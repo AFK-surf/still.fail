@@ -150,6 +150,8 @@ export class CloudSync {
       const ids = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).flatMap((w) => (isObject(w) && typeof w.id === "string" ? [w.id] : []));
       const scheduler = this.#core.scheduler;
       for (const id of ids) if (this.#core.workspaces.owner(id) === sub) scheduler.enqueue("cloud", `workspace/${id}`, Priority.background, this.#workspace(id));
+      // The team's replies on bug reports from each one's chats: what changed while the socket was closed.
+      if (this.#core.provider.supports("feedback")) for (const id of ids) if (this.#core.workspaces.owner(id) === sub) this.feedbackChanged(id);
       // What only some providers have: login sessions, an operator's lists.
       if (this.#core.provider.supports("loginSessions")) scheduler.enqueue("cloud", `sessions/${sub}`, Priority.background, this.#loginSessions(sub));
       if (this.#core.provider.supports("admin")) scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
@@ -255,6 +257,29 @@ export class CloudSync {
         // a little later, else what it says (how far the lock goes) stayed behind until it changed once more.
         if (error.status === 429) this.#workspaceLater(id);
         core.store.invalidate(topic);
+      }
+    });
+  }
+
+  /// The team's replies on bug reports from a workspace's chats changed (its event, or this device answered one): read
+  /// again.
+  feedbackChanged(id: string): void {
+    if (this.#core.workspaces.owner(id) === null || !this.#core.provider.supports("feedback")) return;
+    this.#core.scheduler.enqueue("cloud", `feedback/${id}`, Priority.background, this.#feedback(id));
+  }
+
+  /// A workspace's reports with the team's replies (feedback-replies.ts), as its member reads them; what was kept stays
+  /// when they cannot be read, and goes when the account is no member.
+  #feedback(id: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const core = this.#core;
+      const sub = core.workspaces.owner(id);
+      if (sub === null) return;
+      const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/workspaces/${encode(id)}/feedback`, null));
+      if (answer._tag === "Success") core.data.put("feedback", id, isObject(answer.success) ? answer.success : { feedback: [] });
+      else if (answer.failure.status === 404 || answer.failure.status === 403) {
+        core.data.forgetRecord("feedback", id);
+        core.data.forgetRecord("feedbackDismissed", id);
       }
     });
   }
@@ -452,8 +477,11 @@ export class CloudSync {
     return entryTargetsOf(this.#relayMe());
   }
 
-  /// A workspace's own relays, as its members' `/v1/me` name them: used besides still.fail's for its stations alone.
+  /// A workspace's own relays, as its stations keep them (views/ways-stations.ts), else as its members' `/v1/me` name
+  /// them (stations from before): used besides still.fail's for its stations alone.
   workspaceRelays(workspace: string): string[] {
+    const kept = this.#core.data.record("ways", workspace);
+    if (isObject(kept) && Array.isArray(kept.relays)) return kept.relays.flatMap((r) => (isObject(r) && typeof r.url === "string" ? [r.url] : []));
     for (const account of this.#core.accounts.list()) {
       const me = this.#core.data.record("me", account.sub);
       const found = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).find((w) => isObject(w) && w.id === workspace);
@@ -462,9 +490,11 @@ export class CloudSync {
     return [];
   }
 
-  /// The ways a workspace turned off (its `ways_off`: relays, `lan`, `tailnet`, `direct`), as its members' `/v1/me` name
-  /// them: none of its stations reached that way (mesh.ts `Mesh.link`).
+  /// The ways a workspace turned off (its `ways_off`: relays, `lan`, `tailnet`, `direct`), as its stations keep them,
+  /// else as its members' `/v1/me` name them: none of its stations reached that way (mesh.ts `Mesh.link`).
   workspaceOff(workspace: string): string[] {
+    const kept = this.#core.data.record("ways", workspace);
+    if (isObject(kept) && Array.isArray(kept.off)) return kept.off.filter((u): u is string => typeof u === "string");
     for (const account of this.#core.accounts.list()) {
       const me = this.#core.data.record("me", account.sub);
       const found = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).find((w) => isObject(w) && w.id === workspace);
@@ -617,6 +647,7 @@ export class CloudSync {
     if (event.type === "workspaces") core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#listed(sub));
     else if (event.type === "release") this.onRelease();
     else if (event.type === "relays") this.onRelayLoad(sub);
+    else if (event.type === "feedback" && typeof event.workspace === "string") this.feedbackChanged(event.workspace);
     else if (event.type === "workspace" && typeof event.id === "string") {
       if (core.workspaces.owner(event.id) === null) return;
       const lock = event.lock;

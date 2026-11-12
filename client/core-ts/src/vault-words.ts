@@ -19,6 +19,16 @@ export function howText(mode: string, hosts: readonly string[]): string {
   const name = modeText(mode);
   return HOSTED.includes(mode) && hosts.length > 0 ? `${name} · ${t("core-views.vault.only_to", { hosts: hosts.join(", ") })}` : name;
 }
+/// What a request to rename an item would change, a line each (名字改为 …, 说明改为 … or 删去说明): what its card says in
+/// place of how it would be given.
+export function describeText(wasName: string, d: { name: string; about: string; wasAbout: string }): string {
+  return [
+    ...(d.name !== wasName ? [t("core-views.vault.describe.name", { name: d.name })] : []),
+    ...(d.about !== d.wasAbout ? [d.about === "" ? t("core-views.vault.describe.noAbout") : t("core-views.vault.describe.about", { about: d.about })] : []),
+  ].join("\n");
+}
+/// What a secret to keep is for, as the agent said it, in a line (说明：…).
+export const aboutText = (about: string): string => t("core-views.vault.about", { about });
 /// The longest a grant of it lasts, in a word (仅一次, 1 小时, 直到对话归档): any but these, the chat.
 export const lastsText = (lasts: unknown): string => t(`core-views.vault.lasts.${typeof lasts === "string" && SCOPE_WORDS.includes(lasts) ? lasts : "chat"}`);
 

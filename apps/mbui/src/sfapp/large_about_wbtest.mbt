@@ -56,7 +56,7 @@ test "大屏 关于 made once: its title, section titles, rows and switch are th
     @sf.t("web-pages.settings.nav.changelog"),
     @sf.t("common.legal.terms"),
   ] {
-    assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{own}")
+    assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{Repr(own)}")
   }
   let told : Array[Bool] = []
   reporting_host.set(Some({ get: fn() { told.last().unwrap_or(true) }, set: fn(on) { told.push(on) } }))
@@ -91,7 +91,7 @@ test "大屏 关于 made once, come to and the sidebar shown a while with no fra
   let at_once = about_peeked(true, false)
   assert_eq(at_once, framed)
   match framed {
-    Some((_, aside, _, _)) => assert_true(aside > 0.0, msg="moved aside: \{framed}")
+    Some((_, aside, _, _)) => assert_true(aside > 0.0, msg="moved aside: \{Repr(framed)}")
     None => fail("no move")
   }
 }
@@ -140,7 +140,7 @@ fn about_drags(mode : String, platform : Int) -> Array[String] {
 test "大屏 关于 made once in a window with its buttons in the app's top row: a press across the page's top drags the window where another settings page's (外观, an old view's) does, nowhere else" {
   for platform in [0, 2] {
     let other = about_drags("settings-appearance", platform)
-    assert_true(other.iter().any(fn(p) { p.has_prefix("1250,") }), msg="the page's top drags it: \{other}")
+    assert_true(other.iter().any(fn(p) { p.has_prefix("1250,") }), msg="the page's top drags it: \{Repr(other)}")
     assert_eq(about_drags("settings-about", platform), other, msg="at \{platform}")
   }
 }
@@ -152,7 +152,7 @@ test "记忆 made once, its page wide on a large screen and on the tape: its row
     let _ = large_about_tester(true, platform, scale~, w~, mode="settings-memories")
     assert_true(app.nav.top() == Setting(@settings.Route::Memories), msg="on top: \{@sfbase.page_kind(app.nav.top())}")
     let own = tree_words_drawn()
-    assert_true(own.iter().any(fn(o) { o.contains(@sf.t("android-misc.memory.note")) }), msg="its lead the tree's: \{own} at \{case}")
+    assert_true(own.iter().any(fn(o) { o.contains(@sf.t("android-misc.memory.note")) }), msg="its lead the tree's: \{Repr(own)} at \{Repr(case)}")
   }
 }
 
@@ -165,7 +165,7 @@ test "大屏 关于 made once over 更新日志, the language changed: its back 
   let back = @sf.t("web-pages.settings.nav.changelog")
   let page = @sfdesk.pane_made_seen()
   let back_node = tree_node_of(back)
-  assert_true(page is Some(_) && back_node is Some(_), msg="its back the tree's: \{tree_words_drawn()}")
+  assert_true(page is Some(_) && back_node is Some(_), msg="its back the tree's: \{Repr(tree_words_drawn())}")
   lang.set("en")
   // The made-up prefs notify readers as the core would when the language changes.
   t.stepped()
@@ -174,7 +174,7 @@ test "大屏 关于 made once over 更新日志, the language changed: its back 
   let title_en = @sf.t("web-pages.settings.nav.about")
   assert_true(back_en != back, msg="in English: \{back_en}")
   let words = tree_words_drawn()
-  assert_true(words.contains(back_en) && words.contains(title_en), msg="said anew: \{words}")
+  assert_true(words.contains(back_en) && words.contains(title_en), msg="said anew: \{Repr(words)}")
   assert_true(@sfdesk.pane_made_seen() == page, msg="the same page")
   assert_true(tree_node_of(back_en) == back_node, msg="the same back")
   lang.set("")
@@ -287,7 +287,7 @@ test "更新日志 made once on a large screen and on the tape, wide and narrow:
     let (platform, scale, w) = case
     let _ = large_about_tester(true, platform, scale~, w~, mode="settings-changelog")
     assert_true(app.nav.top() == Setting(@settings.Route::Changelog))
-    assert_true(tree_words_drawn().iter().any(fn(o) { o.contains("10 月 19 日") }), msg="its day the tree's: \{case}")
+    assert_true(tree_words_drawn().iter().any(fn(o) { o.contains("10 月 19 日") }), msg="its day the tree's: \{Repr(case)}")
   }
 }
 
@@ -372,8 +372,8 @@ test "更新日志 made once, its parts each scrolled and chosen again: each whe
   t.tap_text("乙")
   t.run_for(@ui.move_most_ms)
   ys.push(first_day_y(t, "乙"))
-  assert_true(ys[1] < ys[0] && ys[3] < ys[2], msg="each scrolled: \{ys}")
-  assert_eq((ys[4], ys[5]), (ys[1], ys[3]), msg="each where it was left: \{ys}")
+  assert_true(ys[1] < ys[0] && ys[3] < ys[2], msg="each scrolled: \{Repr(ys)}")
+  assert_eq((ys[4], ys[5]), (ys[1], ys[3]), msg="each where it was left: \{Repr(ys)}")
 }
 
 ///|
@@ -414,7 +414,7 @@ fn changelog_dragged_past() -> (Array[Double], String, String, String, String) {
   let (x, y, _, h) = t.rect_of(line).unwrap()
   let ys = [first_day_y(t, "甲")]
   t.press_at(x + 4.0, y + h / 2.0)
-  t.move(x + 40.0, 898.0)
+  t.move_to(x + 40.0, 898.0)
   t.run_for(held_past_ms)
   ys.push(first_day_y(t, "甲"))
   let held = t.ctx().selected_text()
@@ -433,7 +433,7 @@ fn changelog_dragged_past() -> (Array[Double], String, String, String, String) {
 ///|
 test "更新日志 made once, narrow: words picked dragged past the page's foot bring its list on, picking on; let go, it stops, what was picked kept and copied by ⌘C; the page left, kept still" {
   let (ys, held, let_go, copied, left) = changelog_dragged_past()
-  assert_true(ys[1] < ys[0], msg="brought on while held: \{ys}")
+  assert_true(ys[1] < ys[0], msg="brought on while held: \{Repr(ys)}")
   assert_eq(ys[3], ys[2], msg="still once let go")
   assert_true(held.has_prefix("甲 的第 1 天") || held.contains("第 1 天第 1 处"), msg="from the line pressed: \{held}")
   assert_true(held.contains("第 3 天"), msg="picking on as it came: \{held}")
@@ -449,11 +449,11 @@ test "大屏 一台 station 的记忆 made once, wide, with keyboard and mouse a
   for case in [(0, 1.0, 1280.0), (2, 1.0, 1280.0), (0, 2.0, 1280.0), (0, 1.0, 1800.0)] {
     let (platform, scale, w) = case
     let made = large_about_tester(true, platform, scale~, w~, mode="settings-memory")
-    assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="\{case}")
+    assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="\{Repr(case)}")
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
     for w in [@sf.t("web-main.memory.global"), "习惯", "发布流程", "周报", "pdf、xlsx"] {
-      assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{case}: \{own}")
+      assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{Repr(case)}: \{Repr(own)}")
     }
   }
 }
@@ -483,7 +483,7 @@ test "大屏 一台 station 的记忆 made once, the language changed and the st
   let section = tree_node_of(global)
   let row = tree_node_of("发布流程")
   let title = tree_node_of("Willow")
-  assert_true(section is Some(_) && row is Some(_) && title is Some(_), msg="the tree's own: \{tree_words_drawn()}")
+  assert_true(section is Some(_) && row is Some(_) && title is Some(_), msg="the tree's own: \{Repr(tree_words_drawn())}")
   lang.set("en")
   // The made-up prefs notify readers as the core would when the language changes.
   t.stepped()
@@ -497,7 +497,7 @@ test "大屏 一台 station 的记忆 made once, the language changed and the st
   t.run_for(@ui.move_most_ms)
   @settings.fixture_call("workspace.renameStation", { "station": Json::string("st1"), "name": Json::string("工作室") }) |> ignore
   t.run_for(@ui.move_most_ms)
-  assert_true(tree_node_of("工作室") == title, msg="renamed in the same node: \{tree_words_drawn()}")
+  assert_true(tree_node_of("工作室") == title, msg="renamed in the same node: \{Repr(tree_words_drawn())}")
 }
 
 ///|
@@ -506,10 +506,10 @@ test "大屏 一台 station 的记忆 made once: what it is for by one mark afte
   let marks = t.semantics().filter(fn(n) { n.role == Button && n.label == @sf.t("web-main.about") })
   guard marks is [m] else { fail("its mark read out \{marks.length()} times") }
   let mark = m.rect
-  t.move(mark.0 + mark.2 / 2.0, mark.1 + mark.3 / 2.0)
+  t.move_to(mark.0 + mark.2 / 2.0, mark.1 + mark.3 / 2.0)
   t.run_for(@kit.tooltip_delay_ms + @ui.move_most_ms)
   let words = words_where(t)
-  assert_true(words.iter().any(fn(w) { w.has_prefix(@sf.t("web-pages.settings.memory.lead")) }), msg="its tip: \{words}")
+  assert_true(words.iter().any(fn(w) { w.has_prefix(@sf.t("web-pages.settings.memory.lead")) }), msg="its tip: \{Repr(words)}")
 }
 
 ///|
@@ -527,23 +527,23 @@ test "归档, 一台 station 的归档 and 自动决策 made once on a large scr
     (0, 1.0, 1000.0),
   ] {
     let (platform, scale, w) = case
-    let at = "\{case}"
+    let at = "\{Repr(case)}"
     let _ = large_about_tester(true, platform, scale~, w~, mode="settings-archiving")
     assert_true(app.nav.top() == Setting(@settings.Route::Archiving), msg=at)
     let own = tree_words_drawn()
     for words in ["Willow", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
-      assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="归档's \{words} the tree's own at \{at}: \{own}")
+      assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="归档's \{words} the tree's own at \{at}: \{Repr(own)}")
     }
     let _ = large_about_tester(true, platform, scale~, w~, mode="settings-archiving:ws1/st1")
     let own = tree_words_drawn()
     for words in ["按模型判断", "7 天", "不归档", @sf.t("web-pages.archiving.slackHint")] {
-      assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="一台 station 的归档's \{words} the tree's own at \{at}: \{own}")
+      assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="一台 station 的归档's \{words} the tree's own at \{at}: \{Repr(own)}")
     }
     let t = large_about_tester(true, platform, scale~, w~, mode="settings-decisions")
     let own = tree_words_drawn()
     let whole = own.iter().any(fn(o) { o.contains(@sf.t("web-pages.automaticDecisions.completionNote")) })
     let short = own.iter().any(fn(o) { o.contains(@sf.t("web-pages.automaticDecisions.completionShort")) })
-    assert_true(whole != short, msg="自动决策's note one way at \{at}: \{own}")
+    assert_true(whole != short, msg="自动决策's note one way at \{at}: \{Repr(own)}")
     if w >= 1280.0 {
       assert_true(whole, msg="自动决策 wide at \{at}")
     }
@@ -587,7 +587,7 @@ fn archiving_pictures_asked(w : Double, url : String) -> (Array[Int], Array[Int]
         }
         _ => []
       }
-      { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+      { ..r, value: Some(Json::array(first + a[1:].to_owned())) }
     },
   }
   @sfdesk.pane_makes.val = true
@@ -619,7 +619,7 @@ test "归档 made once, on every screen: a station's picture that could not be h
   let got = [390.0, 700.0, 1280.0].map(fn(w) { (w, archiving_pictures_asked(w, url)) })
   // (asked as it is put up; not while it stays; once again as it is come back to; not while it stays then)
   if got.iter().any(fn(g) { g.1.0 != [1, 1, 2, 2] }) {
-    fail("\{got}")
+    fail("\{Repr(got)}")
   }
 }
 
@@ -653,7 +653,7 @@ test "归档 made once, on every screen: a station's picture answered later, whi
           }
           _ => []
         }
-        { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+        { ..r, value: Some(Json::array(first + a[1:].to_owned())) }
       },
     }
     @sfdesk.pane_makes.val = true

@@ -37,6 +37,8 @@ export type SearchSource = {
   stations(scope: string): { address: string; name: string; emoji: string | null; icon: string | null; online: boolean }[] | undefined;
   /// The messages the device holds that have the words, in the chats listed (newest first, at most `wanted`).
   foundMessages(chats: J, view: Topic): J[];
+  /// A list's row whole, as its chat's own row says it (views.ts wholeFor): what it shows of the list's rows.
+  whole(row: J): J;
   me(scope: string): J;
   clock(): present.Clock;
 };
@@ -96,7 +98,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   const clock = src.clock();
   if (words.length === 0) {
     const recent = refs.search(chats, "", undefined, undefined, RECENT);
-    return { ok: { items: recent.items, words: [], messages: [], groups: [], wait: waitNote([]) } };
+    return { ok: { items: arr(recent.items).map((i) => src.whole(i)), words: [], messages: [], groups: [], wait: waitNote([]) } };
   }
   const stations = src.stations(scope) ?? [];
   const several = stations.length > 1;
@@ -156,7 +158,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
           const seq = num(hit.seq);
           if (thread === null || seq === null || seenMessages.has(`${s.address}\u0001${thread}\u0001${seq}`)) continue;
           seenMessages.add(`${s.address}\u0001${thread}\u0001${seq}`);
-          const chat = row ?? chatRow(hit, s, str(hit.chatTitle) ?? "");
+          const chat = row !== undefined ? src.whole(row) : chatRow(hit, s, str(hit.chatTitle) ?? "");
           const said = { last: { authorKind: hit.authorKind, author: hit.author, agentIdentity: hit.agentIdentity }, agents: chat.agents };
           const by = present.lastBy(said, me, [], members);
           const message: J = { station: s.address, thread, seq, by: str(get(by, "name")) ?? "", ...refs.excerpt(String(hit.text ?? ""), words) };
@@ -223,7 +225,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   if (older.length > 0) notes.push(t("core-views.search.older", { names: older.join("、") }));
   const offline = stations.filter((s) => !s.online).map((s) => s.name);
   if (offline.length > 0) notes.push(t("core-views.search.offlineStations", { names: offline.join("、") }));
-  const shownItems = items.slice(0, kind === "chat" ? limit : kind ? 0 : CHATS_SHOWN).map((item) => foundChat(item, saidOf.get(`${item.station}\u0001${item.id}`), words));
+  const shownItems = items.slice(0, kind === "chat" ? limit : kind ? 0 : CHATS_SHOWN).map((item) => foundChat(src.whole(item), saidOf.get(`${item.station}\u0001${item.id}`), words));
   return {
     ok: {
       items: shownItems,

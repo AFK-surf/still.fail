@@ -47,7 +47,7 @@ let inst_owners : InstOwners = {
   tree_painting: None,
   tree_words: Map([]),
   mark: [],
-  own_colours: Set::new(),
+  own_colours: Set([]),
 }
 
 ///|
@@ -107,11 +107,12 @@ fn inst_owned(k : Int) -> Unit {
 ///|
 /// Who drew an instance (contrast.mbt's inst_owners): a node of the old view's (its index in the frame's nodes), a node
 /// of the window's tree's, or nothing known. What reads who drew what asks this, whichever drew it.
+#derive(Eq)
 priv enum InstBy {
   Nobody
   Old(Int)
   Node(@view.NodeId)
-} derive(Eq)
+}
 
 ///|
 /// Who drew instance `k`.
@@ -665,7 +666,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   for n in inst_owners.own_colours {
     pictures.add(n)
   }
-  let disabled : Set[Int] = Set::new()
+  let disabled : Set[Int] = Set([])
   for s in self.sems {
     if s.disabled {
       disabled.add(s.node)
@@ -674,10 +675,10 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   let holding = self.holding()
   // each node's words at their faintest letter, a line's or an icon's pieces at their strongest: (ratio, what is said
   // where it is under the least)
-  let lines : Map[Int, (Double, String)] = Map::new()
+  let lines : Map[Int, (Double, String)] = Map([])
   let order : Array[Int] = []
   let out : Array[String] = []
-  let seen : Set[String] = Set::new()
+  let seen : Set[String] = Set([])
   let say = fn(s : String) {
     if !seen.contains(s) {
       seen.add(s)
@@ -687,7 +688,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   // (what a node of the window's tree draws, by node and by what it is checked as, each its own whatever else the node
   // draws: its words at their faintest letter, as an old view's are (their size and weight the tree's words',
   // view_host.mbt); its shapes at their strongest piece, as an old view's icon or line)
-  let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map::new()
+  let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map([])
   let tree_order : Array[(@view.NodeId, Int)] = []
   // (what a node of the window's tree said disabled holds, as an old view's in a widget said disabled: asked nothing;
   // its own presses off, not what a modal layer over it takes them from)
@@ -915,16 +916,21 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
 
 ///|
 /// Where the screen as it is now draws something too faint to be seen on what it lies on (see the file's head): a
-/// frame drawn, each fault once. `marks`: the least for what has nothing in it (contrast_mark_least).
+/// frame drawn, each fault once. `marks`: the least for what has nothing in it (contrast_mark_least). Its frame and
+/// the one that draws the screen back after it are both at the last frame's moment (Tester::frame_again): what is
+/// read after it, and the clock, are as before.
 pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_least) -> Array[String] {
+  self.reads_own()
   let c = g()
   inst_owners.on = true
   inst_owners_clear()
-  self.frame()
+  self.frame_again()
   inst_owners.on = false
-  // (drawn as before from the next frame on, built whole: frame_watch.mbt)
+  let faults = c.contrast_faults_drawn(marks)
+  // (drawn back as it was, built whole: frame_watch.mbt; each loop where the clock has it again, not at its start)
   test_stepped()
-  c.contrast_faults_drawn(marks)
+  self.frame_again()
+  faults
 }
 
 ///|

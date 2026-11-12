@@ -125,7 +125,7 @@ fn clocked(m : Map[String, Json]) -> Unit {
     }
   }
   match rt.log {
-    Some(log) => log("[core clock] at \{at} ms: next \{due("next")}, later \{due("later")}")
+    Some(log) => log("[core clock] at \{at} ms: next \{Repr(due("next"))}, later \{Repr(due("later"))}")
     None => ()
   }
   if own.ticket != 0 && at >= own.asked {

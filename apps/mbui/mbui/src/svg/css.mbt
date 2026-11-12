@@ -25,7 +25,7 @@ fn AttrOp::matches(self : AttrOp, value : String) -> Bool {
   match self {
     Exists => true
     Matches(v) => value == v
-    Contains(v) => value.split(" ").any(fn(s) { s.to_string() == v })
+    Contains(v) => value.split(" ").any(fn(s) { s.to_owned() == v })
     StartsWith(v) =>
       if value == v {
         true
@@ -43,12 +43,8 @@ fn AttrOp::matches(self : AttrOp, value : String) -> Bool {
 ///|
 priv enum PseudoClass {
   FirstChild
-  Link
-  Visited
-  Hover
-  Active
-  Focus
-  Lang(String)
+  /// :link, :visited, :hover, :active, :focus, :lang(…): none of them matches here
+  Unmatched
 }
 
 ///|
@@ -58,12 +54,13 @@ priv enum SubSelector {
 }
 
 ///|
+#derive(Eq)
 priv enum Combinator {
   CNone
   Descendant
   Child
   Adjacent
-} derive(Eq)
+}
 
 ///|
 priv struct Component {
@@ -170,7 +167,7 @@ fn CStream::skip_bytes(self : CStream, f : (Int) -> Bool) -> Unit {
 
 ///|
 fn CStream::slice(self : CStream, a : Int, b : Int) -> String {
-  self.text.view(start_offset=a, end_offset=b).to_string()
+  self.text.exact_view(start=a, end=b).to_owned()
 }
 
 ///|
@@ -337,7 +334,7 @@ fn consume_rule_set(s : CStream, rules : Array[CssRule]) -> Bool {
     if s.cur() == 0x2C {
       s.pos += 1
     }
-    let (selector, offset) = parse_selector(s.text.view(start_offset=s.pos).to_string())
+    let (selector, offset) = parse_selector(s.text.exact_view(start=s.pos).to_owned())
     s.pos += offset
     s.skip_spaces()
     match selector {
@@ -440,7 +437,7 @@ fn consume_declaration(s : CStream) -> Declaration? {
       return None
     }
   }
-  let value = s.slice(start, end).trim(chars=" \t\n\r\u{0C}").to_string()
+  let value = s.slice(start, end).trim(chars=" \t\n\r\u{0C}").to_owned()
   if !s.skip_spaces_and_comments() {
     return None
   }
@@ -450,7 +447,7 @@ fn consume_declaration(s : CStream) -> Declaration? {
     if !s.skip_spaces_and_comments() {
       return None
     }
-    if s.text.view(start_offset=s.pos).has_prefix("important") {
+    if s.text.exact_view(start=s.pos).has_prefix("important") {
       s.pos += 9
       important = true
     }
@@ -530,7 +527,7 @@ priv enum SelToken {
   TId(String)
   TAttr(String, AttrOp)
   TPseudo(String)
-  TLang(String)
+  TLang
   TDescendant
   TChild
   TAdjacent
@@ -650,12 +647,12 @@ fn parse_selector(text : String) -> (Selector?, Int) {
           }
           let start = s.pos
           s.skip_bytes(fn(c) { c != 0x29 })
-          let lang = s.slice(start, s.pos).trim(chars=" \t\n\r").to_string()
+          let lang = s.slice(start, s.pos).trim(chars=" \t\n\r").to_owned()
           if !s.consume_byte(0x29) || lang == "" {
             finished = true
             return Some((None, false))
           }
-          return Some((Some(TLang(lang)), true))
+          return Some((Some(TLang), true))
         }
         return Some((Some(TPseudo(ident)), true))
       } else if c == 0x3E || c == 0x2B {
@@ -744,16 +741,12 @@ fn parse_selector(text : String) -> (Selector?, Int) {
       Some(TPseudo(i)) => {
         let class = match i {
           "first-child" => FirstChild
-          "link" => Link
-          "visited" => Visited
-          "hover" => Hover
-          "active" => Active
-          "focus" => Focus
+          "link" | "visited" | "hover" | "active" | "focus" => Unmatched
           _ => return (None, s.pos)
         }
         add_sub(SubPseudo(class))
       }
-      Some(TLang(l)) => add_sub(SubPseudo(Lang(l)))
+      Some(TLang) => add_sub(SubPseudo(Unmatched))
       Some(TDescendant) => combinator = Descendant
       Some(TChild) => combinator = Child
       Some(TAdjacent) => combinator = Adjacent
@@ -847,7 +840,7 @@ fn match_component(comp : Component, doc : XDoc, id : Int) -> Bool {
           None => return false
         }
       SubPseudo(FirstChild) => if prev_sibling_element(doc, id) >= 0 { return false }
-      SubPseudo(_) => return false
+      SubPseudo(Unmatched) => return false
     }
   }
   true

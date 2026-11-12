@@ -3,19 +3,21 @@
 // function pointers are the enums they are made from.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum LineCap {
   Butt
   Round
   Square
-} derive(Eq, Show, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum LineJoin {
   Miter
   MiterClip
   Round
   Bevel
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub(all) struct Stroke {
@@ -39,6 +41,7 @@ let quad_recursive_limit : Int = 3
 let recursive_limits : Array[Int] = [5 * 3, 26 * 3, 11 * 3, 11 * 3]
 
 ///|
+#derive(Eq)
 priv enum ReductionType {
   RPoint
   RLine
@@ -46,7 +49,7 @@ priv enum ReductionType {
   RDegenerate
   RDegenerate2
   RDegenerate3
-} derive(Eq)
+}
 
 ///|
 fn ReductionType::rank(self : ReductionType) -> Int {
@@ -61,23 +64,26 @@ fn ReductionType::rank(self : ReductionType) -> Int {
 }
 
 ///|
+#derive(Eq)
 priv enum StrokeType {
   Outer
   Inner
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum ResultType {
   Split
   Degenerate
   QuadResult
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum IntersectRayType {
   CtrlPt
   ResultTypeRay
-} derive(Eq)
+}
 
 ///|
 /// The path's outline at `stroke`'s width (Path::stroke), curves cut fine enough for `resolution_scale` pixels a unit.
@@ -931,12 +937,13 @@ fn is_clockwise(before : Point, after : Point) -> Bool {
 }
 
 ///|
+#derive(Eq)
 priv enum AngleType {
   Nearly180
   Sharp
   Shallow
   NearlyLine
-} derive(Eq)
+}
 
 ///|
 fn dot_to_angle_type(dot : Float) -> AngleType {

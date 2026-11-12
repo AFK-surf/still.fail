@@ -43,7 +43,7 @@ fn edge_drawn(node : Bool, runs : Bool) -> (Array[(Double, Double)], Int, Double
       root.lines_up(Is(Some(Start))) |> ignore
       root.box(fn(b) {
         b.width(Is(Some(w))) |> ignore
-        let look : @view.WordsLook = { size: 16.0, weight: 400, line: 20.0, wrap: true, tracking: @view.letters_own, balance: false }
+        let look : @view.WordsLook = { size: 16.0, weight: 400, line: 20.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
         if runs {
           b.words_runs(Is([@view.words_run(edge_words)]), look~) |> ignore
         } else {
@@ -64,7 +64,7 @@ test "a node's words in a box a hair narrower than three of them: wrapped two to
   let (old, new) = (edge_drawn(false, false), edge_drawn(true, false))
   // (the same box both sides, three glyphs' width less a quarter of a point, more than two)
   let premise = old.2 == new.2 && old.3 == new.3 && old.2 == old.3 - 0.25 && old.3 > 0.0
-  assert_eq((premise, old.1, old.0 == new.0, new.1), (true, 3, true, 3), msg="old \{old}\nnode \{new}")
+  assert_eq((premise, old.1, old.0 == new.0, new.1), (true, 3, true, 3), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }
 
 ///|
@@ -72,5 +72,5 @@ test "a node's words in pieces in a box a hair narrower than three of them: wrap
   let (old, new) = (edge_drawn(false, true), edge_drawn(true, true))
   // (the same box both sides, three glyphs' width less a quarter of a point, more than two)
   let premise = old.2 == new.2 && old.3 == new.3 && old.2 == old.3 - 0.25 && old.3 > 0.0
-  assert_eq((premise, old.1, old.0 == new.0, new.1), (true, 3, true, 3), msg="old \{old}\nnode \{new}")
+  assert_eq((premise, old.1, old.0 == new.0, new.1), (true, 3, true, 3), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }

@@ -34,7 +34,8 @@ export interface AccountSessions {
 }
 
 /// What a provider can do besides the accounts, workspaces, stations and credentials every provider has.
-export type Feature = "loginSessions" | "admin" | "invitations" | "push" | "signIn";
+/// (`feedback`: the team's replies on bug reports from the workspaces' chats, feedback-replies.ts)
+export type Feature = "loginSessions" | "admin" | "invitations" | "push" | "signIn" | "feedback";
 
 export interface AccountProvider {
   readonly kind: "stillfail" | "comma";

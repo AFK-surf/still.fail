@@ -24,11 +24,11 @@ priv struct TextTable {
 
 ///|
 /// A Tester's kept text (Tester::new's `text`), None: the fake host's own made-up metrics.
-let text_table : Ref[TextTable?] = Ref::new(None)
+let text_table : Ref[TextTable?] = Ref(None)
 
 ///|
 /// Recording (MBUI_TEXT_RECORD=1): -1 not asked yet, 0 no, 1 yes; what was said already.
-let text_rec : Ref[Int] = Ref::new(-1)
+let text_rec : Ref[Int] = Ref(-1)
 
 ///|
 let text_said : Map[String, Bool] = Map([])
@@ -159,7 +159,7 @@ fn text_table_of(lines : String) -> TextTable {
       Some(i) => i + 8
       None => if line.has_prefix("{") { 0 } else { continue }
     }
-    let j = @json.parse(line.view(start_offset=start).to_owned()) catch {
+    let j = @json.parse(line.exact_view(start=start).to_owned()) catch {
       _ => continue
     }
     guard j is Object(m) else { continue }
@@ -190,6 +190,7 @@ fn text_table_of(lines : String) -> TextTable {
 /// What the kept text (Tester::new's `text`) did not have that the view asked of it, once each: "metrics 15|400|0",
 /// "shape 15|400|0|words", "key …", "glyph N".
 pub fn Tester::text_missing(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   match text_table.val {
     Some(t) => t.missing.copy()

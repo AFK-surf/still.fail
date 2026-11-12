@@ -37,6 +37,21 @@ fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideA
 }
 
 ///|
+/// What the chats' sidebar (lists_side_node) shows of workspace `ws` as it opens, asked of `ask` (sfbase's
+/// opens_answered): its list as it is filtered (sfbase's list_opens); the band's and the foot's of all its chats
+/// (what is catching up, whether it has stations to filter, their trouble: chats_all_opens); 待处理's count, of the
+/// core's marks; what is left up long, the foot's 运行中 (where the foot shows it).
+fn side_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  let list = @sfbase.list_opens(src, ws, ask)
+  let all = @sfbase.chats_all_opens(src, ws, ask)
+  let marks = @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked()))
+  // (the foot's 运行中 reads it where the bell is not in the rail: in its panel then, read as that opens, lists_foot)
+  let long = rail_items(src, ws).contains("attention") ||
+    @sfbase.opens_answered(ask("longJobs", @sfbase.long_jobs_asked(ws)))
+  list && all && marks && long
+}
+
+///|
 /// Whether the sidebar of `place` (side_place's) is made once over the block, not drawn by its old view (sidebar's).
 fn side_made(place : String) -> Bool {
   !(place is ("files" | "settings" | "stations" | "profiles"))
@@ -76,7 +91,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
     foot: fn() { 0.0 },
     // (on the tape the block's, a step darker behind the panel in use: tape_side_at)
     ground: fn() {
-      if wide.tape {
+      if wide.tape.get() {
         at().ground
       } else if side_folded() {
         apart_ground()
@@ -206,25 +221,14 @@ fn lists_band_node(
         })
       })
       |> ignore
-      // catching up on what changed while away (its old view)
+      // catching up on what changed while away
       line.show(fn() { view().map(fn(v) { v.syncing is Some(_) }).unwrap_or(false) }, fn(k) {
-        // (as wide as it is laid out, told by the old frame)
-        let wide : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-        k.shrink(Is(0.0)).width(By(fn() { wide.get() })) |> ignore
-        @ui.old(
-          k,
-          fn(c) {
-            let said = match view() {
-              Some({ syncing: Some(y), .. }) => y
-              _ => ""
-            }
-            @sf.sync_key(c, "side/syncing", update_key_side, update_key_mark, true, said)
-          },
-          natural=true,
-          fits=(update_key_side, wide),
-        )
-        |> @ui.old_takes_own
-        |> ignore
+        @sf.sync_key_node(k, tips, update_key_side, update_key_mark, fn() {
+          match view() {
+            Some({ syncing: Some(y), .. }) => Some(y)
+            _ => None
+          }
+        })
       })
       // 更新 before the filter where one is offered (brand.mbt update_in_row)
       line.show(update_shown, fn(k) {

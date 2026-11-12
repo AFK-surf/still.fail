@@ -66,7 +66,7 @@ priv struct LoginSaid {
   red : Bool
   busy : Bool
   last : Bool
-} derive(Eq)
+}
 
 ///|
 fn said_line(words : String, red? : Bool = false, busy? : Bool = false, last? : Bool = false) -> LoginSaid {
@@ -360,25 +360,33 @@ pub fn login_card(
 }
 
 ///|
-/// A step left of something under an agent's message, as a login's card looks (its ground, its title, a line under it),
-/// the whole card the way to it (`go`), a › in its corner where a login's × is: an approved phone's pairing with its
-/// station (decision.mbt phone_ask_card). Quiet as the cards beside it are, no button of its own (2026-10-30, user: a
-/// card with a solid button was 「明显有点过大了，而且好像不是很搭风格」).
-pub fn step_card(c : @ui.Ctx, key : String, title : String, line : String, go : () -> Unit) -> Unit {
-  let x = c.id(key)
-  c.on_press(x, fn() {
-    go()
-  })
+/// A step left of something under an agent's message, as a login's card looks (its ground, its title, a line under it
+/// where there is one), the whole card the way to it (`go`), a › in its corner where a login's × is: what is left on
+/// the phone for an approved request of it (decision.mbt phone_ask_card). Quiet as the cards beside it are, no button
+/// of its own (2026-10-30, user: a card with a solid button was 「明显有点过大了，而且好像不是很搭风格」). A step with
+/// nothing to press (`go` None) is the card alone: no ›, no answer to a press.
+pub fn step_card(c : @ui.Ctx, key : String, title : String, line : String, go? : (() -> Unit)? = None) -> Unit {
+  let x = if go is Some(_) { c.id(key) } else { 0 }
+  match go {
+    Some(go) => c.on_press(x, fn() { go() })
+    None => ()
+  }
   c.box(style=lc_room, fn() {
-    let b = c.box(style=lc_card_step, id=x, fn() {
+    let b = c.box(style=if go is Some(_) { lc_card_step } else { lc_card }, id=x, fn() {
       c.box(style=lc_head, fn() {
-        c.box(style=lc_title_room, fn() { c.text(title, style=lc_title) |> ignore }) |> ignore
-        c.box(style=lc_cancel, fn() { @sf.icon(c, "chevron-right", size=lc_icon, color=@sf.theme().p.muted) |> ignore }) |> ignore
+        c.box(style=if line == "" { lc_title_alone } else { lc_title_room }, fn() { c.text(title, style=lc_title) |> ignore }) |> ignore
+        if go is Some(_) {
+          c.box(style=lc_cancel, fn() { @sf.icon(c, "chevron-right", size=lc_icon, color=@sf.theme().p.muted) |> ignore }) |> ignore
+        }
       })
       |> ignore
-      login_said(c, said_line(line, last=true))
+      if line != "" {
+        login_said(c, said_line(line, last=true))
+      }
     })
-    c.semantics(b, Button, id=x, label=title)
+    if go is Some(_) {
+      c.semantics(b, Button, id=x, label=title)
+    }
   })
   |> ignore
 }
@@ -622,10 +630,10 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?, place : St
         enter_sends=true,
         field=login_field(here),
       )
-      words = r.text.trim(chars=" \n").to_string()
+      words = r.text.trim(chars=" \n").to_owned()
       logins_here.typed[here] = words != ""
       match r.submitted {
-        Some(sent) if sent.trim(chars=" \n").to_string() != "" && !busy => send(sent.trim(chars=" \n").to_string())
+        Some(sent) if sent.trim(chars=" \n").to_owned() != "" && !busy => send(sent.trim(chars=" \n").to_owned())
         _ => ()
       }
     })
@@ -757,6 +765,8 @@ fn login_said_node(p : @view.View, s : () -> LoginSaid) -> Unit {
 /// login_shows' lines, its code and its step.
 fn login_active_node(card : @view.View, core : Core, station : String, l : () -> Json?, relay : () -> Bool, place : String) -> Unit {
   card.pick(fn() { flag(l(), "paste") && text(l(), "url") != "" }, fn(x, paste) {
+    // (its lines, its code and its step as far apart as the card's own: lc_card_body's)
+    @sf.style_node(x, fn() { lc_active })
     if paste {
       login_paste_node(x, core, station, l, place)
       return
@@ -814,16 +824,15 @@ fn login_step_node(p : @view.View, s : () -> LoginStep) -> Unit {
             (false, true) => lc_step_lit
             (false, false) => lc_step
           }
-          if in_row {
+          let step = if in_row {
             look.then(lc_in_row)
           } else {
             foot(look)
           }
+          step.then(lc_inner_round)
         },
         in_row~,
       )
-      // (concentric with the card: lc_step's Inner, the old view's worked out as it is laid out)
-      b.radius(Is(lc_inner_corner)) |> ignore
       @sf.presses_node(b, fn() { (s().press)() }, on=fn() { !s().busy })
       b.says(By(fn() { Some(@view.said(Button, label=s().label)) })) |> ignore
       let ink = fn() { if s().solid { @sf.theme().p.on_primary } else { @sf.theme().p.text } }
@@ -843,8 +852,7 @@ fn login_step_node(p : @view.View, s : () -> LoginStep) -> Unit {
       @sf.style_node(r, fn() { foot(lc_step_row) })
       button(r, true)
       r.box(fn(m) {
-        @sf.style_node(m, fn() { if @sf.lit_node(m) { lc_more_lit } else { lc_more } }, in_row=true)
-        m.radius(Is(lc_inner_corner)) |> ignore
+        @sf.style_node(m, fn() { (if @sf.lit_node(m) { lc_more_lit } else { lc_more }).then(lc_inner_round) }, in_row=true)
         @sf.presses_node(m, fn() {
           let (wx, wy, ww, wh) = m.placed_window_now()
           @sf.menu(s().more.map(fn(i) { Some(i) }), from=At(wx, wy, ww, wh), along=End)
@@ -865,7 +873,7 @@ fn login_step_node(p : @view.View, s : () -> LoginStep) -> Unit {
 fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Json?, place : String) -> Unit {
   let id = text(@signals.untracked(l), "id")
   let field = login_field(place + "\u{1}" + station + "\u{1}" + id)
-  let words = fn() { field.text().trim(chars=" \n").to_string() }
+  let words = fn() { field.text().trim(chars=" \n").to_owned() }
   let shows = @signals.computed(fn(_) { login_paste_shows(core, station, l(), words() != "") })
   let shows = fn() { shows.get() }
   login_said_node(x, fn() { shows().lead })
@@ -876,8 +884,7 @@ fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Jso
     login_answer(core, station, id, code)
   }
   x.box(fn(b) {
-    @sf.style_node(b, fn() { lc_paste })
-    b.radius(Is(lc_inner_corner)) |> ignore
+    @sf.style_node(b, fn() { lc_paste.then(lc_inner_round) })
     b.box(fn(w) {
       @sf.style_node(w, fn() { lc_paste_words }, in_row=true)
       @ui.field(
@@ -893,7 +900,7 @@ fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Jso
           (p.text, p.muted, p.accent)
         },
         submitted=fn(sent) {
-          let code = sent.trim(chars=" \n").to_string()
+          let code = sent.trim(chars=" \n").to_owned()
           if code != "" && !shows().busy {
             send(code)
           }
@@ -904,8 +911,7 @@ fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Jso
     |> ignore
     b.show(fn() { words() != "" || shows().busy }, fn(d) {
       d.box(fn(go) {
-        @sf.style_node(go, fn() { if @sf.lit_node(go) && !shows().busy { lc_done_lit } else { lc_done } }, in_row=true)
-        go.radius(Is(lc_done_corner)) |> ignore
+        @sf.style_node(go, fn() { (if @sf.lit_node(go) && !shows().busy { lc_done_lit } else { lc_done }).then(lc_done_round) }, in_row=true)
         @sf.presses_node(go, fn() { send(words()) }, on=fn() { !shows().busy })
         go.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.logins.finish"))) })) |> ignore
         // busy: a spinner over its word, as wide as before
@@ -942,6 +948,11 @@ let lc_card : @ui.Style = lc_card_body.then(@ui.style(min_w=@sf.login_card_least
 /// The card but how wide it is (its node's: that by where it is, as laid out).
 // kept across runs: a value (no field of it changes)
 let lc_card_body : @ui.Style = @ui.style(w=Cut, p=@sf.inset_room, gap=S0_5, radius=@sf.login_card_corner, bg=A(Fg, O5), align=AStart)
+
+///|
+/// What a login under way shows in its card (login_active_node's): its lines, code and step as far apart as the card's.
+// kept across runs: a value (no field of it changes)
+let lc_active : @ui.Style = @ui.css("gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -986,6 +997,11 @@ let lc_head : @ui.Style = @ui.css("row w=Full gap=S1 align=AStart")
 /// Its title (cardTitle): 13 on 20, medium, 10 in and 10 down (a small panel's row).
 // kept across runs: a value (no field of it changes)
 let lc_title_room : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2_5")
+
+///|
+/// Its title with no line under it (step_card's): as far from the card's foot as from its top, as a last line is.
+// kept across runs: a value (no field of it changes)
+let lc_title_alone : @ui.Style = lc_title_room.then(@ui.css("pb=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1160,3 +1176,11 @@ let lc_inner_corner : Double = @ui.concentric(@sf.card_corner, @ui.capsule_in(@s
 
 ///|
 let lc_done_corner : Double = @ui.concentric(lc_inner_corner, 4.0)
+
+///|
+// kept across runs: a value (no field of it changes)
+let lc_inner_round : @ui.Style = @ui.style(radius=@sf.radius_between(lc_inner_corner))
+
+///|
+// kept across runs: a value (no field of it changes)
+let lc_done_round : @ui.Style = @ui.style(radius=@sf.radius_between(lc_done_corner))

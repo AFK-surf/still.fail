@@ -2,10 +2,11 @@
 
 ///|
 /// A point (a value: every operation makes a new one).
+#derive(Eq, Debug)
 pub(all) struct Point {
   x : Float
   y : Float
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn Point::from_xy(x : Float, y : Float) -> Point {
@@ -101,11 +102,6 @@ pub fn Point::scaled(self : Point, scale : Float) -> Point {
 }
 
 ///|
-fn Point::swapped(self : Point) -> Point {
-  { x: self.y, y: self.x }
-}
-
-///|
 fn Point::rotated_cw(self : Point) -> Point {
   { x: -self.y, y: self.x }
 }
@@ -164,12 +160,13 @@ pub impl Mul for Point with mul(self, other) {
 
 ///|
 /// A rect of whole pixels, never empty (its width and height at least 1, its right and bottom no past i32's range).
+#derive(Eq, Debug)
 pub(all) struct IntRect {
   x : Int
   y : Int
   width : Int
   height : Int
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn IntRect::from_xywh(x : Int, y : Int, width : Int, height : Int) -> IntRect? {
@@ -180,15 +177,6 @@ pub fn IntRect::from_xywh(x : Int, y : Int, width : Int, height : Int) -> IntRec
     return None
   }
   Some({ x, y, width, height })
-}
-
-///|
-/// (u32 widths as Rust has them: one past i32's range, as `try_from` refuses, is none)
-fn IntRect::from_xywh64(x : Int, y : Int, width : Int64, height : Int64) -> IntRect? {
-  if width > 2147483647L || height > 2147483647L {
-    return None
-  }
-  IntRect::from_xywh(x, y, width.to_int(), height.to_int())
 }
 
 ///|
@@ -285,12 +273,13 @@ pub fn IntRect::to_rect(self : IntRect) -> Rect {
 
 ///|
 /// A rect of finite sides, left at most right and top at most bottom.
+#derive(Eq, Debug)
 pub(all) struct Rect {
   left : Float
   top : Float
   right : Float
   bottom : Float
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn checked_f32_sub(a : Float, b : Float) -> Bool {
@@ -506,12 +495,13 @@ pub fn Rect::to_non_zero_rect(self : Rect) -> NonZeroRect? {
 
 ///|
 /// A rect of finite sides, left below right and top below bottom.
+#derive(Eq, Debug)
 pub(all) struct NonZeroRect {
   left : Float
   top : Float
   right : Float
   bottom : Float
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn NonZeroRect::from_ltrb(left : Float, top : Float, right : Float, bottom : Float) -> NonZeroRect? {
@@ -604,10 +594,11 @@ pub fn NonZeroRect::to_int_rect(self : NonZeroRect) -> IntRect {
 
 ///|
 /// A size of whole pixels, neither side 0.
+#derive(Eq, Debug)
 pub(all) struct IntSize {
   width : Int
   height : Int
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn IntSize::from_wh(width : Int, height : Int) -> IntSize? {
@@ -667,10 +658,11 @@ fn size_scale(s1 : IntSize, s2 : IntSize, expand : Bool) -> IntSize {
 
 ///|
 /// A size of finite sides above 0.
+#derive(Eq, Debug)
 pub(all) struct Size {
   width : Float
   height : Float
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn Size::from_wh(width : Float, height : Float) -> Size? {

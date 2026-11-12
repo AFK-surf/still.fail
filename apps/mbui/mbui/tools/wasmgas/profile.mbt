@@ -551,10 +551,10 @@ fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers
   let nk = kinds.length()
   let mi = s.memories
   let half = ((nd * 64 + 65535) / 65536).max(1)
-  let mem_entry = @buffer.new()
+  let mem_entry = Buffer()
   mem_entry.write_byte(b'\x00')
   leb_u(mem_entry, (2 * half).to_int64())
-  let globals_entry = @buffer.new()
+  let globals_entry = Buffer()
   for _ in 0..=nk {
     put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
   }
@@ -563,16 +563,16 @@ fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers
   put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
   // (the defined function running now, for `focus`: its place among them, -1 none)
   put(globals_entry, [0x7f, 0x01, 0x41, 0x7f, 0x0b])
-  let out = @buffer.new()
+  let out = Buffer()
   out.write_bytesview(data[0:8])
   let mut had_globals = false
   let mut had_memory = false
   let mut had_exports = false
   let memory_section = fn(body : BytesView?) {
-    let b = @buffer.new()
+    let b = Buffer()
     match body {
       Some(body) => {
-        let r = Reader::new(body.to_bytes(), 0)
+        let r = Reader::new(body.to_owned(), 0)
         let n = r.uint()
         leb_u(b, (n + 1).to_int64())
         b.write_bytesview(body[r.p:])
@@ -600,7 +600,7 @@ fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers
     match id {
       3 => {
         let n = r.uint()
-        let b = @buffer.new()
+        let b = Buffer()
         leb_u(b, (n + nd).to_int64())
         b.write_bytesview(data[r.p:next])
         for t in s.func_types {
@@ -615,7 +615,7 @@ fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers
       6 => {
         had_globals = true
         let n = r.uint()
-        let b = @buffer.new()
+        let b = Buffer()
         leb_u(b, (n + 5 + nk).to_int64())
         b.write_bytesview(data[r.p:next])
         b.write_bytes(globals_entry.to_bytes())
@@ -623,7 +623,7 @@ fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers
       }
       7 => {
         if !had_globals {
-          let b = @buffer.new()
+          let b = Buffer()
           leb_u(b, (5 + nk).to_int64())
           b.write_bytes(globals_entry.to_bytes())
           section(out, 6, b)
@@ -631,7 +631,7 @@ fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers
         }
         had_exports = true
         let n = r.uint()
-        let b = @buffer.new()
+        let b = Buffer()
         leb_u(b, (n + 4 + nk).to_int64())
         for _ in 0..<n {
           let l = r.uint()
@@ -662,7 +662,7 @@ fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers
       }
       9 => {
         let n = r.uint()
-        let b = @buffer.new()
+        let b = Buffer()
         leb_u(b, n.to_int64())
         for _ in 0..<n {
           let flags = r.uint()
@@ -722,7 +722,7 @@ fn code_section(
   if count != nd {
     fail("the code section has \{count} functions, the function section \{nd}")
   }
-  let b = @buffer.new()
+  let b = Buffer()
   leb_u(b, (count + nd).to_int64())
   let starts : Array[Int] = []
   let ends : Array[Bool] = []
@@ -747,7 +747,7 @@ fn code_section(
       ignore(r.uint())
       value_type(r)
     }
-    let nb = @buffer.new()
+    let nb = Buffer()
     nb.write_bytesview(data[fstart:r.p])
     starts.clear()
     ends.clear()
@@ -837,7 +837,7 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
   // (the allocator's calls so far: the kind's global, KINDS)
   let allocs = gas + 1 + K_ALLOC
   let params = s.type_params[s.func_types[k]]
-  let nb = @buffer.new()
+  let nb = Buffer()
   // no locals
   nb.write_byte(b'\x00')
   bump(nb, pb, mi, calls, 1L)
@@ -892,8 +892,8 @@ fn focus_is(focus : String, name : String) -> Bool {
   match focus.find("*") {
     None => name == focus
     Some(at) => {
-      let head = focus.view(end_offset=at).to_string()
-      let tail = focus.view(start_offset=at + 1).to_string()
+      let head = focus.exact_view(end=at).to_owned()
+      let tail = focus.exact_view(start=at + 1).to_owned()
       name.length() >= head.length() + tail.length() &&
       name.has_prefix(head) &&
       name.has_suffix(tail)
@@ -919,7 +919,7 @@ fn focus_wrapper(s : Shape, k : Int, gas : Int, pb : Int, cur : Int, f : Int) ->
   let prev = params
   let began = params + 1
   let a_began = params + 2
-  let nb = @buffer.new()
+  let nb = Buffer()
   put(nb, [0x02, 0x01, 0x7f, 0x02, 0x7e])
   let op = fn(o : Int, i : Int) {
     nb.write_byte(o.to_byte())
@@ -1008,7 +1008,7 @@ fn apart_wrapper(s : Shape, k : Int, gas : Int, nk : Int, pb : Int, apart_at : I
   // its locals after its parameters: the table in use's address, then __gas and each kind's as they were
   let at = params
   let was = params + 1
-  let nb = @buffer.new()
+  let nb = Buffer()
   put(nb, [0x02, 0x01, 0x7f])
   leb_u(nb, (1 + nk).to_int64())
   nb.write_byte(b'\x7e')

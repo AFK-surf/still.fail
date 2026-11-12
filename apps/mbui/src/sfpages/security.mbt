@@ -8,8 +8,8 @@
 
 ///|
 /// 安全 (SecuritySettings, SecurityScreen), made once in node `v` as wide as `width` gives it, in the frame it is given:
-/// the person's own lock first (an app's alone: a web page signs nothing), then the workspace's as the core's `lock`
-/// says it, each part of it a block of its own come and gone as that changes (read the first time: the page as it is
+/// the workspace's lock as the core's `lock` says it (the person's own lock is no row of its own: to people there is one
+/// safe mode, the user, 2026-11-10), each part of it a block of its own come and gone as that changes (read the first time: the page as it is
 /// while the lock is off, in its bones). `stint`: the page's time on top, what a station's picture is asked for on.
 pub fn security_node(
   v : @view.View,
@@ -33,7 +33,7 @@ pub fn security_node(
     width?,
     lead=fn() { @sf.t("web-pages.security.lead") },
     fn() {
-      let out = if @ui.platform() != 4 { ["personal"] } else { [] }
+      let out : Array[String] = []
       let l = lock()
       match l {
         None => out.push("waiting")
@@ -61,12 +61,6 @@ pub fn security_node(
     },
     fn(b, key) {
       match key {
-        "personal" =>
-          @sf.group_node(b, fn(g) {
-            @sf.link_row_node(g, fn() { @sf.t("android-misc.personal.heading") }, fn() { (core.push)(PersonalLock) }, note=fn() {
-              @sf.t("android-misc.personal.note")
-            })
-          })
         "waiting" =>
           // (read the first time: the page as it is while the lock is off, the commonest, in its bones)
           @sf.waiting_node(
@@ -260,7 +254,7 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
           },
         )
       },
-      fn() { sec_state },
+      fn() { sec_state_lines },
     )
     |> ignore
     let look = @sf.look_node(k)
@@ -442,7 +436,7 @@ fn sec_line_node(
         |> ignore
       }
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { if indent { sec_narrow_row_in } else { @sf.pg_said_row } })
+        @sf.style_node(r, fn() { (if indent { sec_narrow_row_in } else { @sf.pg_said_row }).then(sec_narrow_round) })
         match acts {
           None => words(r)
           // (its mark beside its title and its note as in a row doing nothing, what it does under them all from where
@@ -1035,6 +1029,12 @@ let sec_lead : @ui.Style = @sf.desk_card.then(@ui.css("mb=S7"))
 let sec_state : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Medium, color=Fg, wrap=false)
 
 ///|
+/// The state said alone on its line, the card's first (pair_node's: waiting to be approved, to be made trusted): on
+/// as many lines as it takes where the card has not the room, never cut (a phone's words set larger, in English).
+// kept across runs: a value (no field of it changes)
+let sec_state_lines : @ui.TextStyle = sec_state.then(@sf.in_lines)
+
+///|
 // kept across runs: a value (no field of it changes)
 let sec_state_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
@@ -1196,6 +1196,10 @@ let sec_note_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// it is to be renewed soon; what a row says at its end (the secondary's, on one line).
 // kept across runs: a value (no field of it changes)
 let sec_narrow_row_in : @ui.Style = @ui.css("row w=Full pl=S6 pr=S3 py=S2_5 gap=S3 radius=Inner align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_narrow_round : @ui.Style = @ui.style(radius=@sf.group_row_end_radius)
 
 ///|
 /// Narrow: the app a person's devices under it are, at their marks (sec_narrow_row_in's), 6 over the first (Security.tsx's

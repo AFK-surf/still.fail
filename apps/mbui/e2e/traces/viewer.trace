@@ -1,3 +1,4 @@
+{"settings":{"w":390.0,"h":844.0,"scale":2,"platform":2,"pointing":1,"utc":0,"motion":0,"glass":0,"dark":0,"inset":1,"ime":0,"copy":0,"font":1,"from":"replay"}}
 {"start":"signal-viewer-geometry-live-v3"}
 {"step":"drive-seed 201493"}
 {"env":{"MBUI_CLOUD":"http://127.0.0.1:28840","MBUI_CORE_ACCOUNT":"{\"sub\":\"alice\",\"email\":\"alice@example.test\",\"name\":\"Name of alice\",\"picture\":\"\",\"access\":\"-\",\"refresh\":\"-\",\"accessExpires\":1794119851}","MBUI_DOWNLOADS_DIR":"/test-worktree/apps/mbui/out/e2e/mac/01-viewer/downloads"}}

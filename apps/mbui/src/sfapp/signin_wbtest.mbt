@@ -1,7 +1,7 @@
 // An agent's ask to sign in to a site, answered on its card in the chat (sfpages signin_card.mbt
 // 登录态 "Signing in from a card"): on a device with no password manager to ask, on the tab's screen; a code the page
 // asks typed on the card; a person's step a tap from the screen, and said done; signed in and to be kept, approved here
-// in place, then one line once out of sight.
+// in place, then one line in the card's place.
 
 ///|
 test "a sign-in's card: on screen where there is no password manager here, a code typed on it, a person's step said done" {
@@ -14,7 +14,7 @@ test "a sign-in's card: on screen where there is no password manager here, a cod
   let self = named(calls, "signin.self")
   assert_eq(self.length(), 1)
   assert_eq(text(Some(self[0].params), "id"), "g-1")
-  assert_eq(self[0].params.as_object().unwrap().get("done"), Some(Json::boolean(false)))
+  assert_eq((if self[0].params is Object(o) { Some(o) } else { None }).unwrap().get("done"), Some(Json::boolean(false)))
   // the page asks a code: typed on the card, 继续 sends it alone
   let calls : Array[Made] = []
   let t = cards_core(calls, mode="chat-signin-code")
@@ -28,7 +28,7 @@ test "a sign-in's card: on screen where there is no password manager here, a cod
   t.draw()
   let fill = named(calls, "signin.fill")
   assert_eq(fill.length(), 1)
-  assert_eq(fill[0].params.as_object().unwrap().get("login"), Some(Json::object({ "code": Json::string("123456") })))
+  assert_eq((if fill[0].params is Object(o) { Some(o) } else { None }).unwrap().get("login"), Some(Json::object({ "code": Json::string("123456") })))
   // a captcha: the screen a tap away, 我已登录 once done there
   let calls : Array[Made] = []
   let t = cards_core(calls, mode="chat-signin-person")
@@ -37,11 +37,11 @@ test "a sign-in's card: on screen where there is no password manager here, a cod
   t.draw()
   let self = named(calls, "signin.self")
   assert_eq(self.length(), 1)
-  assert_eq(self[0].params.as_object().unwrap().get("done"), Some(Json::boolean(true)))
+  assert_eq((if self[0].params is Object(o) { Some(o) } else { None }).unwrap().get("done"), Some(Json::boolean(true)))
 }
 
 ///|
-test "signed in and to be kept: approved here once, in place; kept, one line once out of sight" {
+test "signed in and to be kept: approved here once, in place; kept, one line in the card's place" {
   let calls : Array[Made] = []
   let t = cards_core(calls, mode="chat-signin-done")
   t.draw()
@@ -72,7 +72,7 @@ test "1Password slow to answer: the card says it is asked, and the screen is the
   t.draw()
   let self = named(calls, "signin.self")
   assert_eq(self.length(), 1)
-  assert_eq(self[0].params.as_object().unwrap().get("done"), Some(Json::boolean(false)))
+  assert_eq((if self[0].params is Object(o) { Some(o) } else { None }).unwrap().get("done"), Some(Json::boolean(false)))
   // (1Password let go of: what it would have said no more taken)
   assert_true(t.find("正在问 1Password…") is None)
 }

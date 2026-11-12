@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
@@ -30,7 +31,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"]; claudeVersion?: string; ownReset?: boolean } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -67,7 +68,8 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
             return { state: "ok", windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() };
           }
         : null),
-    resetQuota: o.resetQuota ?? null,
+    // (ownReset: the station's own way of resetting, a Claude subscription's here)
+    ...(o.ownReset ? {} : { resetQuota: o.resetQuota ?? null }),
     codex: o.codex,
     hub: o.hub,
     reviewUndecided: o.review,
@@ -77,6 +79,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     workspaces: () => o.workspaces ?? [],
     shared: o.shared,
     urls: o.urls,
+    ...(o.claudeVersion !== undefined ? { claudeVersion: () => o.claudeVersion! } : {}),
   });
   accounts.start();
   const table = routes({
@@ -723,6 +726,65 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("an allowance read stands while its provider gives no answer, half an hour at most; a person who asks it again is told it was not answered", async () => {
+    // One round's question not reaching Anthropic took every Claude account's allowance and resets off their pages
+    // until the next round (ccvm, 2026-11-11).
+    const time = testClock();
+    const ok = (used: number) => ({ state: "ok", windows: [{ label: "每周", usedPercent: used, resetsAt: null }], resetCount: 1, detail: null, checkedAt: 0 });
+    const none = { state: "unavailable", windows: [], detail: "无法连接服务商", checkedAt: 0, unanswered: true };
+    let answer: any = ok(40);
+    let asked = 0;
+    const t = await rig({ clock: time.clock, readQuota: async () => { asked++; return answer; }, resetQuota: async () => ({ outcome: "reset" }) });
+    try {
+      assert.equal((await t.call("POST", "/profiles/cc/quota"))[0], 200);
+      const read = t.view("cc")!.quota;
+      assert.deepEqual([read.state, read.windows[0].usedPercent, read.resetCount], ["ok", 40, 1]);
+      // No answer: what was read stands, with when it was read.
+      answer = none;
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.deepEqual(t.view("cc")!.quota, read);
+      // Told to a station borrowing it the same; not asked again before the next round.
+      const before = asked;
+      assert.deepEqual((await t.accounts.lentHealth("cc")).quota, read);
+      assert.equal(asked, before);
+      // Asked by a person: told it was not answered, what stands left as it is.
+      assert.deepEqual(await t.call("POST", "/profiles/cc/quota"), [502, { error: "无法连接服务商" }]);
+      assert.deepEqual(t.view("cc")!.quota, read);
+      // An answer again: the allowance as it is now, and a person asking is answered.
+      answer = ok(55);
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.equal(t.view("cc")!.quota.windows[0].usedPercent, 55);
+      assert.equal((await t.call("POST", "/profiles/cc/quota"))[0], 200);
+      // None for half an hour since it was read: the failure is said, the marker not kept in it.
+      answer = none;
+      await time.adjust(25 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.equal(t.view("cc")!.quota.windows[0].usedPercent, 55);
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      const failed = t.view("cc")!.quota;
+      assert.deepEqual([failed.state, failed.windows.length, failed.detail, "unanswered" in failed], ["unavailable", 0, "无法连接服务商", false]);
+      // What the provider says of the account itself (its sign-in over) is said at once, an allowance read or not.
+      answer = ok(60);
+      await t.accounts.refreshQuota("cc");
+      answer = { state: "unavailable", windows: [], detail: "登录已过期或失效", checkedAt: 0 };
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.deepEqual([t.view("cc")!.quota.state, t.view("cc")!.quota.detail], ["unavailable", "登录已过期或失效"]);
+      // Asked because it changed (a reset used): what was read before the reset does not stand through no answer.
+      await t.call("PUT", "/profiles/cx", { access: { kind: "subscription" } });
+      await settle();
+      answer = ok(100);
+      await t.accounts.refreshQuota("cx");
+      assert.equal(t.view("cx")!.quota.windows[0].usedPercent, 100);
+      answer = none;
+      assert.equal((await t.call("POST", "/profiles/cx/reset-quota", undefined, owner, { "Idempotency-Key": "k1" }))[0], 200);
+      assert.equal(t.view("cx")!.quota.state, "unavailable");
+    } finally { await t.close(); }
+  });
+
   test("a borrowed Codex subscription's allowance is read with the login its host lent while that is good, else its host's", async () => {
     const data = temp("borrowed-quota");
     const home = join(data, "homes", "bx");
@@ -908,6 +970,63 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a Claude subscription's limit reset is used as the installed Claude Code uses it, and wakes its account", async () => {
+    const woke: string[] = [];
+    let grantLeft = 1;
+    const p = await provider((asked) => {
+      if (asked.url.startsWith("/api/oauth/usage")) {
+        return { status: 200, body: {
+          seven_day: { utilization: 100, resets_at: null },
+          juniper_tide: { eligible: false, ineligible_reason: "not_at_wall", arm: null, available: false },
+          cedar_ember: { eligible: true, grants: [{ id: "launch-fable", resets_total: 1, resets_left: grantLeft, ends_at: "2027-03-09T07:59:00+00:00", paused: false, usable_now: true }], next_grant_id: grantLeft > 0 ? "launch-fable" : null },
+        } };
+      }
+      if (asked.url === "/api/oauth/profile") return { status: 200, body: { organization: { uuid: "0f0e-org" } } };
+      if (asked.url === "/api/organizations/0f0e-org/reset_rate_limits") {
+        const result = grantLeft > 0 ? "reset" : "already_used";
+        grantLeft = 0;
+        return { status: 200, body: { result, resets_left: 0 } };
+      }
+      return { status: 404, body: {} };
+    });
+    const t = await rig({
+      urls: { ...URLS, anthropic: p.base },
+      claudeVersion: "2.1.321",
+      ownReset: true,
+      hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, allowanceReset: async (id) => { woke.push(id); } },
+      readQuota: async () => ({ state: "ok", windows: [{ label: "每周", usedPercent: grantLeft > 0 ? 100 : 3, resetsAt: null }], detail: null, checkedAt: 0 }),
+    });
+    await t.call("PUT", "/profiles/cc", { access: { kind: "subscription" } });
+    mkdirSync(join(t.data, "homes/cc"), { recursive: true });
+    writeFileSync(join(t.data, "homes/cc/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "claude-token", refreshToken: "r", expiresAt: Date.now() + 86_400_000 } }));
+    const redeem = (key: string, reset?: string) => t.call("POST", "/profiles/cc/reset-quota", reset !== undefined ? { reset } : undefined, owner, { "Idempotency-Key": key });
+    // A kind it holds none of: nothing claimed.
+    assert.equal((await redeem("weekly", "weekly"))[0], 409);
+    assert.equal(p.asked.filter((a) => a.method === "POST").length, 0);
+    assert.deepEqual(await redeem("first", "full"), [200, { outcome: "reset" }]);
+    const claim = p.asked.find((a) => a.method === "POST")!;
+    assert.deepEqual(claim.body, { program: "cedar_ember", grant_id: "launch-fable", request_id: createHash("sha256").update("first").digest("hex") });
+    assert.equal(claim.headers.authorization, "Bearer claude-token");
+    assert.equal(claim.headers["user-agent"], "claude-cli/2.1.321 (external, cli)");
+    assert.deepEqual(woke, ["cc"]);
+    // None left now: said so, nothing claimed.
+    const claims = p.asked.filter((a) => a.method === "POST").length;
+    assert.equal((await redeem("second"))[0], 409);
+    assert.equal(p.asked.filter((a) => a.method === "POST").length, claims);
+    await t.close();
+    await p.close();
+  });
+
+  test("without an installed Claude Code a Claude subscription's reset is not asked", async () => {
+    const p = await provider(() => ({ status: 500, body: {} }));
+    const t = await rig({ urls: { ...URLS, anthropic: p.base }, ownReset: true, readQuota: async () => ({ state: "ok", windows: [], detail: null, checkedAt: 0 }) });
+    await t.call("PUT", "/profiles/cc", { access: { kind: "subscription" } });
+    assert.equal((await t.call("POST", "/profiles/cc/reset-quota", undefined, owner, { "Idempotency-Key": "k" }))[0], 503);
+    assert.equal(p.asked.length, 0);
+    await t.close();
+    await p.close();
+  });
+
   test("a successful reset wakes its account and informs its share; an old redemption with no allowance does neither", async () => {
     const woke: string[] = [];
     const sent: string[] = [];
@@ -970,6 +1089,48 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(replaced, 2, "a quota or profile update with the same login does not restart a running app-server");
     await chatgpt.close();
     await t.close();
+  });
+
+  test("a copy of another station's profile is paused and used again here, nothing else of it edited here", async () => {
+    const data = temp("borrowed-paused");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const moved: string[] = [];
+    const shared = { status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }), view: () => ({ id: "s1", role: "user", host: "H", allow: null, reachable: true, pausable: true as const }) };
+    const t = await rig({ data, shared, hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, profileGone: async (id) => { moved.push(id); } } });
+    try {
+      assert.equal(t.view("bx")!.enabled, true);
+      assert.equal((await t.call("PUT", "/profiles/bx", { name: "Mine" }))[0], 409, "a copy is edited on its host");
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false, name: "Mine" }))[0], 409);
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+      assert.equal(t.view("bx")!.enabled, false);
+      assert.deepEqual(moved, ["bx"], "its sessions here move off it");
+      assert.equal((t.profile("bx") as any).share.paused, true);
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+      assert.deepEqual(moved, ["bx"], "paused already: nothing moves again");
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+      assert.equal(t.view("bx")!.enabled, true);
+      assert.equal((t.profile("bx") as any).share.paused, undefined);
+      assert.notEqual(t.profile("bx")!.enabled, false);
+    } finally { await t.close(); }
+  });
+
+  test("a copy its host disabled stays disabled as it is used again here, said so or placed before that was said", async () => {
+    // (`hostOff` is written as a copy is placed; one placed before it was, disabled, its host disabled: nothing else did)
+    for (const share of [{ id: "s1", borrowed: true, host: "H", hostOff: true }, { id: "s1", borrowed: true, host: "H" }]) {
+      const data = temp("borrowed-host-off");
+      writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, enabled: false, share }], connects: [] }));
+      const shared = { status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }), view: () => null };
+      const t = await rig({ data, shared });
+      try {
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+        assert.equal(t.view("bx")!.enabled, false, `its host disabled it (${JSON.stringify(share)}): using it again is the host's to say`);
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+        assert.equal((t.profile("bx") as any).share.paused, true);
+        assert.equal(t.view("bx")!.enabled, false);
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+        assert.equal(t.view("bx")!.enabled, false, "paused here and ended: still its host's disabling");
+      } finally { await t.close(); }
+    }
   });
 
   test("a shared Codex host signing out updates the borrowed check even when there is no login to lend", async () => {

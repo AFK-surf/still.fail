@@ -63,6 +63,8 @@ pub fn flight_by(Spec) -> @view.Flight
 
 pub fn fly(@ui.Ctx, Int32, Double, Double, scale? : Double, px~ : Double, py~ : Double, ps? : Double) -> Unit
 
+pub fn fly_by(@ui.Ctx, Int32, () -> (Double, Double, Double, Double, Double, Double)) -> Unit
+
 pub fn flying_placed(@ui.Ctx, Int32) -> Unit
 
 pub fn generator_duration(Generator) -> Double
@@ -250,6 +252,7 @@ pub fn Anim::new(Double) -> Self
 pub fn Anim::over(Self) -> Bool
 pub fn Anim::snap(Self, Double) -> Unit
 pub fn Anim::target(Self) -> Double
+pub fn Anim::value_at(Self, Double) -> Double
 pub impl @ui.Moving for Anim
 
 pub(all) struct GenState {

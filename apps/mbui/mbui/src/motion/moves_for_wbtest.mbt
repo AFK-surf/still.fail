@@ -39,8 +39,8 @@ fn button_pair(
           let b = c.box(dir=Row, h=Px(36.0), padx=16.0, bg=0x3366CCFFL, radius=18.0, align=ACenter, fn() {
             at = c.text(label, size=13.0, line=18.0, wrap=false, color=0xFFFFFFFFL)
           })
-          reshape(c, b, "t/shape", by=label, spec=move())
-          layout(c, at, "t/words", by=label, spec=move())
+          reshape(c, b, "t/shape", by=label, spec=moved())
+          layout(c, at, "t/words", by=label, spec=moved())
         })
         if half {
           c.look(outer, @ui.look(scale=0.5))
@@ -58,7 +58,7 @@ fn button_pair(
         o.box(fn(b) {
           b.row(Is(true)).height(Is(Some(36.0))).padding(Is((16.0, 0.0, 16.0, 0.0))).ground(Is(0x3366CCFFL)).radius(Is(18.0)).lines_up(Is(Some(Middle))) |> ignore
           let words_at = b.box(fn(k) {
-            k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+            k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
           })
           let g = moves_for(b, fn() { words.get() })
           g.reshapes(b)
@@ -101,7 +101,7 @@ test "a button's words longer, then shorter again: its ground and its words wher
   let old = seen(false)
   let new = seen(true)
   let same = Array::makei(old.length(), fn(k) { seen_near(old[k], new[k]) })
-  assert_eq(same, Array::make(old.length(), true), msg="old \{old}\nnode \{new}")
+  assert_eq(same, Array::make(old.length(), true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }
 
 ///|
@@ -125,7 +125,7 @@ test "a button's words longer: at each moment the same, frames drawn all along o
   let moments = [16.0, 60.0, 120.0, 240.0]
   let all = moments.map(fn(at) { node_at(at, true) })
   let none = moments.map(fn(at) { node_at(at, false) })
-  assert_eq(Array::makei(4, fn(k) { seen_near(all[k], none[k]) }), [true, true, true, true], msg="\{all}\n\{none}")
+  assert_eq(Array::makei(4, fn(k) { seen_near(all[k], none[k]) }), [true, true, true, true], msg="\{Repr(all)}\n\{Repr(none)}")
 }
 
 ///|
@@ -176,7 +176,7 @@ test "a button's words longer, the short ones 70 after and others 80 after, no f
   assert_eq(
     (seen_near(a90, b90), seen_near(a_end, b_end), seen_near(b_end, rest), a_clock, b_clock),
     (true, true, true, false, false),
-    msg="\{a90} \{b90}; \{a_end} \{b_end} \{rest}",
+    msg="\{Repr(a90)} \{Repr(b90)}; \{Repr(a_end)} \{Repr(b_end)} \{Repr(rest)}",
   )
 }
 
@@ -212,7 +212,7 @@ test "a button's words longer, then the short ones at 70: each way set off from 
   // (the same where each was and as fast, in the window's terms, whatever its layout did meanwhile: nothing here)
   let near = fn(a : (Double, Double), b : (Double, Double)) { (a.0 - b.0).abs() <= 1.0e-9 && (a.1 - b.1).abs() <= 1.0e-9 }
   let same = Array::makei(before.length(), fn(i) { Array::makei(before[i].length(), fn(k) { near(before[i][k], after[i][k]) }) })
-  assert_eq(same, before.map(fn(m) { Array::make(m.length(), true) }), msg="\{before}\n\{after}")
+  assert_eq(same, before.map(fn(m) { Array::make(m.length(), true) }), msg="\{Repr(before)}\n\{Repr(after)}")
 }
 
 ///|
@@ -279,7 +279,7 @@ test "a button growing for its words while what holds it is made narrower, then 
     seen_near(left_alone, no_frame) &&
     seen_near(left_alone, timed) &&
     seen_near(left_alone, direct),
-    msg="\{left_alone} \{with_frame} \{no_frame} \{timed} \{direct}",
+    msg="\{Repr(left_alone)} \{Repr(with_frame)} \{Repr(no_frame)} \{Repr(timed)} \{Repr(direct)}",
   )
 }
 
@@ -295,7 +295,7 @@ test "a button's words let go of while it goes: from that moment no more of it, 
       let g = moves_for(b, fn() { words.get() })
       g.reshapes(b)
       b.show(fn() { shown.get() }, fn(k) {
-        k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+        k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
         g.moves_with(k)
       })
       group.val = Some(g)
@@ -336,8 +336,8 @@ fn nested_pair(room : @signals.Signal[Double], node : Bool, box_first? : Bool = 
             inner = c.box(pad=2.7, bg=0x3366CCFFL, fn() { c.text("Hi", size=13.0, line=18.0, wrap=false, color=0xFFFFFFFFL) |> ignore })
             c.box(w=Px(10.5), h=Px(10.5), bg=0xCC3333FFL, fn() {  }) |> ignore
           })
-          layout(c, row, "t/row", by=r.to_string(), spec=move())
-          layout(c, inner, "t/inner", by=r.to_string(), spec=move())
+          layout(c, row, "t/row", by=r.to_string(), spec=moved())
+          layout(c, inner, "t/inner", by=r.to_string(), spec=moved())
         })
         |> ignore
       }
@@ -355,7 +355,7 @@ fn nested_pair(room : @signals.Signal[Double], node : Bool, box_first? : Bool = 
           row.box(fn(sp) { sp.width(By(fn() { Some(room.get()) })).height(Is(Some(4.0))) |> ignore }) |> ignore
           let inner = row.box(fn(b) {
             b.pad(Is(2.7)).ground(Is(0x3366CCFFL)) |> ignore
-            b.box(fn(k) { k.words(Is("Hi"), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore }) |> ignore
+            b.box(fn(k) { k.words(Is("Hi"), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore }) |> ignore
           })
           row.box(fn(d) { d.width(Is(Some(10.5))).height(Is(Some(10.5))).ground(Is(0xCC3333FFL)) |> ignore }) |> ignore
           let g = moves_for(row, fn() { room.get() })
@@ -415,7 +415,7 @@ test "a row and a box in it going together, what is in it not said to go carried
   let row_first = seen(true, false)
   let box_first = seen(true, true)
   let same = Array::makei(old.length(), fn(k) { (near(old[k], row_first[k]), near(old[k], box_first[k])) })
-  assert_eq(same, Array::make(old.length(), (true, true)), msg="old \{old}\nnode \{row_first}\nbox first \{box_first}")
+  assert_eq(same, Array::make(old.length(), (true, true)), msg="old \{Repr(old)}\nnode \{Repr(row_first)}\nbox first \{Repr(box_first)}")
 }
 
 ///|
@@ -427,7 +427,7 @@ test "a button in a box made narrower, its words the same: where it is laid out 
   w.set(300.0)
   t.frame()
   let after = button_seen(t)
-  assert_eq(((before.0 - after.0) * 1000.0).round(), 50000.0, msg="\{before} \{after}")
+  assert_eq(((before.0 - after.0) * 1000.0).round(), 50000.0, msg="\{Repr(before)} \{Repr(after)}")
   assert_true(!@ui.view_tree().unwrap().clock_read())
 }
 
@@ -460,7 +460,7 @@ test "a button in a box drawn half as big about its middle, its words longer the
   let told = button_seen(t)
   let ground_same = (before.0 - told.0).abs() <= 1.0e-9 && (before.1 - told.1).abs() <= 1.0e-9
   let same = Array::makei(old.length(), fn(k) { seen_near(old[k], new[k]) })
-  assert_eq((same, ground_same), (Array::make(old.length(), true), true), msg="old \{old}\nnode \{new}\n\{before} \{told}")
+  assert_eq((same, ground_same), (Array::make(old.length(), true), true), msg="old \{Repr(old)}\nnode \{Repr(new)}\n\{Repr(before)} \{Repr(told)}")
 }
 
 ///|
@@ -520,14 +520,14 @@ fn narrowed_at_50(width : Double) -> (Double, Double, Double) {
 test "a button narrowed and its words changed at one moment, two changes one after the other, a frame between or none: drawn as the narrowing left it as the second is told" {
   let narrowed = narrowed_at_50(300.0)
   let (a, b) = (same_moment(0, true), same_moment(0, false))
-  assert_true(seen_near(a, narrowed) && seen_near(b, narrowed), msg="\{narrowed} \{a} \{b}")
+  assert_true(seen_near(a, narrowed) && seen_near(b, narrowed), msg="\{Repr(narrowed)} \{Repr(a)} \{Repr(b)}")
 }
 
 ///|
 test "a button narrowed from outside, then narrowed again with its words changed in one batch: drawn as the first narrowing left it (not the second) as the batch is told, a frame between or none" {
   let narrowed = narrowed_at_50(300.0)
   let (a, b) = (same_moment(1, true), same_moment(1, false))
-  assert_true(seen_near(a, narrowed) && seen_near(b, narrowed), msg="\{narrowed} \{a} \{b}")
+  assert_true(seen_near(a, narrowed) && seen_near(b, narrowed), msg="\{Repr(narrowed)} \{Repr(a)} \{Repr(b)}")
 }
 
 ///|
@@ -548,7 +548,7 @@ fn two_buttons(words : @signals.Signal[String], second_first : Bool) -> @ui.Test
           b.row(Is(true)).height(Is(Some(36.0))).padding(Is((16.0, 0.0, 16.0, 0.0))).ground(Is(ground)).radius(Is(18.0)).lines_up(Is(Some(Middle))) |> ignore
         })
         let k = b.box(fn(k) {
-          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
         })
         (b, k)
       }
@@ -619,7 +619,7 @@ fn room_and_button(open : @signals.Signal[Bool], words : @signals.Signal[String]
       o.width(Is(Some(400.0))).lines_up(Is(Some(Middle))) |> ignore
       let room = fn() {
         reveal_node(o, fn() { open.get() }, fn(h) {
-          h.width(Is(Some(300.0))).words(Is("Waiting for the browser to finish"), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
+          h.width(Is(Some(300.0))).words(Is("Waiting for the browser to finish"), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
         })
         |> ignore
       }
@@ -628,7 +628,7 @@ fn room_and_button(open : @signals.Signal[Bool], words : @signals.Signal[String]
           b.row(Is(true)).height(Is(Some(36.0))).padding(Is((16.0, 0.0, 16.0, 0.0))).ground(Is(0x3366CCFFL)).radius(Is(18.0)).lines_up(Is(Some(Middle))) |> ignore
         })
         let k = b.box(fn(k) {
-          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
         })
         let g = moves_for(b, fn() { words.get() })
         g.reshapes(b)
@@ -707,7 +707,7 @@ test "a button going for its words, what holds it narrowed from outside while it
   t2.advance(s0 + 60.0 - t2.time())
   tree2.event(t2.time(), fn() { w2.set(250.0) })
   t2.frame_at(t2.time())
-  assert_true(first == 1 && second == 2 && seen_near(drawn, button_seen(t2)), msg="\{first} \{second} \{drawn} \{button_seen(t2)}")
+  assert_true(first == 1 && second == 2 && seen_near(drawn, button_seen(t2)), msg="\{first} \{second} \{Repr(drawn)} \{Repr(button_seen(t2))}")
 }
 
 ///|
@@ -718,7 +718,7 @@ test "a button that goes for its words given another colour, then its words chan
   @ui.set_view_app(fn(root) {
     root.box(fn(b) {
       b.row(Is(true)).height(Is(Some(36.0))).ground(By(fn() { ground.get() })) |> ignore
-      let k = b.box(fn(k) { k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore })
+      let k = b.box(fn(k) { k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore })
       let g = moves_for(b, fn() { words.get() })
       g.reshapes(b)
       g.moves_with(k)

@@ -151,7 +151,7 @@ function helperSays(): Promise<string> {
 async function ask(conn: Connection, method: string, path: string, query: Record<string, string> = {}, body?: Buffer | unknown): Promise<{ status: number; headers: Record<string, string>; body: Buffer; json: any }> {
   const s = await conn.openBi();
   const q = new URLSearchParams(query).toString();
-  await writeLine(s, { method, path: `/admin/api${path}${q ? `?${q}` : ""}`, headers: { "stillfail-lang": "zh" } });
+  await writeLine(s, { method, path: `/admin/api${path}${q ? `?${q}` : ""}`, headers: { "stillfail-lang": "zh", "stillfail-build": "0.1.0" } });
   if (body !== undefined) await s.write(Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body)));
   await s.finish();
   const r = new Reader(s);

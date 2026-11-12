@@ -8,13 +8,15 @@ fn settings_tester(
   mode? : String = "settings",
   shows? : String = "",
   platform? : Int = 0,
+  w? : Double = 390.0,
+  h? : Double = 844.0,
 ) -> @ui.Tester {
   new_run()
   if shows != "" {
     @settings.fixture_page(shows) |> ignore
   }
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   open_setting(page)
   // the pages opened slide in from the frame that takes them
   t.draw()
@@ -330,7 +332,7 @@ test "the workspace left: asked first, then another workspace's Home at once whi
   t.run_for(@ui.move_most_ms)
   t.tap_text("退出此 workspace")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("退出「星火工作室」？") is Some(_), msg=t.drawn_text())
   let (x, y) = words_node(t, "退出").unwrap()
   t.tap(x, y)
@@ -427,10 +429,11 @@ test "profiles, connects, the vault: their lists" {
   let t3 = settings_tester("vault")
   assert_true(t3.find("git push origin main") is Some(_))
   assert_true(t3.find("部署机") is None)
-  assert_true(settings_tester("vault-items").find("部署机") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t3.run_for(bar.rest() - t3.time())
   t3.assert_idle()
+  // (read last: a Tester made after t3 is the one every read reads)
+  assert_true(settings_tester("vault-items").find("部署机") is Some(_))
 }
 
 ///|
@@ -448,9 +451,30 @@ test "profiles on a phone: an allowance of three windows said one way for all, e
   // a phone's 390 has the room for all three in full: each its name and what is left, whole
   let shown = t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })
   for words in ["5 小时", "剩 62%", "本周", "剩 19%", "每月", "剩 97%"] {
-    assert_true(shown.contains(words), msg="\{words}: \{shown}")
+    assert_true(shown.contains(words), msg="\{words}: \{Repr(shown)}")
     assert_eq(t.lines_of(words), [words], msg=words)
   }
+  assert_eq(t.squeeze_faults(), [])
+}
+
+///|
+test "a model's own week (Fable's) is a chip and a dial of its own, after the account's week" {
+  let t = settings_tester("profiles", shows="settings-profiles-fable")
+  // (its chips one way for all, the longest the row has the room for: each its name whole, then what is left)
+  let shown = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.5 > 0.5 }) }
+  let at = fn(t : @ui.Tester, words : String) { shown(t).filter(fn(w) { w.0 == words })[0] }
+  for words in ["每周", "每周 · Fable"] {
+    assert_eq(shown(t).filter(fn(w) { w.0 == words }).length(), 1, msg="\{words}: \{Repr(shown(t).map(fn(w) { w.0 }))}")
+  }
+  assert_true(shown(t).iter().any(fn(w) { w.0.has_suffix("46%") && w.1 > at(t, "每周 · Fable").1 }))
+  assert_true(at(t, "每周 · Fable").1 > at(t, "每周").1 && at(t, "每周 · Fable").2 == at(t, "每周").2)
+  assert_eq(t.squeeze_faults(), [])
+  // on its page a dial after the account's, under the same heading: beside them, or on the line under where one
+  // line has not the room for all three whole (dials_node's `lines`)
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-fable")
+  let (week, fable) = (at(t, "每周"), at(t, "每周 · Fable"))
+  assert_true((fable.2 == week.2 && fable.1 > week.1) || (fable.2 > week.2 && fable.1 == at(t, "5 小时").1), msg="\{Repr(week)} \{Repr(fable)}")
+  assert_true(shown(t).iter().any(fn(w) { w.0.has_prefix("46") }), msg="\{Repr(shown(t).map(fn(w) { w.0 }))}")
   assert_eq(t.squeeze_faults(), [])
 }
 
@@ -547,15 +571,34 @@ test "添加成员: what is typed counts at once, 添加 lit by it" {
   let (x, y, w, h) = t.query(Button, label="添加成员").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(t.find("添加成员") is Some(_))
+  // (its sheet risen: its field where a finger finds it)
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("name@example.com")
   t.type_text("he2@example.com")
-  // the sheet's 添加, its last words (the page's 添加中继 lies under it)
-  match t.find_last("添加") {
-    Some((x, y)) => t.tap(x, y)
-    None => fail("no 添加")
-  }
+  // the sheet's 添加 (the page's 添加中继 lies under it; the sheet's title 添加成员 over it)
+  t.click(Button, label="添加")
   // the fixture adds them: the sheet says what came of it
   assert_true(t.find("完成") is Some(_))
+}
+
+///|
+test "添加成员: 完成 closes what came of it, opened again and again in one run" {
+  let t = settings_tester("workspace", w=1280.0, h=800.0)
+  for i in 0..<3 {
+    let (x, y, w, h) = t.query(Button, label="添加成员").unwrap().rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.run_for(@ui.move_most_ms + 600.0)
+    t.tap_text("name@example.com")
+    t.type_text("he\{i}@example.com")
+    t.click(Button, label="添加")
+    t.run_for(@ui.move_most_ms + 600.0)
+    assert_true(t.find("添加成员") is Some(_))
+    t.click(Button, label="完成")
+    t.run_for(@ui.move_most_ms + 600.0)
+    if t.find("完成") is Some(_) {
+      fail("round \{i}: 完成 pressed, what came of it still shown")
+    }
+  }
 }
 
 ///|
@@ -579,6 +622,57 @@ test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed
   assert_true(dark.length() > 25)
   t.tap_text("在飞书中打开")
   assert_eq(t.opened(), ["https://open.feishu.cn/page/launcher?code=made-up"])
+}
+
+///|
+test "Comma: a new connect's 绑定模型 step shows its model and no 会话方式, which a Comma connect has not" {
+  for w in [390.0, 1280.0] {
+    let t = settings_tester("connects", mode="settings-new-connect-comma", shows="settings-new-connect-comma", w~)
+    assert_true(t.find("绑定模型") is Some(_), msg="its step at \{w}")
+    // (the model's field, its label the words 模型 alone)
+    assert_true(t.words().iter().any(fn(x) { x.0 == "模型" }), msg="its model at \{w}: " + t.words().map(fn(x) { x.0 }).join("|"))
+    // (its choices' words: the connects behind the sheet say 每个 thread 一个会话 of their own)
+    for gone in ["会话方式", "在 thread 中 @ 它即开启一个新会话", "它看到的所有 thread 都进入同一个会话"] {
+      assert_true(t.find(gone) is None, msg="\{gone} at \{w}")
+    }
+  }
+}
+
+///|
+test "Comma: a connect's page says Comma's words, no way of making sessions and no Slack" {
+  let t = settings_tester("connect:ws1/st1#k1", mode="settings-connect-comma", w=1280.0)
+  for w in ["Comma 助手", "Comma · Willow", "运行方式", "最近会话", "暂无会话。Comma 交给它的每个 Task 各开启一个会话。"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(x) { x.0 }).join("|"))
+  }
+  assert_true(t.query(Link, label="会话") is None, msg="its way of making sessions is one: no row to change it")
+  // (its note under the model: no single session to switch)
+  assert_true(t.find("运行于 Claude Code，创建后无法更改；如需使用其他运行时，请新建连接。") is Some(_))
+  assert_true(t.find("单会话的当前会话下一条起用新模型") is None)
+  assert_true(t.find("Slack") is None, msg=t.words().map(fn(x) { x.0 }).join("|"))
+  t.click(Button, label="更多")
+  t.frame()
+  t.tap_text("删除连接")
+  t.run_for(@ui.move_most_ms)
+  assert_true(
+    t.find("Comma 连接将断开。如需在 Comma 中也移除这台设备，请到 Comma 的 still.fail 插件页或 Comma for Teams 的 still.fail 页面操作。") is Some(_),
+    msg=t.words().map(fn(x) { x.0 }).join("|"),
+  )
+  assert_true(t.find("Slack") is None)
+}
+
+///|
+test "飞书: a connect's page with no sessions yet, and its delete, say nothing of Slack" {
+  let t = settings_tester("connect:ws1/st1#k1", mode="settings-connect-feishu", w=1280.0)
+  for w in ["飞书助手", "飞书 · Willow", "每个群一个会话", "暂无会话，在群里 @飞书助手 或私聊它即可开始"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(x) { x.0 }).join("|"))
+  }
+  assert_true(t.find("Slack") is None, msg=t.words().map(fn(x) { x.0 }).join("|"))
+  t.click(Button, label="更多")
+  t.frame()
+  t.tap_text("删除连接")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("连接将断开。开放平台中的应用需要你手动删除。") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
+  assert_true(t.find("Slack") is None)
 }
 
 ///|
@@ -738,8 +832,8 @@ test "settings: a station's card with its CPU, memory and disk all low shows eac
     // in words where the line has the room for all three, else all by their figures: one way for all of them
     let worded = ["空闲 8%", "剩 5.8 G", "剩 19.4 G"].iter().all(fn(x) { shown.contains(x) })
     let figured = ["8%", "5.8G", "19.4G"].iter().all(fn(x) { shown.contains(x) })
-    assert_true(worded != figured, msg="\{w}: \{shown}")
-    assert_true(!shown.iter().any(fn(x) { x.contains("…") }), msg="\{w}: \{shown}")
+    assert_true(worded != figured, msg="\{w}: \{Repr(shown)}")
+    assert_true(!shown.iter().any(fn(x) { x.contains("…") }), msg="\{w}: \{Repr(shown)}")
     // (at 320 its summary beside its name is cut short, as it may be: none of the chips is)
     let chips = t.squeeze_faults().filter(fn(f) { ["空闲", "剩", "%", "G」"].iter().any(fn(x) { f.contains(x) }) })
     assert_eq(chips, [], msg="\{w}")
@@ -940,7 +1034,7 @@ test "a run can choose another runtime for a model available on both" {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -1023,7 +1117,7 @@ test "an API key can be disabled and enabled again from its page" {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -1039,6 +1133,37 @@ test "an API key can be disabled and enabled again from its page" {
   let again = t.drive("tap icon:more\nuntil 启用\ntap =启用\n")
   assert_true(again.contains("EXIT 0"), msg=again.join("\n"))
   assert_true(named(calls, "profile.put").iter().any(fn(c) { flag(field(Some(c.params), "input"), "enabled") }))
+}
+
+///|
+test "a copy of another station's profile is paused here from its page and used again, nothing else of it offered" {
+  new_run()
+  @settings.fixture_page("settings-profile-copy") |> ignore
+  let calls : Array[Made] = []
+  let base = fixture("settings")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("profile:ws1/st1#bx")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let log = t.drive("tap icon:more\nuntil 停用\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  assert_true(t.find("重命名") is None, msg="a copy is renamed on its host")
+  assert_true(t.find("删除") is None, msg="a copy is taken away by its host, not deleted here")
+  let on = t.drive("tap =停用\nuntil 停用「maple@example.com」？\nuntil 分享它的 station 不受影响\ntap =停用\n")
+  assert_true(on.contains("EXIT 0"), msg=on.join("\n"))
+  t.draw()
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { text(Some(c.params), "id") == "bx" && !flag(field(Some(c.params), "input"), "enabled") }))
+  assert_true(t.find("已停用") is Some(_))
+  let again = t.drive("tap icon:more\nuntil 启用\ntap =启用\n")
+  assert_true(again.contains("EXIT 0"), msg=again.join("\n"))
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { text(Some(c.params), "id") == "bx" && flag(field(Some(c.params), "input"), "enabled") }))
 }
 
 ///|
@@ -1090,17 +1215,11 @@ test "a connect's page says what another runtime reaches where its station lets 
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
   open_setting("connect:ws1/st1#k1")
   t.draw()
-  assert_true(t.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is Some(_))
+  // (a multi-session connect: nothing of a single session's)
+  assert_true(t.find("运行于 Claude Code。新会话用新设置。") is Some(_))
+  assert_true(t.find("单会话") is None)
   let before = settings_tester("connect:ws1/st1#k1")
-  assert_true(before.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is None)
-}
-
-///|
-/// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
-/// a dialog (with a pointer) past its coming.
-fn presented_in(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present")
-  t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
+  assert_true(before.find("运行于 Claude Code。新会话用新设置。") is None)
 }
 
 ///|

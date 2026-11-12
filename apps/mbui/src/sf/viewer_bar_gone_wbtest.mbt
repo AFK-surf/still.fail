@@ -22,7 +22,7 @@ test "the viewer's bar going up out of the way: drawn higher each frame as it is
   // (the bar's glass, across the window: where its top is drawn)
   let top = fn() { t.drawn_glass().filter(fn(g) { g.2 >= 1000.0 }).map(fn(g) { g.1 }) }
   let rest = top()
-  assert_true(rest.length() == 1, msg="\{t.drawn_glass()}")
+  assert_true(rest.length() == 1, msg="\{Repr(t.drawn_glass())}")
   // (told to go: built for that)
   hidden.set(true)
   t.draw()
@@ -51,6 +51,6 @@ test "the viewer's bar going up out of the way: drawn higher each frame as it is
   let higher = tops.length() > 3 &&
     tops[0] < rest[0] &&
     Array::makei(tops.length() - 1, fn(k) { tops[k + 1] < tops[k] }).iter().all(fn(b) { b })
-  assert_true(higher, msg="\{rest} then \{tops}")
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  assert_true(higher, msg="\{Repr(rest)} then \{Repr(tops)}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
 }

@@ -16,7 +16,7 @@ priv struct HeldTopic {
 
 ///|
 /// Each legacy scope holds its own graph reader, so leaving one scope does not end another scope's topic.
-let held_topics : Map[String, Map[String, HeldTopic]] = {}
+let held_topics : Map[String, Map[String, HeldTopic]] = Map([])
 
 ///|
 /// What was let go of in the build going on though that build read it (held_build): what is read in the build its
@@ -29,7 +29,7 @@ let held_deferred : Ref[Array[HeldTopic]] = Ref([])
 let held_read_now : Ref[Array[HeldTopic]] = Ref([])
 
 ///|
-let held_building : Ref[Bool] = Ref::new(false)
+let held_building : Ref[Bool] = Ref(false)
 
 ///|
 /// This watch belongs to its legacy scope, not to the particular build which first read that scope.
@@ -71,7 +71,7 @@ pub fn hold(src : Source, scope : String, name : String, params : Map[String, Js
   let topics = match held_topics.get(scope) {
     Some(m) => m
     None => {
-      let m : Map[String, HeldTopic] = {}
+      let m : Map[String, HeldTopic] = Map([])
       held_topics[scope] = m
       m
     }
@@ -98,8 +98,23 @@ pub fn hold(src : Source, scope : String, name : String, params : Map[String, Js
 }
 
 ///|
+/// The topic `name` with `params` as `scope` holds it of `src`, where it does (hold's); None where it holds none such.
+/// It asks nothing and holds nothing.
+fn held_state(src : Source, scope : String, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState]? {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  match held_topics.get(scope) {
+    Some(m) =>
+      match m.get(key) {
+        Some(t) if physical_equal(t.source, src) => Some(t.state)
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
 /// What `scope` read, let go of (it ended: its page left, its chat closed).
-pub fn let_go(src : Source, scope : String) -> Unit {
+pub fn let_go(_src : Source, scope : String) -> Unit {
   match held_topics.get(scope) {
     Some(m) => {
       held_topics.remove(scope)

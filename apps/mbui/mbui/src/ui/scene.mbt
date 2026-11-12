@@ -181,6 +181,13 @@ fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Doub
 }
 
 ///|
+/// Whether a clip's edge at `a` is the one at `b` (within a millionth, what the same place worked out two ways may
+/// differ by).
+fn clip_edge_is(a : Double, b : Double) -> Bool {
+  (a - b).abs() < 1.0e-6
+}
+
+///|
 /// Whether (`x`, `y`) is the clip `k`'s corner `corner` (clip_corner_r's).
 fn clip_corner_is(k : Int, corner : Int, x : Double, y : Double) -> Bool {
   let s = clip_stack
@@ -341,7 +348,7 @@ fn[A : ClipNumbers] clip_cutting(
 
 ///|
 /// What a clip's 12 numbers are read from: clip_stack, an instance list, a kept clip's.
-trait ClipNumbers {
+priv trait ClipNumbers {
   clip_number(Self, Int) -> Double
 }
 
@@ -391,7 +398,7 @@ fn clip_arc_powers(e : Double) -> Unit {
 
 ///|
 // kept across runs: worked out again only for another power (clip_arc_powers)
-let clip_arc_e : Ref[Double] = Ref::new(-1.0)
+let clip_arc_e : Ref[Double] = Ref(-1.0)
 
 ///|
 // kept across runs: as clip_arc_e
@@ -588,10 +595,12 @@ fn push_box_clip(
   let r1 = box_corner_r(r1, room)
   let r2 = box_corner_r(r2, room)
   let r3 = box_corner_r(r3, room)
-  let own0 = r0 > 0.0 && x0 == x && y0 == y
-  let own1 = r1 > 0.0 && x1 == x + w && y0 == y
-  let own2 = r2 > 0.0 && x1 == x + w && y1 == y + h
-  let own3 = r3 > 0.0 && x0 == x && y1 == y + h
+  // (a corner its own where the clip it is in leaves it there: within a millionth, as clip_corner_is, since an edge of
+  // both worked out two ways differs by that, and the corner was square for that frame)
+  let own0 = r0 > 0.0 && clip_edge_is(x0, x) && clip_edge_is(y0, y)
+  let own1 = r1 > 0.0 && clip_edge_is(x1, x + w) && clip_edge_is(y0, y)
+  let own2 = r2 > 0.0 && clip_edge_is(x1, x + w) && clip_edge_is(y1, y + h)
+  let own3 = r3 > 0.0 && clip_edge_is(x0, x) && clip_edge_is(y1, y + h)
   let p0 = clip_corner_radius(k, 0, x0, y0)
   let p1 = clip_corner_radius(k, 1, x1, y0)
   let p2 = clip_corner_radius(k, 2, x1, y1)
@@ -683,13 +692,34 @@ fn on_pixels(v : Double, sc : Double) -> Double {
 }
 
 ///|
-/// Where a glyph's picture goes down the screen: its line's baseline `base` set on the pixels first, then the glyph's
-/// own offset `oy` from it. A host draws each picture with the baseline on a pixel row (win_text.cpp), so every glyph
-/// of a line lands on the same row; rounded as one sum, a baseline half way between two rows went up for one glyph
-/// and down for the next, by how its offset's float rounded (at 150%, a flat-topped "u" a pixel above its "p" and "s").
-fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
-  on_pixels(on_pixels(base, sc) + oy, sc)
+/// Where a glyph's picture goes down the screen, its words `base` under the top `top` of the box they are in: its line's
+/// baseline set on the pixels first, then the glyph's own offset `oy` from it. A host draws each picture with the
+/// baseline on a pixel row (win_text.cpp), so every glyph of a line lands on the same row; rounded as one sum, a
+/// baseline half way between two rows went up for one glyph and down for the next, by how its offset's float rounded (at
+/// 150%, a flat-topped "u" a pixel above its "p" and "s").
+/// Words are rigid in their box: the top is taken apart into its nearest whole pixel and what is left of it, the
+/// baseline's offset added to what is left, and that put on the pixel half way up (a tie, and what is within
+/// tie_slack under one, going up), then the glyph's own offset in whole pixels; so a box moved by whole pixels, its top
+/// on them or not, draws its words the same to the bit (rounded as one sum with the top, an offset half way between two
+/// pixels went to either by the float bits of the top: a row's words a pixel higher as it was kept, moved, than drawn
+/// anew at 2.75 pixels a point), and a box on a motion's way has its baseline on the pixel nearest where it falls.
+/// Not mended here: across, glyph_x puts a sum on the pixels the same way, so a list that scrolls sideways may still
+/// have its words step in their rows; and an old view's list (ListRows), whose rows are not put on the pixels, has its
+/// words on the pixel nearest where they fall while its rows' grounds are where they fall.
+fn on_glyph_row(top : Double, base : Double, oy : Double, sc : Double) -> Double {
+  let t = top * sc
+  let tp = t.round()
+  let f = t - tp
+  // (half way up, as the sum was where it is on the screen: an offset is the same wherever its box is)
+  let up = fn(v : Double) { (v + 0.5).floor() }
+  (tp + (f + base * sc + 0.5 + tie_slack).floor() + up(oy * sc)) / sc
 }
+
+///|
+/// How far under half way between two pixels a baseline still goes up (on_glyph_row): what is left of a top past its
+/// whole pixel carries the float bits of the sums it came of (about a millionth of a millionth of a pixel), which
+/// decided a tie by where the box stood; what is laid out falls on a tie or well off one, never a millionth under it.
+let tie_slack : Double = 1.0e-6
 
 ///|
 /// How far the old view painted now is carried off the pixels from where it was laid out (an old view hosted in a node
@@ -707,11 +737,11 @@ fn glyph_x(x : Double, sc : Double) -> Double {
 }
 
 ///|
-/// Where a glyph's picture goes down, its line's baseline `base` as painted, then its own offset `oy` (on_glyph_row): on
-/// the pixels where it is laid out (glyphs_carried).
-fn glyph_row(base : Double, oy : Double, sc : Double) -> Double {
+/// Where a glyph's picture goes down, its line's baseline `base` under the top `top` of its box as painted, then its own
+/// offset `oy` (on_glyph_row): on the pixels where it is laid out (glyphs_carried).
+fn glyph_row(top : Double, base : Double, oy : Double, sc : Double) -> Double {
   let m = glyphs_carried[1]
-  on_glyph_row(base - m, oy, sc) + m
+  on_glyph_row(top - m, base, oy, sc) + m
 }
 
 ///|
@@ -880,7 +910,7 @@ fn Ctx::push_inst(
   }
   let (y, alpha, c2d) = match glyph_look.val {
     Some(f) if !glyph_pushing.val => {
-      let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 })
+      let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1, line: -1, cx: 0.0 })
       (y + l.dy, alpha * l.alpha, if kind == 0.0 { c2d * l.alpha } else { c2d })
     }
     _ => (y, alpha, c2d)
@@ -908,7 +938,7 @@ fn Ctx::push_inst(
   a.unsafe_set(b + 14, c2c)
   a.unsafe_set(b + 15, c2d)
   let k = clip_top()
-  guard k >= 0 else { abort("push_inst: no clip pushed") }
+  guard k >= 0 else { @halt.saying("push_inst: no clip pushed") }
   a.unsafe_set(b + 16, clip_stack.unsafe_get(k))
   a.unsafe_set(b + 17, clip_stack.unsafe_get(k + 1))
   a.unsafe_set(b + 18, clip_stack.unsafe_get(k + 2))
@@ -1065,14 +1095,14 @@ let glyph_cut : Ref[(Double, Double)] = Ref((0.0, 0.0))
 let glyph_pushing : Ref[Bool] = Ref(false)
 
 ///|
-/// The next glyph's own look, where what is painted says one (Ctx::glyphs_by), counted: its line's box from (x, y),
-/// `h` high.
-fn glyph_next(x : Double, y : Double, h : Double) -> GlyphLook? {
+/// The next glyph's own look, where what is painted says one (Ctx::glyphs_by, View::glyphs_by), counted: its line's
+/// box from (x, y), `h` high; it on line `line` of its words, its middle `cx` along it (GlyphAt's).
+fn glyph_next(x : Double, y : Double, h : Double, line : Int, cx : Double) -> GlyphLook? {
   match glyph_look.val {
     Some(f) => {
       let gi = glyph_n.val
       glyph_n.val = gi + 1
-      Some(f({ index: gi, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 }))
+      Some(f({ index: gi, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1, line, cx }))
     }
     None => None
   }
@@ -1089,7 +1119,7 @@ fn Ctx::emit_text(
   center_in? : Double = -1.0,
   spans? : Array[(Int, Int, Int64)] = [],
   font? : (Double, Int, Int, Double),
-  unplaced? : Array[(Int, Double, Double, Double)],
+  unplaced? : Array[(Int, Double, Double, Double, Double, Double)],
 ) -> Unit {
   let s = tl.shaped
   let n = s.starts.length()
@@ -1130,7 +1160,7 @@ fn Ctx::emit_text(
     let line = tl.line_of[c]
     let top = oy + line.to_double() * tl.line_h
     // (its own look, where what holds it says one: numbered whether or not it shows, Ctx::glyphs_by)
-    let own = glyph_next(ox + tl.xs[c], top, tl.line_h)
+    let own = glyph_next(ox + tl.xs[c], top, tl.line_h, line, tl.xs[c] + tl.shaped.adv[c] / 2.0)
     match own {
       Some(l) if l.alpha <= 0.002 => continue
       _ => ()
@@ -1159,16 +1189,11 @@ fn Ctx::emit_text(
       0.0
     }
     let gx = glyph_x(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
-    let gy = glyph_row(top + tl.ascent, g.oy / z, sc)
-    // (where it is before it is set on the pixels, for what places it again elsewhere: a node's words, set on the
-    // pixels where the scene composes them, view_blit)
-    match unplaced {
-      Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z, top + tl.ascent, g.oy / z))
-      None => ()
-    }
+    let gy = glyph_row(oy, line.to_double() * tl.line_h + tl.ascent, g.oy / z, sc)
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
+    let (set_x, set_y) = (gx, gy)
     let (gx, gy, gw, gh, ga) = match own {
       Some(l) => {
         let ink_x = gx + gw * (1.0 - l.scale) / 2.0
@@ -1177,6 +1202,12 @@ fn Ctx::emit_text(
         (x + l.dx, gy + gh * (1.0 - l.scale) / 2.0 + l.dy, gw * l.scale * l.sx, gh * l.scale, alpha * l.alpha)
       }
       None => (gx, gy, gw, gh, alpha)
+    }
+    // (where it is before it is set on the pixels, for what places it again elsewhere: a node's words, set on the
+    // pixels where the scene composes them, view_blit; what its own look moves it by after that, as here)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z, top + tl.ascent, g.oy / z, gx - set_x, gy - set_y))
+      None => ()
     }
     glyph_pushing.val = true
     self.push_inst(

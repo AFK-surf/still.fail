@@ -1,7 +1,7 @@
 // The reader's layout (排版) as nodes of the window's tree (src/sf reader_layout_node.mbt), held to where the old panel
 // drew it (desk_layout in the host's sheet on 小屏, in the panel docked at the right on a wide window: its words, its
-// controls' places and their values as read out, recorded from the old body on main as of 53f883b00d), then each
-// control pressed where it is drawn and what it changes; closed by Escape and by its close.
+// controls' places and their values as read out, recorded from the old body on main as of 53f883b00d; the size it
+// starts at 16 since #3116), then each control pressed where it is drawn and what it changes; closed by Escape and by its close.
 
 ///|
 /// The words drawn where `inside` says, each where it is (to half a point) and how big, in the order of where they are.
@@ -62,7 +62,8 @@ fn layout_reading() -> @sf.Reading {
 ///|
 test "小屏: the layout a sheet half the window tall, each of its words and controls where the host's sheet had them" {
   let t = layout_phone()
-  let words = layout_words(t, fn(_, y) { y >= 400.0 })
+  // (a paragraph of the book that begins under the sheet is the book's, many lines tall: not the layout's words)
+  let words = layout_words(t, fn(_, y) { y >= 400.0 }).filter(fn(w) { w.4 < 100.0 })
   // (the old body in the host's sheet, as recorded; the reader's bars under it as they are)
   let old = [
     ("排版", 18.0, 451.0, 32.0, 22.5),
@@ -75,7 +76,7 @@ test "小屏: the layout a sheet half the window tall, each of its words and con
     ("浅灰", 183.0, 561.5, 24.0, 16.0),
     ("字号", 20.0, 587.5, 350.0, 18.0),
     ("A−", 42.5, 626.5, 15.0, 22.0),
-    ("18", 187.5, 626.5, 15.0, 22.0),
+    ("16", 187.5, 626.5, 15.0, 22.0),
     ("A+", 332.5, 626.5, 15.0, 22.0),
     ("行距", 20.0, 676.5, 48.0, 18.0),
     ("170%", 344.0, 676.5, 26.0, 18.0),
@@ -84,7 +85,7 @@ test "小屏: the layout a sheet half the window tall, each of its words and con
     ("下一章", 318.0, 706.0, 39.0, 18.0),
     ("边距", 20.0, 714.5, 48.0, 18.0),
     ("22", 357.0, 714.5, 13.0, 18.0),
-    ("41%", 350.5, 743.0, 19.5, 18.0),
+    ("43%", 350.5, 743.0, 19.5, 18.0),
     ("字体", 20.0, 747.5, 168.0, 18.0),
     ("缩进", 202.0, 747.5, 168.0, 18.0),
     ("宋体", 48.0, 781.0, 30.0, 21.0),
@@ -164,7 +165,7 @@ test "wide: the layout docked at the right under the bar, each of its words and 
     ("浅灰", 1110.0, 171.0, 22.0, 16.0),
     ("字号", 981.0, 197.0, 279.0, 18.0),
     ("A−", 1004.5, 237.0, 13.0, 20.0),
-    ("18", 1114.0, 237.0, 13.0, 20.0),
+    ("16", 1114.0, 237.0, 13.0, 20.0),
     ("A+", 1223.5, 237.0, 13.0, 20.0),
     ("行距", 981.0, 286.0, 48.0, 18.0),
     ("170%", 1236.0, 286.0, 24.0, 18.0),
@@ -320,11 +321,12 @@ test "小屏: the layout of a chat's Markdown answers its controls and closes" {
   let (x, y) = layout_middle(t, Button, "排版")
   t.tap(x, y)
   t.run_for(sheet_way_ms(t))
+  let was = layout_style().size
   let (x, y) = layout_middle(t, Button, "增大字号")
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
-  assert_eq(layout_style().size, 19)
-  assert_true(t.find("19") is Some(_))
+  assert_eq(layout_style().size, was + 1)
+  assert_true(layout_words(t, fn(_, _) { true }).iter().any(fn(w) { w.0 == "\{was + 1}" }))
   t.key(@ui.key_escape)
   t.run_for(sheet_way_ms(t))
   assert_true(t.find("背景") is None)
@@ -355,12 +357,16 @@ test "wide: layout changes show while the core is still keeping them" {
   let (x, y) = layout_middle(t, Button, "排版")
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
+  let was = layout_style().size
   let (x, y) = layout_middle(t, Button, "增大字号")
   t.tap(x, y)
   t.draw()
-  assert_eq(layout_style().size, 19)
+  assert_eq(layout_style().size, was + 1)
   assert_eq(pending.length(), 1)
-  assert_true(t.find("19") is Some(_), msg="the chosen size shows before the core replies")
+  assert_true(
+    layout_words(t, fn(_, _) { true }).iter().any(fn(w) { w.0 == "\{was + 1}" }),
+    msg="the chosen size shows before the core replies",
+  )
   let (x, y) = layout_middle(t, Radio, "宋体")
   t.tap(x, y)
   t.draw()
@@ -371,4 +377,24 @@ test "wide: layout changes show while the core is still keeping them" {
   t.draw()
   assert_true(t.find("150%") is Some(_))
   assert_eq(pending.length(), 3)
+}
+
+///|
+test "wide: the mouse's pointer over the layout's ground (its title, a heading's words) is the arrow, over its controls the hand (@sf.ground_node)" {
+  let t = layout_wide()
+  let words = layout_words(t, fn(x, y) { x >= 955.0 && y >= 40.0 })
+  let shape_on = fn(x : Double, y : Double) {
+    t.move_to(x, y)
+    t.run_for(@ui.move_most_ms)
+    t.cursor()
+  }
+  let grounds = ["排版", "背景"].map(fn(s) {
+    match words.filter(fn(w) { w.0 == s }) {
+      [(_, x, y, w, h), ..] => (s, shape_on(x + w / 2.0, y + h / 2.0))
+      [] => (s, NotAllowed)
+    }
+  })
+  assert_eq(grounds, [("排版", Arrow), ("背景", Arrow)], msg="\{Repr(words)}")
+  let (kx, ky) = layout_middle(t, Button, "增大字号")
+  assert_eq(shape_on(kx, ky), Hand)
 }

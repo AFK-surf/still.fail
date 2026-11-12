@@ -40,12 +40,10 @@ let glass_window_h : Double = 700.0
 
 ///|
 test "29-glass" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("glass"), seed~, h=glass_window_h)
-    // The recording used a Mac window whose buttons occupy the app's top row.
-    f.t.set_window_inset(true)
     f.tap("端到端测试")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("发消息")
     for i, words in glass_words {
       f.tap("发消息")
@@ -60,70 +58,63 @@ test "29-glass" {
     }
     // (one at a time)
     let turns = f.t.rest_of("a chat's list turns")
-    if turns > f.t.time() && turns < @double.infinity {
-      f.run_to(turns)
+    if f.saw(turns > f.t.time() && turns < @double.infinity) {
+      f.run_to(fn() { turns })
     }
     // (the list come to its end after them: gliding to what came at it, the rows over what came in over its end going
     // up for it)
     for moves in ["a list gliding", "Anim \"layout ", "a list's rows' heights"] {
       let rest = f.t.rest_of(moves)
-      if rest > f.t.time() && rest < @double.infinity {
-        f.run_to(rest)
+      if f.saw(rest > f.t.time() && rest < @double.infinity) {
+        f.run_to(fn() { rest })
       }
     }
     // the first scrolled to run on under the top bar's glass (how far it went up past it the layout's: the composer's
     // room under the list, the words' lines)
     // The list virtualizes messages above the viewport. Bring the first one into the tree before measuring it.
     for _ in 0..<12 {
-      match f.t.rect_of(glass_words[0]) {
-        Some(_) => break
-        None => ()
+      if f.saw(f.t.rect_of(glass_words[0]) is Some(_)) {
+        break
       }
       f.wheel(-300.0)
       let eased = f.t.rest_of("wheel ease")
-      if eased > f.t.time() && eased < @double.infinity {
-        f.run_to(eased)
+      if f.saw(eased > f.t.time() && eased < @double.infinity) {
+        f.run_to(fn() { eased })
       }
     }
-    let (_, top_y, _, top_h, _, _) = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && g.1 < 100.0 })[0]
-    match f.t.rect_of(glass_words[0]) {
-      Some((_, y, _, h)) => {
-        // (whole points: as the scripted run is told it)
-        let down = (top_y + top_h / 2.0 - (y + h / 2.0)).to_int().to_double()
-        if down.abs() >= 1.0 {
-          f.wheel_aligned(-down)
-          let eased = f.t.rest_of("wheel ease")
-          if eased > f.t.time() && eased < @double.infinity {
-            f.run_to(eased)
-          }
-        }
-      }
-      None => ()
-    }
-    assert_true(under_glass(f, top=true))
+    glass_align(f, glass_words[0], top=true)
+    f.check(under_glass(f, top=true), "nothing under the top glass")
     f.wheel(-500.0)
     // (eased where its lists have it: a phone's, Android's, go there at once)
     let eased = f.t.rest_of("wheel ease")
-    if eased > f.t.time() && eased < @double.infinity {
-      f.run_to(eased)
+    if f.saw(eased > f.t.time() && eased < @double.infinity) {
+      f.run_to(fn() { eased })
     }
     // scrolled up: what was above runs under the composer's
     // Align a visible message with the composer's pane; fixed scrolling can stop between messages.
-    let (_, bottom_y, _, bottom_h, _, _) = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && g.1 > 350.0 })[0]
-    match f.t.rect_of(glass_words[2]) {
-      Some((_, y, _, h)) => {
-        let down = (bottom_y + bottom_h / 2.0 - (y + h / 2.0)).to_int().to_double()
-        if down.abs() >= 1.0 {
-          f.wheel_aligned(-down)
-          let rest = f.t.rest_of("wheel ease")
-          if rest > f.t.time() && rest < @double.infinity {
-            f.run_to(rest)
-          }
-        }
-      }
-      None => ()
-    }
-    assert_true(under_glass(f, top=false))
+    glass_align(f, glass_words[2], top=false)
+    f.check(under_glass(f, top=false), "nothing under the composer's glass")
     f.end()
   })
+}
+
+///|
+/// `words` lined up with the middle of the glass bar at the top (`top`) or of the composer's (whole points: as the
+/// scripted run is told it), by the wheel, as far as the strict pass measured it (Flow::measured): none where either
+/// is not drawn.
+fn glass_align(f : @sfreplay.Flow, words : String, top~ : Bool) -> Unit {
+  let bar = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && (if top { g.1 < 100.0 } else { g.1 > 350.0 }) }).get(0)
+  let down = f.measured(
+    match (bar, f.t.rect_of(words)) {
+      (Some((_, by, _, bh, _, _)), Some((_, y, _, h))) => (by + bh / 2.0 - (y + h / 2.0)).to_int().to_double()
+      _ => 0.0
+    },
+  )
+  if down.abs() >= 1.0 {
+    f.wheel_aligned(-down)
+    let eased = f.t.rest_of("wheel ease")
+    if f.saw(eased > f.t.time() && eased < @double.infinity) {
+      f.run_to(fn() { eased })
+    }
+  }
 }

@@ -31,4 +31,5 @@ description: Work across chats and services: read another chat by its link, writ
 - waiting needs something that brings you back when the work ends or fails: a background command or agent, a job (skill stillfail-jobs), or a loop polling CI that exits on its first failure (skill stillfail-github-ci). seconds is only a fallback for work that cannot be watched. Waiting on nothing but a watch of yours (a schedule, a monitor): add watch: true.
 
 ## Archive
+- chat_archive archives another still.fail chat of this workspace by its link, here or on another station, as the app does. Its messages remain; its workspace files may later be cleaned up.
 - The station may recommend a chat marked all_done for the archive by its archive policy. When someone says a recommendation is wrong, read archive_policy: change it if the policy caused it, or say the model misjudged.

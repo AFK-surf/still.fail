@@ -56,8 +56,8 @@ test "a timer set between frames (a host's callback, a test's): the host woken f
   let at = t.display_frame(due)
   let asked = frames.filter(fn(f) { f.1 })
   let changed = frames.filter(fn(f) { f.2 })
-  assert_eq(asked.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{frames}")
-  assert_eq(changed.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{frames}")
+  assert_eq(asked.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{Repr(frames)}")
+  assert_eq(changed.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{Repr(frames)}")
   assert_true(t.find("after") is Some(_))
   assert_eq(t.find("before"), None)
 }
@@ -72,8 +72,8 @@ test "a timer set between frames before one set already: the host woken for the 
   @ui.runtime().after(30, fn() { said.set("earlier") })
   let frames = host_frames_for(t, between_timer_ms)
   let (early, late) = (t.display_frame(now + 30.0), t.display_frame(now + 80.0))
-  assert_eq(frames.filter(fn(f) { f.1 }).map(fn(f) { f.0 }), [early, late], msg="\{frames}")
-  assert_eq(frames.filter(fn(f) { f.2 }).map(fn(f) { f.0 }), [early, late], msg="\{frames}")
+  assert_eq(frames.filter(fn(f) { f.1 }).map(fn(f) { f.0 }), [early, late], msg="\{Repr(frames)}")
+  assert_eq(frames.filter(fn(f) { f.2 }).map(fn(f) { f.0 }), [early, late], msg="\{Repr(frames)}")
   assert_true(t.find("later") is Some(_))
 }
 
@@ -105,7 +105,7 @@ test "a press's handler forks; the fiber first runs as the frame the press bring
   let tapped = t.time().floor().to_int64()
   assert_eq(log, [])
   t.draw()
-  assert_eq(log[0:2].to_array(), ["fiber at \{tapped}", "view busy"])
+  assert_eq(log[0:2].to_owned(), ["fiber at \{tapped}", "view busy"])
   let due = (tapped + nap.to_int64()).to_double()
   // a millisecond before it
   t.run_for(due - 1.0 - t.time())
@@ -160,7 +160,7 @@ test "a lifetime ends the first frame its key is not built: its fibers interrupt
   let t = @ui.Tester::new(fn(c) {
     if shown.val {
       c.effect("panel", async fn(s) {
-        s.add_finalizer(async fn() { log.push("finalizer at \{@effect.now()}") })
+        s.add_finalizer(fn() { log.push("finalizer at \{@effect.now()}") })
         defer log.push("fiber ended at \{@effect.now()}")
         log.push("started at \{@effect.now()}")
         @effect.never()
@@ -235,7 +235,7 @@ fn race_dump(seed : Int) -> String {
 
 ///|
 test "with a seed, the order ready fibers run in is drawn from it, and a seed replays it" {
-  let seen : Map[String, Int] = Map::new()
+  let seen : Map[String, Int] = Map([])
   @effect.for_seeds(count=30, s => {
     let d = race_dump(s)
     assert_eq(race_dump(s), d)

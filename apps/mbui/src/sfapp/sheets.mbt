@@ -145,7 +145,6 @@ fn info_row(
   dot? : Bool = false,
   on_press? : () -> Unit,
 ) -> Unit {
-  let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
   let look = if tile {
     info_row_style.then(info_row_tile)
@@ -203,7 +202,7 @@ fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
       match opt_number(wait, "seconds") {
         Some(sec) => {
           // at its most it stands still
-          if now - from < sec * second_ms {
+          if now < from + sec * second_ms {
             each_second(c, now - from)
           }
           elapsed(dmin(now, from + sec * second_ms) - from) + " / " + elapsed(sec * second_ms)
@@ -289,8 +288,12 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
     }
     // who started it and when, how many take part, when it was last written in: what there is of them, in a line
     let facts : Array[String] = []
+    // (a Feishu chat's by Feishu, a Comma Task's by Comma alone: it is in no place)
+    let surface = text(thread, "surface")
     match text(chat, "place") {
+      "" if surface.has_prefix("comma:") => facts.push("Comma")
       "" => ()
+      p if surface.has_prefix("feishu:") || text(chat, "feishuUrl") != "" => facts.push(@sf.t("web-pages.connect.feishu.name") + " · " + p)
       p => facts.push(fill("android-chat.info.from.slack", [("place", p)]))
     }
     // (made by another chat's agent: that chat said over this line, not a person)
@@ -324,7 +327,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
     }
     c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=16.0, gap=8.0, align=ACenter, fn() {
       if people.length() > 0 {
-        let shown = if people.length() > 5 { people[:5].to_array() } else { people }
+        let shown = if people.length() > 5 { people[:5].to_owned() } else { people }
         c.box(w=Px(19.0 + 14.0 * (shown.length() - 1).to_double()), fn() {
           // ringed in the sheet's ground
           people_stack(c, src, shown, 16.0, ring=t.p.card)
@@ -616,8 +619,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   let stations = station_marks(src, @sfbase.workspace_of(r.station))
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let s = field(a, "session")
-  let status = text(a, "status")
-  let entry = context_entry(c, src, r, key, s)
+  let entry = context_entry(c, src, r, key, s, close)
   c.box(w=Fill(1.0), fn() {
     // (its head: the panel's title row in the middle of the window (agent_title_row), else its own here, clear of an
     // untitled dialog's close button over its end)
@@ -647,7 +649,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       None => []
     }
     // All visible rows share a column wide enough for their labels in this language and at this text size.
-    let labels = [tr("android-chat.agent.account"), tr("android-chat.agent.history")]
+    let labels = [tr("android-chat.agent.account"), tr("android-chat.agent.history"), tr("android-chat.new.model")]
     if station is Some(_) { labels.push(tr("android-chat.agent.station")) }
     if screens.length() > 0 { labels.push(tr("android-chat.agent.screen")) }
     if entry is Some(_) && !(field(card, "context") is Some(Object(_))) { labels.push(tr("android-chat.agent.context")) }
@@ -701,12 +703,29 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       } else {
         fill("android-chat.agent.account.auto", [("name", name)])
       }
-      // The same model picker as the chat's history and a new chat: every way to the run offers the same choices.
+      // What it runs on under its own name, the model and how hard it thinks said (2026-11-10: the only way to its
+      // picker was the row named 账号, and how hard it thinks was said nowhere short of the picker). The same model
+      // picker as the chat's history and a new chat: every way to the run offers the same choices.
+      let model = match text(s, "modelName") {
+        "" => text(s, "model")
+        n => n
+      }
+      if model != "" {
+        let runs = match text(s, "effort") {
+          "" => model
+          e => model + " · " + @sfpages.effort_text(e)
+        }
+        agent_row(c, "agent/model", tr("android-chat.new.model"), runs, label_w, fn() {  }, on_press=fn() {
+          close()
+          @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"))
+        })
+      }
+      // (who runs it: the picker with its accounts open over it)
       agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, under=fn() {
         allowance_line(c, field(account, "quota"))
       }, on_press=fn() {
         close()
-        @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"))
+        @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"), accounts=true)
       })
       agent_row(
         c,
@@ -972,10 +991,13 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
       // (AgentTiles: 「name figure」 to a screen reader)
       label=name + " " + figure,
       fn() {
-        c.box(h=Px(26.0), justify=JCenter, fn() {
+        // (on a line of 26 at the system's size of words, its box as high: where a box of 26 drew its 28 before, its
+        // glyphs where they were, and growing with them as the system's size of words grows)
+        c.box(fn() {
           c.text(
             figure,
             size=if figure.length() > 6 { 16.0 } else { 20.0 },
+            line=26.0,
             weight=600,
             color~,
             wrap=false,
@@ -1254,7 +1276,7 @@ fn waiting_rows(c : @ui.Ctx, error : Json?, sample : () -> Unit) -> Unit {
 /// Words as the job's sheet sets them (an old view's words of a size, a weight and a wrap said alone, as nodes): `size`
 /// as the theme has it, on lines of the theme's line to it (or `line` points), the face's own letters.
 fn job_words(size : Double, weight? : Int = 400, wrap? : Bool = true, line? : Double = 0.0) -> @view.WordsLook {
-  { size, weight, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap, tracking: @view.letters_own, balance: false }
+  { size, weight, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|
@@ -1386,7 +1408,7 @@ fn job_detail_node(v : @view.View, src : Source, r : ChatRef, id : String, j : (
     // (filling what its head leaves (job_body_at's h=Full, an old view's Fill), from none: never pushed past it by a
     // long output)
     col.height(Is(None)).grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-    col.show(fn() { text(j(), "command").trim(chars=" \n").to_string() != "" }, fn(w) {
+    col.show(fn() { text(j(), "command").trim(chars=" \n").to_owned() != "" }, fn(w) {
       job_runs_node(
         w,
         fn() { [@ui.span(text(j(), "command"), mono=true)] },
@@ -1482,9 +1504,10 @@ fn job_said_node(v : @view.View, src : Source, r : ChatRef, id : String, j : () 
 }
 
 ///|
-/// A job's output (job_detail's, as nodes) in `v`: its last lines (the core's `jobLog`) in a terminal's colours where the
-/// core says them, else as words, on a faint ground, scrolling, from its end and kept there as lines come while it is
-/// there; words saying it wrote nothing where it did not, a spinner while it is read.
+/// A job's output (job_detail's, as nodes) in `v`: its last lines (the core's `jobLog`) in a terminal's colours as the
+/// core says them, a block a line by its number, on a faint ground, scrolling, from its end and kept there as lines come
+/// while it is there (a line more makes its block alone); words saying it wrote nothing where it did not, a spinner
+/// while it is read.
 fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(r.station),
@@ -1492,22 +1515,12 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
     "lines": Json::number(job_output_most),
   }
   let log = @sfbase.hold(src, @sfbase.jobs_scope(r.station), "jobLog", params)
-  // (its lines as they are now, in the theme's ink: job_output_lines's)
-  let lines : @signals.Computed[Array[Array[@ui.Run]]?] = @signals.computed(fn(_) {
+  // (its lines as they are now, each by its number, in the theme's ink: job_output_of's, a line's runs worked out as it
+  // comes and kept while it is the same)
+  let lines : @signals.Computed[@sfbase.TermLines?] = @signals.computed(fn(_) {
     guard log.get().value is Some(Object(_)) else { return None }
     let t = @sf.theme()
-    let value = src.topic("jobLog", params).get().value
-    let words = text(value, "text")
-    let runs = items(value, "runs")
-    Some(
-      if words == "" {
-        [[@ui.span(tr("android-misc.jobs.noOutput"), mono=true)]]
-      } else if runs.length() > 0 {
-        @sfbase.term_lines(runs, t.p.text, t.dark)
-      } else {
-        words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
-      },
-    )
+    Some(@sfbase.job_output_of(src, params, t.p.text, t.dark))
   })
   @sf.style_node(v, fn() { job_output_box.then(@ui.style(bg=Data(@sf.alpha(@sf.theme().p.text, job_output_ink)))) })
   // (filling what is left of its column (job_output_box's h=Full, an old view's Fill), at least its min_h, from none:
@@ -1521,29 +1534,51 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
     // (the room its box has, whatever it holds: from none, not from how tall all its lines are, an old list's)
     b.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     let scroll = @view.Scroll::list()
-    let count = fn() { lines.get().map(fn(l) { l.length() }).unwrap_or(0) }
+    // (its blocks are its lines by their numbers: a line more one block more, those there before as they were; where
+    // it wrote nothing, one saying so, `job_output_none`)
+    let keys = fn() {
+      match lines.get() {
+        Some(l) if l.lines.is_empty() => [job_output_none]
+        Some(l) => l.lines.map(fn(x) { x.n })
+        None => []
+      }
+    }
+    let first = fn() {
+      match lines.get() {
+        Some(l) if !l.lines.is_empty() => l.lines[0].n
+        _ => job_output_none
+      }
+    }
     b.scrolls_window(
       scroll,
-      fn() { Array::makei(count(), fn(i) { i }) },
-      fn(row, i) {
-        @sf.style_node(row, fn() {
-          job_output_line.then(
-            @ui.style(
-              pt=@sf.room_of(if i == 0 { job_output_end } else { 0.0 }),
-              pb=@sf.room_of(if i == count() - 1 { job_output_end } else { 0.0 }),
-            ),
-          )
-        })
-        job_runs_node(
-          row,
-          fn() { lines.get().bind(fn(l) { l.get(i) }).unwrap_or([]) },
-          fn() { job_words(@sf.theme().t.caption, line=job_code_line) },
-          fn() { @sf.theme().p.text },
+      keys,
+      // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
+      at_once=true,
+      fn(row, n) {
+        // (its own line's runs, read again only as that line changes: the same while it is the same line)
+        let runs = @signals.computed(
+          fn(_) {
+            if n == job_output_none {
+              [@ui.span(tr("android-misc.jobs.noOutput"), mono=true)]
+            } else {
+              lines.get().bind(fn(l) { l.at(n) }).map_or([], fn(l) { l.runs })
+            }
+          },
+          same=fn(a, b) { physical_equal(a, b) },
         )
+        let top = @signals.computed(fn(_) { first() == n }, same=fn(a, b) { a == b })
+        @sf.style_node(row, fn() {
+          job_output_line.then(@ui.style(pt=@sf.room_of(if top.get() { job_output_end } else { 0.0 })))
+        })
+        job_runs_node(row, fn() { runs.get() }, fn() { job_words(@sf.theme().t.caption, line=job_code_line) }, fn() {
+          @sf.theme().p.text
+        })
       },
       est=job_code_line,
       slop=@ui.touch_slop(),
       bar=@ui.tree_scroll_bar(),
+      // (under its last line the room its first has over it: its foot, drawing nothing)
+      foot=fn(f) { f.height(Is(Some(job_output_end))) |> ignore },
       // (Ctx::list's stick_end, the old one's: made at its end, kept there as lines come while it is there, not once
       // scrolled off it; followed again once scrolled back to it)
       follows=fn() { true },
@@ -1553,6 +1588,10 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
     |> ignore
   })
 }
+
+///|
+/// The key of the one block of a job's output that wrote nothing: none of its lines' numbers.
+let job_output_none : Int = -1
 
 ///|
 /// How many of a job's last lines its output shows.
@@ -1720,7 +1759,7 @@ fn open_jobs_node(v : @view.View, src : Source, w : Workspace) -> Unit {
       if dui.opened.contains(gkey()) || l.length() <= 4 {
         l
       } else {
-        l[:3].to_array()
+        l[:3].to_owned()
       }
     }
     @sf.style_node(gb, fn() { open_jobs_group })
@@ -1757,15 +1796,16 @@ fn open_job_row_node(row : @view.View, src : Source, job : () -> Json?) -> Unit 
     row,
     fn() {
       let j = @signals.untracked(job)
-      let chat = field(j, "chat")
-      if chat is Some(Object(_)) {
-        let station = text(j, "station")
-        @sfbase.history_push()
-        app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
-        // a service: its page over its chat
-        if flag(j, "service") {
-          app.nav.push(Service(station, text(j, "id")))
+      match @sfbase.job_chat(j) {
+        Some(r) => {
+          @sfbase.history_push()
+          app.nav.push(Chat(r))
+          // a service: its page over its chat (the service is the job's station's)
+          if flag(j, "service") {
+            app.nav.push(Service(text(j, "station"), text(j, "id")))
+          }
         }
+        None => ()
       }
     },
     open_job_row_corner,
@@ -1813,9 +1853,13 @@ fn open_job_row_node(row : @view.View, src : Source, job : () -> Json?) -> Unit 
         }
       },
     )
-    s.show(fn() { doing(skey()) }, fn(b) { @sf.spinner_node(b, size=open_job_stop_spin) |> ignore })
-    s.show(fn() { !doing(skey()) }, fn(b) {
-      @sf.icon_node(b, "stop", open_job_stop_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+    // (stopping, a spinner in its icon's place: one of them made, not one made and one waiting)
+    s.pick(fn() { doing(skey()) }, fn(b, stopping) {
+      if stopping {
+        @sf.spinner_node(b, size=open_job_stop_spin) |> ignore
+      } else {
+        @sf.icon_node(b, "stop", open_job_stop_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+      }
     })
   })
   |> ignore

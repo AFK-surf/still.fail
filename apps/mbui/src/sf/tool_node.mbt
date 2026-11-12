@@ -7,12 +7,13 @@
 /// What a tool says of itself as it changes (tool_node): the icon it shows, its words (read out, its tip), whether it
 /// is on (its chosen ground, read out pressed), whether it can be pressed at all (not: faint, taking no press, no
 /// focus, nothing to be done to it, read out so).
+#derive(Eq, Debug)
 pub(all) struct ToolSaid {
   icon : String
   label : String
   on : Bool
   disabled : Bool
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// How big a tool is (viewer_tool_box's S8), and how far its icon is in from its sides.

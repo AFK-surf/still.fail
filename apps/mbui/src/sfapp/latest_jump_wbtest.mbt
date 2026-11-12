@@ -13,7 +13,7 @@ test "a chat short of its end: its way to the end says how many new messages wai
     { ..tp, value: Some(Json::object(o)) }
   })
   t.run_for(@ui.move_most_ms)
-  guard t.find("3 条新消息") is Some((x, y)) else { fail("\{t.words().map(fn(w) { w.0 })}") }
+  guard t.find("3 条新消息") is Some((x, y)) else { fail("\{Repr(t.words().map(fn(w) { w.0 }))}") }
   assert_eq(named(calls, "chat.latest").length(), 0)
   t.tap(x, y)
   t.draw()
@@ -61,7 +61,7 @@ test "the page before asked for as the reader nears the chat's top (chat.older),
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.run_for(@ui.move_most_ms)
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     t.wheel(195.0, 400.0, -900.0)
     t.run_for(@ui.move_most_ms)

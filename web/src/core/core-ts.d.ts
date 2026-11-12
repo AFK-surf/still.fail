@@ -20,6 +20,6 @@ declare module "@stillfail/core-ts/web" {
   /** Whether what the core shares is frozen where it is shared (on in development: a write on it throws there). */
   export function checkShared(on: boolean): void;
   /** `emit(client, message)`: what the core says to each client; `onFatal`: a bug ended the core; `loadSqlite`: its databases;
-   *  `onReport`: an error it goes on after, for error tracking. */
-  export function startWeb(emit: (client: number, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, onReport?: (error: Error) => void): Promise<WebCore>;
+   *  `onReport`: an error it goes on after, for error tracking; `build`: this build (`0.1.<n>`), said to the stations. */
+  export function startWeb(emit: (client: number, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, onReport?: (error: Error) => void, build?: string): Promise<WebCore>;
 }

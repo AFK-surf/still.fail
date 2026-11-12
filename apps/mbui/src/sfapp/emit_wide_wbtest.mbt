@@ -5,7 +5,7 @@
 test "wide: an agent's picture in its line is where its answer's is, out in the margin: the flying one lands with no step aside" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   t.tap_text("发消息")
   t.type_text("看一下列表")
@@ -25,7 +25,7 @@ test "wide: an agent's picture in its line is where its answer's is, out in the 
 test "wide: the avatar an answer comes out of is drawn where it flies in the window, the chat beside the sidebar" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   t.tap_text("发消息")
   t.type_text("看一下列表")
@@ -40,11 +40,11 @@ test "wide: the avatar an answer comes out of is drawn where it flies in the win
   // folded, then on its way: half way through its float
   t.run_for(Pose::Fold.ms() + Pose::Float.ms() / 2.0)
   guard em.current is Some(turn) && turn.pose == Float else {
-    fail("not on its way: \{em.current.map(fn(c) { c.pose })}")
+    fail("not on its way: \{Repr(em.current.map(fn(c) { c.pose }))}")
   }
   let (x, y, _, _) = emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, [turn.agent]).unwrap()
   // its 18 face's ground drawn there (scaled about its middle as it flies)
   let near = t.drawn_rects().filter(fn(r) { (r.0 - x).abs() < 2.0 && (r.1 - y).abs() < 2.0 && r.2 > 14.0 && r.2 < 22.0 })
-  assert_true(near.length() > 0, msg="nothing drawn at \{(x, y)}")
+  assert_true(near.length() > 0, msg="nothing drawn at \{Repr((x, y))}")
   fix_clock.val = None
 }

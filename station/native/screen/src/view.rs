@@ -78,7 +78,7 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let audio = if request["audio"].as_bool() == Some(true) { Some(super::audio::Audio::start(out.clone())) } else { None };
+    let audio = if request["audio"].as_bool() == Some(true) { Some(super::audio::Audio::start(out.clone(), request["audioCodec"].as_str() == Some("opus"))) } else { None };
     let options = Options {
         jpeg: request["codec"].as_str() == Some("jpeg"),
         hevc: request["codec"].as_str() == Some("h265"),

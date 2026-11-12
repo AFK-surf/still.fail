@@ -28,9 +28,11 @@ pub fn[T] computed_following((T?) -> T, Computed[Unit], same? : (T, T) -> Bool) 
 
 pub fn[T] computed_scoped((T?) -> T, same? : (T, T) -> Bool, untracked_read? : (() -> T?)?) -> Computed[T]
 
-pub fn effect(() -> Unit) -> () -> Unit
+pub fn effect(() -> Unit, loc~ : SourceLoc) -> () -> Unit
 
-pub fn effect_cleanup(() -> () -> Unit) -> () -> Unit
+pub fn effect_cleanup(() -> () -> Unit, loc~ : SourceLoc) -> () -> Unit
+
+pub let effect_in_watch : @ref.Ref[((SourceLoc) -> Unit)?]
 
 pub fn effect_scope(() -> Unit) -> () -> Unit
 
@@ -73,7 +75,7 @@ pub struct Keyed[K] {
   // private fields
 }
 pub fn[K : Hash + Eq] Keyed::add(Self[K], K) -> Unit
-pub fn[K : Hash + Eq] Keyed::count(Self[K]) -> Int32
+pub fn[K] Keyed::count(Self[K]) -> Int32
 pub fn[K : Hash + Eq] Keyed::has(Self[K], K) -> Bool
 pub fn[K : Hash + Eq] Keyed::peek(Self[K], K) -> Bool
 pub fn[K : Hash + Eq] Keyed::remove(Self[K], K) -> Unit

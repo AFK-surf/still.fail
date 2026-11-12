@@ -186,7 +186,7 @@ test("an ask about no offer, or an unknown one, is answered in the asker's langu
   assert.deepEqual(unknown.lines(), [{ status: 400, headers: { "content-type": "application/json" } }, { message: "无法识别的 adb 请求" }]);
   assert.ok(unknown.finished);
   const none = new Memory();
-  await answerAdb(shares, nowhere, viewer, asking({ op: "pair", code: "123456", phone: PHONE }, { "stillfail-lang": "en" }), none as unknown as Stream);
+  await answerAdb(shares, nowhere, viewer, asking({ op: "pair", code: "123456", phone: PHONE }, { "stillfail-lang": "en", "stillfail-build": "0.1.0" }), none as unknown as Stream);
   assert.deepEqual(none.lines(), [{ status: 409, headers: { "content-type": "application/json" } }, { message: "This device isn't sharing debugging" }]);
 });
 
@@ -582,16 +582,16 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
     // and adbd's plain port is turned on, once a boot, for the phone to be held on off Wi-Fi
     await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} tcpip 5555`));
-    const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
+    const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en", "stillfail-build": "0.1.0" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });
     assert.deepEqual(granted.body, { message: "app 现在可以自行开启无线调试" });
     assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
     // ColorOS (an OPPO, 2026-10-17) and MIUI refuse the shell's grant with a page of stack: said as the switch to turn
-    // on; anything else by its first line.
+    // on, with the code the app goes by; anything else by its first line, no code.
     adb.say("grant-says", "Exception occurred while executing 'grant':\njava.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS.\n  at android.app.ContextImpl.enforce(ContextImpl.java:2493)");
     const refused = await mesh.answer({ op: "grant", phone: PHONE });
-    assert.deepEqual(refused.body, { message: "手机不允许 adb 授权：请在开发者选项中开启「禁止权限监控」（ColorOS）或「USB 调试（安全设置）」（MIUI）后重试" });
+    assert.deepEqual(refused.body, { message: "手机不允许 adb 授权：请在开发者选项中开启「禁止权限监控」（ColorOS）或「USB 调试（安全设置）」（MIUI）后重试", code: "adb_grant_refused" });
     adb.say("grant-says", "Error: Unknown permission\n  at something");
     const failed = await mesh.answer({ op: "grant", phone: PHONE });
     assert.deepEqual(failed.body, { message: "授权失败：Error: Unknown permission" });
@@ -623,7 +623,7 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
   const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const mesh = await link(shares);
   try {
-    const { stream, reader } = await mesh.ask({ op: "share", phone: PHONE }, { "stillfail-lang": "en" });
+    const { stream, reader } = await mesh.ask({ op: "share", phone: PHONE }, { "stillfail-lang": "en", "stillfail-build": "0.1.0" });
     // `offline` after `connect`: looked at again until SETTLE is over.
     await time.asleep(500);
     await time.adjust(SETTLE);
@@ -644,7 +644,8 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
     await again.reader.line();
     do state = await again.reader.line();
     while (state.adb === "connecting");
-    assert.deepEqual(state, { serial: state.serial, adb: "failed", message: "the phone did not reach adb: connection refused" });
+    // (the phone's own words, which it says in its person's language: no English of the station's before them)
+    assert.deepEqual(state, { serial: state.serial, adb: "failed", message: "connection refused" });
     await again.stream.reset(0);
   } finally {
     await shares.close();

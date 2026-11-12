@@ -61,5 +61,5 @@ test "a way and an Anim told alike a fraction into a ms: where each is at each f
   let (seen, (anim_ends, way_ends)) = way_and_anim(open_at, open_at + 4.0 * frame, frames)
   let differ = seen.filter(fn(s) { s.0 != s.1 })
   // (and each over at the same moment, its way out's length after it was turned back)
-  assert_eq((differ, way_ends - anim_ends), ([], 0.0), msg="\{seen}")
+  assert_eq((differ, way_ends - anim_ends), ([], 0.0), msg="\{Repr(seen)}")
 }

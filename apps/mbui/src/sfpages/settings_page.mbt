@@ -9,17 +9,11 @@ using @sf {
   desk_lane_in,
   desk_column_most,
   desk_column_in,
-  desk_hint_words,
   desk_card_row,
   desk_card_text,
   desk_strong,
   desk_words,
   desk_muted,
-  desk_chevron,
-  desk_mark,
-  desk_list_text,
-  desk_named,
-  desk_list_title,
   desk_note_bad,
 }
 

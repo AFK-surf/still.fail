@@ -5,7 +5,7 @@
 
 ///|
 test "31-places" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("places"), seed~)
     f.see("端到端测试")
     f.tap("icon:folder")
@@ -27,7 +27,7 @@ test "31-places" {
     f.run_for(@sfapp.switch_fade_ms)
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end (the ball's ride on the bar chosen included)
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

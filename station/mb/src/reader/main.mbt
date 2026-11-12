@@ -77,7 +77,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList"].contains(
     op,
   )
 }
@@ -109,6 +109,19 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
     "openedChatSaid" => @readops.opened_chat_said(db, args)
     "widgetState" => @readops.widget_state(db, args)
     "transcriptFile" => @readops.transcript_file(db, self.host, self.data, self.sep, self.finder, args)
+    "memory" => @readops.memory(self.host, self.data, self.sep, args)
+    "machineSessions" => @readops.machine_sessions(db, self.host, self.sep, args)
+    "machineSession" => @readops.machine_session(db, self.host, self.sep, args)
+    "sessionsAtWork" => @readops.sessions_at_work(db, args)
+    "policyChecks" => @readops.policy_checks(db, args)
+    "recentConnectPeople" => @readops.recent_connect_people(db, args)
+    "usageTurns" => @readops.usage_turns(db, args)
+    "usageCalls" => @readops.usage_calls(db, args)
+    "outflowMessages" => @readops.outflow_messages(db, self.host, self.data, self.sep, args)
+    "archiveLook" => @readops.archive_look(db, args)
+    "recentChatList" => @readops.recent_chat_list(db, args)
+    "searchChatList" => @readops.search_chat_list(db, args)
+    "threadList" => @readops.thread_list(db)
     _ => fail("no read \{op}")
   }
 }

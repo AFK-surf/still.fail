@@ -518,6 +518,27 @@ test("cancel retry addresses the notice and leaves a different retry alone", asy
   }
 });
 
+test("retry takes up again the failed turn its notice is about, and only that notice's", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const thread = made.thread.id;
+    const [seq] = r.store.insertMessage(newMessage(thread, "2.0", "ember", "ember", "⚠️ 与模型服务的连接中断，回复即可重试"));
+    r.store.startTurn("lost", made.key, "input");
+    r.store.setAbout("lost", [thread, seq, "2.0"]);
+    r.store.endTurn("lost", "failed", "network: fetch failed", null, null);
+    const path = `/sessions/${made.key}/retry`;
+    assert.equal((await r.ask("POST", path, { thread, seq: 0 }))[0], 400);
+    assert.deepEqual(await r.ask("POST", path, { thread, seq: seq + 1 }), [200, { ok: true }]);
+    assert.equal(r.claude.count(), 0);
+    assert.deepEqual(await r.ask("POST", path, { thread, seq }), [200, { ok: true }]);
+    await until("it goes on", () => r.claude.count() === 1);
+    assert.equal(r.store.lastTurn(made.key)!.kind, "resume");
+  } finally {
+    await r.close();
+  }
+});
+
 test("stopping, evicting, warming and changing a session", async () => {
   const r = rig();
   try {
@@ -818,6 +839,8 @@ test("a session at work: the station follows it, its summary says how long its t
     // At work: followed, read, its length kept where its summary reads it.
     r.store.setRunning(key, true);
     assert.deepEqual(r.hub.live.held(), [key]);
+    // Read off the main thread: once it is.
+    await r.hub.live.idle();
     assert.equal((await summary()).transcriptLength, 5);
     const timeline = async (query: [string, string][]) => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}/timeline`, undefined, query))[1];
     const texts = (t: any) => [t.start, t.entries.map((e: any) => e.text), t.end];

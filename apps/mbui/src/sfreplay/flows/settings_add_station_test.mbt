@@ -4,15 +4,15 @@
 
 ///|
 test "80-add-station" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-add-station"), seed~)
     f.tap("icon:settings")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("=Station")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("=willow")
     f.tap("icon:plus")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("添加 station")
     f.tap("例如机器名")
     f.type_text("e2e-080726-b")
@@ -23,16 +23,16 @@ test "80-add-station" {
     f.peer_aside("second-station {LOG}")
     f.see("已加入")
     f.tap("=完成")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("=e2e-080726-b")
     f.tap("=e2e-080726-b")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("概览")
     // its ⋯ and the asking first are the presenters' (sheets on a phone)
     f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("=从 workspace 移除")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("移除「e2e-080726-b」")
     f.tap("=移除 station")
     // said as the cloud answers (its toast's time its own: looked at as it shows), the page going back
@@ -42,14 +42,14 @@ test "80-add-station" {
     f.toast_gone()
     let back = @ui.nav_rest()
     if back > f.t.time() {
-      f.run_to(back)
+      f.run_to(fn() { back })
     }
     f.see("=willow")
     f.gone("e2e-080726-b")
     // the confirming sheet gone down behind the page (at rest already when the page's way back took longer)
-    let down = @kit.sheet_rest("sf-present")
+    let down = @sf.presented_rest()
     if down > f.t.time() {
-      f.run_to(down)
+      f.run_to(fn() { down })
     }
     // (the second station stopped, its directory gone)
     f.peer_aside("second-down")

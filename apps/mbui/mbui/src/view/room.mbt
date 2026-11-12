@@ -109,7 +109,7 @@ fn Room::measure(self : Room, w : Double) -> Unit {
     if v.alive() {
       let h = self.height_at(v, w)
       if h != cell.untracked() {
-        abort(
+        @halt.saying(
           "Room::tall: what reads how tall a node made by its room comes to changed that (\{h} for \{cell.untracked()}): say it outside what is measured",
         )
       }
@@ -240,10 +240,15 @@ fn Tree::under_node(self : Tree, at : Int, top : Int) -> Bool {
 
 ///|
 /// Node `at` to be laid out again as a room it is in is told (Tree::in_room): it and what holds it up to the room's
-/// node, which is being laid out, marked so (what that layout measured of them before forgotten), nothing else.
+/// node, which is being laid out, marked so (what that layout measured of them before forgotten), nothing else. The
+/// room's own node is a fault (boundary.mbt): what it said of its own box is not laid out by it.
 fn Tree::room_marked_at(self : Tree, at : Int) -> Unit {
   if at == self.rooming {
-    abort("View::by_room: its own box said by the room it is given, as it is laid out by it: say it of what it holds")
+    self.fault(
+      { at, gen: self.nodes[at].gen },
+      "View::by_room: its own box said by the room it is given, as it is laid out by it: say it of what it holds",
+    )
+    return
   }
   if self.under_node(at, self.rooming) {
     let mut i = at

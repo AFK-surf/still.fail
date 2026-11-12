@@ -83,11 +83,11 @@ test "a toast given at 0: the pointer over it at 400, still at its due 1000, it 
   let (t, k) = toast_case([@kit.toast("a", "一")])
   run_to_time(t, 400.0)
   let (x, y) = toast_at(t, "一").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   run_to_time(t, 1000.0)
   let held = (k.gone.copy(), @kit.toast_due("toast"))
   run_to_time(t, 1500.0)
-  t.move(380.0, 400.0)
+  t.move_to(380.0, 400.0)
   let due = @kit.toast_due("toast")
   run_to_time(t, 2099.0)
   let before = k.gone.copy()
@@ -100,13 +100,13 @@ test "toasts: the focus on one's action and the pointer over it, the pointer gon
   let (t, k) = toast_case([@kit.toast("a", "一", action="做")])
   run_to_time(t, 200.0)
   let (x, y) = toast_at(t, "一").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   run_to_time(t, 300.0)
   // (the focus: the box at the top, then the action)
   t.tab()
   t.tab()
   let focused = t.semantics().iter().any(fn(s) { s.label == "做" && s.focused })
-  t.move(380.0, 400.0)
+  t.move_to(380.0, 400.0)
   run_to_time(t, 1500.0)
   let held = k.gone.copy()
   t.tab()
@@ -126,12 +126,12 @@ test "toasts: the pointer over one, the focus on its action going away, still he
   let focused = t.semantics().iter().any(fn(s) { s.label == "做" && s.focused })
   run_to_time(t, 300.0)
   let (x, y) = toast_at(t, "一").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   // (the focus away, to the box at the top)
   t.tab()
   run_to_time(t, 1500.0)
   let held = k.gone.copy()
-  t.move(380.0, 400.0)
+  t.move_to(380.0, 400.0)
   // (from 200, 800 left)
   run_to_time(t, 2299.0)
   let before = k.gone.copy()
@@ -147,10 +147,10 @@ test "toasts: the pointer over one holds them all; let go, each goes on from wha
   t.frame()
   run_to_time(t, 300.0)
   let (x, y) = toast_at(t, "一").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   run_to_time(t, 2000.0)
   let held = k.gone.copy()
-  t.move(380.0, 400.0)
+  t.move_to(380.0, 400.0)
   // (a: 700 left, b: 800)
   run_to_time(t, 2700.0)
   let first = k.gone.copy()
@@ -180,7 +180,7 @@ test "a toast going out (no longer given), a finger on it: moved away by half th
   run_to_time(t, 200.0)
   let (x, y) = toast_at(t, "一").unwrap()
   t.press_at(x, y)
-  t.move(x + 30.0, y)
+  t.move_to(x + 30.0, y)
   let held = k.drawn.val.0
   k.toasts.set([])
   t.frame()
@@ -219,8 +219,9 @@ test "a toast going out at a moment between whole ms: its way out going on till 
   run_to_time(t, rest - 0.5)
   let between = (@ui.view_tree().unwrap().clock_read(), t.query(Status, label="一") is Some(_))
   run_to_time(t, rest)
-  let after = (t.query(Status, label="一") is None, @kit.toast_rest("toast"), t.next_wake())
-  assert_eq((early, rest == rest.floor(), between, after), (true, false, (true, true), (true, -1.0, None)), msg="\{rest} \{t.time()}")
+  // (let go: its rest the moment it came to rest, as it said it, not -1)
+  let after = (t.query(Status, label="一") is None, @kit.toast_rest("toast") == rest, t.next_wake())
+  assert_eq((early, rest == rest.floor(), between, after), (true, false, (true, true), (true, true, None)), msg="\{rest} \{t.time()}")
 }
 
 ///|
@@ -235,9 +236,17 @@ test "a toast coming in, what holds the toaster let go: none of it left, read ou
   k.holder.set(false)
   t.frame()
   assert_eq(
-    (coming, t.query(Status, label="一") is None, t.rest_of("presence/toast"), t.next_wake(), t.at_rest(), @kit.toast_rest("toast")),
-    ((true, true), true, -1.0, None, true, -1.0),
-    msg="\{t.moving()} \{t.rest_why()}",
+    // (none of it moving: what it said cut short by its letting go, at rest by now)
+    (
+      coming,
+      t.query(Status, label="一") is None,
+      t.rest_of("presence/toast") <= t.time(),
+      t.next_wake(),
+      t.at_rest(),
+      @kit.toast_rest("toast") <= t.time(),
+    ),
+    ((true, true), true, true, None, true, true),
+    msg="\{Repr(t.moving())} \{t.rest_why()}",
   )
 }
 
@@ -261,9 +270,10 @@ test "the last toast going out, given again by its id with another action: the s
   let acted = k.acted.copy()
   k.toasts.set([])
   t.frame()
-  run_to_time(t, @kit.toast_rest("toast"))
+  let gone = @kit.toast_rest("toast")
+  run_to_time(t, gone)
   assert_eq(
     (first is Some(_), back == first, button, acted, t.query(Status, label="一") is None, @kit.toast_rest("toast"), t.next_wake()),
-    (true, true, (true, true), ["a"], true, -1.0, None),
+    (true, true, (true, true), ["a"], true, gone, None),
   )
 }

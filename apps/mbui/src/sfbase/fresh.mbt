@@ -75,6 +75,7 @@ pub fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 /// (on a phone as Android's LeaveFade), over the chat it became (new_chat_leaving_of): as the words go, not once the
 /// core has made the chat and taken them in.
 pub fn became_starts(c : @ui.Ctx, wide~ : Bool) -> Unit {
+  ignore(wide)
   let leave = new_leave(c)
   leave.snap(c, 0.0)
   leave.animate(c, 1.0, @motion.tween(new_leave_ms, ease=Leave))

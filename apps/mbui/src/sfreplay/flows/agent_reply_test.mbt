@@ -3,7 +3,7 @@
 
 ///|
 test "05-agent-reply" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("agent-reply"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over
@@ -16,7 +16,7 @@ test "05-agent-reply" {
     f.run_for(@sfapp.flight_ms)
     f.gone("正在发送")
     f.see_n(2, "收到，这是 agent 的回复 064618")
-    assert_true(f.t.at_end())
+    f.check_by(fn() { f.t.at_end() }, "the list not at its end")
     f.end()
   })
 }

@@ -4,18 +4,18 @@
 
 ///|
 test "85-vault-item" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-vault-item"), seed~)
     f.tap("icon:settings")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("密钥")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("未加锁")
     // what it keeps, a page under it: adding there
     f.tap("全部密钥")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("icon:plus")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("=Token")
     f.see("添加密钥")
     f.tap("=GitHub token")
@@ -26,7 +26,7 @@ test "85-vault-item" {
     f.tap("switch:允许 agent 申请")
     // the editor taller than a sheet's most now (as it is laid out, the frame after): the sheet that tall at once, what
     // it holds scrolling in it
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     // 限定域名's field, under the fold of the editor's sheet: what it holds scrolled (the wheel over the window's middle,
     // the sheet's)
     f.wheel(300.0)
@@ -34,28 +34,28 @@ test "85-vault-item" {
     f.type_text("api.example.test")
     f.tap("=保存")
     f.answered("vault.putItem", 1)
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("=e2e-080726")
     f.tap("=e2e-080726")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     // 编辑 opens it first (vault.open), then its editor on what it holds
     f.tap("icon:edit")
     f.answered("vault.open", 1)
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("限定域名")
     // 删除 at the sheet's foot, in reach however tall what it holds
     f.tap("=删除")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("删除「e2e-080726」")
     f.tap("=删除")
     // the page goes back once the station has deleted it
     f.answered("vault.deleteItem", 1)
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.gone("=e2e-080726")
     // the confirming sheet gone down behind the page (at rest already when the page's pop took longer)
-    let down = @kit.sheet_rest("sf-present")
+    let down = @sf.presented_rest()
     if down > f.t.time() {
-      f.run_to(down)
+      f.run_to(fn() { down })
     }
     f.end()
   })

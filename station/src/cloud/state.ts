@@ -8,7 +8,8 @@ import { wall } from "../ops/fibers.ts";
 import { readJsonFile } from "../ops/json-file.ts";
 import { log } from "../ops/log.ts";
 import { setStationCloud } from "../ops/i18n.ts";
-import { type Entry, type LockState, apply, asEntry, entryHash, fold } from "./lock.ts";
+import { type Entry, type LockState, apply, asEntry, entryHash, fold, genesis, lockChain } from "./lock.ts";
+import { type Kept, type LogRules, type OffChain, hashOf, keep, rechoose } from "./log-keep.ts";
 import { type Provider, providerOf } from "./provider.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
@@ -17,9 +18,28 @@ export type Revocation = { kind: string; id: string; at: number };
 /// stations there and what that workspace takes back.
 /// `locked`: that workspace is in security mode, as the control plane says (its lock is pinned here before any of its
 /// members is taken).
-export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[]; locked?: true };
+export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[]; locked?: true; rigs?: Rig[]; ways?: WaysSaid };
+
+/// A workspace's own relays and the ways its members' devices do not take to its stations (`lan`, `tailnet`, `direct`,
+/// a relay's URL), as still.fail cloud kept them before the stations did: what a station takes as its first of them
+/// where it holds none yet (mesh/ways.ts). Absent from planes of before, and from Comma's.
+export type WaysSaid = { relays: string[]; off: string[] };
+
+/// A rig of a workspace (a station that only runs tasks): a machine that only runs what the workspace's stations send it, its person's
+/// (`owner`, who added it), as the control plane names it. In security mode that is not taken on the plane's word:
+/// `Cloud.rigVouched` says which of them its person signed for (rigs/adds.ts).
+export type Rig = { id: string; name: string; owner: string; owner_email: string; owner_name: string; version?: string | null };
+
+/// What this machine is when it is a rig: whose (`owner`, as the control plane said when it joined), and the hash of
+/// that person's own lock, which the command that added it named (`person`: the rig takes only what a key on it
+/// signed, rig/grants.ts).
+export type RigSelf = { owner: string; owner_email: string; owner_name: string; person: string };
 
 /// One of the workspaces the station is in, its home one (cloud.json's top level) or a joined one.
+/// Why a station `Cloud.unprotected` names cannot be called (its refusal, and its line in station_list): an agent took
+/// the plain "not another station" for a bug (FB-11). What is to be done, in the app's words for it.
+export const UNPROTECTED =
+  "that station is in this workspace but not protected by its safe mode (安全模式): it was offline or too old when safe mode was turned on. It is not a bug: stations safe mode protects run no remote tasks for an unprotected one, nor share with it, and it cannot be called from here. An owner or admin of the workspace protects it in the app's Settings → Security (设置 → 安全) with Protect (保护), updating it first if it is too old.";
 export type Membership = Joined & { home: boolean };
 
 export type CloudState = {
@@ -45,7 +65,31 @@ export type CloudState = {
   /// The workspaces it joined besides its home one (the top level), as the control plane's `state` frame said last;
   /// absent from files of before, and from stations in one workspace.
   joined?: Joined[];
+  /// The home workspace's rigs, as the control plane said last; absent from planes of before them.
+  rigs?: Rig[];
+  /// The home workspace's own relays and ways turned off, as the control plane kept them (WaysSaid).
+  ways?: WaysSaid;
+  /// This machine is a rig, not a whole station: a station that only runs tasks (set by `enroll --rig`, or by
+  /// `rig_due` below; never by the control plane's word alone).
+  rig?: RigSelf;
+  /// A whole station asked to run only tasks from now on, by a member's device that reached it itself (rigs/module.ts
+  /// `POST /mode`): whose it will be (who asked; the control plane lets only its owner list it so), and their own
+  /// lock to pin. Good for `MODE_PENDING_S` from `at`.
+  rig_pending?: RigSelf & { at: number };
+  /// The control plane lists it as that person's rig now (cloud/presence.ts): it stops what it runs as a station and
+  /// becomes one (sessions/agents.ts).
+  rig_due?: true;
+  /// A rig its person signed whole again (rig/module.ts `rig.full`), at `at`: it becomes a station once the control
+  /// plane lists it as one.
+  full_pending?: { at: number };
 };
+
+/// How long a change of a station's mode asked of the machine waits for the control plane to list it so.
+export const MODE_PENDING_S = 3600;
+
+/// What a rig keeps of its person's grants (rig/grants.ts): gone with every change of what the machine is, so one
+/// person's are never read under another's lock.
+export const rigGrantsPath = (data: string) => join(data, "rig", "grants.json");
 
 export const meshDir = (data: string) => join(data, "mesh");
 const statePath = (data: string) => join(meshDir(data), "cloud.json");
@@ -60,33 +104,143 @@ export const joinedLockPath = (data: string, ws: string) => join(meshDir(data), 
 /// The locks a workspace's owner turned off here (beside its lock.json, `{genesis: [hash]}`): none is pinned again. Each
 /// device that changed one before brings it the whole chain up to then, and one coming after the `disable` (its
 /// answer slower than the control plane's) would lock the station again in a lock no longer on anywhere else.
+///
+/// With every branch kept (2026-11-12) a `disable` can lose its place to an entry after the same parent that another
+/// station took first: what was kept of the lock as it was turned off is kept beside (`logs`, by genesis, the last few),
+/// and where what a device brings later makes the chain the rules choose one that is not turned off, it is on again here
+/// (Cloud.keepLock), as it is at the stations that took the other first.
 const turnedOffPath = (path: string) => `${path}.off`;
-function turnedOff(path: string): string[] {
+/// How many locks turned off keep what was kept of them beside.
+const OFF_LOGS = 4;
+function readOff(path: string): { genesis: string[]; logs: Record<string, Kept> } {
   try {
-    const g = JSON.parse(readFileSync(turnedOffPath(path), "utf8"))?.genesis;
-    return Array.isArray(g) ? g.filter((h): h is string => typeof h === "string") : [];
+    const raw = JSON.parse(readFileSync(turnedOffPath(path), "utf8")); // sync: one step with the entries it judges, as it was read before
+    const g = raw?.genesis;
+    const logs: Record<string, Kept> = {};
+    for (const [h, l] of Object.entries(raw?.logs ?? {})) {
+      const entries = Array.isArray((l as any)?.entries) ? (l as any).entries.map(asEntry) : [];
+      const aside = Array.isArray((l as any)?.aside) ? (l as any).aside.map(asEntry) : [];
+      if (entries.length > 0 && !entries.some((e: Entry | null) => e === null)) logs[h] = { entries, aside: aside.filter((e: Entry | null): e is Entry => e !== null) };
+    }
+    return { genesis: Array.isArray(g) ? g.filter((h): h is string => typeof h === "string") : [], logs };
   } catch {
-    return [];
+    return { genesis: [], logs: {} };
   }
+}
+/// The record of the locks turned off here, with `genesis` the one off now (and what was kept of it) or none.
+function writeOff(path: string, off: { genesis: string[]; logs: Record<string, Kept> }) {
+  const genesis = off.genesis.slice(-16);
+  const kept = Object.keys(off.logs).filter((h) => genesis.includes(h)).slice(-OFF_LOGS);
+  writePrivate(turnedOffPath(path), JSON.stringify({ genesis, ...(kept.length > 0 ? { logs: Object.fromEntries(kept.map((h) => [h, off.logs[h]])) } : {}) }));
 }
 export const joinedPendingPath = (data: string, ws: string) => join(meshDir(data), "locks", `${fileOf(ws)}.pending.json`);
 
-/// The pinned lock as lock.json has it (a joined workspace's: its own file): null without one. A file that does not
-/// hold a lock (edited by hand, cut short) is a lock that admits nobody: refusing is safer than trusting the control
-/// plane again by itself.
-export function readLock(data: string, ws: string | null = null): { entries: Entry[]; state: LockState | null } | null {
+/// A pinned lock as kept: its active chain (`entries`, from its genesis), the entries the rules take that are off it
+/// (`aside`), and the state of the chain (null: its file is broken, nobody is admitted).
+export type KeptLock = { entries: Entry[]; aside?: Entry[]; state: LockState | null };
+
+/// The pinned lock as lock.json has it (a joined workspace's: its own file): null without one. `entries` is its active
+/// chain in order, as every reader from before reads it; `aside`, absent from files of before 2026-11-12 and while none
+/// is, the entries kept off it (cloud/log-keep.ts): the chain is chosen again among all of them as it is read. A file
+/// that does not hold a lock (edited by hand, cut short) is a lock that admits nobody: refusing is safer than trusting
+/// the control plane again by itself.
+export function readLock(data: string, ws: string | null = null): KeptLock | null {
   const path = ws === null ? lockPath(data) : joinedLockPath(data, ws);
   if (!existsSync(path)) return null;
+  let read: { entries: Entry[]; aside: Entry[]; state: LockState };
   try {
     const raw = JSON.parse(readFileSync(path, "utf8"));
     const entries = (Array.isArray(raw?.entries) ? raw.entries : []).map(asEntry);
     if (entries.some((e: Entry | null) => e === null)) throw new Error("an entry is malformed");
-    return { entries, state: fold(entries, null) };
+    const aside = (Array.isArray(raw?.aside) ? raw.aside : []).map(asEntry).filter((e: Entry | null): e is Entry => e !== null);
+    read = { entries, aside, state: fold(entries, null) };
   } catch (e) {
     log.warn("lock", "lock.json holds no valid lock; nobody is admitted until `stillfail lock reset`", { error: (e as Error).message });
     return { entries: [], state: null };
   }
+  if (read.aside.length === 0) return { entries: read.entries, state: read.state };
+  try {
+    const { kept } = rechoose(read, lockRules(read.state, null, new Map()));
+    const same = kept.entries.length === read.entries.length && kept.entries.every((e, i) => hashOf(e) === hashOf(read.entries[i]!));
+    return { entries: kept.entries, aside: kept.aside, state: same ? read.state : fold(kept.entries, null) };
+  } catch (e) {
+    log.warn("lock", "the entries kept off the lock's chain could not be read; it goes by its chain", { error: (e as Error).message });
+    return { entries: read.entries, state: read.state };
+  }
 }
+
+/// The workspace lock's rules for keeping (cloud/log-keep.ts), of the lock whose chain's state is `s`: entries of its
+/// workspace, each checked after its parent with the station's time `now` (none: taken before), the states after the
+/// entries kept made once (`states`, by hash).
+function lockRules(s: LockState, now: number | null, states: Map<string, LockState>): LogRules {
+  states.set(s.head, s);
+  return {
+    chain: (all) => lockChain(all, s.genesis),
+    pre: (e) => (e.ws !== s.ws ? "an entry of another workspace's lock" : null),
+    now: now === null ? undefined : (parent, e, find) => {
+      const at = stateAt(parent, find, states);
+      if (at === null) return null;
+      try {
+        apply(at, e, now);
+        return null;
+      } catch (error) {
+        return (error as Error).message;
+      }
+    },
+  };
+}
+
+/// The lock's state after the entry of hash `h`, from the nearest state made (`states`) along its parents; null where
+/// they do not go back to one (the chain says why).
+function stateAt(h: string, find: (hash: string) => Entry | undefined, states: Map<string, LockState>): LockState | null {
+  const path: Entry[] = [];
+  let at: string | null = h;
+  while (at !== null && !states.has(at)) {
+    const e = find(at);
+    if (e === undefined) return null;
+    path.push(e);
+    at = e.prev;
+  }
+  let s: LockState | null = at === null ? null : states.get(at)!;
+  for (const e of path.reverse()) {
+    try {
+      s = s === null ? genesis(e) : apply(s, e, null);
+    } catch {
+      return null;
+    }
+    states.set(hashOf(e), s);
+  }
+  return s;
+}
+
+/// A lock turned off here (`off`, its genesis `g`) with `brought` taken into what was kept of it: the chain the rules
+/// choose and its state where that is not turned off; else null, or "kept" where what was kept beside changed (in `off`).
+function onAgain(off: { genesis: string[]; logs: Record<string, Kept> }, g: string, brought: Entry[], now: number): { kept: Kept; state: LockState; taken: number } | "kept" | null {
+  const was = off.logs[g];
+  if (was === undefined) return null;
+  try {
+    const t = keep(was, brought, lockRules(fold(was.entries, null), now, new Map()));
+    const state = fold(t.kept.entries, null);
+    if (!state.disabled) return { kept: t.kept, state, taken: t.taken };
+    if (t.changed) {
+      off.logs[g] = t.kept;
+      return "kept";
+    }
+  } catch {}
+  return null;
+}
+
+/// What a station answers an entry that lost its place, or that disagrees with the chain it goes by and follows none it
+/// keeps: as it answered a fork before it kept every branch (an app from before calls an answer "taken" whose head is
+/// as far as its entry, so the words and status stay).
+export const FORK = "the entry disagrees with this station's lock (a fork)";
+
+/// What taking entries of a lock did: how many were kept that were not (on the chain or aside), each one brought that
+/// is not on the chain now and why, and the refusal an answer from before gave (none where all are on it).
+export type LockTook = { taken: number; off: OffChain[]; refusal: Error | null };
+
+/// What is kept of a lock, as a word that changes when any of it does.
+const keptText = (l: KeptLock | null | undefined) => JSON.stringify(l === null || l === undefined ? null : [l.entries, l.aside ?? []]);
 
 /// still.fail cloud's host before the rename, and its host now: a station enrolled then has the old one in cloud.json
 /// (its origin, its relays), moved to the new one when the station starts. The cloud answers both until the old goes.
@@ -114,7 +268,39 @@ export function readState(data: string): CloudState | null {
   const state: CloudState = { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], revocations: raw.revocations ?? [] };
   if (raw.joined !== undefined) state.joined = joinedOf(raw.joined);
   if (raw.provider !== undefined) state.provider = providerOf(raw.provider);
+  if (raw.rigs !== undefined) state.rigs = rigsOf(raw.rigs);
+  const ways = waysSaidOf(raw.ways);
+  if (ways !== null) state.ways = ways;
+  else delete state.ways;
+  const rig = rigSelfOf(raw.rig);
+  if (rig !== null) state.rig = rig;
+  else delete state.rig;
+  const at = (v: any) => Number.isSafeInteger(v?.at);
+  const pending = rigSelfOf(raw.rig_pending);
+  if (pending !== null && at(raw.rig_pending)) state.rig_pending = { ...pending, at: raw.rig_pending.at };
+  else delete state.rig_pending;
+  if (raw.rig_due !== true || state.rig_pending === undefined) delete state.rig_due;
+  if (at(raw.full_pending)) state.full_pending = { at: raw.full_pending.at };
+  else delete state.full_pending;
   return state;
+}
+
+const HEX32 = /^[0-9a-f]{64}$/;
+
+/// The rigs a file or a `state` frame names, what is malformed in them left out.
+export function rigsOf(raw: unknown): Rig[] {
+  if (!Array.isArray(raw)) return [];
+  const text = (v: unknown) => (typeof v === "string" ? v : "");
+  return raw.flatMap((r: any) =>
+    typeof r?.id === "string" && HEX32.test(r.id) && typeof r.owner === "string" && r.owner !== ""
+      ? [{ id: r.id, name: text(r.name), owner: r.owner, owner_email: text(r.owner_email), owner_name: text(r.owner_name), ...(typeof r.version === "string" ? { version: r.version } : {}) }]
+      : [],
+  );
+}
+
+function rigSelfOf(raw: any): RigSelf | null {
+  if (raw === null || typeof raw !== "object" || typeof raw.owner !== "string" || raw.owner === "" || typeof raw.person !== "string" || !HEX32.test(raw.person)) return null;
+  return { owner: raw.owner, owner_email: typeof raw.owner_email === "string" ? raw.owner_email : "", owner_name: typeof raw.owner_name === "string" ? raw.owner_name : "", person: raw.person };
 }
 
 /// Pretty JSON, field order as the Rust struct's, the removal only while there is one; the provider and the gateways
@@ -129,6 +315,12 @@ export function writeState(data: string, s: CloudState) {
   if (s.removed_at !== undefined) out.removed_at = s.removed_at;
   if (s.removed_code !== undefined) out.removed_code = s.removed_code;
   if (s.joined !== undefined && s.joined.length > 0) out.joined = s.joined;
+  if (s.rigs !== undefined && s.rigs.length > 0) out.rigs = s.rigs;
+  if (s.ways !== undefined) out.ways = s.ways;
+  if (s.rig !== undefined) out.rig = s.rig;
+  if (s.rig_pending !== undefined) out.rig_pending = s.rig_pending;
+  if (s.rig_due === true) out.rig_due = true;
+  if (s.full_pending !== undefined) out.full_pending = s.full_pending;
   writePrivate(statePath(data), JSON.stringify(out, null, 2));
 }
 
@@ -144,9 +336,18 @@ export function joinedOf(raw: unknown): Joined[] {
           peers: Array.isArray(j.peers) ? j.peers : [],
           revocations: Array.isArray(j.revocations) ? j.revocations.filter(isRevocation) : [],
           ...(j.locked === true ? { locked: true as const } : {}),
+          ...(Array.isArray(j.rigs) && j.rigs.length > 0 ? { rigs: rigsOf(j.rigs) } : {}),
+          ...(waysSaidOf(j.ways) !== null ? { ways: waysSaidOf(j.ways)! } : {}),
         }]
       : [],
   );
+}
+
+/// The ways a file or a `state` frame says (WaysSaid); null when it says none.
+export function waysSaidOf(raw: any): WaysSaid | null {
+  if (raw === null || typeof raw !== "object" || !Array.isArray(raw.relays)) return null;
+  const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  return { relays: strings(raw.relays), off: strings(raw.off) };
 }
 
 export const isRevocation = (r: any): r is Revocation => typeof r?.kind === "string" && typeof r?.id === "string" && Number.isInteger(r?.at) && r.at >= 0;
@@ -169,19 +370,30 @@ export class Cloud {
   toolCalls: ((request: unknown) => Promise<unknown>) | null = null;
   /// The workspace's lock, once pinned (null: none, the control plane is trusted as before). Its state null: lock.json
   /// is broken, nobody is admitted.
-  lock: { entries: Entry[]; state: LockState | null } | null;
+  lock: KeptLock | null;
   /// The locks of the workspaces it joined, pinned there, by workspace (read from their files on first use).
-  private joinedLocks = new Map<string, { entries: Entry[]; state: LockState | null } | null>();
+  private joinedLocks = new Map<string, KeptLock | null>();
   /// How far the control plane's copy of the lock goes, as its last `state` frame said (null: a plane that keeps none).
   planeLockSeq: number | null = null;
   /// The same of each joined workspace's lock.
   planeLockSeqs = new Map<string, number | null>();
+  /// The hash of the control plane's head of each lock (`""` the home one's), as its last `state` frame said (none: it
+  /// said none). Where it parted from the one this station goes by (it kept the entry that lost), it is given this
+  /// station's as another keeper's (presence.ts `syncLock`, `planeParted`).
+  planeLockHashes = new Map<string, string>();
+  /// The plane's head found parted from the chain gone by here and this station's head then (`<plane>><here>`), each
+  /// pair given this station's chain once, by lock (`""` the home one's).
+  planeParted = new Map<string, string>();
+  /// Which of a locked workspace's rigs its person signed for (rigs/adds.ts sets it): until then none of them is
+  /// taken, the control plane's word counting for nothing there.
+  rigVouched: (workspace: string, rig: Rig) => boolean = () => false;
   /// What the control plane last said of the roster and gateways, before the lock filtered them (this run only).
   private planePeers: any[] | null = null;
   private planeGateways: string[] | undefined;
   private listeners = new Set<(s: CloudState | null) => void>();
   private writing = false;
   private watcher: FSWatcher | undefined;
+  private locksWatcher: FSWatcher | undefined;
   readonly data: string;
 
   /// `watchFiles`: whether the files are watched for others' changes (tests that start and stop many stations leave it out:
@@ -209,6 +421,16 @@ export class Cloud {
         this.watcher?.close();
         this.watcher = undefined;
       });
+      // The joined workspaces' locks: `lock reset --workspace`, or a join on this machine setting one aside.
+      mkdirSync(join(meshDir(data), "locks"), { recursive: true }); // sync: once, as the station starts
+      this.locksWatcher = watch(join(meshDir(data), "locks"), { persistent: false }, () => {
+        if (!this.writing) this.reloadJoined();
+      });
+      this.locksWatcher.on("error", (error) => {
+        log.warn("cloud", "the joined workspaces' locks no longer watched", { error: error.message });
+        this.locksWatcher?.close();
+        this.locksWatcher = undefined;
+      });
     } catch {
       // No mesh directory yet: `enroll` makes it, and the station is started anew after.
     }
@@ -216,6 +438,7 @@ export class Cloud {
 
   close() {
     this.watcher?.close();
+    this.locksWatcher?.close();
     this.listeners.clear();
   }
 
@@ -238,10 +461,24 @@ export class Cloud {
 
   reloadLock() {
     const next = readLock(this.data);
-    if (JSON.stringify(next?.entries ?? null) === JSON.stringify(this.lock?.entries ?? null) && (next?.state === null) === (this.lock?.state === null)) return;
+    if (keptText(next) === keptText(this.lock) && (next?.state === null) === (this.lock?.state === null)) return;
     this.lock = next;
     log.info("lock", next === null ? "the workspace lock was taken away on this machine; the control plane is trusted again" : "the workspace lock was read anew");
     this.refilter();
+  }
+
+  /// The joined workspaces' locks read again from their files (another process changed one: `lock reset --workspace`, a
+  /// join on this machine); told when one did.
+  reloadJoined() {
+    const locks = (this.joinedLocks ??= new Map());
+    const changed = [...locks].filter(([ws, was]) => {
+      const now = readLock(this.data, ws);
+      return keptText(now) !== keptText(was) || (now?.state === null) !== (was?.state === null);
+    });
+    if (changed.length === 0) return;
+    for (const [ws] of changed) locks.delete(ws);
+    log.info("lock", "a joined workspace's lock was changed on this machine", { workspaces: changed.map(([ws]) => ws) });
+    this.tell();
   }
 
   /// Whether `ws` names the home workspace (none named does).
@@ -250,7 +487,7 @@ export class Cloud {
   }
 
   /// The lock pinned in `ws` (the home one's when none is named), as its file has it.
-  private lockOf(ws: string | null | undefined): { entries: Entry[]; state: LockState | null } | null {
+  private lockOf(ws: string | null | undefined): KeptLock | null {
     if (this.isHome(ws)) return this.lock;
     // (Made here too: a Cloud made without its constructor, as tests make one, has none yet.)
     const locks = (this.joinedLocks ??= new Map());
@@ -282,15 +519,16 @@ export class Cloud {
     }
   }
 
-  /// A joined workspace the station is no longer in: its lock and what it was to pin forgotten.
-  forgetJoined(ws: string) {
-    rmSync(joinedLockPath(this.data, ws), { force: true });
-    rmSync(joinedPendingPath(this.data, ws), { force: true });
-    this.joinedLocks.delete(ws);
+  /// A joined workspace the control plane no longer names: not served (memberships), but its lock and what joining
+  /// named to pin are kept, and go on deciding once it is named again. Only the plane said so, which may hold the
+  /// workspace back for a frame and name it again unlocked: the lock is let go only by its own `disable`, on this machine
+  /// (`lock reset --workspace`, a join there naming another: cli.ts), or by `succeed`.
+  leftJoined(ws: string) {
     this.planeLockSeqs.delete(ws);
   }
 
-  /// A workspace it joined takes over as its home one, the home it was taken out of gone: that
+  /// A workspace it joined takes over as its home one, the home it was taken out of gone (or, its home not locked, any
+  /// the plane makes its home that it keeps a lock for: presence.ts `took`): that
   /// workspace's lock, pinned or named by joining, is the home one's now (lock.json, lock-pending.json), the old home's
   /// forgotten. Refused (false) while the home one is locked and that workspace's lock is not pinned here: the station
   /// stays where its lock keeps it.
@@ -332,6 +570,17 @@ export class Cloud {
     };
   }
 
+  /// The stations the control plane lists in `ws` (the home one when none is named) that the lock in force there leaves
+  /// out: not protected by safe mode (offline or too old when it was turned on), so the stations it protects neither
+  /// call them nor take their calls. Said to agents (`UNPROTECTED`) instead of letting them vanish. Empty without a
+  /// lock, with a broken one, and for the home one until the control plane's first roster of this run.
+  unprotected(ws?: string | null): any[] {
+    const s = this.locked(ws)?.state;
+    if (!s || !this.state) return [];
+    const listed = this.isHome(ws) ? (this.planePeers ?? []) : ((this.state.joined ?? []).find((j) => j.workspace === ws)?.peers ?? []);
+    return listed.filter((p) => typeof p?.id === "string" && p.id !== this.state!.station && !s.stations.has(p.id));
+  }
+
   private refilter() {
     if (!this.state) return this.tell();
     this.update((st) => {
@@ -341,10 +590,30 @@ export class Cloud {
     });
   }
 
-  /// Pins a lock (its whole chain, from genesis), or takes more of the pinned one: what follows its head. Entries it
-  /// already has are skipped; one that disagrees with them (a fork) or does not verify is refused, and nothing after it
-  /// is taken. Returns how many were taken; throws why the first refused one was.
-  takeLock(entries: Entry[], ws: string | null = null): number {
+  /// Pins a lock (its whole chain, from genesis), or takes more of the pinned one (keepLock). Returns how many entries
+  /// were kept that were not; where none was, throws why the first one brought that is not on the chain is not, as
+  /// before every branch was kept (a fork, the rules' refusal).
+  takeLock(entries: Entry[], ws: string | null = null, fork = false): number {
+    const t = this.keepLock(entries, ws, fork);
+    if (t.refusal !== null && t.taken === 0) throw t.refusal;
+    if (t.refusal !== null) log.warn("lock", "a lock entry was refused", { error: t.refusal.message });
+    return t.taken;
+  }
+
+  /// Pins a lock (its genesis first, which must be of this workspace and not one turned off here: else throws why), or
+  /// takes more of the pinned one.
+  ///
+  /// `fork`: entries another keeper already took (a station of the lock, or a device saying so: `keep`), every one the
+  /// rules take after a parent kept, in any order, also one off the chain gone by (cloud/log-keep.ts); the chain is the
+  /// rules' fork choice among all it keeps, and one that wins at its parent moves it to that branch. Else (what a
+  /// device brings itself, the hello's, the control plane's) only what goes on from the head, in order, as always: one
+  /// that does not is refused and not kept (`not on the head`), its signer at hand to sign it again after the head. So
+  /// this station changes branch only for what another took first, never for a fork it would be the first to make: a
+  /// device of today's core, which only goes on from what it read, is never left on an entry the station moved off for
+  /// one that came to it alone (2026-11-12). Refusing to keep a fresh entry decides nothing for anyone else (any keeper
+  /// may drop one), every keeper holding the same entries still chooses the same chain, and the stations of a lock still
+  /// give each other all they keep.
+  keepLock(entries: Entry[], ws: string | null = null, fork = false): LockTook {
     const home = this.isHome(ws);
     const now = nowSecs();
     const current = this.lockOf(ws);
@@ -352,60 +621,145 @@ export class Cloud {
     if (current !== null && had === null) throw new Error("this station's lock.json is broken; run `stillfail lock reset` on it");
     const workspace = home ? this.state?.workspace : ws!;
     const path = home ? lockPath(this.data) : joinedLockPath(this.data, ws!);
-    let kept = had?.entries ?? [];
+    let kept: Kept = { entries: had?.entries ?? [], aside: had?.aside ?? [] };
     let state = had?.state ?? null;
     let taken = 0;
-    let refused: Error | null = null;
-    for (const e of entries) {
-      try {
-        if (state === null) {
-          if (workspace !== undefined && e.ws !== workspace) throw new Error("the lock is another workspace's");
-          if (turnedOff(path).includes(entryHash(e))) throw new Error("this lock was turned off by its owner here; it is not taken again");
-          state = fold([e], now);
-          kept = [e];
-        } else if (e.seq <= state.seq) {
-          if (kept[e.seq] === undefined || entryHash(kept[e.seq]!) !== entryHash(e)) throw new Error("the entry disagrees with this station's lock (a fork)");
-          continue;
-        } else {
+    let changed = false;
+    let rest = entries;
+    let off: OffChain[] = [];
+    if (state === null) {
+      const e = entries[0];
+      if (e === undefined) return { taken: 0, off: [], refusal: null };
+      if (workspace !== undefined && e.ws !== workspace) throw new Error("the lock is another workspace's");
+      const wasOff = readOff(path);
+      const back = fork && wasOff.genesis.includes(entryHash(e)) ? onAgain(wasOff, entryHash(e), entries, now) : null;
+      if (back === "kept") this.offWritten(path, wasOff);
+      if (wasOff.genesis.includes(entryHash(e)) && (back === null || back === "kept")) throw new Error("this lock was turned off by its owner here; it is not taken again");
+      if (back !== null && back !== "kept") {
+        // Its `disable` lost its place to what was brought: on again, as where that was taken first.
+        this.offWritten(path, { genesis: wasOff.genesis.filter((h) => h !== entryHash(e)), logs: wasOff.logs });
+        state = back.state;
+        kept = back.kept;
+        taken = back.taken;
+        rest = [];
+        log.info("lock", "the workspace lock is on again here: its owner's disable lost its place to an entry after the same one", { seq: state.seq, ...(home ? {} : { workspace: ws }) });
+      } else {
+        state = fold([e], now);
+        kept = { entries: [e], aside: [] };
+        taken = 1;
+        rest = entries.slice(1);
+      }
+      changed = true;
+    }
+    const head = state.head;
+    const known = new Set([...kept.entries, ...kept.aside].map(hashOf));
+    const fresh = rest.filter((e) => !known.has(hashOf(e)) && (known.add(hashOf(e)), true));
+    if (!fork || (kept.aside.length === 0 && fresh.every((e, i) => e.prev === (i === 0 ? head : hashOf(fresh[i - 1]!))))) {
+      // On from the head alone, as always: each checked after the last, none after one refused or not on the head.
+      for (const e of fresh) {
+        if (e.prev !== state.head) {
+          off = [{ why: "not on the head", hash: hashOf(e), seq: e.seq, kept: false }];
+          break;
+        }
+        try {
           if (e.ws !== state.ws) throw new Error("an entry of another workspace's lock");
           state = apply(state, e, now);
-          kept = [...kept, e];
+          kept = { entries: [...kept.entries, e], aside: kept.aside };
+          taken++;
+          changed = true;
+        } catch (error) {
+          off = [{ why: "refused", refusal: (error as Error).message, hash: hashOf(e), seq: e.seq, kept: false }];
+          break;
         }
-        taken++;
-      } catch (error) {
-        refused = error as Error;
-        break;
       }
+    } else {
+      const t = keep(kept, rest, lockRules(state, now, new Map()));
+      if (t.changed) {
+        changed = true;
+        taken += t.taken;
+        if (t.moved || t.kept.entries.length !== kept.entries.length) state = fold(t.kept.entries, null);
+        kept = t.kept;
+      }
+      off = t.off;
     }
-    if (taken > 0) {
-      const set = (l: { entries: Entry[]; state: LockState | null } | null) => (home ? (this.lock = l) : this.joinedLocks.set(ws!, l));
+    const on = new Set(kept.entries.map(hashOf));
+    const refusal = this.refusalOf(entries, on, off, state, now);
+    if (changed) {
+      const set = (l: KeptLock | null) => (home ? (this.lock = l) : this.joinedLocks.set(ws!, l));
       this.writing = true;
       try {
         mkdirSync(dirname(path), { recursive: true });
-        writePrivate(path, JSON.stringify({ entries: kept }, null, 2));
+        writePrivate(path, JSON.stringify(kept.aside.length > 0 ? { entries: kept.entries, aside: kept.aside } : { entries: kept.entries }, null, 2));
       } finally {
         wall.after(100, () => (this.writing = false));
       }
-      set({ entries: kept, state });
+      set({ entries: kept.entries, ...(kept.aside.length > 0 ? { aside: kept.aside } : {}), state });
       const which = home ? {} : { workspace: ws };
       if (state!.disabled) {
         // Off: nothing pinned, the control plane trusted as before (it sends its lists again on the next frame).
-        writePrivate(turnedOffPath(path), JSON.stringify({ genesis: [...turnedOff(path), state!.genesis].slice(-16) }));
+        const wasOff = readOff(path);
+        this.offWritten(path, { genesis: [...wasOff.genesis.filter((h) => h !== state!.genesis), state!.genesis], logs: { ...wasOff.logs, [state!.genesis]: kept } });
         rmSync(path, { force: true });
         set(null);
         log.info("lock", "the workspace lock was turned off by its owner", which);
-      } else log.info("lock", had === null ? "pinned the workspace lock" : "took the workspace lock's new entries", { seq: state!.seq, ...which });
+      } else if (had === null) log.info("lock", "pinned the workspace lock", { seq: state!.seq, ...which });
+      else if (!on.has(had.state!.head)) log.info("lock", "the workspace lock goes by another branch now", { seq: state!.seq, head: state!.head.slice(0, 12), was: had.state!.head.slice(0, 12), aside: kept.aside.length, ...which });
+      else log.info("lock", "took the workspace lock's new entries", { seq: state!.seq, ...(kept.aside.length > 0 ? { aside: kept.aside.length } : {}), ...which });
       if (home) this.refilter();
       else this.tell();
     }
-    if (refused !== null && taken === 0) throw refused;
-    if (refused !== null) log.warn("lock", "a lock entry was refused", { error: refused.message });
-    return taken;
+    return { taken, off, refusal };
   }
 
-  /// The lock's entries after `seq` (all of them for -1), in `ws` (the home one when none is named).
+  /// Why the first of `entries` not on the chain (`on`) is not, as a station answered before it kept every branch:
+  /// lost its place, or disagreeing with the chain where it follows nothing kept, a fork; else the rules' refusal.
+  private refusalOf(entries: Entry[], on: Set<string>, off: OffChain[], state: LockState, now: number): Error | null {
+    const e = entries.find((x) => !on.has(hashOf(x)));
+    if (e === undefined) return null;
+    const o = off.find((x) => x.hash === hashOf(e));
+    if (o?.why === "refused") return new Error(o.refusal);
+    if (o === undefined || (o.why !== "no parent" && o.why !== "not on the head") || e.seq <= state.seq) return new Error(FORK);
+    try {
+      apply(state, e, now);
+    } catch (error) {
+      return error as Error;
+    }
+    return new Error(FORK);
+  }
+
+  /// The lock's entries after `seq` (all of them for -1), in `ws` (the home one when none is named): its active chain.
   lockAfter(seq: number, ws: string | null = null): Entry[] {
     return (this.lockOf(ws)?.entries ?? []).filter((e) => e.seq > seq);
+  }
+
+  /// Every entry kept of the lock in `ws`: its active chain, then those off it.
+  lockKept(ws: string | null = null): Entry[] {
+    const l = this.lockOf(ws);
+    return l === null ? [] : [...l.entries, ...(l.aside ?? [])];
+  }
+
+  /// What was kept of the lock of `ws` last turned off here, where none is pinned there now (its chain ends with the
+  /// `disable`): offered to the stations it names, so that one that missed the `disable` hears it, and taken from them,
+  /// so that a `disable` that lost its place there is let go here too (keepLock). Null when there is none.
+  lockOff(ws: string | null = null): Kept | null {
+    if (this.lockOf(ws) !== null) return null;
+    const path = this.isHome(ws) ? lockPath(this.data) : joinedLockPath(this.data, ws!);
+    const offs = (this.offLogs ??= new Map());
+    if (!offs.has(path)) {
+      const off = readOff(path);
+      const g = off.genesis.at(-1);
+      offs.set(path, g === undefined ? null : (off.logs[g] ?? null));
+    }
+    return offs.get(path) ?? null;
+  }
+
+  /// The locks turned off here as written, what was kept of the last of each, by its file (lockOff, read once).
+  private offLogs = new Map<string, Kept | null>();
+
+  private offWritten(path: string, off: { genesis: string[]; logs: Record<string, Kept> }) {
+    writeOff(path, off);
+    const g = off.genesis.at(-1);
+    (this.offLogs ??= new Map()).set(path, g === undefined ? null : (off.logs[g] ?? null));
   }
 
   /// Takes the lock away on this machine (`stillfail lock reset`): kept beside as lock.json.reset-<time>.
@@ -484,6 +838,34 @@ export class Cloud {
     return this.locked() !== null ? "home" : null;
   }
 
+  /// The rigs of `workspace` this station sends work to: those the control plane names, in security mode only those
+  /// their person signed for (`rigVouched`). None while the roster is not current, none for a rig (it asks nothing of
+  /// another), none outside the workspace.
+  rigs(workspace: string): Rig[] {
+    const s = this.state;
+    if (s === null || s.rig !== undefined || this.membership(workspace) === null) return [];
+    const named = workspace === s.workspace ? (s.rigs ?? []) : ((s.joined ?? []).find((j) => j.workspace === workspace)?.rigs ?? []);
+    const mine = named.filter((r) => r.id !== s.station);
+    return this.locked(workspace) === null ? mine : mine.filter((r) => this.rigVouched?.(workspace, r) === true);
+  }
+
+  /// The rigs of `workspace` as the control plane names them, signed for or not (what a person is shown to sign for).
+  rigsNamed(workspace: string): Rig[] {
+    const s = this.state;
+    if (s === null || s.rig !== undefined || this.membership(workspace) === null) return [];
+    return (workspace === s.workspace ? (s.rigs ?? []) : ((s.joined ?? []).find((j) => j.workspace === workspace)?.rigs ?? [])).filter((r) => r.id !== s.station);
+  }
+
+  /// The workspace `id` is a rig of, of those this station is in (`workspace`: that one alone); null when of none.
+  rigOf(id: string, workspace: string | null = null): { workspace: string; rig: Rig } | null {
+    for (const m of this.memberships()) {
+      if (workspace !== null && m.workspace !== workspace) continue;
+      const rig = this.rigs(m.workspace).find((r) => r.id === id);
+      if (rig !== undefined) return { workspace: m.workspace, rig };
+    }
+    return null;
+  }
+
   /// The station in `workspace`, if it is in it now.
   membership(workspace: string): Membership | null {
     const s = this.state;
@@ -491,6 +873,14 @@ export class Cloud {
     if (workspace === s.workspace) return this.homeMembership(s);
     const joined = (s.joined ?? []).find((j) => j.workspace === workspace);
     return joined === undefined ? null : this.joinedMembership(joined, s.workspace);
+  }
+
+  /// A workspace's own relays and ways turned off as the control plane kept them (WaysSaid): null when it said none.
+  waysSaid(workspace: string): WaysSaid | null {
+    const s = this.state;
+    if (s === null) return null;
+    if (workspace === s.workspace) return s.ways ?? null;
+    return (s.joined ?? []).find((j) => j.workspace === workspace)?.ways ?? null;
   }
 
   /// still.fail's relays, ours first, as `relays()` in the Rust station: `relay_urls`, else `relay_url`; what is no URL

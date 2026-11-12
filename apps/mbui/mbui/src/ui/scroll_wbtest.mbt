@@ -2,6 +2,11 @@
 // scripts/scrollplot.py table, a reference written apart from this), and
 // lists scrolled by scripted touches as each platform's would scroll.
 
+using @view {
+  edge_spring_at,
+  first_when,
+}
+
 ///|
 fn approx(got : Double, want : Double, tol : Double) -> Unit raise {
   if (got - want).abs() > tol || got != got {
@@ -336,7 +341,7 @@ test "Android: a fling into the end stretches there and comes back" {
   let frames_to = fn(end : Double) {
     // (a motion told and not started yet has no end to run to: a test that says otherwise is wrong)
     if end > 1.0e300 {
-      abort("the list's motion has not started")
+      @halt.saying("the list's motion has not started")
     }
     while t.time() < end {
       t.frame()
@@ -604,7 +609,7 @@ fn desk_rows_with_others(at : Ref[Double]) -> (Ctx) -> Unit {
 
 ///|
 test "desktop: the mouse dragged up or down on a code block or a swiped row in a list drags the list no more than on a row (2026-11-05 用户: codeblock/table 啥的，鼠标是可以拖动导致 chat 页面滚动的)" {
-  let at = Ref::new(0.0)
+  let at = Ref(0.0)
   let t = Tester::new(desk_rows_with_others(at), w=900.0, h=800.0)
   t.draw()
   // on the sideways box's row (its third row: 100 to 150), dragged up: the list stands

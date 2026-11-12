@@ -69,7 +69,6 @@ priv struct FeatureMap {
   shift : Int
   mask : Int
   one_mask : Int
-  needs_fallback : Bool
   auto_zwnj : Bool
   auto_zwj : Bool
   random : Bool
@@ -104,7 +103,6 @@ pub struct ShapePlan {
   priv kern_mask : Int
   priv requested_kerning : Bool
   priv has_frac : Bool
-  priv has_vert : Bool
   priv zero_marks : Bool
   priv fallback_glyph_classes : Bool
   priv fallback_mark_positioning : Bool
@@ -119,16 +117,6 @@ pub struct ShapePlan {
 }
 
 ///|
-fn ShapePlan::get_1_mask(self : ShapePlan, t : Int) -> Int {
-  for f in self.features {
-    if f.tag == t {
-      return f.one_mask
-    }
-  }
-  0
-}
-
-///|
 fn ShapePlan::get_mask(self : ShapePlan, t : Int) -> (Int, Int) {
   for f in self.features {
     if f.tag == t {
@@ -136,16 +124,6 @@ fn ShapePlan::get_mask(self : ShapePlan, t : Int) -> (Int, Int) {
     }
   }
   (0, 0)
-}
-
-///|
-fn ShapePlan::feature_index(self : ShapePlan, table : Int, t : Int) -> Int {
-  for f in self.features {
-    if f.tag == t {
-      return f.index[table]
-    }
-  }
-  -1
 }
 
 ///|
@@ -433,7 +411,6 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
       shift,
       mask,
       one_mask: (1 << shift) & mask,
-      needs_fallback: !found,
       auto_zwnj: (info.flags & F_MANUAL_ZWNJ) == 0,
       auto_zwj: (info.flags & F_MANUAL_ZWJ) == 0,
       random: (info.flags & F_RANDOM) != 0,
@@ -467,7 +444,7 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
         }
       }
       if last_lookup + 1 < list.length() {
-        let tail = list[last_lookup:].to_array()
+        let tail = list[last_lookup:].to_owned()
         tail.sort_by(fn(a, b) {
           let c = a.index.compare(b.index)
           if c != 0 {
@@ -562,7 +539,6 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
     kern_mask,
     requested_kerning: kern_mask != 0,
     has_frac: frac_mask != 0 || (numr_mask != 0 && dnom_mask != 0),
-    has_vert: ot_get_1("vert") != 0,
     zero_marks: shaper != SHAPER_INDIC,
     fallback_glyph_classes: !ot.has_glyph_classes(),
     fallback_mark_positioning: adjust && script_fallback,

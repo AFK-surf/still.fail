@@ -12,10 +12,11 @@ pub fn opt_number(v : Json?, key : String) -> Double? {
 
 ///|
 /// A moment in words, as the core says it (Stamp): `ago` (3 分钟前), `full` (9/20 14:05:09).
+#derive(Eq)
 pub(all) struct Stamp {
   ago : String
   full : String
-} derive(Eq)
+}
 
 ///|
 pub fn stamp_of(v : Json?, key : String) -> Stamp? {
@@ -137,6 +138,34 @@ pub(all) struct Card {
   phone : PhoneAsk?
   /// an agent's ask to sign in to a site (MessageCard.signinAsk), drawn in place of the post's words
   signin : SignInAsk?
+  /// an agent's request for a rig of the workspace (MessageCard.rigAsk), drawn in place of the post's words
+  rig : RigAsk?
+}
+
+///|
+/// An agent's request for a rig (a station that only runs tasks) as its card says it (RigAsk): its id, the rig and its name, the agent's
+/// reason and the time it asked for; the chat as the card named it (what the rig's person's device signs with the
+/// grant: `rig.decide`'s `ask`); once decided, how (`status`: granted, denied, ended; `why`; granted, whether the rig
+/// took it yet, `delivered`, and for how long it was signed).
+pub(all) struct RigAsk {
+  request : String
+  rig : String
+  name : String
+  reason : String
+  timeout_kind : String
+  timeout_seconds : Int
+  session : String
+  chat : String
+  title : String
+  by : String
+  status : String
+  why : String
+  delivered : Bool
+  granted_kind : String
+  granted_seconds : Int
+  /// One of the rig's devices alone (设备), its id and name as asked: "" for the rig itself.
+  device : String
+  device_name : String
 }
 
 ///|
@@ -193,6 +222,12 @@ pub(all) struct VaultAsk {
   /// a file's name, where the agent gave one
   filename : String
   typed : Bool
+  /// one to rename the item or change its about (secret_describe): its name and about as they would be, its about as
+  /// it was
+  describe : Bool
+  new_name : String
+  new_about : String
+  was_about : String
   status : String
   scope : String
   /// another station of the workspace its commands run on, by name (empty: the chat's)
@@ -378,6 +413,8 @@ pub(all) struct Message {
   notice_md : Json?
   /// the agent whose capacity retry this notice can cancel, while that retry waits
   notice_retry_session : String
+  /// the agent whose failed turn this notice can try again (重试), while that turn is where it stands
+  notice_again_session : String
   /// a failure's own words, as what failed said them, shown under its words when the notice is opened
   notice_detail : String
   /// a chat's run changed: what it runs on now, said in place of its words where they have not the room on their line
@@ -440,6 +477,10 @@ pub fn message_of(m : Json) -> Message {
                 username: text(field(a, "save"), "username"),
                 filename: text(field(a, "save"), "filename"),
                 typed: flag(field(a, "save"), "typed"),
+                describe: field(a, "describe") is Some(_),
+                new_name: text(field(a, "describe"), "name"),
+                new_about: text(field(a, "describe"), "about"),
+                was_about: text(field(a, "describe"), "wasAbout"),
                 status: text(a, "status"),
                 scope: text(a, "scope"),
                 station: text(a, "station"),
@@ -480,6 +521,29 @@ pub fn message_of(m : Json) -> Message {
               })
             _ => None
           },
+          rig: match field(c, "rigAsk") {
+            Some(Object(_)) as a =>
+              Some({
+                request: text(a, "request"),
+                rig: text(a, "rig"),
+                name: text(a, "name"),
+                reason: text(a, "reason"),
+                timeout_kind: text(a, "timeoutKind"),
+                timeout_seconds: count(a, "timeoutSeconds"),
+                session: text(a, "session"),
+                chat: text(a, "chat"),
+                title: text(a, "title"),
+                by: text(a, "by"),
+                status: text(a, "status"),
+                why: text(a, "why"),
+                delivered: flag(a, "delivered"),
+                granted_kind: text(a, "grantedKind"),
+                granted_seconds: count(a, "grantedSeconds"),
+                device: text(a, "device"),
+                device_name: text(a, "deviceName"),
+              })
+            _ => None
+          },
         })
       _ => None
     },
@@ -513,6 +577,7 @@ pub fn message_of(m : Json) -> Message {
     },
     notice_md: field(field(s, "notice"), "md"),
     notice_retry_session: text(field(s, "notice"), "retrySession"),
+    notice_again_session: text(field(s, "notice"), "againSession"),
     notice_detail: text(field(s, "notice"), "detail"),
     notice_short: text(field(s, "notice"), "short"),
     notice_lines: items(field(s, "notice"), "lines").filter_map(fn(l) {
@@ -559,10 +624,10 @@ pub(all) struct Outgoing {
   /// its files still going up before it goes but its images, among its `attachments` already (`uploads`): each one's
   /// name, size and how much of it the station has
   uploads : Array[(String, Int, Int)]
-  /// when it was sent (the frames' clock's: "正在发送" shows a while after), and whether it was refused as it is (sent
-  /// again it would be again: its words go back to the composer)
+  /// when it was sent (the time of day, as Source.now says it: "正在发送" shows a while after), and whether it was
+  /// refused as it is (sent again it would be again: its words go back to the composer)
   created_at : Double
-  final : Bool
+  refused : Bool
 }
 
 ///|
@@ -626,6 +691,10 @@ pub(all) struct ChatView {
   /// the first and last entries loaded (letters and edits are not messages): the cursors for loading pages
   first_entry : Double?
   last_entry : Double?
+  /// the page before, being read ("reading") or not read ("failed", why in `older_failed`, asked again a while after):
+  /// "" neither, when it may be asked for
+  older : String
+  older_failed : String
   /// how many letters its agents and other chats' wrote each other (not in `messages`: their own sheet)
   letters : Int
   at : Double?
@@ -633,6 +702,9 @@ pub(all) struct ChatView {
   unread_line : Double?
   unread_above : Bool
   outbox : Array[Outgoing]
+  /// till when (the core's time, its source's `now`) what the viewer sends here goes close under its last row, theirs,
+  /// that row's time under the new one (the core's `joinsUntil`); None: it would stand apart
+  joins_until : Double?
   offline : Bool
   /// its station down, the line over the composer (why, and that what is sent goes once it is reached)
   offline_note : String?
@@ -737,6 +809,8 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     newer: flag(s, "newer"),
     first_entry: opt_number(s, "firstEntry"),
     last_entry: opt_number(s, "lastEntry"),
+    older: text(s, "older"),
+    older_failed: text(s, "olderFailed"),
     letters: number(s, "letters").to_int(),
     at: opt_number(s, "at"),
     at_offset: opt_number(s, "atOffset"),
@@ -762,9 +836,10 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
           (text(Some(u), "name"), number(Some(u), "size").to_int(), number(Some(u), "sent").to_int())
         }),
         created_at: number(s, "createdAt"),
-        final: flag(s, "final"),
+        refused: flag(s, "final"),
       }
     }),
+    joins_until: opt_number(s, "joinsUntil"),
     offline: flag(s, "offline"),
     offline_note: opt_text(s, "offlineNote"),
     updating: flag(s, "updating"),
@@ -834,16 +909,71 @@ pub fn stations_of(v : Json?) -> Array[Station] {
 }
 
 ///|
-/// The workspace's stations as a page that only names them shows them (`stations` `brief`: each one's mark and how it
-/// is reached, not its overview and profiles, nor their changes).
+/// The workspace's stations as a list's rows (`stations {scope}`: what a row shows, never a station whole), asked one
+/// way wherever they are read so the core is asked them once (the settings' stations_of is the same ask).
+pub fn stations_asked(scope : String) -> Map[String, Json] {
+  { "scope": Json::string(scope) }
+}
+
+///|
+/// The workspace's stations' rows (stations_asked) as they are now.
+pub fn station_rows(src : Source, scope : String) -> TopicState {
+  src.topic("stations", stations_asked(scope)).get()
+}
+
+///|
+/// The workspace's stations as a page that only names them shows them: each one's mark and how it is reached, from
+/// their rows. Never what was last said while nothing read them (`lasting`'s, a place's to show at once): a chat
+/// names its station as it is now, or not yet (core_signal_wbtest.mbt).
 pub fn station_marks(src : Source, scope : String) -> Array[Station] {
-  stations_of(src.topic("stations", { "scope": Json::string(scope), "brief": Json::boolean(true) }).get().value)
+  let t = station_rows(src, scope)
+  if t.kept() {
+    []
+  } else {
+    stations_of(t.value)
+  }
 }
 
 ///|
 /// A chat's topics' params: its station and session.
 pub fn chat_params(r : ChatRef) -> Map[String, Json] {
   { "station": Json::string(r.station), "session": Json::string(r.session) }
+}
+
+///|
+/// The chat a job is in, as the core names it beside the job (`chat`: its id, the session it opens by, its title; and
+/// `station` where it is on another station than the job's, a task run there for it): none where it is in none. A job
+/// row opens this, never a chat of the job's own station by the chat's id (2026-11-12: a task Studio ran for a chat on
+/// another station opened a chat Studio has not, waiting for good).
+pub fn job_chat(job : Json?) -> ChatRef? {
+  let chat = field(job, "chat")
+  let station = match opt_text(chat, "station") {
+    Some(s) if s != "" => s
+    _ => text(job, "station")
+  }
+  let session = text(chat, "id")
+  if chat is Some(Object(_)) && station != "" && session != "" {
+    Some({ station, session, title: text(chat, "title"), station_name: "" })
+  } else {
+    None
+  }
+}
+
+///|
+/// What chat `r`'s page opens on, asked of `ask` (opens_answered's): its view, answered once it is, or why it has none,
+/// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come.
+pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
+  let t = ask("chat", chat_params(r))
+  opens_answered(t) || t.waiting
+}
+
+///|
+/// The core's marks of every workspace's chats (`workspaceMarks`: the rail's, 待处理's, the chat each was left on, and in
+/// each what the others have waiting), asked one way wherever a workspace opening reads them: one topic whichever
+/// workspace is shown, held across a switch. Asked of the one shown, each switch asked another, sent whole (24.6 KB of
+/// the real-size two) for what it said of the others alone.
+pub fn marks_asked() -> Map[String, Json] {
+  {}
 }
 
 ///|
@@ -858,7 +988,7 @@ pub fn chat_jobs_summary_params(r : ChatRef) -> Map[String, Json] {
 /// The last part of a path.
 pub fn base_name(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_string()
+    Some(i) => path.exact_view(start=i + 1).to_owned()
     None => path
   }
 }

@@ -666,6 +666,16 @@ pub struct Ctx {
   // being built, the dismissals asked for since, where a press went down since the last frame
   mut layers : Array[Layer]
   mut last_layers : Array[Layer]
+  /// the nodes the last whole build came to, taken as each build ends (frame_body), against which the last frame's
+  /// layers are held (Ctx::modal_layer). Two jobs: mid-build it is the build before's, so a layer of the last frame's is
+  /// asked of that frame whole, not of the nodes this build has written so far over it (`count` starts again from
+  /// none); after the build it is this one's, so a layer of the last frame's this build made no more (its node past
+  /// it, the layers' nodes made last) is passed over at once, in the frame it closed in, by what asks between the
+  /// build's end and Ctx::layers_frame_end (the hand, the cursor, the focus given back, back's chain)
+  mut built_count : Int
+  /// where each of `last_layers` stood in the window's stack of layers (Ctx::old_layer_stack) as its frame ended, by
+  /// id: asked as the next frame is built, no node read (Ctx::old_modal_stack)
+  last_stacks : Map[Int, Int]
   /// the layers this frame has given the focus as they opened (their ids): once a frame, at the first build they are in
   layers_opened : Array[Int]
   /// what the view tells outside of what it built, by key, this build's (Ctx::after_build): done once the frame's
@@ -689,6 +699,9 @@ pub struct Ctx {
   mut press_down : (Double, Double)?
   // (the window's tree took that press: none of the old frame's targets did, whatever its targets lie under it)
   mut press_down_tree : Bool
+  // (where in the window's stack of layers what of the tree's a press went down on is, as it went down, its topmost
+  // modal layer's at least (view_pointer): the old frame's layers under that never saw it, as the tree took it)
+  mut press_tree_stack : Int
   // output
   mut inst : FixedArray[Double]
   mut ninst : Int
@@ -812,10 +825,10 @@ fn Ctx::new() -> Ctx {
     menu_sig: "",
     edit_can_told: -1,
     handle_dy: 0.0,
-    lists: Map::new(),
-    editors: Map::new(),
+    lists: Map([]),
+    editors: Map([]),
     dev: DeviceState::new(),
-    springs: Map::new(),
+    springs: Map([]),
     movers: [],
     cycling: false,
     cycles: [],
@@ -828,31 +841,31 @@ fn Ctx::new() -> Ctx {
     read_back_moved: false,
     read_back_key: "",
     read_back_whole: false,
-    laid_reads: Map::new(),
-    size_reads: Map::new(),
-    place_reads: Map::new(),
+    laid_reads: Map([]),
+    size_reads: Map([]),
+    place_reads: Map([]),
     info_reads: [],
-    row_reads: Map::new(),
-    words_reads: Map::new(),
-    words_shape_reads: Map::new(),
-    left_ids: Map::new(),
-    left_reads: Map::new(),
-    cut_ids: Map::new(),
-    laid_watch: Map::new(),
-    tallest_h: Map::new(),
+    row_reads: Map([]),
+    words_reads: Map([]),
+    words_shape_reads: Map([]),
+    left_ids: Map([]),
+    left_reads: Map([]),
+    cut_ids: Map([]),
+    laid_watch: Map([]),
+    tallest_h: Map([]),
     tallest_new: false,
-    laid_rects: Map::new(),
-    shown_watch: Map::new(),
-    shown_spans: Map::new(),
+    laid_rects: Map([]),
+    shown_watch: Map([]),
+    shown_spans: Map([]),
     nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),
     host_rec: HostRec::new(),
-    covers: Map::new(),
+    covers: Map([]),
     cover_asks: [],
     owner: 0,
     stint: 0,
-    owned: Map::new(),
-    owned_releases: Map::new(),
+    owned: Map([]),
+    owned_releases: Map([]),
     back: None,
     back_node: -1,
     back_edge: 20.0,
@@ -863,11 +876,11 @@ fn Ctx::new() -> Ctx {
     back_island_next: None,
     back_chain: Unsaid,
     back_chain_next: Unsaid,
-    layer_gen: Map::new(),
+    layer_gen: Map([]),
     layer_hook: None,
-    layer_on_dismiss: Map::new(),
-    layer_retired: Map::new(),
-    layers_gone: Set::new(),
+    layer_on_dismiss: Map([]),
+    layer_retired: Map([]),
+    layers_gone: Set([]),
     back_held: None,
     back_off: false,
     back_node_next: -1,
@@ -888,8 +901,8 @@ fn Ctx::new() -> Ctx {
     arounds: [],
     corner_ladder: [],
     corner_fit: None,
-    lit_asked: Set::new(),
-    hand_chooses: Set::new(),
+    lit_asked: Set([]),
+    hand_chooses: Set([]),
     hand_was: (-1.0, -1.0),
     hand_moved: false,
     lit_apart: 0.0,
@@ -910,22 +923,25 @@ fn Ctx::new() -> Ctx {
     focus_before: 0,
     focusables: [],
     last_focusables: [],
-    groups: Map::new(),
+    groups: Map([]),
     group_cur: 0,
     layers: [],
     last_layers: [],
+    built_count: 0,
+    last_stacks: Map([]),
     layers_opened: [],
     tells: [],
     told: [],
-    shots: Map::new(),
+    shots: Map([]),
     shot_scale: 0.0,
     layer_cur: 0,
     stack_cur: -1,
     keys_layer: 0,
-    dismissals: Map::new(),
-    layer_return: Map::new(),
+    dismissals: Map([]),
+    layer_return: Map([]),
     press_down: None,
     press_down_tree: false,
+    press_tree_stack: -2,
     inst: FixedArray::make(inst_size * 4096, 0.0),
     ninst: 0,
     segs: [],
@@ -1080,6 +1096,8 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.layers.shrink_to_fit()
   self.last_layers.clear()
   self.last_layers.shrink_to_fit()
+  self.built_count = 0
+  self.last_stacks.clear()
   self.layers_opened.clear()
   self.layers_opened.shrink_to_fit()
   self.tells.clear()
@@ -1901,6 +1919,7 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 ///|
 /// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
+/// `line_em` sets the line height as a multiple of the drawn text size, after the system's text scaling.
 /// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis;
 /// `tabular`: digits all one width, a number keeping its width as it changes (the theme's `tabular` where unsaid).
 /// `balance`: wrapped words broken where their lines come out even, on as many lines as they would take (CSS's
@@ -1925,6 +1944,7 @@ pub fn Ctx::text(
   wrap? : Bool,
   w? : Size,
   line? : Double,
+  line_em? : Double,
   trim? : Bool = false,
   center? : Bool,
   tracking? : Double,
@@ -1964,12 +1984,16 @@ pub fn Ctx::text(
       None => s_size.unwrap_or(15.0)
     },
   )
-  n.line_h = match line {
-    Some(l) => self.sp(l)
+  n.line_h = match line_em {
+    Some(em) => n.font_size * em
     None =>
-      match s_line {
+      match line {
         Some(l) => self.sp(l)
-        None => self.theme.text_line * n.font_size
+        None =>
+          match s_line {
+            Some(l) => self.sp(l)
+            None => self.theme.text_line * n.font_size
+          }
       }
   }
   n.line_trim = trim
@@ -2395,7 +2419,7 @@ pub let tap_indication_ms : Double = 100.0
 
 ///|
 /// Whether a frame is being built now (on_frame): a frame asked for outside one is the host's to be told of.
-let in_frame : Ref[Bool] = Ref::new(false)
+let in_frame : Ref[Bool] = Ref(false)
 
 ///|
 /// What the view reads changed (`what`: said by an unsettled frame that never stops changing it): while the frame is
@@ -2506,10 +2530,20 @@ pub fn Ctx::moment(self : Ctx) -> Double {
 }
 
 ///|
-/// `t` (ms) in whole ms, as a motion's and the runtime's time go: rounded down, a moment summed one way or another
-/// (1316.9999999999998 for 1317) the same.
+/// `t` (ms) in whole ms, as the runtime's time goes (its timers, fx.mbt): rounded down, a moment summed one way or
+/// another (1316.9999999999998 for 1317) the same. Not a motion's: gone_ms.
 pub fn whole_ms(t : Double) -> Double {
   (t + same_moment_ms).floor()
+}
+
+///|
+/// The time gone `t` (ms) as a motion reads it: as it is, put on a grid far finer than any frame (same_moment_ms) so
+/// that a moment summed one way or another (1316.9999999999998 for 1317) reads the same, and nothing coarser. A motion
+/// sampled at whole ms stepped 8, 8, 9 ms at 120 frames a second, a step longer every third frame on the straight of a
+/// way (the coordinator of the migration, 2026-11-11). Taken where the time gone is: a difference of two moments, each
+/// on the grid, is not on it.
+pub fn gone_ms(t : Double) -> Double {
+  @flex.time_gone(t, 0.0)
 }
 
 ///|
@@ -2642,10 +2676,11 @@ fn marks_drawn(marks : Int) -> Bool {
 fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
   let targets = physical_equal(rects, g().hit_rects)
   let clips = if targets { g().hit_clips } else { [] }
-  // (a press: past what is only pointed at)
-  let k = hit_at(ids, rects, clips, x, y, pressed=targets)
+  // (a press: past what is only pointed at; on the window's tree's top row, past the old views' under it)
+  let passes = if targets { old_under_top_row(g(), x, y) } else { g().passes }
+  let k = hit_at(ids, rects, clips, x, y, pressed=targets, passes~)
   // what is drawn smaller than its room is reached from round it, by a finger or a pointer alike (press_reach)
-  let k = if targets { press_reach(ids, rects, clips, k, x, y) } else { k }
+  let k = if targets { press_reach(ids, rects, clips, k, x, y, passes~) } else { k }
   if k >= 0 {
     ids[k]
   } else {
@@ -2661,63 +2696,14 @@ pub fn finger_target() -> Double {
 }
 
 ///|
-/// The room a press has round what is drawn (x0, y0)–(x1, y1): each way it is drawn smaller than `room_least()`, it
-/// grown to it round its middle (not drawn so, nor laid out); moved in where that passes an edge past which nothing is pressed
-/// (`edge`: the window, what cuts it) rather than cut short there; cut where it passes what holds it that takes presses
-/// (`cut`: a row's small button keeps to its row, the row's own room round it the row's). What the hit test reaches
-/// (press_reach) and the room rules measure (rooms.mbt), one.
-fn press_room(
-  x0 : Double,
-  y0 : Double,
-  x1 : Double,
-  y1 : Double,
-  cut : (Double, Double, Double, Double),
-  edge : (Double, Double, Double, Double),
-) -> (Double, Double, Double, Double) {
-  let (ax0, ax1) = room_across(x0, x1, cut.0, cut.2, edge.0, edge.2)
-  let (ay0, ay1) = room_across(y0, y1, cut.1, cut.3, edge.1, edge.3)
-  (ax0, ay0, ax1, ay1)
-}
-
-///|
-/// One way of press_room: `lo`–`hi` grown to room_least() round its middle where shorter, moved in from `elo`–`ehi`'s
-/// ends, cut to `clo`–`chi`.
-fn room_across(
-  lo : Double,
-  hi : Double,
-  clo : Double,
-  chi : Double,
-  elo : Double,
-  ehi : Double,
-) -> (Double, Double) {
-  let mut a = lo
-  let mut b = hi
-  let least = room_least()
-  if hi - lo < least {
-    let mid = (lo + hi) / 2.0
-    a = mid - least / 2.0
-    b = mid + least / 2.0
-    // (moved in from an edge it passes, not cut short at it)
-    if a < elo {
-      b = b + (elo - a)
-      a = elo
-    }
-    if b > ehi {
-      a = a - (b - ehi)
-      b = ehi
-    }
-  }
-  (dmax(a, dmax(clo, elo)), dmin(b, dmin(chi, ehi)))
-}
-
-///|
 /// What a press (or the pointer) at (x, y) is on: `top` (the topmost target there, its index; -1 none), or a target
-/// drawn over it and within it smaller than its room whose room (press_room, cut to `top`, moved in from what cuts it
-/// and the window) holds (x, y), the nearest of several (where rooms meet, each has the part nearer it): a row's small
-/// button from round it, not the row's neighbour's. On what takes the pointer (`capture`: a picture a drag pans) the
-/// press is its own, nothing over it reached (a viewer's 下一张 over the picture: a drag beside it pans). By a finger
-/// and a pointer alike (the user, 2026-10-26: drawn small with a keyboard and mouse, a press's room is not), so what
-/// lights under the pointer is what a click there presses. What is only pointed at is never reached for.
+/// drawn over it and within it smaller than its room whose room (@view.press_room, cut to `top`, moved in from what
+/// cuts it and the window) holds (x, y), the nearest of several (where rooms meet, each has the part nearer it): a row's
+/// small button from round it, not the row's neighbour's (@view.press_reaches: the window's tree's hit test's too, one
+/// way of working it out). On what takes the pointer (`capture`: a picture a drag pans) the press is its own, nothing
+/// over it reached (a viewer's 下一张 over the picture: a drag beside it pans). By a finger and a pointer alike (the
+/// user, 2026-10-26: drawn small with a keyboard and mouse, a press's room is not), so what lights under the pointer is
+/// what a click there presses. What is only pointed at is never reached for.
 fn press_reach(
   ids : Array[Int],
   rects : Array[Double],
@@ -2725,6 +2711,7 @@ fn press_reach(
   top : Int,
   x : Double,
   y : Double,
+  passes? : Map[Int, Bool] = g().passes,
 ) -> Int {
   if top >= 0 && captures.contains(ids[top]) {
     return top
@@ -2738,14 +2725,11 @@ fn press_reach(
   for k in (top + 1)..<ids.length() {
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
-    let (w, h) = (x1 - x0, y1 - y0)
     if points.contains(ids[k]) ||
-      g().passes.contains(ids[k]) ||
+      passes.contains(ids[k]) ||
       as_drawn(ids[k]) ||
       (hits && !old_hit_open(k)) ||
-      w <= 0.0 ||
-      h <= 0.0 ||
-      (w >= least && h >= least) {
+      !@view.press_small(x0, y0, x1, y1, least) {
       continue
     }
     // cut to what the press is on (drawn in it), moved in from what cuts it (a list's edge) and the window
@@ -2762,17 +2746,13 @@ fn press_reach(
     if b + clip_n <= clips.length() {
       edge = (dmax(0.0, clips[b]), dmax(0.0, clips[b + 1]), dmin(ww, clips[b + 2]), dmin(wh, clips[b + 3]))
     }
-    let (rx0, ry0, rx1, ry1) = press_room(x0, y0, x1, y1, cut, edge)
     // (and within the rounded corners of what cuts it, as a press on it is)
-    if x < rx0 || x >= rx1 || y < ry0 || y >= ry1 || !in_round_clip(clips, k, x, y) {
-      continue
-    }
-    let dx = dmax(0.0, dmax(x0 - x, x - x1))
-    let dy = dmax(0.0, dmax(y0 - y, y - y1))
-    let d = dx * dx + dy * dy
-    if d < best_d {
-      best_d = d
-      best = k
+    match @view.press_reaches(x0, y0, x1, y1, cut, edge, least, x, y) {
+      Some(d) if d < best_d && in_round_clip(clips, k, x, y) => {
+        best_d = d
+        best = k
+      }
+      _ => ()
     }
   }
   best

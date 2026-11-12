@@ -71,7 +71,7 @@ fn Reader::name(self : Reader) -> String {
   if self.p + n > self.data.length() {
     fail("a name past the module's end")
   }
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for i in 0..<n {
     sb.write_char(Int::unsafe_to_char(self.data[self.p + i].to_int()))
   }
@@ -134,7 +134,7 @@ fn section(out : @buffer.Buffer, id : Int, body : @buffer.Buffer) -> Unit {
 ///|
 /// A function's name by its index (the name section's), the module's whole when it has none
 fn function_names(data : Bytes) -> Map[Int, String] {
-  let names = {}
+  let names = Map([])
   check_magic(data)
   let r = Reader::new(data, 8)
   while r.p < data.length() {

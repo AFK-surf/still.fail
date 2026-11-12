@@ -87,6 +87,7 @@ fn notify_core(
   notify? : @signals.Signal[Json] = @signals.signal({ "on": true, "asked": true, "push": true, "show": [] }),
   show? : Array[Json] = [],
   env? : Array[(String, String)] = [],
+  answered? : @signals.Signal[Bool] = @signals.signal(true),
 ) -> @ui.Tester {
   new_run()
   use_system(sys)
@@ -98,14 +99,16 @@ fn notify_core(
         "notify" =>
           if params.contains("workspace") {
             { value: Some({ "show": Json::array(show) }), error: None, version: show.length() }
-          } else {
+          } else if answered.get() {
             { value: Some(notify.get()), error: None, version: 1 }
+          } else {
+            { value: None, error: None, version: -1 }
           }
         _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "notice.claim" => done(Ok({ "show": true }))
         "link.parse" => done(Ok({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "s-c2" }))
@@ -285,6 +288,20 @@ test "a message gone to is lit whole as a band: across the list from edge to edg
 }
 
 ///|
+test "a notice gone to lights its own pill, round, never a band across the list behind it" {
+  // (opened at still.fail's notice, its flash held at its peak)
+  let t = screen("chat-flash-notice", @ui.move_most_ms)
+  assert_eq(@sfpages.flashing_now.val, ("ts1", 1.0))
+  let ground = @sf.theme().p.accent_bg
+  let lit = t.drawn_rect_corners().filter(fn(r) { r.4 >> 8 == ground >> 8 && (r.4 & 0xFFL) != 0L })
+  assert_eq(lit.length(), 1)
+  let (x, _, w, h, _, corners) = lit[0]
+  // the pill's, in from the list's sides, as round as it (its ends whole half circles)
+  assert_true(x > 1.0 && w < 388.0 && h > 0.0)
+  assert_true(corners.0 >= h / 2.0 - 0.5, msg="\{Repr(corners)} for \{h}")
+}
+
+///|
 test "with motion reduced, a message gone to is lit whole for its flash's time, then not: no fade" {
   let calls : Array[Made] = []
   let sys = fake_system()
@@ -323,6 +340,35 @@ test "the system told what it allows; asked once when it never was, with notific
   assert_eq(sys.asks, 1)
   // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
 }
+
+///|
+test "what the system allows told at the moment the core's notify is answered, and as the app is shown again, no frame waited for" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let answered = @signals.signal(false)
+  let t = notify_core(calls, sys, answered~)
+  t.run_for(notify_late_ms)
+  // (not answered: nothing told, nothing registered)
+  assert_eq(named(calls, "notify.permission").length(), 0)
+  // answered between frames: told then, before any frame after it, so the same among the core's messages at any rate
+  // of frames
+  answered.set(true)
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 1)
+  assert_true(told[0].params.stringify().contains("\"granted\""))
+  // hidden: not told; shown again: told again, once
+  t.app_state(false, false)
+  t.run_for(notify_late_ms)
+  assert_eq(named(calls, "notify.permission").length(), 1)
+  t.app_state(true, true)
+  assert_eq(named(calls, "notify.permission").length(), 2)
+  t.run_for(notify_late_ms)
+  assert_eq(named(calls, "notify.permission").length(), 2)
+}
+
+///|
+/// How long the core's `notify` is not answered in the test above, and how long the app is behind.
+let notify_late_ms : Double = 500.0
 
 ///|
 test "pushes: none registered without a token, taken off while off; a token registered" {

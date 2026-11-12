@@ -9,6 +9,7 @@
 /// (ui's Ctx::show_cursor, Tree::cursor_of): a field the I-beam, what takes presses the hand, words picked with the
 /// pointer the I-beam; what is none of those as it is (an edge, what a press on goes to a field, a remote screen's
 /// pointer) is said so (ui's Ctx::cursor, View::cursor).
+#derive(Eq, Debug)
 pub(all) enum Cursor {
   Arrow
   Hand
@@ -19,7 +20,25 @@ pub(all) enum Cursor {
   Grabbing
   Crosshair
   NotAllowed
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as a Tester's export writes the pointer's shape: what `derive(Show)` wrote.
+pub impl Show for Cursor with output(self, logger) {
+  logger.write_string(
+    match self {
+      Arrow => "Arrow"
+      Hand => "Hand"
+      IBeam => "IBeam"
+      ResizeX => "ResizeX"
+      ResizeY => "ResizeY"
+      Grab => "Grab"
+      Grabbing => "Grabbing"
+      Crosshair => "Crosshair"
+      NotAllowed => "NotAllowed"
+    },
+  )
+}
 
 ///|
 /// The number a host is told it by (@hostapi.set_cursor).
@@ -39,7 +58,7 @@ pub fn Cursor::code(self : Cursor) -> Int {
 
 ///|
 /// The pointer's shape over it, as it changes (None: what it is shown by without being told, Tree::cursor_of): a still
-/// pointer over it shows it anew by the frame then owed.
+/// pointer over it shows it anew at that change (Tree::on_cursor), no frame asked for it.
 pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(Prop::Cursor.ord()) {
@@ -53,15 +72,16 @@ pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
     guard self.live() is Some(n) else { return }
     if n.cursor != c {
       n.cursor = c
-      // (a frame owed: a still pointer over it shown it anew as the frame ends, view_cursor_tell)
-      self.tree.marked()
+      // (a still pointer over it shown it anew at once, what hosts the tree told (Tree::on_cursor: ui's
+      // view_cursor_tell): nothing drawn for a shape, no frame asked)
+      (self.tree.on_cursor)()
     }
   }
   match shape {
     Is(v) => set(v)
     By(f) =>
       self.owning(fn() {
-        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
+        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) }, draws=false)
         n.props[Prop::Cursor.ord()] = stop
       })
   }
@@ -79,4 +99,15 @@ pub fn Tree::cursor_of(self : Tree, id : NodeId) -> Cursor {
     Some(c) => c
     None => if n.on_press is Some(_) && self.takes_presses(id) { Hand } else { Arrow }
   }
+}
+
+///|
+/// It a ground, no control, for as long as it lives: what a press on it does is the ground's (a message's words a hold
+/// picks in and the links in them, ui's runs_links; the room round a panel's rows), so it has no room of its own to be
+/// pressed in and cuts none from what is beside it (Tree::press_boxes, ui's rooms.mbt), whatever the pointer's shape
+/// over it (View::cursor: that is how it looks, not what it is).
+pub fn View::as_ground(self : View) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.as_ground = true
+  self
 }

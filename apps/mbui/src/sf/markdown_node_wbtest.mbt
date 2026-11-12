@@ -106,14 +106,14 @@ test "Markdown as nodes: its blocks' words where an old view's markdown draws th
     let made = mn_words(made_t)
     let made_drawn = mn_instances(made_t)
     // (each block's words drawn, the heading's to the last paragraph's)
-    assert_true(old.iter().any(fn(w) { w.has_prefix("今天的进度") }) && old.iter().any(fn(w) { w.has_prefix("最后一段。") }), msg="\{case}: \{old}")
-    assert_eq(made, old, msg="\{case}:\nmade \{made}\nold  \{old}")
+    assert_true(old.iter().any(fn(w) { w.has_prefix("今天的进度") }) && old.iter().any(fn(w) { w.has_prefix("最后一段。") }), msg="\{Repr(case)}: \{Repr(old)}")
+    assert_eq(made, old, msg="\{Repr(case)}:\nmade \{Repr(made)}\nold  \{Repr(old)}")
     // (and every instance the window draws: grounds, bars, keys, glyphs, where each is cut)
     let only_made = made_drawn.filter(fn(x) { !old_drawn.contains(x) })
     let only_old = old_drawn.filter(fn(x) { !made_drawn.contains(x) })
     assert_true(
       made_drawn == old_drawn,
-      msg="\{case}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{only_made.iter().take(8).collect()}\nonly old  \{only_old.iter().take(8).collect()}",
+      msg="\{Repr(case)}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{Repr(only_made.iter().take(8).collect())}\nonly old  \{Repr(only_old.iter().take(8).collect())}",
     )
   }
 }
@@ -172,14 +172,14 @@ test "Markdown as nodes: a code block's language changed draws it as the new one
   }
   // (its text as it is read: what a reading is kept by, as a message's words are)
   let t = mn_live(fn() { "```" + lang.get() + "\n" + code.get() + "\n```" }, tree, fn() { 15.0 })
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:x" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:x" }), msg="\{Repr(mn_drawn())}")
   code.set("y")
   t.draw()
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:y" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:y" }), msg="\{Repr(mn_drawn())}")
   lang.set("b")
   t.draw()
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "b:y" }), msg="\{mn_drawn()}")
-  assert_true(!mn_drawn().iter().any(fn(d) { d.0.has_prefix("a:") }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "b:y" }), msg="\{Repr(mn_drawn())}")
+  assert_true(!mn_drawn().iter().any(fn(d) { d.0.has_prefix("a:") }), msg="\{Repr(mn_drawn())}")
 }
 
 ///|
@@ -196,11 +196,11 @@ test "Markdown as nodes: a paragraph of only a link to a file the message places
     )
   }
   let t = mn_live(fn() { "[图](" + href.get() + ")" }, tree, fn() { 15.0 })
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{Repr(mn_drawn())}")
   href.set("y.png")
   t.draw()
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:y.png" }), msg="\{mn_drawn()}")
-  assert_true(!mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:y.png" }), msg="\{Repr(mn_drawn())}")
+  assert_true(!mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{Repr(mn_drawn())}")
 }
 
 ///|
@@ -241,18 +241,132 @@ test "Markdown as nodes: a row of images, one of them twice, each drawn at the w
     images().iter().all(fn(d) { d.0.has_suffix(":" + d.1.to_string()) })
   }
   let first = images()
-  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:a.jpg:") }).length(), 2, msg="\{first}")
-  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:b.jpg:") }).length(), 1, msg="\{first}")
-  assert_true(said_as_drawn(), msg="\{first}")
+  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:a.jpg:") }).length(), 2, msg="\{Repr(first)}")
+  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:b.jpg:") }).length(), 1, msg="\{Repr(first)}")
+  assert_true(said_as_drawn(), msg="\{Repr(first)}")
   t.resize(600.0, 900.0)
   t.draw()
   let wider = images()
-  assert_true(said_as_drawn(), msg="\{wider}")
-  assert_true(wider[0].1 > first[0].1, msg="\{first} \{wider}")
+  assert_true(said_as_drawn(), msg="\{Repr(wider)}")
+  assert_true(wider[0].1 > first[0].1, msg="\{Repr(first)} \{Repr(wider)}")
   ratio.set(0.5)
   t.draw()
   let narrower = images()
-  assert_eq(narrower.length(), 3, msg="\{narrower}")
-  assert_true(said_as_drawn(), msg="\{narrower}")
-  assert_true(narrower[0].1 < wider[0].1, msg="\{wider} \{narrower}")
+  assert_eq(narrower.length(), 3, msg="\{Repr(narrower)}")
+  assert_true(said_as_drawn(), msg="\{Repr(narrower)}")
+  assert_true(narrower[0].1 < wider[0].1, msg="\{Repr(wider)} \{Repr(narrower)}")
+}
+
+///|
+/// `code` in a code block in a column 16 in from a window `w` wide (a finger's at 390, a mouse's wider), in the colours
+/// `ink` says where it says them, the system's words at `scale`, wrapped at its width where `wrapped` (its wrap key
+/// pressed), drawn by an old view's code_block or as nodes (`node`, code_block_node): its Tester, drawn.
+fn mlines_tester(node : Bool, code : String, ink : String?, w : Double, scale : Double, wrapped : Bool) -> @ui.Tester {
+  // (an old view's block wrapped by its id: none so till its key is pressed here)
+  code_wrapped.clear()
+  let platform = if w < 500.0 { 2 } else { 0 }
+  let t = if node {
+    @ui.Tester::new(fn(c) { begin(c) |> ignore }, w~, h=900.0, platform~)
+  } else {
+    @ui.Tester::new(
+      fn(c) {
+        begin(c) |> ignore
+        c.with_theme(ui_theme(), fn() { c.column(w=Fill(1.0), pad=16.0, fn() { code_block(c, code, "sh", colours=ink) }) |> ignore })
+      },
+      w~,
+      h=900.0,
+      platform~,
+    )
+  }
+  if node {
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(ui_theme_now)
+      root.lines_up(Is(None)) |> ignore
+      root.box(fn(b) {
+        b.padding(Is((16.0, 16.0, 16.0, 16.0))) |> ignore
+        b.box(fn(k) { code_block_node(k, fn() { code }, fn() { "sh" }, fn() { ink }) }) |> ignore
+      })
+      |> ignore
+    })
+  }
+  t.set_font_scale(scale)
+  t.draw()
+  t.draw()
+  if wrapped {
+    t.tap_text(md_wrap_words(false))
+    t.run_for(@ui.move_most_ms)
+  }
+  t
+}
+
+///|
+/// Where each line of `code` is drawn in `t` (Tester::run_rects: a rectangle a line), to a hundredth, and the box of
+/// the words holding its first line.
+fn mlines_at(t : @ui.Tester, code : String) -> (Array[String], String) {
+  let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
+  let lines = code.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { l.to_owned() })
+  let at = lines.map(fn(l) { "\{l}: \{@ui.list_text(t.run_rects(l).map(fn(r) { @ui.rect_text((r2(r.0), r2(r.1), r2(r.2), r2(r.3))) }))}" })
+  let first = match t.rect_of(lines[0]) {
+    Some(r) => @ui.rect_text((r2(r.0), r2(r.1), r2(r.2), r2(r.3)))
+    None => "none"
+  }
+  (at, first)
+}
+
+///|
+/// Code of more lines in a code block, wrapped at its width (`wrapped`) or on its lines as written, drawn as nodes as an old
+/// view's code block draws it: each case at 760 and 390, words at 1 and 1.3.
+fn mlines_alike(wrapped : Bool) -> Unit raise {
+  let long = "printf '%s\\n' \"a line of a script long enough to run past a phone's width and past a desktop's at its size, on and on\""
+  let cases : Array[(String, String, String?)] = [
+    ("two lines", "moon test --target wasm-gc src/sf/markdown_node_wbtest.mbt\nmoon check", None),
+    ("an empty line", "a = 1\n\nb = 2", None),
+    ("a long line among short ones", "set -e\n" + long + "\ndone", None),
+    ("a break at its end", "line one\nline two\n", None),
+    ("in a language's colours", "let x = 1\n// note\nfoo(\"hi\")\n", Some("h3a1j1a1c1a1f1a1b7a1i3c1d4c1a1")),
+  ]
+  for case in cases {
+    let (name, code, ink) = case
+    for w in [760.0, 390.0] {
+      for scale in [1.0, 1.3] {
+        let at = "\{name}, \{w} wide, words at \{scale}\{if wrapped { ", wrapped" } else { "" }}"
+        let old_t = mlines_tester(false, code, ink, w, scale, wrapped)
+        let old = mn_words(old_t)
+        let old_lines = mlines_at(old_t, code)
+        let old_drawn = mn_instances(old_t)
+        let made_t = mlines_tester(true, code, ink, w, scale, wrapped)
+        let made = mn_words(made_t)
+        let made_lines = mlines_at(made_t, code)
+        let made_drawn = mn_instances(made_t)
+        assert_eq(made_lines, old_lines, msg="\{at}:\nmade \{Repr(made_lines)}\nold  \{Repr(old_lines)}")
+        assert_eq(made, old, msg="\{at}:\nmade \{Repr(made)}\nold  \{Repr(old)}")
+        if !wrapped {
+          // (every instance the window draws, at rest on its lines as written: grounds, keys, glyphs, where each is cut)
+          let only_made = made_drawn.filter(fn(x) { !old_drawn.contains(x) })
+          let only_old = old_drawn.filter(fn(x) { !made_drawn.contains(x) })
+          assert_true(
+            made_drawn == old_drawn,
+            msg="\{at}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{Repr(only_made.iter().take(8).collect())}\nonly old  \{Repr(only_old.iter().take(8).collect())}",
+          )
+          // (each a line of its own, one under the other)
+          let rows = code.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { made_t.run_rects(l.to_owned()) })
+          assert_true(rows.iter().all(fn(r) { r.length() == 1 }), msg="\{at}: \{Repr(rows)}")
+          for k in 1..<rows.length() {
+            assert_true(rows[k][0].1 > rows[k - 1][0].1, msg="\{at}: \{Repr(rows)}")
+          }
+        }
+      }
+    }
+  }
+  code_wrapped.clear()
+}
+
+///|
+test "a code block of more lines as nodes, on its lines as written: each line on a line of its own where an old view's code block draws it, at 760 and 390, words at 1 and 1.3" {
+  mlines_alike(false)
+}
+
+///|
+test "a code block of more lines as nodes, wrapped once its key is pressed: each line from a line of its own where an old view's code block draws it, at 760 and 390, words at 1 and 1.3" {
+  mlines_alike(true)
 }

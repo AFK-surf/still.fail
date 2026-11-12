@@ -12,7 +12,7 @@ test "91-drive-download-many" {
 
 ///|
 fn replay_drive_download_many() -> Unit raise {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-download-many"), seed~, w=1280.0, h=800.0)
     // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
     f.before("drive-big 105609")

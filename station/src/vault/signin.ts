@@ -82,7 +82,7 @@ export type SignInDeps = {
     listed(session: string, site: string): string | null;
     held(session: string, site: string): string | null;
     use(session: string, item: string, reason: string): Promise<string>;
-    keep(session: string, site: string, reason: string, made: (request: string) => void): Promise<string>;
+    keep(session: string, site: string, reason: string, made: (request: string) => void, named?: { name?: string; about?: string }): Promise<string>;
   };
   /// The link that opens a tab's screen in the app, where the station has pages.
   screenLink(tab: string): string | null;
@@ -175,7 +175,7 @@ export class SignIns {
   /// keeps, asked for (secret_use); none (or `again`: the one kept ran out), a card asks the person to sign in on the
   /// chat's tab on the site (`tab`, else the last one there). `done`: the agent looked and it is signed in; `stuck`: it
   /// is not, and what is left (given to the person on the tab's screen).
-  async ask(session: string, a: { site: string; reason?: string; tab?: string; again?: boolean; reask?: boolean; done?: boolean; stuck?: string }, signal?: AbortSignal): Promise<string> {
+  async ask(session: string, a: { site: string; reason?: string; tab?: string; again?: boolean; reask?: boolean; done?: boolean; stuck?: string; name?: string; about?: string }, signal?: AbortSignal): Promise<string> {
     signal?.throwIfAborted();
     const site = siteOf(a.site);
     if (site === "" || !site.includes(".")) throw new Refused("site is the site's host, e.g. github.com");
@@ -186,7 +186,7 @@ export class SignIns {
     }
     if (a.done || a.stuck !== undefined) {
       if (open === undefined) throw new Refused(`No sign-in to ${site} is under way in this chat: sign_in {site, reason} asks for one.`);
-      return a.done ? this.#done(open) : this.#stuck(open, a.stuck ?? "");
+      return a.done ? this.#done(open, { ...(a.name?.trim() ? { name: a.name.trim() } : {}), ...(a.about?.trim() ? { about: a.about.trim() } : {}) }) : this.#stuck(open, a.stuck ?? "");
     }
     // Asked again once it left its sign-in, the site asking for the password again (to add a passkey, a setting's
     // confirmation): typed in again from what the app gave, while it is held.
@@ -290,14 +290,14 @@ export class SignIns {
       x.cardTs = posted;
       this.#save(x);
     }
-    return `Asked ${owner} to sign in to ${site} (sign-in ${x.id}): the card in your chat signs in on tab ${tab.id} from their own password manager, the station typing it in; you never see it. ${UNDECIDED} You are told here when the page has left its sign-in: then look, and say so with sign_in {site: "${site}", done: true} (or stuck: "what is left").`;
+    return `Asked ${owner} to sign in to ${site} (sign-in ${x.id}): the card in your chat signs in on tab ${tab.id} from their own password manager, the station typing it in; you never see it. ${UNDECIDED} You are told here when the page has left its sign-in: then look, and say so with sign_in {site: "${site}", done: true, name: "…", about: "…"} (a name and about a person knows it by, as secret_save's), or stuck: "what is left".`;
   }
 
   /// What the agent is told of an ask still under way.
   #waiting(x: SignInAsk): string {
     switch (x.status) {
       case "left":
-        return `The sign-in to ${x.site} (${x.id}) left its sign-in page on tab ${x.tab}: look whether it is signed in, then sign_in {site: "${x.site}", done: true}, or stuck: "what is left".`;
+        return `The sign-in to ${x.site} (${x.id}) left its sign-in page on tab ${x.tab}: look whether it is signed in, then sign_in {site: "${x.site}", done: true, name: "…", about: "…"}, or stuck: "what is left".`;
       case "person":
         return `The sign-in to ${x.site} (${x.id}) is with ${x.owner}, on tab ${x.tab}'s screen. ${UNDECIDED} You are told when they are done.`;
       default:
@@ -433,7 +433,7 @@ export class SignIns {
 
   #left(x: SignInAsk, said: string) {
     this.#set(x, "left");
-    this.#tell(x.session, `${said} Look whether ${x.site} is signed in now (tab ${x.tab}): then call sign_in {site: "${x.site}", done: true}${x.keep !== false ? ", which keeps the sign-in in their vault as they chose on the card" : ""}; if a step is left that only they can take (a confirmation by mail, a new device's check), sign_in {site: "${x.site}", stuck: "what is left"}, in their language.`);
+    this.#tell(x.session, `${said} Look whether ${x.site} is signed in now (tab ${x.tab}): then call sign_in {site: "${x.site}", done: true, name: "…", about: "…"}${x.keep !== false ? ", which keeps the sign-in in their vault as they chose on the card" : ""}; if a step is left that only they can take (a confirmation by mail, a new device's check), sign_in {site: "${x.site}", stuck: "what is left"}, in their language.`);
   }
 
   /// From the person's app: they sign in themselves on the tab's screen (`screen`), or say they did (`done`).
@@ -458,8 +458,8 @@ export class SignIns {
   }
 
   /// The agent looked: signed in. Kept in the vault where the person chose so (the request told on the card, for their
-  /// app to approve in place).
-  async #done(x: SignInAsk): Promise<string> {
+  /// app to approve in place), by the name and about the agent gave (`named`; none: the site's).
+  async #done(x: SignInAsk, named: { name?: string; about?: string } = {}): Promise<string> {
     this.#forget(x.id);
     if (x.keep === false) {
       this.#end(x, "done");
@@ -468,7 +468,7 @@ export class SignIns {
     let made: string | null = null;
     let said: string;
     try {
-      said = await this.#d.vault.keep(x.session, x.site, `登录 ${x.site} 后保存，下次 agent 申请使用就不用再登录`, (r) => (made = r));
+      said = await this.#d.vault.keep(x.session, x.site, `登录 ${x.site} 后保存，下次 agent 申请使用就不用再登录`, (r) => (made = r), named);
     } catch (e) {
       this.#end(x, "done");
       return `Signed in to ${x.site}, but it could not be kept in the vault: ${(e as Error).message}`;

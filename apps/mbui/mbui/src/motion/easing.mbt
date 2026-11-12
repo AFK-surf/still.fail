@@ -116,10 +116,11 @@ pub fn anticipate(p : Double) -> Double {
 
 ///|
 /// Where `steps` jumps: at the end of each step (CSS's jump-end) or its start.
+#derive(Eq, Debug)
 pub(all) enum StepsAt {
   End
   Start
-} derive(Eq, Show)
+}
 
 ///|
 /// So many equal steps (Motion's steps, CSS's steps()).

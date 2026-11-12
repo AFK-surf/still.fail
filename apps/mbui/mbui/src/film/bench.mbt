@@ -26,6 +26,7 @@ priv struct Measured {
 
 ///|
 /// `script` run over `view` and measured (the head of this file): the APPBENCH line said, whether the script passed.
+/// `settings`: what the app's program ran its scene with besides mbui's own, said in the APPBENCH line as it is.
 pub fn bench(
   view : (@ui.Ctx) -> Unit,
   tree? : (@view.View) -> Unit,
@@ -38,6 +39,7 @@ pub fn bench(
   pointing? : @ui.Pointing,
   fps? : Double = 120.0,
   frames_out? : String = "",
+  settings? : Json,
 ) -> Bool {
   if !supported {
     say("bench: this host has no offscreen renderer")
@@ -69,9 +71,11 @@ pub fn bench(
   )
   // (a frame of the looks alone drawn once, as a host draws it: a test's draws it whole too, frame_watch.mbt)
   t.check_looks(false)
+  // (nor its corners worked out anew beside what is kept, compared: tester_corners.mbt)
+  t.corners_look(false)
   // (MBUI_BENCH_WHOLE=1: every frame measured built whole, keeping nothing: what building a frame anew costs)
   t.bench_whole(arg("MBUI_BENCH_WHOLE") == "1")
-  let buf = Ref::new(FixedArray::make(0, 0.0))
+  let buf = Ref(FixedArray::make(0, 0.0))
   let damage = @damage.Damage::new()
   let timing = FixedArray::make(2, 0.0)
   let drawn : Array[Measured] = []
@@ -79,7 +83,7 @@ pub fn bench(
   let mut ticks = 0
   // why the frames drawn were asked for (Tester::wanted_why as the frame before each ended): how many each thing asked for
   // (a frame counted under each that asked for it, said without when or where: why_labels)
-  let whys : Map[String, Int] = {}
+  let whys : Map[String, Int] = Map([])
   let mut why = ""
   // (a list's rows set on the device's pixels, as every platform's host has them (Native's rows_on_pixels): the path a
   // device runs measured, not the fake host's default)
@@ -192,6 +196,15 @@ pub fn bench(
     "passed": ToJson::to_json(passed),
     "why": ToJson::to_json(whys),
   }
+  // (what the app's program said its scene was run with, beside mbui's own: its made-up data's pace, say)
+  let out = match (out, settings) {
+    (Object(m), Some(s)) => {
+      let m = m.copy()
+      m["settings"] = s
+      Json::object(m)
+    }
+    _ => out
+  }
   say("APPBENCH " + out.stringify())
   // (and a row of the table scripts/appbench.sh prints)
   let ms = fn(xs : Array[Double]) { "\{round2(centile(xs, 50))} / \{round2(centile(xs, 95))}" }
@@ -247,7 +260,7 @@ pub fn bench_log(name : String, log : String) -> Bool {
   let mut t0 = -1.0
   let mut t1 = -1.0
   for line in log.split("\n") {
-    let l = line.to_string()
+    let l = line.to_owned()
     if l.contains("DRIVE LOG measure") {
       measuring = true
     }
@@ -256,9 +269,9 @@ pub fn bench_log(name : String, log : String) -> Bool {
     }
     match l.find("PERF ") {
       Some(at) if measuring => {
-        let f : Map[String, Double] = {}
+        let f : Map[String, Double] = Map([])
         for kv in l.unsafe_substring(start=at + 5, end=l.length()).split(" ") {
-          let kv = kv.to_string()
+          let kv = kv.to_owned()
           match kv.find("=") {
             Some(eq) =>
               match number(kv.unsafe_substring(start=eq + 1, end=kv.length())) {
@@ -334,10 +347,11 @@ fn total_ms(xs : Array[Double]) -> String {
 }
 
 ///|
-/// A bench run of the process's arguments (the head of this file says which), `view` the app's: the process ends with
+/// A bench run of the process's arguments (the head of this file says which), `view` the app's (`settings`, what its
+/// program ran the scene with, said in APPBENCH: bench): the process ends with
 /// 0 when the script passed, 1 when not, 2 when it was not asked for rightly. MBUI_BENCH_LOG=<file>: a phone's run
 /// read from its log instead (bench_log), no Tester.
-pub fn run_bench(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+pub fn run_bench(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, settings? : Json) -> Unit {
   let drive = arg("MBUI_BENCH_DRIVE")
   let name = arg("MBUI_BENCH_NAME")
   let log = arg("MBUI_BENCH_LOG")
@@ -376,6 +390,7 @@ pub fn run_bench(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
     },
     fps=number(arg("MBUI_BENCH_FPS")).unwrap_or(120.0),
     frames_out=arg("MBUI_BENCH_FRAMES"),
+    settings?,
   )
   exit(if ok { 0 } else { 1 })
 }
@@ -390,7 +405,7 @@ fn why_labels(why : String) -> Array[String] {
   }
   let out = []
   for part in why.split("; ") {
-    let mut s = part.to_string()
+    let mut s = part.to_owned()
     if s.has_prefix("moving: ") {
       s = s.unsafe_substring(start=8, end=s.length())
     }
@@ -401,7 +416,7 @@ fn why_labels(why : String) -> Array[String] {
       }
     }
     // (a motion's target, a count: not what it is)
-    let s = s.trim(chars=" ").to_string()
+    let s = s.trim(chars=" ").to_owned()
     let s = match s.find(" to ") {
       Some(i) => s.unsafe_substring(start=0, end=i)
       None => s

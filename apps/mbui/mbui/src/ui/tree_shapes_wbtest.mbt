@@ -42,7 +42,7 @@ test "a node's shapes: drawn where it is, the same as composed again in a later 
     for j in (i + 1)..<ranges.length() {
       let (a0, an) = ranges[i]
       let (b0, bn) = ranges[j]
-      assert_true(a0 + an <= b0 || b0 + bn <= a0, msg="\{ranges}")
+      assert_true(a0 + an <= b0 || b0 + bn <= a0, msg="\{Repr(ranges)}")
     }
   }
   assert_eq(t.shape_cover(110.0, 110.0), covered)

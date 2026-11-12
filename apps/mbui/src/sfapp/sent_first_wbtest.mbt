@@ -59,7 +59,7 @@ test "words sent from a window short of the chat's end: its latest page asked fo
   tap_send(t)
   assert_eq(named(calls, "chat.latest").length(), 1)
   // read up there meanwhile; the latest page comes: the list at its end
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
   assert_true(!t.at_end())
   short.set(false)
@@ -127,7 +127,7 @@ fn not_seen(t : @ui.Tester, words : String) -> Bool {
 
 ///|
 test "words sent while an answer comes out of its avatar fly at once; the answer comes in once they have landed" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   t.tap_text("发消息")
   t.type_text("再看一下按钮")

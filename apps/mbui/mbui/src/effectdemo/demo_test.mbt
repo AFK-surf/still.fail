@@ -44,12 +44,16 @@ test "the injected race is found by some seed, and that seed replays it exactly"
   println("race found at seed \{seed} (after \{tried} seeds): replay with SEED=\{seed}")
   let a = @effectdemo.World::new(seed, fixed=false)
   assert_true(!a.two_sends())
-  let b = @effectdemo.World::new(seed, fixed=false)
-  assert_true(!b.two_sends())
-  assert_eq(a.trace(), b.trace())
-  assert_eq(a.t.dump(), b.t.dump())
+  // (all of the first run read before the second is made: a Tester read after another was made reads the other's
+  // frame, tester_own.mbt)
+  let a_trace = a.trace()
+  let a_dump = a.t.dump()
   // the screen shows the first message's reply, which came last
   assert_true(a.t.find("reply: MESSAGE 1") is Some(_))
+  let b = @effectdemo.World::new(seed, fixed=false)
+  assert_true(!b.two_sends())
+  assert_eq(a_trace, b.trace())
+  assert_eq(a_dump, b.t.dump())
 }
 
 ///|

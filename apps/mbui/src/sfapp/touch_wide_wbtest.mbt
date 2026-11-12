@@ -68,7 +68,7 @@ fn touch_narrow_tester() -> @ui.Tester raise {
 test "touch wide, a small tablet held upright (600 wide, its system saying regular): by its width the tape, nothing folded for room" {
   let t = touch_narrow_tester()
   assert_true(@sfdesk.is_wide(t.ctx()))
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   assert_false(@sfdesk.wide.crowded)
 }
 

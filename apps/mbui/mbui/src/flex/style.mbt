@@ -2,6 +2,7 @@
 // which is also what React Native and the UI framework use.
 
 ///|
+#derive(Eq)
 pub(all) enum Dim {
   Auto
   Pt(Double)
@@ -9,25 +10,28 @@ pub(all) enum Dim {
   /// points, or all of the reference length where that is less (CSS's `min(100%, 320px)`); the points where the
   /// reference is not known
   Within(Double)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum FlexDirection {
   Column
   Row
   ColumnReverse
   RowReverse
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum FlexWrap {
   NoWrap
   Wrap
   WrapReverse
-} derive(Eq)
+}
 
 ///|
 /// Used for align-items, align-self, align-content and justify-content.
+#derive(Eq)
 pub(all) enum Align {
   Auto
   FlexStart
@@ -38,41 +42,46 @@ pub(all) enum Align {
   SpaceBetween
   SpaceAround
   SpaceEvenly
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum PositionType {
   Relative
   Absolute
   Static
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Display {
   Flex
   DisplayNone
   Contents
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum BoxSizing {
   BorderBox
   ContentBox
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Overflow {
   Visible
   Hidden
   Scroll
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum MeasureMode {
   Undefined
   Exactly
   AtMost
-} derive(Eq)
+}
 
 ///|
 /// A length's kind in a Style (its `<name>_k`; the number is its `<name>_v`): as a Dim says, kept as two numbers in the
@@ -156,6 +165,10 @@ pub(all) struct Style {
   mut one_of : Bool
   mut fit_need : Double
   mut fit_whole : Bool
+  // Not CSS's: words on one line cut short (a node's, View::cuts): what of them such a row keeps before what may leave
+  // does, past its padding and border (`cut_kept_ems` of their size, as an old view's fit_need has it), no more than they
+  // are whole (kept_of); NaN none. An old view says its own `fit_need` instead.
+  mut cut_least : Double
   // Not CSS's: the least an item of a row comes to as a last resort (NaN: its min-width), where the row has not the room
   // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
   // what holds them. What may come down so, the widest first (layout.mbt last_resort).
@@ -185,12 +198,50 @@ pub(all) struct Style {
   // out so (move_ms), ending at `come_ends` (NaN till then, kept from then), drawn at `come_now` (NaN: none); as tall as
   // its way has got, what it holds laid out whole from its top in that, the gap before it in its column its share of
   // it. `come_k`: the share of what it comes to its last layout was (1 none), read by the column for that gap.
+  // `come_v`: how fast (points a ms) its height went as it set out, its way a Move on from that speed (move_path), as
+  // one set out again while it went goes on from its way's (come_state); `come_goal`: how tall it went to, as last laid
+  // out (NaN none yet); `come_plan`: how tall it went to as its way's length and turn were said, the first time it was
+  // laid out so (NaN till then): that way's length and turn kept whatever it comes to after (come_way_by).
   mut come_from : Double
   mut come_to : Double
   mut come_at : Double
   mut come_now : Double
   mut come_ends : Double
   mut come_k : Double
+  mut come_v : Double
+  mut come_goal : Double
+  // Not CSS's: how tall what it holds comes to, as its column measured it for its way in this layout (NaN none yet):
+  // written only where the way is worked out (come_height), read only by what lays it out whole in that in the same
+  // layout (size_uncached), its way's end the same; flex's alone, never read across layouts or by anything else.
+  mut come_whole : Double
+  mut come_plan : Double
+  // Not CSS's: its way's turn, worked out once for its speed and length (move.mbt's come_style_turn); None till then.
+  mut come_turn : ComeTurn?
+  // Not CSS's: the one way of its column it goes on with others come or going at the same moment (ComeGroup), none
+  // alone. flex's alone to read.
+  mut come_group : ComeGroup?
+  // Not CSS's: what an item's come way is to the box holding it (come_*), where that box takes no room holding nothing
+  // (`gone_empty`): whether this way is it going from holding nothing or to it (set out from none, going to none, or
+  // turned back on such a way), not one in another's place (a pick's, from as tall as that one was).
+  mut come_fill : Bool
+  // Not CSS's: whether its come way (come_*) goes along a row, across: its width the way's, what it holds laid out
+  // whole at the width it comes to, the gap before it in that row its share; else down a column, its height. Said with
+  // the way (the view's View::comes, by the direction of what lays it out).
+  mut come_across : Bool
+  // Not CSS's: the way said for a height change declared (the view's View::resizes): how long (ms) and on what curve
+  // (the share of the way gone for the share of its time gone); none, a Move by how far. A way of its own alone: in a
+  // group with others (come_group set), the group's.
+  mut come_spec : (Double, (Double) -> Double)?
+  // Not CSS's: holding nothing laid out (all it holds laid out nowhere, or none), it is laid out nowhere itself: no
+  // room, padding or gap in what holds it (an old view's box `gone_empty`, CSS's :empty { display: none }). Its padding
+  // top and foot as much as what it holds is there while what it holds comes from none or goes to none (come_fill: the
+  // most such a share of all it holds), the gap before it the same (come_k); across, all of it till it holds nothing.
+  mut gone_empty : Bool
+  // Not CSS's: the box a structure makes for what it shows (the view's show, pick, each), not one the app said. Holding
+  // no box and on no way, it is nothing to a box that takes no room holding nothing (gone_empty): neither what that box
+  // holds, nor what it holds there (Node's nothing_made). A box the app says itself, holding nothing, is something:
+  // it may be as tall or as padded as it says; it is nothing only where it says gone_empty itself.
+  mut structural : Bool
   // Not CSS's: a column whose items are a page's list's rows set on a host's pixels (this many a point; 0: anywhere): each
   // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
   // list's rows', ui's Ctx::row_slot).
@@ -271,6 +322,7 @@ pub fn Style::new() -> Style {
     one_of: false,
     fit_need: 0.0 / 0.0,
     fit_whole: false,
+    cut_least: 0.0 / 0.0,
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
     min_held: false,
@@ -282,6 +334,17 @@ pub fn Style::new() -> Style {
     come_now: 0.0 / 0.0,
     come_ends: 0.0 / 0.0,
     come_k: 1.0,
+    come_v: 0.0,
+    come_goal: 0.0 / 0.0,
+    come_whole: 0.0 / 0.0,
+    come_plan: 0.0 / 0.0,
+    come_turn: None,
+    come_group: None,
+    come_fill: false,
+    come_across: false,
+    come_spec: None,
+    gone_empty: false,
+    structural: false,
     rows_grid: 0.0,
     ver: 0,
     basis_v: 0.0,
@@ -358,10 +421,14 @@ pub fn Style::reset(self : Style) -> Unit {
   self.one_of = false
   self.fit_need = 0.0 / 0.0
   self.fit_whole = false
+  self.cut_least = 0.0 / 0.0
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false
   self.min_held = false
   self.wrap_least = false
+  self.gone_empty = false
+  self.structural = false
+  self.come_fill = false
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO
@@ -991,6 +1058,15 @@ pub fn Style::get_gap_col(self : Style) -> Dim {
 }
 
 ///|
+/// Whether it takes no room holding nothing (its `gone_empty`), its box (no least of its padding so) made again.
+pub fn Style::set_gone_empty(self : Style, on : Bool) -> Unit {
+  if self.gone_empty != on {
+    self.gone_empty = on
+    self.ver = self.ver + 1
+  }
+}
+
+///|
 pub fn Style::set_box_sizing(self : Style, b : BoxSizing) -> Unit {
   self.box_sizing = b
   self.ver = self.ver + 1
@@ -1081,6 +1157,11 @@ pub(all) struct Node {
   // was the one before, reused
   mut laid_gen : Int
   mut skip_gen : Int
+  // Whether any of its children may take no room holding nothing (Style's gone_empty): set as one is added so or said so,
+  // worked out again as its children are put again (none: what lays it out reads none of theirs for it, one test a
+  // container, however many it holds). Never false where one is; true where none is any more only lays it out the
+  // slower way (each child asked), the same layout.
+  mut holds_gone : Bool
 }
 
 ///|
@@ -1093,6 +1174,7 @@ pub fn Node::new() -> Node {
   {
     style: Style::new(),
     children: [],
+    holds_gone: false,
     measure: None,
     left: 0.0,
     top: 0.0,
@@ -1151,4 +1233,7 @@ pub fn computes() -> Int {
 ///|
 pub fn Node::add(self : Node, child : Node) -> Unit {
   self.children.push(child)
+  if child.style.gone_empty {
+    self.holds_gone = true
+  }
 }

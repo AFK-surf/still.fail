@@ -42,14 +42,14 @@ let mouse_pair_box : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 ///|
 /// One of them, floating on its own: round, 44 (a press's least), on the floating ground (the ink at 8% pressed).
 // kept across runs: a value (no field of it changes)
-let mouse_button_box : @ui.Style = @ui.css(
+let mouse_button_box : @ui.Style = @ui.css((
   #|w=S11 h=S11 radius=Full bg=Floating shadow=Sm align=ACenter justify=JCenter pressed{bg=Hover}
-)
+))
 
 ///|
-/// Over the frame's foot, at its end, 12 in (the mouse's buttons, 全屏 and sideways).
+/// The mouse's buttons at the end of the frame's foot (stage_foot_paired's).
 // kept across runs: a value (no field of it changes)
-let screen_foot_end : @ui.Style = @ui.css("w=Full h=Full p=S3 align=AEnd justify=JEnd")
+let mouse_pair_end : @ui.Style = @ui.css("justify=JEnd")
 
 ///|
 /// Over the frame's top right corner, 12 in (全屏's folded tools).
@@ -74,9 +74,9 @@ let take_over_place : @ui.Style = @ui.css("w=Full px=S3 py=S1 align=ACenter")
 ///|
 /// A round button (40), the ink at 10% under it while it is on.
 // kept across runs: a value (no field of it changes)
-let round_button_box : @ui.Style = @ui.css(
+let round_button_box : @ui.Style = @ui.css((
   #|w=S10 h=S10 radius=Full align=ACenter justify=JCenter selected{bg=A(Fg,O10)}
-)
+))
 
 ///|
 let round_icon : Double = 20.0
@@ -183,9 +183,9 @@ let keys_row_box : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 /// A key: 36 high, 40 wide at least, round, 10 in, its words or mark in a row (never squeezed: a key short of room
 /// leaves whole); the ink at 6%, or the ink while it is held.
 // kept across runs: a value (no field of it changes)
-let row_key_box : @ui.Style = @ui.css(
+let row_key_box : @ui.Style = @ui.css((
   #|row h=S9 min_w=S10 px=S2_5 radius=Full bg=Tint align=ACenter justify=JCenter selected{bg=Fg}
-)
+))
 
 ///|
 let key_icon : Double = 18.0
@@ -307,6 +307,17 @@ let stage_center : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCen
 /// Over the frame's foot: 16 in, 420 at most, 8 between.
 // kept across runs: a value (no field of it changes)
 let stage_foot : @ui.Style = @ui.css("w=Full h=Full p=S4 align=ACenter justify=JEnd")
+
+///|
+/// Over the frame's foot with the mouse's buttons at its end (screen_corner_end's: 12 in, clear of the window's corner):
+/// what else is there before them, 8 apart, on their foot.
+// kept across runs: a value (no field of it changes)
+let stage_foot_paired : @ui.Style = @ui.css("row w=Full h=Full p=S3 gap=S2 align=AEnd")
+
+///|
+/// What else is over the frame's foot there: the room the buttons leave, its column in the middle of it.
+// kept across runs: a value (no field of it changes)
+let stage_foot_before : @ui.Style = @ui.style(w=@sf.grow, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -547,9 +558,9 @@ let net_chip_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S2 align=ACen
 let net_mark_tile : @ui.Style = @ui.css("w=S6 h=S6 radius=Full bg=Tint align=ACenter justify=JCenter")
 
 ///|
-/// Who drives it and 接管 among the viewer's bar's tools: its dot, the words (cut short first) and 接管, 10 apart.
+/// 接管 among the viewer's bar's tools (who drives said in the bar's line).
 // kept across runs: a value (no field of it changes)
-let take_over_bar_row : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
+let take_over_bar_row : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// The signal mark's bars side by side, 2 apart, standing on its foot.
@@ -627,6 +638,11 @@ let debug_pane_head : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBet
 let net_panel_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2 gap=S2_5")
 
 ///|
+/// 复制诊断 in the middle under its figures.
+// kept across runs: a value (no field of it changes)
+let net_diag_place : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
 /// Its head: the mark at 20, the round trip beside it (15, semibold), 10 apart.
 // kept across runs: a value (no field of it changes)
 let net_head_box : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
@@ -668,14 +684,16 @@ let net_value_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, tabula
 // ── 控制中心 (screen_panel.mbt) ───────────────────────────────────────────
 
 ///|
-/// A choice of it (画质, 缩放): a segmented row in by a panel row's padding.
-// kept across runs: a value (no field of it changes)
-let center_choice : @ui.Style = @ui.css("w=Full px=S2_5 py=S1")
-
-///|
-/// The combos' tiles: rows of three, 8 apart, in by a panel row's padding.
+/// Tiles (快捷操作's, the combos', the keys'): rows of them, 8 apart, in by a panel row's padding, on its labels' and
+/// rows' words' edges.
 // kept across runs: a value (no field of it changes)
 let tiles_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S1 gap=S2")
+
+///|
+/// Under 按键's last tiles: what keeps them out of its panel's foot corners, as far up as those are round (a corner's
+/// tile there would be concentric with none of the ladder's).
+// kept across runs: a value (no field of it changes)
+let keys_foot : @ui.Style = @ui.style(w=Full, h=Fixed(@sf.r_menu - @sf.panel_pad))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -692,6 +710,16 @@ let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
 /// A tile's ground while pressed (tile_box's and key_tile_box's `pressed`, on a tile made as a node).
 // kept across runs: a value (no field of it changes)
 let tile_pressed : @ui.Style = @ui.css("bg=Hover")
+
+///|
+/// A tile of 快捷操作 lit (on: 全屏, 静音, 触控板): the ink's ground, its icon and words on it in the page's, as a modifier
+/// held on the keys row is shown solid.
+// kept across runs: a value (no field of it changes)
+let tile_lit : @ui.Style = @ui.css("bg=Fg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_lit_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Bg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

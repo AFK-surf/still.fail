@@ -46,7 +46,7 @@ test "a failing notice pressed opens to what failed said of it, as it said it, w
   assert_true(t.find(failed_detail) is None)
   t.tap_text(failed_notice)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find(failed_detail) is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find(failed_detail) is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   t.tap_text("复制")
   t.draw()
   assert_eq(t.clipboard(), failed_detail)
@@ -94,7 +94,7 @@ test "a runtime installing says how far under the message, and pressed then inst
   let calls : Array[Made] = []
   let t = blocked_chat(calls, Some({ "runtime": "codex", "state": "installing", "title": "正在安装 codex", "percent": 40 }))
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("正在安装 codex 40%") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("正在安装 codex 40%") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   t.tap_text("正在安装 codex 40%")
   t.draw()
   assert_eq(named(calls, "software.update").length(), 0)
@@ -106,6 +106,6 @@ test "the viewer's message its agent has not taken yet says 等待 agent 接收 
   let t = blocked_chat(calls, None)
   t.run_for(@ui.move_most_ms)
   let (_, my) = t.find("还有深色模式也看一下").unwrap()
-  guard t.find("等待 agent 接收") is Some((_, wy)) else { fail("\{t.words().map(fn(w) { w.0 })}") }
+  guard t.find("等待 agent 接收") is Some((_, wy)) else { fail("\{Repr(t.words().map(fn(w) { w.0 }))}") }
   assert_true(wy > my)
 }

@@ -21,23 +21,23 @@ priv struct Source {
 /// A place as it is said: `module/path:line` (MoonBit's `path:line:col-line:col@module`, where it began).
 pub fn source_place(loc : SourceLoc) -> String {
   let s = loc.to_string()
-  let (path, module) = match s.rev_find("@") {
-    Some(i) => (s[:i].to_string(), s[i + 1:].to_string())
+  let (path, module_name) = match s.rev_find("@") {
+    Some(i) => (s[:i].to_owned(), s[i + 1:].to_owned())
     None => (s, "")
   }
   // (`path:line:col-line:col`: to its first line)
   let path = match path.find(":") {
     Some(i) =>
       match path[i + 1:].find(":") {
-        Some(j) => path[:i + 1 + j].to_string()
+        Some(j) => path[:i + 1 + j].to_owned()
         None => path
       }
     None => path
   }
-  if module == "" {
+  if module_name == "" {
     path
   } else {
-    module + "/" + path
+    module_name + "/" + path
   }
 }
 
@@ -57,12 +57,13 @@ pub fn View::made_for(self : View, loc : SourceLoc) -> View {
 /// One node on the way from what is drawn out to the root: who it is, where it was made, where the part it is the
 /// outside of was asked for ("" where it is no part's), and where each of its properties was last said, by name, in
 /// the order the properties are listed. Places as source_place says them.
+#derive(Eq, Debug)
 pub(all) struct SourceStep {
   id : NodeId
   made : String
   made_for : String
   said : Array[(String, String)]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where node `id` was made, and what holds it out to the root, innermost first; none where it is let go or the tree
@@ -80,7 +81,7 @@ pub fn Tree::sources_of(self : Tree, id : NodeId) -> Array[SourceStep] {
         ords.sort()
         let said = ords.map(fn(k) {
           let (p, l) = s.said.get(k).unwrap()
-          (p.to_string(), source_place(l))
+          (Show::to_string(p), source_place(l))
         })
         out.push({
           id: { at, gen: n.gen },
@@ -159,7 +160,7 @@ pub fn Tree::looks_of(self : Tree, id : NodeId) -> Array[String] {
     sb.write_string("#")
     for k = 7; k >= 0; k = k - 1 {
       let v = ((c >> (k * 4)) & 0xFL).to_int()
-      sb.write_string(d[v:v + 1].to_string())
+      sb.write_string(d[v:v + 1].to_owned())
     }
     sb.to_string()
   }
@@ -209,7 +210,9 @@ pub fn Tree::looks_of(self : Tree, id : NodeId) -> Array[String] {
 ///|
 /// What takes presses where it is drawn now, for a check of the room each has to be pressed in (ui's rooms.mbt): each
 /// node drawn that does something pressed or held (View::on_press, View::on_drag; not one hosting an old view, whose
-/// own boxes are its) and takes it now (Tree::pressless_at: not leaving, nor said to take none, nor under a modal layer
+/// own boxes are its; nor a ground (View::as_ground: a message's words a hold picks in, the links in them, ui's
+/// runs_links), no control: no room of its own, none it cuts) and takes
+/// it now (Tree::pressless_at: not leaving, nor said to take none, nor under a modal layer
 /// it is not in), seen, whole within the window and what bounds its input (View::bounds_input: a list's rows scrolled
 /// partly out are not). Each with its box in the window (x0, y0, x1, y1), the nearest such that holds it (its index
 /// here, -1 none) and the node of the root's it is in (its layer: two in different ones never meet).
@@ -218,7 +221,11 @@ pub fn Tree::press_boxes(self : Tree) -> Array[(NodeId, (Double, Double, Double,
   let (ww, wh) = self.room.untracked()
   self.each_drawn_scaled(fn(c, cx, cy, alpha, s) {
     let n = self.nodes[c.id.at]
-    if alpha <= 0.01 || n.hosted || (n.on_press is None && n.on_drag is None) || self.pressless_at(c.id.at) {
+    if alpha <= 0.01 ||
+      n.hosted ||
+      (n.on_press is None && n.on_drag is None) ||
+      n.as_ground ||
+      self.pressless_at(c.id.at) {
       return
     }
     let b = (cx, cy, cx + c.w * s, cy + c.h * s)
@@ -234,7 +241,7 @@ pub fn Tree::press_boxes(self : Tree) -> Array[(NodeId, (Double, Double, Double,
     }
     found.push((c.id, b))
   })
-  let index : Map[Int, Int] = {}
+  let index : Map[Int, Int] = Map([])
   for k, f in found {
     index[f.0.at] = k
   }

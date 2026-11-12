@@ -9,7 +9,7 @@ fn scan_data(j : Bytes) -> Array[Byte] {
     at = at + 1
   }
   let len = (a[at + 2].to_int() << 8) | a[at + 3].to_int()
-  a[at + 2 + len:a.length() - 2].to_array()
+  a[at + 2 + len:a.length() - 2].to_owned()
 }
 
 ///|
@@ -125,7 +125,7 @@ test "a ThumbHash drawn back as the reference does, and its proportions" {
     mid.push(rgba[(w * 16 + 11) * 4 + i].to_int())
   }
   inspect(
-    "\{w}x\{h} \{first} \{mid}",
+    "\{w}x\{h} [\{first.map(fn(x) { x.to_string() }).join(", ")}] [\{mid.map(fn(x) { x.to_string() }).join(", ")}]",
     content="23x32 [64, 77, 113, 255, 66, 79, 114, 255] [140, 109, 88, 255]",
   )
   // thumbHashToApproximateAspectRatio: 5 / 7
@@ -162,7 +162,7 @@ fn exif_note(orientation : Int, le : Bool) -> Array[Byte] {
 ///|
 test "a JPEG's size as it is shown: its frame's, turned a quarter where its EXIF says" {
   let a = @pixels.jpeg(20, 9, FixedArray::make(20 * 9 * 4, b'\xFF')).to_array()
-  let noted = fn(note : Array[Byte]) { Bytes::from_array(a[0:2].to_array() + note + a[2:].to_array()) }
+  let noted = fn(note : Array[Byte]) { Bytes::from_array(a[0:2].to_owned() + note + a[2:].to_owned()) }
   assert_eq(@pixels.image_size(Bytes::from_array(a)), Some((20, 9)))
   assert_eq(@pixels.image_size(noted(exif_note(6, true))), Some((9, 20)))
   assert_eq(@pixels.image_size(noted(exif_note(8, false))), Some((9, 20)))

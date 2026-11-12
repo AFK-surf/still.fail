@@ -22,7 +22,8 @@ for fps in ${FPS:-60 120 24 7}; do
     out=$(MBUI_TEST_FPS=$fps moon_tests "${args[@]}" 2>&1 | grep -av '^TDUMP')
   fi
   st=$?
-  # (how what moves goes, said where the run counts it (MBUI_TEST_MOTION=count): kept whole, out of what is shown)
+  # (how what moves goes and each file's bars, said where the run says them (src/ui/tester_fps.mbt: motion_runs): kept
+  # whole, out of what is shown)
   [ -z "${MOTION_OUT:-}" ] || echo "$out" | grep -a '^MOTION ' >> "$MOTION_OUT"
   out=$(echo "$out" | grep -av '^MOTION ')
   echo "$fps fps: $(echo "$out" | grep -a '^Total tests' | tail -1)"

@@ -5,11 +5,19 @@ import type { Mailer } from "./mail";
 import type { RelayLoad } from "./relay-load";
 import type { ServiceStatus } from "./status";
 import type { Relay } from "./relay-worker";
+import type { Station } from "./station";
 import type { TelemetryLimiter } from "./tracing";
 
 export interface Env {
   ACCOUNTS: DurableObjectNamespace<Account>;
   DIRECTORY: DurableObjectNamespace<Directory>;
+  /** One per station, by its key: its presence socket, and whether it is enrolled (station.ts). */
+  STATIONS: DurableObjectNamespace<Station>;
+  /**
+   * "primary": devices' events sockets and stations' presence sockets open on the Directory again, as before their own
+   * objects (directory.ts `sockets`): the way back, deployed as a change of this variable alone. Unset: on their objects.
+   */
+  DIRECTORY_SOCKETS?: string;
   /** The stations' releases (scripts/release.sh). */
   RELEASES?: R2Bucket;
   /** Where the station's releases are read when the bucket has none of a file (releases.ts upstream): still.fail's
@@ -22,6 +30,17 @@ export interface Env {
   PUBLIC_ORIGIN: string;
   /** Older origins of the same (comma-separated): answered like PUBLIC_ORIGIN, never linked to (compat.ts). */
   PUBLIC_ORIGIN_ALIASES?: string;
+  /** The other product's origins this cloud answers as that product (guests.ts): a JSON list of {origin, beta?,
+   * google_client_id?, google_client_secret?}. */
+  GUESTS?: string;
+  /** Set on a cloud that moved into another: where its API's requests go (guests.ts `forward`), its releases still its own. */
+  FORWARD_TO?: string;
+  /** What a forwarding cloud and the one it forwards to both know (32 characters at least): a forwarded request says
+   * its origin and client under it, and is taken as made there only with it (guests.ts `served`). */
+  FORWARD_SECRET?: string;
+  /** Set while its accounts move into another cloud, or another's into it (move.ts): every /v1/ call but the move's
+   * answered 503 moving. */
+  MOVING?: string;
   /** The admin's console's host (its /v1/ calls come here: see index.ts). */
   ADMIN_ORIGIN: string;
   /** Older origins of the console (comma-separated), answered like ADMIN_ORIGIN. */
@@ -58,7 +77,11 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;
   ADMIN_TOKEN?: string;
-  /** Reads the console's bug reports and nothing else (POST /v1/admin/feedback/list): the team's feedback monitor's. Unset: nobody. */
+  /**
+   * Reads the console's bug reports, marks their status and replies to them, and nothing else (POST
+   * /v1/admin/feedback/list, /v1/admin/feedback/<id>/status and /v1/admin/feedback/<id>/reply): the team's feedback
+   * monitor's. Unset: nobody.
+   */
   FEEDBACK_TOKEN?: string;
   /** The console admin's Google email (wrangler.jsonc; the tests and the dev cloud set their own). Unset: no admin. */
   ADMIN_EMAIL?: string;
@@ -79,8 +102,12 @@ export interface Env {
   VAPID_SUBJECT?: string;
   /** The Firebase project's service account (its JSON) that sends to the Android app (fcm.ts). Without it there is no FCM. */
   FCM_SERVICE_ACCOUNT?: string;
+  /** The other product's Firebase projects' service accounts (one's JSON, or a list): its Android apps' tokens are sent by those (fcm.ts). */
+  FCM_SERVICE_ACCOUNT_MORE?: string;
   /** The team's APNs key that sends to the iOS app (apns.ts): JSON { keyId, teamId, key (the .p8's PEM), topic? }. Without it there is no APNs. */
   APNS_KEY?: string;
+  /** The other product's iOS apps' APNs keys (one's JSON, or a list), each with its topic (apns.ts). */
+  APNS_KEY_MORE?: string;
   /** The accounts that sign in with an email and a password (password.ts): a JSON list of {email, password, name?}, App Store review's. Unset: none. */
   REVIEW_ACCOUNTS?: string;
   /** Cloudflare Email Service's send_email binding (wrangler.jsonc), which sends the sign-in codes (mail.ts). */

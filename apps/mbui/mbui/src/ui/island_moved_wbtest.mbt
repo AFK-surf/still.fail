@@ -133,9 +133,9 @@ test "an old view faded by its node: painted alone, drawn as built whole" {
     @signals.signal(30.0, same=fn(a, b) { a == b }),
     Ref(0),
   )
-  let opaque = t.frame_hash()
+  let solid = t.frame_hash()
   let (alone, drawn, whole) = island_frame(t, fn() { alpha.set(0.5) })
-  assert_eq((alone, drawn == whole, drawn != opaque), (true, true, true), msg=t.built_why())
+  assert_eq((alone, drawn == whole, drawn != solid), (true, true, true), msg=t.built_why())
 }
 
 ///|
@@ -257,6 +257,6 @@ test "an old view laid out 30 in by its holder's padding, drawn moved by an offs
   assert_eq(
     (first, second, field.text(), caret2.0 - caret.0, caret2.1 - caret.1, whole == second, caret3 == caret2),
     ((50.0, 20.0, 80.0, 40.0), (90.0, 50.0, 80.0, 40.0), "a", 40.0, 30.0, true, true),
-    msg="caret \{caret} then \{caret2}, built whole \{caret3}",
+    msg="caret \{Repr(caret)} then \{Repr(caret2)}, built whole \{Repr(caret3)}",
   )
 }

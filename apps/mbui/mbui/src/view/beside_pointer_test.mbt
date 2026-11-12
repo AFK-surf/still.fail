@@ -3,7 +3,7 @@
 
 ///|
 test "beside the pointer: by its point while it is on the anchor; told the same point again, nothing worked out; moved, placed again, nothing laid out or measured again" {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {

@@ -52,9 +52,9 @@ fn closing_before_future_change(change : Int) -> (Double, Double, Double, Double
 test "a closing row keeps closing while a future arrival's duration changes" {
   let steady = closing_before_future_change(0)
   let retimed = closing_before_future_change(1)
-  assert_true(steady.0 > steady.1 && steady.1 > 0.0, msg="the old row closes: \{steady}")
+  assert_true(steady.0 > steady.1 && steady.1 > 0.0, msg="the old row closes: \{Repr(steady)}")
   assert_true((steady.0 - retimed.0).abs() < 0.001 && (steady.1 - retimed.1).abs() < 0.001,
-    msg="a future arrival cannot change the closing row yet: \{steady} / \{retimed}")
+    msg="a future arrival cannot change the closing row yet: \{Repr(steady)} / \{Repr(retimed)}")
   assert_eq(retimed.2, 0.0, msg="the arrival has not started")
   assert_eq(retimed.4, 50.0, msg="the arrival opens once it is due")
 }
@@ -64,7 +64,7 @@ test "a closing row keeps closing until it is due to return" {
   let steady = closing_before_future_change(0)
   let returning = closing_before_future_change(2)
   assert_true((steady.0 - returning.0).abs() < 0.001 && (steady.1 - returning.1).abs() < 0.001,
-    msg="a future return cannot stop the closing row yet: \{steady} / \{returning}")
+    msg="a future return cannot stop the closing row yet: \{Repr(steady)} / \{Repr(returning)}")
   assert_eq(returning.3, 50.0, msg="the returning row opens once it is due")
   assert_eq(returning.4, 50.0, msg="the arrival opens once it is due")
 }
@@ -74,7 +74,7 @@ test "a closing row keeps closing when a future arrival is moved later" {
   let steady = closing_before_future_change(0)
   let later = closing_before_future_change(3)
   assert_true((steady.0 - later.0).abs() < 0.001 && (steady.1 - later.1).abs() < 0.001,
-    msg="a later arrival cannot change the closing row yet: \{steady} / \{later}")
+    msg="a later arrival cannot change the closing row yet: \{Repr(steady)} / \{Repr(later)}")
   assert_eq(later.2, 0.0, msg="the arrival has not started")
   assert_eq(later.4, 50.0, msg="the later arrival opens once it is due")
 }
@@ -102,4 +102,35 @@ test "an arriving row whose own start is moved to the future does not open early
   assert_eq(t.row(1).unwrap().3, 0.0, msg="the rescheduled row has not arrived yet")
   t.run_for(@ui.row_size_ms * 2.0)
   assert_eq(t.row(1).unwrap().3, 50.0, msg="the row opens once its start is due")
+}
+
+///|
+test "an arriving row told to come sooner than it was before it set out opens from then, not from the moment said first" {
+  let entries = [[0]]
+  let start = [-1.0]
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(fn(c) {
+    let now = entries[0]
+    let (items, _) = rows.rows(
+      c, now.map(fn(i) { "r\{i}" }), now, fn(_) { "" },
+      from=fn(k) { if k == "r1" && start[0] >= 0.0 { Some(start[0]) } else { None } },
+    )
+    c.list("list", items.length(), 50.0, fn(_) {
+      c.box(h=Px(50.0), fn() { c.text("Row") |> ignore }) |> ignore
+    }, stick_end=true, sized=rows.sized()) |> ignore
+  }, w=300.0, h=400.0)
+  // said to come a row's way from now
+  start[0] = t.time() + @ui.row_size_ms
+  entries[0] = [0, 1]
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  assert_eq(t.row(1).unwrap().3, 0.0, msg="not due yet")
+  // told now that it comes now (its cause timed once it knows its way)
+  start[0] = t.time()
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  let opening = t.row(1).unwrap().3
+  assert_true(opening > 0.0 && opening < 50.0, msg="opening from when it was told it comes: \{opening}")
+  t.run_for(@ui.row_size_ms * 2.0)
+  assert_eq(t.row(1).unwrap().3, 50.0)
 }

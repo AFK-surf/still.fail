@@ -55,7 +55,8 @@ const strings = [process.env.MBUI_FIXTURE ?? '', process.env.MBUI_LOCALE ?? '', 
   process.env.MBUI_LOCAL_STATION ?? '', process.env.MBUI_WINDOW ?? '', process.env.MBUI_HOLD ?? '',
   process.env.MBUI_FAILED ?? '', process.env.MBUI_FAILED_WHY ?? '', process.env.MBUI_SAID ?? '',
   process.env.MBUI_UPDATE ?? '', process.env.MBUI_FILM_AUTOFILL ?? '',
-  process.env.MBUI_CORE_MS ?? '', process.env.MBUI_UPDATES_MS ?? ''].map(s => Array.from(s, c => c.codePointAt(0)));
+  process.env.MBUI_CORE_MS ?? '', process.env.MBUI_UPDATES_MS ?? '',
+  process.env.MBUI_FIX_PACE ?? '', process.env.MBUI_FIX_CORE ?? ''].map(s => Array.from(s, c => c.codePointAt(0)));
 const numbers = [size[0], size[1], scale, platform, dark, at, fps, max, frame, fontScale, inset, corner, nav, cornersKept];
 let core, scratch = [], pixels;
 function text() {
@@ -162,7 +163,23 @@ const fsUnstable = {
   set_env_var() {},
   unset_env_var() {},
 };
-const imports = { probe, film, __moonbit_fs_unstable: fsUnstable, __moonbit_sys_unstable: { exit(code) { throw new Exit(code); } },
+// The core's host (stillfail/core's native_wasm.mbt, "mbhost"): a film has no engine, its core the fixture's, so each
+// answers as core_native.c does with none given it (mbc_use never called): not started, nothing sent, no sign-in. The
+// film's program links them since a test's late core serves the app's client (sffixture's round_trip_again, #5212):
+// without them the film did not start, mbui-media-runtime 42753280921, 2026-11-10.
+const mbhost = {
+  mbc_start: () => 0,
+  mbc_send() {},
+  mbc_send_bytes() {},
+  mbc_stop() {},
+  mbc_has_web_auth: () => 0,
+  mbc_web_auth: () => 0,
+  mbc_now_ms: () => performance.now(),
+  mbc_wall_ms: () => Date.now(),
+  mbc_screen_ack: () => 0,
+  mbc_auth_scheme() { throw new Error('a film signs in to nothing: no auth scheme'); },
+};
+const imports = { probe, film, mbhost, __moonbit_fs_unstable: fsUnstable, __moonbit_sys_unstable: { exit(code) { throw new Exit(code); } },
   __moonbit_time_unstable: { now: () => BigInt(Date.now()) }, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
   const memory = new DataView(core.memory.buffer); let total = 0;
   for (let i = 0; i < count; i++) {

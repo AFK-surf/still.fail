@@ -1,16 +1,28 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, pendingDeliveries, statePendingCard, stateQuestion, threadSessions } from "./store.ts";
+import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThread, lastSaid, lastSaidText, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, pendingDeliveries, statePendingCard, stateQuestion, threadSessions } from "./store.ts";
 import { searchChats } from "../store/chat-list.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
+import { workspaceSessionsToMeasure } from "../jobs/workspace-size.ts";
+import { policyChecksRead } from "./policy-checks.ts";
+import { archiveLookOf, recentConnectPeople } from "../store/store.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
 /// `?turns=`: how many of a session's latest turns; none (or not a count): all of them, as a device from before reads.
 const latest = (v: unknown): number | null => (typeof v === "string" && /^\d{1,6}$/.test(v) ? Number(v) : null);
 
 export const sessionOps: Record<string, ReadOp> = {
+  /// The sessions whose workspaces the station measures this round (jobs/workspace-size.ts).
+  sessionsAtWork: (s, a) => workspaceSessionsToMeasure(s.db, a.processes),
+  /// What a week's checks say of a workspace's chats, for its archive policy's view (api/overview.ts).
+  policyChecks: (s, a) => policyChecksRead(s.db, a.since, a.viewer),
+  /// One look of the auto-archive (sessions/lifecycle.ts): every session shown and chat of its own, and what it needs
+  /// of those idle long enough. Read on the main thread at each look, it held it.
+  archiveLook: (s, a) => archiveLookOf(s.db, Number(a.now), Number(a.after), Number(a.slackAfter)),
+  /// The people of a connect's recent threads, learned as it connects (connects/part.ts).
+  recentConnectPeople: (s, a) => recentConnectPeople(s.db, a.connect, a.limit),
   /// Every thread as chat_list has it; it does not use a viewer's unread count (sessions/others.ts).
   threadList: (s) => listThreads(s, "", null, null, "none"),
   /// The first page of chat_list and its count, read together in the reader's snapshot.
@@ -69,17 +81,6 @@ export const sessionOps: Record<string, ReadOp> = {
   sessionPlace: (s, a) => sessionPlace(s, a.key, a.path ?? "", a.lang),
   threads: (s, a) => threads(s, a.viewer, a.session ?? null, a.lang),
   thread: (s, a) => thread(s, a.viewer, a.id, a.lang),
-  /// A thread as each of several viewers has it (`thread`), in one read: what is told to every one after each message.
-  /// None for one it is not for.
-  threadViews: (s, a) =>
-    a.viewers.map((v: { viewer: any; lang: any }) => {
-      try {
-        return thread(s, v.viewer, String(a.id), v.lang);
-      } catch (error) {
-        if (error instanceof LegacyEditsUnavailable) throw error;
-        return null;
-      }
-    }),
   openJobs: (s, a) => openJobs(s, a.viewer, a.lang, a.chats !== false),
   job: (s, a) => job(s, a.id),
   jobLog: (s, a) => jobLog(s, a.id, a.lines),

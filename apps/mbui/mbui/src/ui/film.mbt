@@ -6,10 +6,11 @@
 
 ///|
 /// The first frame that could not be drawn or written.
+#derive(Eq, Debug)
 pub(all) enum FilmFailure {
   Draw
   Write(Int)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A filmed run's log and, if a frame failed, what happened.
@@ -36,8 +37,8 @@ pub fn Tester::film(
   let t0 = self.fake.time
   let first = self.fake.logs.copy()
   // the film's frame the picture drawn last is
-  let shown = Ref::new(0)
-  let failure : Ref[FilmFailure?] = Ref::new(None)
+  let shown = Ref(0)
+  let failure : Ref[FilmFailure?] = Ref(None)
   if !draw(self) {
     return { logs: first, failure: Some(Draw) }
   }
@@ -89,6 +90,7 @@ pub fn Tester::film_frame(self : Tester, script : String, frame : Int, max? : In
 /// `inst_size` numbers each: the Tester's own, read, not changed), how many, and what is under them (red, green,
 /// blue, 0-1).
 pub fn Tester::presented(self : Tester) -> (FixedArray[Double], Int, (Double, Double, Double)) {
+  self.reads_own()
   ignore(self)
   let c = g()
   (c.inst, c.ninst, c.clear)

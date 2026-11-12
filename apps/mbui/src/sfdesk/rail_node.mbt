@@ -51,7 +51,7 @@ fn rail_round_of(bar : Bool) -> @ui.Radius {
   let in_bar : @ui.CornerOf = Follow(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in, @sf.small_corner)
   if bar {
     @sf.rail_ground_radius(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in)
-  } else if wide.tape {
+  } else if wide.tape.get() {
     @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
   } else {
     @sf.rail_ground_radius(Window, rail_window_in() + rail_ground_in, alone=in_bar.radius(@ui.corner_roots()))
@@ -77,7 +77,7 @@ fn rail_round_node(v : @view.View, at : () -> RailAt) -> Unit {
 /// The rail's places' nodes as they are made (their names), for what opens beside one at its cause (the rail's menu
 /// asked of the rail itself or by a fixture: beside its first place, or the one named).
 // kept across runs: each let go with its node
-let rail_drawn : Map[String, @view.View] = {}
+let rail_drawn : Map[String, @view.View] = Map([])
 
 ///|
 /// The rail's node as it is made: the trigger of what opens beside it from the old frame (rail_adder: a press in the
@@ -105,6 +105,14 @@ fn rail_menu_from(place : String, src : Source) -> (Double, Double, Double, Doub
     Some(w) => rail_place_at(rail_items(src, w.id).get(0).unwrap_or(""))
     None => None
   }
+}
+
+///|
+/// What the rail (rail_node) shows of a workspace as it opens, asked of `ask` (sfbase's opens_answered): the core's
+/// marks (its places' tones, the workspaces' at its foot: one topic whichever workspace is shown), what it reads of it but
+/// the prefs, which are the app's whole.
+fn rail_opens(ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked()))
 }
 
 ///|
@@ -225,10 +233,9 @@ fn rail_gear() -> Unit {
 }
 
 ///|
-/// What a key of the rail gives what it draws on its ground: its node, its ground (its 30 square), and its icon's ink
-/// now (the words' colour eased in over 140 ms as it is lit or pointed at).
+/// What a key of the rail gives what it draws on its ground: its ground (its 30 square), and its icon's ink now (the
+/// words' colour eased in over 140 ms as it is lit or pointed at).
 priv struct RailKey {
-  item : @view.View
   sq : @view.View
   ink : () -> Int64
 }
@@ -290,7 +297,6 @@ fn rail_key_node(
       }))
       |> ignore
       body({
-        item,
         sq,
         ink: fn() {
           let t = @sf.theme()
@@ -476,7 +482,7 @@ fn rail_place_node(item : @view.View, src : Source, tips : @sf.TipLayer, place :
   let tone = fn() {
     match ws() {
       Some(w) => {
-        let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
+        let marks = src.topic("workspaceMarks", @sfbase.marks_asked()).get().value
         let here = field(field(marks, "workspaces"), w.id)
         match place {
           "chats" => text(here, "tone")
@@ -630,13 +636,24 @@ fn rail_card_node(anchor : @view.View, src : Source, tips : @sf.TipLayer, place 
       .shadow(By(fn() { (16.0, 12.0, @sf.theme().p.shadow) }))
       .clips(Is(true))
       .padding(Is((@sf.panel_pad, @sf.panel_pad, @sf.panel_pad, @sf.panel_pad)))
-      .presses(Is(true))
-      .on_press(fn() {  })
+      // (a press on it its own: a ground, the arrow over it)
+      |> @sf.ground_node
       |> ignore
       // (its words 10 in: what reaches out to the panel's padding, 分享卡片, drawn there)
       k.box(fn(w) {
         @sf.style_node(w, fn() { rail_card_words })
-        @sfpages.rail_card_node(w, src, fn() { @sfbase.workspace_in_view(src).0 }, place)
+        // (a figure pressed: the chats it counts, the card gone)
+        @sfpages.rail_card_node(w, src, fn() { @sfbase.workspace_in_view(src).0 }, place, go=fn(to) {
+          stop()
+          open.set(false)
+          guard @sfbase.workspace_in_view(src).0 is Some(ws) else { return }
+          // (待处理 opened, never closed by it: the bell's own press toggles it)
+          if to == "attention" {
+            attention_set(true)
+          } else {
+            rail_go_told(src, ws, to, fn(_, f) { f() })
+          }
+        })
       })
       |> ignore
     })
@@ -758,7 +775,7 @@ fn rail_workspaces_node(r : @view.View, src : Source, tips : @sf.TipLayer, at : 
   let ws = fn() { @sfbase.workspace_in_view(src).0 }
   let marks = fn() {
     match ws() {
-      Some(w) => field(src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value, "workspaces")
+      Some(_) => field(src.topic("workspaceMarks", @sfbase.marks_asked()).get().value, "workspaces")
       None => None
     }
   }

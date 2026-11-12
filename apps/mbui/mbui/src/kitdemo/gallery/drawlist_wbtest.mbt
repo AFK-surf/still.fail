@@ -12,7 +12,7 @@ fn controls_kept() -> @ui.Tester {
 test "the controls page's last frame as a draw list: a line an instance, every glyph named by what the host shaped" {
   let t = controls_kept()
   let dl = t.drawlist()
-  let lines = dl.split("\n").map(fn(l) { l.to_string() }).to_array()
+  let lines = dl.split("\n").map(fn(l) { l.to_owned() }).to_array()
   assert_eq(lines[0], "mbui-dl 4")
   assert_eq(lines[1], "window 960 720 1")
   assert_eq(lines[2], "clear 0.961 0.961 0.969")
@@ -59,6 +59,9 @@ test "the same screen reached by other steps is the same draw list: glyphs and p
   let a = with_picture(Ref("two.png"))
   a.draw()
   a.draw()
+  // (read whole before the next is made: a Tester read after another was made reads the other's frame, tester_own.mbt)
+  let straight = a.drawlist()
+  assert_true(straight.contains("image 0 "))
   // by way of another picture first (decoded first: another id), and other words drawn before (other atlas places)
   let pic = Ref("one.png")
   let extra = Ref("Light")
@@ -69,8 +72,7 @@ test "the same screen reached by other steps is the same draw list: glyphs and p
   extra.val = ""
   b.draw()
   b.draw()
-  assert_eq(b.drawlist(), a.drawlist())
-  assert_true(a.drawlist().contains("image 0 "))
+  assert_eq(b.drawlist(), straight)
 }
 
 ///|

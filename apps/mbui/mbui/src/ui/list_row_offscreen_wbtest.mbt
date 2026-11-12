@@ -57,7 +57,7 @@ fn row_offscreen_result(keep : Bool) -> (Bool, Double, Bool, Bool, Bool) raise {
 test "a row paint change in an offscreen frame has the same host requests and drawing with and without a cache" {
   let cached = row_offscreen_result(true)
   let rebuilt = row_offscreen_result(false)
-  println("ROW_OFFSCREEN cached=\{cached} rebuilt=\{rebuilt}")
+  println("ROW_OFFSCREEN cached=\{Repr(cached)} rebuilt=\{Repr(rebuilt)}")
   assert_eq((cached.0, cached.1), (rebuilt.0, rebuilt.1), msg="host requests differ between the same frames")
   assert_true(cached.2 && cached.3 && rebuilt.2 && rebuilt.3, msg="both offscreen and subsequent display frames must show the new color")
 }

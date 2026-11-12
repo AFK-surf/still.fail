@@ -92,13 +92,11 @@ let items_src : String =
 fn sp(src : String, unit_bytes? : Int = 0) -> (Map[String, String], Split) raise SplitError {
   let dir = tmp_path("t")
   makedirs(dir)
-  let s = try split(utf8(src), dir, unit_bytes~) catch {
-    e => {
-      rmtree(dir)
-      raise e
-    }
+  let s = {
+    errdefer rmtree(dir)
+    split(utf8(src), dir, unit_bytes~)
   }
-  let out = {}
+  let out = Map([])
   for f in s.files {
     out[str(f.0)] = str(read_file(path_join(dir, f.0)).unwrap())
   }
@@ -359,15 +357,13 @@ test "by content, apart" {
   assert_eq(lit.length(), 2)
   assert_true(has(data, "const uint32_t \{lay[0]} = 0;")) // (the first of the two)
   same_hash.val = true
-  let apart = try {
+  let apart = {
+    errdefer {
+      same_hash.val = false
+    }
     let r = [layout_names_in(sp(src).0), layout_names_in(sp(src).0)]
     same_hash.val = false
     r
-  } catch {
-    e => {
-      same_hash.val = false
-      raise e
-    }
   }
   for x in apart {
     let (lay2, lit2, data2) = x
@@ -386,38 +382,40 @@ fn init_text(n : Int, b_value : Int) -> String {
   let n1 = n + 1
   let n2 = n + 2
   let n3 = n + 3
-  $|void moonbit_init() {
-  $|  moonbit_layout_table = moonbit_layout_table_data;
-  $|  int32_t _M0L6_2atmpS\{n};
-  $|  int32_t _M0L6_2atmpS\{n1};
-  $|  int32_t _M0L1iS\{n2};
-  $|  struct _M0TP11a1T _M0L6_2atmpS\{n3};
-  $|  _M0L6_2atmpS\{n} = 7;
-  $|  _M0FP11a1x = _M0L6_2atmpS\{n} + 1;
-  $|  moonbit_decref(_M0L6_2atmpS\{n});
-  $|  _M0L6_2atmpS\{n3} = (struct _M0TP11a1T){
-  $|    .x = 1
-  $|  };
-  $|  Moonbit_object_header(_M0FP11a1y)->meta = _M0L6_2atmpS\{n3}.x;
-  $|  _M0L1iS\{n2} = 0;
-  $|  while (1) {
-  $|    if (_M0L1iS\{n2} < 3) {
-  $|      _M0FP11b1z[_M0L1iS\{n2}] = \{b_value};
-  $|    } else {
-  $|      break;
-  $|    }
-  $|    _M0L1iS\{n2} += 1;
-  $|  }
-  $|  _M0FP11b1w = 0;
-  $|  do {
-  $|    _M0FP11b1w += 1;
-  $|  } while (_M0FP11b1w < 2);
-  $|  _M0L6_2atmpS\{n1} = 5;
-  $|  _M0FP11a1v = _M0L6_2atmpS\{n1};
-  $|  _M0FP11b1u = _M0L6_2atmpS\{n1};
-  $|  _M0FP11c1t = 1;
-  $|}
-  $|
+  (
+    $|void moonbit_init() {
+    $|  moonbit_layout_table = moonbit_layout_table_data;
+    $|  int32_t _M0L6_2atmpS\{n};
+    $|  int32_t _M0L6_2atmpS\{n1};
+    $|  int32_t _M0L1iS\{n2};
+    $|  struct _M0TP11a1T _M0L6_2atmpS\{n3};
+    $|  _M0L6_2atmpS\{n} = 7;
+    $|  _M0FP11a1x = _M0L6_2atmpS\{n} + 1;
+    $|  moonbit_decref(_M0L6_2atmpS\{n});
+    $|  _M0L6_2atmpS\{n3} = (struct _M0TP11a1T){
+    $|    .x = 1
+    $|  };
+    $|  Moonbit_object_header(_M0FP11a1y)->meta = _M0L6_2atmpS\{n3}.x;
+    $|  _M0L1iS\{n2} = 0;
+    $|  while (1) {
+    $|    if (_M0L1iS\{n2} < 3) {
+    $|      _M0FP11b1z[_M0L1iS\{n2}] = \{b_value};
+    $|    } else {
+    $|      break;
+    $|    }
+    $|    _M0L1iS\{n2} += 1;
+    $|  }
+    $|  _M0FP11b1w = 0;
+    $|  do {
+    $|    _M0FP11b1w += 1;
+    $|  } while (_M0FP11b1w < 2);
+    $|  _M0L6_2atmpS\{n1} = 5;
+    $|  _M0FP11a1v = _M0L6_2atmpS\{n1};
+    $|  _M0FP11b1u = _M0L6_2atmpS\{n1};
+    $|  _M0FP11c1t = 1;
+    $|}
+    $|
+  )
 }
 
 ///|
@@ -535,15 +533,13 @@ test "init pieces" {
   }
   assert_eq(inits, ["init.s0.c"]) // (small: together)
   init_small.val = 0
-  let (x, y) = try {
+  let (x, y) = {
+    errdefer {
+      init_small.val = 16 * 1024
+    }
     let r = (sp(prog_init(10, 4)).0, sp(prog_init(90, 6)).0)
     init_small.val = 16 * 1024
     r
-  } catch {
-    e => {
-      init_small.val = 16 * 1024
-      raise e
-    }
   }
   let xi = []
   for n, _ in x {
@@ -677,4 +673,26 @@ fn one_data(files : Map[String, String]) -> String {
   }
   names.sort()
   names.map(fn(n) { files[n] }).fold(init="", fn(a, b) { a + b })
+}
+
+///|
+test "moonc's prototype of fflush is <stdio.h> in the units" {
+  // halt's `extern "C" fn … = "fflush"`, as moonc writes it, in a program whose prelude has no <stdio.h>
+  let src = prelude_src.replace(old="#include <stdio.h>\n", new="") +
+    items_src
+    .replace(
+      old="#define _M0FP1a3ffi puts\n",
+      new="#define _M0FP1a3ffi puts\n\n#define _M0FP1a5flush fflush\n\nint32_t fflush(uint64_t);\n",
+    )
+    .replace(old="+ pre_tab[1];", new="+ pre_tab[1] + _M0FP1a5flush(0ull);")
+  let (files, _) = sp(src, unit_bytes=2)
+  let mut calls = 0
+  for n, text in files {
+    assert_false(has(text, "fflush(uint64_t)"), msg="\{n}: moonc's prototype of fflush")
+    if n.has_suffix(".c") && has(text, "_M0FP1a5flush(0ull)") {
+      calls += 1
+      assert_true(has(text, "#include <stdio.h>"), msg="\{n}: calls fflush without <stdio.h>")
+    }
+  }
+  assert_eq(calls, 1)
 }

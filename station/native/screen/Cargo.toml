@@ -10,6 +10,8 @@ path = "src/main.rs"
 
 [dependencies]
 serde_json = "1"
+# A view's sound as Opus (audio_packets.rs): the encoder of the decoder the apps' shell has (client/shell), pure Rust.
+opus-rs = "=0.1.42"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [

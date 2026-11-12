@@ -21,7 +21,7 @@ fn lists_tester(calls : Array[Made], w : Double, platform : Int, regular : Bool)
 fn open_share(t : @ui.Tester) -> Unit {
   t.tap_text("分享…")
   t.frame()
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   t.run_for(if rest > t.time() && rest < 1.0e12 { rest - t.time() } else { @ui.move_most_ms })
 }
 
@@ -184,7 +184,7 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
     } else {
       assert_true(t.query(Button, label="归档「夜里的构建又失败了」") is None, msg=at)
       let (x, y) = t.find("夜里的构建又失败了").unwrap()
-      t.move(x, y)
+      t.move_to(x, y)
       t.frame()
       match t.query(Button, label="归档「夜里的构建又失败了」") {
         Some(b) => {
@@ -196,6 +196,20 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
       }
     }
   }
+}
+
+///|
+test "a row's 归档 right clicked: the row's menu, nothing archived" {
+  let calls : Array[Made] = []
+  let t = lists_tester(calls, 1280.0, 0, false)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.move_to(x, y)
+  t.frame()
+  let (bx, by, bw, bh) = t.get(Button, label="归档「夜里的构建又失败了」").rect
+  t.right_click(bx + bw / 2.0, by + bh / 2.0)
+  // (what is pressed in a row asks for no menu of its own: the row's, as on its name)
+  assert_true(t.find("重命名") is Some(_))
+  assert_eq(named(calls, "chat.archive").length(), 0)
 }
 
 ///|
@@ -252,7 +266,7 @@ test "wide: rows pressed one after another, one chat open in place of the other;
       app.nav.pop() |> ignore
       t.draw()
       // (on the tape the rows are the sidebar's, pressed with it in use: the page the last one brought over sent back)
-      if @sfdesk.wide.tape && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Side {
+      if @sfdesk.wide.tape.get() && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Side {
         @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Side))
         t.draw()
         t.run_for(@ui.move_most_ms)

@@ -8,16 +8,11 @@ fn play_tester(mode : String) -> @ui.Tester {
   @sfbase.reset()
   reset()
   @sffixture.fixture_reset()
-  @sf.viewer_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
   let src = @sffixture.fixture(mode)
   let (at, pin) = @sffixture.play_fixture(mode).unwrap()
   app.nav.push(DrivePlay(at))
-  match pin {
-    Some(s) => @sf.playing_for(@sfbase.reader_key(at)).media.pin(s)
-    None => ()
-  }
   let t = @ui.Tester::new(
     fn(c) {
       @sf.begin(c) |> ignore
@@ -32,6 +27,13 @@ fn play_tester(mode : String) -> @ui.Tester {
     w=390.0,
     h=844.0,
     platform=2,
+    // (the film where the fixture pins it: the run's own, from its first frame)
+    begun=fn() {
+      match pin {
+        Some(s) => @sf.playing_for(@sfbase.reader_key(at)).media.pin(s)
+        None => ()
+      }
+    },
   )
   t.draw()
   t

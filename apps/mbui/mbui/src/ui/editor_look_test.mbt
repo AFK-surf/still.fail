@@ -158,17 +158,36 @@ test "a field written with what it holds already: nothing to draw, no frame aske
 }
 
 ///|
-test "panic: one Field given to two editors in one build stops the app, naming both" {
+/// `f` run as an app's run on a host runs it (a fault told, not stopping the run): what was told, and whether the
+/// signals' graph was left in the middle of a change or a read after it.
+fn ui_faults_kept(f : () -> Unit) -> (Array[String], Bool) {
+  let told : Array[String] = []
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { told.push(said) })
+  f()
+  @view.faults_stop.val = true
+  @view.fault_told.val = None
+  (told, @signals.batch_depth() != 0 || @signals.active_sub() is Some(_))
+}
+
+///|
+test "one Field given to two editors in one build: a fault naming both, the build ended whole" {
   let field = @ui.Field::new()
-  let t = @ui.Tester::new(
-    fn(c) {
-      c.editor("one", font_size=10.0, field~) |> ignore
-      c.editor("two", font_size=10.0, field~) |> ignore
-    },
-    w=300.0,
-    h=100.0,
-  )
-  t.frame()
+  let (told, left) = ui_faults_kept(fn() {
+    let t = @ui.Tester::new(
+      fn(c) {
+        c.editor("one", font_size=10.0, field~) |> ignore
+        c.editor("two", font_size=10.0, field~) |> ignore
+      },
+      w=300.0,
+      h=100.0,
+    )
+    t.frame()
+  })
+  assert_eq(told, [
+    "Ctx::editor: one Field given to two editors in one build (one id 1389090428 and two id 1793745277): a Field is one editor's",
+  ])
+  assert_false(left, msg="the signals' graph left mid-change or mid-read")
 }
 
 ///|
@@ -191,15 +210,21 @@ test "a Field kept over one Tester's end (an app's own) and given to another edi
 }
 
 ///|
-test "panic: one Field given to the same key's editors in two scopes (a list's rows) stops the app too" {
+test "one Field given to the same key's editors in two scopes (a list's rows): a fault too, the build ended whole" {
   let field = @ui.Field::new()
-  let t = @ui.Tester::new(
-    fn(c) {
-      c.scope(1, fn() { c.editor("draft", font_size=10.0, field~) |> ignore })
-      c.scope(2, fn() { c.editor("draft", font_size=10.0, field~) |> ignore })
-    },
-    w=300.0,
-    h=100.0,
-  )
-  t.frame()
+  let (told, left) = ui_faults_kept(fn() {
+    let t = @ui.Tester::new(
+      fn(c) {
+        c.scope(1, fn() { c.editor("draft", font_size=10.0, field~) |> ignore })
+        c.scope(2, fn() { c.editor("draft", font_size=10.0, field~) |> ignore })
+      },
+      w=300.0,
+      h=100.0,
+    )
+    t.frame()
+  })
+  assert_eq(told, [
+    "Ctx::editor: one Field given to two editors in one build (draft id 1819598885 and draft id 2043881708): a Field is one editor's",
+  ])
+  assert_false(left, msg="the signals' graph left mid-change or mid-read")
 }

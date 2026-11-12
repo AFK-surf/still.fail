@@ -25,13 +25,6 @@ priv enum Resume {
 }
 
 ///|
-priv enum State {
-  Running
-  Parked((Resume) -> Unit)
-  Ended
-}
-
-///|
 priv enum End {
   NotYet
   Done
@@ -45,7 +38,8 @@ struct Task {
   id : Int
   rt : Runtime
   name : String
-  mut state : State
+  /// parked: what resumes it (none while it runs, and once it ended)
+  mut state : ((Resume) -> Unit)?
   mut end : End
   /// Asked to stop: the next suspension (outside a shield) raises the
   /// cancellation signal.
@@ -236,7 +230,7 @@ fn Runtime::make(seed : Int, shuffle : Bool, start : Int64, clock : (() -> Int64
     defects,
     log: [],
     steps: 0,
-    awaited: Map::new(),
+    awaited: Map([]),
     ended: [],
     ended_n: 0,
     keep_ended: false,
@@ -341,7 +335,7 @@ pub fn Runtime::trace_text(self : Runtime) -> String {
 fn current_task() -> Task {
   match current.val {
     Some(t) => t
-    None => abort("effect: not inside a task")
+    None => @halt.saying("effect: not inside a task")
   }
 }
 
@@ -370,7 +364,7 @@ fn Runtime::start(self : Runtime, name : String, body : async () -> Unit) -> Tas
     id: self.ids,
     rt: self,
     name,
-    state: Ended,
+    state: None,
     end: NotYet,
     interrupted: false,
     shield: 0,
@@ -380,11 +374,11 @@ fn Runtime::start(self : Runtime, name : String, body : async () -> Unit) -> Tas
     event: 0,
     watchers: {},
   }
-  t.state = Parked(fn(r) {
+  t.state = Some(fn(r) {
     // Interrupted before it ever ran: it never does (as Effect has it).
     if r is Stop {
       t.end = Cut
-      t.state = Ended
+      t.state = None
       t.finish()
       return
     }
@@ -394,7 +388,7 @@ fn Runtime::start(self : Runtime, name : String, body : async () -> Unit) -> Tas
       } noraise {
         _ => if t.end is NotYet { t.end = Done }
       }
-      t.state = Ended
+      t.state = None
       t.finish()
     })
   })
@@ -446,7 +440,7 @@ fn Task::watch(self : Task, f : () -> Unit) -> Int {
 
 ///|
 fn Task::wake(self : Task) -> Unit {
-  if !self.queued && self.state is Parked(_) {
+  if !self.queued && self.state is Some(_) {
     self.rt.make_ready(self)
   }
 }
@@ -469,7 +463,7 @@ async fn park() -> Unit noraise {
   if t.interrupted && t.shield == 0 {
     raise_cancel()
   }
-  let r : Resume = suspend_raw(k => { t.state = Parked(k) })
+  let r : Resume = suspend_raw(k => { t.state = Some(k) })
   if r is Stop {
     raise_cancel()
   }
@@ -498,7 +492,7 @@ pub async fn pause() -> Unit noraise {
     raise_cancel()
   }
   let r : Resume = suspend_raw(k => {
-    t.state = Parked(k)
+    t.state = Some(k)
     t.queued = true
     t.since = t.rt.time
     t.rt.ready.push(t)
@@ -604,8 +598,8 @@ fn Runtime::run_ready_now(self : Runtime) -> Unit {
 ///|
 fn Runtime::step_task(self : Runtime, t : Task) -> Unit {
   t.queued = false
-  guard t.state is Parked(k) else { return }
-  t.state = Running
+  guard t.state is Some(k) else { return }
+  t.state = None
   let prev = current.val
   current.val = Some(t)
   self.steps += 1
@@ -652,7 +646,7 @@ fn Runtime::run_tasks(self : Runtime) -> Int {
     self.step_task(t)
     n += 1
     if n > 10_000_000 {
-      abort("effect: tasks kept each other ready without end (\{t.name})")
+      @halt.saying("effect: tasks kept each other ready without end (\{t.name})")
     }
   }
   n
@@ -791,7 +785,7 @@ fn Runtime::next_instant(self : Runtime) -> Int64? {
 ///|
 /// Moves virtual time on `ms`: every timer due meanwhile fires at its time.
 pub fn Runtime::advance(self : Runtime, ms : Int) -> Unit {
-  guard self.clock is None else { abort("effect: advance on the host's clock") }
+  guard self.clock is None else { @halt.saying("effect: advance on the host's clock") }
   let until = self.time + ms.to_int64()
   self.fire_until(until)
   self.time = until
@@ -812,7 +806,7 @@ pub fn Runtime::tick(self : Runtime) -> Unit {
 /// the clock's time, what is ready and what waits for a frame. What starts
 /// waiting for a frame in it waits for the next one.
 pub fn Runtime::frame(self : Runtime, at : Int64) -> Unit {
-  guard self.clock is None else { abort("effect: frame on the host's clock") }
+  guard self.clock is None else { @halt.saying("effect: frame on the host's clock") }
   let outer = self.turning
   self.turning = true
   defer {

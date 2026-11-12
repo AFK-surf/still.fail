@@ -51,6 +51,14 @@ pub fn Tester::set_rows_on_pixels(self : Tester, on : Bool) -> Unit {
 }
 
 ///|
+/// The host keeping groups of instances as every platform's host does, from the next frame on, or keeping none (as the
+/// web's host: what a list draws drawn out flat in each frame).
+pub fn Tester::set_groups(self : Tester, on : Bool) -> Unit {
+  self.fake.groups = on
+  groups_host.val = -1
+}
+
+///|
 /// A frame begins: what is kept of another run forgotten. (A fiber's step is no event from outside: what it changes
 /// it says by the signals it sets, and only what reads them is built again.)
 fn parts_frame_start(c : Ctx) -> Unit {
@@ -113,6 +121,7 @@ pub fn Ctx::kept_part(
 ///|
 /// How many parts the last frame kept as their nodes (Ctx::kept_part, kept_nodes.mbt), not built.
 pub fn Tester::parts_kept(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   nodes_run.kept_at.iter().filter(fn(k) { k.1 < 0 }).count()
 }
@@ -138,6 +147,9 @@ priv struct KeptClock {
 priv struct KeptDue {
   at : Double
   mut later : Bool
+  /// whether a frame is asked of the host for it (false: read in the first frame drawn at or past it for anything
+  /// else, Ctx::shows_from)
+  mut asks : Bool
   come : @signals.Signal[Bool]
 }
 
@@ -156,7 +168,7 @@ fn part_live() -> Unit {
 ///|
 /// What is built now changes at `t` (`later`: what is shown does not wait for it): built again in the first frame at
 /// or past it, kept or not; one past already, the next frame's.
-fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
+fn part_wake(now : Double, t : Double, later : Bool, asks? : Bool = true) -> Unit {
   if !part_building() || t == @double.infinity {
     return
   }
@@ -172,11 +184,12 @@ fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
   let d = if i < dues.length() && dues[i].at == t {
     dues[i]
   } else {
-    let d = { at: t, later: true, come: @signals.signal(false) }
+    let d = { at: t, later: true, asks: false, come: @signals.signal(false) }
     dues.insert(i, d)
     d
   }
   d.later = d.later && later
+  d.asks = d.asks || asks
   d.come.get() |> ignore
 }
 
@@ -223,6 +236,17 @@ pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
 }
 
 ///|
+/// What is being built changes at `t` (the frames' clock) while something else it shows is drawn each frame meanwhile
+/// (a share of a way reached while that way is drawn going): built again in the first frame drawn at or past it, a
+/// part's or a row's kept as it was drawn or not, with no frame of its own asked for it (Ctx::shows_until asks one at
+/// `t`, a frame drawn between those the display draws, where what moved since the last is seen from where that one
+/// drew it). Only what a frame drawn for something else will show: what nothing else draws a frame for till then is
+/// Ctx::shows_until's.
+pub fn Ctx::shows_from(self : Ctx, t : Double) -> Unit {
+  part_wake(self.clock, t, true, asks=false)
+}
+
+///|
 /// A frame begins (frame_drawn, before what it does again is decided): what read the frame told it changed, and what
 /// read a moment come.
 fn clock_frame_start(t : Double) -> Unit {
@@ -258,7 +282,7 @@ fn clock_frame_end(c : Ctx) -> Unit {
 /// (a frame drawn from the last build's tree too: frame_watch.mbt).
 fn dues_wake(c : Ctx) -> Unit {
   for d in kept_clock.dues {
-    if d.at > c.clock {
+    if d.at > c.clock && d.asks {
       if c.wake_at < 0.0 || d.at < c.wake_at {
         c.wake_at = d.at
       }
@@ -284,7 +308,7 @@ fn Ctx::insts_replay(self : Ctx, insts : FixedArray[Double], floats : Int, segs 
   insts.blit_to(a, len=floats, dst_offset=base)
   let seg0 = (self.segs.length() / 4).to_double()
   self.segs.append(segs)
-  let caps : Map[Int, Int] = {}
+  let caps : Map[Int, Int] = Map([])
   for j in 0..<count {
     let b = base + j * inst_size
     let kind = a[b + 5]
@@ -317,28 +341,6 @@ fn Ctx::insts_replay(self : Ctx, insts : FixedArray[Double], floats : Int, segs 
       inst_owned(k)
     }
   }
-}
-
-///|
-/// Where what is laid out in node `i` can show (x0, y0, x1, y1): what holds it all (the window, a layer over it), cut by
-/// each box round it that clips, as laid out.
-fn Ctx::shown_at(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
-  let mut x0 = -@double.infinity
-  let mut y0 = -@double.infinity
-  let mut x1 = @double.infinity
-  let mut y1 = @double.infinity
-  let mut j = self.nodes[i].parent
-  while j >= 0 {
-    let n = self.nodes[j]
-    if n.clip || n.parent < 0 {
-      x0 = dmax(x0, n.x)
-      y0 = dmax(y0, n.y)
-      x1 = dmin(x1, n.x + n.fw)
-      y1 = dmin(y1, n.y + n.fh)
-    }
-    j = n.parent
-  }
-  (x0, y0, x1, y1)
 }
 
 ///|

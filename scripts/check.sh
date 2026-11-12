@@ -10,11 +10,12 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, station, core) runs only those parts of it: ts the icons, the clients'
-# types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
-# station the station (station/, its typecheck and tests) and its native parts' own tests
-# (station/native); core client/'s Rust (the core's native shells: iroh for the web and the apps' IO).
-# Unset: all of them.
+# STILLFAIL_CHECK_PART="<part> …" (ts, station, station-tests, core) runs only those parts of it: ts the icons, the
+# clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core:
+# client/core-ts); station the station (station/: its typecheck, its programs in MoonBit) and its native parts' own
+# tests (station/native); station-tests the station's tests (station/test), all of them or, with
+# STILLFAIL_STATION_SHARD="<i>/<n>", the i-th slice of n; core client/'s Rust (the core's native shells: iroh for the
+# web and the apps' IO). Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
 # output is kept to itself, and they are reported in the order they are listed here, as each is done, with the seconds
@@ -123,8 +124,21 @@ open_tests() {
   # (One file each: the runner above them names them all.)
   for p in $(below $$); do ps -o args= -p "$p" 2>/dev/null | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") != 1 { exit 1 }' && kill -USR2 "$p" 2>/dev/null && hung="$hung $p"; done
   [ -n "$hung" ] || return 0
-  sleep 1
+  # Until each has answered, half a second at most: the runner ends the job about a second after its signal, and a
+  # whole second waited here was all of it (42939482348: test/screens.test.ts, hung with every test passed, was named
+  # and the job ended before what it had open was said).
+  w=0
+  while [ $w -lt 5 ]; do
+    answered=1
+    for p in $hung; do [ -e "$STILLFAIL_TEST_HUNG/$p" ] || answered=0; done
+    [ $answered = 0 ] || break
+    sleep 0.1
+    w=$((w + 1))
+  done
   for p in $hung; do
+    # (One that wrote nothing did not get to the signal: its thread held in a call, or the process ending. Its state
+    # and the CPU it takes say which.)
+    [ -e "$STILLFAIL_TEST_HUNG/$p" ] || ps -o pid= -o stat= -o pcpu= -o etime= -p "$p" 2>/dev/null | sed 's/^/    did not answer (pid, state, CPU %, since): /'
     sed 's/^/    /' "$STILLFAIL_TEST_HUNG/$p" 2>/dev/null
     for c in $(below "$p"); do ps -o pid= -o etime= -o args= -p "$c" 2>/dev/null | cut -c1-200 | sed 's/^/      under it: /'; done
   done
@@ -340,6 +354,22 @@ if part ts; then
       | grep -v 'timer:' > "$tmp/timers" || true
     step "no polling between still.fail's parts (in what this adds)" sh -c "! grep . '$tmp/timers'"
   fi
+  # The station's main thread waits on nothing (station/AGENTS.md): what a change adds there calls no synchronous file
+  # call, process or compression of node's (fs, child_process, zlib) unless its line says why with "sync:". What runs on
+  # no other thread may: a worker's own file (`*worker.ts`), the readers' (src/read/, but for what of it the main thread
+  # runs: the pool, the builders and their requests, and the transcripts it follows), the command line (src/cli.ts), and
+  # the update's (src/updates/command.ts, `stillfail-station update`, and the delta applier it alone runs,
+  # src/updates/delta.ts: a process apart, release.ts applyApart; flagged on main 154f6d15, 42758290890, 2026-11-10).
+  if touches '^station/src/'; then
+    {
+      added 'station/src/*.ts' ':(exclude,glob)station/src/**/*worker.ts' ':(exclude)station/src/read' ':(exclude)station/src/cli.ts' \
+        ':(exclude)station/src/updates/command.ts' ':(exclude)station/src/updates/delta.ts'
+      added 'station/src/read/pool.ts' 'station/src/read/mb-reader.ts' 'station/src/read/tail.ts' 'station/src/read/transcript.ts' \
+        'station/src/read/packed.ts' 'station/src/read/plan.ts' 'station/src/read/*-builder.ts' 'station/src/read/*-requests.ts' ':(exclude,glob)station/src/**/*worker.ts'
+    } | grep -nE '\b(access|appendFile|chmod|chown|close|copyFile|cp|exists|fchmod|fchown|fdatasync|fstat|fsync|ftruncate|futimes|lchown|link|lstat|lutimes|mkdir|mkdtemp|open|opendir|read|readdir|readFile|readlink|readv|realpath|rename|rm|rmdir|stat|statfs|symlink|truncate|unlink|utimes|write|writeFile|writev|exec|execFile|spawn|gzip|gunzip|deflate|deflateRaw|inflate|inflateRaw|unzip|brotliCompress|brotliDecompress|zstdCompress|zstdDecompress)Sync(\.native)?\(' \
+      | grep -v 'sync:' > "$tmp/syncs" || true
+    step "the station's main thread waits on nothing (in what this adds)" sh -c "! grep . '$tmp/syncs'"
+  fi
   # No way into a station from outside (AGENTS.md): every socket a station listens on is this machine's own, and says
   # so on its line (127.0.0.1; the fd the launcher holds, a Unix socket's path); the mesh's endpoint is bound by
   # mesh/native.ts. No tunnel in the station or the cloud. (A `.listen(` given a function is an event's, not a socket's.)
@@ -377,6 +407,8 @@ if part ts; then
   if touches "$ts_core|^apps/mbui/src/sfkept/kept\\.mbt$"; then prep core deps client/core-ts; step "kept core answers" after core node client/core-ts/scripts/kept-answers.ts --check; fi
   # What makes the views writes only on what it made, never on what it was given (「谁能改什么」).
   if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
+  # Nothing that answers the app reads a station's chats whole: the chat table is read by what a view shows.
+  if touches '^client/core-ts/(src|scripts)/'; then step "core reads no chat list whole" after core node client/core-ts/scripts/whole-lists.ts --check; fi
 
 fi
 
@@ -389,11 +421,18 @@ if [ $full = 1 ]; then
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
   # Run whenever one of what they read changed (the list `remembered` keys them by): a change to the words alone
   # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
-  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
+  # (core-ts's tests import the station's (test/rigs.test.ts its rig's grants, which import effect): its deps too, or a
+  # change that runs core-ts's tests alone fails rigs.test.ts at its import, #5386's check-linux 42962214582, 2026-11-11)
+  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$"; then prep core deps client/core-ts; prep station deps station; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core after station sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
-  # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
-  # tests): its tests run whenever it, one of them or the words it says changed.
-  if part station && touches '^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$'; then
+  # The station: it and its tests run whenever it, one of its native parts or the words it says changed (station_paths:
+  # scripts/plan.sh reads it from this line for CI's check-station).
+  station_paths='^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$'
+  # Its tests' native parts, prebuilt (mesh addon, runner, the reader in MoonBit; on a Mac the Rust station's archive
+  # command too, for the compatibility tests, which skip themselves without it: it is prebuilt for darwin alone).
+  station_natives="mesh runner reader"
+  [ "$(uname -s)" = Darwin ] && station_natives="mesh runner archive-rs reader"
+  if part station && touches "$station_paths"; then
     prep station deps station
     # Its programs in MoonBit (station/mb): what of them runs without a host (src/wire).
     remembered "tests: station's MoonBit" "station/mb apps/mbui/mbui/src/effect apps/mbui/mbui/moon.mod" sh -c 'cd station/mb && moon test --target native src/wire && moon test --target native src/jsjson && moon test --target native src/nodepath && moon test --target native src/jscase'
@@ -402,9 +441,24 @@ if [ $full = 1 ]; then
     # driver (agents/cursor-bridge.mjs) and the sandbox bridge (agents/sandbox-bridge.mjs) run in processes of their own,
     # not the station's.
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs" ":!station/src/agents/sandbox-bridge.mjs"'
-    # (STILLFAIL_NODE_TEST_JOBS, on a machine CI's runners share: station/package.json's `test`, that many files at a
-    # time, .github/actions/setup-mac)
-    remembered "tests: station" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs reader -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
+    # Where the station's tests are another run's (CI: check-station's, on Linux), the ones only a Mac can run are
+    # this one's: those of the Rust station's archive command (test/cold-compat.test.ts, 8 tests; every other test
+    # ran on Linux as on a Mac, 2026-11-10).
+    if ! part station-tests && [ "$(uname -s)" = Darwin ]; then
+      remembered "tests: station, a Mac's alone" "station scripts/native.ts" after station sh -c 'cd station && node ../scripts/native.ts run mesh runner archive-rs reader -- node --import ./test/setup-env.mjs --test --test-timeout=600000 test/cold-compat.test.ts'
+    fi
+  fi
+  # The station's tests (station/test): every file, or one slice of them (STILLFAIL_STATION_SHARD="<i>/<n>": the files
+  # in order, every n-th from the i-th). CI runs them in slices on Linux runners of their own (pipeline.yml,
+  # check-station), not on macos-ci: four runners share that Mac, the tests took 2.3 to 4.1 minutes there by what else
+  # ran, and three checks at once went past the job's five (6 of some 18 in half a day, 2026-11-09; the files doubled
+  # in the five days before). A machine to itself, a slice takes the same every run.
+  if part station-tests && touches "$station_paths"; then
+    prep station deps station
+    slice=${STILLFAIL_STATION_SHARD:-}
+    # (STILLFAIL_NODE_TEST_JOBS: that many files at a time rather than Node's own count)
+    # shellcheck disable=SC2016 # the command's own variables, expanded by its shell
+    remembered "tests: station${slice:+ $slice}" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts" after station env STATION_SLICE="$slice" STATION_NATIVES="$station_natives" sh -c 'cd station && files=$(ls test/*.test.ts | awk -v s="${STATION_SLICE:-0/1}" '"'"'BEGIN { split(s, a, "/") } NR % a[2] == a[1]'"'"') && [ -n "$files" ] && node ../scripts/native.ts run $STATION_NATIVES -- node --import ./test/setup-env.mjs --test ${STILLFAIL_NODE_TEST_JOBS:+--test-concurrency="$STILLFAIL_NODE_TEST_JOBS"} --test-timeout=600000 $files'
   fi
   # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
   # typecheck and prepare both sides before checking and running it, including on a fresh checkout.

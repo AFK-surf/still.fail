@@ -32,11 +32,6 @@ fn fin(x : Float) -> Bool {
 }
 
 ///|
-fn dfin(x : Double) -> Bool {
-  !(x.is_nan() || x.is_inf())
-}
-
-///|
 /// f32::min: the other for a NaN.
 fn fmin(a : Float, b : Float) -> Float {
   if a.is_nan() {
@@ -233,11 +228,6 @@ fn fround(x : Float) -> Float {
   } else {
     t
   }
-}
-
-///|
-fn fsqrt(x : Float) -> Float {
-  x.sqrt()
 }
 
 ///|

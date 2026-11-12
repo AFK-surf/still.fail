@@ -16,13 +16,14 @@
 ///|
 /// Where a flat stack stands as a change left it (nav_flat_view): the entries it holds a node for, those that show,
 /// whether what shows is pushed over the page in place, and what kind of page made once each is (by `keys`' order).
+#derive(Eq)
 priv struct FlatSeen {
   keys : Array[Int]
   shown : Array[Int]
   stacked : Bool
   /// what kind of page made once each holds (nav_flat_view's `made`; "" its old view), as what each is then
   kinds : Array[String]
-} derive(Eq)
+}
 
 ///|
 /// The page drawn in place now (the one kept shown where its owner keeps one, else the one on top), read as it changes.
@@ -113,7 +114,7 @@ pub fn[P] nav_flat_view(
       if nav.mode == 3 {
         c.page_in_hand = true
       }
-      let r = nav.ends_at(c.frame_no)
+      let r = nav.rested_at(c.frame_no)
       if r > c.nav_rest {
         c.nav_rest = r
       }

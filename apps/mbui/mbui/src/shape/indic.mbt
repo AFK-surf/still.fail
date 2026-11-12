@@ -8,9 +8,6 @@ const SHAPER_INDIC : Int = 2
 // categories (indic::category)
 
 ///|
-const OT_X : Int = 0
-
-///|
 const OT_C : Int = 1
 
 ///|
@@ -215,7 +212,6 @@ let indic_configs : Array[(String, Bool, Int, Int, Int, Bool)] = [
 ///|
 /// The Indic shaper's part of a plan.
 priv struct IndicPlan {
-  has_old_spec : Bool
   virama : Int
   reph_pos : Int
   reph_mode : Int
@@ -278,7 +274,6 @@ fn indic_plan_new(
     }
   })
   {
-    has_old_spec: config.1,
     virama: config.2,
     reph_pos: config.3,
     reph_mode: config.4,

@@ -28,9 +28,9 @@ priv struct SFont {
 
 ///|
 fn SFont::key(self : SFont) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for f in self.families {
-    sb.write_string(f.to_string())
+    sb.write_string(Show::to_string(f))
     sb.write_char('|')
   }
   sb.write_string(self.style.to_string())
@@ -449,7 +449,7 @@ fn parse_font_variation_settings(doc : SDoc, node : Int) -> Array[(String, Float
     return out
   }
   for part in value.split(",") {
-    let part = part.trim(chars=" \t\n\r").to_string()
+    let part = part.trim(chars=" \t\n\r").to_owned()
     if part == "" {
       continue
     }
@@ -457,17 +457,17 @@ fn parse_font_variation_settings(doc : SDoc, node : Int) -> Array[(String, Float
     if q != 0x22 && q != 0x27 {
       continue
     }
-    let rest = part.view(start_offset=1).to_string()
+    let rest = part.exact_view(start=1).to_owned()
     let close = match rest.find(Int::unsafe_to_char(q).to_string()) {
       Some(i) => i
       None => rest.length()
     }
-    let tag = rest.view(end_offset=close).to_string()
+    let tag = rest.exact_view(end=close).to_owned()
     if tag.length() != 4 {
       continue
     }
     let num = if close + 1 <= rest.length() {
-      rest.view(start_offset=if close < rest.length() { close + 1 } else { close }).to_string().trim(chars=" \t\n\r").to_string()
+      rest.exact_view(start=if close < rest.length() { close + 1 } else { close }).to_owned().trim(chars=" \t\n\r").to_owned()
     } else {
       ""
     }
@@ -582,7 +582,7 @@ fn resolve_rotate_list(doc : SDoc, text_node : Int) -> Array[Float] {
 fn resolve_decoration(doc : SDoc, tspan : Int, state : State, cache : Cache) -> (TDeco?, TDeco?, TDeco?) {
   let find = fn(n : Int, value : String) {
     match doc.attr(n, "text-decoration") {
-      Some(s) => s.split(" ").any(fn(v) { v.to_string() == value })
+      Some(s) => s.split(" ").any(fn(v) { v.to_owned() == value })
       None => false
     }
   }

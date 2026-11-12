@@ -170,9 +170,6 @@ const GPROPS_LIGATURE : Int = 0x04
 const GPROPS_MARK : Int = 0x08
 
 ///|
-const GPROPS_CLASS_MASK : Int = 0x0E
-
-///|
 const GPROPS_SUBSTITUTED : Int = 0x10
 
 ///|
@@ -209,9 +206,6 @@ const SCRATCH_HAS_VARIATION_SELECTOR_FALLBACK : Int = 0x40
 
 ///|
 const SCRATCH_HAS_CONTINUATIONS : Int = 0x80
-
-///|
-const SCRATCH_SHAPER0 : Int = 0x01000000
 
 ///|
 fn GlyphInfo::general_category(self : GlyphInfo) -> Int {
@@ -255,12 +249,26 @@ fn GlyphInfo::unhide(self : GlyphInfo) -> Unit {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Direction {
   LeftToRight
   RightToLeft
   TopToBottom
   BottomToTop
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as a shaping plan's key says it (ShapeFont::plan): what `derive(Show)` wrote.
+pub impl Show for Direction with output(self, logger) {
+  logger.write_string(
+    match self {
+      LeftToRight => "LeftToRight"
+      RightToLeft => "RightToLeft"
+      TopToBottom => "TopToBottom"
+      BottomToTop => "BottomToTop"
+    },
+  )
+}
 
 ///|
 fn Direction::is_horizontal(self : Direction) -> Bool {
@@ -350,12 +358,12 @@ pub fn Buffer::guess_script(self : Buffer) -> Unit {
 
 ///|
 pub fn Buffer::glyph_infos(self : Buffer) -> Array[GlyphInfo] {
-  self.info[0:self.len].to_array()
+  self.info[0:self.len].to_owned()
 }
 
 ///|
 pub fn Buffer::glyph_positions(self : Buffer) -> Array[GlyphPosition] {
-  self.pos[0:self.len].to_array()
+  self.pos[0:self.len].to_owned()
 }
 
 ///|
@@ -422,11 +430,6 @@ fn Buffer::copy_out_to_infos(self : Buffer, src : Int, dst : Int, count : Int) -
 ///|
 fn Buffer::cur(self : Buffer, i : Int) -> GlyphInfo {
   self.info[self.idx + i]
-}
-
-///|
-fn Buffer::cur_pos(self : Buffer) -> GlyphPosition {
-  self.pos[self.idx]
 }
 
 ///|
@@ -631,13 +634,6 @@ fn Buffer::output_glyph(self : Buffer, glyph : Int) -> Unit {
 fn Buffer::output_info(self : Buffer, info : GlyphInfo) -> Unit {
   self.make_room_for(0, 1)
   self.set_out_info(self.out_len, info)
-  self.out_len += 1
-}
-
-///|
-fn Buffer::copy_glyph(self : Buffer) -> Unit {
-  self.make_room_for(0, 1)
-  self.set_out_info(self.out_len, self.info[self.idx])
   self.out_len += 1
 }
 

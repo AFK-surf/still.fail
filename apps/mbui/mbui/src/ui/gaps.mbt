@@ -76,6 +76,7 @@ let gap_slack : Double = 0.5
 ///|
 /// Where the last frame breaks the spacing rules (see the file's head): one line for each fault, its rule first.
 pub fn Tester::gap_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().gap_faults()
 }
@@ -359,8 +360,8 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     // (the parts of one control: what lights up in a ground that is theirs alone, as large as they are with its few in
     // round them, a segmented choice's options in its track: one thing, its parts edge to edge on purpose, what is
     // chosen shown by its thumb)
-    let ground_of : Map[Int, Int] = {}
-    let parts : Map[Int, (Double, Double, Double, Double)] = {}
+    let ground_of : Map[Int, Int] = Map([])
+    let parts : Map[Int, (Double, Double, Double, Double)] = Map([])
     for i in lit {
       let mut q = self.nodes[i].parent
       while q >= 0 && layer[q] == layer[i] && !self.nodes[q].grounded() {
@@ -495,7 +496,7 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
   }
   // 4. what a box with a ground holds, in from its edges and as far from both sides: each content's box, the nearest
   // grounded one round it
-  let held : Map[Int, Array[Int]] = Map::new()
+  let held : Map[Int, Array[Int]] = Map([])
   for i in 0..<n {
     let c = self.nodes[i]
     if !whole[i] || !c.gap_content() || self.in_picture(i, pictures) {
@@ -673,7 +674,7 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
   // page's head and its cards, a sheet's rows), stand on the same left and right edges as the most of them (no two
   // alike: the widest's); one a little off them (more than the layout's rounding, less than a step of the scale) juts
   // out or falls short
-  let groups : Map[Int, Array[Int]] = {}
+  let groups : Map[Int, Array[Int]] = Map([])
   // (a box grounded by a layer of its size under it, a card drawn so, is grounded as one with its own: by that ground)
   let laid = self.layer_grounds()
   let ground_of = fn(k : Int) -> Int? {
@@ -782,7 +783,7 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     // shown as it is: wider than tall, no ground with no hand on it (a block of its own, a code's, stands the
     // ladder's inset in), not a capsule; by the nearest box with a ground round it, in its layer, as wide as most of
     // it)
-    let rows : Map[Int, Array[Int]] = {}
+    let rows : Map[Int, Array[Int]] = Map([])
     for i in 0..<n {
       let b = self.nodes[i]
       if !whole[i] ||
@@ -990,7 +991,7 @@ fn Ctx::gap_steps(self : Ctx, whole : Array[Bool], layer : Array[Int], out : Arr
       let across = if column { n.fw } else { n.fh }
       "\{n.kind}/\{n.grounded()}/\{n.bg}/\{n.radius}/\{n.border_w}/\{across.round()}"
     }
-    let kinds : Map[String, Array[(Int, Int, Double)]] = {}
+    let kinds : Map[String, Array[(Int, Int, Double)]] = Map([])
     for g in gaps {
       let (a, b, _) = g
       let ka = kind_of(a)
@@ -1035,7 +1036,7 @@ let gap_align_step : Double = 16.0
 /// Whether node `i` is the box of an old view hosted in a node of the window's tree held by one that scrolls what it
 /// holds (Tree::in_scroller): what it holds moves with that, as what a box of the old frame's that scrolls holds does
 /// (a sideways one, shown_whole's).
-fn Ctx::island_scrolls(self : Ctx, i : Int) -> Bool {
+fn Ctx::island_scrolls(_self : Ctx, i : Int) -> Bool {
   match (old_box_owners.get(i), view_app.val) {
     (Some((_, id)), Some(tree)) => tree.in_scroller(id)
     _ => false

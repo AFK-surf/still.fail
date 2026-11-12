@@ -35,3 +35,54 @@ fn test_motion_judged(loc : String) -> MotionJudged {
     _ => Results
   }
 }
+
+///|
+/// Whether this run says each file's bars and what was found under them: one that counts or judges how what moves goes
+/// (MBUI_TEST_MOTION said, a run at 60 or 120 a second), or one at the default rate told to (MBUI_TEST_BARS `1`, CI's:
+/// a bar holds what the default run's frames find as well). If so it says what each file's bars are, which files its
+/// Testers were made in, which of them are not judged on how what moves goes (Tester::motion_unjudged), and each fault
+/// a Tester found with how many it has come to, within its file's bar or counted (`MOTION bar`, `MOTION made`, `MOTION
+/// unjudged`, `MOTION known`, `MOTION counted`, `MOTION held`), so that each bar can be set beside the most one Tester
+/// of its file found (scripts/motion_bars.sh): a bar more than that falls, or what it was for is filed under another
+/// file (a Tester made in a helper of another file's: the helper's file).
+fn motion_runs() -> Bool {
+  if motion_run_said.val < 0 {
+    motion_run_said.val = if @env.get_env_var("MBUI_TEST_MOTION").unwrap_or("") != "" ||
+      @env.get_env_var("MBUI_TEST_BARS").unwrap_or("") == "1" {
+      1
+    } else {
+      0
+    }
+  }
+  motion_run_said.val == 1
+}
+
+///|
+// kept across runs: the test program's own environment, asked once (-1 not yet)
+let motion_run_said : Ref[Int] = Ref(-1)
+
+///|
+/// A per-file bar said (motion_runs): `MOTION bar <check> <file> <n>`.
+fn motion_bars_said(check : String, bars : Array[(String, Int)]) -> Unit {
+  if motion_runs() {
+    for b in bars {
+      println("MOTION bar \{check} \{b.0} \{b.1}")
+    }
+  }
+}
+
+///|
+/// A fault a Tester found, judged against its file's bar or counted (motion_runs): `MOTION known <check> <file>
+/// <n>/<bar>: <what>`, `n` how many that Tester has found so far, the most of them what the bar holds.
+fn motion_known_said(check : String, file : String, n : Int, bar : Int, what : String) -> Unit {
+  if motion_runs() {
+    println("MOTION known \{check} \{file} \{n}/\{bar}: \{what}")
+  }
+}
+
+///|
+/// Whether a Tester looks at each frame's corners worked out with what is kept (tester_corners.mbt): MBUI_CORNERS_LOOK
+/// `0` not, for a run to set beside one that does (the same to the bit); else, the default, it does.
+fn test_corners_looked() -> Bool {
+  @env.get_env_var("MBUI_CORNERS_LOOK").unwrap_or("") != "0"
+}

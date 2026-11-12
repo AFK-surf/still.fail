@@ -1,6 +1,6 @@
 // What of this machine still.fail uses (resources/watch.ts), as a part of the station (parts.ts): looked at while a
 // page asks; GET /resources.
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -61,10 +61,10 @@ export function parseNettop(text: string): Map<number, { in: number; out: number
 
 /// Whether this process's parent is its launcher (stillfail-station), not a shell or launchd, whose all under it is not
 /// the station's.
-function launcher(): boolean {
+async function launcher(): Promise<boolean> {
   if (process.ppid <= 1) return false;
   try {
-    return basename(execFileSync("ps", ["-o", "comm=", "-p", String(process.ppid)], { encoding: "utf8" }).trim()).startsWith("stillfail");
+    return basename((await run("ps", ["-o", "comm=", "-p", String(process.ppid)], { encoding: "utf8" })).stdout.trim()).startsWith("stillfail");
   } catch {
     return false;
   }
@@ -83,6 +83,7 @@ export const ResourcesLive = Layer.effectDiscard(
     const mesh = loadMesh();
     const isApp = appBundles();
     const whose = runnerSessions(store, (runners) => hub.runnerNameSessions(runners));
+    const underLauncher = yield* Effect.promise(() => launcher());
     const watch = yield* Effect.acquireRelease(
       Effect.sync(() => new ResourceWatch({
         clock: hub.clock,
@@ -97,7 +98,7 @@ export const ResourcesLive = Layer.effectDiscard(
         runners: () => runnersWithSessions(data, whose),
         jobs: () => watchedJobs(store, hub.processJobLookup()),
         isApp,
-        self: [process.pid, ...(launcher() ? [process.ppid] : [])],
+        self: [process.pid, ...(underLauncher ? [process.ppid] : [])],
       })),
       (w) => Effect.promise(() => w.close()),
     );

@@ -22,6 +22,7 @@
 /// (no workspace yet, every account answered: entry_tree.mbt); the splash's nodes while the workspaces are read or fail
 /// to be (app.mbt's reading_tree); a window of its own, its page in the tree's frame (app.mbt's lone_tree); or nothing
 /// while the window's width is not known yet (the tree made before its first frame).
+#derive(Eq)
 priv enum ShellIs {
   Stacked
   Taped
@@ -30,7 +31,7 @@ priv enum ShellIs {
   Reading
   Lone
   Unsized
-} derive(Eq)
+}
 
 ///|
 /// Which shell the signed-in app is in for a window `width` wide (app_tree).
@@ -112,8 +113,47 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     page_key=fn(_page) { narrow_island_key(src) },
     // (the pages made once as nodes: narrow_made)
     made=fn(page) { narrow_made(src, page) },
+    // (a place of the bottom bar switched away from kept, its nodes put by at rest, taken back as it is switched to:
+    // go_place's, sfbase's nav_root_kept)
+    keeps_made=true,
   )
   |> ignore
+  // (none kept of another workspace: those put by left for good as the workspace in view changes)
+  v.reacts(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(_) { app.nav.shelf_empty() })
+  // a station's screen with a page put over it (a chat a notice opened): its page is not built there, so its view is
+  // let go of as it is covered, and opened again by its page as it is on top again
+  v.reacts(
+    fn() {
+      let pages = app.nav.pages()
+      let screens : Array[(String, String, Bool)] = []
+      for i, p in pages {
+        match p {
+          Screen(at) => screens.push((at.station, at.screen, i < pages.length() - 1))
+          _ => ()
+        }
+      }
+      screens
+    },
+    fn(screens) {
+      for k in screens {
+        @sfpages.screen_covered(src, k.0, k.1, k.2)
+      }
+    },
+  )
+  // what the places of the bar open on asked ahead of them from the moment it shows, held till its page is gone from
+  // view under another (the stack at rest: Nav::root_shows), at those moments whatever frames are drawn (sfbase's
+  // places_ahead_node)
+  @sfbase.places_ahead_node(v, src, fn() {
+    match workspace_in_view(src).0 {
+      // (its page shows, on top or beside a page sliding over it or off it: held across that slide, let go of as it
+      // is over with its page gone from view; another page sliding over one already over it is no cause of the bar's)
+      Some(w) if narrow_bar_shown(src, w) || app.nav.root_shows() => Some(w.id)
+      _ => None
+    }
+  })
+  // a workspace switched shows once all its Home opens on is answered (home_opens), the screen as it was till then
+  // (sfbase's workspace_switch_node)
+  @sfbase.workspace_switch_node(v, src, home_opens)
   // the bottom bar told what the app's state and the window say of it as that changes, at the moment of what changed it
   // (a page put on the stack, a place come in, the bars' order, the window's width), whatever frames are drawn: the
   // frames only read where it is then (bar_tell)
@@ -197,12 +237,12 @@ fn narrow_island_key(src : Source) -> String {
 /// Page `page` of the narrow shell's stack as its island builds it: picked words with a mouse (a finger holds to pick:
 /// pick.mbt), the pictures it waits for said afresh (image_item, video_item).
 fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page, barred? : Bool = false) -> Unit {
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
   // (the page is its island, kept as its nodes by what it reads and its key (narrow_page_key): no part of its own)
   let built = fn() {
     let whole = c.box(style=page_whole, fn() {
-      let (now, all, _, invited) = workspace_in_view(src)
-      page_view(c, src, now.unwrap_or(w), all, invited, page, barred~)
+      let (now, _, _, _) = workspace_in_view(src)
+      page_view(c, src, now.unwrap_or(w), page, barred~)
     })
     @motion.scope(c, whole, bottom=true)
   }
@@ -242,9 +282,10 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the core and the workspace links are opened against, as the frame ends (links.mbt)
   c.after_build("links", fn() { links_frame(src, w) })
   // the number on the app's icon (app_frame.mbt)
-  badge_frame(c, src, w)
+  badge_frame(c, src)
   // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
-  if !link_later.is_empty() {
+  // (whether one waits read as a signal: this part, kept as its nodes, built again as one is given)
+  if links_wait() {
     c.tell("links-given", fn() { links_given(src) })
   }
   // a newer build of the app asked for once (updates.mbt)
@@ -329,7 +370,7 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a device of the person's waiting on this one for a vault's key (settings/vault_prompts.mbt), the same way
   @settings.vault_prompts(settings_core(src, w), !sheet_open())
   // (the core what the settings put up over a page draws with, put up by what has none at hand)
-  @settings.panels_frame(settings_core(src, w))
+  @settings.panels_frame(settings_core(src, w), w.id)
   // what another app shares, in the wide window's panel (share.mbt; a sheet on Small, as ShareSheet)
   share_panel(c, src, w)
   // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,
@@ -507,6 +548,20 @@ fn narrow_made_as(
               // (its bar the page's node's, over its old view: chat_bar_node)
               over=chat_bar_node,
               stint~,
+              // (with chat_page_nodes on: its messages nodes, its composer under them its old view)
+              body=fn(col, s, r) {
+                @sfpages.chat_page_body_node(
+                  col,
+                  s,
+                  r,
+                  tips=@sf.TipLayer::new(fn() { None }),
+                  stint~,
+                  top=list_top,
+                  foot=list_foot,
+                  lead=unread_lead(),
+                )
+              },
+              foot=chat_foot_nodes,
             )
             |> ignore
           },
@@ -661,13 +716,8 @@ fn place_comes_in(v : @view.View) -> Unit {
     }
   })
   let shown = fn() {
-    w.said()
     ended.get() |> ignore
-    if w.goes_at(v.logic_at()) {
-      w.value_at(v.drawn_at())
-    } else {
-      w.target()
-    }
+    w.shown_on(v)
   }
   v.alpha(By(shown)).offset(By(fn() { (app.switch_way.to_double() * switch_slide * (1.0 - shown()), 0.0) })) |> ignore
 }

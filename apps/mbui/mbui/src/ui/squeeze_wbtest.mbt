@@ -10,7 +10,7 @@ fn laid_box(id : Int) -> (Double, Double, Double, Double, Double) {
       return (n.x, n.y, n.fw, n.fh, n.opacity)
     }
   }
-  abort("no box \{id}")
+  @halt.saying("no box \{id}")
 }
 
 ///|
@@ -301,7 +301,7 @@ test "one_line: a line break with the spaces round it one space, none at the end
 
 ///|
 test "words on one line hold their row alike, plain or in runs: as wide as they are while there is room, cut as a last resort" {
-  let ids : Map[Bool, Int] = {}
+  let ids : Map[Bool, Int] = Map([])
   let t = Tester::new(
     fn(c) {
       for rich in [false, true] {
@@ -426,7 +426,7 @@ fn laid_words(s : String) -> Node {
       return n
     }
   }
-  abort("no words \{s}")
+  @halt.saying("no words \{s}")
 }
 
 ///|
@@ -589,7 +589,7 @@ fn hint_now() -> TextLayout {
       }
     }
   }
-  abort("no field")
+  @halt.saying("no field")
 }
 
 ///|

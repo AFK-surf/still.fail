@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { SEARCH_SETTLE_MS, SEARCH_STALE_MS } from "../src/station/sync.ts";
 import { openOf } from "../src/views/search.ts";
 import { apply, subscribe, v } from "./helpers.ts";
-import { base, started, threadView } from "./station-fixture.ts";
+import { base, chatsOf, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -36,8 +36,7 @@ const found = {
 test("a_search_lists_what_the_device_holds_and_what_its_stations_find_each_once", async () => {
   const { host, core } = await started({
     ...base(),
-    "GET /chats": [row("a", 7, "部署页"), row("b", 8, "别的")],
-    "GET /threads": [threadView(7, 1, 1, 0), threadView(8, 1, 1, 0)],
+    ...chatsOf([{ ...row("a", 7, "部署页"), last: { seq: 1 } }, { ...row("b", 8, "别的"), last: { seq: 1 } }]),
     "GET /threads/7/entries?limit=50": { first: 1, last: 1, entries: [said(7, 1, "部署 studio", 1000)] },
     "GET /threads/8/entries?limit=50": { first: 1, last: 1, entries: [said(8, 1, "无关", 500)] },
     "GET /search?q=%E9%83%A8%E7%BD%B2&limit=6": found,
@@ -76,7 +75,7 @@ test("a_search_lists_what_the_device_holds_and_what_its_stations_find_each_once"
 });
 
 test("a_station_from_before_search_is_said_to_need_an_update", async () => {
-  const { host, core } = await started({ ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)] });
+  const { host, core } = await started({ ...base(), ...chatsOf([row("a", 7, "部署页")]) });
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "search", scope: "ws", query: "部署" });
   await host.settle();
@@ -90,7 +89,7 @@ test("a_station_from_before_search_is_said_to_need_an_update", async () => {
 });
 
 test("a_search_shown_again_asks_its_stations_again", async () => {
-  const replies: Record<string, unknown> = { ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)], "GET /search?q=%E9%83%A8%E7%BD%B2&limit=6": found };
+  const replies: Record<string, unknown> = { ...base(), ...chatsOf([row("a", 7, "部署页")]), "GET /search?q=%E9%83%A8%E7%BD%B2&limit=6": found };
   const { host, core } = await started(replies);
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "search", scope: "ws", query: "部署" });
@@ -101,7 +100,7 @@ test("a_search_shown_again_asks_its_stations_again", async () => {
   await host.settle();
   // Archived meanwhile: the station says so now.
   replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
-  replies["GET /chats"] = [];
+  Object.assign(replies, chatsOf([]));
   subscribe(core, ui, 2, { topic: "search", scope: "ws", query: "部署" });
   await host.settle();
   await host.time.pass(SEARCH_SETTLE_MS + 10);
@@ -114,7 +113,7 @@ test("a_search_shown_again_asks_its_stations_again", async () => {
 });
 
 test("a_search_shown_is_asked_again_when_its_station_says_a_chat_changed", async () => {
-  const replies: Record<string, unknown> = { ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)], "GET /search?q=%E9%83%A8%E7%BD%B2&limit=6": found };
+  const replies: Record<string, unknown> = { ...base(), ...chatsOf([row("a", 7, "部署页")]), "GET /search?q=%E9%83%A8%E7%BD%B2&limit=6": found };
   const { host, core, push } = await started(replies);
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "search", scope: "ws", query: "部署" });
@@ -123,9 +122,9 @@ test("a_search_shown_is_asked_again_when_its_station_says_a_chat_changed", async
   await host.settle();
   // Archived on the station: it says so, and finds it so (asked again: `again=1`).
   replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6&again=1"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
-  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  push("thread", { id: 7, entries: [] });
   // Told again and again meanwhile (a busy station): asked again once.
-  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  push("thread", { id: 7, entries: [] });
   await host.settle();
   await host.time.pass(SEARCH_STALE_MS + SEARCH_SETTLE_MS + 10);
   await host.settle();
@@ -164,7 +163,7 @@ test("what_a_search_finds_says_where_it_opens_as_every_client_has_a_page_for_it"
 });
 
 test("a_search_typed_on_asks_its_stations_for_the_last_words_alone_and_again_only_for_them", async () => {
-  const replies: Record<string, unknown> = { ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)] };
+  const replies: Record<string, unknown> = { ...base(), ...chatsOf([row("a", 7, "部署页")]) };
   for (const q of ["u", "up", "upd"]) for (const tail of ["", "&again=1"]) replies[`GET /search?q=${q}&limit=6${tail}`] = { building: false, groups: [] };
   const { host, core, push } = await started(replies);
   const ui = core.connect();
@@ -181,7 +180,7 @@ test("a_search_typed_on_asks_its_stations_for_the_last_words_alone_and_again_onl
   const asked = (from: number) => host.requests.slice(from).map((r: J) => r.url as string).filter((u) => u.includes("/search?")).map((u) => u.split("q=")[1]);
   assert.deepEqual(asked(0), ["upd&limit=6"]);
   const before = host.requests.length;
-  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  push("thread", { id: 7, entries: [] });
   await host.settle();
   await host.time.pass(SEARCH_STALE_MS + SEARCH_SETTLE_MS + 10);
   await host.settle();

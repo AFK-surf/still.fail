@@ -9,7 +9,7 @@ test "desk: a chat switched to shows once its view has come, the chat before it 
   let base = fixture("chat")
   // what is still asked is current at once; what is asked anew, while `slow`, not answered: answered as it is let be
   // fast, told then as the core's answer is (what reads it follows `slow`)
-  let asked : Map[String, Bool] = {}
+  let asked : Map[String, Bool] = Map([])
   let slow = @signals.signal(false)
   let client = @core.Client::new(fn(_) {  })
   let key = fn(name : String, params : Map[String, Json]) { name + " " + Json::object(params).stringify() }

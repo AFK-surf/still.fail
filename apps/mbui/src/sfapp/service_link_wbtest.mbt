@@ -13,6 +13,7 @@ priv struct Asked {
 /// The service's page over the fixture, with its calls of the core's for the page seen by the test (station.preview
 /// answered by the fixture's station as ever).
 fn link_tester(mode? : String = "service") -> (@ui.Tester, Asked) {
+  @sf.presenters_reset()
   new_run()
   let base = fixture(mode)
   open_drive_fixture(mode)
@@ -233,7 +234,7 @@ test "the top page's fetch() on its port: asked of the service, its answer said 
 fn png_hex_head(w : Int, h : Int) -> String {
   let hex = fn(n : Int) {
     let d = "0123456789abcdef".to_array()
-    let out = StringBuilder::new()
+    let out = StringBuilder()
     for i in [24, 16, 8, 0] {
       let b = (n >> i) & 0xFF
       out.write_char(d[b >> 4])
@@ -334,13 +335,13 @@ test "a sized page on its canvas: the ground dragged moves it, 适应 (its sizes
   // 适应, among the sizes (its ⋯'s): fitted again, the sizes gone
   t.click(Button, label="更多操作")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("页面尺寸")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   t.click(Button, label="适应")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_eq(view_rect(t, site).unwrap().0, x0)
   // moved again, then two taps on the ground
   t.drag(362.0, 400.0, 302.0, 430.0)
@@ -351,7 +352,7 @@ test "a sized page on its canvas: the ground dragged moves it, 适应 (its sizes
   assert_eq(view_rect(t, site).unwrap().0, x0)
   // 移动 (its key has no words to tap it by): the page's touches all the canvas's
   let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
-  p.moving = true
+  p.moving.set(true)
   t.frame()
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("touch \{site} through") }))
 }
@@ -382,7 +383,7 @@ test "the system's back steps the page back in its own history first; at its fir
   t.back()
   // the page a step back, the service's page still there
   if !t.views().iter().any(fn(s) { s.has_prefix("control \{site} 5 ") }) {
-    fail("the page not stepped back: \{t.views()}")
+    fail("the page not stepped back: \{Repr(t.views())}")
   }
   assert_eq(app.nav.depth(), depth)
   assert_true(t.view_said(state("/", false)))

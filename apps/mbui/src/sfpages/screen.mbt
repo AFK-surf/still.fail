@@ -18,16 +18,17 @@ priv struct DropTo {
   reveal : Bool
   /// the file is an app to install on the device once it is there (`screen.install`)
   install : Bool
-} derive(Eq)
+}
 
 ///|
 /// A part of the screen (0..1 of its width and height): its left, top, width, height.
+#derive(Eq)
 priv struct Part {
   x : Double
   y : Double
   w : Double
   h : Double
-} derive(Eq)
+}
 
 ///|
 /// A config's part of the screen (`region`), when it says one.
@@ -342,7 +343,7 @@ fn ScreenSess::own_stream(self : ScreenSess) -> Unit {
 /// A call nobody waits for (`screen.ack`): sent in order with the rest, its
 /// answer (or error) let go.
 fn screen_tell(src : Source, name : String, params : Map[String, Json]) -> Unit {
-  (src.call)(name, Json::object(params), fn(_) {  })
+  (src.call)(name, Json::object(params), @sfbase.answer_unread)
 }
 
 ///|
@@ -738,7 +739,11 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "maxHeight": Json::number(mh.to_double()),
   }
   asks_into(params, quality, fps)
-  if @ui.stream_audio_here() { params["audio"] = Json::string("pcm_s16le") }
+  if @ui.stream_audio_here() {
+    params["audio"] = Json::string("pcm_s16le")
+    // (muted here: the station sends none from the start, `screen.sound`)
+    if self.audio_muted.untracked() { params["sound"] = Json::boolean(false) }
+  }
   // Shown by the system's video layer (its frames tagged colours honoured, a wide-gamut screen's shown as wide): the
   // Mac's desktop sent in Display P3; the app's canvas (a faded or ended view's picture) has it converted to sRGB.
   if @ui.stream_layers_here() { params["gamut"] = Json::string("p3") }
@@ -985,6 +990,22 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       if number(self.state, "watchOnly") != number(Some(s), "watchOnly") {
         self.wants_control = Some(false)
       }
+      // taken by someone else as it drove, or taken from people by this view's 接管: said once each (a view opened again
+      // starts its counts anew, none said)
+      let names = fn(key) { strings(Some(s), key).join(@sf.t("web-main.list.separator")) }
+      if number(Some(s), "taken") > number(self.state, "taken") {
+        let by = names("takenBy")
+        toast_later(
+          if by == "" {
+            @sf.t("android-misc.screen.taken")
+          } else {
+            @sf.t("android-misc.screen.takenBy", args=[("names", by)])
+          },
+        )
+      }
+      if number(Some(s), "took") > number(self.state, "took") {
+        toast_later(@sf.t("android-misc.screen.took", args=[("names", names("tookFrom"))]))
+      }
       self.state = Some(s)
       self.heard = true
       if moved {
@@ -1165,4 +1186,8 @@ fn ScreenSess::toggle_audio(self : ScreenSess) -> Unit {
   let muted = !self.audio_muted.untracked()
   self.audio_muted.set(muted)
   if muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
+  // Muted, the station sends the view no sound till it is on again.
+  if self.call != 0 {
+    screen_tell(self.src, "screen.sound", { "view": Json::string(self.view), "on": Json::boolean(!muted) })
+  }
 }

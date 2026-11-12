@@ -197,6 +197,22 @@ test("a station's log goes on to Axiom's logs, signed with its key; a member's a
   }
 });
 
+test("a signed-in client's spans use up none of its account's requests a minute, and a token not good is refused", async () => {
+  // (they have their own budget, by sender: a person's devices sending theirs had the account system refuse the rest)
+  const axiom = fakeAxiom();
+  const h = await harness({ axiom: axiom.answer });
+  try {
+    const tokens = await h.login("alice");
+    const alice = h.as(tokens);
+    for (let i = 0; i < 100; i++) assert.equal((await alice("GET", "/v1/me")).status, 200);
+    for (let i = 0; i < 30; i++) assert.equal((await post(h, batch(), { authorization: `Bearer ${tokens.access_token}` })).status, 202);
+    assert.equal((await alice("GET", "/v1/me")).status, 200, "the account's own still answered");
+    assert.equal((await post(h, batch(), { authorization: "Bearer not-a-token" })).status, 401);
+  } finally {
+    await h.close();
+  }
+});
+
 test("each sender has its own budget a minute", async () => {
   const axiom = fakeAxiom();
   const h = await harness({ axiom: axiom.answer });

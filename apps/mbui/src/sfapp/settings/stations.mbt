@@ -16,16 +16,6 @@ fn joined_mark(s : Json?) -> String {
 }
 
 ///|
-/// A station's mark where it has one (StationMark): its glyph, picture or emoji.
-fn station_mark(c : @ui.Ctx, s : Json?, size : Double, tint : Int64) -> Unit {
-  let emoji = text(s, "emoji")
-  let icon = text(s, "icon")
-  if @sf.has_station_mark(emoji, icon) {
-    @sf.station_mark(c, emoji, icon, size, tint)
-  }
-}
-
-///|
 /// The workspace's stations (StationsScreen), pushed from settings: their cards, each opening its page.
 fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let topic = stations_of(core, here)
@@ -68,6 +58,19 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }
       }
     }
+    // those that only run tasks after the whole ones, a card each: its page a press away
+    let rigs = if list is Some(_) { rigs_listed(core, here) } else { [] }
+    for r in rigs {
+      blocks.push(fn() { rig_station_card(c, core, here, r) })
+    }
+    // the workspace's devices after its stations (设备: attached to one, or a person's phone), under their heading
+    let devices = if list is Some(_) { devices_listed(core, here) } else { [] }
+    if devices.length() > 0 {
+      blocks.push(fn() { @sf.heading(c, @sf.t("web-pages.devices.title")) })
+    }
+    for d in devices {
+      blocks.push(fn() { device_card(c, core, here, d) })
+    }
     blocks.push(fn() { gap(c, 30.0) })
     // (each block by what it is: a station by its id, so one joining or leaving comes and goes where it is)
     let keys = match list {
@@ -75,8 +78,17 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       Some(_) => ["first"]
       None => ["waiting"]
     }
+    for r in rigs {
+      keys.push("rig/" + text(Some(r), "id"))
+    }
+    if devices.length() > 0 {
+      keys.push("devices")
+    }
+    for d in devices {
+      keys.push("device/" + text(Some(d), "station") + "/" + text(Some(d), "id"))
+    }
     keys.push("foot")
-    scroll_page(c, "stations", blocks, keys~, continuity=fn(k) { k.has_prefix("st/") })
+    scroll_page(c, "stations", blocks, keys~, continuity=fn(k) { k.has_prefix("st/") || k.has_prefix("rig/") || k.has_prefix("device/") })
   })
 }
 
@@ -91,8 +103,9 @@ fn card_head(c : @ui.Ctx, mark : () -> Unit, name : String, said : String?, end 
     c.box(w=Fill(1.0), fn() {
       // A card is a summary; its page can show the station's name in full.
       c.text(name, size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0, allow_ellipsis=true) |> ignore
+      // what is said of it goes on to a line more where it does not fit (words set larger: a rig's whose and how)
       match said {
-        Some(line) => c.text(line, size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+        Some(line) => c.text(line, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
         None => ()
       }
     })
@@ -136,6 +149,31 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
     station_body(c, core, s)
   }, on_press=fn() {
     (core.push)(Station(address))
+  })
+}
+
+///|
+/// A station that only runs tasks in the list (rig `r`): its mark, its name, and that it only runs tasks, whose it is
+/// and how it is; no body (this device is not linked to it: a station says how it is).
+fn rig_station_card(c : @ui.Ctx, core : Core, here : Here, r : Json) -> Unit {
+  let t = @sf.theme()
+  let address = here.workspace + "/" + text(Some(r), "id")
+  card(c, key="station/" + address, fn() {
+    card_head(c, fn() { @sf.icon(c, "boxes", size=card_mark, color=t.p.text) |> ignore }, text(Some(r), "name"), Some(rig_said(Some(r))), fn() { chevron(c) })
+  }, on_press=fn() {
+    (core.push)(Station(address))
+  })
+}
+
+///|
+/// A device in the list (设备): its mark, its name, what it is, where, whose and how chats use it; its panel a press away.
+fn device_card(c : @ui.Ctx, core : Core, here : Here, d : Json) -> Unit {
+  let t = @sf.theme()
+  let key = "device/" + text(Some(d), "station") + "/" + text(Some(d), "id")
+  card(c, key~, fn() {
+    card_head(c, fn() { @sf.icon(c, device_icon(Some(d)), size=card_mark, color=t.p.text) |> ignore }, text(Some(d), "name"), Some(device_said(Some(d))), fn() { chevron(c) })
+  }, on_press=fn() {
+    open_device(core, here, text(Some(d), "station"), text(Some(d), "id"), Unanchored)
   })
 }
 
@@ -392,4 +430,4 @@ pub let station_parts : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 ///|
 /// Whose page has its 高级网络设置 opened, by station (opened by the person, or the fixture's
 /// settings-station-network); kept while the page is in the stack.
-pub let station_network_open : Map[String, Bool] = {}
+pub let station_network_open : Map[String, Bool] = Map([])

@@ -63,20 +63,20 @@ test("a_view_gathered_from_stations_says_whom_it_waits_on_and_who_failed", () =>
 
 test("a_list_with_no_rows_says_it_reads_fails_or_has_none", () => {
   const days = [{ items: [{}] }];
-  assert.deepEqual(listNote([station("w/a", "A", "error")], days, false, []), { reading: false, failing: [], empty: false });
-  assert.equal(listNote([station("w/a", "A", "connecting")], [], false, []).text, "正在连接 A");
-  assert.equal(listNote([station("w/a", "A", "connecting"), station("w/b", "B", "connecting")], [], false, []).text, "正在连接 2 台 station");
-  assert.equal(listNote([station("w/a", "A", "online")], [], true, []).text, "正在读取会话");
-  assert.equal(listNote([station("w/a", "A", "online")], [], true, []).reading, true);
-  assert.equal(listNote([station("w/a", "A", "connecting")], [], false, []).reading, true);
-  const failing = listNote([station("w/a", "A", "error"), station("w/b", "B", "online")], [], false, []);
+  assert.deepEqual(listNote([station("w/a", "A", "error")], days.length > 0, false, []), { reading: false, failing: [], empty: false });
+  assert.equal(listNote([station("w/a", "A", "connecting")], false, false, []).text, "正在连接 A");
+  assert.equal(listNote([station("w/a", "A", "connecting"), station("w/b", "B", "connecting")], false, false, []).text, "正在连接 2 台 station");
+  assert.equal(listNote([station("w/a", "A", "online")], false, true, []).text, "正在读取会话");
+  assert.equal(listNote([station("w/a", "A", "online")], false, true, []).reading, true);
+  assert.equal(listNote([station("w/a", "A", "connecting")], false, false, []).reading, true);
+  const failing = listNote([station("w/a", "A", "error"), station("w/b", "B", "online")], false, false, []);
   assert.equal(failing.failing[0].text, "无法连接「A」，正在重试");
   assert.equal(failing.empty, false);
-  assert.equal(listNote([station("w/b", "B", "online")], [], false, []).empty, true);
-  assert.equal(listNote([], [], false, []).empty, true);
-  const unread = listNote([station("w/a", "A", "offline")], [], false, ["w/a"]);
+  assert.equal(listNote([station("w/b", "B", "online")], false, false, []).empty, true);
+  assert.equal(listNote([], false, false, []).empty, true);
+  const unread = listNote([station("w/a", "A", "offline")], false, false, ["w/a"]);
   assert.deepEqual([unread.empty, unread.failing[0].text], [false, "A 离线 · 尚未读取会话"]);
-  assert.equal(listNote([station("w/a", "A", "offline")], [], false, []).empty, true);
+  assert.equal(listNote([station("w/a", "A", "offline")], false, false, []).empty, true);
 });
 
 test("a_skill_reads_without_its_frontmatter", () => {

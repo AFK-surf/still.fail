@@ -22,7 +22,7 @@ fn login_core(
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(answer(name)))
     },
   }
@@ -114,7 +114,7 @@ test "a login's page copied from the ⋯ beside its button, its address on the c
     let calls : Array[Made] = []
     let t = with_logins(login_core(calls, login))
     t.click(Button, label="其他方式")
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@sf.presented_rest() - t.time())
     t.tap_text("复制链接")
     assert_eq(t.clipboard(), "https://app.devin.ai/login")
     assert_true(t.opened().is_empty(), msg="copied, nothing opened")
@@ -152,9 +152,9 @@ test "a login the station's own browser can do: seldom used, in the ⋯ by the s
   assert_true(t.find("在 Willow 的浏览器中打开") is None, msg="not a button of its own")
   t.click(Button, label="其他方式")
   assert_true(@sf.presenting())
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("在 Willow 的浏览器中打开")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   let asked = named(calls, "machineLogin.browser")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "id"), "login-1")
@@ -218,7 +218,7 @@ test "this device's port taken just now: the station's browser is the step, this
   assert_true(t.find("本机 8085 端口被占用") is Some(_))
   assert_true(t.find("在 Willow 的浏览器中打开") is Some(_))
   t.click(Button, label="其他方式")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("在浏览器里登录") is Some(_))
 }
 
@@ -360,7 +360,7 @@ test "a code-pasting login's card in its chat and on its station's page beside i
   assert_eq(side_now({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" }).1, "station:[\"ws1/st1\"]")
   assert_true(t.find("这部分显示出错了") is None)
   let fields = t.locate("粘贴登录码")
-  assert_eq(fields.length(), 2, msg="\{fields}")
+  assert_eq(fields.length(), 2, msg="\{Repr(fields)}")
   // what is typed in the one is its own: typed on the station's page
   let (x, y) = fields.iter().find_first(fn(p) { p.0 > 800.0 }).unwrap()
   t.tap(x, y)
@@ -368,5 +368,5 @@ test "a code-pasting login's card in its chat and on its station's page beside i
   t.frame()
   // (完成 shows once a code is in: on the station's page's card alone)
   let done = t.locate("完成")
-  assert_true(done.length() == 1 && done[0].0 > 800.0, msg="\{done}")
+  assert_true(done.length() == 1 && done[0].0 > 800.0, msg="\{Repr(done)}")
 }

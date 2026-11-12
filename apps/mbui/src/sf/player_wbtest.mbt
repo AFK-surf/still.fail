@@ -62,9 +62,6 @@ fn player_tester(
   keyed? : Bool = false,
 ) -> @ui.Tester {
   let (w, h, platform) = window.unwrap_or(if narrow { (390.0, 844.0, 1) } else { (1280.0, 800.0, 0) })
-  viewer_reset()
-  // (no menu left open by the test before: the app begun again)
-  parts_reset()
   set_viewer_host(viewer_host_default())
   set_words(fn(key, args) {
     args.fold(init=test_words.get(key).unwrap_or(key), fn(said, a) { said.replace_all(old="{" + a.0 + "}", new=a.1) })
@@ -149,7 +146,7 @@ test "a desktop's timeline dragged: paused, the picture going to the start of ea
   assert_true(told(t, 9, value="1"))
   assert_true(told(t, 3, value="200"))
   let (x1, y1) = at(0.75)
-  t.move(x1, y1)
+  t.move_to(x1, y1)
   assert_true(told(t, 3, value="700"))
   // the frame it is at, of how many, while the finger is on it
   assert_true(t.find("8 / 10 帧") is Some(_))
@@ -298,7 +295,7 @@ test "a desktop's: the bar's way back under the pointer lit on the film's black 
   }
   let lit = alpha(media_dark_text, media_hot_share)
   assert_false(under(lit))
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   assert_true(under(lit))
   // (the page's: dark on the black)
@@ -317,10 +314,6 @@ test "a desktop's: the bar says the film's size, length and rate as its message 
   t.draw()
   assert_true(t.find("640×360 · 0:10") is Some(_))
 }
-
-///|
-/// How long a single tap waits to be a double one (@kit.Media's double_tap_ms).
-let double_tap_wait : Double = 300.0
 
 ///|
 test "a desktop's on a narrow page with a finger: short of room for its keys a finger apart, 保存此帧 leaves them for their ⋯" {
@@ -363,6 +356,6 @@ test "the player's volume read out as a slider whose range is its least, where i
   assert_eq(s.range, Some((desk_none, 0.4, desk_whole)))
   let told = tt.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
   assert_eq(told.length(), 1)
-  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
   assert_eq([f[12], f[13], f[14]], [desk_none.to_string(), (0.4).to_string(), desk_whole.to_string()])
 }

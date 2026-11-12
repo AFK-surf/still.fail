@@ -6,7 +6,7 @@
 test "beside: below its anchor, its middle on its anchor's; above it where there is no room below; kept in the window; following its anchor moved" {
   let ax = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {
@@ -42,7 +42,7 @@ test "beside: leaving, or its anchor gone, it stays where it last went beside it
   let anchor_on = @signals.signal(true, same=fn(a, b) { a == b })
   let on = @signals.signal(true, same=fn(a, b) { a == b })
   let fade = @signals.signal(1.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.show(at_once=true, fn() { anchor_on.get() }, fn(a) {
@@ -140,7 +140,7 @@ test "lives_with: held beside its owner in one layer, the layer let go whole (a 
 test "beside: one beside another that goes beside a third, made and said the other way round: placed in their order, whatever order made or said; following the first's holder moved, in the one frame after; a colour alone changed, none placed again" {
   let hx = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ink = @signals.signal(0x000000FFL, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       // (the last of the chain made first: its anchor a node made after it)
@@ -188,8 +188,8 @@ test "beside: one beside another that goes beside a third, made and said the oth
 ///|
 test "beside: two beside each other (a ring), and one beside what it holds: each goes beside nothing, where it is laid out, frame after frame" {
   let grow = @signals.signal(30.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
-  let made : Map[String, @view.View] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
+  let made : Map[String, @view.View] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       for k in ["a", "b", "c"] {
@@ -230,7 +230,7 @@ test "beside: two beside each other (a ring), and one beside what it holds: each
 test "went_over: the side it went on as it is placed: moved along its anchor or within the room it has, the same; no room below, above; room again, below" {
   let ax = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {
@@ -272,7 +272,7 @@ test "went_over: the side it went on as it is placed: moved along its anchor or 
 ///|
 /// A tree in a window 400×500: an anchor 40×20 at (100, `ay`) while `on`, a node 60×484 beside it (Bottom, 6 off).
 fn went_tree(ay : @signals.Signal[Double], on : @signals.Signal[Bool]) -> (@view.Tree, Map[String, @view.NodeId]) {
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.show(at_once=true, fn() { on.get() }, fn(s) {
@@ -317,4 +317,107 @@ test "went_over: placed above its anchor, then its anchor gone: beside nothing" 
   t.event(10.0, fn() { on.set(false) })
   t.frame(400.0, 500.0) |> ignore
   assert_eq((placed, t.went_over(ids["b"])), (Some(@view.Side::Top), None))
+}
+
+///|
+test "beside a piece of its anchor (`piece`): by that piece, given how big the anchor is laid out, following the anchor moved; with none now, where it last was; what the piece reads alone changing places nothing" {
+  let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let aw = @signals.signal(40.0, same=fn(a, b) { a == b })
+  // (a plain value, not followed: what the piece reads, as it is placed)
+  let piece_at = Ref(Some((10.0, 5.0)))
+  let given : Array[(Double, Double)] = []
+  let ids : Map[String, @view.NodeId] = Map([])
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(By(fn() { Some(aw.get()) })).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b
+        .width(Is(Some(60.0)))
+        .height(Is(Some(30.0)))
+        .beside(ids["a"], side=Bottom, along=Start, offset=6.0, piece=fn(w, h) {
+          given.push((w, h))
+          piece_at.val.map(fn(p) { (p.0, p.1, 20.0, 10.0) })
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let at = fn() {
+    let d = t.drawn_of(ids["b"]).unwrap()
+    (d.x, d.y)
+  }
+  assert_eq((at(), given), ((110.0, 121.0), [(40.0, 20.0)]), msg="under the piece, at its start")
+  t.event(10.0, fn() { ay.set(150.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (110.0, 171.0), msg="following the anchor moved")
+  // (what the piece reads changed alone: nothing placed again)
+  piece_at.val = Some((30.0, 5.0))
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (110.0, 171.0), msg="its piece's reads are not followed")
+  // (the anchor laid out again: asked again, given its new size)
+  t.event(20.0, fn() { aw.set(50.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq((at(), given[given.length() - 1]), ((130.0, 171.0), (50.0, 20.0)), msg="asked again as it is laid out")
+  // (no such piece now: where it last was, the anchor moved or not)
+  piece_at.val = None
+  t.event(30.0, fn() { ay.set(200.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (130.0, 171.0), msg="no piece: where it was")
+  piece_at.val = Some((10.0, 5.0))
+  t.event(40.0, fn() { ay.set(210.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (110.0, 231.0), msg="by it again")
+}
+
+///|
+/// Where a box 60 by 30 is drawn beside one 40 by 20 at (`ax`, 100) in a window 400 by 300: under it, 6 off, lined up at
+/// its start, moved `shift` further along (View::beside's along_offset); beside the piece (10, 0, 20, 20) of it where
+/// `piece`.
+fn beside_shifted(ax : Double, shift : Double, piece? : Bool = false) -> (Double, Double) {
+  let ids : Map[String, @view.NodeId] = Map([])
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(Is((ax, 100.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b.width(Is(Some(60.0))).height(Is(Some(30.0))) |> ignore
+        if piece {
+          b.beside(ids["a"], side=Bottom, along=Start, offset=6.0, along_offset=shift, piece=fn(_, _) {
+            Some((10.0, 0.0, 20.0, 20.0))
+          })
+          |> ignore
+        } else {
+          b.beside(ids["a"], side=Bottom, along=Start, offset=6.0, along_offset=shift) |> ignore
+        }
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let d = t.drawn_of(ids["b"]).unwrap()
+  (d.x, d.y)
+}
+
+///|
+test "beside: moved along its side by along_offset, either way, from its anchor's start; kept in the window by its padding as ever; from a piece of its anchor where it has one" {
+  assert_eq(beside_shifted(100.0, 0.0), (100.0, 126.0), msg="none: at its anchor's start")
+  assert_eq(beside_shifted(100.0, 10.0), (110.0, 126.0), msg="10 on")
+  assert_eq(beside_shifted(100.0, -10.0), (90.0, 126.0), msg="10 back")
+  // (its anchor near the window's right: 340 would leave it past 400 - 8; kept in, at 332)
+  assert_eq(beside_shifted(330.0, 10.0), (332.0, 126.0), msg="kept in the window")
+  // (a piece of its anchor 10 in: from the piece's start, 110, 5 on)
+  assert_eq(beside_shifted(100.0, 5.0, piece=true), (115.0, 126.0), msg="from its piece")
 }

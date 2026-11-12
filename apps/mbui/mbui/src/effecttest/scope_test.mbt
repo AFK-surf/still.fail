@@ -75,7 +75,7 @@ test "a finalizer that fails is a defect; the others still run" {
   let log = []
   let f = rt.fork(() => @effect.scoped(s => {
     s.add_finalizer(() => log.push("first"))
-    s.add_finalizer(async fn() { raise Broke("finalizer broke") })
+    s.add_finalizer(fn() raise { raise Broke("finalizer broke") })
     s.add_finalizer(() => log.push("last"))
     "body"
   }))
@@ -101,7 +101,7 @@ test "acquisition is uninterruptible, and what it acquired is released" {
         log.push("acquired")
         7
       },
-      async fn(x) { log.push("released \{x}") },
+      fn(x) { log.push("released \{x}") },
     )
     log.push("using \{r} (wrong: asked to stop during acquisition)")
     @effect.sleep(1000)

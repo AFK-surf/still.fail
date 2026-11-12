@@ -56,7 +56,7 @@ fn CffIndex::bias(self : CffIndex) -> Int {
 /// A DICT's operators with their integer operands (reals are read as their integer part: none the outlines use
 /// are real); escaped operators are 1200 + the second byte.
 fn cff_dict(b : Bytes, start : Int, end : Int) -> Map[Int, Array[Int]] {
-  let out : Map[Int, Array[Int]] = {}
+  let out : Map[Int, Array[Int]] = Map([])
   let operands = []
   let mut p = start
   while p < end {

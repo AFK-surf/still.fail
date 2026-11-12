@@ -16,6 +16,7 @@ pub fn Tester::export_frames(self : Tester) -> Unit {
 /// colour (#rrggbb) and opacity apart, its corners, the clip it is cut by, who drew it, and for a run of glyphs the
 /// words of what drew them. Tester::export_frames first, for who drew what to be known.
 pub fn Tester::frame_export(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let a = c.inst
@@ -31,7 +32,7 @@ pub fn Tester::frame_export(self : Tester) -> Array[String] {
     let n = (v * 255.0).round().to_int()
     let n = if n < 0 { 0 } else if n > 255 { 255 } else { n }
     let d = "0123456789abcdef"
-    d[n / 16:n / 16 + 1].to_string() + d[n % 16:n % 16 + 1].to_string()
+    d[n / 16:n / 16 + 1].to_owned() + d[n % 16:n % 16 + 1].to_owned()
   }
   let kind_of = fn(k : Double) -> String {
     match k.to_int() {
@@ -114,11 +115,12 @@ pub fn Tester::frame_export(self : Tester) -> Array[String] {
 /// shown in it), the pointer's shape, and what the frame drew otherwise than before it came (what lights up), as
 /// Tester::frame_export's lines: those gone first (-), then those come (+). The pointer stays there.
 pub fn Tester::probe_at(self : Tester, x : Double, y : Double) -> String {
+  self.reads_own()
   let before = self.frame_export()
-  self.move(x, y)
+  self.move_to(x, y)
   self.frame()
   let after = self.frame_export()
-  let counted : Map[String, Int] = {}
+  let counted : Map[String, Int] = Map([])
   for l in before {
     counted[l] = counted.get(l).unwrap_or(0) + 1
   }

@@ -30,7 +30,7 @@ pub fn changelog_news_node(parent : @view.View, src : Source, tips : @sf.TipLaye
         // (read out as the old frame's box was: all it says)
         @sf.rippled_node(words, fn() { open_page(Setting(@settings.Route::Changelog)) }, 0.0, fn() {
           let said = [news_title_now(news())]
-          said.append(lines()[:@cmp.minimum(news_lines_most, lines().length())].to_array())
+          said.append(lines()[:@cmp.minimum(news_lines_most, lines().length())].to_owned())
           if lines().length() > news_lines_most {
             said.push(@sf.t("android-settings.changelog.more", args=[("n", (lines().length() - news_lines_most).to_string())]))
           }
@@ -65,7 +65,7 @@ pub fn changelog_news_node(parent : @view.View, src : Source, tips : @sf.TipLaye
           @sf.style_node(x, fn() { news_close })
           @sf.rippled_node(x, fn() {
             news_gone.set(@signals.untracked(news))
-            (src.call)("changelog.seen", Json::object({}), fn(_) {  })
+            (src.call)("changelog.seen", Json::object({}), @sfbase.answer_unread)
           }, news_close_side / 2.0, fn() { @sf.t("android-settings.changelog.dismiss") })
           @sf.icon_node(x, "close", 16.0, By(fn() { @sf.theme().p.muted })) |> ignore
           // (over it)

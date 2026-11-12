@@ -51,7 +51,7 @@ test "failed: the splash's words the window's tree's own, on more than two lines
   assert_eq(
     (own, glyphs.length() == letters, shapes.length() > 0, lines.length() > 2),
     (true, true, true, true),
-    msg="the tree's \{glyphs.length()} glyphs of \{letters}, \{shapes.length()} shapes; lines \{lines}",
+    msg="the tree's \{glyphs.length()} glyphs of \{letters}, \{shapes.length()} shapes; lines \{Repr(lines)}",
   )
 }
 

@@ -7,10 +7,11 @@
 // next take it up (`snapshot` / `adopt`), its turn going on all along.
 import { presetCopyOf, presetInstructions } from "./presets.ts";
 import { sessionSkills } from "./agent-home.ts";
+import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_FAILED, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, readMemory, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -52,6 +53,15 @@ const endedIn = (declared: DeclaredState | null, outcome: TurnOutcome["kind"]): 
 /// that did not complete ends in.
 const retrying = (turn: { outcome: string | null; declared: string | null; detail: string | null }) =>
   turn.outcome === "failed" && turn.declared === "waiting" && (turn.detail ?? "").startsWith("overloaded");
+
+/// The reasons a failed turn can be taken up again by a press of its notice's 重试 (`retryFailed`), as a person's reply
+/// would: what failed was the provider's or the connection's, or not said (`other`), and nothing of the person's (an
+/// account's sign-in, its allowance, a refusal) has to change first.
+const AGAIN = ["network", "model", "other", "exited"];
+
+/// A turn that failed for one of `AGAIN`'s reasons and waits on nothing: its notice offers 重试.
+export const retryable = (turn: { outcome: string | null; declared: string | null; detail: string | null }) =>
+  turn.outcome === "failed" && turn.declared === null && AGAIN.some((reason) => (turn.detail ?? "").startsWith(`${reason}:`));
 
 /// How long it waits before trying again a turn the provider had no room for, the `n`th in a row (from 0): twice as long
 /// each time, ten minutes at most.
@@ -122,6 +132,9 @@ export type Surface = {
 /// What a session needs of the station; the hub gives it.
 export type SessionDeps = {
   store: SessionStore;
+  /// What its process opening needs read first: its workspace's skills linked where it runs, its memory given back
+  /// (`linkSkills`).
+  linkSkills(row: any): Promise<string>;
   /// Pending messages and letters, merged as they are now, read off the station thread.
   pendingDeliveries(key: string, signal?: AbortSignal): Promise<PendingMessage[]>;
   /// Card state for a person's delivery, read off the station thread.
@@ -153,7 +166,7 @@ export type SessionDeps = {
   untitled?(key: string): string | null;
   backgroundOnMessage(key: string): boolean;
   /// Where the runtime's live steps go, for whoever watches the session (and that it went on in a new runtime session).
-  live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void; moved?(key: string): void };
+  live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): Promise<void> | void; moved?(key: string): void };
   /// What it is told when it goes on on `to` in a new runtime session rather than take up `id` (last run on `was`, when
   /// the store does not know); null: it takes it up (sessions/afresh.ts).
   startsAfresh?(key: string, id: string, to: Profile, was: string | null): string | null;
@@ -175,7 +188,7 @@ export type SessionDeps = {
   /// The runtime session it runs in, on `profile` (null: not known).
   ranIn?(key: string, id: string, profile: string | null): void;
   idle(key: string): void;
-  archiveIsCold(key: string): boolean;
+  archiveIsCold(key: string): Promise<boolean>;
   restoreArchive(key: string): void | Promise<void>;
   /// An archived session's process is gone: its files may go to cold storage now (session.rs `clean_archive`).
   cleanArchive?(key: string): void | Promise<void>;
@@ -575,7 +588,7 @@ export class SessionActor {
           this.codexUpdate = null;
           this.deps.store.setRunning(this.key, false);
           await this.notice(t("station.notice.stopped"));
-          this.deps.live?.turnEnded(this.key);
+          await this.deps.live?.turnEnded(this.key);
           return;
         }
         if (this.agent?.session.busy()) {
@@ -591,7 +604,7 @@ export class SessionActor {
         if (this.turn) return;
         await this.stopWaiting();
         // Nothing runs: whatever is still said to be under way (a start that failed) is not.
-        this.deps.live?.turnEnded(this.key);
+        await this.deps.live?.turnEnded(this.key);
       } finally { this.deliveryInterruptions--; }
     });
   }
@@ -604,7 +617,20 @@ export class SessionActor {
       if (this.turn || this.agent?.session.busy() || !last || !retrying(last) || last.about?.thread !== thread || last.about?.seq !== seq) return;
       await this.stopWaiting(false);
       await this.notice(t("station.notice.retryCanceled"));
-      this.deps.live?.turnEnded(this.key);
+      await this.deps.live?.turnEnded(this.key);
+    });
+  }
+
+  /// Takes up again the failed turn the notice the person pressed (重试) was about, as a reply would, going on where
+  /// it stopped. Only that notice's turn, while it is still the last and nothing runs or waits to be delivered: a
+  /// delayed press after a reply, or on an older notice, does nothing.
+  retryFailed(thread: number, seq: number): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.deps.held(this.key) || this.archived() || this.turn || this.codexUpdate || this.agent?.session.busy() || this.deps.store.hasPending(this.key)) return;
+      const last = this.deps.store.lastTurn(this.key);
+      if (!last || !retryable(last) || last.about?.thread !== thread || last.about?.seq !== seq) return;
+      log.info("session", "trying again a failed turn, as asked", { session: this.key });
+      await this.startTurn("resume", GO_ON_AFTER_FAILED);
     });
   }
 
@@ -949,7 +975,7 @@ export class SessionActor {
         if (turn) store.endTurn(turn.id, "aborted", "other: the station left its workspace", endedIn(turn.declared, "aborted")?.kind ?? null, null);
         store.setRunning(this.key, resume);
         if (turn || busy) store.markUndelivered(this.key, steered);
-        this.deps.live?.turnEnded(this.key);
+        await this.deps.live?.turnEnded(this.key);
         store.notify(this.key);
         this.phase = "idle";
       } finally { this.deliveryInterruptions--; }
@@ -1301,7 +1327,7 @@ export class SessionActor {
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
       // A session begun in a terminal and continued here: its first turn here says so, with how still.fail works.
-      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key))) : null;
+      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), await this.deps.linkSkills(row))) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
       // What people chose on its cards without a message since it was last handed anything: before what it is handed.
@@ -1324,10 +1350,10 @@ export class SessionActor {
       if (told < latestNote()) {
         const full = row ? join(row.workspace, ".stillfail-instructions.md") : "";
         if (row) {
-          const { writeFileSync } = await import("node:fs");
           try {
             const preset = row.cwd ? null : presetCopyOf(row.workspace);
-            writeFileSync(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key)) + (preset ? presetInstructions(preset) : ""));
+            const memory = await this.deps.linkSkills(row);
+            await writeFile(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key), memory) + (preset ? presetInstructions(preset) : ""));
           } catch {}
         }
         store.setToldNotes(this.key, latestNote());
@@ -1360,7 +1386,7 @@ export class SessionActor {
       if (turn) store.endTurn(turn.id, "failed", `other: ${message}`, null, null);
       store.setRunning(this.key, false);
       // It was said to be starting: no turn runs.
-      this.deps.live?.turnEnded(this.key);
+      await this.deps.live?.turnEnded(this.key);
       this.doneWorking();
       // Not installed here: said so, about the runtime (the pages offer to install it; once installed, what waits goes
       // on). Tried again (each restart gives it what waits) and failing the same, it is not said again.
@@ -1402,7 +1428,8 @@ export class SessionActor {
     try {
       profile = row ? this.deps.runOn(this.key, this.holding()) : null;
     } catch {}
-    if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
+    const ready = row && profile && !this.restart && profile.id === this.profile && agent.session.retune ? await this.deps.linkSkills(row) : "";
+    if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps, ready))) {
       this.stale = false;
       this.runningIdentity = { runtime: this.runtime, model: row.model ?? null, effort: row.effort ?? null };
       log.info("session", "session process takes the change in place", { session: this.key, model: row.model ?? "", effort: row.effort ?? "" });
@@ -1441,7 +1468,7 @@ export class SessionActor {
     }
     await this.catchUp(true);
     if (this.agent) return this.agent.session;
-    if (this.deps.archiveIsCold(this.key)) await this.deps.restoreArchive(this.key);
+    if (await this.deps.archiveIsCold(this.key)) await this.deps.restoreArchive(this.key);
     const store = this.deps.store;
     const row = store.getSession(this.key);
     if (!row) throw new Error(`session ${this.key} disappeared`);
@@ -1450,11 +1477,12 @@ export class SessionActor {
     this.runtime = runtime;
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
-    const base = openOptions(row, profile, this.deps);
+    const memory = await this.deps.linkSkills(row);
+    const base = openOptions(row, profile, this.deps, memory);
     // Its context cleared by hand (clear): no runtime session now, those before on record. A new one, told so; one
     // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).
     const wasCleared = row.runtimeSessionId === null && (store.runtimeSessions?.(this.key).length ?? 0) > 0;
-    if (wasCleared && row.cwd) base.instructions = sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key));
+    if (wasCleared && row.cwd) base.instructions = sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), memory);
     // A runtime started where the station may not read exits at once with nothing to say why (macOS privacy protection
     // on a session continued in ~/Documents): told as it is instead. A directory someone named (one continued from a
     // terminal) is looked at as ops/places.ts does, never on this thread in a folder macOS protects (still.fail Helper
@@ -1529,11 +1557,16 @@ export class SessionActor {
           }
         });
         break;
-      case "turnEnded":
-        this.deps.live?.turnEnded(this.key);
+      case "turnEnded": {
+        // What it wrote last is read (off the main thread) and told before the turn is said to be over.
+        const read = this.deps.live?.turnEnded(this.key);
         this.doneWorking();
-        void this.enqueue(() => this.onTurnEnded(generation, event.outcome));
+        void this.enqueue(async () => {
+          await read;
+          await this.onTurnEnded(generation, event.outcome);
+        });
         break;
+      }
       case "live":
         // Asking its model: what was given to the turn so far goes with the request.
         if (event.event.kind === "phase" && event.event.phase === "requesting") {
@@ -2021,17 +2054,24 @@ export class SessionActor {
 
 /// How a session's runtime session is opened (or taken up) on `profile`: its directory, model as the profile spells it,
 /// effort, instructions and MCP token.
-export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">): OpenOptions {
-  // Its workspace's skills where it runs (agent-home.ts), kept up with each time it is opened or retuned; a session
-  // continued from a terminal runs in the person's own project, given none.
-  const skills = row.cwd ? undefined : join(dirname(deps.memoryPath(row.key)), "skills");
-  if (skills !== undefined) {
+/// What a session's process opening needs off the station's thread, before `openOptions`: its workspace's skills where
+/// it runs (agent-home.ts), kept up with each time it is opened or retuned (a session continued from a terminal runs in
+/// the person's own project, given none), and its workspace's memory as it is now, which it gives back.
+export async function linkSkills(row: any, deps: Pick<SessionDeps, "memoryPath">): Promise<string> {
+  const memory = readMemory(deps.memoryPath(row.key));
+  if (!row.cwd) {
     try {
-      sessionSkills(row.workspace, skills);
+      await sessionSkills(row.workspace, join(dirname(deps.memoryPath(row.key)), "skills"));
     } catch (error) {
       log.warn("session", "its workspace's skills not linked where it runs", { session: row.key, error: (error as Error).message });
     }
   }
+  return memory;
+}
+
+/// `memory`: its workspace's memory as `linkSkills` gave it.
+export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">, memory: string): OpenOptions {
+  const skills = row.cwd ? undefined : join(dirname(deps.memoryPath(row.key)), "skills");
   // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
   const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
   // What its chat was opened with (presets.ts): told after the station's own instructions (its folders' skills are in
@@ -2046,7 +2086,7 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     ...(typeof row.context === "number" ? { context: row.context } : {}),
     ...(typeof row.fast === "boolean" ? { fast: row.fast } : {}),
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
-    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)) + (preset ? presetInstructions(preset) : ""),
+    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key), memory) + (preset ? presetInstructions(preset) : ""),
     ...(skills !== undefined ? { skills } : {}),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),

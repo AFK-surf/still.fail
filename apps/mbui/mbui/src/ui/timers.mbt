@@ -17,7 +17,7 @@ priv struct Held {
 }
 
 ///|
-let helds : Map[Int, Held] = {}
+let helds : Map[Int, Held] = Map([])
 
 ///|
 /// What a wait's time added up frame by frame may fall short of its length by, from rounding, and still have held.
@@ -43,7 +43,7 @@ fn periods_at(now : Double, from : Double, period : Double) -> (Int, Double) {
 ///|
 /// When each thing marked happened (Ctx::mark), by its id, as a signal of its own: what asks of one (Ctx::within) is
 /// told as that one is marked again, none other. One asked of and never marked holds -inf.
-let marks_at : Map[Int, @signals.Signal[Double]] = {}
+let marks_at : Map[Int, @signals.Signal[Double]] = Map([])
 
 ///|
 /// When what `id` names was last marked (-inf: never), its signal made as it is first asked of or marked.
@@ -100,6 +100,49 @@ pub fn Ctx::held(
     w.build = g().build_no
   })
   self.sweep_helds()
+  // (no `since` said, seen off and on now: since the moment its build's watch was first told of a change since it
+  // was last read, not this frame's clock (the coordinator of the migration, 2026-11-11), the latest of those of the
+  // watches that told it. A watch is told once till it is read: a second change told it before the build has no moment
+  // here, and the wait may count from the first and end early by their distance, under a frame (the first telling asks
+  // for one); said so (MOTION held_causes, wait_look) wherever more than one told it or more was set after the
+  // telling, over-said rather than missed)
+  // (only where it was seen off and is on now, coming on since then: one on all along is not told on again by what
+  // else came)
+  let since = if since >= 0.0 || !(on && w.last < 0.0 && w.off >= 0.0) {
+    since
+  } else if build_causes.is_empty() {
+    // (told by nothing: turned by the clock alone (another wait falling due, the clock compared as it is built), this
+    // frame's clock and so the rate's: said, a place to say its `since` or to be a node's)
+    match wait_look.val {
+      Some(f) => f("held_no_cause", loc, build_causes)
+      None => ()
+    }
+    since
+  } else {
+    let mut m = build_causes[0]
+    for x in build_causes {
+      if x.0 > m.0 {
+        m = x
+      }
+    }
+    // (told by more than one, or more set after what told it (a watch is told once till it is read: what came after
+    // the first has no moment of its own here, and may be what turned it on): said, over-said rather than missed)
+    if build_causes.length() > 1 || build_told_more.val {
+      match wait_look.val {
+        Some(f) => f("held_causes", loc, build_causes)
+        None => ()
+      }
+    }
+    // (told as a frame began (a message a Tester's host posted, handed over then): the frame's moment, the rate's,
+    // till each message is handed over as it comes)
+    if m.1 == "frame" {
+      match wait_look.val {
+        Some(f) => f("held_frame", loc, [m])
+        None => ()
+      }
+    }
+    m.0
+  }
   if !on {
     w.last = -1.0
     w.off = self.clock
@@ -148,6 +191,13 @@ pub fn Ctx::held(
 }
 
 ///|
+/// What looks at a wait asked without its own `since` that counts from no cause, from a frame's moment as it began, or
+/// from the latest of several (Ctx::held), where something does (a Tester's: wait_looked, MOTION held_* lines): its
+/// kind, where it was asked and the moments it was told by. None on a device: nothing made or kept for it.
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let wait_look : Ref[((String, SourceLoc, Array[(Double, String)]) -> Unit)?] = Ref(None)
+
+///|
 /// When the wait `key` (Ctx::held, asked in this scope this frame) will have held: the time of its wake, while it
 /// runs; -1 when it is off (paused) or has held.
 pub fn Ctx::held_due(self : Ctx, key : String) -> Double {
@@ -183,7 +233,9 @@ pub fn Ctx::mark(self : Ctx, id : Int) -> Unit {
 /// (nothing waits on it), so what read it is built again then.
 pub fn Ctx::within(self : Ctx, id : Int, ms : Double) -> Bool {
   let at = mark_of(id).get()
-  if self.clock - at < ms {
+  // (its end one sum, the one it wakes at and a test's run_for comes to, start and length: the clock less the start is
+  // a rounding short of the length at that very moment, 2016.6666666666665 - 1016.6666666666666 < 1000)
+  if self.clock < at + ms {
     // (what reads it read so till then: drawn again as it ends)
     self.wake_at_time(at + ms, later=true)
     true
@@ -212,7 +264,7 @@ priv struct Due {
 ///|
 /// What is due, by the id of the key it was said under (Ctx::at_moment).
 // kept across runs: said as each is declared, let go as it is done, called off or declared anew; a run's start clears it
-let dues : Map[Int, Due] = {}
+let dues : Map[Int, Due] = Map([])
 
 ///|
 /// `f` done once at the moment `when` (the frames' clock), declared under `key` (the cause it is the moment of: "this

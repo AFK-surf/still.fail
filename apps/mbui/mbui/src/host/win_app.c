@@ -84,7 +84,9 @@ static DWORD drag_time;
 static POINT drag_at;
 // a message posted from outside (mb_post_wake), a stream shown by its layer that said something (mb_app_streamed:
 // wParam its id), each told the app between frames, which asks for a frame only where something is left for one
-enum { WM_MB_DRAG = WM_APP + 6, WM_MB_POSTED = WM_APP + 7, WM_MB_STREAMED = WM_APP + 8, WM_MB_CALL = WM_APP + 9 };  // (win_life.h has 1 to 5, win.h 4)
+enum { WM_MB_DRAG = WM_APP + 6, WM_MB_POSTED = WM_APP + 7, WM_MB_STREAMED = WM_APP + 8, WM_MB_CALL = WM_APP + 9,
+       WM_MB_CAUGHT_KEY = WM_APP + 10, WM_MB_PICKED = WM_APP + 11, WM_MB_TOLD = WM_APP + 12 };  // (win_life.h has 1 to 5, win.h 4)
+static void mb_app_picked(void);  // a pick read on its thread: the app told between frames (WM_MB_PICKED)
 static int frames_drawn;
 static int sizing;  // inside the modal move/size loop, where our loop does not run
 
@@ -180,6 +182,21 @@ static void told_between(int kind, int id) {
   if (want_frame) outside_asked = 1;
   want_frame |= was;
 }
+
+// The picks read since the app was last told, told now, between frames (pick_tell, each with how it went): what was
+// picked taken into what reads it as it comes (ui's outside_take), a frame asked for only where something reads it.
+static void picks_between(void) {
+  if (!outside_cb) {
+    want_frame = 1;
+    outside_asked = 1;
+    return;
+  }
+  int was = want_frame;
+  want_frame = 0;
+  pick_tell(outside_cb);
+  if (want_frame) outside_asked = 1;
+  want_frame |= was;
+}
 static int presenting = 1;  // the frame under way is put on the screen
 
 static void draw_frame(void) {
@@ -191,7 +208,6 @@ static void draw_frame(void) {
   mb_images_tell(outside_cb);
   mb_views_tell(outside_cb);
   device_tell(outside_cb);
-  pick_tell(outside_cb);
   update_tell(outside_cb);
   int away = rc.right <= 0 || rc.bottom <= 0 || !IsWindowVisible(hwnd) || IsIconic(hwnd);
   if (away) {
@@ -305,12 +321,6 @@ static void paste(void) {
 }
 
 // ---- keys ----
-
-static int mods_now(void) {
-  return (GetKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetKeyState(VK_CONTROL) < 0 ? 2 : 0) |
-         (GetKeyState(VK_MENU) < 0 ? 4 : 0) |
-         ((GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) ? 8 : 0);
-}
 
 // files from outside: the system's dialog, let go on the window
 #include "win_files.h"
@@ -656,6 +666,8 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_APP: want_frame = 1; outside_asked = 1; return 0;  // mb_app_wake
     case WM_MB_POSTED: told_between(MB_OUTSIDE_POSTED, 0); return 0;
     case WM_MB_STREAMED: told_between(MB_OUTSIDE_STREAMED, (int)wp); return 0;
+    case WM_MB_PICKED: picks_between(); return 0;
+    case WM_MB_TOLD: told_between((int)wp, (int)lp); return 0;
     case WM_MB_CALL: ((void (*)(void *))wp)((void *)lp); return 0;  // mb_app_call
     case WM_MB_DRAG:
       if (GetKeyState(VK_LBUTTON) < 0) {
@@ -739,6 +751,9 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_MOUSEWHEEL: wheel(wp, lp, 0); return 0;
     case WM_MOUSEHWHEEL: wheel(wp, lp, 1); return 0;
     case WM_KEYDOWN: key_down(wp); return 0;
+    case WM_MB_CAUGHT_KEY:
+      if (catch_canvas()) mb_cb.key((int32_t)wp, (int32_t)lp);
+      return 0;
     case WM_SYSKEYDOWN:
       // Alt with a key: a key catcher's shortcut (win_device.h)
       if (key_catching && ime_active && catch_vk(wp)) return 0;
@@ -755,12 +770,13 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       return TRUE;
     case WM_CHAR: char_in((WCHAR)wp); return 0;
     case WM_SETFOCUS:
+      catch_keys_focus(1);
       if (ime_active) {
         CreateCaret(h, NULL, 1, (int)lround(caret[3] * scale));
         ime_place();
       }
       return 0;
-    case WM_KILLFOCUS: DestroyCaret(); return 0;
+    case WM_KILLFOCUS: catch_keys_focus(0); DestroyCaret(); return 0;
     case WM_IME_SETCONTEXT:
       // we draw the composition ourselves; the system draws the candidates
       lp &= ~(LPARAM)ISC_SHOWUICOMPOSITIONWINDOW;
@@ -981,6 +997,8 @@ void mb_app_wake(void) { PostMessageW(hwnd, WM_APP, 0, 0); }
 static void mb_post_wake(void) { PostMessageW(hwnd, WM_MB_POSTED, 0, 0); }
 
 void mb_app_streamed(int id) { PostMessageW(hwnd, WM_MB_STREAMED, (WPARAM)id, 0); }
+static void mb_app_picked(void) { PostMessageW(hwnd, WM_MB_PICKED, 0, 0); }
+void mb_app_told(int kind, int id) { PostMessageW(hwnd, WM_MB_TOLD, (WPARAM)kind, (LPARAM)id); }
 
 void mb_app_call(void (*fn)(void *), void *arg) { PostMessageW(hwnd, WM_MB_CALL, (WPARAM)fn, (LPARAM)arg); }
 

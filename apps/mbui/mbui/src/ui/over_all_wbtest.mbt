@@ -89,7 +89,7 @@ test "over all else, the old frame's modal layer open: drawn over it, pressed wh
   t.tap(40.0, 20.0)
   let pressed = (top.val, old.val)
   t.tap(200.0, 150.0)
-  assert_eq((over, pressed, (top.val, old.val)), (true, (1, 0), (1, 1)), msg="\{rects}")
+  assert_eq((over, pressed, (top.val, old.val)), (true, (1, 0), (1, 1)), msg="\{Repr(rects)}")
 }
 
 ///|
@@ -154,7 +154,7 @@ test "over all else, a node of the root's made after it, later: under it, drawn 
   assert_eq(
     (last.map(fn(r) { r.4 }) == own, lates, top.val, late.val, under.val),
     (true, 2, 1, 0, 0),
-    msg="\{rects}",
+    msg="\{Repr(rects)}",
   )
 }
 
@@ -203,7 +203,7 @@ fn pointed_in_tester(c_on : @signals.Signal[Bool], cover_on : @signals.Signal[Bo
 test "the pointer on a node held by another, still: the holder pointed within; the node let go, not, the pointer not moved" {
   let c_on = @signals.signal(true)
   let (t, within) = pointed_in_tester(c_on, @signals.signal(false))
-  t.move(40.0, 20.0)
+  t.move_to(40.0, 20.0)
   t.draw()
   let on = within.val
   c_on.set(false)
@@ -215,7 +215,7 @@ test "the pointer on a node held by another, still: the holder pointed within; t
 test "the pointer on a node held by another, still: something over it taking presses there come, the holder pointed within no more" {
   let cover_on = @signals.signal(false)
   let (t, within) = pointed_in_tester(@signals.signal(true), cover_on)
-  t.move(40.0, 20.0)
+  t.move_to(40.0, 20.0)
   t.draw()
   let on = within.val
   cover_on.set(true)

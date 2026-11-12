@@ -59,6 +59,7 @@ fn bezier_at(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> 
 /// What a timed motion's curve says it is (sf/motion.mbt, Curves): one curve for each, so what moves the
 /// same way moves alike everywhere. No other: what is sprung is @motion's (its springs: rows making way, a sheet, a
 /// thing let go with the hand's speed, a thing lifted).
+#derive(Eq, Debug)
 pub(all) enum Ease {
   /// A thing seen where it was and where it goes, going there: a page pushed or risen, the tape, the sidebar, a side
   /// panel, the composer's shape, a picture flown open, the search rising. A critically damped spring's way from rest
@@ -78,7 +79,7 @@ pub(all) enum Ease {
   Linear
   /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt)
   Flight
-} derive(Eq, Show)
+}
 
 ///|
 /// Move's spring: ω·T where it rests, and how far it has got there (said once under what lays things out: flex's
@@ -103,31 +104,90 @@ pub let move_least_ms : Double = @flex.move_least_ms
 pub let move_most_ms : Double = @flex.move_most_ms
 
 ///|
+/// How far (points) what goes `v` points a ms is carried as it is told to stop: as far as a Move from that speed
+/// slows to rest on its own way (move_path from `v` with nothing left of it then: ω·d + v = 0, as long as move_ms has a
+/// way that far), never past it and back.
+pub fn move_stop_points(v : Double) -> Double {
+  @flex.move_stop_points(v)
+}
+
+///|
+/// Where what is let go at `at`, going `v` (points a ms, signed), comes to rest of itself: on from that speed as far as
+/// it carries it (move_stop_points), the way a motion set off again from it goes first (flex's come_way).
+pub fn lands_at(at : Double, v : Double) -> Double {
+  if v > 0.0 {
+    at + move_stop_points(v)
+  } else if v < 0.0 {
+    at - move_stop_points(v)
+  } else {
+    at
+  }
+}
+
+///|
+/// Whether what is let go at `at`, going `v` (points a ms, signed), lands past `line` (on its side of where it rests,
+/// 0: over it where `line` is above 0, under it where below): where something let go goes (closed or back, archived or
+/// back, a page back or not) is judged by where it lands, with a gesture's own fling, never by where it was let go
+/// alone. So one judged back never goes on past its line before it turns: what it is carried on and turned is no more
+/// than what it fell short of that line by (the coordinator of the migration, 2026-11-10: one model for where it goes
+/// and how it goes there). Only the event's own place and speed as it is let go, never a frame's.
+pub fn lands_past(at : Double, v : Double, line : Double) -> Bool {
+  let x = lands_at(at, v)
+  if line >= 0.0 {
+    x > line
+  } else {
+    x < line
+  }
+}
+
+///|
+/// How fast (points a ms) a finger putting a thing away (a sheet down, a toast aside) lets go of it for that to put it
+/// away however far it went: a flick (the coordinator of the migration, 2026-11-10: the same for the gestures of the
+/// one kind).
+pub let flung_away : Double = 0.5
+
+///|
 /// Where a Move is `t` ms into its `dur`: `d` off its end as it set out, going `v` (per ms, of the same units) then
 /// (what it was told to go on from: a move under way, the hand's speed as it let go). A critically damped spring's way
 /// (ω = move_k / dur), its rest at `dur` made exact by taking off what it would still have left there in the measure
 /// of Ease::Move (so from rest it is Ease::Move's way, and it leaves as fast as `v`). Its offset from its end and how
 /// fast it goes (per ms).
 pub fn move_path(d : Double, v : Double, t : Double, dur : Double) -> (Double, Double) {
-  if dur <= 0.0 || t >= dur {
-    return (0.0, 0.0)
-  }
-  if t <= 0.0 {
-    return (d, v)
-  }
-  let w = move_k / dur
-  let b = v + w * d
-  let at = fn(t : Double) {
-    let e = @dmath.exp(-w * t)
-    ((d + b * t) * e, (b - w * (d + b * t)) * e)
-  }
-  let (x, xv) = at(t)
-  let (xt, _) = at(dur)
-  // Ease::Move's way and speed at t (per ms)
-  let s = move_k * t / dur
-  let m = (1.0 - (1.0 + s) * @dmath.exp(-s)) / move_end
-  let mv = s * @dmath.exp(-s) * move_k / dur / move_end
-  (x - xt * m, xv - xt * mv)
+  @flex.move_path(d, v, t, dur)
+}
+
+///|
+/// Where a way from `from` set out at `v` (points a ms) toward `plan` has got `t` ms on, and how fast it goes, as it
+/// goes to `goal` (flex's come_way_by: its turn and lengths said by `plan`, only its end where `goal` is): for what
+/// sets off from where it stands as fast as it goes there, not from rest.
+pub fn come_way_by(
+  from : Double,
+  v : Double,
+  goal : Double,
+  plan : Double,
+  t : Double,
+  kept? : ComeKept,
+) -> (Double, Double) {
+  @flex.come_way_by(from, v, goal, plan, t, kept?)
+}
+
+///|
+/// (flex's: what a way turned back keeps of its turn, @ui.ComeKept)
+pub using @flex {
+  type ComeKept,
+}
+
+///|
+/// What a way turned back keeps of its turn, worked out once (flex's ComeKept): one to hold with a way set off, given
+/// to each come_way_by and come_way_ms of it.
+pub fn come_kept() -> ComeKept {
+  @flex.ComeKept::new()
+}
+
+///|
+/// How long that way takes (flex's come_way_ms, `goal` its plan).
+pub fn come_way_ms(from : Double, v : Double, goal : Double, kept? : ComeKept) -> Double {
+  @flex.come_way_ms(from, v, goal, kept?)
 }
 
 ///|

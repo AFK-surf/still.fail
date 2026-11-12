@@ -39,8 +39,8 @@ test "a field's placeholder where the same words typed into it are, in an old vi
         let hint = placed_glyphs(tree, line, trim, "", fs)
         let typed = placed_glyphs(tree, line, trim, "按空格输入", fs)
         let said = "tree \{tree}, line \{line}, trim \{trim}, at \{fs}"
-        assert_true(hint.length() == 5, msg="\{said}: its placeholder's glyphs \{hint}")
-        assert_eq(hint, typed, msg="\{said}: its placeholder \{hint}, its words \{typed}")
+        assert_true(hint.length() == 5, msg="\{said}: its placeholder's glyphs \{Repr(hint)}")
+        assert_eq(hint, typed, msg="\{said}: its placeholder \{Repr(hint)}, its words \{Repr(typed)}")
       }
     }
   }

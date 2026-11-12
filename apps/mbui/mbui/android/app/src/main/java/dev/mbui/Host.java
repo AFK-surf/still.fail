@@ -39,10 +39,15 @@ final class Host {
         return (resumed ? 1 : 0) | (resumed && focused ? 2 : 0);
     }
 
-    /** Tells the app (on the GL thread, before it pauses when the activity does). */
-    static void tellAppState() {
+    /** What the app was last told of it (-1: nothing yet): told only as it changes, the same said again telling nothing. */
+    private static int toldAppState = -1;
+
+    /** Tells the app (on the GL thread, before it pauses when the activity does), only as it changes. */
+    static synchronized void tellAppState() {
         int s = appState();
-        if (view != null) view.toGL(() -> Native.appState(s));
+        if (s == toldAppState || view == null) return;
+        toldAppState = s;
+        view.toGL(() -> Native.appState(s));
     }
 
     /** The system in night mode (MainActivity: its configuration's uiMode, kept as it changes): @hostapi.system_dark. */

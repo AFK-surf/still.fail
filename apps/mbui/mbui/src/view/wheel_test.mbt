@@ -100,3 +100,24 @@ test "wheel: the tree let go asks none" {
   let gone = t.wheel_at(50.0, 50.0, 0.0, 30.0, 0, 20.0)
   assert_eq((first, gone, told.copy()), (true, false, [40]))
 }
+
+///|
+test "wheel: told how big the node it is over is laid out then, in its own terms, as a drag is" {
+  let told : Array[(Double, Double)] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        a
+        .width(Is(Some(300.0)))
+        .height(Is(Some(200.0)))
+        .on_wheel(fn(w) { told.push((w.w, w.h)) })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  t.wheel_at(50.0, 50.0, 0.0, 40.0, 0, 10.0) |> ignore
+  assert_eq(told.copy(), [(300.0, 200.0)])
+}

@@ -57,7 +57,7 @@ test "signed out, at each width on either screen: 登录或注册 signs in; a ph
   for case in gate_cases {
     let (w, platform, regular) = case
     let at = "\{w} platform \{platform}"
-    let signed = Ref::new(0)
+    let signed = Ref(0)
     let t = gate_tester("signin", w, platform, regular, [], signed)
     let touch = platform == 2
     assert_eq(t.find("让 agent 持续工作") is Some(_), touch, msg=at)
@@ -75,7 +75,7 @@ test "signed out: the button across a phone's page less its sides, no wider than
   for case in gate_cases {
     let (w, platform, regular) = case
     let at = "\{w} platform \{platform}"
-    let signed = Ref::new(0)
+    let signed = Ref(0)
     let t = gate_tester("signin", w, platform, regular, [], signed)
     let (_, y, _, h) = t.rect_of("登录或注册").unwrap()
     // the button's ends found by pressing: where it is pressed it signs in, past its end nothing
@@ -92,7 +92,7 @@ test "signed out, at each width on either screen: where signing in stands said u
   for case in gate_cases {
     let (w, platform, regular) = case
     let at = "\{w} platform \{platform}"
-    let signed = Ref::new(0)
+    let signed = Ref(0)
     let step : @signals.Signal[@sfbase.SignInStep] = @signals.signal(Failed("登录已取消"), same=fn(a, b) { a == b })
     let t = gate_tester("signin", w, platform, regular, [], signed, step~)
     t.run_for(@ui.move_most_ms)
@@ -127,14 +127,14 @@ test "no workspace yet, at each width on either screen: 创建 workspace makes o
     let (w, platform, regular) = case
     let at = "\{w} platform \{platform}"
     let calls : Array[(String, Json)] = []
-    let t = gate_tester("landing", w, platform, regular, calls, Ref::new(0))
+    let t = gate_tester("landing", w, platform, regular, calls, Ref(0))
     assert_true(t.find("尚未加入任何 workspace") is Some(_), msg="\{at}: \{t.words().map(fn(x) { x.0 }).join("|")}")
     t.tap_text("创建 workspace")
     t.frame()
     assert_eq(calls.length(), 1, msg=at)
     assert_eq(calls[0].0, "workspace.create", msg=at)
     assert_eq(text(Some(calls[0].1), "account"), "u1", msg=at)
-    let t = gate_tester("landing", w, platform, regular, calls, Ref::new(0))
+    let t = gate_tester("landing", w, platform, regular, calls, Ref(0))
     t.tap_text("用邀请链接加入")
     t.frame()
     t.frame()
@@ -150,7 +150,7 @@ test "no workspace yet, an invitation waiting, at each width on either screen: �
     let (w, platform, regular) = case
     let at = "\{w} platform \{platform}"
     let calls : Array[(String, Json)] = []
-    let t = gate_tester("landing-invited", w, platform, regular, calls, Ref::new(0))
+    let t = gate_tester("landing-invited", w, platform, regular, calls, Ref(0))
     assert_true(t.find("你收到一个邀请") is Some(_), msg=at)
     // (the button's own words: the line above says 加入 too)
     let (x, y) = words_node(t, "加入").unwrap()
@@ -167,7 +167,7 @@ test "an account not let in, at each width on either screen: why, its email; 退
     let (w, platform, regular) = case
     let at = "\{w} platform \{platform}"
     let calls : Array[(String, Json)] = []
-    let signed = Ref::new(0)
+    let signed = Ref(0)
     let t = gate_tester("blocked", w, platform, regular, calls, signed)
     assert_true(t.find("此账号暂未开放测试版") is Some(_), msg=at)
     assert_true(t.find("lin@example.com") is Some(_), msg=at)
@@ -181,7 +181,7 @@ test "an account not let in, at each width on either screen: why, its email; 退
 
 ///|
 test "signed out: where signing in stands, changed with no frame drawn since, is what its button does at once: at work not pressed, out in the browser pressed to open it again" {
-  let signed = Ref::new(0)
+  let signed = Ref(0)
   let step : @signals.Signal[@sfbase.SignInStep] = @signals.signal(Idle, same=fn(a, b) { a == b })
   let t = gate_tester("signin", 390.0, 2, false, [], signed, step~)
   let (x, y, bw, bh) = t.rect_of("登录或注册").unwrap()
@@ -250,7 +250,7 @@ test "signed out, its words told as the app's tree is made: its button's words i
   let (on_way, going) = gate_words_at("重新打开登录页")
   t.run_for(@ui.move_most_ms)
   let (there, still_going) = gate_words_at("重新打开登录页")
-  assert_eq((first, going, on_way != there, still_going), ((195.0, false), true, true, false), msg="\{first} \{on_way} \{there}")
+  assert_eq((first, going, on_way != there, still_going), ((195.0, false), true, true, false), msg="\{Repr(first)} \{on_way} \{there}")
 }
 
 ///|

@@ -227,7 +227,7 @@ test "the year: a month whose weeks have not the room for its name says none, no
   t.draw()
   assert_true(t.rect_of("10月") is Some(_))
   let last = t.lines_of("11月")
-  assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{last}")
+  assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{Repr(last)}")
   // a day pointed at: its date and tokens a moment later (week 50's fourth day: its column and row among the cells,
   // each a square under the months' row)
   let squares = t.drawn_rects().filter(fn(r) { r.2 == r.3 && r.2 > 4.0 && r.2 < 20.0 })
@@ -241,7 +241,7 @@ test "the year: a month whose weeks have not the room for its name says none, no
   xs.dedup()
   assert_true(xs.length() >= 52 && ys.length() >= 7, msg="the grid's columns \{xs.length()}, rows \{ys.length()}")
   let side = cells[0].2
-  t.move(xs[50] + side / 2.0, ys[3] + side / 2.0)
+  t.move_to(xs[50] + side / 2.0, ys[3] + side / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
   assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_), msg="\{t.drawn_text()}")
   t.leave()
@@ -364,7 +364,8 @@ test "用量: the overview follows the page's theme, including after a day is pi
     check("$118")
   }
   t.tap_text("10/3")
-  t.draw()
+  // (the day's chip makes its way in: looked at once there)
+  t.run_for(@ui.move_most_ms)
   for dark in [false, true, false] {
     @sf.set_dark(Some(dark))
     t.draw()

@@ -185,7 +185,7 @@ export class ViewCalls {
         const made = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
             yield* parse(station);
-            // What the new chat changes (the lists, the footprint) is read again beside what waited for it, not before.
+            // What the new chat changes (the lists) is read again beside what waited for it, not before.
             const op: ops.Request = { target: { station }, method: "POST", path: "/sessions", body: ask, fallback: null, effect: { kind: "none" } };
             const answer = yield* this.#inner.stations.perform(op, null);
             const session = get(answer, "key");
@@ -288,6 +288,14 @@ export class ViewCalls {
     handlers.chatCc = (_inner, call) => {
       const c = call as Of<"chatCc">;
       return Effect.andThen(parse(c.station), Effect.sync(() => (views.setCc(c.station, c.thread, c.to, c.on), null)));
+    };
+    handlers.chatsWindow = (_inner, call) => {
+      const c = call as Of<"chatsWindow">;
+      return Effect.sync(() => (views.setChatsWindow(c.list, c.rows), null));
+    };
+    handlers.chatWindow = (_inner, call) => {
+      const c = call as Of<"chatWindow">;
+      return Effect.sync(() => (views.setChatWindow(c.station, c.thread, c.session, c.rows), null));
     };
     handlers.chatCreate = (_inner, call) => {
       const c = call as Of<"chatCreate">;

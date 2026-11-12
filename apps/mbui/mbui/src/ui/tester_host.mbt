@@ -6,6 +6,7 @@
 
 ///|
 /// One frame as the host got it.
+#derive(Debug)
 pub(all) struct HostFrame {
   /// its time on the clock
   at : Double
@@ -19,7 +20,7 @@ pub(all) struct HostFrame {
   /// of the window (1: all)
   damage : Array[(Double, Double, Double, Double)]
   damage_share : Double
-} derive(Show)
+}
 
 ///|
 /// The frames recorded since Tester::record_host (None: not recording).
@@ -82,6 +83,7 @@ pub fn Tester::record_host(self : Tester) -> Unit {
 ///|
 /// The frames recorded since Tester::record_host or the last taken, oldest first; recording goes on.
 pub fn Tester::host_frames(self : Tester) -> Array[HostFrame] {
+  self.reads_own()
   ignore(self)
   match host_record.val {
     Some(r) => {

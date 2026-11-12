@@ -37,7 +37,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
     self.tree.bones_marked_below(self.at)
     // (into them or out: what takes input in it is not there, or is again)
     if (was == 0L) != (k == 0L) {
-      self.tree.hits = self.tree.hits + 1
+      self.tree.hits_bump()
       if k != 0L {
         self.tree.hold_lost_in(self.at)
         self.tree.focus_lost_in(self.at)
@@ -114,12 +114,6 @@ fn Tree::bone_as_at(self : Tree, at : Int) -> Int {
   } else {
     0
   }
-}
-
-///|
-/// Whether node `at` or what holds it is in its bones: not pressed, pointed at or read out.
-fn Tree::boned_at(self : Tree, at : Int) -> Bool {
-  self.bones_of_at(at) != 0L
 }
 
 ///|

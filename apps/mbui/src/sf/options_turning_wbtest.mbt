@@ -13,7 +13,7 @@ test "an option sent: its spinner fades out as each frame is painted, nothing bu
   t.draw()
   // (the spinner's ring and arc: the only lines the card draws)
   let inks = fn() { t.drawn_lines().map(fn(l) { l.5 & 0xFFL }) }
-  assert_true(inks().length() > 0, msg="turning: \{t.drawn_lines()}")
+  assert_true(inks().length() > 0, msg="turning: \{Repr(t.drawn_lines())}")
   // (sent: built for that, its spinner told to go)
   busy.set(None)
   t.draw()
@@ -40,7 +40,7 @@ test "an option sent: its spinner fades out as each frame is painted, nothing bu
     }
   }
   t.frame_at(t.display_frame(end))
-  assert_true(seen.length() > 2, msg="fading: \{seen}")
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
-  assert_eq(t.drawn_lines().length(), 0, msg="gone at \{end}: \{t.drawn_lines()}")
+  assert_true(seen.length() > 2, msg="fading: \{Repr(seen)}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
+  assert_eq(t.drawn_lines().length(), 0, msg="gone at \{end}: \{Repr(t.drawn_lines())}")
 }

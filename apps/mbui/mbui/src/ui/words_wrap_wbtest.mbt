@@ -16,7 +16,7 @@ fn wrap_case(s : String, runs : Bool) -> (Double, Double) {
         b.box(fn(w) {
           made.val = Some(w)
           if runs {
-            w.words_runs(Is(s.split("|").map(fn(p) { @view.words_run(p.to_string()) }).collect())) |> ignore
+            w.words_runs(Is(s.split("|").map(fn(p) { @view.words_run(p.to_owned()) }).collect())) |> ignore
           } else {
             w.words(Is(s)) |> ignore
           }

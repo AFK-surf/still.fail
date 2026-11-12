@@ -109,7 +109,7 @@ let finder : Finder = {
 
 ///|
 /// How the search read last is let go of as the search closes.
-let finder_leave : Ref[(() -> Unit)?] = Ref::new(None)
+let finder_leave : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 fn finder_reset() -> Unit {
@@ -471,7 +471,7 @@ pub fn finder_list(
   let f = @sf.theme().chat_list
   // (the words as the field has them, followed: built again as they are typed, whatever field it is)
   finder_typed(finder.field.text())
-  let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_string()
+  let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_owned()
   let typed = query != ""
   let commands = commands_of(c, src, query, offered)
   let view = search_of(src, w.id, query)

@@ -177,7 +177,7 @@ test "files from the Finder let go on a field go in as their paths, a line each,
     fn(c) {
       // (a box around it that would take files as they came)
       let page = c.id("page")
-      c.on_files(page, held=fn(_) {  }, take=fn(_, _) { abort("files let go on a field taken as files") })
+      c.on_files(page, held=fn(_) {  }, take=fn(_, _) { @halt.saying("files let go on a field taken as files") })
       c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
         c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
       })

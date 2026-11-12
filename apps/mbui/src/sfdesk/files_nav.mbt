@@ -81,11 +81,11 @@ priv enum PlaceItem {
 ///|
 /// Each places list keeps its own rows and their identities, so favorites enter and leave where they are.
 // kept across runs: put back by nav_reset
-let places_rows : Map[String, @ui.ListRows[PlaceItem]] = {}
+let places_rows : Map[String, @ui.ListRows[PlaceItem]] = Map([])
 
 ///|
 // kept across runs: put back by nav_reset
-let places_keys : Map[String, Array[String]] = {}
+let places_keys : Map[String, Array[String]] = Map([])
 
 ///|
 fn places_rows_of(ws : String) -> @ui.ListRows[PlaceItem] {
@@ -414,29 +414,13 @@ fn station_places(
   go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
-  if s.anywhere && !nav.asked.contains(s.station) {
-    c.after_build("files-places/" + s.station, fn() {
-      if !nav.asked.contains(s.station) {
-        nav.asked[s.station] = true
-        (src.call)("drive.folders", { "station": Json::string(s.station), "path": Json::null() }, fn(r) {
-          nav.places[s.station] = match r {
-            Ok(v) =>
-              items(Some(v), "places").map(fn(p) {
-                let p = Some(p)
-                (text(p, "name"), text(p, "path"), flag(p, "disk"))
-              })
-            Err(_) => []
-          }
-        })
-      }
-    })
-  }
+  let read = if s.anywhere { station_places_read(c, src, s) } else { None }
   let places = if s.anywhere {
-    nav.places.get(s.station).unwrap_or([])
+    read.unwrap_or([])
   } else {
     s.roots.map(fn(r) { (r.name, r.path, false) })
   }
-  if s.anywhere && nav.places.get(s.station) is None {
+  if s.anywhere && read is None {
     c.box(style=nav_note, fn() { c.text(@sf.t("web-pages.files.reading"), style=nav_meta()) |> ignore }) |> ignore
   }
   c.box(style=places_in, fn() {
@@ -460,6 +444,30 @@ fn station_places(
     }
   })
   |> ignore
+}
+
+///|
+/// The places a station's drive offers one who browses everywhere (its home, the home's own folders, its disks: each
+/// its name, path, whether a disk), asked once and kept; None while they are read.
+fn station_places_read(c : @ui.Ctx, src : Source, s : DvStation) -> Array[(String, String, Bool)]? {
+  if !nav.asked.contains(s.station) {
+    c.after_build("files-places/" + s.station, fn() {
+      if !nav.asked.contains(s.station) {
+        nav.asked[s.station] = true
+        (src.call)("drive.folders", { "station": Json::string(s.station), "path": Json::null() }, fn(r) {
+          nav.places[s.station] = match r {
+            Ok(v) =>
+              items(Some(v), "places").map(fn(p) {
+                let p = Some(p)
+                (text(p, "name"), text(p, "path"), flag(p, "disk"))
+              })
+            Err(_) => []
+          }
+        })
+      }
+    })
+  }
+  nav.places.get(s.station)
 }
 
 ///|

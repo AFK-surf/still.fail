@@ -115,10 +115,10 @@ test "desk: the bar hidden by a click shows while the pointer is along the top, 
   t.tap(640.0, 400.0)
   t.run_for(@ui.double_click_ms)
   assert_true(!v.bars_shown())
-  t.move(640.0, 20.0)
+  t.move_to(640.0, 20.0)
   t.draw()
   assert_true(v.bars_shown())
-  t.move(640.0, 400.0)
+  t.move_to(640.0, 400.0)
   t.draw()
   assert_true(!v.bars_shown())
 }
@@ -174,6 +174,20 @@ test "desk: a chat's Markdown reads in the reader on its paper, the preview's ow
   assert_true(t.find("源码") is None)
   t.key(@ui.key_escape)
   assert_true(viewer.get() is None)
+}
+
+///|
+test "desk: words picked in a chat's Markdown read over its chat, the pointer taken to where the chat's words lie under the paper: the file's alone, none of the chat's" {
+  let t = desk_tester("chat-preview-md")
+  t.run_for(@sf.reader_place_ms)
+  // (a message of the chat under the reader's paper, over the list's first line)
+  let (ux, uy, uw, uh) = t.run_rects("截图也一起换掉")[0]
+  let (x, y, _, h) = t.run_rects("换成")[0]
+  assert_true(uy + uh / 2.0 < y, msg="the chat's words under the paper above the line pressed")
+  t.drag(x + 1.0, y + h / 2.0, ux + uw / 2.0, uy + uh / 2.0)
+  let picked = t.ctx().selected_text()
+  assert_true(picked.contains("版本号和更新说明"), msg=picked)
+  assert_false(picked.contains("换掉"), msg=picked)
 }
 
 ///|

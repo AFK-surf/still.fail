@@ -5,7 +5,7 @@
 test "scale: a node drawn half as big about its middle, what it holds with it; about its edge toward its anchor, the side it went on" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
   let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(n) {
@@ -116,7 +116,7 @@ fn hosted_drawn(t : @view.Tree) -> Array[(Double, Double, Double, Double, Double
       out.push((x, y, c.w * s, c.h * s, s))
     }
   })
-  assert_true(same, msg="each where Tree::drawn_of has it, as big: \{out}")
+  assert_true(same, msg="each where Tree::drawn_of has it, as big: \{Repr(out)}")
   out
 }
 
@@ -155,7 +155,7 @@ test "scale: an old view shown by a change in what is drawn half as big: drawn i
     drawn[0].1 >= 10.0 &&
     drawn[0].0 + drawn[0].2 <= 75.0 &&
     drawn[0].1 + drawn[0].3 <= 30.0,
-    msg="shown: \{drawn}",
+    msg="shown: \{Repr(drawn)}",
   )
 }
 
@@ -164,7 +164,7 @@ test "scale: what holds an old view scaled by a change: drawn as big as it is no
   let s = @signals.signal(1.0, same=fn(a, b) { a == b })
   let t = scaled_hosting(s, @signals.signal(true))
   let whole = hosted_drawn(t)
-  assert_true(whole.length() == 1 && whole[0].4 == 1.0 && whole[0].2 == 60.0 && whole[0].3 == 20.0, msg="whole: \{whole}")
+  assert_true(whole.length() == 1 && whole[0].4 == 1.0 && whole[0].2 == 60.0 && whole[0].3 == 20.0, msg="whole: \{Repr(whole)}")
   t.event(10.0, fn() { s.set(0.5) })
   t.frame(400.0, 300.0) |> ignore
   let (x, y, w, h, _) = whole[0]
@@ -219,7 +219,7 @@ fn scale_and_presses(scale_first : Bool) -> Array[(Double, Bool)] {
 test "scale and presses on one node, either said first: each followed as it changes, neither letting go of the other's" {
   let want = [(100.0, true), (50.0, true), (50.0, false), (25.0, false), (25.0, true)]
   let first = scale_and_presses(true)
-  assert_eq(first, want, msg="scale said first: \{first}")
+  assert_eq(first, want, msg="scale said first: \{Repr(first)}")
   let after = scale_and_presses(false)
-  assert_eq(after, want, msg="presses said first: \{after}")
+  assert_eq(after, want, msg="presses said first: \{Repr(after)}")
 }

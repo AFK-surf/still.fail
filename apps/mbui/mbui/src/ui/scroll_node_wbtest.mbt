@@ -201,7 +201,7 @@ test "a column of the tree's that scrolls: its old view's field under its rows o
     Some((top, foot)) => top >= 50.0 - 0.5 && foot <= 250.0 + 0.5
     None => false
   }
-  assert_eq((out_first, t.focused().map(fn(s) { s.role }), shown, scroll_node_at(k) > 0.0), (true, Some(TextField), true, true), msg="\{below_at(t)} \{scroll_node_at(k)}")
+  assert_eq((out_first, t.focused().map(fn(s) { s.role }), shown, scroll_node_at(k) > 0.0), (true, Some(TextField), true, true), msg="\{Repr(below_at(t))} \{scroll_node_at(k)}")
 }
 
 ///|
@@ -323,7 +323,7 @@ test "a column of the tree's that scrolls, one old view in it with a field over 
     Some((top, foot)) => top >= 50.0 - 0.5 && foot <= 250.0 + 0.5
     None => false
   }
-  assert_eq((out_first, shown, scroll.at(view_tree().unwrap()) > 0.0), (true, true, true), msg="\{below_at(t)} \{scroll.at(view_tree().unwrap())}")
+  assert_eq((out_first, shown, scroll.at(view_tree().unwrap()) > 0.0), (true, true, true), msg="\{Repr(below_at(t))} \{scroll.at(view_tree().unwrap())}")
 }
 
 ///|
@@ -379,7 +379,7 @@ fn below_whole(t : Tester) -> Bool {
 test "a column of the tree's that scrolls, one old view in it: its lower field given the focus as the old view is first built: brought into sight in that first frame" {
   let (t, scroll) = scroll_one_island_case(below=@signals.signal(true, same=fn(a, b) { a == b }))
   // (as of its first frame)
-  assert_eq((t.focused().map(fn(s) { s.role }), below_whole(t), scroll.at(view_tree().unwrap()) > 0.0), (Some(TextField), true, true), msg="\{below_at(t)}")
+  assert_eq((t.focused().map(fn(s) { s.role }), below_whole(t), scroll.at(view_tree().unwrap()) > 0.0), (Some(TextField), true, true), msg="\{Repr(below_at(t))}")
 }
 
 ///|
@@ -393,7 +393,7 @@ test "a column of the tree's that scrolls, one old view in it: rows added over i
   @signals.end_batch()
   // (as of the one frame after)
   t.draw()
-  assert_eq((t.focused().map(fn(s) { s.role }), below_whole(t), scroll.at(view_tree().unwrap()) > 300.0), (Some(TextField), true, true), msg="\{below_at(t)} \{scroll.at(view_tree().unwrap())}")
+  assert_eq((t.focused().map(fn(s) { s.role }), below_whole(t), scroll.at(view_tree().unwrap()) > 300.0), (Some(TextField), true, true), msg="\{Repr(below_at(t))} \{scroll.at(view_tree().unwrap())}")
 }
 
 ///|
@@ -585,7 +585,7 @@ test "a column of the tree's that scrolls, with these bars, a mouse over it: scr
     |> ignore
   })
   t.draw()
-  t.move(200.0, 100.0)
+  t.move_to(200.0, 100.0)
   t.wheel(200.0, 100.0, 40.0)
   t.run_for(turn_done_ms)
   let drawn = t.drawn_instances()
@@ -594,7 +594,7 @@ test "a column of the tree's that scrolls, with these bars, a mouse over it: scr
   let rows = drawn.filter(fn(a) { a[2] == 400.0 && a[1] > 120.0 && a[1] < 200.0 })
   let rows_fade = rows.iter().any(fn(a) { a[55] > 0.0 })
   let thumb_clear = thumb.iter().all(fn(a) { a[53] == 0.0 && a[55] == 0.0 })
-  assert_eq((thumb.length(), rows_fade, thumb_clear), (1, true, true), msg="\{thumb.map(fn(a) { (a[0], a[1], a[3], a[53], a[55]) })}")
+  assert_eq((thumb.length(), rows_fade, thumb_clear), (1, true, true), msg="\{Repr(thumb.map(fn(a) { (a[0], a[1], a[3], a[53], a[55]) }))}")
 }
 
 ///|
@@ -606,9 +606,9 @@ fn thumb_opacity(t : Tester, x : Double) -> Double? {
 ///|
 test "a column of the tree's that scrolls, with these bars, and an old view's box kept to a height: the pointer come along their right edge, each bar coming in as the other, from nothing" {
   let came = fn(t : Tester, x : Double, y : Double) {
-    t.move(x - 40.0, y)
+    t.move_to(x - 40.0, y)
     t.run_for(bar_long_gone_ms)
-    t.move(x, y)
+    t.move_to(x, y)
     let first = thumb_opacity(t, 380.0).unwrap_or(0.0)
     t.run_for(bar_fade_part_ms)
     let mid = thumb_opacity(t, 380.0).unwrap_or(0.0)
@@ -637,7 +637,7 @@ test "a column of the tree's that scrolls, with these bars, and an old view's bo
   })
   t.draw()
   let new = came(t, 395.0, 150.0)
-  assert_eq((new.0 < 0.05, (new.1 - old.1).abs() < 0.02, (new.2 - old.2).abs() < 0.02, old.1 > 0.05, old.1 < old.2), (true, true, true, true, true), msg="\{new} \{old}")
+  assert_eq((new.0 < 0.05, (new.1 - old.1).abs() < 0.02, (new.2 - old.2).abs() < 0.02, old.1 > 0.05, old.1 < old.2), (true, true, true, true, true), msg="\{Repr(new)} \{Repr(old)}")
 }
 
 ///|
@@ -672,7 +672,7 @@ test "a column of the tree's that scrolls in one that does too, with these bars:
     |> ignore
   })
   t.draw()
-  t.move(200.0, 150.0)
+  t.move_to(200.0, 150.0)
   // (the inner to its end: its thumb at its foot, 220 down, past the outer's at 200)
   for _ in 0..<3 {
     t.wheel(200.0, 150.0, 120.0)
@@ -681,7 +681,7 @@ test "a column of the tree's that scrolls in one that does too, with these bars:
   let thumbs = t.drawn_instances().filter(fn(a) { a[2] == scroll_bar_size && a[0] > 340.0 && a[0] < 360.0 })
   // (faded by the outer towards its foot at 200; the inner's own, towards 220, none of it)
   let by_outer = thumbs.iter().all(fn(a) { a[55] > 0.0 && (a[54] - 200.0).abs() < 0.5 })
-  assert_eq((thumbs.length(), by_outer), (1, true), msg="\{thumbs.map(fn(a) { (a[0], a[1], a[3], a[54], a[55]) })}")
+  assert_eq((thumbs.length(), by_outer), (1, true), msg="\{Repr(thumbs.map(fn(a) { (a[0], a[1], a[3], a[54], a[55]) }))}")
 }
 
 ///|
@@ -703,7 +703,7 @@ fn flick_to_mouse(t : Tester, y : Double, at : () -> Double) -> (Bool, Bool, Boo
   t.run_for(hand_step_ms)
   let went_on = at() > let_go
   t.host_says_finger(Some(false))
-  t.move(200.0, y)
+  t.move_to(200.0, y)
   let before = at()
   t.run_for(hand_step_ms)
   let still = at() > before
@@ -743,7 +743,7 @@ test "a column of the tree's that scrolls, with these bars: flung by a finger, a
   t.draw()
   let new = flick_to_mouse(t, 150.0, fn() { scroll.at(view_tree().unwrap()) })
   assert_true(t.at_rest(), msg=t.rest_why())
-  assert_eq((new, old.0), (old, true), msg="\{new} \{old}")
+  assert_eq((new, old.0), (old, true), msg="\{Repr(new)} \{Repr(old)}")
 }
 
 ///|
@@ -771,10 +771,10 @@ test "an old view's box kept to a height in another as wide, and a column of the
   }, w=400.0, h=300.0, platform=0)
   old_t.draw()
   let near = fn(t : Tester) {
-    t.move(200.0, 100.0)
+    t.move_to(200.0, 100.0)
     t.run_for(bar_long_gone_ms)
     let before = thumbs_at(t, 380.0)
-    t.move(395.0, 100.0)
+    t.move_to(395.0, 100.0)
     t.run_for(turn_done_ms)
     (before, thumbs_at(t, 380.0))
   }
@@ -813,7 +813,7 @@ test "an old view's box kept to a height in another as wide, and a column of the
   let new = near(t)
   // (each shown the inner's, short (100 of 400 shows), or the outer's, long (200 of 500))
   let whose = fn(th : Array[(Double, Double)]) { th.map(fn(r) { r.1 - r.0 < 50.0 }) }
-  assert_eq((new.0.length(), whose(new.1), old.0.length()), (0, whose(old.1), 0), msg="\{new} \{old}")
+  assert_eq((new.0.length(), whose(new.1), old.0.length()), (0, whose(old.1), 0), msg="\{Repr(new)} \{Repr(old)}")
 }
 
 ///|
@@ -851,10 +851,10 @@ test "a column of the tree's that scrolls in another, with these bars: the inner
   t.draw()
   // (the outer moved on 80 by the wheel over its own rows: the inner at 20 to 120 down the window, its edge over the
   // outer's top, at 100, from 20 to 100)
-  t.move(200.0, 220.0)
+  t.move_to(200.0, 220.0)
   t.wheel(200.0, 220.0, 80.0)
   t.run_for(bar_long_gone_ms)
-  t.move(355.0, 60.0)
+  t.move_to(355.0, 60.0)
   t.run_for(turn_done_ms)
   assert_eq(thumbs_at(t, 340.0).filter(fn(th) { th.0 < 100.0 }), [])
 }
@@ -862,14 +862,14 @@ test "a column of the tree's that scrolls in another, with these bars: the inner
 ///|
 test "a column of the tree's that scrolls and an old view's box kept to a height, as tall and holding as much, with these bars: their thumbs where each other's are; the pointer just under each, in what takes it round it: each lit as the other" {
   let lit = fn(t : Tester) {
-    t.move(200.0, 100.0)
+    t.move_to(200.0, 100.0)
     t.wheel(200.0, 100.0, 40.0)
     t.run_for(turn_done_ms)
     let th = t.drawn_order().filter(fn(d) { d.0 == 0 && d.3 == scroll_bar_size && d.5 > 0.0 })
     guard th.length() == 1 else { return (th.map(fn(d) { (d.1, d.2, d.4) }), 0.0) }
     let (x, y, h) = (th[0].1, th[0].2, th[0].4)
     // (2 under its foot, in the 4 round it the pointer takes it in)
-    t.move(x + 1.5, y + h + 2.0)
+    t.move_to(x + 1.5, y + h + 2.0)
     t.run_for(turn_done_ms)
     let o = t.drawn_order().filter(fn(d) { d.0 == 0 && d.3 == scroll_bar_size && d.5 > 0.0 }).map(fn(d) { d.5 })
     ([(x, y, h)], o.get(0).unwrap_or(0.0))
@@ -903,7 +903,7 @@ test "a column of the tree's that scrolls and an old view's box kept to a height
   })
   t.draw()
   let new = lit(t)
-  assert_eq((new.0, (new.1 - old.1).abs() < 0.02, old.1 > 0.4), (old.0, true, true), msg="\{new} \{old}")
+  assert_eq((new.0, (new.1 - old.1).abs() < 0.02, old.1 > 0.4), (old.0, true, true), msg="\{Repr(new)} \{Repr(old)}")
 }
 
 ///|
@@ -914,7 +914,7 @@ test "a column of the tree's that scrolls and an old view's box kept to a height
       c.capped("over", 200.0, fn() { c.box(w=Px(400.0), h=Px(200.0 + over), fn() {  }) |> ignore }) |> ignore
     }, w=400.0, h=300.0, platform=0)
     old_t.draw()
-    old_t.move(200.0, 100.0)
+    old_t.move_to(200.0, 100.0)
     old_t.wheel(200.0, 100.0, 40.0)
     old_t.run_for(turn_done_ms)
     let old = (capped_id_at("over"), thumbs_at(old_t, 380.0).length())
@@ -935,7 +935,7 @@ test "a column of the tree's that scrolls and an old view's box kept to a height
       |> ignore
     })
     t.draw()
-    t.move(200.0, 100.0)
+    t.move_to(200.0, 100.0)
     t.wheel(200.0, 100.0, 40.0)
     t.run_for(turn_done_ms)
     ((scroll.most(), scroll_node_at_of(scroll)), thumbs_at(t, 380.0).length(), old)
@@ -944,7 +944,7 @@ test "a column of the tree's that scrolls and an old view's box kept to a height
   // (as far as each goes, the same: what it holds past it, laid out so)
   let ranges = got.map(fn(g) { (g.0.0, g.0.1, g.2.0) })
   let bars = got.map(fn(g) { (g.1, g.2.1) })
-  assert_eq((ranges, bars), ([(0.5, 0.5, 0.5), (1.0, 1.0, 1.0), (2.0, 2.0, 2.0)], [(0, 0), (0, 0), (1, 1)]), msg="\{got}")
+  assert_eq((ranges, bars), ([(0.5, 0.5, 0.5), (1.0, 1.0, 1.0), (2.0, 2.0, 2.0)], [(0, 0), (0, 0), (1, 1)]), msg="\{Repr(got)}")
 }
 
 ///|

@@ -20,6 +20,15 @@ pub fn small_panel_node(p : @view.View) -> @view.View {
 }
 
 ///|
+/// Node `v` as a ground (a panel's, a menu's, a sheet's, a card's): it takes a press, which is its own (not outside it,
+/// nothing under it pressed), and is no control: nothing is done, the pointer over it the arrow (not the hand
+/// Tree::cursor_of gives what does something pressed), and a ground (View::as_ground): no target of the room a press
+/// takes, none it cuts. What it holds that is pressed is its own as ever, the hand over it. It.
+pub fn ground_node(v : @view.View) -> @view.View {
+  v.presses(Is(true)).on_press(fn() {  }).cursor(Is(Some(Arrow))).as_ground()
+}
+
+///|
 /// A small panel's line round it (its width), and its shadow's blur and how far under it it falls (small_panel's).
 let small_panel_line : Double = 1.0
 

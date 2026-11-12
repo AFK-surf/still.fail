@@ -3,15 +3,6 @@
 // read in place from the font's bytes; offsets here are from the start of the font file.
 
 ///|
-fn rd8(d : Bytes, i : Int) -> Int {
-  if i < 0 || i >= d.length() {
-    0
-  } else {
-    d[i].to_int()
-  }
-}
-
-///|
 fn rd16(d : Bytes, i : Int) -> Int {
   if i < 0 || i + 2 > d.length() {
     0
@@ -28,11 +19,6 @@ fn rds16(d : Bytes, i : Int) -> Int {
   } else {
     v
   }
-}
-
-///|
-fn rd24(d : Bytes, i : Int) -> Int {
-  (rd8(d, i) << 16) | (rd8(d, i + 1) << 8) | rd8(d, i + 2)
 }
 
 ///|

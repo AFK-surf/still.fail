@@ -154,7 +154,7 @@ export class Station {
         if (head !== null && JSON.parse(head).screen !== undefined) return this.#view(stream, JSON.parse(head), c.bytes);
         if (head !== null && JSON.parse(head).adb?.op === "share") {
           this.offers.push({ conn, head: JSON.parse(head) });
-          await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-ndjson" } })}\n`));
+          await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-ndjson", "stillfail-build": "0.1.0" } })}\n`));
           await stream.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
           return;
         }
@@ -168,7 +168,7 @@ export class Station {
         const parsed = JSON.parse(head!);
         this.served.push(parsed);
         if (this.lateMs > 0) await this.world.sleep(this.lateMs);
-        const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method };
+        const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method, "stillfail-build": "0.1.0" };
         if (once) headers["stillfail-idempotent"] = "1";
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
         // A large reply: how fast a way brings one, written a piece at a time (as the station's file reads are), so two at
@@ -216,7 +216,7 @@ export class Station {
         waiting.wake?.();
       }
     })().catch(() => {});
-    await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-stillfail-screen" } })}\n`));
+    await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-stillfail-screen", "stillfail-build": "0.1.0" } })}\n`));
     await stream.write(Buffer.from(configFrame({ codec: "jpeg", width: 640, height: 480 })));
     for (const frame of frames) {
       while (unacked.size >= 2) await new Promise<void>((r) => (waiting.wake = r));

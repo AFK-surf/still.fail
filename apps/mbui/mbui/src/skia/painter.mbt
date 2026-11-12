@@ -200,7 +200,7 @@ fn RasterPipelineBlitter::blit_mask(self : RasterPipelineBlitter, image : (Int, 
 
 ///|
 impl Blitter for RasterPipelineBlitter with blit_h(self, x, y, width) {
-  self.blit_rect({ x, y, width, height: 1 })
+  Blitter::blit_rect(self, { x, y, width, height: 1 })
 }
 
 ///|
@@ -213,7 +213,7 @@ impl Blitter for RasterPipelineBlitter with blit_anti_h(self, x, y, aa, runs) {
     let width = run
     match aa[offset] {
       0 => ()
-      255 => self.blit_h(x, y, width)
+      255 => Blitter::blit_h(self, x, y, width)
       alpha => {
         self.blit_anti_h_rp.ctx.current_coverage = fi(alpha) * (1.0 / 255.0)
         self.blit_anti_h_rp.run({ x, y, width, height: 1 }, aa_mask_none, mask_ctx, self.pixmap_src, self.pixmap)

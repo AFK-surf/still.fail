@@ -1,0 +1,42 @@
+// (Each formula one connective deep, the rest in predicates of their own: the lowering to WhyML prints `a && (b || c)`
+// without its brackets.)
+
+predicate never(b : Bool) {
+  !b
+}
+
+predicate holds(b : Bool) {
+  b
+}
+
+predicate in_range(n : Int, b : Int) {
+  0 <= b && b < n
+}
+
+predicate same_length(ws : FixedArray[Int], rs : FixedArray[Bool], ts : FixedArray[Int], hs : FixedArray[Int]) {
+  rs.length() == ws.length() && ts.length() == ws.length() && hs.length() == ws.length()
+}
+
+predicate two_of(n : Int, i : Int, j : Int) {
+  0 <= i && i < n && 0 <= j && j < n && i != j
+}
+
+predicate distinct(hs : FixedArray[Int]) {
+  ∀ i : Int, ∀ j : Int, two_of(hs.length(), i, j) → hs[i] != hs[j]
+}
+
+predicate before_at(ws : FixedArray[Int], rs : FixedArray[Bool], ts : FixedArray[Int], hs : FixedArray[Int], b : Int, j : Int) {
+  ahead(ws[b], rs[b], ts[b], hs[b], ws[j], rs[j], ts[j], hs[j])
+}
+
+predicate other(n : Int, b : Int, j : Int) {
+  0 <= j && j < n && j != b
+}
+
+predicate before_upto(ws : FixedArray[Int], rs : FixedArray[Bool], ts : FixedArray[Int], hs : FixedArray[Int], b : Int, i : Int) {
+  ∀ j : Int, other(i, b, j) → before_at(ws, rs, ts, hs, b, j)
+}
+
+predicate chosen(ws : FixedArray[Int], rs : FixedArray[Bool], ts : FixedArray[Int], hs : FixedArray[Int], b : Int) {
+  in_range(ws.length(), b) && before_upto(ws, rs, ts, hs, b, ws.length())
+}

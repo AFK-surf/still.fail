@@ -13,7 +13,6 @@ import {
   type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync,
   statSync, watch, writeFileSync,
 } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { startEnv } from "../ops/agent-env.ts";
@@ -26,10 +25,9 @@ import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
-  Busy, type BusyCause, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor,
-  overstaying, pick, place, served,
+  type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, overstaying, pick, place,
+  served,
 } from "./admit.ts";
-import type { Ticks } from "../read/host.ts";
 
 export { outputAt, tail };
 
@@ -141,13 +139,11 @@ export type Notify = (session: string, text: string) => void;
 /// service), when the station is in a workspace.
 export type Link = (session: string, job: string) => string | null;
 
-/// What the queue (jobs/admit.ts) measures of the machine: its CPUs, their ticks, what the system says of its memory,
-/// and how long its input has been idle (ms; none where it is not read: no person is seen at it).
-export type Machine = { cpus(): number; ticks(): Ticks | null; pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
+/// What the queue (jobs/admit.ts) measures of the machine: what the system says of its memory, and how long its input
+/// has been idle (ms; none where it is not read: no person is seen at it).
+export type Machine = { pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
 
 export const liveMachine: Machine = {
-  cpus: () => availableParallelism(),
-  ticks: () => platform.host.cpuTicks(),
   pressure: () => platform.memoryPressure(),
   inputIdle: () => platform.inputIdleMs(),
 };
@@ -286,13 +282,10 @@ export class Jobs {
   /// What waits for an exit file to appear, by job id; the watch on jobs/exit that tells them.
   private exitHeard = new Map<string, () => void>();
   private exitWatch: FSWatcher | null = null;
-  /// The queue (jobs/admit.ts): what it measures, the CPUs as it saw them, what the system last said of its memory, when
-  /// its last task started and when each session's did, and why the first waiting waits.
+  /// The queue (jobs/admit.ts): what it measures, what the system last said of its memory, when each session's task
+  /// last started, and why the first waiting waits.
   private machine: Machine;
-  private busy = new Busy();
   private pressure: Pressure | null = null;
-  private lastStart: number | null = null;
-  private lastStarted: string | null = null;
   private lastOf = new Map<string, number>();
   private why: Why | null = null;
   /// The queue looks at the machine (every LOOK_MS) while a task waits, on the jobs' clock.
@@ -467,33 +460,24 @@ export class Jobs {
   /// What the queue would start now, and why the first waiting waits else (kept for `queueOf`).
   private chosen(pressure: Pressure | null): ReturnType<typeof pick> {
     const { waiting, running } = this.line();
-    // (the last started, while it runs: how busy since it started; one that ended holds nothing back)
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const chosen = pick(waiting, running, { busy: this.busy.share(ramp), pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const chosen = pick(waiting, running, { pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     this.why = chosen !== null && "wait" in chosen ? chosen.wait : null;
     return chosen;
   }
 
-  /// A task of the queue starts: noted as the last, and what it is told of the CPUs free.
+  /// A task of the queue starts: noted as its session's last. A small one is told to use one CPU; any other is told
+  /// nothing of the CPUs (jobs/admit.ts), however many run beside it.
   private admitted(job: JobRow): Record<string, string> {
-    const alone = this.line().running.length === 0;
-    const now = this.queueNow();
-    if (!job.small) {
-      this.lastStart = now;
-      this.lastStarted = job.id;
-    }
-    this.lastOf.set(job.sessionKey, now);
-    if (job.small) return { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" };
-    return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
+    this.lastOf.set(job.sessionKey, this.queueNow());
+    return job.small ? { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" } : {};
   }
 
-  /// While a task waits: every LOOK_MS the CPUs noted, the memory asked for, the next started if there is room.
+  /// While a task waits: every LOOK_MS the memory asked for, the next started if there is room.
   private watchQueue(): void {
     if (this.looking || this.closing) return;
     this.looking = true;
     const waiting = () => !this.closing && this.line().waiting.length > 0;
     const look = Effect.promise(async () => {
-      this.busy.note(this.queueNow(), this.machine.ticks());
       try {
         this.pressure = await this.machine.pressure();
       } catch {
@@ -503,8 +487,7 @@ export class Jobs {
       this.startNext();
     });
     void this.run(
-      Effect.sync(() => this.busy.note(this.queueNow(), this.machine.ticks())).pipe(
-        Effect.andThen(Effect.sleep(LOOK_MS)),
+      Effect.sleep(LOOK_MS).pipe(
         Effect.andThen(Effect.andThen(look, Effect.sync(waiting)).pipe(Effect.repeat({ schedule: Schedule.spaced(LOOK_MS), until: (more) => !more }))),
         Effect.ensuring(Effect.sync(() => {
           this.looking = false;
@@ -516,7 +499,13 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// Starts what the queue picks now. A small task has its own slot and does not have to wait for a build's ramp.
+  /// What the station's memory watch (jobs/memory.ts) read of the memory on its own look: what the queue goes by as a
+  /// task asks to start, the queue looking at it itself only while one waits.
+  memorySeen(pressure: Pressure | null): void {
+    this.pressure = pressure;
+  }
+
+  /// Starts what the queue picks now. A small task has its own slot beside the rest.
   /// Then the screen given out to the commands that ask for it, if no task has it now.
   private startNext(): void {
     if (this.closing) return;
@@ -579,9 +568,10 @@ export class Jobs {
     if (this.line().waiting.length > 0) this.watchQueue();
   }
 
-  /// A waiting task's place in line (1: the next), what blocks it, and the queue's measurements; null for one not
-  /// waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has it (screenHolder).
-  queueOf(id: string): { place: number; why: Why | null; cause?: BusyCause; holder?: string; decision: { cpuBusy: ReturnType<Busy["sample"]>; memoryPressure: Pressure | null } } | null {
+  /// A waiting task's place in line (1: the next), what blocks it, and what the queue measured (the memory's pressure);
+  /// null for one not waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has
+  /// it (screenHolder).
+  queueOf(id: string): { place: number; why: Why | null; holder?: string; decision: { memoryPressure: Pressure | null } } | null {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
     const { waiting, running } = this.line();
@@ -589,13 +579,10 @@ export class Jobs {
     if (task === undefined) return null;
     const p = place(waiting.filter((w) => !!w.small === !!task.small), id, (s) => this.lastOf.get(s) ?? null);
     if (p === null) return null;
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const cpuBusy = this.busy.sample(ramp);
-    const selected = pick([task], running, { busy: cpuBusy?.share ?? null, pressure: this.pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const selected = pick([task], running, { pressure: this.pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     const why = selected !== null && "wait" in selected ? selected.wait : null;
-    const cause = selected !== null && "wait" in selected ? selected.cause : undefined;
     const holder = why === "screen" ? this.screenHolder(id) : null;
-    return { place: p, why, ...(cause !== undefined ? { cause } : {}), ...(holder !== null ? { holder } : {}), decision: { cpuBusy, memoryPressure: this.pressure } };
+    return { place: p, why, ...(holder !== null ? { holder } : {}), decision: { memoryPressure: this.pressure } };
   }
 
   /// Who has the screen, for one waiting for it (not `except`, a job of its own): the task's name, the chat it is
@@ -916,7 +903,7 @@ export class Jobs {
       // and this one does not follow (it started out of its workspace, so took nothing up): its group is ended too.
       const entry = job.pgid !== null ? this.leftBehind(job.pgid) : null;
       if (entry) {
-        if (stillOurs(entry)) {
+        if (await stillOurs(entry)) {
           log.warn("jobs", "ending a job an earlier station left running", { job: job.id, pgid: entry.pgid });
           await this.timed(endGroup(entry.pgid, STOP_GRACE_MS));
         }
@@ -981,8 +968,10 @@ export class Jobs {
   /// After a start of the station: what still runs is followed again; what ended meanwhile is told as ended; what was
   /// running and is gone without a word (the machine restarted, or an older station ended it) runs again, and its agent
   /// is told; a service waiting to start again starts. Groups of jobs no longer running are ended.
-  relaunch(): void {
+  async relaunch(): Promise<void> {
     const recorded = new Map<number, ProcessRow>(this.store.listProcesses().filter((p) => p.runtime === "job").map((p) => [p.pgid, p]));
+    // Each group asked after together, none waited on (stillOurs starts a process).
+    const ours = new Set((await Promise.all([...recorded.values()].map(async (p) => (await stillOurs(p)) ? [p.pgid] : []))).flat());
     const followed = new Set<number>();
     const jobs = this.store.jobsUp();
     for (const job of jobs.filter((j) => j.state === "running")) {
@@ -990,7 +979,7 @@ export class Jobs {
       if (job.queued === true) continue;
       const entry = job.pgid !== null ? recorded.get(job.pgid) : undefined;
       if (entry) {
-        if (stillOurs(entry)) {
+        if (ours.has(entry.pgid)) {
           log.info("jobs", "job went on through the restart; following it again", { job: job.id, pgid: entry.pgid });
           this.follow(job, entry.pgid);
           followed.add(entry.pgid);
@@ -1034,7 +1023,7 @@ export class Jobs {
     }
     for (const [pgid, entry] of recorded) {
       if (followed.has(pgid)) continue;
-      if (stillOurs(entry)) {
+      if (ours.has(pgid)) {
         log.warn("jobs", "ending the group of a job no longer running", { pgid, label: entry.label });
         void this.timed(endGroup(pgid, STOP_GRACE_MS));
       }

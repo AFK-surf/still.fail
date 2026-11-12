@@ -27,7 +27,7 @@ impl @hostapi.Host for FakeHost with drive(_, kind, text) {
   if kind != 8 {
     return false
   }
-  let wh = text.split("x").map(fn(v) { number(v.to_string()) }).to_array()
+  let wh = text.split("x").map(fn(v) { number(v.to_owned()) }).to_array()
   if wh.length() < 2 {
     return false
   }
@@ -42,9 +42,9 @@ impl @hostapi.Host for FakeHost with exit(self, code) {
 }
 
 ///|
-/// An update asked for: kept as asked (Tester::update_asked).
-impl @hostapi.Host for FakeHost with update_fetch(_, _, _, _, name, now) {
-  update_asked.push("fetch \{name} \{now}")
+/// An update asked for: kept as asked (Tester::update_asked), with the delta it was given where there was one.
+impl @hostapi.Host for FakeHost with update_fetch(_, _, _, _, name, now, delta) {
+  update_asked.push(if delta == "" { "fetch \{name} \{now}" } else { "fetch \{name} \{now} delta \{delta}" })
 }
 
 ///|
@@ -59,14 +59,15 @@ impl @hostapi.Host for FakeHost with update_state(_) {
 }
 
 // The system's pickers and the files kept on the device (@hostapi pick.mbt, keep.mbt) as a test has them: its pickers
-// give what the test said (Tester::picks) from the frame after each ask; what the app keeps is kept by the test
-// (Tester::kept), from the frame after it was finished.
+// give what the test said (Tester::picks) at the moment each is asked, told as a host's event tells it (FakeHost::due:
+// after the event that asked, before the clock moves on); what the app keeps is kept by the test (Tester::kept), from
+// the frame after it was finished.
 
 ///|
 priv struct FakePick {
   kind : @hostapi.PickKind
-  /// the frame it was asked in: answered from the next on
-  frame : Int
+  /// its answer told (the host's event said): what the pickers give is there to take from then
+  mut said : Bool
   mut taken : Bool
 }
 
@@ -89,16 +90,29 @@ impl @hostapi.Host for FakeHost with pk_start(self, kind) {
     3 => Camera
     _ => Files
   }
-  self.pick_asks.push({ kind, frame: g().frame_no, taken: false })
-  self.wants = true
-  self.pick_asks.length()
+  self.pick_asks.push({ kind, said: false, taken: false })
+  let id = self.pick_asks.length()
+  // (answered at the moment it is asked, the host's event after the one that asked; where the test answers its pickers
+  // itself, as it says: Tester::pick_answer)
+  if !self.picks_by_hand {
+    self.due(self.time, "a pick answered", fn() { fake_pick_said(self, id) })
+  }
+  id
 }
 
 ///|
-/// How ask `id` goes: 0 asking (until the frame after it was asked), 1 answered, -1 let go of or none.
+/// Ask `id` answered with what the pickers give: told as a host's event tells it (on_outside, MB_OUTSIDE_PICK).
+fn fake_pick_said(f : FakeHost, id : Int) -> Unit {
+  guard f.pick_asks.get(id - 1) is Some(a) && !a.said else { return }
+  a.said = true
+  on_outside(outside_pick, id, 1)
+}
+
+///|
+/// How ask `id` goes: 0 asking (till its answer is told: fake_pick_said), 1 answered, -1 let go of or none.
 impl @hostapi.Host for FakeHost with pk_state(self, id) {
   match self.pick_asks.get(id - 1) {
-    Some(a) if !a.taken => if g().frame_no <= a.frame { 0 } else { 1 }
+    Some(a) if !a.taken => if a.said { 1 } else { 0 }
     _ => -1
   }
 }
@@ -666,6 +680,11 @@ impl @hostapi.Host for FakeHost with image_load(self, src, max_px) {
   }
   // (its source kept, a failed one's too: Tester::image_src describes the same id as a live host's)
   self.image_srcs[id] = src
+  // (said to take a while: done that long after it is asked for, Tester::decode_after)
+  match self.decode_after.get(src) {
+    Some(ms) => self.decode_due[id] = self.time + ms
+    None => ()
+  }
   id
 }
 
@@ -675,13 +694,75 @@ impl @hostapi.Host for FakeHost with image_load(self, src, max_px) {
 impl @hostapi.Host for FakeHost with image_load_bytes(self, data, max_px) {
   self.image_loads.push(("bytes:\{data.length()}", max_px))
   let head = image_bytes_head(data, max_px)
-  match self.live {
+  let id = match self.live {
     Some(l) => live_image(self, l, l.host.image_load_bytes(data, max_px), { "ib": head })
     None =>
       match (text_table.val, kept_sizes(kept_answer("ib", head))) {
         (Some(_), Some((w, h, ow, oh))) => fake_image_sized(self, w, h, ow, oh)
         _ => fake_image(self, 400, 300, max_px)
       }
+  }
+  self.image_bytes[id] = data.length()
+  self.image_bytes_now += data.length()
+  if self.image_bytes_now > self.image_bytes_most {
+    self.image_bytes_most = self.image_bytes_now
+    host_image_bytes_held(self)
+  }
+  id
+}
+
+// What the host holds of the bytes handed over for decodes, at once (FakeHost.image_bytes): a phone's Java side kept a
+// GIF's every frame's, 140 MB of a 256 MB heap, and the app was killed (#5301); the tests' every image was small and
+// nothing counted what they came to. Held a file at a time, as gaps_steady.mbt's faults: the most a Tester made in a
+// file has its host hold at once is at most its file's bar (`host_image_bytes_known`, given by a test package as it
+// starts) and a tenth, or `host_image_bytes_free` where the file has none. The bars are what each file's Testers held
+// at most when they were set (the user, 2026-11-11: 三条都加), and only fall: one brought down by a change to what is
+// handed over is written down in the same change.
+
+///|
+/// What a Tester made in a file with no bar may have its host hold at once: an icon's, a few small pictures'.
+let host_image_bytes_free : Int = 4096
+
+///|
+/// Each file's bar: the most bytes handed over for decodes a Tester made there may have its host hold at once.
+// kept across runs: said once as a test program starts (its packages' `init`)
+let host_image_bytes_bars : Map[String, Int] = Map([])
+
+///|
+/// The most bytes each file's Testers had their hosts hold so far in this run, said as it grows (motion_runs).
+// kept across runs: the most of all the program's Testers, each file's said once as it grows
+let host_image_bytes_most : Map[String, Int] = Map([])
+
+///|
+/// The bars of the files `bars` names, each the most bytes handed over for decodes (image_load_bytes) a Tester made
+/// there may have its host hold at once, a tenth over it let by. Said by a test package as it starts (`fn init`);
+/// only falls.
+pub fn host_image_bytes_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("host_image_bytes", bars)
+  for b in bars {
+    host_image_bytes_bars.set(b.0, b.1)
+  }
+}
+
+///|
+/// Stops the test where what the host holds of the bytes handed over goes over its file's bar by more than a tenth.
+fn host_image_bytes_held(f : FakeHost) -> Unit {
+  let file = match f.made_at.find(":") {
+    Some(i) => f.made_at.unsafe_substring(start=0, end=i)
+    None => f.made_at
+  }
+  let bar = host_image_bytes_bars.get(file).unwrap_or(host_image_bytes_free)
+  // (the most each file's Testers held, said as it grows: motion_runs, `MOTION held host_image_bytes <file> <bytes>`)
+  if motion_runs() && f.image_bytes_now > host_image_bytes_most.get(file).unwrap_or(0) {
+    host_image_bytes_most.set(file, f.image_bytes_now)
+    println("MOTION held host_image_bytes \{file} \{f.image_bytes_now}")
+  }
+  if f.image_bytes_now * 10 > bar * 11 {
+    @halt.saying(
+      "the host holds \{f.image_bytes_now} bytes handed over for decodes at once (fake_host.mbt: host_image_bytes_known), " +
+      "the Tester made at \{f.made_at}; \{file}'s bar is \{bar}" +
+      (if host_image_bytes_bars.contains(file) { "" } else { " (none said: host_image_bytes_free)" }),
+    )
   }
 }
 
@@ -777,6 +858,13 @@ impl @hostapi.Host for FakeHost with drawn_pixels_of(self, inst, count, r, gg, b
 ///|
 impl @hostapi.Host for FakeHost with image_free(self, id) {
   self.images.remove(id)
+  match self.image_bytes.get(id) {
+    Some(n) => {
+      self.image_bytes.remove(id)
+      self.image_bytes_now -= n
+    }
+    None => ()
+  }
   match (self.live, self.live_images.get(id)) {
     (Some(l), Some(mine)) => {
       self.live_images.remove(id)
@@ -1117,6 +1205,7 @@ impl @hostapi.Host for FakeHost with pdf_close(self, doc) {
 /// The pointer's shape as last told (desktop.mbt).
 impl @hostapi.Host for FakeHost with set_cursor(self, kind) {
   self.cursor = kind
+  self.cursors_told = self.cursors_told + 1
 }
 
 ///|
@@ -1273,6 +1362,12 @@ impl @hostapi.Host for FakeHost with font_scale(self) {
 }
 
 ///|
+/// How far its local time is ahead of UTC (Tester::set_utc_offset), whatever the moment.
+impl @hostapi.Host for FakeHost with utc_offset_min(self, _) {
+  self.utc_offset
+}
+
+///|
 /// What the person points with as it starts (Tester::new's `pointing`): 1 a finger, 0 a mouse; each event's word
 /// after (@ui.pointing).
 impl @hostapi.Host for FakeHost with pointing(self) {
@@ -1410,6 +1505,11 @@ impl @hostapi.Host for FakeHost with present(self, _, _, _, _, _) {
   c.flat_from(0)
   self.instances = c.ninst
   host_presented_now(c.inst, c.ninst)
+  // (what of it was drawn not as laid out, as it is presented: held at the frame's end, tester_placed.mbt)
+  placed_at_present()
+  // (what the window's tree keeps against what working it out whole gives, as it is presented: held at the frame's
+  // end, tester.mbt)
+  kept_at_present()
 }
 
 ///|
@@ -1670,7 +1770,7 @@ impl @hostapi.Host for FakeHost with cl_set(self, text, png, label) {
 /// A read of the clipboard asked (its id, from 1: the ask's place): answered by what the test gave before it, if it
 /// did, else by what it gives next.
 impl @hostapi.Host for FakeHost with cl_read(self) {
-  let ask = { frame: g().frame_no, answer: None }
+  let ask : FakeClipRead = { answer: None }
   if self.dev.held.length() > 0 {
     ask.answer = Some((self.dev.held.remove(0), g().frame_no))
     self.wants = true
@@ -1995,14 +2095,14 @@ impl @hostapi.Host for FakeHost with post_next(_) {
 
 // The app's own calls of its host (@hostapi native.mbt; @ui's native_call.mbt) as a test has them: each waits until
 // the test answers it (Tester::answer_native, refuse_native), or answered as it is asked (Tester::native_answers) or by
-// an answer given before it (held), each from the frame after.
+// an answer given before it (held: a replay's NATIVESAID), each told at that moment as a host's event tells it
+// (FakeHost::due: after the event that asked or answered, before the clock moves on).
 
 ///|
 /// A call asked (its id, from 1: its place).
 impl @hostapi.Host for FakeHost with ncall_call(self, name, params) {
   let params = @json.parse(params) catch { _ => Json::string(params) }
-  let ask : FakeNative = { name, params, answer: None }
-  let at = g().frame_no
+  let ask : FakeNative = { name, params, answer: None, said: false }
   let mut held = -1
   for i, h in self.dev.native_held {
     if h.0 == name {
@@ -2011,28 +2111,26 @@ impl @hostapi.Host for FakeHost with ncall_call(self, name, params) {
     }
   }
   if held >= 0 {
-    ask.answer = Some((self.dev.native_held.remove(held).1, at))
+    ask.answer = Some(self.dev.native_held.remove(held).1)
   } else {
     match self.dev.native_auto.get(name) {
-      Some(answer) => ask.answer = Some((answer(params), at))
+      Some(answer) => ask.answer = Some(answer(params))
       None => ()
     }
   }
   self.dev.natives.push(ask)
+  let id = self.dev.natives.length()
   if ask.answer is Some(_) {
-    self.wants = true
+    fake_native_due(self, id)
   }
-  self.dev.natives.length()
+  id
 }
 
 ///|
-/// Call `id`'s answer, from the frame after it was given.
+/// Call `id`'s answer, once its host's event told it (fake_native_due).
 fn FakeHost::native_given(self : FakeHost, id : Int) -> Result[Json, String]? {
-  guard self.dev.natives.get(id - 1) is Some(a) else { return None }
-  match a.answer {
-    Some((r, at)) if g().frame_no > at => Some(r)
-    _ => None
-  }
+  guard self.dev.natives.get(id - 1) is Some(a) && a.said else { return None }
+  a.answer
 }
 
 ///|
@@ -2057,15 +2155,17 @@ impl @hostapi.Host for FakeHost with ncall_result(self, id) {
 
 ///|
 /// Its answers come by the frame after they were asked or given (Tester::finish where the test says when), told by
-/// no event; the marks' drawings, where the test answers them by hand (Tester::marks_by_hand), told as a host's event
-/// tells them (Tester::marks_answer).
+/// no event; but what was picked and a native call's answer, told at their moment as a host's event tells them
+/// (fake_pick_said, fake_native_due), and the marks' drawings where the test answers them by hand
+/// (Tester::marks_by_hand), told so (Tester::marks_answer).
 impl @hostapi.Host for FakeHost with answers_by_frame(self, kind) {
+  kind != outside_pick &&
+  kind != outside_native &&
   !(kind == outside_marks && self.marks_by_hand)
 }
 
 ///|
-/// What it answers by hand is told as a host's event (Tester::marks_answer: on_outside); the rest by the frame
-/// (answers_by_frame).
+/// What it answers at a moment is told as a host's event (on_outside); the rest by the frame (answers_by_frame).
 impl @hostapi.Host for FakeHost with set_outside(_, _) {
   true
 }
@@ -2074,6 +2174,8 @@ impl @hostapi.Host for FakeHost with set_outside(_, _) {
 /// A test's finger (kinds as on_pointer's: 0 down, 1 moved, 2 up, 3 called off; 4, 5, 6 a second finger; 8 the first
 /// let go, the second the first from here), taken as a host takes it where a page's view is.
 fn finger(kind : Int, x : Double, y : Double) -> Unit {
+  // (what was posted before this input told first, at its moment: posted_tell)
+  posted_tell()
   let f = match fake.val {
     Some(f) => f
     None => return on_pointer(kind, x, y, 0)
@@ -2153,6 +2255,7 @@ fn finger_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
     }
     None => ()
   }
+  posted_tell()
   on_wheel(x, y, dx, dy, phase)
 }
 
@@ -2188,7 +2291,7 @@ impl @hostapi.Host for FakeHost with script_step(self, step, arg) {
               n = n * 10 + (ch.to_int() - 48)
             }
             let bytes = Bytes::make(n, b'x')
-            self.picks.push({ name: part[:i].to_string(), bytes, held: 0, size: n.to_double(), src: "" })
+            self.picks.push({ name: part[:i].to_owned(), bytes, held: 0, size: n.to_double(), src: "" })
           }
           None => ()
         }
@@ -2200,9 +2303,10 @@ impl @hostapi.Host for FakeHost with script_step(self, step, arg) {
 }
 
 ///|
-/// It keeps groups of instances, as every platform's host does: drawn out as it is handed them (present).
-impl @hostapi.Host for FakeHost with groups_here(_) {
-  true
+/// It keeps groups of instances, as every platform's host does: drawn out as it is handed them (present); none where
+/// the test says so (Tester::set_groups), as the web's host.
+impl @hostapi.Host for FakeHost with groups_here(self) {
+  self.groups
 }
 
 ///|
@@ -2225,5 +2329,91 @@ impl @hostapi.Host for FakeHost with lines_on_pixels(_) {
   match text_table.val {
     Some(t) => t.metrics.values().any(fn(r) { r.length() > 5 && r[5] == 1.0 })
     None => false
+  }
+}
+
+///|
+/// What the fake host was posted and has not told yet, told now, between frames: before its clock moves on (a frame
+/// drawn later, the clock advanced) and before an input it is given, so at the moment it was posted, as a device's host
+/// tells it as it is posted (MB_OUTSIDE_POSTED), not as the next frame begins. What is posted at one moment is told as
+/// one, in the order posted, as a device's host takes all that came by the time it is told (messages_between).
+fn posted_tell() -> Unit {
+  if in_frame.val || frame_running.val {
+    return
+  }
+  if fake_posted.length() > 0 {
+    on_outside(outside_posted, 0, 0)
+  }
+  // (and what the fake host does at a moment of its own come by now: FakeHost::due, each as one event, in its order)
+  let now = match fake.val {
+    Some(f) => f.time
+    None => return
+  }
+  while fake_dues.length() > 0 && fake_dues[0].0 <= now + 1.0e-9 {
+    let (_, _, _, f) = fake_dues.remove(0)
+    f()
+    if fake_posted.length() > 0 {
+      on_outside(outside_posted, 0, 0)
+    }
+  }
+}
+
+///|
+/// A frame of the fake host's ended: what it is to do by now (FakeHost::due: asked of it as the frame was made, at the
+/// frame's moment) done now, between frames, before anything else comes, and what was posted with it (posted_tell),
+/// as a device's host answers after the frame that asked. Nothing of the frame's posted else is told here: that waits,
+/// as ever, for the clock to move or an input.
+fn fake_dues_after_frame(f : FakeHost) -> Unit {
+  if fake_dues.length() > 0 && fake_dues[0].0 <= f.time + 1.0e-9 {
+    posted_tell()
+  }
+}
+
+///|
+/// What the fake host is to do at moments of its clock (FakeHost::due): when, in what order said, what (named for what
+/// says it), done.
+// kept across runs: emptied by each Tester (Tester::new)
+let fake_dues : Array[(Double, Int, String, () -> Unit)] = []
+
+///|
+// kept across runs: only counted on
+let fake_due_count : Ref[Int] = Ref(0)
+
+///|
+/// `f` done by the fake host at `at` on its clock, between frames, as an event from outside that comes then (a picked
+/// file, a native call's answer, an operation done, as a device's host tells each at its moment): at the moment the
+/// clock comes to it, however it is run on (run_for and come_to stop there at any rate of frames), after what is
+/// going on now where `at` is now; several at one moment in the order said. `what` names it where it is said.
+pub fn FakeHost::due(self : FakeHost, at : Double, what : String, f : () -> Unit) -> Unit {
+  ignore(self)
+  fake_due_count.val += 1
+  let entry = (at, fake_due_count.val, what, f)
+  let mut i = fake_dues.length()
+  while i > 0 && (fake_dues[i - 1].0 > at || (fake_dues[i - 1].0 == at && fake_dues[i - 1].1 > entry.1)) {
+    i -= 1
+  }
+  fake_dues.insert(i, entry)
+}
+
+///|
+/// The fake host's next moment of its own (FakeHost::due) after `now`, +inf none.
+fn fake_due_next(now : Double) -> Double {
+  for d in fake_dues {
+    if d.0 > now {
+      return d.0
+    }
+  }
+  @double.infinity
+}
+
+///|
+/// The fake host's clock on to each of its moments (FakeHost::due) up to `t`, what is due at each done there, before the
+/// clock goes on.
+fn fake_dues_to(f : FakeHost, t : Double) -> Unit {
+  while !in_frame.val && !frame_running.val && fake_dues.length() > 0 && fake_dues[0].0 <= t + 1.0e-9 {
+    if fake_dues[0].0 > f.time {
+      f.time = fake_dues[0].0
+    }
+    posted_tell()
   }
 }

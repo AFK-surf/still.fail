@@ -201,7 +201,7 @@ fn search_close(c : @ui.Ctx) -> Unit {
 /// The field's way up and back: from where it stood in the list (its top in the window) to the top, a Move as long as
 /// that (the list's rise at least).
 fn search_way() -> @motion.Spec {
-  @motion.move(points=dmax(search.from, search_list_rise))
+  @motion.moved(points=dmax(search.from, search_list_rise))
 }
 
 ///|
@@ -389,8 +389,14 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
     search_gone()
     return
   }
-  // a row opened from over another page: the search goes as its page comes (as ⌘K's panel does)
-  let close = fn() { if search.over { search_gone() } }
+  // a row opened from over another page: the search goes as its page comes (as ⌘K's panel does), its field's focus with
+  // it at that press (the page come takes it as it takes it on coming: the composer's)
+  let close = fn() {
+    if search.over {
+      c.blur()
+      search_gone()
+    }
+  }
   let t = @sf.theme()
   // (the list's field come up: as high, its mark and its words as big, not changing as it goes up or comes back)
   let band = t.chat_list
@@ -544,6 +550,7 @@ pub fn search_page_node(
   let u = fn() { up.shown(v) }
   let close = fn() {
     if search.over {
+      v.focus_let_go()
       search_gone()
     }
   }

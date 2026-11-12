@@ -5,7 +5,6 @@
 /// As at the start (tests): nothing picked, no press remembered, no link's menu.
 fn pick_reset() -> Unit {
   @sfbase.pick_reset()
-  link_menu.href = ""
   link_menu.items = []
   link_menu.pick = fn(_, _) {  }
   link_menu.x = 0.0
@@ -21,14 +20,11 @@ fn pick_reset() -> Unit {
 fn pick_back(c : @ui.Ctx) -> Unit {
   if link_menu.open {
     c.take_back(fn() { link_menu.open = false })
-  } else if pk.ts != "" {
+  } else if @sfbase.picked.get().ts != "" {
+    // (as told: picked as a message's row is built, elsewhere than this may be built: what lies over the tape's)
     c.take_back(fn() { pick_clear() })
   }
 }
-
-///|
-/// How long a finger is held still for a long press (ViewConfiguration's long press timeout, as Compose has it).
-let long_press_ms : Double = @ui.long_press_ms
 
 ///|
 /// Whether words are picked as a desktop's (a mouse's selection over the page, its pill) rather than as a phone's: by the

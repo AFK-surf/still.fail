@@ -1,6 +1,7 @@
 // svgtypes' font families and the `font` shorthand.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FontFamily {
   FSerif
   FSansSerif
@@ -8,7 +9,24 @@ pub(all) enum FontFamily {
   FFantasy
   FMonospace
   FNamed(String)
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// As a font's key says it (SFont::key): what `derive(Show)` wrote, a name as its text.
+pub impl Show for FontFamily with output(self, logger) {
+  match self {
+    FSerif => logger.write_string("FSerif")
+    FSansSerif => logger.write_string("FSansSerif")
+    FCursive => logger.write_string("FCursive")
+    FFantasy => logger.write_string("FFantasy")
+    FMonospace => logger.write_string("FMonospace")
+    FNamed(name) => {
+      logger.write_string("FNamed(")
+      logger.write_string(name)
+      logger.write_string(")")
+    }
+  }
+}
 
 ///|
 fn Stream::parse_font_families(self : Stream) -> Array[FontFamily]? {

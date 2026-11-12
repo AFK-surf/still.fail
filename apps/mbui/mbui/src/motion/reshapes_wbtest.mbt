@@ -69,9 +69,9 @@ fn cause_of(i : Inputs) -> String {
 /// whose unit is twice as far (slower), carried; opened or shut as a Move, where it is.
 fn cause_spec(was : String, now : String) -> Spec {
   if cause_carries(was, now) {
-    move(points=2.0)
+    moved(points=2.0)
   } else {
-    move()
+    moved()
   }
 }
 
@@ -105,7 +105,7 @@ fn composer(
           causes.val = (causes.val.1, by)
         }
         let (was, _) = causes.val
-        let spec = if per_cause { cause_spec(was, by) } else { move() }
+        let spec = if per_cause { cause_spec(was, by) } else { moved() }
         let carries = !per_cause || cause_carries(was, by)
         let l = composer_laid(i.open.get(), i.page.get(), i.kb.get())
         let was_page = i.page.get()
@@ -263,7 +263,7 @@ fn goes_alike(
   assert_eq(
     (same, seen_alike(old_over, new_over)),
     (Array::make(old.length(), true), true),
-    msg="old \{old}\nnode \{new}\nover \{old_over} \{new_over}",
+    msg="old \{Repr(old)}\nnode \{Repr(new)}\nover \{Repr(old_over)} \{Repr(new_over)}",
   )
 }
 
@@ -329,6 +329,6 @@ test "a composer opening: nothing built or laid out again while it goes, the clo
       tree.clock_read(),
     ),
     (false, 0, 0, 0, 0, true, false),
-    msg="\{drawn_on}",
+    msg="\{Repr(drawn_on)}",
   )
 }

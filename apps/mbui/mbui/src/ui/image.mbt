@@ -3,6 +3,7 @@
 // dropped least recently used first once they take more than the budget.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Fit {
   /// fills the box, cropping what sticks out
   FitCover
@@ -12,7 +13,7 @@ pub(all) enum Fit {
   FitContain
   /// stretched to the box
   FitFill
-} derive(Eq)
+}
 
 ///|
 priv struct ImageEntry {
@@ -43,12 +44,12 @@ impl Moving for ImageEntry with rest_at(self, now, frame) {
 
 ///|
 /// Decodes by source, smallest first.
-let image_cache : Map[String, Array[ImageEntry]] = {}
+let image_cache : Map[String, Array[ImageEntry]] = Map([])
 
 ///|
 // kept across runs: each decode in image_cache by its host's number, and its source (a host numbers each anew, never one
 // let go of again), gone with it (image_dropped, Tester's reset)
-let image_by_id : Map[Int, (String, ImageEntry)] = {}
+let image_by_id : Map[Int, (String, ImageEntry)] = Map([])
 
 ///|
 // kept across runs: the bytes of the ready decodes in image_cache (each w·h·4 as it is ready, image_dropped's taken off):
@@ -117,11 +118,11 @@ fn named_image_state(name : String) -> (Int, Array[String]) {
 ///|
 /// Encoded images the app handed over (thumbnails from the core, say), by
 /// the key views show them by.
-let image_data : Map[String, Bytes] = {}
+let image_data : Map[String, Bytes] = Map([])
 
 ///|
 /// A vector picture's own renderer when the code that supplies the picture has one, by its source.
-let image_vector_drawers : Map[String, (Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = {}
+let image_vector_drawers : Map[String, (Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = Map([])
 
 ///|
 /// Decoded bytes kept before unused images are dropped.
@@ -384,6 +385,18 @@ fn image_entry_for(src : String, px : Double, used : Int, at : Double) -> ImageE
 }
 
 ///|
+/// Whether a decode of the image at `src` is ready, of any size (what Ctx::image_ready finds once one is asked: that
+/// size's, or one standing in for it), followed as the host's word on its decodes comes (image_decoded), asking for
+/// none: what waits for a picture a build asked for reads it so, between frames.
+pub fn image_any_ready(src : String) -> Bool {
+  image_decodes_read(src)
+  match image_cache.get(src) {
+    Some(list) => list.iter().any(fn(e) { e.state == 1 })
+    None => false
+  }
+}
+
+///|
 /// Whether the image at `src` is still coming at `px` on its long side (its bytes on their way, or a decode of it that
 /// large not ready yet and not failed): a shot waits for it (shot.mbt).
 fn image_awaited(src : String, px : Double) -> Bool {
@@ -602,9 +615,10 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
 
 ///|
 /// What a picture node shows now: a GIF that moves the frame of its loop at this frame's time (Ctx::loop_at: as long as
-/// its frames' lengths summed, a frame of the window as its next frame comes), unless held still; any other its source. Every frame of it is asked for at the size
-/// it is shown, so each is decoded before its turn; one not yet is stood in for by the last one before it that is
-/// (never a frame of nothing between them).
+/// its frames' lengths summed, a frame of the window as its next frame comes), unless held still; any other its source.
+/// Every frame of it made is asked for at the size it is shown, the next made a turn ahead of its own, so each is
+/// decoded before its turn; one not yet is stood in for by the last one before it that is (never a frame of nothing
+/// between them).
 fn Ctx::moving_src(self : Ctx, n : Node) -> String {
   if n.still {
     return n.text
@@ -615,17 +629,22 @@ fn Ctx::moving_src(self : Ctx, n : Node) -> String {
 ///|
 /// What picture `src` shows now drawn `bw` by `bh` as `fit` fits it (Ctx::moving_src's, an old view's or a node's): a
 /// GIF that moves the frame of its loop at this frame's time, the frame woken for as its turn comes (Ctx::loop_at),
-/// each frame asked for at the size it is shown and one not decoded yet stood in for by the last before it that is;
-/// any other `src`.
+/// made as it is first wanted and the one after it with it (GifCycle::make: so the host has that one decoded by its
+/// turn), each frame made asked for at the size it is shown (one with no bytes yet never: its key is no picture the host
+/// could find) and one not decoded yet stood in for by the last before it that is; any other `src`.
 fn Ctx::moving_key(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> String {
   match moving_images.get(src) {
     Some(m) => {
       let px = self.image_px(m.keys[0], bw, bh, fit)
       let px = if px <= 0.0 { 256.0 } else { px }
-      let ready = m.keys.map(fn(k) { self.image_ready(k, px) })
       let length = m.ends[m.ends.length() - 1]
       let want = moving_frame(m, self.loop_at(length, m.ends) / length)
-      let mut k = m.keys.search(want).unwrap_or(0)
+      // (made as it is painted: what it makes is bytes in image_data, read by nothing built; their being here said as
+      // a decode's being done is, image_done, while a frame is painted)
+      m.make(want)
+      m.make((want + 1) % m.keys.length())
+      let ready = Array::makei(m.keys.length(), fn(i) { m.made[i] && self.image_ready(m.keys[i], px) })
+      let mut k = want
       while k > 0 && !ready[k] {
         k = k - 1
       }
@@ -780,15 +799,16 @@ priv struct ImageSaid {
 ///|
 /// How the decode of a picture to one size (bucket) stands: coming (or not yet started), done, or failed (it, or one
 /// at least as large: pixels_for's). Told as the host's word on one of its decodes comes (image_done).
+#derive(Eq)
 priv enum DecodeState {
   DecodeComing
   DecodeDone
   DecodeFailed
-} derive(Eq)
+}
 
 ///|
 // kept across runs: what is said of the pictures kept, gone with them (image_forget, Tester's reset)
-let images_said : Map[String, ImageSaid] = {}
+let images_said : Map[String, ImageSaid] = Map([])
 
 ///|
 fn image_said(src : String) -> ImageSaid {

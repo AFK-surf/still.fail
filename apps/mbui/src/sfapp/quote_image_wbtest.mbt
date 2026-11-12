@@ -31,7 +31,7 @@ fn hold_quote(t : @ui.Tester, x : Double, y : Double) -> Unit {
   t.run_for(@ui.long_press_ms + 20.0)
   t.release(x, y)
   t.draw()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("引用")
   t.frame()
   t.frame()
@@ -86,13 +86,13 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
   // its tile in its card (as a picture waiting is: 56 square)
   let tile = match t.drawn_images().iter().find_first(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 }) {
     Some(i) => i
-    None => fail("no picture in the quote's card: \{t.drawn_images()}")
+    None => fail("no picture in the quote's card: \{Repr(t.drawn_images())}")
   }
   tap_send(t)
   // as it sets out: where its tile was
   assert_true(
     t.drawn_images().iter().any(fn(i) { (i[0] - tile[0]).abs() < 0.5 && (i[1] - tile[1]).abs() < 0.5 && (i[2] - 56.0).abs() < 0.5 }),
-    msg="\{t.drawn_images()}",
+    msg="\{Repr(t.drawn_images())}",
   )
   // on its way: between its tile's size and its own, drawn at no size it has at rest
   t.run_for(@sfbase.flight_len(true) * 0.4)
@@ -101,7 +101,7 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
   assert_true(send_flight.get() is None)
   let rest = t.drawn_images().map(fn(i) { i[2] })
   let between = mid.filter(fn(w) { w > 56.5 && rest.iter().all(fn(r) { (r - w).abs() > 0.5 }) })
-  assert_true(between.length() > 0, msg="drawn \{mid} on its way, at rest \{rest}")
+  assert_true(between.length() > 0, msg="drawn \{Repr(mid)} on its way, at rest \{Repr(rest)}")
 }
 
 ///|
@@ -116,7 +116,7 @@ fn lowest_picture_corners(t : @ui.Tester) -> (Double, Double, Double, Double) ra
       at = i
     }
   }
-  assert_true(at >= 0, msg="no picture drawn: \{images}")
+  assert_true(at >= 0, msg="no picture drawn: \{Repr(images)}")
   clips[at].1
 }
 
@@ -131,7 +131,7 @@ test "an image quoted and sent: its picture in its card in the message concentri
   t.draw()
   let (a, b, c, d) = lowest_picture_corners(t)
   for k in [a, b, c, d] {
-    assert_true((k - @sf.quote_picture_corner).abs() < 0.5, msg="corners \{(a, b, c, d)}, its card's \{@sf.quote_picture_corner}")
+    assert_true((k - @sf.quote_picture_corner).abs() < 0.5, msg="corners \{Repr((a, b, c, d))}, its card's \{@sf.quote_picture_corner}")
   }
 }
 
@@ -144,7 +144,7 @@ test "a quoted image sent while reading above the end does not jump the chat to 
   let before = t.visible()
   tap_send(t)
   let first = t.visible()
-  assert_eq(first.0, before.0, msg="the chat jumped from \{before} to \{first} on sending")
+  assert_eq(first.0, before.0, msg="the chat jumped from \{Repr(before)} to \{Repr(first)} on sending")
   assert_false(t.at_end(), msg="the chat jumped to its end on sending")
   t.run_for(@sfbase.flight_wait_ms + @sfbase.flight_most_ms)
   assert_true(t.at_end(), msg="the chat did not reach its newest message")
@@ -181,23 +181,23 @@ fn quoted_preview_places(platform : Int, width : Double, count : Int) -> Unit ra
   t.run_for(@sfbase.flight_len(true) * 2.0 + @sf.hint_back_ms + @ui.move_most_ms)
   t.draw()
   let pictures = picture_instances(t, "mem:fixture/插画参考.png").map(fn(p) { p.1 }).filter(fn(a) { a[2] > 70.0 && a[11] > 0.9 })
-  assert_eq(pictures.length(), count + 1, msg="the original and every quote must be visible: \{pictures}")
+  assert_eq(pictures.length(), count + 1, msg="the original and every quote must be visible: \{Repr(pictures)}")
   for i in 0..<pictures.length() {
     // A new message can move the chat while a picture is open; press each picture where it is now.
     t.draw()
     let current = picture_instances(t, "mem:fixture/插画参考.png").map(fn(p) { p.1 }).filter(fn(a) { a[2] > 70.0 && a[11] > 0.9 })
-    assert_eq(current.length(), count + 1, msg="the original and every quote must still be visible: \{current}")
+    assert_eq(current.length(), count + 1, msg="the original and every quote must still be visible: \{Repr(current)}")
     let picture = current[i]
     let (x, y) = (picture[0] + picture[2] / 2.0, picture[1] + picture[3] / 2.0)
     t.tap(x, y)
-    assert_true(viewer.get() is Some(_), msg="no preview for picture \{i} at \{(x, y)}")
+    assert_true(viewer.get() is Some(_), msg="no preview for picture \{i} at \{Repr((x, y))}")
     let v = viewer.get().unwrap()
     let from = v.fly_from.unwrap()
-    assert_true(from.x <= x && x <= from.x + from.w && from.y <= y && y <= from.y + from.h, msg="pressed \{(x, y)} but opened from \{(from.x, from.y, from.w, from.h)}")
+    assert_true(from.x <= x && x <= from.x + from.w && from.y <= y && y <= from.y + from.h, msg="pressed \{Repr((x, y))} but opened from \{Repr((from.x, from.y, from.w, from.h))}")
     t.run_for(@ui.move_most_ms)
     t.back()
     let back = pv_leaving.get().unwrap().fly_from.unwrap()
-    assert_true(back.x <= x && x <= back.x + back.w && back.y <= y && y <= back.y + back.h, msg="closed to \{(back.x, back.y, back.w, back.h)} instead of \{(x, y)}")
+    assert_true(back.x <= x && x <= back.x + back.w && back.y <= y && y <= back.y + back.h, msg="closed to \{Repr((back.x, back.y, back.w, back.h))} instead of \{Repr((x, y))}")
     t.run_for(@ui.move_most_ms)
   }
 }
@@ -260,7 +260,7 @@ test "a quoted picture opened as it is sent returns to its row after the core ta
   assert_eq(v.thumb_id(), thumb, msg="the thumbnail changed identity as the core took the row")
   let asked : Array[String] = []
   @sfbase.near_asked.each(fn(_, p) { asked.push(text(Some(Json::object(p)), "at")) })
-  assert_true(asked.contains("o:out-1/q:0"), msg="the viewer did not ask for the row the core took over: \{asked}")
+  assert_true(asked.contains("o:out-1/q:0"), msg="the viewer did not ask for the row the core took over: \{Repr(asked)}")
   let current = thumb_of(t.ctx(), thumb).unwrap()
   t.run_for(@ui.move_most_ms)
   t.back()
@@ -270,7 +270,7 @@ test "a quoted picture opened as it is sent returns to its row after the core ta
 
 ///|
 test "the pictures before and after a quote can be separate occurrences of the same file" {
-  new_run()
+  fresh_app()
   let a = strip("same-photo.png")
   let photo = attachment_json(a, "s-c1")
   let base = fixture("chat")
@@ -319,7 +319,7 @@ test "a quoted picture remains visible over its card as they fly to the message"
     let a = p.1
     a[2] > 56.5 && a[11] > 0.9
   })
-  assert_eq(moving.length(), 1, msg="the quoted picture on its way: \{moving}")
+  assert_eq(moving.length(), 1, msg="the quoted picture on its way: \{Repr(moving)}")
   let (index, picture) = moving[0]
   let (x, y) = (picture[0] + picture[2] / 2.0, picture[1] + picture[3] / 2.0)
   assert_true(corner_cover(picture, x, y, 2.0) > 0.9, msg="the picture is clipped away")
@@ -327,7 +327,7 @@ test "a quoted picture remains visible over its card as they fly to the message"
     let a = p.1
     p.0 > index && (a[5] == 0.0 || a[5] == 4.0) && a[11] > 0.9 && corner_cover(a, x, y, 2.0) > 0.9
   })
-  assert_eq(over.length(), 0, msg="the picture is covered on its way: \{over}")
+  assert_eq(over.length(), 0, msg="the picture is covered on its way: \{Repr(over)}")
 }
 
 ///|
@@ -354,7 +354,7 @@ fn local_quote_visible(name : String) -> Unit raise {
   open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   @ui.add_image(picture, png_head())
-  @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+  @sfbase.sent_picture_kept(@sfbase.sent_key(station, path), picture)
   let file = attachment_of({
     "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900,
     "owner": "s-c1", "upload": "original-upload",
@@ -417,7 +417,7 @@ fn local_quote_uncovered(name : String) -> Unit raise {
   open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   @ui.add_image(picture, png_head())
-  @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+  @sfbase.sent_picture_kept(@sfbase.sent_key(station, path), picture)
   @sffixture.fix_put_up[path] = "original-upload"
   let file : Json = {
     "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900, "owner": "s-c1",
@@ -481,8 +481,8 @@ fn quoted_media_handoff(name : String) -> Unit raise {
   t.frame()
   t.run_for(@sfbase.flight_len(true) * 0.4)
   let images = picture_instances(t, "mem:fixture/" + name).map(fn(p) { p.1 }).filter(fn(a) { a[11] > 0.9 })
-  assert_eq(images.length(), 1, msg="the picture as the core's row takes over: \{images}")
-  assert_true(images[0][2] > 56.5 && images[0][2] < 300.0, msg="the picture jumped rather than flying: \{images}")
+  assert_eq(images.length(), 1, msg="the picture as the core's row takes over: \{Repr(images)}")
+  assert_true(images[0][2] > 56.5 && images[0][2] < 300.0, msg="the picture jumped rather than flying: \{Repr(images)}")
 }
 
 ///|
@@ -536,8 +536,8 @@ test "a quoted video cover that arrives during the flight is shown on that same 
   assert_true(given.val, msg="the cover did not arrive")
   assert_true(send_flight.get() is Some(_), msg="the flight ended before the cover arrived")
   let shown = picture_instances(t, "mem:fixture/" + name).filter(fn(p) { p.1[11] > 0.9 })
-  assert_eq(shown.length(), 1, msg="the cover was not drawn on its flight: \{shown}")
-  assert_true(shown[0].1[2] > 56.5, msg="the cover remained at its starting tile: \{shown}")
+  assert_eq(shown.length(), 1, msg="the cover was not drawn on its flight: \{Repr(shown)}")
+  assert_true(shown[0].1[2] > 56.5, msg="the cover remained at its starting tile: \{Repr(shown)}")
 }
 
 ///|
@@ -557,11 +557,12 @@ test "the same picture quoted twice flies to each quote's own place" {
   tap_send(t)
   t.draw()
   t.draw()
-  let pictures = send_flight.get().unwrap().files.filter(fn(f) { f.picture == Some("mem:fixture/twice.png") })
+  let flight = send_flight.get().unwrap()
+  let pictures = flight.files.filter(fn(f) { f.picture == Some("mem:fixture/twice.png") })
   assert_eq(pictures.length(), 2)
-  let first = @motion.measured_rect(t.ctx(), "flight/to/" + pictures[0].key).unwrap()
-  let second = @motion.measured_rect(t.ctx(), "flight/to/" + pictures[1].key).unwrap()
-  assert_true((first.1 - second.1).abs() > 0.5, msg="both pictures fly to the same place: \{first}, \{second}")
+  let first = @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(flight, pictures[0].key)).unwrap()
+  let second = @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(flight, pictures[1].key)).unwrap()
+  assert_true((first.1 - second.1).abs() > 0.5, msg="both pictures fly to the same place: \{Repr(first)}, \{Repr(second)}")
 }
 
 ///|
@@ -582,13 +583,13 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
   // its still in its card (as a picture waiting is: 56 square)
   let tile = match t.drawn_images().iter().find_first(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 }) {
     Some(i) => i
-    None => fail("no still in the quote's card: \{t.drawn_images()}")
+    None => fail("no still in the quote's card: \{Repr(t.drawn_images())}")
   }
   tap_send(t)
   // as it sets out: where its tile was
   assert_true(
     t.drawn_images().iter().any(fn(i) { (i[0] - tile[0]).abs() < 0.5 && (i[1] - tile[1]).abs() < 0.5 && (i[2] - 56.0).abs() < 0.5 }),
-    msg="\{t.drawn_images()}",
+    msg="\{Repr(t.drawn_images())}",
   )
   // on its way: between its tile's size and its box's, drawn at no size it has at rest
   t.run_for(@sfbase.flight_len(true) * 0.4)
@@ -597,7 +598,7 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
   assert_true(send_flight.get() is None)
   let rest = t.drawn_images().map(fn(i) { i[2] })
   let between = mid.filter(fn(w) { w > 56.5 && rest.iter().all(fn(r) { (r - w).abs() > 0.5 }) })
-  assert_true(between.length() > 0, msg="drawn \{mid} on its way, at rest \{rest}")
+  assert_true(between.length() > 0, msg="drawn \{Repr(mid)} on its way, at rest \{Repr(rest)}")
 }
 
 ///|
@@ -617,7 +618,7 @@ test "a video quoted and sent: its still in its card in the message concentric w
   t.draw()
   let (a, b, c, d) = lowest_picture_corners(t)
   for k in [a, b, c, d] {
-    assert_true((k - @sf.quote_picture_corner).abs() < 0.5, msg="corners \{(a, b, c, d)}, its card's \{@sf.quote_picture_corner}")
+    assert_true((k - @sf.quote_picture_corner).abs() < 0.5, msg="corners \{Repr((a, b, c, d))}, its card's \{@sf.quote_picture_corner}")
   }
 }
 

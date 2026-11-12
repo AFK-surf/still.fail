@@ -95,7 +95,7 @@ test "on the tape a side panel opened and the page brought back while the tape g
   // (on its way to the panel then: moved past where the page has it, the page not yet as narrow as beside it)
   let (x_was, w_was) = was
   let (x_end, w_end) = one.0
-  assert_true(x_was < x_end && w_was > w_end, msg="at back \{was}, at rest \{one.0}")
+  assert_true(x_was < x_end && w_was > w_end, msg="at back \{Repr(was)}, at rest \{Repr(one.0)}")
 }
 
 ///|
@@ -228,10 +228,10 @@ test "on the tape the window made 大屏 and 中屏 again: off the tape, then th
   t.resize(1280.0, 840.0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.tape_seen() is None)
-  assert_false(@sfdesk.wide.tape)
+  assert_false(@sfdesk.wide.tape.get())
   t.resize(720.0, 840.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_eq(tape_now(), was)
 }
@@ -273,7 +273,7 @@ test "中屏: a screen reader's press of a panel's cover brings it over at that 
 /// Whether the page's panel draws the chat titled `title` (in its bar: where the tape has the page then, past the
 /// sidebar's column; the sidebar's rows say the titles too).
 fn page_draws(t : @ui.Tester, title : String) -> Bool {
-  let col = if @sfdesk.wide.tape {
+  let col = if @sfdesk.wide.tape.get() {
     @sfdesk.tape_col_now(t.time())
   } else {
     // (off the tape, Large: past the block's column)
@@ -365,10 +365,10 @@ test "中屏: a page opened in the page's panel shows once, as its view comes or
       if s == (false, true) {
         switched = true
       } else {
-        assert_true(s == (true, false) && !switched, msg="late \{late}, at \{along[i]}: \{s} (\{seen})")
+        assert_true(s == (true, false) && !switched, msg="late \{late}, at \{along[i]}: \{Repr(s)} (\{Repr(seen)})")
       }
     }
-    assert_true(switched, msg="late \{late}: never shown \{seen}")
+    assert_true(switched, msg="late \{late}: never shown \{Repr(seen)}")
     // none drawn till after it: the same at the end
     let end = along[along.length() - 1]
     assert_eq(page_waited_seen(late, [end]), [seen[seen.length() - 1]], msg="late \{late}")
@@ -463,7 +463,7 @@ fn held_let_go(
   })
   let felt = t.haptics().length()
   let now = fn() -> (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane) {
-    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_array(), @sfdesk.wide.tape_at.get())
+    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_owned(), @sfdesk.wide.tape_at.get())
   }
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
@@ -488,10 +488,10 @@ fn held_let_go(
 test "中屏: a finger held on the page beside the sidebar past a long press and let go before any frame: the frame after picks the word under it, as with frames all along; told once, felt once" {
   let (along, along_later) = held_let_go(true)
   let (none, none_later) = held_let_go(false)
-  assert_true(along.0 != "" && along.2 > along.1, msg="\{along}")
+  assert_true(along.0 != "" && along.2 > along.1, msg="\{Repr(along)}")
   assert_eq(none, along)
   assert_eq(along.3, 1)
-  assert_eq(along.4.length(), 1, msg="\{along.4}")
+  assert_eq(along.4.length(), 1, msg="\{Repr(along.4)}")
   // (nothing more after: not picked again, told again or felt again)
   assert_eq(along_later, along)
   assert_eq(none_later, none)
@@ -793,9 +793,9 @@ test "on the tape a finger's short swipe let go slowly goes back; quick, it is f
   page_over(t, 720.0)
   t.press_at(360.0, 400.0)
   t.advance(@ui.input_step_ms * 40.0)
-  t.move(380.0, 400.0)
+  t.move_to(380.0, 400.0)
   t.advance(@ui.input_step_ms * 40.0)
-  t.move(390.0, 400.0)
+  t.move_to(390.0, 400.0)
   assert_eq(@sfdesk.wide.tape_pull.get(), Some(@sfdesk.TapePane::Side))
   t.advance(@ui.input_step_ms * 40.0)
   t.release(390.0, 400.0)
@@ -829,7 +829,7 @@ test "on the tape a table with further to go takes a finger's swipe across it fi
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   let (moved, _) = t.drawn_of(cell).unwrap()
-  assert_true(moved < x, msg="\{(moved, x)}")
+  assert_true(moved < x, msg="\{Repr((moved, x))}")
   // (back to its start, then on: the sidebar's from a swipe begun there)
   t.drag(x + 50.0, y, x + 350.0, y, steps=8)
   t.run_for(@ui.move_most_ms)
@@ -853,7 +853,7 @@ test "on the tape a finger held on a message's words widens them as it slides ac
   slide(t, x, y, x + 60.0, y, 6)
   assert_eq(@sfdesk.wide.tape_pull.get(), None)
   assert_eq(pk.sel.a, first.0)
-  assert_true(pk.sel.b > first.1 + 2, msg="\{(first, pk.sel.a, pk.sel.b)}")
+  assert_true(pk.sel.b > first.1 + 2, msg="\{Repr((first, pk.sel.a, pk.sel.b))}")
   t.release(x + 60.0, y)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
@@ -873,7 +873,7 @@ test "on the tape a picked passage's handle moved across moves its end, no panel
   t.frame()
   slide(t, x, y, x + 60.0, y, 6)
   assert_eq(@sfdesk.wide.tape_pull.get(), None)
-  assert_true(pk.sel.b > first.1 + 2, msg="\{(first, pk.sel.a, pk.sel.b)}")
+  assert_true(pk.sel.b > first.1 + 2, msg="\{Repr((first, pk.sel.a, pk.sel.b))}")
   t.release(x + 60.0, y)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)

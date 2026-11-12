@@ -75,7 +75,7 @@ test "resvg suite" {
   let fonts = @font.FontDb::new()
   let font_list = @utf8.decode(@skiatest.read_file(dir + "fonts.txt")) catch { _ => "" }
   for f in font_list.split("\n") {
-    let f = f.trim(chars=" \r").to_string()
+    let f = f.trim(chars=" \r").to_owned()
     if f != "" {
       fonts.load_font_data(@skiatest.read_file(dir + "fonts/" + f))
     }
@@ -88,14 +88,14 @@ test "resvg suite" {
   let mut passed = 0
   let mut total = 0
   for line in index.split("\n") {
-    let name = line.trim(chars=" \r").to_string()
+    let name = line.trim(chars=" \r").to_owned()
     if name == "" || (only != "" && !only.contains(name)) {
       continue
     }
     total += 1
     let svg = @utf8.decode(@skiatest.read_file(dir + name + ".svg")) catch { _ => "" }
     let opt = { ..@svg.Options::default(), fonts, read_file: fn(f) {
-        let b = @skiatest.read_file(dir + name.rev_find("/").map(fn(i) { name.view(end_offset=i + 1).to_string() }).unwrap_or("") + f)
+        let b = @skiatest.read_file(dir + name.rev_find("/").map(fn(i) { name.exact_view(end=i + 1).to_owned() }).unwrap_or("") + f)
         if b.length() > 0 { Some(b) } else { None }
       } }
     let expected = @skiatest.decode_png(@skiatest.read_file(dir + name + ".png"))

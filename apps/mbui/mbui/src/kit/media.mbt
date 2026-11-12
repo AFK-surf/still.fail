@@ -21,6 +21,7 @@ pub(all) struct MediaTrack {
 
 ///|
 /// How a player stands, as its view says (or pinned, for a fixture's shot).
+#derive(Eq, Debug)
 pub(all) struct MediaStatus {
   /// -1 failed, -2 unsupported format, -3 damaged file, -4 unsupported or damaged, 0 opening, 1 ready
   state : Int
@@ -33,7 +34,7 @@ pub(all) struct MediaStatus {
   /// the picture's own size (0 × 0: none, or not known yet)
   width : Double
   height : Double
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// How `n` stands now (nothing open: opening, of no length).
@@ -70,6 +71,7 @@ pub fn media_status(n : @ui.NativeView?) -> MediaStatus {
 
 ///|
 /// What is playing, in the terms a person cares about.
+#derive(Eq, Debug)
 pub(all) enum MediaPhase {
   Opening
   Buffering
@@ -77,16 +79,17 @@ pub(all) enum MediaPhase {
   Paused
   Ended
   Failed
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What a double tap did, said a moment (the view's words for it): `nudge_ms` back, on, paused, played.
+#derive(Eq, Debug)
 pub(all) enum MediaNote {
   Back(Double)
   Ahead(Double)
   Paused
   Played
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A frame of the player: how it stands, what is playing, whether it is a song, whether what it waits on has been
@@ -270,8 +273,9 @@ pub fn Media::new(
 }
 
 ///|
-/// `track` played from `start` ms in (0: its start), at the speed chosen; what played before stops.
-pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> Unit {
+/// `track` played from `start` ms in (0: its start), at the speed chosen; what played before stops. `play` false: opened
+/// paused there, showing that frame, until it is played.
+pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0, play? : Bool = true) -> Unit {
   self.close_view()
   self.decode_failed = false
   let n = @ui.NativeView::video(track.mime, track.read, direct=track.direct)
@@ -284,7 +288,9 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   if start > 0.0 {
     n.seek(start)
   }
-  n.play()
+  if play {
+    n.play()
+  }
   self.view = Some(n)
   self.track = Some(track)
   self.start_at = start

@@ -25,7 +25,7 @@ pub fn Face::svg_document(self : Face, glyph : Int) -> (Bytes, Int, Int)? {
       if off + len > b.length() {
         return None
       }
-      return Some((b[off:off + len].to_bytes(), start, end))
+      return Some((b[off:off + len].to_owned(), start, end))
     }
   }
   None
@@ -115,7 +115,7 @@ fn Face::sbix_glyph(self : Face, strike : Int, glyph : Int) -> BitmapGlyph? {
   if strike + end > b.length() {
     return None
   }
-  let png = b[d + 8:strike + end].to_bytes()
+  let png = b[d + 8:strike + end].to_owned()
   let (lsb, y_min) = match self.glyph_range(glyph) {
     Some((at, len)) if len > 0 && i16(b, at) != 0 => (fi(self.lsb(glyph)), fi(i16(b, at + 4)))
     _ => (0.0, 0.0)
@@ -253,7 +253,7 @@ fn Face::cbdt_glyph(self : Face, cblc : Int, cbdt : Int, size : Int, glyph : Int
     if png_at + 4 + len > b.length() {
       return None
     }
-    let png = b[png_at + 4:png_at + 4 + len].to_bytes()
+    let png = b[png_at + 4:png_at + 4 + len].to_owned()
     return Some({
       png,
       width: m.1,

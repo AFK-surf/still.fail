@@ -18,15 +18,15 @@ pub fn chat_link(station : String, session : String) -> String {
     Some(at) if at > 0 && at < station.length() - 1 && session != "" => {
       let cloud = cloud_origin()
       let base = if cloud.has_suffix("/") {
-        cloud.view(end_offset=cloud.length() - 1).to_owned()
+        cloud.exact_view(end=cloud.length() - 1).to_owned()
       } else {
         cloud
       }
       base +
       "/o/" +
-      station.view(end_offset=at).to_owned() +
+      station.exact_view(end=at).to_owned() +
       "/" +
-      station.view(start_offset=at + 1).to_owned() +
+      station.exact_view(start=at + 1).to_owned() +
       "/" +
       @codec.encode_uri_component(session)
     }
@@ -46,7 +46,7 @@ pub fn message_link(station : String, session : String, seq : Double) -> String 
 /// Copies a chat's link as a reference is sent (chatLinkText): `[title](link)`, as a press asks it (a menu's item, a
 /// button): on the clipboard and felt at once, said so.
 pub fn copy_chat_link(title : String, link : String) -> Unit {
-  let shown = title.replace_all(old="[", new=" ").replace_all(old="]", new=" ").replace_all(old="\n", new=" ").trim(chars=" ").to_string()
+  let shown = title.replace_all(old="[", new=" ").replace_all(old="]", new=" ").replace_all(old="\n", new=" ").trim(chars=" ").to_owned()
   let shown = if shown == "" { link } else { shown }
   // (its first 120 characters, as Android's chatLinkText cuts it)
   let cut = StringBuilder()

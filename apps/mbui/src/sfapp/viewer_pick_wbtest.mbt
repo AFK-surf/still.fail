@@ -62,7 +62,7 @@ test "touch wide, a tall window: a link held (its menu up), then a picture in th
   }
   let (px, py) = match t.locate("img:compare.png") {
     [p, ..] => p
-    [] => fail("the picture not on the screen with the link: \{link}")
+    [] => fail("the picture not on the screen with the link: \{Repr(link)}")
   }
   let page = (app.nav.top(), app.nav.depth())
   // (nothing over it: the picture opens, back closes it)
@@ -78,11 +78,11 @@ test "touch wide, a tall window: a link held (its menu up), then a picture in th
   t.press_at(x + w / 2.0, y + h / 2.0)
   t.run_for(long_press_ms)
   t.release(x + w / 2.0, y + h / 2.0)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("打开链接") is Some(_), msg="its menu")
   // (the picture tapped where it was)
   t.tap(px, py)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.run_for(@ui.move_most_ms)
   let menu = t.find("打开链接") is Some(_)
   let opened = viewer.get() is Some(_)

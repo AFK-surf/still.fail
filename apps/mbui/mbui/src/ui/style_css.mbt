@@ -14,6 +14,31 @@
 /// exactly). Whatever it does not know (a property, a token, a block) aborts naming the text: the constants are read
 /// as the app starts, so a mistyped one fails every test at once.
 pub fn css(text : String) -> Style {
+  match css_read(text) {
+    Ok(st) => st
+    Err(said) => @halt.saying(said)
+  }
+}
+
+///|
+/// What css(text) reads, or what it says of the text where it cannot (the words css stops with: the two are one reading,
+/// css stopping on what this says).
+pub fn css_read(text : String) -> Result[Style, String] {
+  try css_parse(text) catch {
+    CssError(said) => Err(said)
+  } noraise {
+    st => Ok(st)
+  }
+}
+
+///|
+/// What a css text is short of: the words said of it (Css::fail).
+priv suberror CssError {
+  CssError(String)
+}
+
+///|
+fn css_parse(text : String) -> Style raise CssError {
   let r : Css = { s: text, i: 0 }
   let st : CssStates = {
     narrow: None,
@@ -57,8 +82,8 @@ priv struct CssStates {
 }
 
 ///|
-fn[T] Css::fail(self : Css, what : String) -> T {
-  abort("css: \{what} at \{self.i} in \"\{self.s}\"")
+fn[T] Css::fail(self : Css, what : String) -> T raise CssError {
+  raise CssError("css: \{what} at \{self.i} in \"\{self.s}\"")
 }
 
 ///|
@@ -83,7 +108,7 @@ fn Css::space(self : Css) -> Unit {
 
 ///|
 /// A name: a property's, a token's, a block's.
-fn Css::name(self : Css) -> StringView {
+fn Css::name(self : Css) -> StringView raise CssError {
   self.space()
   let a = self.i
   while self.i < self.s.length() {
@@ -95,11 +120,11 @@ fn Css::name(self : Css) -> StringView {
   if self.i == a {
     self.fail("a name wanted")
   }
-  self.s.view(start_offset=a, end_offset=self.i)
+  self.s.exact_view(start=a, end=self.i)
 }
 
 ///|
-fn Css::expect(self : Css, c : Char) -> Unit {
+fn Css::expect(self : Css, c : Char) -> Unit raise CssError {
   self.space()
   if self.peek() != c {
     self.fail("\{c} wanted")
@@ -109,7 +134,7 @@ fn Css::expect(self : Css, c : Char) -> Unit {
 
 ///|
 /// 10^e, for e of 0 … 22: the powers of ten a Double holds exactly.
-fn css_pow10(e : Int) -> Double {
+fn css_pow10(e : Int) -> Double raise CssError {
   match e {
     0 => 1.0e0
     1 => 1.0e1
@@ -134,7 +159,7 @@ fn css_pow10(e : Int) -> Double {
     20 => 1.0e20
     21 => 1.0e21
     22 => 1.0e22
-    _ => abort("css: 10^\{e} is not exact")
+    _ => raise CssError("css: 10^\{e} is not exact")
   }
 }
 
@@ -142,7 +167,7 @@ fn css_pow10(e : Int) -> Double {
 /// A number, as moonc reads its literal: its digits an integer m (`_` left out), its point and exponent a power of
 /// ten e; with m at most 2^53 and e within ±22 both are Doubles exactly and m·10^e (or m/10^-e) is one rounding, the
 /// nearest Double, which is what the literal is (Clinger's fast path). One past that aborts rather than be near.
-fn Css::num(self : Css) -> Double {
+fn Css::num(self : Css) -> Double raise CssError {
   self.space()
   let neg = self.peek() == '-'
   if neg {
@@ -208,7 +233,7 @@ fn Css::num(self : Css) -> Double {
 
 ///|
 /// An Int64: decimal or `0x` hex (a colour's rrggbbaa).
-fn Css::int64(self : Css) -> Int64 {
+fn Css::int64(self : Css) -> Int64 raise CssError {
   self.space()
   let neg = self.peek() == '-'
   if neg {
@@ -255,7 +280,7 @@ fn Css::int64(self : Css) -> Int64 {
 
 ///|
 /// `(v)`, a constructor's one Double.
-fn Css::arg(self : Css) -> Double {
+fn Css::arg(self : Css) -> Double raise CssError {
   self.expect('(')
   let v = self.num()
   self.expect(')')
@@ -263,7 +288,7 @@ fn Css::arg(self : Css) -> Double {
 }
 
 ///|
-fn Css::arg_int64(self : Css) -> Int64 {
+fn Css::arg_int64(self : Css) -> Int64 raise CssError {
   self.expect('(')
   let v = self.int64()
   self.expect(')')
@@ -271,7 +296,7 @@ fn Css::arg_int64(self : Css) -> Int64 {
 }
 
 ///|
-fn Css::bool(self : Css) -> Bool {
+fn Css::bool(self : Css) -> Bool raise CssError {
   let n = self.name()
   match n {
     "true" => true
@@ -281,7 +306,7 @@ fn Css::bool(self : Css) -> Bool {
 }
 
 ///|
-fn Css::len(self : Css) -> Len {
+fn Css::len(self : Css) -> Len raise CssError {
   let n = self.name()
   match n {
     "Hug" => Hug
@@ -333,7 +358,7 @@ fn Css::len(self : Css) -> Len {
 }
 
 ///|
-fn Css::space_token(self : Css) -> Space {
+fn Css::space_token(self : Css) -> Space raise CssError {
   let n = self.name()
   match n {
     "S0" => S0
@@ -380,7 +405,7 @@ fn Css::space_token(self : Css) -> Space {
 }
 
 ///|
-fn Css::align(self : Css) -> Align {
+fn Css::align(self : Css) -> Align raise CssError {
   let n = self.name()
   match n {
     "AStart" => AStart
@@ -392,7 +417,7 @@ fn Css::align(self : Css) -> Align {
 }
 
 ///|
-fn Css::justify(self : Css) -> Justify {
+fn Css::justify(self : Css) -> Justify raise CssError {
   let n = self.name()
   match n {
     "JStart" => JStart
@@ -404,7 +429,7 @@ fn Css::justify(self : Css) -> Justify {
 }
 
 ///|
-fn Css::radius(self : Css) -> Radius {
+fn Css::radius(self : Css) -> Radius raise CssError {
   let n = self.name()
   match n {
     "Sharp" => Sharp
@@ -433,7 +458,7 @@ fn Css::radius(self : Css) -> Radius {
 }
 
 ///|
-fn Css::stroke(self : Css) -> Stroke {
+fn Css::stroke(self : Css) -> Stroke raise CssError {
   let n = self.name()
   match n {
     "B0" => B0
@@ -448,7 +473,7 @@ fn Css::stroke(self : Css) -> Stroke {
 }
 
 ///|
-fn Css::shadow(self : Css) -> Shadow {
+fn Css::shadow(self : Css) -> Shadow raise CssError {
   let n = self.name()
   match n {
     "NoShadow" => NoShadow
@@ -472,7 +497,7 @@ fn Css::shadow(self : Css) -> Shadow {
 }
 
 ///|
-fn Css::opacity(self : Css) -> Opacity {
+fn Css::opacity(self : Css) -> Opacity raise CssError {
   let n = self.name()
   match n {
     "O0" => O0
@@ -503,7 +528,7 @@ fn Css::opacity(self : Css) -> Opacity {
 }
 
 ///|
-fn Css::color(self : Css) -> Color {
+fn Css::color(self : Css) -> Color raise CssError {
   let n = self.name()
   match n {
     "Clear" => Clear
@@ -573,7 +598,7 @@ fn Css::color(self : Css) -> Color {
 
 ///|
 /// The items up to the end (`states` given: the top, where the state blocks are) or up to a block's `}`.
-fn Css::patch(self : Css, states : CssStates?) -> Patch {
+fn Css::patch(self : Css, states : CssStates?) -> Patch raise CssError {
   let mut row : Bool? = None
   let mut w : Len? = None
   let mut h : Len? = None

@@ -94,7 +94,7 @@ fn bar_middle_node(row : @view.View, src : Source, r : ChatRef, view : () -> Cha
     match view() {
       Some(v) => {
         let station = station_marks(src, w).iter().find_first(fn(s) { s.address == r.station })
-        let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
+        let people = if v.people.length() > 5 { v.people[:5].to_owned() } else { v.people }
         let s = match station {
           Some(s) => "\{s.name}\u{1}\{s.emoji}\u{1}\{s.icon}\u{1}\{s.via}"
           None => ""
@@ -129,7 +129,7 @@ fn bar_middle_node(row : @view.View, src : Source, r : ChatRef, view : () -> Cha
       }))
       .words_look(By(fn() {
         let th = @sf.theme()
-        { size: th.t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false }
+        { size: th.t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @sf.theme().p.text }))
       // (whole while what follows it may leave the row, cut short once nothing more may: the old views' `keep`)
@@ -180,6 +180,9 @@ fn bar_middle_node(row : @view.View, src : Source, r : ChatRef, view : () -> Cha
 /// jobs while it has any (a dot when one died lately or a service is started again), what it is and "…".
 fn bar_end_node(e : @view.View, src : Source, r : ChatRef, view : () -> ChatView?) -> Unit {
   e.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+  // (its "…" is its chat's whole row's: held while its page is open (let go of as it is left, chat_left), asked as it
+  // opens: @sfpages.chat_menu_of)
+  @signals.untracked(fn() { @sfbase.chat_whole_held(src, r) }) |> ignore
   let archivable = fn() {
     match view() {
       Some(v) => v.archivable && !v.archived
@@ -325,7 +328,7 @@ fn station_chip_node(v : @view.View, address : String, s : Station, stint : () -
       t
       .words(Is(s.name))
       .words_look(By(fn() {
-        { size: @sf.theme().t.caption, weight: 400, line: 16.0, wrap: false, tracking: @view.letters_own, balance: false }
+        { size: @sf.theme().t.caption, weight: 400, line: 16.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @sf.theme().p.muted }))
       .cuts(Is(true))
@@ -414,7 +417,7 @@ fn model_mark_node(v : @view.View, a : Agent, size : Double) -> Unit {
   v.box(fn(m) {
     m.width(Is(Some(size))).height(Is(Some(size))) |> ignore
     mark_tile_node(m, a, size)
-    agent_badge_node(m, a.badge, size)
+    @sfpages.agent_badge_node(m, a.badge, size)
   })
   |> ignore
 }
@@ -475,7 +478,7 @@ fn agent_station_node(v : @view.View, a : Agent, station : Station?, stint : () 
                 t
                 .words(Is(s.name))
                 .words_look(By(fn() {
-                  { size: @sf.theme().t.caption, weight: 400, line: said_line, wrap: false, tracking: @view.letters_own, balance: false }
+                  { size: @sf.theme().t.caption, weight: 400, line: said_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
                 }))
                 .ink(By(fn() { @sf.theme().p.muted }))
                 .cuts(Is(true))
@@ -493,7 +496,7 @@ fn agent_station_node(v : @view.View, a : Agent, station : Station?, stint : () 
           over.over(Is(true)) |> ignore
           over.box(fn(b) {
             b.over(Is(true)).width(Is(Some(m))).height(Is(Some(m))) |> ignore
-            agent_badge_node(b, a.badge, m)
+            @sfpages.agent_badge_node(b, a.badge, m)
           })
           |> ignore
           if s.via != "" {
@@ -511,46 +514,5 @@ fn agent_station_node(v : @view.View, a : Agent, station : Station?, stint : () 
         |> ignore
       })
       |> ignore
-  }
-}
-
-///|
-/// The badge at the corner of an agent's mark `side` across (sfpages' agent_badge, as nodes): a dot ringed in the
-/// page's ground, blue waiting on a person, red failed; yellow spokes at work.
-fn agent_badge_node(v : @view.View, badge : String, side : Double) -> Unit {
-  let k = if side / 20.0 < 1.0 { side / 20.0 } else { 1.0 }
-  match badge {
-    "block" | "failed" => {
-      let d = 12.0 * k
-      let at = side - d + 3.0 * k
-      v.box(fn(r) {
-        r
-        .over(Is(true))
-        .width(Is(Some(d)))
-        .height(Is(Some(d)))
-        .offset(Is((at, at)))
-        .radius(Is(d / 2.0))
-        .padding(Is((2.0 * k, 2.0 * k, 2.0 * k, 2.0 * k)))
-        .ground(By(fn() { @sf.theme().p.bg }))
-        |> ignore
-        r.box(fn(dot) {
-          let ink = if badge == "block" { @sf.mark_blue } else { @sf.mark_red }
-          dot.grow(Is(1.0)).radius(Is(d / 2.0)).ground(By(fn() { @ui.tree_theme().color(ink) }))
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    }
-    "run" => {
-      let d = 10.0 * k
-      let at = side - d + 2.0 * k
-      v.box(fn(r) {
-        r.over(Is(true)).width(Is(Some(d))).height(Is(Some(d))).offset(Is((at, at))) |> ignore
-        @sf.spokes_node(r, d, fn() { @sf.mark_yellow }) |> ignore
-      })
-      |> ignore
-    }
-    _ => ()
   }
 }

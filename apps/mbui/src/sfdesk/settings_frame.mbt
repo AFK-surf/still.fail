@@ -75,14 +75,27 @@ pub fn settings_fixture(src : Source, core : Core) -> Unit {
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>
+      // (the first connect listed, as its page has it: the ways it could change are its page's)
       match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).get().value, "items") {
-        [item, ..] => @sfpages.cd_mode_dialog(core, "ws1/st1", Some(item))
+        [row, ..] => {
+          let station = text(Some(row), "station")
+          let here = @settings.here_of(core, "ws1", "星火工作室")
+          match @settings.connect_of(core, here, station, text(field(Some(row), "connect"), "id")) {
+            Some(_) as item => @sfpages.cd_mode_dialog(core, station, item)
+            None => ()
+          }
+        }
         _ => ()
       }
     "new-connect" => @sfpages.new_connect_dialog(src, core, @settings.here_of(core, "ws1", "星火工作室"), "ws1/st1")
     "vault-add" => @sfpages.fx_vault_add_up.val = true
     "vault-editor" => @sfpages.vault_editor_dialog(core, "ws1", "v1", None, kind="token")
     "vault-recover" => @sfpages.vault_recover_dialog(core, "ws1")
+    "copies-confirm" =>
+      match items(@settings.fixture_copies(), "offers") {
+        [copy, ..] => @sfpages.copies_restore_confirm(core, "ws1/st1", Some(copy))
+        _ => ()
+      }
     _ => ()
   }
 }

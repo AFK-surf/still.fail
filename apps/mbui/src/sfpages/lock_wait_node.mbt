@@ -5,29 +5,37 @@
 
 ///|
 /// The page in `parent` (lock_wait_page's): the shield, 等待批准, what it waits for, then the steps
-/// (pair_steps_node). The node.
-pub fn lock_wait_node(parent : @view.View, core : Core, here : @settings.Here) -> @view.View {
+/// (pair_steps_node); `clear()` of its top is under a bar (@sf.waiting_page_node). The node.
+pub fn lock_wait_node(
+  parent : @view.View,
+  core : Core,
+  here : @settings.Here,
+  clear? : () -> Double = fn() { 0.0 },
+) -> @view.View {
   @sf.waiting_page_node(
     parent,
     "shield-check",
     fn() { @sf.t("web-pages.security.waitingTitle") },
     fn() { @sf.t("web-pages.security.waitingLead", args=[("name", here.name)]) },
     fn(col) { pair_steps_node(col, core, here.workspace) },
+    clear~,
   )
 }
 
 ///|
 /// Which of the steps shows (pair_steps' branches): the code typed, one being found, or what is so and the request.
+#derive(Eq)
 priv enum PairShows {
   Typing
   Finding
   Asked
-} derive(Eq)
+}
 
 ///|
 /// The steps in `col` (pair_steps' as nodes, on the waiting page): typing, 输入… over the six boxes, then 正在核对
 /// (turning), or how many tries are left in red, until when the code holds and 重新获取安全码; finding one, turning,
-/// 没收到，重新申请 under it while nothing is asked; else what is so, 发送批准请求 under it.
+/// 没收到，重新申请 under it while nothing is asked; else what is so, 发送批准请求 under it. Last in each, under its
+/// action, the trusted devices it is about (lock_devices_node).
 fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
   let pair = fn() { field(field((core.topic)("lock", { "workspace": Json::string(ws) }).get().value, "me"), "pair") }
   let me = fn() { field((core.topic)("lock", { "workspace": Json::string(ws) }).get().value, "me") }
@@ -43,6 +51,9 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
       _ => Asked
     }
   }
+  // (the devices it dials, the core's rows; typing, those showing the code alone: pair_steps' `devices`)
+  let dialled = fn() { items(pair(), "approvers") }
+  let showing = fn() { dialled().filter(fn(d) { flag(Some(d), "showing") }) }
   // (what is typed, kept while the page shows: emptied as a code is refused or a new one asked for)
   let typed = @ui.Field::new()
   col.pick(shows, fn(v, shown) {
@@ -93,6 +104,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
             |> ignore
           })
         })
+        lock_devices_node(v, showing)
       }
       Finding => {
         lock_note_node(v, fn() { @sf.t("web-pages.security.pairFinding") }, turning=true)
@@ -106,6 +118,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
             |> ignore
           })
         })
+        lock_devices_node(v, dialled)
       }
       Asked => {
         v.show(fn() { state() == "failed" }, fn(n) {
@@ -125,6 +138,8 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
           }, tone=Primary)
           |> ignore
         })
+        // (none found: which they are, its note having said to open one)
+        lock_devices_node(v, fn() { if state() == "none" { dialled() } else { [] } })
       }
     }
   })
@@ -153,6 +168,34 @@ fn lock_note_node(parent : @view.View, words : () -> String, turning? : Bool = f
     @sf.words_node(row, words, fn() { lock_note_words }).words_centered(Is(true)) |> ignore
   })
   |> ignore
+}
+
+///|
+/// The trusted devices a step is about (`list()`, the core's LockApprover rows) on a quiet card under its action;
+/// nothing where the list is empty. A device to a row: its mark (a phone, a computer) and which machine (the user,
+/// #4213, 2026-11-10: fewer words, and under the buttons, which matter more and are never pushed out by it).
+fn lock_devices_node(parent : @view.View, list : () -> Array[Json]) -> Unit {
+  parent.show(fn() { list().length() > 0 }, fn(room) {
+    @sf.style_node(room, fn() { lock_devices })
+    room.box(fn(card) {
+      @sf.style_node(card, fn() { lock_devices_card })
+      // (as wide as its rows, no wider than the steps: a long name goes on in another line)
+      card.max_width(Is(Some(lock_devices_most)), within=true) |> ignore
+      card.each(fn() { indexed(list()) }, fn(e) { e.0 }, fn(row, e) {
+        let d = fn() { Some(e.get().1) }
+        let kind = fn() { lock_device_icon(d()) }
+        @sf.style_node(row, fn() { lock_device })
+        @sf.icon_node(row, @signals.untracked(kind), lock_device_glyph, By(fn() { @sf.theme().p.muted }), name_now=kind) |> ignore
+        row.box(fn(name) {
+          // (as wide as its words, giving way where the card has not the room: they go on in another line)
+          name.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          @sf.words_node(name, fn() { text(d(), "nameText") }, fn() { lock_device_name }) |> ignore
+        })
+        |> ignore
+      })
+    })
+    |> ignore
+  })
 }
 
 ///|

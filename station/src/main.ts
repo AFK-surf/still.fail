@@ -3,16 +3,16 @@
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
-//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--rig HASH] [--join | --stay] [--data DIR]   status [--data DIR]   id [--data DIR]
 //   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
-//   lock status|reset [--data DIR]
+//   lock status|reset [--workspace ID] [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { type AddressInfo, setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
-import { enroll, id, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
+import { enroll, id, isRig, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
 import { readState } from "./cloud/state.ts";
 import { loadKey } from "./cloud/key.ts";
 import { shortCode } from "./cloud/lock.ts";
@@ -31,7 +31,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, Own, Parts, Paths, Peers, Previous, Readers, ReadersAndStore, ScreenRegistry, StationConfig, StationDrive, Up } from "./services.ts";
+import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, DeviceSources, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, Own, Parts, Paths, Peers, Previous, Readers, ReadersAndStore, ScreenRegistry, StationConfig, StationDrive, Up } from "./services.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
 import { BrowserLive } from "./browser/module.ts";
@@ -49,14 +49,21 @@ import { FeishuLive } from "./feishu/module.ts";
 import { CommaLive } from "./comma/module.ts";
 import { WorkspaceConnectsLive } from "./connects/workspace.ts";
 import { ModelsLive } from "./models/module.ts";
+import { CopiesLive } from "./replica/module.ts";
+import { takeBackSoon } from "./replica/restore.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
-import { timeFiles } from "./ops/file-waits.ts";
+import { timeFiles, timeProcesses } from "./ops/file-waits.ts";
 import { longestWaits } from "./ops/waits.ts";
 import { takeQueries } from "./store/timed.ts";
 import { platform } from "./platform/index.ts";
 import { keepRunnerIn } from "./platform/processes.ts";
+import { becomeOther } from "./ops/restart.ts";
+import { RigLive, RigMeshLive, RigSide } from "./rig/main.ts";
+import { RigsLive } from "./rigs/module.ts";
+import { DevicesLive } from "./devices/module.ts";
+import { StatusLive } from "./api/status.ts";
 
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
@@ -78,7 +85,7 @@ const args = process.argv.slice(2);
 const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
 /// Flags that take a value: what follows them is no command's argument.
-const VALUED = ["--data", "--provider", "--lock"];
+const VALUED = ["--data", "--provider", "--lock", "--rig", "--workspace"];
 /// How often the main thread's longest hold is looked at, and from how long a hold is said.
 const HELD_EVERY_MS = 10_000;
 const HELD_MS = 1_000;
@@ -90,7 +97,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--rig HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status | lock reset [--workspace ID] | heap");
   process.exit(2);
 }
 
@@ -139,24 +146,47 @@ const Loopback = (control: Control) =>
     }),
   );
 
+/// A station's process whose machine is a rig now (made one in the app: sessions/agents.ts; or enrolled as one from
+/// another process, `enroll --rig`) gives way to the rig's: its launcher asked to hand over, so its connections end
+/// as a restart's do (a station that asks it next reaches the new process, not one gone without a word); with no
+/// launcher, it ends for whoever started it to start it again.
+const BecameRig = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const cloud = (yield* ControlPlane).state;
+    const { data } = yield* Paths;
+    let asked = false;
+    yield* Effect.acquireRelease(
+      Effect.sync(() => cloud.listen((s) => {
+        if (s?.rig === undefined || !s.workspace || cloud.removed() || asked) return;
+        asked = true;
+        log.warn("station", "this machine is a rig now: the station's process gives way to the rig's");
+        becomeOther(data);
+      })),
+      (off) => Effect.sync(off),
+    );
+  }),
+);
+
 function run() {
   const app = flag(args, "--app");
   if (!app) usage();
   // Read the essential files before telling the launcher this process is ready. In particular, do not start with
   // defaults when another program has made config.json unreadable.
   const settings = new ConfigFile(data);
+  settings.watch();
   readState(data);
   const control = launcher(args);
   // Runners (agents', jobs') from copies under the data directory on Windows, out of reach of the app's installer.
   keepRunnerIn(join(data, "run", "bin"));
   // Error lines to still.fail's error tracking, while config.json says so (telemetry.errors) and the build has a key.
-  const stationId = () => {
-    try {
-      return JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null;
-    } catch {
-      return null;
-    }
-  };
+  // The station's id as cloud.json says it, held here: read once before the station serves, then as the control plane's
+  // state says it changed (`main`). Read from the disk at each of the log's batches (every 5 s), a file of 3 KB held the
+  // main thread a second at a time on a station whose disk was kept busy (2026-11-02).
+  let stationKey: string | null = null;
+  try {
+    stationKey = JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null; // sync: before it serves
+  } catch {}
+  const stationId = () => stationKey;
   const reports = new ErrorReports({
     key: builtKey(join(app, "dist", "admin")),
     enabled: () => settings.raw()?.telemetry?.errors === true,
@@ -166,13 +196,32 @@ function run() {
   // Every line to still.fail, scrubbed, unless config.json turns it off (telemetry.logs: false); sent once the mesh is up.
   stationLog.configure({ enabled: () => settings.raw()?.telemetry?.logs !== false, station: stationId, version });
   hearLines((line) => stationLog.add(line));
-  const paths = Layer.succeed(Paths)({ data, app });
+  // A lost station's chats brought here to take back (replica/restore.ts): put in before the store opens.
+  const beforeStore = () => takeBackSoon(data, join(data, "stillfail.db"), wall.now()).then(
+    (restored) => { if (restored !== null) log.info("copies", "a lost station's chats taken back", { station: restored.origin, from: restored.from }); },
+    (e: Error) => log.error("copies", "a lost station's chats not taken back", { error: e.message }),
+  );
+  const paths = Layer.succeed(Paths)({ data, app, beforeStore });
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, ReadersAndStore, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(Previous.layer), Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, CheckpointsLive).pipe(
+  // A rig (a station that only runs tasks: cloud.json's `rig`, written by `enroll --rig`) is another program of the same release: of a station's
+  // parts only what another station asks of it (rig/main.ts). What a machine is, is read once, as it starts; enrolled
+  // as the other meanwhile, the process ends and the launcher starts it again as that.
+  const asRig = readState(data)?.rig !== undefined;
+  const rigStation = Layer.mergeAll(RigMeshLive, Loopback(control), AwakeLive, CheckpointsLive).pipe(
+    Layer.provideMerge(RigLive(control)),
+    Layer.provideMerge(RigSide.layer),
+    Layer.provideMerge(AdminHost.layer),
+    Layer.provideMerge(StationConfig.layer),
+    Layer.provideMerge(Peers.layer),
+    Layer.provideMerge(MeshSide.layer),
+    Layer.provideMerge(Parts.layer),
+    Layer.provideMerge(parts),
+  );
+  const station = Layer.mergeAll(MeshLive, Loopback(control), StatusLive, AwakeLive, CheckpointsLive, BecameRig).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive, RigsLive, DevicesLive, CopiesLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's: the platform's, before the agents.
@@ -189,6 +238,8 @@ function run() {
     Layer.provideMerge(Peers.layer),
     // What the mesh and the agents' side share, each filling in its own (services.ts MeshSide).
     Layer.provideMerge(MeshSide.layer),
+    // Where devices come from besides the whole stations' (services.ts DeviceSources): the rigs' and phones' parts.
+    Layer.provideMerge(DeviceSources.layer),
     Layer.provideMerge(Parts.layer),
     // The agents' side, once made (the admin API asks for it as a request comes).
     Layer.provideMerge(AgentsSide.layer),
@@ -196,25 +247,35 @@ function run() {
   );
   // What the parts hold only in memory (the vault's grants), carried over to the next process at a handover.
   let carry = () => {};
-  const main = Effect.gen(function* () {
+  const running = Effect.gen(function* () {
     yield* SubscriptionRef.set(yield* Up, true);
     const stationParts = yield* Parts;
+    const plane = yield* ControlPlane;
+    stationKey = plane.state.state?.station ?? null;
+    plane.state.listen((s) => void (stationKey = s?.station ?? null));
     control.carried((what) => stationParts.takeUp(what));
     carry = () => control.carry(stationParts.carried());
     control.ready(version());
-    log.info("station", "station up", { version: version(), data });
+    log.info("station", asRig ? "rig up" : "station up", { version: version(), data });
     // Where the memory goes, in MB: the main thread's (and resident), and each reader's heap. Every ten minutes, or
     // every ten seconds with STILLFAIL_MEMLOG (for measuring).
     const readers = yield* Readers;
     // `stillfail heap`: a snapshot of this thread's heap, asked for from the command line.
     answerHeapRequests(data);
-    // The main thread held (a query of seconds, a long parse): said as it is let go, with how long. Every device's
-    // requests wait meanwhile; the slow queries say what held it (store/timed.ts). With no slow query, what the
-    // process did meanwhile says whether it worked (`cpuMs`, all its threads'), collected its garbage (`gcMs`, this
-    // thread's, and the longest pause), waited on pages of its memory read back from the disk (`pageFaults`), on files
-    // (`filesMs`, its synchronous calls of node:fs: ops/file-waits.ts) or on its statements (`queriesMs`, all of them,
-    // none slow: store/timed.ts); the longest of each by who made them.
+    // The main thread held (a query of seconds, a long parse): said as it is let go, with how long (`heldMs`, the
+    // longest one hold of the window). Every device's requests wait meanwhile. What may have held it is said two ways,
+    // never to be added up against `heldMs`:
+    // - the longest single wait of each kind in the window (`longestQueryMs`, `longestFileMs`, `longestProcessMs`,
+    //   `gcLongestMs`): one of these as long as the hold was that hold, or in it;
+    // - all of the window's (`window*`, over `windowMs`, some 10 s): the process's CPU (all its threads') and this
+    //   thread's own, its garbage collected, pages of its memory read back from the disk, the times the system took its
+    //   CPUs from it (`windowSwitches`: another process's work wanted them), its synchronous calls of node:fs and its
+    //   statements (store/timed.ts) and the processes it waited on (ops/file-waits.ts), many short ones as much as a
+    //   long one, with the longest by who made them.
+    // Its own CPU near `heldMs` is work of its own; neither that nor a wait near it: it was not given a CPU, or waited on
+    // what is timed nowhere.
     const files = timeFiles();
+    const processes = timeProcesses();
     const held = monitorEventLoopDelay({ resolution: 50 });
     held.enable();
     const gc = { ms: 0, longest: 0 };
@@ -225,23 +286,36 @@ function run() {
       }
     }).observe({ entryTypes: ["gc"] });
     let cpu = process.cpuUsage();
-    let faults = process.resourceUsage().majorPageFault;
-    wall.every(HELD_EVERY_MS, () => {
+    let ownCpu = process.threadCpuUsage();
+    let usage = process.resourceUsage();
+    let sampled = wall.now();
+    wall.every(HELD_EVERY_MS, () => { // timer: a sample of this thread
       const ms = held.max / 1e6;
+      const now = wall.now();
       const used = process.cpuUsage(cpu);
-      const faulted = process.resourceUsage().majorPageFault;
+      const own = process.threadCpuUsage(ownCpu);
+      const nowUsage = process.resourceUsage();
       const waited = files.take();
+      const spawned = processes.take();
       const queried = takeQueries();
       if (ms >= HELD_MS) {
         log.warn("station", "the main thread was held", {
-          ms: Math.round(ms), cpuMs: Math.round((used.user + used.system) / 1000), gcMs: Math.round(gc.ms), gcLongestMs: Math.round(gc.longest), pageFaults: faulted - faults,
-          filesMs: Math.round(waited.ms), files: waited.calls, ...(waited.by.size > 0 ? { waitedOn: longestWaits(waited) } : {}),
-          queriesMs: Math.round(queried.ms), queries: queried.calls, ...(queried.by.size > 0 ? { queriedBy: longestWaits(queried) } : {}),
+          heldMs: Math.round(ms),
+          longestQueryMs: Math.round(queried.longest), longestFileMs: Math.round(waited.longest), longestProcessMs: Math.round(spawned.longest), gcLongestMs: Math.round(gc.longest),
+          windowMs: now - sampled,
+          windowCpuMs: Math.round((used.user + used.system) / 1000), windowThreadCpuMs: Math.round((own.user + own.system) / 1000),
+          windowGcMs: Math.round(gc.ms), windowPageFaults: nowUsage.majorPageFault - usage.majorPageFault,
+          windowSwitches: nowUsage.involuntaryContextSwitches - usage.involuntaryContextSwitches,
+          windowFilesMs: Math.round(waited.ms), windowFiles: waited.calls, ...(waited.by.size > 0 ? { waitedOn: longestWaits(waited) } : {}),
+          windowQueriesMs: Math.round(queried.ms), windowQueries: queried.calls, ...(queried.by.size > 0 ? { queriedBy: longestWaits(queried) } : {}),
+          windowProcessesMs: Math.round(spawned.ms), windowProcesses: spawned.calls, ...(spawned.by.size > 0 ? { spawnedBy: longestWaits(spawned) } : {}),
         });
       }
       held.reset();
       cpu = process.cpuUsage();
-      faults = faulted;
+      ownCpu = process.threadCpuUsage();
+      usage = nowUsage;
+      sampled = now;
       gc.ms = 0;
       gc.longest = 0;
     });
@@ -253,7 +327,8 @@ function run() {
       );
     });
     return yield* Effect.never;
-  }).pipe(Effect.provide(station));
+  });
+  const main = asRig ? running.pipe(Effect.provide(rigStation)) : running.pipe(Effect.provide(station));
   const fiber = Effect.runFork(main);
 
   let stopping = false;
@@ -285,19 +360,23 @@ switch (command) {
     const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
     const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
     const lock = flag(args, "--lock");
-    if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock))) usage();
+    // A rig (a station that only runs tasks): its person's own lock's hash, which the command that adds it names.
+    const rig = flag(args, "--rig");
+    if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock)) || (rig !== undefined && !/^[0-9a-f]{64}$/.test(rig))) usage();
     // One more workspace, staying in those it is in: at the control plane it is enrolled with.
     // --stay (the installers'): joins when the station is in a workspace already, else enrolls; at the control plane it
     // is enrolled with whatever host the command names (the test channel's app.youdid.wtf is still.fail's API too), a
     // token that plane does not know refused there.
-    const stay = !args.includes("--join") && args.includes("--stay") && staysIn(data);
-    if (args.includes("--join") || stay) {
+    // (a rig is in one workspace: it enrolls, which refuses a machine that is a station now, and the other way round)
+    const stay = rig === undefined && !isRig(data) && !args.includes("--join") && args.includes("--stay") && staysIn(data);
+    if (rig === undefined && (args.includes("--join") || stay)) {
       const now = readState(data);
       if (!stay && now !== null && now.origin !== origin.replace(/\/+$/, "")) {
         console.error(`this station is enrolled at ${now.origin}; it joins workspaces there only`);
         process.exit(1);
       }
-      const joined = await joinWorkspace(data, token, lock).catch((error) => {
+      // On this machine: its person may set aside a lock kept here for that workspace by naming another.
+      const joined = await joinWorkspace(data, token, lock, { atMachine: true }).catch((error) => {
         if (stay) console.error(`this station is in workspace ${now?.workspace_name || now?.workspace} (${now?.origin}): it was to join this one beside it, which did not go through. To move it here instead, remove it from that workspace first.`);
         throw error;
       });
@@ -306,14 +385,15 @@ switch (command) {
       if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(loadKey(data).id) }));
       break;
     }
-    await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock);
+    await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock, rig);
     break;
   }
   // The workspace lock on this machine: what is pinned, or taking it away.
   case "lock": {
     const [, what] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
-    if (what !== "status" && what !== "reset") usage();
-    console.log(lockCommand(data, what));
+    const workspace = flag(args, "--workspace");
+    if ((what !== "status" && what !== "reset") || (workspace !== undefined && what !== "reset")) usage();
+    console.log(lockCommand(data, what, workspace));
     break;
   }
   case "status":

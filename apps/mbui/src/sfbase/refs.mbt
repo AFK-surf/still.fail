@@ -29,7 +29,7 @@ priv struct RefField {
 }
 
 ///|
-let ref_fields : Map[String, RefField] = {}
+let ref_fields : Map[String, RefField] = Map([])
 
 ///|
 /// From how many characters words pasted at once go as a file (the core's PASTE_THRESHOLD; 0 till it has said).
@@ -146,7 +146,7 @@ pub fn refs_edited(src : Source, key : String, input : @ui.Field, here : String,
   match mark {
     Some(i) => {
       let a = f.marks[i].0
-      refs_put(key, input, was.view(end_offset=a).to_string() + was.view(start_offset=wc).to_string(), caret=a)
+      refs_put(key, input, was.clamped_view(end=a).to_owned() + was.clamped_view(start=wc).to_owned(), caret=a)
       return
     }
     None => ()
@@ -155,7 +155,7 @@ pub fn refs_edited(src : Source, key : String, input : @ui.Field, here : String,
   refs_marks_moved(f, was, now)
   // what was put in at once: the chats' links in it
   if put - start > 1 && !locked {
-    let pasted = now.view(start_offset=start, end_offset=put).to_string()
+    let pasted = now.clamped_view(start=start, end=put).to_owned()
     refs_pasted(src, key, input, here, now, start, pasted)
   }
   if anchor == caret {
@@ -251,15 +251,15 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
       if a < at || b > s.length() || b - a < 4 {
         continue
       }
-      sb.write_string(s.view(start_offset=at, end_offset=a).to_string())
+      sb.write_string(s.clamped_view(start=at, end=a).to_owned())
       sb.write_string("\u{200B}@")
-      sb.write_string(s.view(start_offset=a + 2, end_offset=b - 1).to_string())
+      sb.write_string(s.clamped_view(start=a + 2, end=b - 1).to_owned())
       sb.write_string("\u{200B}")
       at = b
       spans.push((a + 1, a + 2, @sf.alpha(accent, ref_at_alpha)))
       spans.push((a + 2, b - 1, accent))
     }
-    sb.write_string(s.view(start_offset=at).to_string())
+    sb.write_string(s.clamped_view(start=at).to_owned())
     (sb.to_string(), spans)
   }
 }
@@ -267,7 +267,7 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
 ///|
 /// Words `s` without the blanks at their ends, as they are sent.
 fn sent_words_of(s : String) -> String {
-  s.trim(chars=" \n\t").to_string()
+  s.trim(chars=" \n\t").to_owned()
 }
 
 ///|
@@ -307,7 +307,7 @@ pub fn refs_sent_runs(key : String, words : String) -> Json? {
     Array(a) => a.copy()
     _ => if held != "" { [{ "text": Json::string(held) }] } else { [] }
   }
-  let rest = words.view(start_offset=held.length()).to_string()
+  let rest = words.exact_view(start=held.length()).to_owned()
   if rest != "" {
     runs.push({ "text": Json::string(rest) })
   }
@@ -323,14 +323,14 @@ fn refs_marked_runs(key : String, words : String) -> Json? {
   let runs : Array[Json] = []
   let plain = fn(a : Int, b : Int) {
     if b > a {
-      runs.push({ "text": Json::string(words.view(start_offset=a, end_offset=b).to_string()) })
+      runs.push({ "text": Json::string(words.clamped_view(start=a, end=b).to_owned()) })
     }
   }
   let mut at = 0
   for m in marks {
     let (a, b) = m
     plain(at, a)
-    runs.push({ "text": Json::string(words.view(start_offset=a + 2, end_offset=b - 1).to_string()), "ref": true })
+    runs.push({ "text": Json::string(words.clamped_view(start=a + 2, end=b - 1).to_owned()), "ref": true })
     at = b
   }
   plain(at, words.length())
@@ -345,7 +345,7 @@ pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
   let f = ref_field(key)
   let s = f.marks_in
   let blank = fn(i : Int) {
-    let u = s.unsafe_charcode_at(i)
+    let u = s.unsafe_get(i).to_int()
     u == 32 || u == 10 || u == 9
   }
   let mut lead = 0
@@ -356,7 +356,7 @@ pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
   while end > lead && blank(end - 1) {
     end -= 1
   }
-  guard words.has_prefix(s.view(start_offset=lead, end_offset=end).to_string()) else { return [] }
+  guard words.has_prefix(s.exact_view(start=lead, end=end).to_owned()) else { return [] }
   f.marks.filter_map(fn(m) { if m.0 >= lead && m.1 <= end { Some((m.0 - lead, m.1 - lead)) } else { None } })
 }
 
@@ -483,7 +483,7 @@ pub fn refs_pick(
             refs_put(
               key,
               input,
-              now.view(end_offset=start).to_string() + mark + " " + now.view(start_offset=caret).to_string(),
+              now.exact_view(end=start).to_owned() + mark + " " + now.clamped_view(start=caret).to_owned(),
               caret=start + mark.length() + 1,
             )
           }
@@ -524,7 +524,7 @@ fn refs_pasted(src : Source, key : String, input : @ui.Field, here : String, pas
     for x in items(Some(v), "refs") {
       let o = Some(x)
       let a = number(o, "start").to_int()
-      let whole = put.view(start_offset=a, end_offset=number(o, "end").to_int()).to_string()
+      let whole = put.clamped_view(start=a, end=number(o, "end").to_int()).to_owned()
       let station = text(o, "station")
       let id = text(o, "id")
       let history = text(o, "history")
@@ -538,7 +538,7 @@ fn refs_pasted(src : Source, key : String, input : @ui.Field, here : String, pas
             refs_put(
               key,
               input,
-              now.view(end_offset=p).to_string() + mark + now.view(start_offset=p + whole.length()).to_string(),
+              now.clamped_view(end=p).to_owned() + mark + now.clamped_view(start=p + whole.length()).to_owned(),
               caret=moved,
             )
           }
@@ -568,16 +568,16 @@ fn refs_pasted(src : Source, key : String, input : @ui.Field, here : String, pas
           let cut = station.find("/").unwrap_or(0)
           let page = trimmed(base) +
             "/w/" +
-            station.view(end_offset=cut).to_string() +
+            station.exact_view(end=cut).to_owned() +
             "/s/" +
-            station.view(start_offset=cut + 1).to_string() +
+            station.clamped_view(start=cut + 1).to_owned() +
             "/chats/" +
             @codec.encode_uri_component(id) +
             history
           // the mark only once the core keeps its link (failing, the link stays as it is)
           (src.call)(
             "chat.refs",
-            { "links": [[Json::string(mark.view(start_offset=2, end_offset=mark.length() - 1).to_string()), Json::string(page)]] },
+            { "links": [[Json::string(mark.clamped_view(start=2, end=mark.length() - 1).to_owned()), Json::string(page)]] },
             fn(r) { if r is Ok(_) { place(mark) } },
           )
         },
@@ -589,7 +589,7 @@ fn refs_pasted(src : Source, key : String, input : @ui.Field, here : String, pas
 ///|
 fn trimmed(o : String) -> String {
   if o.has_suffix("/") {
-    o.view(end_offset=o.length() - 1).to_string()
+    o.exact_view(end=o.length() - 1).to_owned()
   } else {
     o
   }

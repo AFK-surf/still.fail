@@ -3,6 +3,7 @@
 
 ///|
 /// What a widget is (ARIA's roles, those the components use).
+#derive(Eq, Debug)
 pub(all) enum Role {
   Text
   Group
@@ -38,19 +39,76 @@ pub(all) enum Role {
   Form
   Heading
   ScrollArea
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as tests and the said tree's text write a node's role: what `derive(Show)` wrote.
+pub impl Show for Role with output(self, logger) {
+  logger.write_string(
+    match self {
+      Text => "Text"
+      Group => "Group"
+      Button => "Button"
+      Link => "Link"
+      Checkbox => "Checkbox"
+      Switch => "Switch"
+      Radio => "Radio"
+      RadioGroup => "RadioGroup"
+      Slider => "Slider"
+      ProgressBar => "ProgressBar"
+      Tab => "Tab"
+      TabList => "TabList"
+      TabPanel => "TabPanel"
+      Dialog => "Dialog"
+      AlertDialog => "AlertDialog"
+      Tooltip => "Tooltip"
+      Menu => "Menu"
+      MenuBar => "MenuBar"
+      MenuItem => "MenuItem"
+      MenuItemCheckbox => "MenuItemCheckbox"
+      MenuItemRadio => "MenuItemRadio"
+      Listbox => "Listbox"
+      Option => "Option"
+      Combobox => "Combobox"
+      Toolbar => "Toolbar"
+      Separator => "Separator"
+      Image => "Image"
+      TextField => "TextField"
+      Status => "Status"
+      Region => "Region"
+      Navigation => "Navigation"
+      Form => "Form"
+      Heading => "Heading"
+      ScrollArea => "ScrollArea"
+    },
+  )
+}
 
 ///|
 /// A checkbox's state (and a menu's checkbox item's): off, on, or neither (some of what it stands for is on).
+#derive(Eq, Debug)
 pub(all) enum Check {
   Off
   On
   Mixed
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as tests and the said tree's text write a checkbox's state: what `derive(Show)` wrote.
+pub impl Show for Check with output(self, logger) {
+  logger.write_string(
+    match self {
+      Off => "Off"
+      On => "On"
+      Mixed => "Mixed"
+    },
+  )
+}
 
 ///|
 /// What can be done to a widget: pressed (a click, a tap), moved up or down a step (a slider), opened or closed,
 /// sent away (a dialog, a menu: Escape), given the keyboard's focus.
+#derive(Eq, Debug)
 pub(all) enum Action {
   Activate
   Increment
@@ -62,13 +120,14 @@ pub(all) enum Action {
   /// words put in a field in place of what it held, as a screen reader writes them (UI Automation's SetValue,
   /// TalkBack's set text); among what a widget says it takes, its words are none's (SetText(""))
   SetText(String)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What a node of the window's tree says it is (View::says): its role, its label (none: the words it holds), what
 /// describes it more, its value as words (and as a number in a range: a progress bar's, a slider's), its state, what can
 /// be done to it (Activate where it is pressed: its on_press,
 /// as a press there runs it). Whether it is disabled is what its presses say (View::presses), not said here.
+#derive(Eq, Debug)
 pub(all) struct Said {
   role : Role
   label : String
@@ -81,7 +140,7 @@ pub(all) struct Said {
   selected : Bool?
   pressed : Bool?
   actions : Array[Action]
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A node of `role`, what else it says as given.
@@ -241,7 +300,8 @@ pub fn Tree::words_within(
     let n = self.nodes[at]
     let me = { at, gen: n.gen }
     match self.drawn_of(me) {
-      Some(d) => put(set(d.words, d.words_look))
+      // (on their lines as written where they keep their breaks, View::words_breaks: as they are, `set` none of theirs)
+      Some(d) => put(if d.words_breaks { d.words } else { set(d.words, d.words_look) })
       None => ()
     }
     for k in self.kids_in_order(at) {
@@ -268,10 +328,11 @@ pub fn Tree::words_within(
 ///|
 /// What one of what is read out holds, in its order (Tree::said_pass): a node read out, or one hosting an old view (what
 /// that old view says read out in its place, then what of the tree it holds).
+#derive(Eq, Debug)
 pub(all) enum SaidKid {
   Entry(NodeId)
   Hosts(NodeId)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A node read out as a pass found it (Tree::said_pass): what it says (None: it says nothing, the node what a column
@@ -367,7 +428,7 @@ pub fn Tree::said_pass(
     }
   }
 
-  let visited : Map[Int, Bool] = {}
+  let visited : Map[Int, Bool] = Map([])
   // (one read out: what it says, what it is called and what it holds where `words`, `kids`)
   let entry = fn(
     at : Int,
@@ -513,7 +574,8 @@ pub fn Tree::said_pass(
     }
     None
   }
-  for at, gen in self.said_again.to_array() |> Map::from_array {
+  let again_now = self.said_again.to_array() |> Map::from_array
+  for at, gen in again_now {
     if visited.contains(at) {
       continue
     }
@@ -524,7 +586,8 @@ pub fn Tree::said_pass(
     let (x, y, _, s) = self.projected(at)
     entry(at, parent_of(at), x, y, s, true, true)
   }
-  for at, gen in self.said_helds.to_array() |> Map::from_array {
+  let helds_now = self.said_helds.to_array() |> Map::from_array
+  for at, gen in helds_now {
     if visited.contains(at) {
       continue
     }

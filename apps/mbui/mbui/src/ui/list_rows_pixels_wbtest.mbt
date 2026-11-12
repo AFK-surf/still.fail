@@ -174,6 +174,6 @@ test "a page's list of blocks made as they show, where its host sets its rows on
   let now = rows_window_drawn(t)
   let row10 = fn(a : Array[(Int, Double, Double)]) { a.search_by(fn(d) { d.0 == 10 }).map(fn(i) { a[i] }).unwrap() }
   // (where it is drawn summed down what holds it: the same sum but for its last bits, a billionth of a point)
-  assert_true((row10(now).1 - row10(was).1).abs() <= 1.0e-9 && row10(now).2 == row10(was).2, msg="row 10 moved: \{row10(was)} to \{row10(now)}")
+  assert_true((row10(now).1 - row10(was).1).abs() <= 1.0e-9 && row10(now).2 == row10(was).2, msg="row 10 moved: \{Repr(row10(was))} to \{Repr(row10(now))}")
   assert_eq(rows_window_faults(t, s.at(tree), -1), [])
 }

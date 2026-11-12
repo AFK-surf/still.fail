@@ -74,6 +74,9 @@ export interface IrohEndpoint {
   dhtSaid?(keep: boolean): { lines: { at: number; text: string }[]; dropped: number };
   /// Update forwarding entrances without closing any station connection.
   setRelayEntries?(entries: { entry: string; relay: string }[]): Effect.Effect<void, HostError>;
+  /// Whether its streams' `tap` decodes a view's Opus sound into the PCM the app plays now (the shell's, asked as each
+  /// view opens: client/shell ScreenTap, `tap.opus`), so the view may ask the station for Opus.
+  opus?(): boolean;
   close(): Effect.Effect<void>;
 }
 

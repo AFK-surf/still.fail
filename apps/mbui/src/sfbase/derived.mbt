@@ -342,7 +342,7 @@ pub fn[T] made_again(
     let index = match by.val {
       Some(m) => m
       None => {
-        let m : Map[String, (Json, T)] = {}
+        let m : Map[String, (Json, T)] = Map([])
         for p in was {
           m[key(p.0)] = p
         }

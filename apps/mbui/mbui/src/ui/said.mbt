@@ -4,7 +4,8 @@
 // is a list of the frame's (a SaidList, one of `build_lists` or `paint_lists`), added to in the order said. What a
 // node is said to be as it is built is no list: its node holds it (the pointer's shape over it, what a press on it
 // does besides, whether it asks for a menu: Node's `marks`, carried by its targets, hit_marks; how it takes the
-// focus: Node's `focus`).
+// focus: Node's `focus`). What is said of an id that has no node (a link in rich words) is the frame's, by its id
+// (Ctx's `marks_ahead`), and a row kept says it again with what it marked used (Ctx::mark_id).
 //
 // A list's row kept as its nodes (kept_nodes.mbt) takes from each list what its build and its paint added, from
 // where the list stood as they began, and says it again, moved to where it is put back, each frame it is kept: all of
@@ -45,12 +46,6 @@ let unmoved : Moved = {
   band_b: 0.0,
   node: -1,
   by: 0,
-}
-
-///|
-/// What a build said said again of node `node` (a part's or a row's box drawn again).
-fn moved_to(node : Int) -> Moved {
-  { ..unmoved, node: node }
 }
 
 ///|
@@ -173,13 +168,6 @@ fn Ctx::build_take(self : Ctx, marks : Array[Int], into : Array[&SaidAgain], cut
 }
 
 ///|
-/// The targets' place among the paint lists, and what scrolls' (a part's marks: what the hand is found on).
-let said_hits : Int = 0
-
-///|
-let said_scrolls : Int = 1
-
-///|
 /// Where each of the frame's paint lists stands now (`marks`, filled).
 fn Ctx::paint_marks(self : Ctx, marks : Array[Int]) -> Unit {
   marks.clear()
@@ -235,7 +223,7 @@ fn said_sel(k : SelKey) -> String {
   match k {
     NoSel => "0"
     Para(id) => said_id(id).to_string()
-    Words(tree, row, place) => "w\{tree}/\{row.at}/\{row.gen}/\{place}"
+    Words(tree, row, place) => "w\{tree}/\{row.at}/\{row.gen}/\{list_text(place)}"
   }
 }
 
@@ -279,6 +267,7 @@ fn Ctx::said_logged(self : Ctx) -> Unit {
 /// in 64ths of a point, ids numbered as first said in the frame: what a part or a row drawn again must say as its build
 /// does. Shown from the frame after the first that asks.
 pub fn Tester::said(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   said_log.on = true
   frame_said.val = Some(fn(c, at) { if at == 0 { c.said_built_logged() } else { c.said_logged() } })
@@ -730,7 +719,7 @@ impl SaidAgain for ScrollsTaken with said_show(self, sb) {
 impl SaidAgain for SelsTaken with said_show(self, sb) {
   for t in self.sels {
     sb.write_string(
-      "sel \{said_sel(t.base)} \{t.at} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
+      "sel \{said_sel(t.base)} \{list_text(t.at)} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
     )
   }
 }

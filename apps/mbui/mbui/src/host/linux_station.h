@@ -9,6 +9,7 @@
 // linux_app.c after linux_life.h (its json_put, and mini_json.h's jparse).
 #include <errno.h>
 #include <signal.h>
+#include "station_install.h"  // what the installer is handed
 
 // (another product's app, its station's own: MBUI_STATION_ID's directory and service, cloud/src/install.ts's names)
 static const char *station_id(void) {
@@ -219,33 +220,24 @@ static void local_fail(const char *why) {
   schedule();
 }
 
-// what may be put in a shell's command as it is: nothing but what a URL or a token is made of
-static int sh_plain(const char *s) {
-  for (; *s; s++)
-    if (!g_ascii_isalnum(*s) && !strchr(":/.-_~?&=%+", *s)) return 0;
-  return 1;
-}
-
 void mb_host_local_station_act(moonbit_string_t action) {
   char *a = utf8(action), *data = local_data();
-  // `install {…}`, `update {…}`: the station's installer, install.sh of the cloud (`origin`), a token or none, the
-  // channel the app is on
+  // `install {…}`, `update {…}`: the station's installer, install.sh of the cloud (`origin`), a token or none (with it
+  // the workspace lock's hash, if any), the channel the app is on
   int install = g_str_has_prefix(a, "install "), update = g_str_has_prefix(a, "update ");
   if (install || update) {
-    jv ask = {0};
-    const char *p = a + (install ? 8 : 7);
-    int ok = jparse(&p, &ask, 0) && ask.kind == 'o';
-    const char *origin = ok ? jtext(&ask, "origin") : "", *token = ok ? jtext(&ask, "token") : "";
-    if ((g_str_has_prefix(origin, "https://") || g_str_has_prefix(origin, "http://")) && sh_plain(origin) &&
-        sh_plain(token)) {
-      char *script = g_strdup_printf("curl -fsSL '%s/install.sh' | sh -s -- %s", origin, token);
+    // (what it is handed: station_install.h, held by its test)
+    station_ask ask;
+    if (station_ask_read(a + (install ? 8 : 7), &ask)) {
+      char *script = station_sh_script(&ask);
       char **argv = g_new0(char *, 4);
-      argv[0] = g_strdup("sh"), argv[1] = g_strdup("-c"), argv[2] = script;
-      local_begin(install ? "install" : "update", argv, !strcmp(jtext(&ask, "channel"), "beta") ? "beta" : NULL);
+      argv[0] = g_strdup("sh"), argv[1] = g_strdup("-c"), argv[2] = g_strdup(script ? script : "exit 1");
+      free(script);
+      local_begin(install ? "install" : "update", argv, ask.beta ? "beta" : NULL);
+      station_ask_free(&ask);
     } else {
       local_fail("origin");
     }
-    jv_free(&ask);
   } else if (!strcmp(a, "log") || !strcmp(a, "folder")) {
     // (the desktop's own app for it: its text editor, its file manager)
     char *path = !strcmp(a, "log") ? g_build_filename(data, "stillfail.log", NULL) : g_strdup(data);

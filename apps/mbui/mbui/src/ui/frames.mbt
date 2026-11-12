@@ -14,6 +14,7 @@ fn hash_mix(h : Int64, v : Int64) -> Int64 {
 /// laid-out tree with its words and carets (`dump`). The same steps give the same number on every run and every
 /// machine, whatever was drawn before.
 pub fn Tester::frame_hash(self : Tester) -> Int64 {
+  self.reads_own()
   ignore(self)
   drawn_hash()
 }
@@ -24,6 +25,7 @@ pub fn Tester::frame_hash(self : Tester) -> Int64 {
 /// a shape says its pieces by what they are, not where they stand among the frame's (its hash takes them as they
 /// stand): what draws the same reads the same, whatever drew before it.
 pub fn Tester::drawn_text(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   drawn_text()
 }
@@ -65,6 +67,7 @@ fn drawn_text() -> String {
 /// pieces by what they are (shape_pieces_key) in the place of where they stand among the frame's, the pieces' own
 /// instances (kind 12, none drawn) left out. What draws the same reads the same, whatever drew before it.
 pub fn Tester::drawn_instances_keyed(self : Tester) -> Array[Array[Double]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -105,7 +108,7 @@ fn shape_pieces_key(c : Ctx, k : Int) -> Double {
 /// The pictures the last frame drew, numbered as first drawn (their host's ids, which depend on what was decoded
 /// before, are not what was drawn).
 fn image_numbers(c : Ctx) -> Map[Int, Int] {
-  let named : Map[Int, Int] = {}
+  let named : Map[Int, Int] = Map([])
   for k in 0..<c.ninst {
     let b = k * inst_size
     if c.inst[b + 5] == 4.0 {
@@ -181,10 +184,10 @@ fn drawn_hash() -> Int64 {
 /// stable: 1 when the host asked for output the same on every run, MBUI_BENCH=-1),
 /// for a Tester over the host's kept text (textrec.mbt) given the same frames (`replay_frames`) to be checked against:
 /// -1 not asked yet, 0 no, 1 yes.
-let draw_log : Ref[Int] = Ref::new(-1)
+let draw_log : Ref[Int] = Ref(-1)
 
 ///|
-let draw_frames : Ref[Int] = Ref::new(0)
+let draw_frames : Ref[Int] = Ref(0)
 
 ///|
 fn log_drawn(w : Double, h : Double, scale : Double, t : Double) -> Unit {
@@ -228,7 +231,7 @@ fn run_first_frame(run : String) -> Double? {
   for line in run.split("\n") {
     match line.find("DRAWHASH ") {
       Some(i) => {
-        let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
+        let parts = line.exact_view(start=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
         if parts.length() >= 2 {
           match (try Some(@json.parse(parts[1])) catch { _ => None }) {
             Some(Number(d, ..)) => return Some(d)
@@ -248,6 +251,7 @@ fn run_first_frame(run : String) -> Double? {
 /// one's (as text). A frame at the time this Tester drew its last is that one (Tester::new at the host's first frame:
 /// `time` 16 ms before it, and `run` this log, so that frame is drawn by the settings the run began with).
 pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String, String)] {
+  self.reads_own()
   let out = []
   let mut framed = false
   // an input handed on since the last frame: the next frame is its, drawn though at the Tester's own first frame's
@@ -277,7 +281,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     }
     match line.find("VIEWSCRIPT ") {
       Some(i) => {
-        scripts.push(line.view(start_offset=i + 11).to_owned())
+        scripts.push(line.exact_view(start=i + 11).to_owned())
         continue
       }
       None => ()
@@ -287,7 +291,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     match line.find("VIEWSAID ") {
       Some(i) => {
         if framed {
-          self.view_said(line.view(start_offset=i + 9).to_owned()) |> ignore
+          self.view_said(line.exact_view(start=i + 9).to_owned()) |> ignore
         }
         continue
       }
@@ -301,7 +305,8 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
       }
       None => ()
     }
-    // a native call's answer as the app took it, given again at its place: the frame after it takes it (native.mbt)
+    // a native call's answer as the app took it, given again at its place: told there, as the host's event that brought
+    // it (native.mbt's fake_native_due)
     match native_of_line(line) {
       Some((name, r)) => {
         fake_native_give(self.fake, name, r)
@@ -321,7 +326,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     // h_frame_late): the next drawn
     match line.find("LATE ") {
       Some(i) =>
-        match num(line.view(start_offset=i + 5).to_owned()) {
+        match num(line.exact_view(start=i + 5).to_owned()) {
           Some(late) => {
             self.fake.late = late
             self.fake.late_after = self.fake.time
@@ -334,7 +339,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     }
     guard line.find("DRAWHASH ") is Some(i) else { continue }
     framed = true
-    let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
+    let parts = line.exact_view(start=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
     guard parts.length() >= 6 else { continue }
     guard (num(parts[0]), num(parts[1]), num(parts[2]), num(parts[3]), num(parts[4]))
       is (Some(n), Some(t), Some(w), Some(h), Some(scale)) else {

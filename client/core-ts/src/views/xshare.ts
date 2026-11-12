@@ -187,9 +187,10 @@ function share(inner: Inner, a: Asking, ctx: J): Effect.Effect<unknown, CoreErro
   });
 }
 
-/// A chat's row in its station's list (the `chatRows` it has): what says whom it is shared with, who started it.
+/// A chat's row in its station's list (by its id, else its agent's session): what says whom it is shared with, who
+/// started it.
 function rowOf(inner: Inner, station: string, id: string): J {
-  return arr(inner.views.ok({ topic: "chatRows", station })).find((r) => get(r, "id") === id || get(r, "session") === id);
+  return inner.data.chat(station, id) ?? inner.data.chatOfSession(station, id);
 }
 
 /// What a row says of a chat's sharing (`xshare` from stations that know it): the workspaces' ids, whether to write.

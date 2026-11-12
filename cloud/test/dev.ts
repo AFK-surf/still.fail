@@ -158,6 +158,9 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
     method: req.method, headers, redirect: "manual",
     ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
   });
+  // (LOG_REQUESTS: each request a line, its time, answer, route and whose sign-in it came with (the token's last
+  // characters): what used an account's requests a minute up, as scripts/e2e-local.sh's cloud log keeps it)
+  if (process.env.LOG_REQUESTS) console.log(`REQ ${new Date().toISOString().slice(11, 23)} ${response.status} ${req.method} ${url.pathname} ${(headers.authorization ?? "").slice(-6) || "-"}`);
   res.writeHead(response.status, Object.fromEntries(response.headers)).end(Buffer.from(await response.arrayBuffer()));
 }
 

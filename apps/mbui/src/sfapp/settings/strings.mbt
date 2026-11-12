@@ -64,7 +64,7 @@ fn fill_named(
       runs.push(named(name))
     }
     if p.length() > 0 {
-      runs.push(words(p.to_string()))
+      runs.push(words(p.to_owned()))
     }
   }
   runs

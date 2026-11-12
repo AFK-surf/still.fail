@@ -194,7 +194,7 @@ test "the system's back gesture (predictive back) follows, then goes or not" {
 test "a page asks the stack where it stands: the root under a page sliding in over it is still the root, one leaving keeps its own" {
   let nav = @ui.Nav::new(0)
   // each page's under as it was last built
-  let told : Map[Int, Int?] = {}
+  let told : Map[Int, Int?] = Map([])
   let t = @ui.Tester::new(fn(c) {
     c.nav(nav, fn(i) {
       told[i] = nav.under()
@@ -283,7 +283,27 @@ test "nav_rest: a test runs to the end of the stacks' slides, holding none of th
   assert_eq(@ui.nav_rest(), tapped + page_ms)
   t.run_for(@ui.nav_rest() - t.time())
   t.assert_idle()
-  assert_eq(@ui.nav_rest(), -1.0)
+  // (over: its end as it was, not "nothing moves", so a test asking after the frames passed it runs to now)
+  assert_eq(@ui.nav_rest(), tapped + page_ms)
+  t.run_for(page_ms)
+  assert_eq(@ui.nav_rest(), tapped + page_ms)
+}
+
+///|
+test "nav_rest: the same end whether the frames drawn on the slide's way passed it or not (a display's 7 a second)" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.draw()
+  t.set_frame_period(seven_a_second)
+  let tapped = t.time()
+  t.tap_text("open 1")
+  let end = @ui.nav_rest()
+  assert_true(end > tapped && end < 1.0e300, msg="\{end} at \{tapped}")
+  // (the display's next frames: the first after the end well past it)
+  t.run_for(end - t.time() + seven_a_second)
+  assert_true(t.time() > end)
+  t.assert_idle()
+  assert_eq(@ui.nav_rest(), end)
 }
 
 ///|
@@ -316,7 +336,7 @@ test "a push is over at the end it declares, to the bit: the page under it no lo
   t.frame_at(@ui.first_frame_ms * 27.0)
   t.tap_text("open 1")
   t.run_for(nav.rest() - t.time())
-  assert_true(t.rest_of("a stack's slide") < 0.0)
+  assert_true(t.rest_of("a stack's slide") <= t.time())
   assert_true(t.find("title 0") is None)
   t.assert_idle()
 }
@@ -330,7 +350,7 @@ test "a push whose end is a hair past one of the display's frames is run to its 
   t.advance(at - t.time())
   t.tap_text("open 1")
   t.run_for(nav.rest() - t.time())
-  assert_true(t.rest_of("a stack's slide") < 0.0)
+  assert_true(t.rest_of("a stack's slide") <= t.time())
   assert_true(t.find("title 0") is None)
   t.assert_idle()
 }
@@ -418,7 +438,7 @@ let test_page_wait_ms : Double = 100.0
 ///|
 test "a page pushed waits for what it shows: the slide starts as it comes, from then" {
   let nav = @ui.Nav::new(0)
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(nav_wait_view(nav, ready, test_page_wait_ms))
   t.tap_text("open 1")
   let pushed = t.time()
@@ -440,7 +460,7 @@ test "a page pushed waits for what it shows: the slide starts as it comes, from 
 ///|
 test "a page pushed whose data never comes slides in once it has waited the most" {
   let nav = @ui.Nav::new(0)
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(nav_wait_view(nav, ready, test_page_wait_ms))
   t.tap_text("open 1")
   let pushed = t.time()
@@ -519,7 +539,7 @@ fn flat_wait_view(nav : @ui.Nav[String], ready : Ref[Bool], most : Double) -> (@
 test "nav_flat: a page put on top shows once it has what it shows, the page before staying as it was and told it left only then" {
   let left : Array[String] = []
   let nav = @ui.Nav::new("page one", on_leave=fn(p) { left.push(p) })
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
   t.draw()
   nav.replace("page two")
@@ -536,7 +556,7 @@ test "nav_flat: a page put on top shows once it has what it shows, the page befo
 ///|
 test "nav_flat: a page put on top whose data never comes shows once it has waited the most" {
   let nav = @ui.Nav::new("page one")
-  let ready = Ref::new(false)
+  let ready = Ref(false)
   let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
   t.draw()
   nav.push("page two")
@@ -768,4 +788,28 @@ test "nav_flat, its owner keeping a stay: one on top again since (come back to: 
   nav.flat_keep(Some(zero))
   t.draw()
   assert_true(t.find("title 2") is Some(_) && t.find("title 0") is None)
+}
+
+///|
+/// A display's frame period at 7 frames a second (ms): frames far apart, one well past a slide's end.
+let seven_a_second : Double = 1000.0 / 7.0
+
+///|
+/// rest_of once what it names is over: when it came to rest, as it said it (the Tester's own record, tester_time.mbt),
+/// whatever frames were drawn on its way; -1 for what was never said to move, and none of a Tester before.
+test "rest_of: a slide over is answered at its end, not -1; a Tester made after it knows none" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.draw()
+  assert_eq(t.rest_of("a stack's slide"), -1.0)
+  t.tap_text("open 1")
+  let end = t.rest_of("a stack's slide")
+  assert_true(end > t.time() && end < @double.infinity, msg="\{end} at \{t.time()}")
+  t.run_for(end - t.time() + @ui.move_most_ms)
+  assert_eq(t.moving(), [])
+  assert_eq(t.rest_of("a stack's slide"), end)
+  assert_eq(t.rest_of("nothing of that name"), -1.0)
+  let again = @ui.Tester::new(nav_view(@ui.Nav::new(0)))
+  again.draw()
+  assert_eq(again.rest_of("a stack's slide"), -1.0)
 }

@@ -26,6 +26,9 @@
 // alone: one with anything else stops this, rather than a merge it does not do, unless the app's manifest has merged
 // it by hand: "merged"). The libraries' resources are linked beside the app's (R classes for each package); resources
 // are not shrunk; stripped of nothing, the native libraries compressed (extractNativeLibs), as the release had them.
+// Every deflated entry is then deflated again by the deflater the app carries (dev.mbui.Delta's repack, JZlib, on this
+// machine's JVM), before zipalign (which pads only stored entries) and apksigner: a phone applying an update's delta
+// deflates the entries it made with that same code, and must come to these very bytes (Delta.java's head).
 //
 // Tools: $ANDROID_HOME's platforms/android-<compileSdk>/android.jar and the newest build-tools' aapt2, zipalign and
 // apksigner; java and javac (17 or newer); R8 from Google's Maven at r8_version; curl, unzip, zip and shasum (or
@@ -80,7 +83,7 @@ fn sh(cmd : String, what : String) -> String {
 ///|
 /// `s` from `a` to `b` (UTF-16 offsets).
 fn sub(s : String, a : Int, b : Int) -> String {
-  s.view(start_offset=a, end_offset=b).to_string()
+  s.exact_view(start=a, end=b).to_owned()
 }
 
 ///|
@@ -93,7 +96,7 @@ fn sha256_file(path : String) -> String {
   let tool = if @sys.run_out("command -v shasum") is Some(_) { "shasum -a 256" } else { "sha256sum" }
   let out = sh(tool + " " + q(path), "sha256")
   match out.split(" ").next() {
-    Some(h) => h.to_string()
+    Some(h) => h.to_owned()
     None => ""
   }
 }
@@ -138,7 +141,7 @@ fn fetch(url : String, dest : String) -> Bool {
 
 ///|
 fn artifact_path(coord : String, ext : String) -> String {
-  let p = coord.split(":").map(fn(x) { x.to_string() }).to_array()
+  let p = coord.split(":").map(fn(x) { x.to_owned() }).to_array()
   let g = p[0].replace_all(old=".", new="/")
   // group:artifact:version[:classifier] (hermes-android's AAR is only its -release one)
   let c = if p.length() > 3 { "-" + p[3] } else { "" }
@@ -185,13 +188,13 @@ fn read_lock(path : String) -> Array[(String, String, String)] {
   let text = @sys.read_text(path).unwrap_or("")
   for raw in text.split("\n") {
     let line = match raw.find("#") {
-      Some(i) => raw.view(end_offset=i).trim(chars=" \t\r").to_string()
-      None => raw.trim(chars=" \t\r").to_string()
+      Some(i) => raw.exact_view(end=i).trim(chars=" \t\r").to_owned()
+      None => raw.trim(chars=" \t\r").to_owned()
     }
     if line == "" {
       continue
     }
-    let parts = line.split(" ").filter(fn(x) { x != "" }).map(fn(x) { x.to_string() }).to_array()
+    let parts = line.split(" ").filter(fn(x) { x != "" }).map(fn(x) { x.to_owned() }).to_array()
     out.push((parts[0], parts.get(1).unwrap_or(""), parts.get(2).unwrap_or("")))
   }
   out
@@ -202,7 +205,7 @@ fn cmd_lock(app : String) -> Unit {
   let (cfg, base) = load(app)
   let path = @sys.join(base, text_of(cfg, "lock"))
   let head = @sys.read_text(path).unwrap_or("").split("\n").filter(fn(l) { l.has_prefix("#") }).map(fn(l) {
-    l.to_string()
+    l.to_owned()
   }).to_array()
   let lines = []
   for d in read_lock(path) {
@@ -291,8 +294,8 @@ fn int_of(s : String) -> Int {
 ///|
 /// A version's numbers, compared as numbers.
 fn version_cmp(a : String, b : String) -> Int {
-  let na = a.split(".").map(fn(x) { int_of(x.to_string()) }).to_array()
-  let nb = b.split(".").map(fn(x) { int_of(x.to_string()) }).to_array()
+  let na = a.split(".").map(fn(x) { int_of(x.to_owned()) }).to_array()
+  let nb = b.split(".").map(fn(x) { int_of(x.to_owned()) }).to_array()
   for i in 0..<@cmp.maximum(na.length(), nb.length()) {
     let x = na.get(i).unwrap_or(0)
     let y = nb.get(i).unwrap_or(0)
@@ -425,7 +428,8 @@ fn manifest_text(
   }
   let left = rx("\\$\\{(\\w+)\\}").findall(text)
   if left.length() > 0 {
-    die("manifest placeholders not given: \{left}")
+    let names = left.join(", ")
+    die("manifest placeholders not given: [\{names}]")
   }
   let ns = text_of(cfg, "namespace")
   text = rx("(<(?:application|activity|activity-alias|service|receiver|provider)\\b[^>]*?android:name=\")\\.").sub_with(
@@ -472,7 +476,7 @@ fn manifest_text(
     // (one the app's manifest has merged by hand, APP.json's "merged": its components there as the app wants them)
     let by_hand = merged.iter().any(fn(p) { name.has_prefix(p) })
     if (rest.trim(chars=" \t\r\n") != "" || inner.trim(chars=" \t\r\n") != "") && !by_hand {
-      die("\{name}: its manifest adds more than <application> attributes; merge it here first:\n" + body.trim(chars=" \t\r\n").to_string())
+      die("\{name}: its manifest adds more than <application> attributes; merge it here first:\n" + body.trim(chars=" \t\r\n").to_owned())
     }
     match app {
       Some(m) =>
@@ -597,9 +601,38 @@ fn lib_dex(r8 : String, android_jar : String, min_api : String, jar : String, ot
 }
 
 ///|
-/// The cache kept small: the newest 6 dex outputs, the newest 24 stripped libraries.
+/// dev.mbui.Delta and JZlib, of the app's Java sources, compiled for this machine's JVM (the APK's repack): kept by
+/// their sources' hash; "" where the app has no Delta. Compiled on their own rather than taken from the dex step's
+/// javac: that step's classes are there only when its dex is not kept (and are built against android.jar), while
+/// these few files compile in a second, and their key is exactly what the repack's bytes depend on besides the APK.
+fn delta_classes(srcs : Array[String], work : String) -> String {
+  let mine = srcs.filter(fn(p) { p.has_suffix("/dev/mbui/Delta.java") || p.contains("/com/jcraft/jzlib/") })
+  if !mine.iter().any(fn(p) { p.has_suffix("/dev/mbui/Delta.java") }) {
+    return ""
+  }
+  let key = mine.map(fn(p) { @sys.basename(p) + " " + sha256_file(p) })
+  key.sort_by(@rjson.str_cmp)
+  let d = @sys.join(cache_dir(), "delta/" + sub(sha256_text(key.join("\n"), work + "/deltakey"), 0, 32))
+  if !@sys.exists(@sys.join(d, ".done")) {
+    ignore(try_sh("rm -rf " + q(d)))
+    @sys.makedirs(d)
+    ignore(
+      sh(
+        "javac -nowarn -encoding UTF-8 -source 17 -target 17 -Xlint:-options -d " + q(d) + " " + mine.map(q).join(" "),
+        "javac (Delta)",
+      ),
+    )
+    ignore(@sys.write_text(@sys.join(d, ".done"), ""))
+  } else {
+    ignore(try_sh("touch " + q(d)))
+  }
+  d
+}
+
+///|
+/// The cache kept small: the newest 6 dex outputs, the newest 24 stripped libraries, the newest 6 Delta compiles.
 fn prune() -> Unit {
-  for kv in [("dex", 6), ("strip", 24)] {
+  for kv in [("dex", 6), ("strip", 24), ("delta", 6)] {
     let d = @sys.join(cache_dir(), kv.0)
     if @sys.is_dir(d) {
       ignore(try_sh("cd " + q(d) + " && ls -t | tail -n +\{kv.1 + 1} | while IFS= read -r n; do rm -rf \"$n\"; done"))
@@ -617,7 +650,7 @@ fn files_under(dir : String) -> Array[String] {
   out
   .split("\n")
   .filter(fn(l) { l.has_prefix("./") })
-  .map(fn(l) { sub(l.to_string(), 2, l.length()) })
+  .map(fn(l) { sub(l.to_owned(), 2, l.length()) })
   .to_array()
 }
 
@@ -680,7 +713,7 @@ fn cmd_build(a : BuildArgs) -> Unit {
   let min_sdk = text_of(cfg, "minSdk")
   let (android_jar, bt) = sdk_tools(text_of(cfg, "compileSdk"))
   let aapt2 = @sys.join(bt, "aapt2")
-  let work = sh("mktemp -d -t apk-XXXXXX", "mktemp").trim(chars=" \n").to_string()
+  let work = sh("mktemp -d -t apk-XXXXXX", "mktemp").trim(chars=" \n").to_owned()
   // the dependencies: AARs unpacked (classes, their res), jars as they are
   let deps = read_lock(@sys.join(base, text_of(cfg, "lock"))).filter(fn(d) { d.1 != "" && d.1 != "none" })
   let jars : Array[String] = []
@@ -810,7 +843,7 @@ fn cmd_build(a : BuildArgs) -> Unit {
     .unwrap_or("")
     .split("\n")
     .filter(fn(l) { !l.trim(chars=" \t").has_prefix("#") })
-    .map(fn(l) { l.to_string() })
+    .map(fn(l) { l.to_owned() })
     .to_array()
     .join("\n")
   ignore(@sys.write_text(aapt_rules, kept))
@@ -931,8 +964,17 @@ fn cmd_build(a : BuildArgs) -> Unit {
     ignore(sh("cd " + q(packed) + " && find . -type f | LC_ALL=C sort | zip -q -X " + q(unsigned) + " -@", "zip"))
   }
   t = lap("packed", t)
+  let to_align = match delta_classes(srcs, work) {
+    "" => unsigned
+    classes => {
+      let repacked = @sys.join(work, "repacked.apk")
+      ignore(sh("java -cp " + q(classes) + " dev.mbui.Delta repack " + q(unsigned) + " " + q(repacked), "repack"))
+      t = lap("repacked", t)
+      repacked
+    }
+  }
   let aligned = @sys.join(work, "aligned.apk")
-  ignore(sh(q(@sys.join(bt, "zipalign")) + " -P 16 -f 4 " + q(unsigned) + " " + q(aligned), "zipalign"))
+  ignore(sh(q(@sys.join(bt, "zipalign")) + " -P 16 -f 4 " + q(to_align) + " " + q(aligned), "zipalign"))
   let ks = if a.keystore != "" {
     a.keystore
   } else {
@@ -977,7 +1019,7 @@ fn usage() -> Int {
 
 ///|
 fn main {
-  let args = @env.args()[1:].to_array()
+  let args = @env.args()[1:].to_owned()
   let code = match args {
     ["lock", app] => {
       cmd_lock(app)

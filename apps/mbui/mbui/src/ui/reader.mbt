@@ -252,7 +252,7 @@ pub fn Pages::text_of(self : Pages, i : Int) -> String {
             if sb.to_string().length() > 0 {
               sb.write_char('\n')
             }
-            sb.write_string(s.view(start_offset=a, end_offset=b).to_string())
+            sb.write_string(s.exact_view(start=a, end=b).to_owned())
           }
           _ => ()
         }
@@ -322,7 +322,7 @@ fn Ctx::paint_page(self : Ctx, n : Node, alpha : Double) -> Unit {
             let gl = glyph(key, sc)
             if gl.gw > 0.0 {
               let gx = glyph_x(ox + x0 + tl.xs[c] + shift + gl.ox, sc)
-              let gy = glyph_row(oy + y + tl.ascent, gl.oy, sc)
+              let gy = glyph_row(oy, y + tl.ascent, gl.oy, sc)
               self.push_inst(
                 gx,
                 gy,

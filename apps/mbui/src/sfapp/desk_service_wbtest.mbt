@@ -96,7 +96,7 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
   t.frame()
   let (tabs, front) = side_now(r)
   assert_eq(front, "service:j-web")
-  assert_true(tabs.contains("jobs") && tabs.contains("service:j-web"), msg="\{tabs}")
+  assert_true(tabs.contains("jobs") && tabs.contains("service:j-web"), msg="\{Repr(tabs)}")
 }
 
 ///|
@@ -123,7 +123,7 @@ test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from 
   for y in [300.0, 600.0] {
     for dx in offsets {
       let x = line + dx
-      t.move(x, y)
+      t.move_to(x, y)
       if t.cursor() != ResizeX {
         continue
       }
@@ -136,4 +136,79 @@ test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from 
     }
   }
   assert_true(shown > 0)
+}
+
+///|
+/// The corner rule on what a desk's service shows with its sizes up: none, but 移动页面's switch ending the panel's last
+/// row in its bottom right corner once the page is laid out at a size of its own (service_panels_wbtest's svc_corners
+/// says why it is known; none on the old panel).
+fn desk_corners(t : @ui.Tester, at : String) -> Unit raise {
+  let faults = t.corner_faults()
+  guard !faults.is_empty() else { return }
+  assert_true(
+    t.query(Switch, label="移动页面") is Some(_) &&
+    faults.length() == 1 &&
+    faults[0].has_prefix("a box in 「移动页面 开着时手指拖动的是画布，不点网页」 (at ") &&
+    faults[0].has_suffix(" (corner 24): 16 and 15 from its edges"),
+    msg="\{at}: \{Repr(faults)}",
+  )
+}
+
+///|
+test "desk: a web service beside its chat laid out at a size through its sizes beside the size key: a preset, 自定义 put by Enter, 横竖互换; the page at each, the panel's fields reading it out" {
+  @sf.presenters_reset()
+  new_run()
+  let src = fixture("chat-info")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  // (its corners said by desk_corners: the one known)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1440.0, h=900.0, platform=0, corners_held=false)
+  t.run_for(@ui.move_most_ms)
+  app.nav.push(Service("ws1/st1", "j-web"))
+  t.frame()
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
+  let size_now = fn() {
+    match p.viewport.get() {
+      Some({ width, height: Some(h) }) => "\{width}×\{h}"
+      Some({ width, height: None }) => "\{width}×auto"
+      None => "fit"
+    }
+  }
+  let read_out = fn() raise { (t.get(TextField, label="宽").value, t.get(TextField, label="自动").value) }
+  // (the size key, or its line in the ⋯ where the bar has not the room for it: laid out at a size, it says that too)
+  let sizes = fn() raise {
+    match t.query(Button, label="页面尺寸") {
+      Some(_) => t.click(Button, label="页面尺寸")
+      None => {
+        t.click(Button, label="更多操作")
+        t.run_for(@ui.move_most_ms)
+        t.tap_text("页面尺寸")
+      }
+    }
+    t.run_for(@ui.move_most_ms)
+  }
+  sizes()
+  desk_corners(t, "as big as the preview")
+  t.click(Button, label="手机 390 × 844")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(size_now(), "390×844", msg="a preset")
+  sizes()
+  desk_corners(t, "at a phone's size")
+  assert_eq(read_out(), ("390", "844"), msg="said in 自定义")
+  t.click(TextField, label="宽")
+  t.frame()
+  t.clear()
+  t.type_text("500")
+  t.enter()
+  t.run_for(@ui.move_most_ms)
+  assert_eq((size_now(), read_out()), ("500×844", ("500", "844")), msg="put by Enter")
+  t.click(Button, label="横竖互换")
+  t.run_for(@ui.move_most_ms)
+  assert_eq((size_now(), read_out()), ("844×500", ("844", "500")), msg="turned")
+  desk_corners(t, "turned")
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_false(@sf.presenter_visible(), msg="the sizes closed")
 }

@@ -33,14 +33,14 @@ fn say(s : String) -> Unit {
 
 ///|
 fn trim(s : String) -> String {
-  s.trim(chars=" \t\r\n\u{b}\u{c}").to_string()
+  s.trim(chars=" \t\r\n\u{b}\u{c}").to_owned()
 }
 
 ///|
 fn errs() -> Int {
   let mut n = 0
   for line in @sys.read_stdin().split("\n") {
-    let line = trim(line.to_string())
+    let line = trim(line.to_owned())
     if !line.has_prefix("{") {
       if line.contains("rror") {
         say(line)
@@ -61,7 +61,7 @@ fn errs() -> Int {
     }
     let path = d.get("path").bind(fn(v) { v.str() }).unwrap_or("")
     let parts = path.split("/src/").to_array()
-    let p = parts[parts.length() - 1].to_string()
+    let p = parts[parts.length() - 1].to_owned()
     say("\{p}:\{shown(d.get("loc"))}: \{shown(d.get("message"))}")
   }
   say("errors: \{n}")
@@ -86,21 +86,21 @@ fn shown(v : @rjson.Value?) -> String {
 ///|
 fn main {
   let argv = @env.args()
-  let args = argv[1:].to_array()
+  let args = argv[1:].to_owned()
   let code = match args {
     ["errs", ..] => errs()
-    ["corner-sl", .. rest] => corner_sl(rest.to_array())
-    ["outside-kinds", .. rest] => outside_kinds(rest.to_array())
-    ["textrec", .. rest] => textrec(rest.to_array())
-    ["logwait", .. rest] => logwait(rest.to_array())
-    ["lines", .. rest] => lines(rest.to_array())
-    ["shapes", .. rest] => shapes(rest.to_array())
-    ["contained", .. rest] => contained(rest.to_array())
-    ["views-round", .. rest] => views_round(rest.to_array())
-    ["views", .. rest] => views(rest.to_array())
-    ["images", .. rest] => images(rest.to_array())
-    ["site", .. rest] => site(rest.to_array())
-    ["cache-prune", .. rest] => cache_prune(rest.to_array())
+    ["corner-sl", .. rest] => corner_sl(rest.to_owned())
+    ["outside-kinds", .. rest] => outside_kinds(rest.to_owned())
+    ["textrec", .. rest] => textrec(rest.to_owned())
+    ["logwait", .. rest] => logwait(rest.to_owned())
+    ["lines", .. rest] => lines(rest.to_owned())
+    ["shapes", .. rest] => shapes(rest.to_owned())
+    ["contained", .. rest] => contained(rest.to_owned())
+    ["views-round", .. rest] => views_round(rest.to_owned())
+    ["views", .. rest] => views(rest.to_owned())
+    ["images", .. rest] => images(rest.to_owned())
+    ["site", .. rest] => site(rest.to_owned())
+    ["cache-prune", .. rest] => cache_prune(rest.to_owned())
     _ => {
       @sys.eprintln("chk: errs | corner-sl [--check] | outside-kinds [HOST…]")
       2

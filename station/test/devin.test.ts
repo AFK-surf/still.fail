@@ -192,25 +192,33 @@ describe("the Devin driver", { concurrency: true }, () => {
       { kind: "thinking", text: "thinking it over" },
       { kind: "assistant", text: "x" },
     ]);
-    // Each turn's counts: its calls' (each said twice, counted once), input less what the cache read; the context its
-    // last call had, of the model's window; then its end.
+    // Each call's counts as it finished (each said twice, counted once), input less what the cache read; the context
+    // each call left, of the model's window; then each turn's end.
     const kept = lines(path!);
     const usage = kept.filter((l) => l.type === "usage");
     assert.deepEqual(usage.map(({ model, usage, calls, context, window }) => ({ model, usage, calls, context, window })), [
-      { model: "swe-2", usage: { inputTokens: 2100, cacheReadTokens: 1200, cacheWriteTokens: 0, outputTokens: 153 }, calls: 3, context: 1252, window: 262000 },
+      { model: "swe-2", usage: { inputTokens: 600, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 50 }, calls: 1, context: 1050, window: 262000 },
+      { model: "swe-2", usage: { inputTokens: 700, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 51 }, calls: 1, context: 1151, window: 262000 },
+      { model: "swe-2", usage: { inputTokens: 800, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 52 }, calls: 1, context: 1252, window: 262000 },
       { model: "swe-2", usage: { inputTokens: 600, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 50 }, calls: 1, context: 1050, window: 262000 },
     ]);
-    const prompts = sent.filter((m) => m.method === "session/prompt").map((m) => m.id.slice("prompt:".length));
-    assert.equal(usage[0].run, prompts[0], "a turn's counts named by its prompt");
+    const prompts = stdin(o.dump).filter((m) => m.method === "session/prompt").map((m) => m.id.slice("prompt:".length));
+    assert.deepEqual(usage.map((u) => u.run), [prompts[0], `${prompts[0]}:2`, `${prompts[0]}:3`, prompts[1]], "each call named by its prompt and call index");
     assert.deepEqual(kept.filter((l) => l.type === "end").map((l) => l.status), ["finished", "finished"]);
     assert.deepEqual(kept[0], { time: kept[0].time, type: "session", id: session.id(), cwd: o.cwd });
     const calls = callsOf("devin", readFileSync(path!, "utf8"), false, { model: null, codexId: null });
     assert.deepEqual(calls.map(({ id, model, input, cacheRead, cacheWrite, output }) => ({ id, model, input, cacheRead, cacheWrite, output })), [
-      { id: `devin:${usage[0].run}`, model: "swe-2", input: 2100, cacheRead: 1200, cacheWrite: 0, output: 153 },
-      { id: `devin:${usage[1].run}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
+      { id: `devin:${prompts[0]}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
+      { id: `devin:${prompts[0]}:2`, model: "swe-2", input: 700, cacheRead: 400, cacheWrite: 0, output: 51 },
+      { id: `devin:${prompts[0]}:3`, model: "swe-2", input: 800, cacheRead: 400, cacheWrite: 0, output: 52 },
+      { id: `devin:${prompts[1]}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
     ]);
-    // Each turn's calls (3 and 1), and the context it ended with, of the model's window: what a chat says of them.
-    assert.deepEqual(calls.map(({ calls, context, window }) => [calls, context, window]), [[3, 1252, 262000], [1, 1050, 262000]]);
+    assert.deepEqual(calls.map(({ calls, context, window }) => [calls, context, window]), [
+      [1, 1050, 262000],
+      [1, 1151, 262000],
+      [1, 1252, 262000],
+      [1, 1050, 262000],
+    ]);
 
     // Between turns, another model (its family's option) and level are set in the process; one it has not, not.
     assert.equal(session.retune?.({ ...o, model: "claude-opus-5-5", effort: "low" }), true);
@@ -422,13 +430,21 @@ describe("the Devin driver", { concurrency: true }, () => {
   });
 
   for (const crashed of [false, true]) {
-    test(`a next driver takes the session up ${crashed ? "after a crash (no snapshot)" : "from its snapshot"}: the turn ends once, no live event twice`, async () => {
+    test(`a next driver takes the session up ${crashed ? "after a crash (no snapshot)" : "from its snapshot"}: live usage kept, the turn ends once, no live event twice`, async () => {
       const first = driver();
       const o = options();
       const a = listen();
       const session = await first.open(o, a.push);
+      const path = transcriptPath("devin", o.profile.home, session.id())!;
       await session.prompt("hold");
       await a.until((e) => deltas(e).join("").includes("holding"));
+      // While the turn is still running, the first call's usage is already on disk for live counting.
+      await eventually(() => lines(path).some((l) => l.type === "usage"));
+      assert.equal(session.busy(), true);
+      assert.deepEqual(
+        callsOf("devin", readFileSync(path, "utf8"), false, { model: null, codexId: null }).map((c) => [c.input, c.cacheRead, c.output, c.context, c.window]),
+        [[600, 400, 50, 1050, 262000]],
+      );
       let snapshot: unknown = null;
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
       // Stops: the process goes on under its runner with nobody reading.
@@ -444,6 +460,8 @@ describe("the Devin driver", { concurrency: true }, () => {
       await b.until(ended(1));
       assert.deepEqual(outcome(b.events), { kind: "completed" });
       assert.ok(deltas(b.events).join("").includes("heard: go on"));
+      // Between turns after handover or crash, retune still knows the session's model families.
+      assert.equal(taken.retune?.({ ...o, model: "claude-opus-5-5", effort: "low" }), true);
       // The message's answer comes after the turn's: not another end.
       await taken.prompt("say:after");
       await b.until(ended(2));
@@ -454,6 +472,14 @@ describe("the Devin driver", { concurrency: true }, () => {
       const starts = live(all).filter((e) => e.kind === "start").length;
       assert.equal(live(all).filter((e) => e.kind === "end").length, starts, "every step started ends");
       assert.equal(b.events.filter((e) => e.type === "turnStarted").length, crashed ? 1 : 0);
+      // Every call before and after the handover/crash is kept once, with distinct ids and the retuned model on the next turn.
+      const recorded = callsOf("devin", readFileSync(path, "utf8"), false, { model: null, codexId: null });
+      assert.equal(new Set(recorded.map((c) => c.id)).size, 3, "distinct call ids across handover/crash");
+      assert.deepEqual(recorded.map((c) => [c.model, c.input, c.cacheRead, c.output, c.calls, c.context]), [
+        ["swe-2", 600, 400, 50, 1, 1050],
+        ["swe-2", 700, 400, 51, 1, 1151],
+        ["claude-opus-5-5", 600, 400, 50, 1, 1050],
+      ]);
       await taken.dispose();
       await b.until((e) => e.some((x) => x.type === "closed"));
       assert.ok(!a.events.some((e) => e.type === "closed"), "the first driver hears nothing after letting go");

@@ -3,6 +3,8 @@
 // advances.
 
 ///|
+// generation_asks and view_reads are read by tests alone
+#warnings("-unused_field")
 struct FakeHost {
   mut time : Double
   /// how late the frame drawn at `late_after` reached the screen, as said of it (Tester::frame_late, a run's LATE line):
@@ -75,6 +77,18 @@ struct FakeHost {
   images : Map[Int, FakeImage]
   /// the last decode's number: each new one the next, never one let go of again (as every host numbers them)
   mut image_ids : Int
+  /// sources said to take a while to decode (Tester::decode_after): how many ms after each is asked for it is done
+  decode_after : Map[String, Double]
+  /// the decodes so said, by their id: the moment each is done (on the timeline: asked for, and that long after)
+  decode_due : Map[Int, Double]
+  /// the bytes handed over for each decode of bytes still kept (image_load_bytes, till image_free): what the host holds
+  /// of them, as a phone's Java side kept a GIF's every frame's (#5301: 140 MB of a 256 MB heap); their sum now, and the
+  /// most it came to in this Tester's run (Tester::host_image_bytes_most)
+  image_bytes : Map[Int, Int]
+  mut image_bytes_now : Int
+  mut image_bytes_most : Int
+  /// where the Tester was made (Tester::new's `loc`), said with what it held
+  made_at : String
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double
@@ -109,8 +123,10 @@ struct FakeHost {
   finished : Array[(Int, Int)]
   /// what its sites say, oldest first (Tester::site_says), as a site view's host would (view_site_next)
   site : Array[String]
-  /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
+  /// the pointer's shape as last told (desktop.mbt), how many times it was told, and how often the window was asked to be
+  /// dragged
   mut cursor : Int
+  mut cursors_told : Int
   mut window_drags : Int
   /// what the app asked of the window's own buttons (@hostapi.window_act: 1 minimize, 2 maximize or back, 3 close),
   /// oldest first; whether the window is maximized (Tester::set_window_zoomed); where the app last said its maximize
@@ -156,6 +172,8 @@ struct FakeHost {
   window_corners : FixedArray[Double]?
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
+  /// how far its local time is ahead of UTC, in minutes (utc_offset_min; Tester::set_utc_offset: 0 as it is)
+  mut utc_offset : Int
   /// whether the system lays out the app's tabs itself (an iPhone Duo's: Tester::set_nav_able), and the bars the app
   /// handed it last (@hostapi.nav_bar's JSON; "" none yet)
   mut nav_able : Bool
@@ -216,12 +234,17 @@ struct FakeHost {
   /// a list's rows set on its pixels (rows_on_pixels): every platform's host does; a Tester's only where its test says
   /// so (Tester::set_rows_on_pixels), its frames' layout else as it always was
   mut rows_on_pixels : Bool
+  /// it keeps groups of instances (groups_here): every platform's host does, a Tester's too unless its test says it
+  /// keeps none (Tester::set_groups), as the web's host, a list drawn out flat in each frame
+  mut groups : Bool
   /// the window's tree keeps where in the source each node was made (keeps_sources): a Tester's does, unless what it
   /// runs is measured as a device runs it (Tester::new's `keeps_sources`)
   keeps_sources : Bool
   /// the marks' drawings answered as the test says (Tester::marks_by_hand, Tester::marks_answer), not by the frame
   /// after each is asked
   mut marks_by_hand : Bool
+  /// the pickers' answers told as the test says (Tester::picks_by_hand, Tester::pick_answer), not at each ask
+  mut picks_by_hand : Bool
   /// what the app handed to the system's share sheet (@ui.share), oldest first
   shares : Array[(String, String, String, Bytes)]
   /// the device's performance record (@hostapi.perf_state: -1 none kept here, 0 off, 1 on; Tester::set_perf), and
@@ -404,6 +427,13 @@ fn h_clock_at_wall(ms : Double) -> Double {
 /// How far local time is ahead of UTC at `at_ms`, in minutes.
 fn h_utc_offset_min(at_ms : Double) -> Int {
   @hostapi.utc_offset_min(at_ms)
+}
+
+///|
+/// How far the local time is ahead of UTC now, in minutes: what a core trace keeps of the host (envrec.mbt's
+/// settings_at_frame), the time of day read here where the host provides it.
+fn h_utc_offset_now() -> Int {
+  h_utc_offset_min(h_wall_ms())
 }
 
 ///|
@@ -840,8 +870,9 @@ fn h_wheel_kept(kept : Bool) -> Unit {
 // the host tells (a pick, the gallery read, marks drawn, a frame grabbed, an update's word) asks for a frame: what it
 // brings is read as the next frame builds, not looked for frame after frame. Where a ticket of these ends: on a host,
 // at its event (or as the app takes the answer, if it read it first); under a Tester, whose fake host tells no event,
-// as the app takes the answer (Pick::files, MarkedImage::made, NativeView::grabbed): both are when the host's work for
-// it is over.
+// as the app takes the answer (MarkedImage::made, NativeView::grabbed): both are when the host's work for it is over.
+// A pick's and a native call's answers are taken as their event comes (outside_take: Pick::take, NativeCall::take),
+// into a signal what waits on them reads; a host answering them by the frame, as each frame begins.
 
 ///|
 /// An image or a PDF's page decoded (its image's id).
@@ -909,9 +940,20 @@ let outside_stood = 13
 let outside_perf = 14
 
 ///|
+/// A run of the password manager's `op` ended (@hostapi.OpRun's id: passwords.mbt), told as it does (macOS, Windows):
+/// what it said taken then into what reads it (OpRun::done).
+let outside_op = 15
+
+///|
+/// The system's autofill gave the login the person picked (id 1: @hostapi's autofill.mbt), told as it does (Android):
+/// taken then into what reads it (autofill_take).
+let outside_autofill = 16
+
+///|
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
 /// `outside_*` here in it: scripts/chk outside-kinds, host_contract.sh HOST kinds
+#warnings("-unused_value")
 fn outside_kinds() -> Array[(String, Int)] {
   [
     ("image", outside_image),
@@ -928,11 +970,13 @@ fn outside_kinds() -> Array[(String, Int)] {
     ("streamed", outside_streamed),
     ("stood", outside_stood),
     ("perf", outside_perf),
+    ("op", outside_op),
+    ("autofill", outside_autofill),
   ]
 }
 
 ///|
-let outside_tickets : Map[Int64, Int] = Map::new()
+let outside_tickets : Map[Int64, Int] = Map([])
 
 ///|
 let outside_told : Ref[Bool] = { val: false }
@@ -970,7 +1014,7 @@ let answers_told : Array[@signals.Signal[Int]] = Array::makei(outside_native + 1
 ///|
 /// The answers the host told of (outside_key) not taken yet.
 // kept across runs: emptied by each Tester (reset_globals)
-let answers_waiting : Map[Int64, Bool] = Map::new()
+let answers_waiting : Map[Int64, Bool] = Map([])
 
 ///|
 /// An answer of `kind` came (the host's event; under a Tester, a frame: its fake host's answers come by the frame).
@@ -1001,20 +1045,94 @@ fn answers_by_the_frame() -> Unit {
   if outside_tickets.is_empty() {
     return
   }
-  let kinds : Map[Int, Bool] = {}
+  let kinds : Map[Int, Bool] = Map([])
   for k, _ in outside_tickets {
     kinds[(k >> 32).to_int()] = true
   }
   for kind, _ in kinds {
-    if kind < answers_told.length() && kind != outside_update && @hostapi.answers_by_frame(kind) {
+    if kind < answers_told.length() &&
+      kind != outside_update &&
+      @hostapi.answers_by_frame(kind) {
       answer_told(kind)
     }
   }
 }
 
 ///|
+/// Who takes the host's answer of a kind that is taken as it comes (outside_pick, outside_native, outside_op,
+/// outside_autofill), by its key
+/// (outside_key): told by the host's event, it takes the answer from the host into what reads it, and says whether it
+/// was there to take.
+// kept across runs: emptied by each Tester (reset_globals)
+let outside_takers : Map[Int64, () -> Bool] = Map([])
+
+///|
+/// `take` takes the host's answer of `kind` for `id` as its event comes (outside_take); now, where the event came
+/// before it was asked to (a host's that answered at once).
+fn outside_takes(kind : Int, id : Int, take : () -> Bool) -> Unit {
+  let k = outside_key(kind, id)
+  if answers_waiting.contains(k) {
+    answers_waiting.remove(k)
+    if take() {
+      return
+    }
+  }
+  outside_takers[k] = take
+}
+
+///|
+/// What waited on the host's answer of `kind` for `id` let go of (an op's run ended by the app, an autofill's ask let
+/// go): nothing takes it any more, a word that comes for it after is nothing.
+fn outside_let_go(kind : Int, id : Int) -> Unit {
+  let k = outside_key(kind, id)
+  outside_takers.remove(k)
+  answers_waiting.remove(k)
+}
+
+///|
+/// What @hostapi waits on (its op's runs, its autofill's ask) waited on here: taken as the host's word comes.
+fn init {
+  @hostapi.outside_waits.val = fn(kind, id, take) { outside_takes(kind, id, take) }
+  @hostapi.outside_lets_go.val = fn(kind, id) { outside_let_go(kind, id) }
+}
+
+///|
+/// The host's event: its answer of `kind` for `id` came, taken now by who waits on it (outside_takes), into what reads
+/// it; kept till one does where none does yet.
+fn outside_take(kind : Int, id : Int) -> Unit {
+  let k = outside_key(kind, id)
+  match outside_takers.get(k) {
+    Some(take) => if take() { outside_takers.remove(k) }
+    None => answers_waiting[k] = true
+  }
+}
+
+///|
+/// A frame begins: the answers of a kind taken as it comes that a host answering it by the frame
+/// (@hostapi.answers_by_frame: a Tester's, what it answers by itself) or telling no events has by now, taken as its
+/// event would have them. Nothing reads them for it: what reads one is told as it is taken, and only then.
+fn takers_by_the_frame() -> Unit {
+  if outside_takers.is_empty() {
+    return
+  }
+  let ks = []
+  for k, _ in outside_takers {
+    ks.push(k)
+  }
+  for k in ks {
+    let kind = (k >> 32).to_int()
+    if @hostapi.answers_by_frame(kind) || !outside_told.val {
+      match outside_takers.get(k) {
+        Some(take) => if take() { outside_takers.remove(k) }
+        None => ()
+      }
+    }
+  }
+}
+
+///|
 /// The native views the host said were ready (or failed): their work is the host's no more, whatever is asked after.
-let views_told : Map[Int, Bool] = Map::new()
+let views_told : Map[Int, Bool] = Map([])
 
 ///|
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
@@ -1043,6 +1161,12 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   // where something read it)
   if kind == outside_perf {
     perf_told()
+    return
+  }
+  // (what was picked, a native call's answer: taken now into what reads it, Pick::files and NativeCall::got, each a
+  // signal; nothing else of the frame built again for it, no frame asked but where something reads it)
+  if kind == outside_pick || kind == outside_native || kind == outside_op || kind == outside_autofill {
+    outside_take(kind, id)
     return
   }
   // (a ready view's player asking more of the app: nothing waited on ends, nothing built again for it)
@@ -1092,12 +1216,7 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   }
   // an answer brought (what was picked, read, drawn, grabbed: told, followed by what waits on it; a view the host is
   // done opening): read as the next frame builds
-  let answer = kind == outside_pick ||
-    kind == outside_gallery ||
-    kind == outside_marks ||
-    kind == outside_grab ||
-    kind == outside_clip ||
-    kind == outside_native
+  let answer = kind == outside_gallery || kind == outside_marks || kind == outside_grab || kind == outside_clip
   if answer {
     answers_waiting[outside_key(kind, id)] = true
     answer_told(kind)
@@ -1336,7 +1455,7 @@ fn site_body_kept(b : Bytes) -> Bytes {
   // (its bytes a char each: the JSON's or the form's names are ASCII, what else is in it kept byte for byte)
   let s = String::from_array(Array::makei(b.length(), fn(i) { b[i].to_int().unsafe_to_char() }))
   let bytes_of = fn(t : String) -> Bytes {
-    Bytes::makei(t.length(), fn(i) { t.unsafe_charcode_at(i).to_byte() })
+    Bytes::makei(t.length(), fn(i) { t.unsafe_get(i).to_int().to_byte() })
   }
   match (try Some(@json.parse(s)) catch { _ => None }) {
     Some(Object(_) as j) => {
@@ -1369,7 +1488,7 @@ fn site_body_kept(b : Bytes) -> Bytes {
 fn json_kept(j : Json) -> Json {
   match j {
     Object(m) => {
-      let out : Map[String, Json] = {}
+      let out : Map[String, Json] = Map([])
       for k, v in m {
         out[k] = if secret_name(k) { Json::string("-") } else { json_kept(v) }
       }
@@ -1396,7 +1515,7 @@ fn query_kept(path : String) -> String {
     None => path
     Some(q) => {
       let fields = path.unsafe_substring(start=q + 1, end=path.length()).split("&").map(fn(f) {
-        let f = f.to_string()
+        let f = f.to_owned()
         match f.find("=") {
           Some(i) if secret_name(f.unsafe_substring(start=0, end=i)) => f.unsafe_substring(start=0, end=i) + "=-"
           _ => f
@@ -1409,7 +1528,7 @@ fn query_kept(path : String) -> String {
 
 ///|
 /// What was last told of each site view's page (view_site_state's JSON), so that it is told as it changes.
-let sites_told_state : Map[Int, String] = {}
+let sites_told_state : Map[Int, String] = Map([])
 
 ///|
 /// What the app tells a view's host beyond its controls (native.mbt): `what` 1 a script to run in its page
@@ -1481,11 +1600,11 @@ fn h_view_still(id : Int) -> Bytes {
 ///|
 /// Who is told what the host says of its views (@ui.trace_views): a run's record of it.
 // kept across runs: the app's own, set once as it starts (a Tester's host says nothing to it)
-let views_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref::new(None)
+let views_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref(None)
 
 ///|
 /// What was last told of each view's answers (view, what), so that each is told once as it changes.
-let views_told_text : Map[(Int, Int), String] = {}
+let views_told_text : Map[(Int, Int), String] = Map([])
 
 ///|
 /// What a real host says of its native views from now on given to `line`, a JSON object a time, as it changes: how a
@@ -1517,7 +1636,7 @@ fn view_told(id : Int, what : Int, text : String) -> Unit {
 
 ///|
 /// What was last told of each view's state (view_info: its state and numbers), so that it is told as it changes.
-let views_told_info : Map[Int, String] = {}
+let views_told_info : Map[Int, String] = Map([])
 
 ///|
 fn view_info_told(id : Int, state : Int, out : FixedArray[Double]) -> Unit {

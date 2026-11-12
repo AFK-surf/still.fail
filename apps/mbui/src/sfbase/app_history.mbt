@@ -259,7 +259,7 @@ fn history_go(src : Source, spot : Spot) -> Unit {
   }
   if spot.ws != ws {
     app.picked.set(spot.ws)
-    (src.call)("prefs.set", { "workspace": Json::string(spot.ws) }, fn(_) {  })
+    (src.call)("prefs.set", { "workspace": Json::string(spot.ws) }, answer_unread)
   }
   history_now.val = Some(spot)
   app.menu = false
@@ -269,11 +269,11 @@ fn history_go(src : Source, spot : Spot) -> Unit {
     k = k + 1
   }
   if k == 0 {
-    // (the root differs: another place's)
+    // (the root differs: another place's, kept as the bar's switch keeps it: nav_root_kept)
     while app.nav.depth() > 1 && app.nav.pop() {
       ()
     }
-    app.nav.replace(spot.pages[0])
+    nav_root_kept(spot.pages[0])
     k = 1
   } else if k < spot.pages.length() && app.nav.depth() > k {
     while app.nav.depth() > k + 1 && app.nav.pop() {

@@ -101,6 +101,7 @@ fn Ctx::emit_line(
 /// The pieces of lines drawn in the last frame (Ctx::lines), each as (x0, y0, x1, y1, its width, its colour RRGGBBAA with
 /// its opacity applied), in the window, where they are drawn.
 pub fn Tester::drawn_lines(self : Tester) -> Array[(Double, Double, Double, Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []

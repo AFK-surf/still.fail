@@ -26,15 +26,15 @@ fn card_tester(kept? : Bool = false) -> (@ui.Tester, CardView) {
       c.box(style=@ui.style(h=Fixed(v.down.get())), fn() {  }) |> ignore
       let body = fn() {
         if v.shown.get() {
-          let r = button(c, "@ada", key="ada", variant=Ghost)
-          v.open.val = hover_card(c, "card", r.id, fn() {
+          let r = @kit.button(c, "@ada", key="ada", variant=Ghost)
+          v.open.val = @kit.hover_card(c, "card", r.id, fn() {
             c.text("Ada's card") |> ignore
-            let b = button(c, "Notes", key="notes")
+            let b = @kit.button(c, "Notes", key="notes")
             if b.clicked {
               v.inner.val = true
             }
-            popover(c, "inner", v.inner.val, b.id, side=Right, fn() {
-              button(c, "Inner notes", key="inner-notes", variant=Ghost) |> ignore
+            @kit.popover(c, "inner", v.inner.val, b.id, side=Right, fn() {
+              @kit.button(c, "Inner notes", key="inner-notes", variant=Ghost) |> ignore
             })
             |> ignore
           })
@@ -73,16 +73,16 @@ fn around(t : @ui.Tester, v : CardView, at : Double, ms : Double) -> Array[(Doub
 test "hover card: its trigger gone a frame and drawn again under the resting pointer waits from when it is drawn again, not from before" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
-  t.run_for(hover_card_open_ms / 2.0)
+  t.move_to(x, y)
+  t.run_for(@kit.hover_card_open_ms / 2.0)
   v.shown.set(false)
   t.draw()
   v.shown.set(true)
   t.frame()
   // (drawn again: under the pointer from this frame)
   let again = t.time()
-  let seen = around(t, v, again, hover_card_open_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after drawn again, open): \{seen}")
+  let seen = around(t, v, again, @kit.hover_card_open_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after drawn again, open): \{Repr(seen)}")
 }
 
 ///|
@@ -94,25 +94,25 @@ test "hover card: kept with its part while nothing it reads changes, its wait go
   let (x, y) = (ax + aw / 2.0, ay + ah / 2.0)
   let came = t.time()
   t.touch_at(1, x, y, came)
-  t.advance(hover_card_open_ms / 3.0)
+  t.advance(@kit.hover_card_open_ms / 3.0)
   t.frame()
-  let seen = around(t, v, came, hover_card_open_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after it came, open): \{seen}")
+  let seen = around(t, v, came, @kit.hover_card_open_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after it came, open): \{Repr(seen)}")
 }
 
 ///|
 test "hover card: a new run waits from its own pointer, nothing of the run before" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
-  t.run_for(hover_card_open_ms / 2.0)
+  t.move_to(x, y)
+  t.run_for(@kit.hover_card_open_ms / 2.0)
   let (t, v2) = card_tester()
   ignore(v)
   let came = t.time()
   t.touch_at(1, x, y, came)
   t.frame()
-  let seen = around(t, v2, came, hover_card_open_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after it came, open): \{seen}")
+  let seen = around(t, v2, came, @kit.hover_card_open_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after it came, open): \{Repr(seen)}")
 }
 
 ///|
@@ -121,57 +121,57 @@ test "hover card: its trigger moved under the still pointer waits from the frame
   let (x, y) = middle_of(t, "@ada")
   // (the pointer where the trigger will be once it is 240 further down: its card under it, clear of the pointer once
   // it is back)
-  t.move(x, y + 240.0)
-  t.run_for(hover_card_open_ms * 2.0)
+  t.move_to(x, y + 240.0)
+  t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_false(v.open.val, msg="nothing under the pointer")
   v.down.set(240.0)
   t.frame()
   // (drawn under it as this frame ended)
   let drawn = t.time()
-  t.advance(hover_card_open_ms * 2.0 / 3.0)
+  t.advance(@kit.hover_card_open_ms * 2.0 / 3.0)
   t.frame()
-  let seen = around(t, v, drawn, hover_card_open_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after it was drawn under the pointer, open): \{seen}")
+  let seen = around(t, v, drawn, @kit.hover_card_open_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after it was drawn under the pointer, open): \{Repr(seen)}")
   // moved from under it again: closes from the frame that drew it away
-  t.run_for(hover_card_open_ms)
+  t.run_for(@kit.hover_card_open_ms)
   v.down.set(0.0)
   t.frame()
   let away = t.time()
-  t.advance(hover_card_close_ms * 2.0 / 3.0)
+  t.advance(@kit.hover_card_close_ms * 2.0 / 3.0)
   t.frame()
-  let seen = around(t, v, away, hover_card_close_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after it was drawn away, open): \{seen}")
+  let seen = around(t, v, away, @kit.hover_card_close_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after it was drawn away, open): \{Repr(seen)}")
 }
 
 ///|
 test "hover card: kept open while the pointer is in a popover opened from it; closes hover_close_ms after it leaves that, the frame late" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
-  t.run_for(hover_card_open_ms * 2.0)
+  t.move_to(x, y)
+  t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_true(v.open.val, msg="opened")
   let (nx, ny) = middle_of(t, "Notes")
-  t.move(nx, ny)
+  t.move_to(nx, ny)
   t.click(@ui.Role::Button, label="Notes")
-  t.run_for(hover_card_open_ms)
+  t.run_for(@kit.hover_card_open_ms)
   let (ix, iy) = middle_of(t, "Inner notes")
-  t.move(ix, iy)
-  t.run_for(hover_card_close_ms * 2.0)
+  t.move_to(ix, iy)
+  t.run_for(@kit.hover_card_close_ms * 2.0)
   assert_true(v.open.val, msg="kept by the pointer in its popover")
   let left = t.time()
   t.touch_at(1, 900.0, 900.0, left)
-  t.advance(hover_card_close_ms * 2.0 / 3.0)
+  t.advance(@kit.hover_card_close_ms * 2.0 / 3.0)
   t.frame()
-  let seen = around(t, v, left, hover_card_close_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after it left, open): \{seen}")
+  let seen = around(t, v, left, @kit.hover_card_close_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after it left, open): \{Repr(seen)}")
 }
 
 ///|
 test "hover card: kept open while the keyboard's focus is in it; closes hover_close_ms after Tab takes the focus out of it, the frame late" {
   let (t, v) = card_tester()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
-  t.run_for(hover_card_open_ms * 2.0)
+  t.move_to(x, y)
+  t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_true(v.open.val, msg="opened")
   let mut on = false
   for _ in 0..<12 {
@@ -181,18 +181,18 @@ test "hover card: kept open while the keyboard's focus is in it; closes hover_cl
       break
     }
   }
-  assert_true(on, msg="Tab to Notes: \{t.focused()}")
-  t.move(900.0, 900.0)
-  t.run_for(hover_card_close_ms * 2.0)
+  assert_true(on, msg="Tab to Notes: \{Repr(t.focused())}")
+  t.move_to(900.0, 900.0)
+  t.run_for(@kit.hover_card_close_ms * 2.0)
   assert_true(v.open.val, msg="kept by the focus in it")
   // Tab out as the host hands it on, the frame late: its close from the key's moment
   let moved = t.time()
   t.key_told(@ui.key_tab, 0, moved)
-  t.advance(hover_card_close_ms * 2.0 / 3.0)
+  t.advance(@kit.hover_card_close_ms * 2.0 / 3.0)
   t.frame()
-  assert_true(t.focused().map(fn(f) { f.label }) != Some("Notes"), msg="the focus out of it: \{t.focused()}")
-  let seen = around(t, v, moved, hover_card_close_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after the focus moved, open): \{seen}")
+  assert_true(t.focused().map(fn(f) { f.label }) != Some("Notes"), msg="the focus out of it: \{Repr(t.focused())}")
+  let seen = around(t, v, moved, @kit.hover_card_close_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after the focus moved, open): \{Repr(seen)}")
 }
 
 ///|
@@ -216,10 +216,10 @@ test "hover card: kept open by the keyboard's focus in it; a screen reader's Foc
       v.width(Is(Some(600.0))).height(Is(Some(600.0))) |> ignore
       @ui.old(v, fn(c) {
         c.column(pad=40.0, fn() {
-          let r = button(c, "@ada", key="ada", variant=Ghost)
-          open.val = hover_card(c, "card", r.id, fn() {
+          let r = @kit.button(c, "@ada", key="ada", variant=Ghost)
+          open.val = @kit.hover_card(c, "card", r.id, fn() {
             c.text("Ada's card") |> ignore
-            button(c, "Notes", key="notes") |> ignore
+            @kit.button(c, "Notes", key="notes") |> ignore
           })
         })
         |> ignore
@@ -230,8 +230,8 @@ test "hover card: kept open by the keyboard's focus in it; a screen reader's Foc
   })
   t.draw()
   let (x, y) = middle_of(t, "@ada")
-  t.move(x, y)
-  t.run_for(hover_card_open_ms * 2.0)
+  t.move_to(x, y)
+  t.run_for(@kit.hover_card_open_ms * 2.0)
   assert_true(open.val, msg="opened")
   let mut on = false
   for _ in 0..<12 {
@@ -241,9 +241,9 @@ test "hover card: kept open by the keyboard's focus in it; a screen reader's Foc
       break
     }
   }
-  assert_true(on, msg="Tab to Notes: \{t.focused()}")
-  t.move(790.0, 590.0)
-  t.run_for(hover_card_close_ms * 2.0)
+  assert_true(on, msg="Tab to Notes: \{Repr(t.focused())}")
+  t.move_to(790.0, 590.0)
+  t.run_for(@kit.hover_card_close_ms * 2.0)
   assert_true(open.val, msg="kept by the focus in it")
   guard t.semantics().iter().find_first(fn(s) { s.label == "Tree button" }) is Some(tb) else { fail("no tree button") }
   // Focus asked of the tree's button as a screen reader asks it, no frame after it
@@ -251,10 +251,10 @@ test "hover card: kept open by the keyboard's focus in it; a screen reader's Foc
   @ui.current().ask_action(tb.id, Focus)
   let tree = @ui.view_tree().unwrap()
   assert_true(tree.focused_now().0 is Some(_), msg="the focus on the tree's button as it is asked")
-  assert_true(t.focused().map(fn(f) { f.label }) == Some("Tree button"), msg="out of the card: \{t.focused()}")
-  t.advance(hover_card_close_ms * 2.0 / 3.0)
+  assert_true(t.focused().map(fn(f) { f.label }) == Some("Tree button"), msg="out of the card: \{Repr(t.focused())}")
+  t.advance(@kit.hover_card_close_ms * 2.0 / 3.0)
   t.frame()
   let v : CardView = { shown: @signals.signal(true), down: @signals.signal(0.0), inner: Ref(false), kept: false, open }
-  let seen = around(t, v, moved, hover_card_close_ms)
-  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after Focus, open): \{seen}")
+  let seen = around(t, v, moved, @kit.hover_card_close_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after Focus, open): \{Repr(seen)}")
 }

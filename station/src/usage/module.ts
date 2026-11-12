@@ -11,7 +11,7 @@ import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
 import { hubConfig } from "../sessions/config.ts";
 import type { LiveHub } from "../sessions/live.ts";
-import { Parts, Paths, Previous, StationConfig, Store } from "../services.ts";
+import { Parts, Paths, Previous, Readers, StationConfig, Store } from "../services.ts";
 import { log } from "../ops/log.ts";
 import { Fibers } from "../ops/fibers.ts";
 import type { Store as StationStore } from "../store/store.ts";
@@ -349,13 +349,18 @@ export const UsageLive = Layer.effectDiscard(
     const config = yield* StationConfig;
     const { hub } = yield* Agents;
     const previous = yield* Previous;
+    const readers = yield* Readers;
     const mover = yield* Effect.acquireRelease(
       Effect.sync(() => watchCompactMoves(store, previous.exited)),
       (m) => Effect.promise(() => m.close()),
     );
     yield* Effect.forkScoped(retireUntilComplete(store, previous.exited, undefined, mover.wake).pipe(Effect.provideService(Clock.Clock, hub.clock)));
     const usage = yield* Effect.acquireRelease(
-      Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
+      Effect.sync(() => new UsageCounter({
+        store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock,
+        // The turns its calls were made in: a reader's (each part of a transcript asked several statements here).
+        turns: async (session, from, until) => JSON.parse(await readers.read("usageTurns", { session, from, until }, "zh")),
+      })),
       (u) => Effect.promise(() => u.stop()),
     );
     usage.start();

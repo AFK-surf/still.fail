@@ -62,6 +62,26 @@ async function rig<T extends { host: FakeHost; core: Core }>(t: T) {
   return { ...t, ask, parts, whole };
 }
 
+test("a pref set that is not one the bringing goes by looks at nothing kept: the workspace switched to waits on none of it", async () => {
+  const t = await started();
+  files(t.host, new Map());
+  const r = await rig(t);
+  await t.host.time.pass(IDLE_MS + 100);
+  const kept = t.core.inner.driveKept;
+  let looks = 0;
+  const unfinished = kept.unfinished.bind(kept);
+  kept.unfinished = (kinds, since) => {
+    looks++;
+    return unfinished(kinds, since);
+  };
+  await r.ask("prefs.set", { workspace: "ws" });
+  await r.ask("prefs.set", { appearance: "dark" });
+  await t.host.time.pass(IDLE_MS + 100);
+  assert.equal(looks, 0);
+  await r.ask("prefs.set", { fillMax: 7 * MB });
+  assert.ok(looks > 0, "looked at again as its bound changed");
+});
+
 test("a chat's video a viewer let go of is brought whole once nothing is waited on, and read from the device after", async () => {
   const film = bytesOf(10 * MB, 3);
   const t = await started();

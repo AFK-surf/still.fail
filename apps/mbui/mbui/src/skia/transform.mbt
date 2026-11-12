@@ -2,6 +2,7 @@
 
 ///|
 /// x' = sx·x + kx·y + tx, y' = ky·x + sy·y + ty.
+#derive(Eq, Debug)
 pub(all) struct Transform {
   sx : Float
   kx : Float
@@ -9,7 +10,7 @@ pub(all) struct Transform {
   sy : Float
   tx : Float
   ty : Float
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn Transform::identity() -> Transform {

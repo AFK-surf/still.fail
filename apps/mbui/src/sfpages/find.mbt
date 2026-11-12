@@ -22,7 +22,7 @@ pub(all) struct Found {
 /// was last asked of the core, what the core found (None nothing asked yet), the time the reader is at (which of its
 /// messages, which time in it), whether what is not on the device is being read.
 pub(all) struct Finding {
-  mut chat : String
+  chat : @signals.Signal[String]
   field : @ui.Field
   mut query : String
   asked : @signals.Signal[String]
@@ -37,7 +37,7 @@ pub(all) struct Finding {
 
 ///|
 pub let finding : Finding = {
-  chat: "",
+  chat: @signals.signal("", same=fn(a, b) { a == b }),
   field: @ui.Field::new(),
   query: "",
   asked: @signals.signal("", same=fn(a, b) { a == b }),
@@ -68,15 +68,15 @@ pub fn chat_key(r : ChatRef) -> String {
 ///|
 /// The chat ⌘F's bar is open in ("" none).
 pub fn find_chat() -> String {
-  finding.chat
+  finding.chat.get()
 }
 
 ///|
 /// ⌘F's bar open in the chat `key` (opened again: its field takes the keyboard again).
 pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
-  if finding.chat != key {
+  if finding.chat.untracked() != key {
     find_close()
-    finding.chat = key
+    finding.chat.set(key)
   }
   c.focus_field(finding.field)
 }
@@ -84,7 +84,7 @@ pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// ⌘F's bar closed: what it looked for forgotten (what the list marked for it is the page's to let go: FindList).
 pub fn find_close() -> Unit {
-  finding.chat = ""
+  finding.chat.set("")
   finding.field.set("")
   finding.query = ""
   finding.asked.set("")
@@ -100,7 +100,7 @@ pub fn find_close() -> Unit {
 ///|
 /// ⌘F's bar open in chat `key` with `words` typed (a screen's fixture).
 pub fn find_preset(key : String, words : String) -> Unit {
-  finding.chat = key
+  finding.chat.set(key)
   finding.field.set(words)
 }
 
@@ -108,7 +108,7 @@ pub fn find_preset(key : String, words : String) -> Unit {
 /// The words to mark in every message of chat `key` drawn now: what ⌘F found while its bar is open in it.
 pub fn find_words_in(key : String) -> Array[String] {
   match finding.found.get() {
-    Some(f) if finding.chat == key => f.words
+    Some(f) if finding.chat.get() == key => f.words
     _ => []
   }
 }
@@ -188,7 +188,7 @@ fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
   let n = finding.moves
   (src.call)("chat.find.go", Json::object(params), fn(res) {
     // (closed, typed on, or moved again since: an answer to what is no longer asked)
-    if finding.chat != key || finding.moves != n {
+    if finding.chat.untracked() != key || finding.moves != n {
       return
     }
     match (res, finding.found.get()) {
@@ -229,7 +229,7 @@ pub let find_typing_ms : Double = 120.0
 /// what it does not.
 fn find_ask(src : Source, station : String, thread : Double, key : String, list : FindList, query : String) -> Unit {
   finding.asked.set(query)
-  let q = query.trim(chars=" ").to_string()
+  let q = query.trim(chars=" ").to_owned()
   if q == "" {
     finding.found.set(None)
     finding.at.set(-1)
@@ -239,48 +239,69 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
     finding.bringing.set(false)
     return
   }
+  ask_bringing(
+    src,
+    "chat.find",
+    { "station": Json::string(station), "thread": Json::number(thread), "query": Json::string(q) },
+    // (typed on since, or closed: an answer to what is no longer asked)
+    fn() { finding.asked.get() == query && finding.chat.untracked() == key },
+    fn(j, bring) {
+      let f = found_of(j)
+      // where the reader was, as a message of what is found now (gone: none)
+      let was = match finding.found.get() {
+        Some(o) if bring && finding.at.get() >= 0 && finding.at.get() < o.hits.length() => o.hits[finding.at.get()].0
+        _ => -1.0
+      }
+      finding.found.set(Some(f))
+      finding.bringing.set(false)
+      finding.at.set(f.hits.search_by(fn(h) { h.0 == was }).unwrap_or(-1))
+      if finding.at.get() < 0 {
+        finding.k.set(0)
+      }
+      finding.position.set(0)
+      finding.total.set(f.hits.fold(init=0, fn(n, h) { n + h.1 }))
+      // kept where it is still found, else where the reader starts (the core's)
+      find_move(src, key, list, 0)
+    },
+    bringing=fn() { finding.bringing.set(true) },
+    // its station away, or the core an older one: what was found stays as it is
+    failed=fn() { finding.bringing.set(false) },
+  )
+}
+
+///|
+/// A chat looked in for words as the chat's find and its outline look (`call`: `chat.find`, `chat.outline.find`, with
+/// `params`, its station, thread and query): at once in what the device holds, then, where that answer says it was not
+/// all of the chat (`whole`), again with what it does not (`bring`), `bringing` told as that is asked. Each answer given
+/// `answer` (with whether it was the one that brought the rest) while `still()` holds (typed on since, or closed: an
+/// answer to what is no longer asked, let be); `failed` as one fails (its station away, the core an older one).
+pub fn ask_bringing(
+  src : Source,
+  call : String,
+  params : Map[String, Json],
+  still : () -> Bool,
+  answer : (Json, Bool) -> Unit,
+  bringing? : () -> Unit = fn() {  },
+  failed? : () -> Unit = fn() {  },
+) -> Unit {
   fn ask(bring : Bool) {
-    (src.call)(
-      "chat.find",
-      {
-        "station": Json::string(station),
-        "thread": Json::number(thread),
-        "query": Json::string(q),
-        "bring": Json::boolean(bring),
-      },
-      fn(res) {
-        // (typed on since, or closed: an answer to what is no longer asked)
-        if finding.asked.get() != query || finding.chat != key {
-          return
-        }
-        match res {
-          Ok(j) => {
-            let f = found_of(j)
-            // where the reader was, as a message of what is found now (gone: none)
-            let was = match finding.found.get() {
-              Some(o) if bring && finding.at.get() >= 0 && finding.at.get() < o.hits.length() => o.hits[finding.at.get()].0
-              _ => -1.0
-            }
-            finding.found.set(Some(f))
-            finding.bringing.set(false)
-            finding.at.set(f.hits.search_by(fn(h) { h.0 == was }).unwrap_or(-1))
-            if finding.at.get() < 0 {
-              finding.k.set(0)
-            }
-            finding.position.set(0)
-            finding.total.set(f.hits.fold(init=0, fn(n, h) { n + h.1 }))
-            // kept where it is still found, else where the reader starts (the core's)
-            find_move(src, key, list, 0)
-            if !bring && !f.whole {
-              finding.bringing.set(true)
-              ask(true)
-            }
+    let p = params.copy()
+    p["bring"] = Json::boolean(bring)
+    (src.call)(call, Json::object(p), fn(res) {
+      if !still() {
+        return
+      }
+      match res {
+        Ok(j) => {
+          answer(j, bring)
+          if !bring && !flag(Some(j), "whole") {
+            bringing()
+            ask(true)
           }
-          // its station away, or the core an older one: what was found stays as it is
-          Err(_) => finding.bringing.set(false)
         }
-      },
-    )
+        Err(_) => failed()
+      }
+    })
   }
 
   ask(false)

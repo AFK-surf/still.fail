@@ -120,11 +120,12 @@ priv struct SAttr {
 }
 
 ///|
+#derive(Eq)
 priv enum SKind {
   SRoot
   SElem
   SText
-} derive(Eq)
+}
 
 ///|
 priv struct SNode {
@@ -243,26 +244,6 @@ fn SDoc::ancestors(self : SDoc, id : Int) -> Array[Int] {
     n = self.nodes[n].parent
   }
   out
-}
-
-///|
-fn SDoc::text(self : SDoc, id : Int) -> String {
-  let n = self.nodes[id]
-  match n.kind {
-    SText => n.text
-    SElem =>
-      if n.children.is_empty() {
-        ""
-      } else {
-        let c = self.nodes[n.children[0]]
-        if c.kind == SText {
-          c.text
-        } else {
-          ""
-        }
-      }
-    SRoot => ""
-  }
 }
 
 ///|
@@ -475,14 +456,6 @@ fn SDoc::attr_color(self : SDoc, id : Int, aid : String) -> SColor? {
 }
 
 ///|
-fn SDoc::attr_paint(self : SDoc, id : Int, aid : String) -> SPaint? {
-  match self.attr(id, aid) {
-    Some(v) => parse_paint(v)
-    None => None
-  }
-}
-
-///|
 /// A number list; None where one of its numbers is not one.
 fn SDoc::attr_numbers(self : SDoc, id : Int, aid : String) -> Array[Float]? {
   match self.attr(id, aid) {
@@ -501,27 +474,11 @@ fn SDoc::attr_numbers(self : SDoc, id : Int, aid : String) -> Array[Float]? {
 }
 
 ///|
-fn SDoc::attr_lengths(self : SDoc, id : Int, aid : String) -> Array[Length]? {
-  match self.attr(id, aid) {
-    Some(v) => {
-      let out = []
-      for n in parse_length_list(v) {
-        match n {
-          Some(n) => out.push(n)
-          None => return None
-        }
-      }
-      Some(out)
-    }
-    None => None
-  }
-}
-
-///|
+#derive(Eq)
 priv enum Units {
   UserSpaceOnUse
   ObjectBoundingBox
-} derive(Eq)
+}
 
 ///|
 fn SDoc::attr_units(self : SDoc, id : Int, aid : String) -> Units? {
@@ -533,11 +490,12 @@ fn SDoc::attr_units(self : SDoc, id : Int, aid : String) -> Units? {
 }
 
 ///|
+#derive(Eq)
 priv enum Visibility {
   Visible
   Hidden
   Collapse
-} derive(Eq)
+}
 
 ///|
 fn parse_visibility(v : String) -> Visibility? {
@@ -550,11 +508,12 @@ fn parse_visibility(v : String) -> Visibility? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ShapeRendering {
   OptimizeSpeed
   CrispEdges
   GeometricPrecision
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn parse_shape_rendering(v : String) -> ShapeRendering? {
@@ -572,11 +531,12 @@ pub fn ShapeRendering::use_shape_antialiasing(self : ShapeRendering) -> Bool {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum TextRendering {
   TrOptimizeSpeed
   TrOptimizeLegibility
   TrGeometricPrecision
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn parse_text_rendering(v : String) -> TextRendering? {
@@ -589,6 +549,7 @@ fn parse_text_rendering(v : String) -> TextRendering? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ImageRendering {
   OptimizeQuality
   IrOptimizeSpeed
@@ -596,7 +557,7 @@ pub(all) enum ImageRendering {
   HighQuality
   IrCrispEdges
   Pixelated
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn parse_image_rendering(v : String) -> ImageRendering? {
@@ -690,7 +651,7 @@ priv struct TreeBuilder {
 fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
   let doc : SDoc = { nodes: [], attrs: [], links: {} }
   doc.nodes.push({ kind: SRoot, tag: "", parent: -1, children: [], attr_start: 0, attr_end: 0, text: "" })
-  let id_map : Map[String, Int] = {}
+  let id_map : Map[String, Int] = Map([])
   let all = []
   xml.descendants(0, all)
   for n in all {
@@ -712,7 +673,7 @@ fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
         Some(t) => if !(t == "" || t.to_lower() == "text/css") { continue }
         None => ()
       }
-      let text = StringBuilder::new()
+      let text = StringBuilder()
       for c in node.children {
         if xml.nodes[c].kind == XText {
           text.write_string(xml.nodes[c].text)
@@ -730,7 +691,7 @@ fn parse_svg_tree(xml : XDoc, injected_style : String?) -> SDoc? {
   if root < 0 || doc.tag(root) != "svg" {
     return None
   }
-  let links : Map[String, Int] = {}
+  let links : Map[String, Int] = Map([])
   let patterns = []
   let clip_paths = []
   let masks = []
@@ -1271,7 +1232,7 @@ fn TreeBuilder::resolve_tref_text(self : TreeBuilder, href : String) -> String? 
   }
   let under = []
   self.xml.descendants(node, under)
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for n in under {
     if self.xml.nodes[n].kind == XText {
       sb.write_string(self.xml.nodes[n].text)
@@ -1287,7 +1248,7 @@ fn TreeBuilder::resolve_tref_text(self : TreeBuilder, href : String) -> String? 
 
 ///|
 fn trim_text(text : String, preserve : Bool) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   let mut prev = 0x30
   for ch in text {
     let mut c = ch.to_int()
@@ -1335,13 +1296,13 @@ fn last_cu(s : String) -> Int {
 ///|
 fn SDoc::remove_first_space(self : SDoc, id : Int) -> Unit {
   let t = self.nodes[id].text
-  self.nodes[id].text = t.view(start_offset=1).to_string()
+  self.nodes[id].text = t.exact_view(start=1).to_owned()
 }
 
 ///|
 fn SDoc::remove_last_space(self : SDoc, id : Int) -> Unit {
   let t = self.nodes[id].text
-  self.nodes[id].text = t.view(end_offset=t.length() - 1).to_string()
+  self.nodes[id].text = t.exact_view(end=t.length() - 1).to_owned()
 }
 
 ///|
@@ -1408,7 +1369,7 @@ fn trim_text_nodes(text_elem : Int, preserve : Bool, doc : SDoc) -> Unit {
         doc.nodes[node1].text.has_suffix(" ") {
         doc.remove_last_space(node1)
       }
-      if doc.nodes[node1].text.trim(chars=" \t\n\r").to_string() != "" {
+      if doc.nodes[node1].text.trim(chars=" \t\n\r").to_owned() != "" {
         last_non_empty = node1
       }
     }

@@ -3,14 +3,14 @@
 ///|
 test "chat neighbours: a list held under the pointer is traversed in its displayed order" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   // (its row in the list, where the pointer rests: not its title over the chat it opens)
   let (x, y) = t.find("给设置页加一个深色模式开关").unwrap()
   t.tap_text("给设置页加一个深色模式开关")
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   // The core moves CI to the top, while the list keeps it below the current row under the pointer.
   fix_clock_set(clock, 2001.0)
@@ -18,7 +18,9 @@ test "chat neighbours: a list held under the pointer is traversed in its display
   let core = src.topic("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).get().value
   let first_day = items(core, "days")[0]
   assert_eq(text(Some(items(Some(first_day), "items")[0]), "id"), "c5")
-  assert_true(t.find("给设置页加一个深色模式开关").unwrap().1 < t.find("盯着 CI，绿了告诉我").unwrap().1)
+  // (the two rows of the sidebar's list, as a screen reader finds them: not the chat's title over it, nor its words)
+  let (current, next) = (t.get(Link, label="给设置页加一个深色模式开关"), t.get(Link, label="盯着 CI，绿了告诉我"))
+  assert_true(current.rect.1 < next.rect.1, msg="\{Repr(current.rect)} \{Repr(next.rect)}")
   // A menu action stays asked throughout the frame. Even if it is built more than once, it moves just one row.
   @settings.ask_action("chat.next")
   t.frame()

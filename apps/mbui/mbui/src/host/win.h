@@ -27,6 +27,7 @@ enum {
   MB_OUTSIDE_STREAMED = 12,
   MB_OUTSIDE_STOOD = 13,
   MB_OUTSIDE_PERF = 14,
+  MB_OUTSIDE_OP = 15,
 };
 
 typedef struct {
@@ -90,6 +91,9 @@ void mb_images_tell(mb_outside_fn f);
 
 // app (win_app.c): asks for a frame from any thread
 void mb_app_wake(void);
+// what the host did for the app (`kind`, as hostcall.mbt's outside_*, for `id`) done on another thread: the app told
+// on the window's thread, between frames (win_app.c's WM_MB_TOLD)
+void mb_app_told(int kind, int id);
 // stream id, shown by its system video layer, said something (win_stream.cpp), from any thread: the app told between
 // frames (MB_OUTSIDE_STREAMED: ui's streams_said), a frame asked for only where what it said changes what is drawn
 void mb_app_streamed(int id);

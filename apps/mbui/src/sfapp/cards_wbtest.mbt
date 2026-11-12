@@ -1,6 +1,11 @@
 // A chat's cards answered from the chat, over the fixture's own answers (chat_fixture.mbt: a card answered or let go
-// at once): on screen the card stays as it is, none of it pressed any more; out of sight it is how it went
-// (sfbase's list_turns.mbt Turns::in_turn; the user, 2026-10-29: what is answered moves nothing in the list).
+// at once): answered or let go, on screen or not, what is under the post closes from that moment and how it went
+// comes in its place (sfbase's list_turns.mbt Turns::in_turn, sfpages' decision.mbt).
+
+///|
+/// How long on from an answer these tests look (3 s, past every motion it sets off): what list_turns.mbt once said was
+/// the most a turn held the next back (turn_most_ms), these moments kept.
+let answer_over_ms : Double = 3000.0
 
 ///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
@@ -10,7 +15,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -40,7 +45,7 @@ test "answered options can be read again by pressing the outcome, without answer
     let t = cards_core(calls, platform~)
     scroll_to_words(t, "把首页和聊天页的截图都更新")
     tap_now(t, "把首页和聊天页的截图都更新")
-    t.run_for(turn_most_ms)
+    t.run_for(answer_over_ms)
     out_of_sight(t)
     scroll_to_words(t, "你 选择了「一起换」")
     assert_true(t.find("这次只改列表，截图下次再说") is None)
@@ -49,7 +54,7 @@ test "answered options can be read again by pressing the outcome, without answer
     assert_true(width < 250.0)
     // (a pointer resting on it opens nothing: only a press does)
     if platform == 0 {
-      t.move(x, y)
+      t.move_to(x, y)
       t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
       assert_true(t.find("这次只改列表，截图下次再说") is None)
     }
@@ -61,7 +66,7 @@ test "answered options can be read again by pressing the outcome, without answer
     // The pointer leaving the line leaves what it opened open.
     if platform == 0 {
       let (cx, cy) = t.find("这次只改列表，截图下次再说").unwrap()
-      t.move(cx, cy)
+      t.move_to(cx, cy)
       t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
       assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
     }
@@ -87,7 +92,7 @@ test "answered phone and sign-in requests show their original reason from the ou
       let before = relevant()
       // (a pointer resting on it opens nothing: only a press does)
       if platform == 0 {
-        t.move(x, y)
+        t.move_to(x, y)
         t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
         assert_true(t.find(reason) is None)
       }
@@ -109,7 +114,7 @@ test "a granted proxy request reveals its reason and allowed host" {
     let (x, y) = t.find("已允许使用 Axiom 查询 token").unwrap()
     // (a pointer resting on it opens nothing: only a press does)
     if platform == 0 {
-      t.move(x, y)
+      t.move_to(x, y)
       t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
       assert_true(t.find("查询中继连接日志，定位拨号失败的原因") is None)
     }
@@ -133,30 +138,13 @@ fn tap_now(t : @ui.Tester, words : String) -> Unit {
 ///|
 /// Scrolled until `words` show.
 fn scroll_to_words(t : @ui.Tester, words : String) -> Unit {
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<8 {
     if t.find(words) is Some(_) {
       break
     }
     t.wheel(195.0, 400.0, -300.0)
   }
-}
-
-///|
-/// Whether the words `what` are drawn faded out (there, their room kept, nothing of them seen).
-fn faded(t : @ui.Tester, what : String) -> Bool {
-  match t.look_of(what) {
-    Some((_, _, alpha)) => alpha < 0.01
-    None => false
-  }
-}
-
-///|
-/// How tall the card's options are, from the first's top to the last's foot.
-fn options_tall(t : @ui.Tester) -> Double {
-  let (_, top, _, _) = t.rect_of("把首页和聊天页的截图都更新").unwrap()
-  let (_, y, _, h) = t.rect_of("这次只改列表，截图下次再说").unwrap()
-  y + h - top
 }
 
 ///|
@@ -170,7 +158,7 @@ test "an option answered on screen: its options close at once, how it went in th
   tap_now(t, "这次只改列表，截图下次再说")
   assert_eq(named(calls, "decision.answer").length(), 1)
   // on screen as out of sight: its room closed with what came of it, one move (mbui's view/list_motion.mbt)
-  t.run_for(turn_most_ms)
+  t.run_for(answer_over_ms)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("你 选择了「一起换」") is Some(_))
   t.assert_idle()
@@ -183,7 +171,7 @@ test "忽略 on screen: let go at once (decision.dismiss), the card's options an
   scroll_to_words(t, "忽略")
   tap_now(t, "忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  t.run_for(turn_most_ms)
+  t.run_for(answer_over_ms)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("忽略") is None)
   t.assert_idle()

@@ -142,7 +142,7 @@ test "a host call interrupted before its answer tells the host to stop" {
 ///|
 test "a fiber of the root scope that fails is a defect, told and kept" {
   let rt = @effect.Runtime::new()
-  ignore(rt.fork(async fn() -> Unit { raise Broke("lost") }))
+  ignore(rt.fork(fn() -> Unit raise { raise Broke("lost") }))
   ignore(rt.run_ready())
   assert_eq(rt.defects.length(), 1)
 }
@@ -178,7 +178,7 @@ test "the seeded random draws the same on every backend" {
   let a = Array::makei(5, _ => r.below(1000))
   let r2 = @effect.Rng::new(42)
   assert_eq(Array::makei(5, _ => r2.below(1000)), a)
-  inspect(a, content=(
+  debug_inspect(a, content=(
     #|[791, 314, 751, 389, 144]
   ))
   for _ in 0..<1000 {

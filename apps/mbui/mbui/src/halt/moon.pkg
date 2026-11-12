@@ -1,0 +1,9 @@
+import {
+}
+
+options(
+  targets: {
+    "halt_native.mbt": [ "native" ],
+    "halt_other.mbt": [ "js", "wasm", "wasm-gc" ],
+  },
+)

@@ -6,9 +6,10 @@
 // start. Their text is src/skills/*.md (with the scripts some bring in src/skills/<name>/), read from there when running from source and from dist/skills/ (copied there by
 // the build) when bundled.
 import { closeSync, existsSync, linkSync as hardLinkSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstat, mkdir, readdir, readlink, realpath, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
-import { linkSync } from "../ops/links.ts";
+import { link, linkSync } from "../ops/links.ts";
 import { log } from "../ops/log.ts";
 import { within } from "../ops/paths.ts";
 import { sharedTranscripts, transcriptDir } from "../read/transcript.ts";
@@ -153,18 +154,32 @@ export const SKILL_HOMES = [join(".claude", "skills"), join(".agents", "skills")
 
 /// Links the skills of a session's workspace (`skills`, its agent home's) into the directory it runs in (`workspace`),
 /// where its runtime loads them as its own (SKILL_HOMES), as a preset's folders' are (presets.ts `keepCopy`); a link to
-/// one gone is taken away. One of the same name there already (a preset's) is left.
-export function sessionSkills(workspace: string, skills: string) {
-  const names = entries(skills).filter((n) => existsSync(join(skills, n, "SKILL.md")));
+/// one gone is taken away. One of the same name there already (a preset's) is left. Off the station's thread: each
+/// session's process opened looked at every skill's file and link there, waiting on the disk.
+export async function sessionSkills(workspace: string, skills: string): Promise<void> {
+  const names: string[] = [];
+  for (const name of await entriesSoon(skills)) if (await there(join(skills, name, "SKILL.md"))) names.push(name);
   for (const home of SKILL_HOMES) {
     const dir = join(workspace, home);
-    for (const entry of entries(dir)) if (!names.includes(entry) && linksInto(join(dir, entry), skills)) rmSync(join(dir, entry), { force: true });
+    for (const entry of await entriesSoon(dir)) if (!names.includes(entry) && await linksIntoSoon(join(dir, entry), skills)) await rm(join(dir, entry), { force: true });
     if (names.length === 0) continue;
-    mkdirSync(dir, { recursive: true });
+    await mkdir(dir, { recursive: true });
     for (const name of names) {
       const at = join(dir, name);
-      if (!existsSync(at) && !isLink(at)) linkSync(join(skills, name), at, { junction: true });
+      if (!(await there(at)) && (await lstat(at).catch(() => null)) === null) await link(join(skills, name), at, { junction: true });
     }
+  }
+}
+
+const entriesSoon = (dir: string): Promise<string[]> => readdir(dir).catch(() => []);
+const there = (path: string): Promise<boolean> => stat(path).then(() => true, () => false);
+async function linksIntoSoon(path: string, dir: string): Promise<boolean> {
+  try {
+    if (!(await lstat(path)).isSymbolicLink()) return false;
+    if (dirname(await readlink(path)) === dir) return true;
+    return dirname(await realpath(path)) === (await realpath(dir));
+  } catch {
+    return false;
   }
 }
 

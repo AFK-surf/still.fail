@@ -40,7 +40,7 @@ pub fn marks_run(c : @ui.Ctx, marks : String, image : String) -> Unit {
             let mut at = 0
             while at < text.length() {
               let end = if at + part < text.length() { at + part } else { text.length() }
-              @hostapi.log("MARKS png " + text.view(start_offset=at, end_offset=end).to_owned())
+              @hostapi.log("MARKS png " + text.exact_view(start=at, end=end).to_owned())
               at = end
             }
             @hostapi.log("MARKS done \{png.length()} bytes")

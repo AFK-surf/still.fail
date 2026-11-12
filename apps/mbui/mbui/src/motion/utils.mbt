@@ -84,7 +84,7 @@ pub fn interpolate(
   mixer? : (Double, Double) -> (Double) -> Double,
 ) -> (Double) -> Double {
   let n = input.length()
-  guard n == output.length() else { abort("Both input and output ranges must be the same length") }
+  guard n == output.length() else { @halt.saying("Both input and output ranges must be the same length") }
   if n == 1 {
     let o = output[0]
     return fn(_) { o }

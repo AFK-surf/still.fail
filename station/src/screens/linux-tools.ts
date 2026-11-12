@@ -1,12 +1,48 @@
 // Programs for the Linux X11 desktop. Prefer the machine's pair; on Debian-family systems the station can prepare
 // its own pair without installing packages into the operating system or requiring an administrator.
-import { execFile } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { mkdir, mkdtemp, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { delimiter, isAbsolute, join } from "node:path";
-import { promisify } from "node:util";
+import { wall } from "../ops/fibers.ts";
+import { endCommand, startCommand } from "../ops/processes.ts";
 
-const run = promisify(execFile);
+type Running = { env: NodeJS.ProcessEnv; signal: AbortSignal; timeout: number; maxBuffer?: number };
+
+/// A command of the preparation, run as a group of its own (ops/processes.ts): stopped, out of time or saying too
+/// much, it is ended whole, it and what it started (apt-get's fetchers), and it answers only once nothing of it holds
+/// its output any more. What follows a stop, the stage removed, then meets no process of it still writing there: ended
+/// alone, apt-get left one behind that put a package into the stage as it was removed, and the stage stayed.
+function run(program: string, args: string[], o: Running): Promise<{ stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = startCommand(program, args, { env: o.env, stdio: ["ignore", "pipe", "pipe"] });
+    const most = o.maxBuffer ?? 1024 * 1024;
+    let stdout = "", said = 0, failed: Error | null = null;
+    const end = (why: Error) => {
+      failed ??= why;
+      endCommand(child, "SIGKILL");
+    };
+    const stopped = () => end(o.signal.reason instanceof Error ? o.signal.reason : new Error(`${program} stopped`));
+    // The command's time, the machine's: one left going is ended, its whole group.
+    const late = wall.after(o.timeout, () => end(new Error(`${program} took more than ${o.timeout} ms`)));
+    const hear = (keep: boolean) => (chunk: Buffer) => {
+      said += chunk.length;
+      if (said > most) end(new Error(`${program} said more than ${most} bytes`));
+      else if (keep) stdout += chunk.toString("utf8");
+    };
+    child.stdout!.on("data", hear(true));
+    child.stderr!.on("data", hear(false));
+    const done = (answer: () => void) => {
+      late();
+      o.signal.removeEventListener("abort", stopped);
+      answer();
+    };
+    // (not started at all: nothing of it to wait for)
+    child.on("error", (e) => done(() => reject(failed ?? e)));
+    child.on("close", (code, signal) => done(() => (failed ? reject(failed) : code === 0 ? resolve({ stdout }) : reject(new Error(`${program} ended with ${code ?? signal}`)))));
+    if (o.signal.aborted) stopped();
+    else o.signal.addEventListener("abort", stopped, { once: true });
+  });
+}
 
 /// Resolve only executables, without invoking a shell or consulting a different user's environment.
 export function executable(name: string, env: NodeJS.ProcessEnv): string | null {

@@ -1,11 +1,11 @@
 import {
-  "moonbitlang/core/double",
   "mbui/ui",
   "mbui/motion",
   "mbui/signals",
   "mbui/codec",
   "mbui/hostapi",
-  "moonbitlang/core/math",
   "mbui/dmath",
   "mbui/view",
 }
+
+import { "mbui/halt", "moonbitlang/core/double" } for "test"

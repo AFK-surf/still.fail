@@ -2,15 +2,15 @@
 test "made: a node is filled once, and anew only as what its fill read changes; the others kept" {
   let word = @signals.signal("one")
   let fills = [0, 0]
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       c.made("view", fn() {
-        made_box(fn(c) { c.box(pad=8.0, fn() {  }) |> ignore }, kids=[
-          made_box(fn(c) {
+        @ui.made_box(fn(c) { c.box(pad=8.0, fn() {  }) |> ignore }, kids=[
+          @ui.made_box(fn(c) {
             fills[0] = fills[0] + 1
             c.text(word.get()) |> ignore
           }),
-          made_box(fn(c) {
+          @ui.made_box(fn(c) {
             fills[1] = fills[1] + 1
             c.text("still") |> ignore
           }),
@@ -42,14 +42,14 @@ test "made: a node is filled once, and anew only as what its fill read changes; 
 test "made: what each item makes is made as it comes, kept while it stays, let go as it goes" {
   let items = @signals.signal([1, 2, 3], same=fn(a, b) { a == b })
   let made = Ref(0)
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       c.made("list", fn() {
-        made_holding(
+        @ui.made_holding(
           fn(c) { c.box(gap=4.0, fn() {  }) |> ignore },
-          made_each(fn() { items.get() }, fn(i) { i }, fn(it) {
+          @ui.made_each(fn() { items.get() }, fn(i) { i }, fn(it) {
             made.val = made.val + 1
-            made_box(fn(c) { c.text("item \{it.get()}") |> ignore })
+            @ui.made_box(fn(c) { c.text("item \{it.get()}") |> ignore })
           }),
         )
       })
@@ -75,13 +75,13 @@ test "made: what each item makes is made as it comes, kept while it stays, let g
 ///|
 test "made: a press on a node does what it said as it is let go, and what reads what that set is filled anew" {
   let count = @signals.signal(0)
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       c.made("button", fn() {
-        made_box(fn(c) {
+        @ui.made_box(fn(c) {
           let id = c.id("tap me")
           c.box(id~, pad=10.0, fn() {  }) |> ignore
-        }, kids=[made_box(fn(c) { c.text("pressed \{count.get()}") |> ignore })]).on_press(fn() {
+        }, kids=[@ui.made_box(fn(c) { c.text("pressed \{count.get()}") |> ignore })]).on_press(fn() {
           count.set(count.get() + 1)
         })
       })
@@ -99,12 +99,12 @@ test "made: a press on a node does what it said as it is let go, and what reads 
 ///|
 test "made: what shows while a condition holds comes and goes with it" {
   let open = @signals.signal(false)
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       c.made("shown", fn() {
-        made_holding(
+        @ui.made_holding(
           fn(c) { c.box(fn() {  }) |> ignore },
-          made_show(fn() { open.get() }, fn() { made_box(fn(c) { c.text("now you see it") |> ignore }) }),
+          @ui.made_show(fn() { open.get() }, fn() { @ui.made_box(fn(c) { c.text("now you see it") |> ignore }) }),
         )
       })
     },
@@ -125,15 +125,15 @@ test "made: what shows while a condition holds comes and goes with it" {
 test "made: in a list's rows kept as their nodes, what a made node read changing fills it anew, its press kept" {
   let words = @signals.signal("before")
   let pressed = @signals.signal(0)
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       c.list("rows", 30, 40.0, h=Px(200.0), fn(i) {
         c.made("row \{i}", fn() {
-          made_box(fn(c) {
+          @ui.made_box(fn(c) {
             let id = c.id("row box")
             c.box(id~, h=Px(40.0), fn() {  }) |> ignore
           }, kids=[
-            made_box(fn(c) {
+            @ui.made_box(fn(c) {
               c.text(if i == 1 { "\{words.get()} \{pressed.get()}" } else { "row \{i}" }) |> ignore
             }),
           ]).on_press(fn() { if i == 1 { pressed.set(pressed.get() + 1) } })
@@ -164,18 +164,18 @@ test "made: an island built the old way is built again only as what it read chan
   let b = @signals.signal("b1")
   let built = [0, 0]
   let frames = Ref(0)
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       // (the frame's own build changes at each step of a count: built anew at each)
       frames.val = frames.val + 1
-      c.text("frame \{c.every(first_frame_ms * 6.0)}") |> ignore
+      c.text("frame \{c.every(@ui.first_frame_ms * 6.0)}") |> ignore
       c.made("islands", fn() {
-        made_box(fn(c) { c.box(h=Px(200.0), fn() {  }) |> ignore }, kids=[
-          made_island("first", fn() { "" }, fn(c) {
+        @ui.made_box(fn(c) { c.box(h=Px(200.0), fn() {  }) |> ignore }, kids=[
+          @ui.made_island("first", fn() { "" }, fn(c) {
             built[0] = built[0] + 1
             c.text("first") |> ignore
           }),
-          made_island("second", fn() { "" }, fn(c) {
+          @ui.made_island("second", fn() { "" }, fn(c) {
             built[1] = built[1] + 1
             c.text("second \{b.get()}") |> ignore
           }),
@@ -188,14 +188,14 @@ test "made: an island built the old way is built again only as what it read chan
   t.draw()
   // (frames of the test's run past its step's first: built anew for the count, the islands kept)
   let (b0, f0) = (built[0], frames.val)
-  t.run_for(move_most_ms)
+  t.run_for(@ui.move_most_ms)
   // (built for the step's first frame, as an event from outside, and once more keeping none by the Tester for each
   // frame that kept it, to hold one to the other: fewer times than the frame was built)
   let frames_built = frames.val - f0
   assert_true(frames_built > 2)
   assert_true(built[0] - b0 < frames_built)
   b.set("b2")
-  t.run_for(move_most_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("second b2") is Some(_))
   assert_true(t.find("first") is Some(_))
 }
@@ -205,14 +205,14 @@ test "made: the case picked is made as it comes, kept while it stays, let go as 
   let which = @signals.signal(0)
   let word = @signals.signal("a")
   let made = Ref(0)
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       c.made("pick", fn() {
-        made_holding(
+        @ui.made_holding(
           fn(c) { c.box(gap=4.0, fn() {  }) |> ignore },
-          made_pick(fn() { which.get() }, fn(k) {
+          @ui.made_pick(fn() { which.get() }, fn(k) {
             made.val = made.val + 1
-            made_box(fn(c) { c.text("case \{k} \{word.get()}") |> ignore })
+            @ui.made_box(fn(c) { c.text("case \{k} \{word.get()}") |> ignore })
           }),
         )
       })
@@ -238,15 +238,15 @@ test "made: the case picked is made as it comes, kept while it stays, let go as 
 test "made: what is built the old way in what is made once is built with the frame, as what it read changes" {
   let word = @signals.signal("one")
   let grounds = Ref(0)
-  let t = Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       c.made("ground", fn() {
-        made_box(
+        @ui.made_box(
           fn(c) {
             grounds.val = grounds.val + 1
             c.box(pad=8.0, fn() {  }) |> ignore
           },
-          kids=[made_old(fn(c) { c.text("old \{word.get()}") |> ignore })],
+          kids=[@ui.made_old(fn(c) { c.text("old \{word.get()}") |> ignore })],
         )
       })
     },

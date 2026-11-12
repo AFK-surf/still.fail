@@ -20,12 +20,12 @@ test "ink_by: words and a line drawn in the ink worked out as they are painted, 
   }
   let as_drawn = fn(c : Int64) { [24, 16, 8, 0].map(fn(s) { ((c >> s) & 0xFFL).to_double() / 255.0 }) }
   let words = [1.0, 7.0]
-  assert_true(inks(words).length() > 0 && inks(words).iter().all(fn(g) { g == as_drawn(0xCC6633FFL) }), msg="\{inks(words)}")
-  assert_true(inks([10.0]).length() > 0 && inks([10.0]).iter().all(fn(l) { l == as_drawn(0xCC6633FFL) }), msg="\{inks([10.0])}")
+  assert_true(inks(words).length() > 0 && inks(words).iter().all(fn(g) { g == as_drawn(0xCC6633FFL) }), msg="\{Repr(inks(words))}")
+  assert_true(inks([10.0]).length() > 0 && inks([10.0]).iter().all(fn(l) { l == as_drawn(0xCC6633FFL) }), msg="\{Repr(inks([10.0]))}")
   // (its ground its own)
-  assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0x224466FFL }), msg="\{t.drawn_rects()}")
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0x224466FFL }), msg="\{Repr(t.drawn_rects())}")
   ink.set(0x229944FFL)
   t.frame()
   assert_eq(t.built_why(), "")
-  assert_true(inks(words + [10.0]).iter().all(fn(g) { g == as_drawn(0x229944FFL) }), msg="\{inks(words + [10.0])}")
+  assert_true(inks(words + [10.0]).iter().all(fn(g) { g == as_drawn(0x229944FFL) }), msg="\{Repr(inks(words + [10.0]))}")
 }

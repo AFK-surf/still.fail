@@ -1,4 +1,4 @@
 import {
+  "mbui/halt",
   "mbui/dmath",
-  "moonbitlang/core/debug",
 }

@@ -138,7 +138,7 @@ pub fn fix_context_actions(chat : Json) -> Json {
               let ao = am.copy()
               let session = match am.get("session") {
                 Some(Object(sm)) => sm.copy()
-                _ => Map::new()
+                _ => Map([])
               }
               session["canCompact"] = Json::boolean(true)
               session["canClear"] = Json::boolean(true)
@@ -237,7 +237,6 @@ pub fn fix_history() -> Json {
         "tasks": [],
         "messages": [
           {
-            "key": "m1",
             "from": { "name": "林", "bound": false },
             "text": "帮我把聊天页的列表做成虚拟列表，几千条消息也要滚得顺。",
           },
@@ -440,15 +439,14 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "jobLog" =>
       Some(
         Some({
-          "text": Json::string(
-            "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy" + fix_job_more_text(),
-          ),
+          "lines": Json::array(fix_job_lines()),
           "said": "最后输出 · 3 分钟前",
           "last": "… waiting for deploy",
         }),
       )
     "longJobs" =>
-      if f.mode == "home-jobs-screens" {
+      // (待处理 beside the rail's bell lists them over its chats: the panel as it was reported, 2026-11-12)
+      if f.mode == "home-jobs-screens" || f.mode == "home-attention" {
         Some(Some(long_screens_view()))
       } else if f.mode == "home-jobs" {
         Some(
@@ -746,9 +744,9 @@ pub fn fix_attention_marks() -> Json {
         "unread": 1,
         "tone": "alert",
         "items": [Json::object(wait), Json::object(failed), Json::object(unread)],
+        "others": "done",
       },
     },
-    "others": "done",
     "badge": 2,
     "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
   }
@@ -842,11 +840,15 @@ pub fn fix_letters() -> Json {
 pub let fix_job_more : Ref[Int] = Ref(0)
 
 ///|
-/// The lines past the four, each on a line of its own after them.
-fn fix_job_more_text() -> String {
-  let out = StringBuilder::new()
-  for k in 1..=fix_job_more.val {
-    out.write_string("\ndeploy check \{k}")
+/// Its lines as the core's `jobLog` gives them, each its number (`n`, its own as more come) and its runs: the made-up
+/// four and those past them.
+fn fix_job_lines() -> Array[Json] {
+  let first = ["✓ build (1m 12s)", "✓ unit tests (48s)", "✓ step 3: screenshots", "… waiting for deploy"]
+  let out : Array[Json] = []
+  for k in 0..<(first.length() + fix_job_more.val) {
+    let words = if k < first.length() { first[k] } else { "deploy check \{k - first.length() + 1}" }
+    let runs : Json = [{ "text": Json::string(words) }]
+    out.push({ "n": Json::number(k.to_double()), "runs": runs })
   }
-  out.to_string()
+  out
 }

@@ -53,5 +53,5 @@ test "a page made once, back not its stack's: its edge's swipe handed to what ta
   t.advance(input_step_ms)
   t.touch(2, 185.0, 50.0)
   t.run_for(move_most_ms)
-  assert_true(steps.length() >= 3 && steps[0] == "began 105" && steps.last() == Some("let go 185"), msg="\{steps}")
+  assert_true(steps.length() >= 3 && steps[0] == "began 105" && steps.last() == Some("let go 185"), msg="\{Repr(steps)}")
 }

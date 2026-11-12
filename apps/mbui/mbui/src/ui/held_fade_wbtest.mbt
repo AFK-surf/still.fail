@@ -167,5 +167,5 @@ test "a look's words: its surface whole (the box it is on, or one said to be), a
       ("on it, in a still look", [(0.5, -1.0)]),
     ],
   )
-  assert_eq(glyphs.length() > 0 && glyphs.iter().all(fn(a) { a == 0.5 }), true, msg="\{glyphs}")
+  assert_eq(glyphs.length() > 0 && glyphs.iter().all(fn(a) { a == 0.5 }), true, msg="\{Repr(glyphs)}")
 }

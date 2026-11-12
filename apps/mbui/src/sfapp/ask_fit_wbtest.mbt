@@ -93,7 +93,7 @@ test "大屏, a short window: a question with a long title and a long hint, its 
   assert_eq(
     (within, in_panel(no), in_panel(ok), title_rows.length() >= 2, title_whole, under_title, end_hidden, end_shown, moved, kept),
     (true, true, true, true, true, true, true, true, true, true),
-    msg="panel \{py} \{ph} title \{title} rows \{title_rows.length()} field \{field} hint \{hint0} → \{hint1} buttons \{no} \{ok}",
+    msg="panel \{py} \{ph} title \{Repr(title)} rows \{title_rows.length()} field \{Repr(field)} hint \{Repr(hint0)} → \{Repr(hint1)} buttons \{Repr(no)} \{Repr(ok)}",
   )
 }
 
@@ -126,9 +126,9 @@ test "大屏, a short window, started with keyboard and mouse or touch: a questi
         hint1.1 < hint0.1 - 1.0,
         t.rect_of(ask_long_title) == title,
         t.query(Button, label="保存").map(fn(b) { b.rect }) == ok,
-        "field \{field} hint \{hint0} (middle \{hint0.1 + hint0.3 / 2.0}) shown to \{foot} → \{hint1}",
+        "field \{Repr(field)} hint \{Repr(hint0)} (middle \{hint0.1 + hint0.3 / 2.0}) shown to \{Repr(foot)} → \{Repr(hint1)}",
       ),
     )
   }
-  assert_eq(out.map(fn(o) { (o.0, o.1, o.2, o.3) }), [(0, true, true, true), (2, true, true, true)], msg="\{out}")
+  assert_eq(out.map(fn(o) { (o.0, o.1, o.2, o.3) }), [(0, true, true, true), (2, true, true, true)], msg="\{Repr(out)}")
 }

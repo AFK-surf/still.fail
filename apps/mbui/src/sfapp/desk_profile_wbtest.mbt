@@ -12,7 +12,7 @@ test "wide: the profile list shows a subscription's tier" {
 ///|
 /// The desk's page wheeled down until `words` shows on it (above the window's foot).
 fn desk_shown(t : @ui.Tester, words : String) -> Unit {
-  t.move(800.0, 400.0)
+  t.move_to(800.0, 400.0)
   for _ in 0..<12 {
     match t.find(words) {
       Some((_, y)) if y < 760.0 => break
@@ -61,7 +61,7 @@ test "wide: adding a profile picks its provider from the core's groups, the mach
   // a provider picked: told to the core
   match t.find("DeepSeek") {
     Some((x, y)) => t.tap(x, y)
-    None => abort("no DeepSeek")
+    None => @halt.saying("no DeepSeek")
   }
   t.draw()
   assert_true(
@@ -80,7 +80,7 @@ test "wide: the station's Hermes profile can be selected from its custom variabl
   desk_shown(t, "Hermes Agent")
   match t.find("Hermes Agent") {
     Some((x, y)) => t.tap(x, y)
-    None => abort("no Hermes Agent")
+    None => @halt.saying("no Hermes Agent")
   }
   t.draw()
   assert_true(
@@ -113,4 +113,43 @@ test "wide: the Station place with none in the workspace is the first to add, no
   t.run_for(@ui.move_most_ms)
   // its scene and its one thing to do (the sidebar's 添加 station too)
   assert_true(t.find_last("添加 station") is Some(_))
+}
+
+///|
+/// The profiles' place opened on 大屏 by touch (a tablet's window), a profile's page in its pane as it opens: the pane's
+/// coming reads the layout for its size before any frame, and the page's blocks, made as that layout comes to them,
+/// each read theirs. Begun inside it, that second layout left what the first laid out unplaced (mbui's
+/// Tree::measured_now, #5245, whose own ways in were a phone's): the page's head and its sections' titles drawn where
+/// and as big as whatever had their nodes before, a title 18 wide a letter a line. With a mouse a change is laid out as
+/// it ends, for what is under the pointer, so the same steps there read no layout still to be done. Every frame is held
+/// placed as laid out (Tester::hold_placed); said here of the first as well.
+test "wide, by touch: the profiles' place opens on a page placed as it is laid out" {
+  let t = wide_tester([], mode="settings-profile-fable", w=1100.0, h=700.0, platform=2)
+  @settings.fixture_page("settings-profile-fable") |> ignore
+  app.nav.replace(Place("profiles"))
+  t.draw()
+  assert_eq(t.placed_faults(), [])
+  // (its sections' titles each across the page's column, none in a box of a few points)
+  for words in ["额度", "可使用的 station"] {
+    let wide = t.words().filter(fn(w) { w.0 == words }).map(fn(w) { w.3 })
+    assert_true(wide.length() == 1 && wide[0] > 200.0, msg="\{words}: \{Repr(wide)} wide")
+  }
+}
+
+///|
+test "wide: a machine's login not made a profile yet shows its allowance in the profiles' sidebar" {
+  // (the fixture's place-profiles-offer, as sffix opens it; the Tester opens the place itself)
+  let t = wide_tester([], mode="settings")
+  @settings.fixture_page("settings-profiles-offer") |> ignore
+  app.nav.replace(Place("profiles"))
+  t.draw()
+  // Willow's own Codex login, last in the sidebar: its week's capsule under its row as a profile's row has it
+  let side = fn() { t.text_runs().filter(fn(r) { r.x0 < 300.0 }) }
+  let offered = side().filter(fn(r) { r.text == "使用此账号" })
+  assert_eq(offered.length(), 1, msg="the machine's login offered: \{Repr(side().map(fn(r) { r.text }))}")
+  let under = side().filter(fn(r) { r.top >= offered[0].bottom }).map(fn(r) { r.text })
+  for words in ["5H", "62%", "W", "19%"] {
+    assert_true(under.contains(words), msg="\{words} under the offered login: \{Repr(under)}")
+  }
+  assert_eq(t.squeeze_faults(), [])
 }

@@ -10,16 +10,16 @@
 /// come to meanwhile), what it holds in its middle (row_held_look: as big as it is open about the middle of what it
 /// draws, coming in from half open), cut at its top and foot softly (View::cuts_softly); as tall as what it holds once
 /// it is open; nothing tall once it is shut. Taking no press and read out as nothing from the moment it closes. The
-/// room's node. `lazy`: what `make` makes is made only as it first opens (what it holds asks for what it shows as it
+/// room's node. `deferred`: what `make` makes is made only as it first opens (what it holds asks for what it shows as it
 /// is made: none of it asked while it is shut), kept from then.
 pub fn reveal_node(
   parent : @view.View,
   open : () -> Bool,
   make : (@view.View) -> Unit,
-  lazy? : Bool = false,
+  deferred? : Bool = false,
 ) -> @view.View {
   let way = NodeWay::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
-  let made = @signals.signal(!lazy || @signals.untracked(open), same=fn(a, b) { a == b })
+  let made = @signals.signal(!deferred || @signals.untracked(open), same=fn(a, b) { a == b })
   parent.box(fn(room) {
     // (as tall as it is laid out, whatever room it has: what is past its room cut)
     let held = room.box(fn(h) {
@@ -35,7 +35,7 @@ pub fn reveal_node(
     let shown = fn() { way.shown(room) }
     room.reacts(open, fn(o) {
       // (how far it goes: what it holds is laid out tall at this moment, the way's length said once, not followed)
-      let go = fn() { way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1)) }
+      let go = fn() { way.go(room, if o { 1.0 } else { 0.0 }, moved().per_unit(held.laid_size().1)) }
       if o && !made.untracked() {
         // (made as it first opens: its way set off at this moment once what this change makes is made, laid out tall
         // as it is then)
@@ -154,17 +154,12 @@ fn NodeWay::go_from(self : NodeWay, n : @view.View, from : Double, to : Double, 
 fn NodeWay::goes(self : NodeWay, n : @view.View) -> Bool {
   self.way.said()
   self.ended.get() |> ignore
-  self.way.goes_at(n.logic_at())
+  n.goes_now(fn(at) { self.way.goes_at(at) })
 }
 
 ///|
 /// Where it is as `n` is drawn: at the moment it is drawn at while it goes, where it went once it is there.
 fn NodeWay::shown(self : NodeWay, n : @view.View) -> Double {
-  self.way.said()
   self.ended.get() |> ignore
-  if self.way.goes_at(n.logic_at()) {
-    self.way.value_at(n.drawn_at())
-  } else {
-    self.way.target()
-  }
+  self.way.shown_on(n)
 }

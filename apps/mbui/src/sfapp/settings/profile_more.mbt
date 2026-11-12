@@ -31,6 +31,26 @@ fn online_stations(core : Core, here : Here, only? : String = "") -> Array[Json]
 }
 
 ///|
+/// The machine logins offered on the workspace's stations, as its `profiles` says them (`machineLogins`: each station
+/// up whose overview is read and offers one, in the stations' order, with its name and those logins), the list the
+/// Profile place opens on: nothing asked of each station for them.
+pub fn profiles_offers(profiles : Json?) -> Array[(Json, Array[Json])] {
+  items(profiles, "machineLogins").map(fn(e) {
+    let e = Some(e)
+    (obj([("station", str(text(e, "station"))), ("name", str(text(e, "stationName")))]), items(e, "logins"))
+  })
+}
+
+///|
+/// The machine logins station `station` offers, as the workspace's `profiles` says them (profiles_offers).
+pub fn profiles_offers_of(profiles : Json?, station : String) -> Array[Json] {
+  match profiles_offers(profiles).iter().find_first(fn(o) { text(Some(o.0), "station") == station }) {
+    Some(o) => o.1
+    None => []
+  }
+}
+
+///|
 /// Where something is added: one of the stations online picked (openPickStation), the library's pick opened `from`
 /// what was pressed (a sheet on Small, else beside it), what it is for its title.
 fn open_pick_station(stations : Array[Json], go : (String) -> Unit, from~ : @sf.Beside) -> Unit {
@@ -42,15 +62,6 @@ fn open_pick_station(stations : Array[Json], go : (String) -> Unit, from~ : @sf.
     })
   })
   @sf.pick(tr("android-settings.pickStation"), choices, "", go, from~)
-}
-
-///|
-/// A variable being edited (EnvRow): its row, the name and value typed, what a secret saved before shows masked, and
-/// the name it had.
-priv struct EnvRow {
-  row : Int
-  masked : String?
-  original : String?
 }
 
 ///|
@@ -69,15 +80,16 @@ let login_state : LoginState = { copied: {}, manual: {}, error: {}, seen: {} }
 
 ///|
 /// The accounts a station machine's own Claude Code and Codex are signed in with that no profile uses yet
-/// (MachineLoginOffers), `s` the station as `stations` has it: one kept where the station reads it used as it is
-/// (`profile.useMachineLogin`), one it cannot signed in again for still.fail (`go_new`), a refused one only said so. A
-/// section of the page it is on (its title a section's, its rows a list card's, as the page's others), titled by the
-/// station it is on (the workspace's page has a section each station: the same account signed in on two is in both);
-/// `inset`, on a page of its own room (a new profile's sheet): its title and card that far in.
-fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, go_new : (String) -> Unit, inset? : Double) -> Array[() -> Unit] {
+/// (MachineLoginOffers), `s` the station (its address and name), `logins` those its overview has: one kept where the
+/// station reads it used as it is (`profile.useMachineLogin`), one it cannot signed in again for still.fail
+/// (`go_new`), a refused one only said so. A section of the page it is on (its title a section's, its rows a list
+/// card's, as the page's others), titled by the station it is on (the workspace's page has a section each station: the
+/// same account signed in on two is in both); `inset`, on a page of its own room (a new profile's sheet): its title and
+/// card that far in.
+fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, logins : Array[Json], go_new : (String) -> Unit, inset? : Double) -> Array[() -> Unit] {
   let t = @sf.theme()
   let station = text(s, "station")
-  let offers = items(field(s, "overview"), "machineLogins").filter(fn(l) { flag(Some(l), "offered") })
+  let offers = logins.filter(fn(l) { flag(Some(l), "offered") })
   if offers.length() == 0 {
     return []
   }

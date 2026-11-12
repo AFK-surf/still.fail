@@ -2258,13 +2258,22 @@ final class NativeViews {
      * outside it.
      */
     static final class Page extends NView {
-        final String html;
+        /**
+         * Its HTML as UTF-8, served to its WebView as the page at PAGE_URL (shouldInterceptRequest), read from as it
+         * loads: not given to loadDataWithBaseURL, which made a base64 string of all of it in the Java heap at once (a
+         * 10 MB page's 27 MB string, past a phone's 256 MB heap: 0.1.8278 and 0.1.8569 stopped by OutOfMemoryError).
+         */
+        final byte[] page;
         /** (main thread) The top of the part of it its frame is, its page scrolled to (pixels); -1: all of it. */
         int partTop = -1;
 
+        /** Where its page is said to be: a host no network has (.invalid), only its own WebView answering for it. */
+        static final String PAGE_HOST = "page.stillfail.invalid";
+        static final String PAGE_URL = "https://" + PAGE_HOST + "/";
+
         Page(int id, String html) {
             super(id, 2);
-            this.html = html;
+            this.page = html.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         }
 
         /**
@@ -2401,11 +2410,20 @@ final class NativeViews {
                         Host.requestFrame();
                     }
                 }
+
+                // its page from its bytes, read as the WebView takes them; nothing else of its host (none is there)
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    if (!PAGE_HOST.equals(request.getUrl().getHost())) return null;
+                    if (!request.isForMainFrame()) return Site.text(404, "");
+                    return new WebResourceResponse("text/html", "utf-8", 200, "OK", new LinkedHashMap<>(),
+                            new ByteArrayInputStream(page));
+                }
             });
-            bytes = html.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            bytes = page.length;
             // (its frame is its rect: put moves and sizes it, nothing here)
             clip.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-            web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+            web.loadUrl(PAGE_URL);
         }
 
         @Override

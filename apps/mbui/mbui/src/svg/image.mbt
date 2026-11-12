@@ -78,7 +78,7 @@ fn convert_image_inner(
   }
   let g = Group::empty()
   g.id = id
-  g.children.push(NImage({ id: "", visible, size: actual, rendering, kind, abs_transform, abs_bbox }))
+  g.children.push(NImage({ id: "", visible, size: actual, rendering, kind, abs_bbox }))
   g.transform = image_ts
   g.abs_transform = abs_transform
   if aspect.slice {
@@ -86,8 +86,8 @@ fn convert_image_inner(
     path.fill = Some(Fill::default())
     let root = Group::empty()
     root.children.push(NPath(path))
+    cache.gen_clip_path_id() |> ignore
     let clip : ClipPath = {
-      id: cache.gen_clip_path_id(),
       transform: @skia.Transform::default(),
       clip_path: None,
       root,
@@ -276,36 +276,36 @@ fn load_sub_svg(data : Bytes, opt : Options) -> ImageData? {
 /// A `data:` URL's MIME type (type/subtype, lower case; text/plain where it has none or a broken one) and its
 /// bytes (the data_url crate's process + decode_to_vec); None where it is not one.
 fn parse_data_url(href : String) -> (String, Bytes)? {
-  let s = href.trim(chars=" \t\n\r\u{0C}").to_string()
-  if s.length() < 5 || s.view(end_offset=5).to_string().to_lower() != "data:" {
+  let s = href.trim(chars=" \t\n\r\u{0C}").to_owned()
+  if s.length() < 5 || s.clamped_view(end=5).to_owned().to_lower() != "data:" {
     return None
   }
-  let rest = s.view(start_offset=5).to_string()
+  let rest = s.exact_view(start=5).to_owned()
   let comma = match rest.find(",") {
     Some(c) => c
     None => return None
   }
-  let meta = rest.view(end_offset=comma).to_string()
-  let body = rest.view(start_offset=comma + 1).to_string()
-  let mut meta_t = meta.trim(chars=" \t\n\r").to_string()
+  let meta = rest.exact_view(end=comma).to_owned()
+  let body = rest.exact_view(start=comma + 1).to_owned()
+  let mut meta_t = meta.trim(chars=" \t\n\r").to_owned()
   let mut base64 = false
   let lower = meta_t.to_lower()
   match lower.rev_find(";") {
     Some(i) => {
-      let tail = lower.view(start_offset=i + 1).to_string().trim(chars=" ").to_string()
+      let tail = lower.exact_view(start=i + 1).to_owned().trim(chars=" ").to_owned()
       if tail == "base64" {
         base64 = true
-        meta_t = meta_t.view(end_offset=i).to_string()
+        meta_t = meta_t.clamped_view(end=i).to_owned()
       }
     }
     None => ()
   }
   let mime = {
     let essence = match meta_t.find(";") {
-      Some(i) => meta_t.view(end_offset=i).to_string()
+      Some(i) => meta_t.exact_view(end=i).to_owned()
       None => meta_t
     }
-    let essence = essence.trim(chars=" \t\n\r").to_string().to_lower()
+    let essence = essence.trim(chars=" \t\n\r").to_owned().to_lower()
     match essence.find("/") {
       Some(i) =>
         if i > 0 && i < essence.length() - 1 {

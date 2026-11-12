@@ -7,6 +7,9 @@
 #   android: the proportional set size (dumpsys meminfo's TOTAL PSS) of the app's process ("app"), and its Java heap's
 #            and native heap's parts, on the device adb is given (ANDROID_SERIAL; an emulator of its own:
 #            AVD=mbui-idlemem EMU_PORT=5592 scripts/android.sh emu)  scripts/idlemem.sh android APK
+#            ("native" is dumpsys's Native Heap, the system allocator's alone. Since 2026-11-11 MoonBit's runtime
+#            allocates with mimalloc (mbui's scripts/android.sh), whose memory dumpsys counts elsewhere: "native" fell
+#            by what moved out of it, and only "app" compares a build from before with one after.)
 set -eo pipefail
 COUNT=${COUNT:-3}
 IDLE=${IDLE:-8}

@@ -40,7 +40,7 @@ fn tree_words(center : @signals.Signal[Bool], width : @signals.Signal[Double]) -
     root.box(fn(v) {
       v
       .width(By(fn() { Some(width.get()) }))
-      .words(Is(centred_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false })
+      .words(Is(centred_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
       .words_centered(By(fn() { center.get() }))
       |> ignore
     })
@@ -68,7 +68,7 @@ test "a node's words centred, a line said and one wrapped, drawn where an old vi
   assert_eq(
     (centred == old, plain != centred, plain.map(fn(g) { g.0 }).fold(init=1.0e9, fn(m, x) { dmin(m, x) }) < 2.0, again == centred, lines.length()),
     (true, true, true, true, 4),
-    msg="old \{old.length()} glyphs, the tree's \{centred.length()}; lines \{lines}",
+    msg="old \{old.length()} glyphs, the tree's \{centred.length()}; lines \{Repr(lines)}",
   )
 }
 
@@ -98,7 +98,7 @@ let spaced_words : String = "Reading your workspaces   \nstill.fail's core waits
 fn centred_spaced(runs : Bool) -> (Array[(Double, Double)], Array[(Double, Double)]) {
   let center = @signals.signal(true, same=fn(a, b) { a == b })
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
-  let look : @view.WordsLook = { size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(v) {
       v.width(Is(Some(200.0))) |> ignore
@@ -136,6 +136,6 @@ test "a node's words in pieces centred, lines ending in spaces said and wrapped:
   assert_eq(
     (runs == whole, runs_again == runs, whole_again == whole, whole.length() > 0, lines.length() > 2),
     (true, true, true, true, true),
-    msg="whole \{whole.length()} glyphs, in pieces \{runs.length()}; first whole \{whole[:4]}, in pieces \{runs[:4]}; lines \{lines}",
+    msg="whole \{whole.length()} glyphs, in pieces \{runs.length()}; first whole \{Repr(whole[:4])}, in pieces \{Repr(runs[:4])}; lines \{Repr(lines)}",
   )
 }

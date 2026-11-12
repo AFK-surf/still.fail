@@ -180,7 +180,7 @@ test "what waits as nodes, in its bones: none of it pressed, read out, found by 
   }
   assert_eq(pressed.val, 0)
   // (no words of its sample found, nor read out)
-  assert_true(!t.words().iter().any(fn(w) { w.0.contains("字") || w.0.contains("按钮") }), msg="\{t.words()}")
+  assert_true(!t.words().iter().any(fn(w) { w.0.contains("字") || w.0.contains("按钮") }), msg="\{Repr(t.words())}")
   assert_true(t.find("字") is None)
   assert_true(!t.semantics_dump().contains("字"), msg=t.semantics_dump())
   // (its picture never asked for)

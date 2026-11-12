@@ -319,17 +319,18 @@ pub fn Ctx::on_back(self : Ctx, f : () -> Unit) -> Unit {
 /// A press followed as it goes (Ctx::follow_press): gone down at (x, y) on the box that took it (where that box was hit
 /// then: x, y, w, h; none, no box), moved to (x, y), let go at (x, y), or called off (the host's word, a layer come over
 /// it).
+#derive(Eq, Debug)
 pub(all) enum PressStep {
   Down(Double, Double, (Double, Double, Double, Double)?)
   Moving(Double, Double)
   Up(Double, Double)
   Off
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What follows the presses that go down on each box (Ctx::follow_press), by its id: what its last build said.
 // kept across runs: said as each box is built, let go with its page (Ctx::forget); a run's start clears it
-let press_followers : Map[Int, (PressStep) -> Unit] = {}
+let press_followers : Map[Int, (PressStep) -> Unit] = Map([])
 
 ///|
 /// What follows the press held now: what the box it went down on said as the press went down (none: none).

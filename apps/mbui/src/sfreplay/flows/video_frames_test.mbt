@@ -6,7 +6,7 @@
 
 ///|
 test "97-video-frames" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("video-frames"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     f.see("端到端测试")
     f.peer("peer createfiles 一段视频 201493 post:收到视频 201493 -- e2e-clip.mp4")
@@ -19,7 +19,7 @@ test "97-video-frames" {
     f.see("e2e-clip.mp4")
     f.tap("e2e-clip.mp4")
     // flown open, its bars on once it is in
-    f.run_to(@sfapp.preview_rest())
+    f.run_to(@sfapp.preview_rest)
     // the system's player reads it through the core, then says its frames' times
     let v = opened_view(f)
     player_opened(f, v)
@@ -45,10 +45,10 @@ test "97-video-frames" {
     f.see("已保存到相册")
     // kept: the grabbed frame, a PNG of the video's size (640 × 360), named by its frame
     let kept = f.t.kept().filter(fn(k) { k.0.has_prefix("e2e-clip-") && k.0.has_suffix(".png") })
-    f.check(kept.length() == 1, "kept: \{f.t.kept().map(fn(k) { k.0 })}")
+    f.check(kept.length() == 1, "kept: \{Repr(f.t.kept().map(fn(k) { k.0 }))}")
     f.check(
       f.t.kept_ways().iter().any(fn(k) { k.0.has_prefix("e2e-clip-") && k.1.to_string() == "Photos" }),
-      "kept: \{f.t.kept_ways()}",
+      "kept: \{Repr(f.t.kept_ways())}",
     )
     if kept.length() == 1 {
       let b = kept[0].2

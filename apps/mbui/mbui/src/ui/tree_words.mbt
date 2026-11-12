@@ -7,7 +7,7 @@
 /// How words of `style` are set on a node of the tree's now (View::words_look), as Ctx::text sets them: its size (15
 /// where it says none); its line its leading's where it says one (Font: the font's own, 0), else its size's as the
 /// theme has it, else the theme's share of its size as drawn; its weight (400 where it says none); wrapped unless it
-/// says not to; its letters' spacing its tracking's at its size as drawn.
+/// says not to; its letters' spacing its tracking's at its size as drawn; wrapped, on as many lines as it says at most.
 pub fn style_words(style : TextStyle) -> @view.WordsLook {
   let th = tree_theme()
   let st = style.resolve(g().narrow, th.dark)
@@ -36,6 +36,7 @@ pub fn style_words(style : TextStyle) -> @view.WordsLook {
       None => @view.letters_own
     },
     balance: st.balance.unwrap_or(false),
+    max_lines: st.max_lines.unwrap_or(0),
   }
 }
 
@@ -53,4 +54,11 @@ pub fn style_ink(style : TextStyle) -> Int64 {
 /// Whether words of `style` are cut short on their line where they have not the room (`w=Cut`).
 pub fn style_cut(style : TextStyle) -> Bool {
   style.resolve(g().narrow, tree_theme().dark).w is Some(Cut)
+}
+
+///|
+/// Whether words of `style` say they fill their line (`w=Full`, `w=Grow(k)`: an old view's Fill, which its squeeze
+/// takes as the words saying they may be cut on it: Ctx::squeeze_cut_said).
+pub fn style_fills(style : TextStyle) -> Bool {
+  style.resolve(g().narrow, tree_theme().dark).w is Some(Full | Grow(_))
 }

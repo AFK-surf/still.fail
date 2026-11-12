@@ -28,7 +28,7 @@ pub using @text {
 
 ///|
 /// A paragraph as its node keeps it: its runs and its own look.
-struct Rich {
+priv struct Rich {
   runs : Array[Run]
   size : Double
   weight : Int
@@ -751,8 +751,8 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 
 ///|
 /// A paragraph of runs, wrapped as one text in `size` (the runs' sizes
-/// relative to it) with lines `line` high (0: the font's own). Links are
-/// drawn in `link_color` (unless a run has its own), with `pressed_bg`
+/// relative to it) with lines `line` high (0: the font's own). `line_em`, when given, sets the line as a multiple of
+/// the drawn size after system text scaling. Links are drawn in `link_color` (unless a run has its own), with `pressed_bg`
 /// behind them while held; tapped, `on_link` is told where they lead; held a long press's time, or right clicked,
 /// `on_link_hold` (with the piece of line under the finger or the pointer); `on_link_shown`, each link's way, its
 /// words and its id as the paragraph is built (what shows over it while it is pointed at: a card by that id,
@@ -778,6 +778,7 @@ pub fn Ctx::rich(
   weight? : Int,
   color? : Int64,
   line? : Double,
+  line_em? : Double,
   trim? : Bool = false,
   wrap? : Bool,
   w? : Size,
@@ -803,7 +804,11 @@ pub fn Ctx::rich(
   let size = self.sp(first(size, s_size).unwrap_or(15.0))
   let weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   let color = first(color, opt_color(self.theme, st.color)).unwrap_or(0x1D1D1FFFL)
-  let line = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * size)
+  // An em line follows the drawn size, including the system's non-linear text scaling.
+  let line = match line_em {
+    Some(em) => size * em
+    None => first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * size)
+  }
   let wrap = first(wrap, st.wrap).unwrap_or(true)
   let w = first(w, opt_size(st.w)).unwrap_or(Auto)
   let spacing = match (tracking, st.tracking) {
@@ -1018,7 +1023,7 @@ fn cut_rich(r : Rich, lay : RichLayout, w : Double) -> Rich {
     if off + n <= cut {
       runs.push(run)
     } else if off < cut {
-      runs.push({ ..run, text: run.text.view(end_offset=cut - off).to_string() })
+      runs.push({ ..run, text: run.text.clamped_view(end=cut - off).to_owned() })
     }
     off = off + n
   }
@@ -1284,7 +1289,7 @@ fn Ctx::emit_rich_glyphs(
   alpha : Double,
   cy0 : Double,
   cy1 : Double,
-  unplaced? : Array[(Int, Double, Double, Double)],
+  unplaced? : Array[(Int, Double, Double, Double, Double, Double)],
   center_in? : Double = -1.0,
 ) -> Unit {
   let sc = self.scale
@@ -1330,7 +1335,7 @@ fn Ctx::emit_rich_glyphs(
     let l = lay.line_of[c]
     let top = oy + lay.line_y[l]
     // (its own look, where what holds it says one: Ctx::glyphs_by)
-    let own = glyph_next(ox + lay.xs[c], top, lay.line_h[l])
+    let own = glyph_next(ox + lay.xs[c], top, lay.line_h[l], l, lay.xs[c] + lay.adv[c] / 2.0)
     match own {
       Some(gl) if gl.alpha <= 0.002 => continue
       _ => ()
@@ -1357,14 +1362,11 @@ fn Ctx::emit_rich_glyphs(
       continue
     }
     let gx = glyph_x(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
-    let gy = glyph_row(top + lay.line_base[l], g.oy / z, sc)
-    match unplaced {
-      Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z))
-      None => ()
-    }
+    let gy = glyph_row(oy, lay.line_y[l] + lay.line_base[l], g.oy / z, sc)
     let (gw, gh) = (g.gw / z, g.gh / z)
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
+    let (set_x, set_y) = (gx, gy)
     let (gx, gy, gw, gh, ga) = match own {
       Some(gl) => {
         let ink_x = gx + gw * (1.0 - gl.scale) / 2.0
@@ -1373,6 +1375,12 @@ fn Ctx::emit_rich_glyphs(
         (x + gl.dx, gy + gh * (1.0 - gl.scale) / 2.0 + gl.dy, gw * gl.scale * gl.sx, gh * gl.scale, alpha * gl.alpha)
       }
       None => (gx, gy, gw, gh, alpha)
+    }
+    // (where it is before it is set on the pixels, for what places it again elsewhere (view_blit), and what its own
+    // look moves it by after that)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z, gx - set_x, gy - set_y))
+      None => ()
     }
     glyph_pushing.val = true
     self.push_inst(

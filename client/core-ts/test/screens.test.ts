@@ -4,7 +4,7 @@
 // SIM_SEED=<seed> runs it again); nothing waits for real time.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect, Queue } from "effect";
+import { Deferred, Effect, Queue } from "effect";
 import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
@@ -176,10 +176,18 @@ function screenWire(seed: number) {
   // `tap`: the host reads the picture and sound itself (IrohStream.tap, Apple's shell), the core only the rest
   const opts: { answer: (v: Viewing) => number | [number, string]; tap?: boolean } = { answer: () => 200 };
   const draw = random(seed);
+  // The way to the station as the mesh has it: `replace` puts another in its place (mesh.ts `#switch`).
+  let way = Deferred.makeUnsafe<void>();
+  const replace = () => {
+    const was = way;
+    way = Deferred.makeUnsafe<void>();
+    Deferred.doneUnsafe(was, Effect.void);
+  };
   const make = (host: FakeHost): StationWire => {
     const plain = new HostWire(host);
     return {
       request: (s, head, body) => plain.request(s, head, body),
+      replaced: () => Deferred.await(way),
       screen: (_station, head, ask) =>
         Effect.gen(function* () {
           const queue = yield* Queue.unbounded<Uint8Array | null>();
@@ -217,7 +225,7 @@ function screenWire(seed: number) {
         }),
     };
   };
-  return { views, opts, make };
+  return { views, opts, make, replace };
 }
 
 const SCREENS = { screens: [{ id: "desktop", kind: "desktop", title: "studio 的桌面", width: 3024, height: 1964, viewers: [] }, { id: "browser:T1", kind: "browser", title: "登录 - GitHub", width: 1280, height: 800, viewers: ["Bob"] }] };
@@ -282,7 +290,7 @@ test("a_tab_says_the_chat_that_opened_it_and_is_closed_by_a_member_not_a_reader"
   const [desktop, tab, other] = (values.get(1) as J).screens;
   assert.equal(desktop.closable, false, "the desktop is not closed from here");
   assert.equal(tab.closable, true);
-  assert.deepEqual(tab.chat, { id: "7", title: "部署", link: "/w/ws/s/st/chats/7" });
+  assert.deepEqual(tab.chat, { id: "k1", title: "部署", link: "/w/ws/s/st/chats/k1" });
   assert.equal(tab.line, "浏览器标签页 · 1280×800 · 由「部署」打开");
   assert.equal(other.chat, undefined, "a session none of the viewer's chats has");
   call(core, ui, 2, "screen.close", { station: "ws/st", screen: "browser:T1" });
@@ -590,6 +598,31 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   core.close();
 });
 
+/// 2026-11-11: a station killed and started again on another port left the view's stream open and silent; the mesh puts
+/// a new link in the old one's place once its ping goes unanswered (mesh.ts `#suspect`), and the view opens again on it
+/// at once, the old stream kept until the new one is open, not left to wait out the old link's close.
+each("a_view_opens_again_on_the_way_put_in_place_of_its_own", async (seed) => {
+  const { host, core, ui, views, replace } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1280, maxHeight: 720, codecs: ["h264"] });
+  await host.settle();
+  views[0]!.send(join([configFrame({ codec: "h264", width: 1280, height: 720, description: base64(bytesOf(38, seed)) }), videoFrame(true, 1_000, bytesOf(900, seed))]));
+  await host.settle();
+  replace();
+  await host.settle();
+  assert.equal(views.length, 2, "opened again at once, no wait");
+  assert.equal(views[1]!.alongside, 1, "the next opened before the one before it closed");
+  assert.equal(views[0]!.closed, true);
+  views[1]!.send(join([configFrame({ codec: "h264", width: 1280, height: 720, description: base64(bytesOf(38, seed)) }), videoFrame(true, 2_000, bytesOf(900, seed + 1))]));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(log.filter((m) => m.id === 1 && m.value?.frame).map((m) => m.value.frame.ts), [1_000, 2_000]);
+  assert.equal(states(log, 1).some((st: J) => st.phase === "reconnecting"), false, "never shown reconnecting");
+  core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await host.settle();
+  core.close();
+});
+
 each("zoomed_in_the_part_looked_at_is_asked_once_it_settles_and_its_frames_say_the_part", async (seed) => {
   const { host, core, ui, views } = await viewing(seed);
   const log: J[] = [];
@@ -800,6 +833,55 @@ each("a_view_made_to_only_look_from_elsewhere_stays_so_when_it_opens_again", asy
   core.close();
 });
 
+each("a_view_taken_by_another_says_who_once_and_one_that_takes_it_says_whose_views_it_took_it_from", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  views[0]!.send(join([stateFrame({ title: "t", control: true }), configFrame({ codec: "jpeg", width: 640, height: 480 }), videoFrame(true, 1, bytesOf(100, seed))]));
+  await host.settle();
+  // Bob takes it: only looking as if chosen, who took it said, the line saying he drives and 接管 a tap away.
+  views[0]!.send(join([stateFrame({ control: false, login: null, passkey: null, takenBy: "Bob" }), stateFrame({ viewers: ["a@x.com", "Bob"], controlledBy: ["Bob"] })]));
+  await host.settle();
+  said(host, log);
+  let s = lastState(log, 1);
+  assert.deepEqual([s.control, s.watchOnly, s.taken, s.takenBy, s.takeOver, s.line], [false, 1, 1, ["Bob"], true, "只看 · Bob 正在控制"]);
+  assert.equal(s.took, undefined);
+  // 接管: asked as its person's (taken), and said whose views it took it from (the viewer's own aside).
+  call(core, ui, 2, "screen.control", { view: "v", control: true });
+  await host.settle();
+  assert.deepEqual([views[1]!.ask.control, views[1]!.ask.taken], [true, true]);
+  views[1]!.send(stateFrame({ title: "t", control: true, took: ["Bob", "a@x.com"] }));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.control, s.took, s.tookFrom, s.taken], [true, 1, ["Bob"], 1]);
+  // Its ask spent: the view's own reopen (its link went) asks as any, never taking it back by itself.
+  views[1]!.end();
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 3);
+  assert.deepEqual([views[2]!.ask.control, views[2]!.ask.taken], [true, undefined]);
+  // Taken by the viewer on another device: unnamed; by an agent: as the agent. Each a take of its own.
+  views[2]!.send(stateFrame({ title: "t", control: true }));
+  await host.settle();
+  views[2]!.send(stateFrame({ control: false, takenBy: "A@x.com" }));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.taken, s.takenBy, s.took], [2, [], 1]);
+  call(core, ui, 3, "screen.control", { view: "v", control: true });
+  await host.settle();
+  views[3]!.send(stateFrame({ title: "t", control: true }));
+  await host.settle();
+  views[3]!.send(stateFrame({ control: false, takenBy: "agent: 部署" }));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.taken, s.takenBy, s.took], [3, ["Agent「部署」"], 1]);
+  core.close();
+});
+
 each("a_view_that_drops_is_opened_again_and_one_the_station_ends_says_why", async (seed) => {
   const { host, core, ui, views } = await viewing(seed);
   const log: J[] = [];
@@ -893,10 +975,11 @@ each("a_screen_an_agent_drives_opens_only_looking_and_is_taken_over_in_one_tap",
   said(host, log);
   s = lastState(log, 1);
   assert.deepEqual([s.control, s.takeOver, s.line], [true, false, "控制 · Agent「修登录」 已暂停 · Bob 也在查看"]);
-  // Asked to drive outright (control: true), it drives whoever else does.
+  // Asked to drive outright (control: true): asked so, not as its person's take (a page opened again asks so too); the
+  // station lets it drive only while no other person's view does.
   call(core, ui, 3, "screen.view", { station: "ws/st", screen: "browser:T1", view: "w", control: true });
   await host.settle();
-  assert.equal(views[2]!.ask.control, true);
+  assert.deepEqual([views[2]!.ask.control, views[2]!.ask.taken], [true, undefined]);
   core.close();
 });
 
@@ -944,6 +1027,39 @@ each("the_station_says_what_a_view_takes_and_lacks_and_when_it_stops", async (se
   await host.settle();
   said(host, log);
   assert.deepEqual([lastState(log, 1).phase, lastState(log, 1).message], ["gone", "此屏幕已不存在"], "its screen went: over for good, nothing to open again");
+  core.close();
+});
+
+each("a_machine_that_takes_no_input_is_not_driven_and_its_view_is_not_made_to_only_look", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  const access = { capture: true, control: false, message: "在「辅助功能」里打开 stillfail-station", app: "stillfail-station" };
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  // The station says so (control false, beside what is missing): not driven, and not as if taken from elsewhere.
+  views[0]!.send(join([stateFrame({ title: "桌面", control: false, access }), configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 1, bytesOf(10, seed))]));
+  await host.settle();
+  said(host, log);
+  let s = lastState(log, 1);
+  assert.deepEqual([s.control, s.watchOnly, s.taken, s.takenBy, s.access], [false, undefined, undefined, undefined, access]);
+  call(core, ui, 2, "screen.input", { view: "v", input: { t: "text", text: "x" } });
+  await host.settle();
+  assert.deepEqual(views[0]!.got, []);
+  // Opened again (the station's update), it still asks to drive, for when the grant is there.
+  views[0]!.send(stateFrame({ ended: "stopping" }));
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 2);
+  assert.equal(views[1]!.ask.control, true);
+  // A station from before it says control true with the same access: not driven either, nothing said taken.
+  views[1]!.send(join([stateFrame({ title: "桌面", control: true, took: ["Bob"], access }), configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 2, bytesOf(10, seed))]));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.control, s.watchOnly, s.took, s.clipboard], [false, undefined, undefined, []]);
+  call(core, ui, 3, "screen.input", { view: "v", input: { t: "text", text: "y" } });
+  await host.settle();
+  assert.deepEqual(views[1]!.got, []);
   core.close();
 });
 
@@ -1096,6 +1212,67 @@ each("screen_audio_packets_survive_fragmentation_and_validate_the_format", (seed
   }
   assert.deepEqual(got, [{ audioConfig: { codec: "pcm_s16le", sampleRate: 48000, channels: 2 } },
     { audio: { ts: 123456789, data: payload.slice(8) } }]);
-  reader.push(wire(6, new Uint8Array(12)));
+  reader.push(wire(6, new Uint8Array(8)));
   assert.throws(() => reader.next(), /invalid screen audio packet/);
+  // Opus: its config, and packets of any length one may be.
+  const opus = new TextEncoder().encode(JSON.stringify({ codec: "opus", sampleRate: 48000, channels: 2 }));
+  const packet = new Uint8Array(8 + 160).fill(4);
+  reader.push(join([wire(5, opus), wire(6, packet)]));
+  assert.deepEqual([reader.next(), reader.next()], [{ audioConfig: { codec: "opus", sampleRate: 48000, channels: 2 } }, { audio: { ts: 0x0404040404040404, data: packet.slice(8) } }]);
+});
+
+const soundOf = (codec: string, ts: number, bytes: number) => {
+  const wire = (kind: number, payload: Uint8Array) => {
+    const out = new Uint8Array(5 + payload.length);
+    out[0] = kind;
+    new DataView(out.buffer).setUint32(1, payload.length);
+    out.set(payload, 5);
+    return out;
+  };
+  const packet = new Uint8Array(8 + bytes).fill(1);
+  new DataView(packet.buffer).setBigUint64(0, BigInt(ts));
+  return join([wire(5, new TextEncoder().encode(JSON.stringify({ codec, sampleRate: 48000, channels: 2 }))), wire(6, packet)]);
+};
+
+/// The page plays PCM: a view whose stream the core reads itself says the sound to it as PCM, and Opus (which only a
+/// shell's tap decodes) not at all.
+each("a_views_sound_the_core_reads_is_said_as_pcm_and_opus_left_to_what_taps_it", async (seed) => {
+  for (const codec of ["pcm_s16le", "opus"]) {
+    const { host, core, ui, views } = await viewing(seed);
+    const log: J[] = [];
+    call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1280, maxHeight: 720, codecs: ["h264"], audio: "pcm_s16le" });
+    await host.settle();
+    assert.equal(views[0]!.ask.audio, "pcm_s16le");
+    views[0]!.send(join([configFrame({ codec: "h264", width: 1280, height: 720, description: base64(bytesOf(38, seed)) }), videoFrame(true, 1_000, bytesOf(900, seed)), soundOf(codec, 5_000, codec === "opus" ? 160 : 3840)]));
+    await host.settle();
+    said(host, log);
+    const sound = log.filter((m) => m.id === 1 && (m.value?.audioConfig || m.value?.audio));
+    if (codec === "opus") assert.deepEqual(sound, []);
+    else assert.deepEqual(sound.map((m) => [Object.keys(m.value)[0], m.bytes?.length]), [["audioConfig", undefined], ["audio", 3840]]);
+    core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+    await host.settle();
+    core.close();
+  }
+});
+
+/// Muted on the page (`screen.sound`), the station is told so at once and sends none; a stream opened again while
+/// muted is told so as it opens.
+each("a_views_sound_switched_off_is_told_the_station_and_each_stream_after_it", async (seed) => {
+  const { host, core, ui, views, replace } = await viewing(seed);
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1280, maxHeight: 720, codecs: ["h264"], audio: "pcm_s16le" });
+  await host.settle();
+  call(core, ui, 2, "screen.sound", { view: "v", on: false });
+  call(core, ui, 3, "screen.sound", { view: "v", on: false });
+  await host.settle();
+  assert.deepEqual(views[0]!.got, [{ sound: false }], "said once");
+  replace();
+  await host.settle();
+  assert.equal(views.length, 2);
+  assert.deepEqual(views[1]!.got, [{ sound: false }]);
+  call(core, ui, 4, "screen.sound", { view: "v", on: true });
+  await host.settle();
+  assert.deepEqual(views[1]!.got, [{ sound: false }, { sound: true }]);
+  core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await host.settle();
+  core.close();
 });

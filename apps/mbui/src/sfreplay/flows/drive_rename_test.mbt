@@ -5,13 +5,13 @@
 
 ///|
 test "19-drive-rename" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-rename"), seed~)
     // (the photo 18's upload left, put there before the app starts: the run apart from 18's)
     f.before("drive-photo 082940")
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.right_click("e2e-photo.jpg")
     f.run_for(@kit.presence_in_ms)
     f.tap("重命名")

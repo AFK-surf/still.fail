@@ -157,9 +157,28 @@ test "draw: a layout read back that moves once is placed again in the frame that
 }
 
 ///|
-test "panic draw: a layout read back that moves at every frame does not converge, and says whose" {
-  let t = reading_back(1.0)
-  t.draw()
+test "draw: a layout read back that moves at every frame does not converge: said, and whose (draw_said)" {
+  let moves = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let x = match c.words_of("w") {
+        Some(w) if w.pieces.length() > 0 && moves.val => w.pieces[0].x + 1.0
+        _ => 0.0
+      }
+      c.box(padx=x, fn() {
+        let b = c.column(w=Px(100.0), fn() { c.rich([@ui.plain("hello")], size=10.0) |> ignore })
+        c.words(b, "w")
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+  moves.val = true
+  assert_eq(
+    t.draw_said(),
+    Some("Tester::draw: what the view reads (words_of \"w\") still changes after 3 frames: it does not converge"),
+  )
 }
 
 ///|
@@ -256,14 +275,15 @@ test "what moves says what it is and who told it; a test runs to it by its name"
   assert_true(rest > t.time() && rest < @double.infinity)
   t.run_for(rest - t.time())
   assert_eq(t.moving(), [])
-  assert_eq(t.rest_of("\"knob\""), -1.0)
+  // (at rest: when it came to rest, as it said it, not "none moves")
+  assert_eq(t.rest_of("\"knob\""), rest)
   t.assert_idle()
 }
 
 ///|
 test "a scripted run waits for a picture decoded by its name, and a frame drawn after it" {
   // (shown once the run has begun: what it waits for ends after its step begins)
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if shown.val {
@@ -284,7 +304,7 @@ test "a scripted run waits for a picture decoded by its name, and a frame drawn 
 ///|
 test "a scripted run waits for a picture decoded from bytes handed over for it, by its name" {
   // (the bytes as a core's answer brings them: a key of the app's, under which the node shows them)
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   let t = @ui.Tester::new(fn(c) {
     if shown.val {
       c.image_bytes("core:files/e2e-photo.jpg", b"\xFF\xD8\xFF\xE0 not a whole JPEG")
@@ -323,9 +343,9 @@ test "a tap goes where the frame drawn has its words, that frame: no wait for th
     })
     |> ignore
   })
-  let began = Ref::new(-1.0)
-  let acted = Ref::new(-1.0)
-  let words = Ref::new((0.0, 0.0, 0.0, 0.0))
+  let began = Ref(-1.0)
+  let acted = Ref(-1.0)
+  let words = Ref((0.0, 0.0, 0.0, 0.0))
   @ui.trace_steps(fn(step, moment) {
     if step == "tap go" {
       match moment {
@@ -355,7 +375,7 @@ test "a tap goes where the frame drawn has its words, that frame: no wait for th
 ///|
 test "a scripted run's answered lines each wait for an answer of their own: two lines, two answers" {
   // the core answers x.get once in the second frame and again in the fortieth
-  let frames = Ref::new(0)
+  let frames = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     frames.val += 1
     if frames.val == 2 || frames.val == 40 {
@@ -378,7 +398,7 @@ test "a scripted run's answered lines each wait for an answer of their own: two 
 test "a scripted run's answered line takes an answer come before the step that acted ahead of it" {
   // the core answers x.get in the run's first frame (the Tester's second), before the tap the line comes after acts
   // (once its words hold still, a frame on)
-  let frames = Ref::new(0)
+  let frames = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     frames.val += 1
     if frames.val == 2 {
@@ -399,7 +419,7 @@ test "a scripted run's answered line takes an answer come before the step that a
 test "a scripted run taps words only where a finger reaches them: not under what lies over them" {
   // a row's words under a bar over the page's foot (a composer): tapped only once the bar has gone from over them
   let covered = @signals.signal(true)
-  let tapped = Ref::new(0)
+  let tapped = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
@@ -433,7 +453,7 @@ test "a scripted run taps words only where a finger reaches them: not under what
 ///|
 test "a box built where a box placed by its size was the frame before is where it is laid out, not placed the same" {
   // the first frame: a menu's box placed by its size (at 50, 60); the next: a plain box built in its slot
-  let menu = Ref::new(true)
+  let menu = Ref(true)
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -467,7 +487,7 @@ test "a scripted run that waits for a call never answered fails within its timeo
 ///|
 test "a scripted run finds what it waits for however many others end before it looks (300 pictures in one frame)" {
   let srcs = Array::makei(300, fn(k) { "p\{k}.jpg" })
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if shown.val {
@@ -578,8 +598,8 @@ test "the system's answer polled once its frame is built (Ctx::after_build): tak
 
 ///|
 test "how a node is drawn over its layout: its scale and opacity, with what holds it" {
-  let shrink = Ref::new(1.0)
-  let down = Ref::new(1.0)
+  let shrink = Ref(1.0)
+  let down = Ref(1.0)
   let t = @ui.Tester::new(fn(c) {
     let card = c.box(w=Px(200.0), h=Px(80.0), id=c.id("card"), fn() { c.text("a card", wrap=false) |> ignore })
     c.look(card, @ui.look(scale=shrink.val, sy=down.val * shrink.val, alpha=0.5))
@@ -615,7 +635,7 @@ test "how a node is drawn, the text node whose words are exactly these (=WORDS):
 
 ///|
 test "a motion going on owes no frame at a moment: draw draws one, run_for draws it on as its time goes" {
-  let go = Ref::new(false)
+  let go = Ref(false)
   let t = @ui.Tester::new(fn(c) {
     let x = c.spring("knob-x", if go.val { 100.0 } else { 0.0 })
     c.box(w=Px(10.0), h=Px(10.0), tx=x, fn() {  }) |> ignore
@@ -672,15 +692,21 @@ test "set_frame_times: every frame at the times given (an input's, run_for's, dr
 }
 
 ///|
-test "panic set_frame_times: a time not later than the one before is said, and which" {
+test "set_frame_times: a time not later than the one before is said, and which (frame_times_wrong)" {
   let t = @ui.Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
-  t.set_frame_times([t.time() + 10.0, t.time() + 10.0])
+  let at = t.time() + 10.0
+  assert_eq(
+    t.frame_times_wrong([at, at]),
+    Some("Tester::set_frame_times: time 1 (\{at}) is not later than the one before it (\{at})"),
+  )
 }
 
 ///|
-test "panic set_frame_times: a time not later than now is said" {
+test "set_frame_times: a time not later than now is said (frame_times_wrong)" {
   let t = @ui.Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
-  t.set_frame_times([t.time()])
+  let now = t.time()
+  assert_eq(t.frame_times_wrong([now]), Some("Tester::set_frame_times: time 0 (\{now}) is not later than now (\{now})"))
+  assert_eq(t.frame_times_wrong([now + 10.0, now + 20.0]), None)
 }
 
 ///|
@@ -693,7 +719,7 @@ test "a host saying what its pointer's events come from: the hand of the moment 
   t.tap(10.0, 10.0)
   assert_eq(@ui.pointing(), @ui.Pointing::Finger)
   t.host_says_finger(Some(false))
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   assert_eq(@ui.pointing(), @ui.Pointing::Mouse)
   // (each event's own: what a replay of the tape gives the app again)
   assert_true(t.tape().contains("\"a\":[0,10,10,0,0,1]"))
@@ -720,3 +746,23 @@ test "the window's buttons coming into the app's top row (a Mac's window back fr
 ///|
 /// How long a test lets the host's answer and the frame it asks for come (a few of the display's frames).
 let host_answer_ms : Double = 100.0
+
+///|
+test "what a test sets for its run in `begun` its first frame shows; what it set before its Tester is the run before's, put back as the run begins" {
+  // (a value put back as a run begins by its on_reset hook, as a library's state is)
+  let state = Ref("as at first")
+  @ui.on_reset(fn() { state.val = "as at first" })
+  let first = Ref("")
+  let seen = fn(c : @ui.Ctx) {
+    if first.val == "" {
+      first.val = state.val
+    }
+    c.text(state.val, size=13.0) |> ignore
+  }
+  state.val = "set before"
+  @ui.Tester::new(seen) |> ignore
+  let before = first.val
+  first.val = ""
+  @ui.Tester::new(seen, begun=fn() { state.val = "set as it began" }) |> ignore
+  assert_eq((before, first.val), ("as at first", "set as it began"))
+}

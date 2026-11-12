@@ -286,6 +286,33 @@ sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
   await close(s, station, mesh);
 });
 
+/// A view's sound is asked as Opus only where what taps the view decodes it (the shell's endpoint says `opus`); on the
+/// web's, PCM, which the page takes as it comes.
+for (const opus of [false, true]) {
+  sim(`a_screen_views_sound_is_asked_as_opus_${opus ? "where" : "only where"}_its_tap_decodes_it`, async (s) => {
+    if (opus) {
+      const bind = s.iroh.bind.bind(s.iroh);
+      s.iroh = { bind: (options) => Effect.map(bind(options), (endpoint) => Object.assign(endpoint, { opus: () => true })) };
+    }
+    const { mesh, station } = await setup(s);
+    station.screenFrames = [{ key: true, ts: 0, data: new Uint8Array(9) }];
+    const wire = wireOf(s, mesh);
+    const addr = StationAddr.parse(`w/${station.id()}`);
+    const ask = { maxWidth: 1280, maxHeight: 720, codecs: ["jpeg"], control: false, audio: "pcm_s16le" as const };
+    await s.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const view = yield* wire.screen!(addr, { method: "POST", path: "/admin/api/screens/desktop/view", headers: [] }, ask);
+          // (the head line went once the stream answered)
+          assert.equal(view.reply.status, 200);
+        }),
+      ),
+    );
+    assert.deepEqual(station.views[0]!.head.screen, { ...ask, ...(opus ? { opus: true } : {}), self: mesh.deviceId() });
+    await close(s, station, mesh);
+  });
+}
+
 sim("reaches_a_station_in_its_protocol", async (s) => {
   for (const [alpns, spoken] of [[[ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
     const { mesh, station } = await setup(s, await s.station(alpns));
@@ -529,6 +556,33 @@ sim("a_link_lost_soon_after_it_replaced_one_gone_quiet_is_not_traded_for_that_on
   await close(s, station, mesh);
 });
 
+/// A station ending the connection a reply came on says why to the one reading it (WireReply `ended`): a device taken out
+/// of its lock is told so (station/src/mesh/serve.ts `gone`), not only that its stream went (station/link.ts LOCK_ENDED).
+sim("a_reply_says_why_its_station_ended_its_connection", async (s) => {
+  const { mesh, station } = await setup(s);
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(`w/${station.id()}`);
+  const get: RequestHead = { method: "GET", path: "/admin/api/events", headers: [["accept", "text/event-stream"]] };
+  const [before, after] = await s.run(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const r = yield* wire.request(addr, get, new Uint8Array());
+        assert.ok((yield* r.body.take) !== null);
+        const before = r.ended!();
+        station.conns.at(-1)!.close(3, "lock_unconfirmed");
+        for (;;) {
+          const chunk = yield* Effect.result(r.body.take);
+          if (chunk._tag === "Failure" || chunk.success === null) break;
+        }
+        return [before, r.ended!()] as const;
+      }),
+    ),
+  );
+  assert.equal(before, null);
+  assert.equal(after, "lock_unconfirmed");
+  await close(s, station, mesh);
+});
+
 /// The side run, seed 143365259 (2026-10-17): the station dropped both its connections to the device at once (a restart);
 /// the read asked then failed on its link, was asked again on the other way, which was gone too though the device was
 /// not told so yet, and failed. It is asked again until a link holds.
@@ -595,9 +649,9 @@ sim("renews_the_grant_until_the_link_closes", async (s) => {
   const { mesh, station } = await setup(s);
   const count = { n: 0 };
   const link = await s.run(mesh.link(station.id(), grants("ok", count)));
-  // Renewed every RENEW_MS: three renewals by three of them.
+  // Renewed every RENEW_MS: three renewals by three of them (each ping presents the one it has again).
   await s.time.pass(3 * RENEW_MS + 1000);
-  assert.deepEqual(station.grants, ["ok-1", "ok-2", "ok-3", "ok-4"]);
+  assert.deepEqual([...new Set(station.grants)], ["ok-1", "ok-2", "ok-3", "ok-4"]);
   // Renewing kept the same link.
   assert.equal(await s.run(mesh.link(station.id(), grants("ok", count))), link);
   link.close();
@@ -806,8 +860,8 @@ sim("its_pings_say_when_no_way_answers_and_when_one_answers_again", async (s) =>
   await request(s, link, head("/admin/api/overview"));
   await s.time.pass(2 * TICK_MS);
   assert.equal(mesh.healthy(id), true);
-  // Its way answers nothing more: once it missed DEAD_PINGS (3) in a row, and not before.
-  station.deadBelow = station.conns.length;
+  // Its way answers nothing more, nor does a new one: once it missed DEAD_PINGS (3) in a row, and not before.
+  station.deadBelow = Number.MAX_SAFE_INTEGER;
   const went = s.time.now();
   const lost = await s.settle(s.runner.run(mesh.healthChange(id, true)));
   assert.equal(lost, false);
@@ -819,6 +873,66 @@ sim("its_pings_say_when_no_way_answers_and_when_one_answers_again", async (s) =>
   assert.equal(back, true);
   await close(s, station, mesh);
 });
+
+/// 2026-11-11: a station killed and started again on another port, its old connection open and silent (QUIC says so
+/// only at its idle timeout): a link raced beside it at its first missed ping takes its place, not after DEAD_PINGS
+/// (a view of its screen stood still 14 s, all of it the misses counted).
+for (const relays of [1, 2]) sim(`a_link_whose_station_stops_answering_on_it_is_replaced_at_its_first_missed_ping_on_${relays}_relays`, async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });
+  const { station, mesh, id } = await onRelays(s, [a, b].slice(0, relays));
+  const old = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  await request(s, old, head("/admin/api/overview"));
+  await s.time.pass(2 * TICK_MS);
+  station.deadBelow = station.conns.length;
+  const went = s.time.now();
+  await s.settle(s.runner.run(mesh.replaced(id, old)));
+  const after = s.time.now() - went;
+  assert.ok(after <= TICK_MS + PING_TIMEOUT_MS + 1_000, `${after}`);
+  const next = mesh.current(id)!;
+  assert.notEqual(next, old);
+  assert.equal((await request(s, next, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
+/// The core closed while a link is dialled beside one gone quiet: the link that opens after it is let go, not left
+/// open (the dial is the core's fiber, not the race's, so it goes on past the race; mesh.ts `#race`).
+sim("a_link_dialled_beside_one_gone_quiet_as_the_core_closes_is_let_go", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });
+  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const old = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  await request(s, old, head("/admin/api/overview"));
+  await s.time.pass(2 * TICK_MS);
+  const before = station.conns.length;
+  station.deadBelow = before;
+  // The station has the new connection (its credential not answered yet): the core closes.
+  await s.until(() => station.conns.length > before);
+  await s.run(mesh.close());
+  await s.time.pass(CONNECT_TIMEOUT_MS + RETIRE_MS);
+  assert.ok(station.conns.every((c: J) => c.isClosed()), "every connection closed");
+});
+
+/// The network gone a while, the station not: the link raced beside the old one at its first missed ping is let go,
+/// the old one kept with what is open on it, once anything comes on it again.
+for (const pause of [6_000, 10_000]) {
+  sim(`a_link_back_after_${pause}_ms_without_its_network_is_kept_with_what_is_open_on_it`, async (s) => {
+    const a = s.relay("https://a.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });
+    const b = s.relay("https://b.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
+    const { station, mesh, id } = await onRelays(s, [a, b]);
+    const link = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+    assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+    await s.time.pass(2 * TICK_MS);
+    const conns = station.conns.length;
+    for (const r of [a, b]) s.net.down(r, pause);
+    await s.time.pass(pause + 4 * TICK_MS);
+    assert.equal(mesh.current(id), link);
+    assert.equal(link.closed(), null);
+    assert.ok(station.conns.slice(conns).every((c: J) => c.isClosed()), "the one raced beside it let go");
+    assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+    await close(s, station, mesh);
+  });
+}
 
 /// 2026-10-08: bft in Tokyo, phones in China. The phone's own relay (Beijing's, nearest it) lost a third of what went
 /// between it and the station, and the phone dialled the station there alone: most tries waited out CONNECT_TIMEOUT_MS,

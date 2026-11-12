@@ -5,23 +5,23 @@
 
 ///|
 test "21-station-files" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("station-files"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
     f.see("=willow")
     f.tap("icon:plus")
     // ＋'s sheet up
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("Station 文件")
     // ＋'s sheet down, the picker's up (the library's panel, sfdesk's station_pick.mbt)
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("所有位置")
     f.tap("=e2e-084051")
     f.see("整个文件夹")
     f.tap("说明.txt")
     f.tap("添加 1 个")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.gone("所有位置")
     f.see("willow · 路径")
     f.tap("发消息")

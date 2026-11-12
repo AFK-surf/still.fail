@@ -48,5 +48,5 @@ test "window tree: two columns flung one after the other, the later stopping soo
   // (the second, still there, stopped by the wheel turned on it: its glide none, nothing said to move)
   t.wheel(300.0, 300.0, 10.0)
   assert_eq(b.glides_till(), None)
-  assert_eq(rest_of("a list's fling, the tree's"), -1.0)
+  assert_true(rest_of("a list's fling, the tree's") <= t.time())
 }

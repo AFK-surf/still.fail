@@ -379,8 +379,8 @@ let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=
 pub fn file_ext(name : String) -> String {
   match lower(name).rev_find(".") {
     Some(i) if i > 0 && name.length() - i - 1 <= viewer_ext_most => {
-      let b = StringBuilder::new()
-      for ch in name.view(start_offset=i + 1) {
+      let b = StringBuilder()
+      for ch in name.exact_view(start=i + 1) {
         b.write_char(if ch >= 'a' && ch <= 'z' { (ch.to_int() - 32).unsafe_to_char() } else { ch })
       }
       b.to_string()

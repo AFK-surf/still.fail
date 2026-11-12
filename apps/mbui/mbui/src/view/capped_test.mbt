@@ -37,7 +37,7 @@ fn capped_tree(
       |> ignore
     },
     // (on one line as wide as all of them, as a host measures words that do not wrap)
-    measure=fn(s, look, w) { if look.wrap { @view.words_measure(s, look, w) } else { (s.length().to_double() * 7.0, 18.0) } },
+    measure=fn(s, look, w, k) { if look.wrap { @view.words_measure(s, look, w, k) } else { (s.length().to_double() * 7.0, 18.0) } },
     time=fn() { 0.0 },
   )
   fn() {
@@ -78,7 +78,7 @@ test "one line of words in a column: as wide as the column; a most said, that wh
     seen.push(w())
     // (column 100: 100; most 150: 100; most 80: 80; none again: 100; a row: 210; a column again: 100; 180 said: 180;
     // wrapped: within the column; one line again: 100)
-    assert_eq(seen, [100.0, 100.0, 80.0, 100.0, 210.0, 100.0, 180.0, 100.0, 100.0], msg="shown \{shown}: \{seen}")
+    assert_eq(seen, [100.0, 100.0, 80.0, 100.0, 210.0, 100.0, 180.0, 100.0, 100.0], msg="shown \{shown}: \{Repr(seen)}")
   }
 }
 

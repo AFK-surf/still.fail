@@ -203,8 +203,8 @@ test "all: the values in order; the first failure fails it and interrupts the re
     },
   ]))
   rt.advance(slowest)
-  assert_eq(outcome(ok), "ok [a, b, c]")
-  assert_eq(outcome(bad), "failed: one broke")
+  assert_eq(outcome_said(ok, fn(xs) { "[" + xs.map(fn(x) { x.to_string() }).join(", ") + "]" }), "ok [a, b, c]")
+  assert_eq(outcome_said(bad, fn(xs) { "[" + xs.map(fn(x) { x.to_string() }).join(", ") + "]" }), "failed: one broke")
   assert_eq(log, ["slow one cleaned up"])
   // the slow one's timer went with it
   assert_idle(rt)
@@ -226,8 +226,8 @@ test "timeout: the value in time, None (and the work interrupted) when late" {
     2
   }))
   rt.advance(limit)
-  assert_eq(outcome(quick), "ok Some(1)")
-  assert_eq(outcome(slow), "ok None")
+  assert_eq(outcome_said(quick, fn(o) { o.map_or("None", fn(v) { "Some(\{v})" }) }), "ok Some(1)")
+  assert_eq(outcome_said(slow, fn(o) { o.map_or("None", fn(v) { "Some(\{v})" }) }), "ok None")
   assert_eq(log, ["slow work interrupted"])
   assert_idle(rt)
 }
@@ -242,7 +242,7 @@ test "errors are checked: catch narrows what a fiber raised" {
         @effect.sleep(1)
         2
       }
-      try @effect.race_first(async fn() -> Int { raise Broke("nope") }, quick) catch {
+      try @effect.race_first(fn() -> Int raise { raise Broke("nope") }, quick) catch {
         Broke(m) => out.push("err \{m}")
         e => out.push("other \{e}")
       } noraise {

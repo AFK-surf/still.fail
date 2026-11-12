@@ -26,13 +26,13 @@ test "a way short of room: the first and the last whole, those between leaving f
   t.resize(280.0, 700.0)
   t.draw()
   let shown = steps.mapi(fn(i, _) { !way_left(t, i) })
-  assert_true(shown[0] && shown[5], msg="\{shown}")
+  assert_true(shown[0] && shown[5], msg="\{Repr(shown)}")
   assert_eq(t.lines_of("Home"), ["Home"])
   assert_eq(t.lines_of("Final notes"), ["Final notes"])
   // (some left, the one after the first first: those still there the last ones between)
-  assert_true(!shown[1], msg="\{shown}")
+  assert_true(!shown[1], msg="\{Repr(shown)}")
   for i in 1..<4 {
-    assert_true(!shown[i] || shown[i + 1], msg="\{shown}")
+    assert_true(!shown[i] || shown[i + 1], msg="\{Repr(shown)}")
   }
   // in a line, in their order, all in the room (16 in either side)
   let (mx, _, mw, _) = t.rect_of(@sf.way_more).unwrap()
@@ -42,11 +42,11 @@ test "a way short of room: the first and the last whole, those between leaving f
   assert_eq(t.squeeze_faults(), [])
   // the …: those that left, in their order; one picked, gone to
   t.tap_text(@sf.way_more)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   let left = [1, 2, 3, 4].filter(fn(i) { !shown[i] })
   let ys = left.map(fn(i) { t.find_last(steps[i]).unwrap().1 })
   for k in 1..<ys.length() {
-    assert_true(ys[k - 1] < ys[k], msg="\{ys}")
+    assert_true(ys[k - 1] < ys[k], msg="\{Repr(ys)}")
   }
   let (px, py) = t.find_last("Projects").unwrap()
   t.tap(px, py)
@@ -72,7 +72,7 @@ test "a way with no room even for its first and last: all but the last left for 
   assert_true(!way_left(t, -1))
   let last = t.lines_of("A folder")
   assert_eq(last.length(), 1)
-  assert_true(last[0].has_suffix("…"), msg="\{last}")
+  assert_true(last[0].has_suffix("…"), msg="\{Repr(last)}")
   let (mx, _, mw, _) = t.rect_of(@sf.way_more).unwrap()
   let (lx, _, lw, _) = t.rect_of("A folder").unwrap()
   assert_true(mx + mw <= lx && lx + lw <= 184.5, msg="\{mx} \{lx} \{lw}")

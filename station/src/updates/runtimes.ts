@@ -203,13 +203,12 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 /// How a runtime the machine has not is installed, or why it cannot be from here: Claude Code by its own installer
 /// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else its own installer (into
 /// ~/.local/bin too; where that is not run, `node`'s npm), DeepSeek Harness and Grok Build by npm (where the machine has
-/// none, `node`'s: installed first), Devin by its own installer (into ~/.local/bin too).
+/// none, `node`'s: installed first), Devin and the Antigravity CLI by their own installers (into ~/.local/bin too).
 export function howToInstall(kind: Kind, env: Env, node: OwnNode | null = null): How | Unable {
   if (kind === "station") return new Unable("");
   if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   if (kind === "claude") return platform.claudeInstall;
-  // Its installer also writes the machine's shell profiles: installed by the person, from antigravity.google.
-  if (kind === "agy") return new Unable("station.updates.agyExternal");
+  if (kind === "agy") return platform.agyInstall;
   if (kind === "devin") return platform.devinInstall;
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
   if (kind === "dsh" || kind === "grok") return npmInstall(env, node, ["install", "-g", `${kindPackage(kind)}@latest`], kindName(kind));

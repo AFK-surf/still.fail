@@ -142,7 +142,7 @@ fn stack_ids(t : Tester, names : Array[String]) -> Map[String, Int] {
 fn stack_takes(t : Tester, k : StackCase, ids : Map[String, Int]) -> (Array[String], Array[String], String?) {
   let from = k.pressed.length()
   t.tap(200.0, 150.0)
-  let tapped = k.pressed[from:].to_array()
+  let tapped = k.pressed[from:].to_owned()
   let from = k.pressed.length()
   for n in ["甲", "乙", "丙"] {
     match ids.get(n) {
@@ -153,7 +153,7 @@ fn stack_takes(t : Tester, k : StackCase, ids : Map[String, Int]) -> (Array[Stri
       None => ()
     }
   }
-  let acted = k.pressed[from:].to_array()
+  let acted = k.pressed[from:].to_owned()
   t.tab()
   (tapped, acted, t.focused().map(fn(s) { s.label }))
 }
@@ -372,7 +372,7 @@ test "an old 丙 at 3, a menu at no place built after it, an old view's own back
     each.push(k.closed.copy())
   }
   t.draw()
-  assert_eq((menu_stack.val, kept, each), (-1, true, [["丙的菜单"], ["丙的菜单", "丙"], ["丙的菜单", "丙", "乙页"]]), msg="\{why} \{builds.val - built} \{nodes_run.evented}")
+  assert_eq((menu_stack.val, kept, each), (-1, true, [["丙的菜单"], ["丙的菜单", "丙"], ["丙的菜单", "丙", "乙页"]]), msg="\{Repr(why)} \{builds.val - built} \{nodes_run.evented}")
 }
 
 ///|
@@ -436,4 +436,143 @@ test "old views' own backs, no layer opened: 丙's at 3 said before 甲's at 1, 
   on_back(2, 0.0, 1.0, 0)
   t.draw()
   assert_eq(k.closed, ["乙"])
+}
+
+///|
+/// Two layers, each modal and closed by a press outside what it holds and by Escape, the old frame's or the window's
+/// tree's (`lower_tree`, `upper_tree`): "下" at 1 holding a button 400 by 100 at the top, "上" at 2 a button 400 by 200
+/// there, over the old view the whole window; `upper_keeps`: "上" stays as it would be dismissed (the old
+/// frame's, `stays`) or takes no Escape (the tree's). What each was pressed and closed (by name).
+fn old_tree_pair_tester(
+  lower_tree : Bool,
+  upper_tree : Bool,
+  upper_keeps? : Bool = false,
+) -> (Tester, StackCase) {
+  let k : StackCase = { on: Map([]), pressed: [], closed: [] }
+  let layers = [("下", 1, lower_tree, 100.0), ("上", 2, upper_tree, 200.0)]
+  for l in layers {
+    k.on[l.0] = @signals.signal(true)
+  }
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.grow(Is(1.0)) |> ignore
+      old(h, fn(c) {
+        for l in layers {
+          let (name, stack, tree, tall) = l
+          if tree || !k.on[name].get() {
+            continue
+          }
+          c.stacked(stack, fn() {
+            c.with_dismissed(fn(_) { k.closed.push(name) }, fn() {
+              // (outside and escape: closed by a press outside what it holds, by Escape)
+              let o = c.overlay(name, modal=true, stays=fn() { name == "上" && upper_keeps }, fn() {
+                let id = c.id(name + " button")
+                if c.interact(id).clicked {
+                  k.pressed.push(name)
+                }
+                let b = c.box(id~, w=Px(400.0), h=Px(tall), bg=0xFFFFFFFFL, fn() {  })
+                c.semantics(b, Button, id~, label=name, actions=[Activate])
+              })
+              if o.dismissed is Some(_) {
+                k.on[name].set(false)
+              }
+            })
+          })
+        }
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    for l in layers {
+      let (name, stack, tree, tall) = l
+      if !tree {
+        continue
+      }
+      let on = k.on[name]
+      let close = fn() {
+        k.closed.push(name)
+        on.set(false)
+      }
+      root.show(fn() { on.get() }, fn(v) {
+        // (its ground pressed: a press outside what it holds, closing it; Escape closes it)
+        v
+        .over(Is(true))
+        .stacked(Is(stack))
+        .modal(Is(true))
+        .ground(Is(0x7FFF7FFFL))
+        .presses(Is(true))
+        .says(Is(Some(@view.said(Button, label=name + "外"))))
+        .on_press(close)
+        .on_key(fn(key) {
+          if key.code == key_escape && !(name == "上" && upper_keeps) {
+            close()
+            true
+          } else {
+            false
+          }
+        })
+        |> ignore
+        v.box(fn(b) {
+          b
+          .width(Is(Some(400.0)))
+          .height(Is(Some(tall)))
+          .presses(Is(true))
+          .says(Is(Some(@view.said(Button, label=name))))
+          .on_press(fn() { k.pressed.push(name) })
+          |> ignore
+        })
+        |> ignore
+      })
+    }
+  })
+  t.draw()
+  t.draw()
+  (t, k)
+}
+
+///|
+test "one layer over another, the old frame's and the tree's, the four ways: a press outside both, one on the one over it alone, Escape: the one over it takes each, the one under it none" {
+  let ways = [(false, false), (true, false), (false, true), (true, true)]
+  for way in ways {
+    let (lower, upper) = way
+    let name = "\{if upper { "the tree's" } else { "old" }} over \{if lower { "the tree's" } else { "old" }}"
+    // (outside both: under what 上 holds)
+    let (t, k) = old_tree_pair_tester(lower, upper)
+    t.tap(200.0, 250.0)
+    t.draw()
+    let outside = (k.pressed.copy(), k.closed.copy(), k.on["下"].get())
+    // (on what 上 holds, below what 下 holds)
+    let (t, k) = old_tree_pair_tester(lower, upper)
+    t.tap(200.0, 150.0)
+    t.draw()
+    let on_upper = (k.pressed.copy(), k.closed.copy(), k.on["下"].get())
+    // (on what both hold)
+    let (t, k) = old_tree_pair_tester(lower, upper)
+    t.tap(200.0, 50.0)
+    t.draw()
+    let on_both = (k.pressed.copy(), k.closed.copy(), k.on["下"].get())
+    let (t, k) = old_tree_pair_tester(lower, upper)
+    t.key(key_escape)
+    t.draw()
+    let escaped = (k.pressed.copy(), k.closed.copy(), k.on["下"].get())
+    assert_eq(
+      (outside, on_upper, on_both, escaped),
+      (([], ["上"], true), (["上"], [], true), (["上"], [], true), ([], ["上"], true)),
+      msg=name,
+    )
+  }
+}
+
+///|
+test "an old layer under a modal one that keeps itself open on Escape (old, `stays`) or takes none (the tree's): Escape closes neither" {
+  let kept = [false, true].map(fn(upper_tree) {
+    let (t, k) = old_tree_pair_tester(false, upper_tree, upper_keeps=true)
+    t.key(key_escape)
+    t.draw()
+    (k.closed.copy(), k.on["下"].get(), k.on["上"].get())
+  })
+  // (old over old as it is, and the tree's over old the same)
+  assert_eq(kept, [([], true, true), ([], true, true)])
 }

@@ -2,11 +2,13 @@
 export interface OperationParams {
   "session.stop": { key: string };
   "session.cancelRetry": { key: string; thread: number; seq: number };
+  "session.retry": { key: string; thread: number; seq: number };
   "tools.access": {  };
   "tools.setAccess": { access: string };
   "agentEnv.set": { env?: unknown; text?: string | null | undefined };
   "search.setPersonal": { personal: boolean };
   "network.setCongestion": { congestion: string };
+  "copies.restore": { origin: string; gen: string; fromStation: string };
   "station.restart": {  };
   "context.setAfresh": { afreshWhenCold?: boolean | null | undefined; afreshAbove?: number | null | undefined };
   "diagnostics.setLogs": { logs: boolean };
@@ -34,6 +36,8 @@ export interface OperationParams {
   "preset.add": { name: string; dirs: unknown; instructions?: string | null | undefined };
   "preset.put": { id: string; name: string; dirs: unknown; instructions?: string | null | undefined };
   "preset.delete": { id: string };
+  "preset.clone": { url: string };
+  "preset.cloneDrop": { id: string };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };
   "widget.state": { key: string; path: string };
@@ -79,7 +83,7 @@ export interface OperationParams {
   "profile.share": { id: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
   "profile.move": { id: string; to: string };
   "skill.share": { name: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
-  "profile.resetQuota": { id: string };
+  "profile.resetQuota": { id: string; reset?: string | null | undefined };
   "profile.quota": { id: string };
   "profile.check": { id: string };
   "profile.login": { id: string };
@@ -118,10 +122,6 @@ export interface OperationParams {
   "signin.deny": { id: string };
   "memory.get": {  };
   "process.end": { pid: number; session: string };
-  "footprint.scan": {  };
-  "footprint.rebuild": { keys?: string[] | null | undefined };
-  "footprint.delete": { keys?: string[] | null | undefined };
-  "footprint.evict": { keys?: string[] | null | undefined };
   "software.update": { id?: string | null | undefined; repair?: boolean | null | undefined };
   "software.updateAll": {  };
   "software.check": {  };
@@ -152,6 +152,7 @@ export interface OperationParams {
   "workspace.enroll": { workspace: string; name?: string | null | undefined };
   "workspace.renameStation": { workspace: string; station: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.removeStation": { workspace: string; station: string };
+  "workspace.feedbackReply": { workspace: string; id: string; text: string };
   "invitation.preview": { token?: string | null | undefined };
   "invitation.accept": { id?: string | null | undefined; token?: string | null | undefined };
   "invitation.decline": { id: string };
@@ -181,11 +182,13 @@ export function bindStationOperations(call: Call) {
   return {
     sessionStop: <T = unknown>(params: OperationParams["session.stop"]) => call("session.stop", params) as Promise<T>,
     sessionCancelRetry: <T = unknown>(params: OperationParams["session.cancelRetry"]) => call("session.cancelRetry", params) as Promise<T>,
+    sessionRetry: <T = unknown>(params: OperationParams["session.retry"]) => call("session.retry", params) as Promise<T>,
     toolsAccess: <T = unknown>(params: OperationParams["tools.access"] = {}) => call("tools.access", params) as Promise<T>,
     toolsSetAccess: <T = unknown>(params: OperationParams["tools.setAccess"]) => call("tools.setAccess", params) as Promise<T>,
     agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     networkSetCongestion: <T = unknown>(params: OperationParams["network.setCongestion"]) => call("network.setCongestion", params) as Promise<T>,
+    copiesRestore: <T = unknown>(params: OperationParams["copies.restore"]) => call("copies.restore", params) as Promise<T>,
     stationRestart: <T = unknown>(params: OperationParams["station.restart"] = {}) => call("station.restart", params) as Promise<T>,
     contextSetAfresh: <T = unknown>(params: OperationParams["context.setAfresh"] = {}) => call("context.setAfresh", params) as Promise<T>,
     diagnosticsSetLogs: <T = unknown>(params: OperationParams["diagnostics.setLogs"]) => call("diagnostics.setLogs", params) as Promise<T>,
@@ -213,6 +216,8 @@ export function bindStationOperations(call: Call) {
     presetAdd: <T = unknown>(params: OperationParams["preset.add"]) => call("preset.add", params) as Promise<T>,
     presetPut: <T = unknown>(params: OperationParams["preset.put"]) => call("preset.put", params) as Promise<T>,
     presetDelete: <T = unknown>(params: OperationParams["preset.delete"]) => call("preset.delete", params) as Promise<T>,
+    presetClone: <T = unknown>(params: OperationParams["preset.clone"]) => call("preset.clone", params) as Promise<T>,
+    presetCloneDrop: <T = unknown>(params: OperationParams["preset.cloneDrop"]) => call("preset.cloneDrop", params) as Promise<T>,
     chatsArchived: <T = unknown>(params: OperationParams["chats.archived"] = {}) => call("chats.archived", params) as Promise<T>,
     chatForSession: <T = unknown>(params: OperationParams["chat.forSession"] = {}) => call("chat.forSession", params) as Promise<T>,
     widgetState: <T = unknown>(params: OperationParams["widget.state"]) => call("widget.state", params) as Promise<T>,
@@ -297,10 +302,6 @@ export function bindStationOperations(call: Call) {
     signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
     processEnd: <T = unknown>(params: OperationParams["process.end"]) => call("process.end", params) as Promise<T>,
-    footprintScan: <T = unknown>(params: OperationParams["footprint.scan"] = {}) => call("footprint.scan", params) as Promise<T>,
-    footprintRebuild: <T = unknown>(params: OperationParams["footprint.rebuild"] = {}) => call("footprint.rebuild", params) as Promise<T>,
-    footprintDelete: <T = unknown>(params: OperationParams["footprint.delete"] = {}) => call("footprint.delete", params) as Promise<T>,
-    footprintEvict: <T = unknown>(params: OperationParams["footprint.evict"] = {}) => call("footprint.evict", params) as Promise<T>,
     softwareUpdate: <T = unknown>(params: OperationParams["software.update"] = {}) => call("software.update", params) as Promise<T>,
     softwareUpdateAll: <T = unknown>(params: OperationParams["software.updateAll"] = {}) => call("software.updateAll", params) as Promise<T>,
     softwareCheck: <T = unknown>(params: OperationParams["software.check"] = {}) => call("software.check", params) as Promise<T>,
@@ -336,6 +337,7 @@ export function bindCloudOperations(call: Call) {
     workspaceEnroll: <T = unknown>(params: OperationParams["workspace.enroll"]) => call("workspace.enroll", params) as Promise<T>,
     workspaceRenameStation: <T = unknown>(params: OperationParams["workspace.renameStation"]) => call("workspace.renameStation", params) as Promise<T>,
     workspaceRemoveStation: <T = unknown>(params: OperationParams["workspace.removeStation"]) => call("workspace.removeStation", params) as Promise<T>,
+    workspaceFeedbackReply: <T = unknown>(params: OperationParams["workspace.feedbackReply"]) => call("workspace.feedbackReply", params) as Promise<T>,
     invitationPreview: <T = unknown>(params: OperationParams["invitation.preview"] = {}) => call("invitation.preview", params) as Promise<T>,
     invitationAccept: <T = unknown>(params: OperationParams["invitation.accept"] = {}) => call("invitation.accept", params) as Promise<T>,
     invitationDecline: <T = unknown>(params: OperationParams["invitation.decline"]) => call("invitation.decline", params) as Promise<T>,

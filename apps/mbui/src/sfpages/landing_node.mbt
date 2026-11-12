@@ -58,7 +58,7 @@ fn landing_error_node(body : @view.View, words : () -> String) -> Unit {
 /// The landing's words, `size` as the window's theme has it and on its own line, `weight`, wrapping.
 fn landing_words(size : @ui.TextSize, weight : Int) -> @view.WordsLook {
   let (px, line) = @ui.tree_theme().text_size(size)
-  { size: px, weight, line, wrap: true, tracking: @view.letters_own, balance: false }
+  { size: px, weight, line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|
@@ -239,7 +239,7 @@ fn invitation_node(row : @view.View, src : Source, p : () -> (Json?, Json)) -> U
 /// row, 8 apart, the button not pressed while no code is typed; what was last tried's error under them, none before a
 /// code was typed.
 fn invite_code_form_node(body : @view.View, src : Source, account : () -> Json?) -> Unit {
-  let code = fn() { landing.code.text().trim(chars=" \n").to_string() }
+  let code = fn() { landing.code.text().trim(chars=" \n").to_owned() }
   body.box(fn(form) {
     form.width_share(Is(1.0)).gap(Is(@ui.Space::px(S2))) |> ignore
     form.box(fn(r) {

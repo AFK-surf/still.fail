@@ -5,7 +5,7 @@ fn first_frame_time(tape : String) -> Double {
     let line = v.to_owned()
     match line.find("DRAWHASH ") {
       Some(i) => {
-        let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
+        let parts = line.exact_view(start=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
         if parts.length() >= 2 {
           match (try Some(@json.parse(parts[1])) catch { _ => None }) {
             Some(Number(d, ..)) => return d

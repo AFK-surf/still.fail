@@ -199,8 +199,47 @@ fn looks_fail(s : String) -> Unit {
   let said = "a frame not built whole (frame_watch.mbt), the Tester made at \{looks_made_at.val}: " +
     s +
     " (built whole last at \{looks_base.built_at.to_int()} ms\{if wall_read.val { "; the time of day read as it was built" } else { "" }}; what is said to move: \{g().moving_now().join("; ")})"
-  println(said)
-  abort(said)
+  if looks_unjudged.val {
+    return
+  }
+  @halt.saying(said)
+}
+
+///|
+/// Whether this Tester's frames are not judged (a frame not built whole, how what moves goes): a run whose frames are
+/// only the way to what it tells its core (sfreplay's pace passes, held to their strict pass's messages), every other
+/// run judging them.
+// kept across runs: set by the Tester that asks it (Tester::frames_unjudged), off as each Tester is made
+let looks_unjudged : Ref[Bool] = Ref(false)
+
+///|
+/// This Tester's frames not judged (looks_unjudged): `on` for its run.
+pub fn Tester::frames_unjudged(self : Tester, on : Bool) -> Unit {
+  looks_unjudged.val = on
+  if on {
+    self.motion = Results
+  }
+}
+
+///|
+/// Whether this Tester's frames are not judged for how what moves goes (words_over, rows_steady, sizes_steady,
+/// gaps_steady), all else of them judged as ever: a sweep of every screen at rest, each opened with motion reduced, whose
+/// frames are only the way to the screen it looks at (the app's corners, contrast, squeeze_said and words_large). For
+/// CI's time while its runners are few (the user, 2026-11-12: 「先省吧，明天加机器，再改回来」): judged again once there
+/// are more.
+// kept across runs: set by the Tester that asks it (Tester::motion_unjudged), off as each Tester is made
+let motion_unjudged : Ref[Bool] = Ref(false)
+
+///|
+/// This Tester's frames not judged for how what moves goes (motion_unjudged): `on` for its run.
+pub fn Tester::motion_unjudged(self : Tester, on : Bool) -> Unit {
+  ignore(self)
+  motion_unjudged.val = on
+  // (its file's bars not set beside what it found, none of it looked for: motion_runs, `MOTION unjudged <file>`)
+  if on && motion_runs() {
+    let at = looks_made_at.val
+    println("MOTION unjudged \{match at.find(":") { Some(i) => at.unsafe_substring(start=0, end=i); None => at }}")
+  }
 }
 
 ///|
@@ -215,6 +254,7 @@ pub fn Tester::check_looks(self : Tester, on : Bool) -> Unit {
 /// Why the last frame was built whole ("" where it was of its looks alone): it left more to come of its own, what it
 /// read changed (the clock, where it read it so), a moment it waits for came.
 pub fn Tester::built_why(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   built_why.val
 }
@@ -224,6 +264,7 @@ pub fn Tester::built_why(self : Tester) -> String {
 /// alone): what its paint read changed (the clock, where it read it so), a moment its paint waits for came, the paint
 /// before it drew otherwise.
 pub fn Tester::painted_why(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   painted_why.val
 }
@@ -253,9 +294,9 @@ fn looks_nodes_kept(c : Ctx) -> Unit {
 /// in it having told what follows it) and the two compared, the test failing where they differ.
 fn looks_looked(
   c : Ctx,
-  w : Double,
-  h : Double,
-  scale : Double,
+  _w : Double,
+  _h : Double,
+  _scale : Double,
   t : Double,
   kind : Int,
   scrolled : Bool,
@@ -314,6 +355,7 @@ fn looks_looked(
 /// How many frames were drawn of their looks alone so far (frame_watch.mbt: nothing built, laid out or painted, a list
 /// moved by its header), each drawn whole after it as well and compared where the looks are checked.
 pub fn Tester::looks_alone(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   looks_frames.val
 }

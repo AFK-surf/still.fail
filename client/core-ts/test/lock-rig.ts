@@ -5,6 +5,7 @@ import { Effect, Queue } from "effect";
 import { apply as applyOps } from "../src/delta.ts";
 import { CoreError } from "../src/error.ts";
 import type { HttpRequest } from "../src/host.ts";
+import type { StationWire } from "../src/station/wire.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { base64url as toB64url, hex, utf8 } from "../src/util.ts";
@@ -95,15 +96,16 @@ export function lockCloud() {
 
 /// A core on an app's host reaching `ws` (W) and `w2` (日常), each with its lock in the cloud; `before` changes the host.
 /// `station`: the id of `ws`'s station (station-fixture.ts's "st" unless given; one the lock names is an iroh id), or of
-/// each of its stations.
-export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void, station?: string | string[]) {
+/// each of its stations. `seen`: those of them the control plane saw just now (`last_seen` the start's time), the others
+/// never seen (`null`). `wire`: how its stations are reached (the host's fetch, HostWire, unless given).
+export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void, station?: string | string[], seen: readonly string[] = [], wire?: (host: FakeHost) => StationWire) {
   const ids = station === undefined ? [] : typeof station === "string" ? [station] : station;
   const cloud = lockCloud();
-  const s = await started(undefined, 0, undefined, (x) => {
+  const s = await started(undefined, 0, wire, (x) => {
     x.host.appKeys = true;
     const signer = Effect.runSync(Signer.make(x.host));
     for (const [ws, g] of Object.entries(locks(signer))) cloud.chains.set(ws, [g]);
-    x.cloud.also = { name: "W", role: "owner", lock: cloud.head("ws"), lock_requests: 0, ...(ids.length > 0 ? { stations: ids.map((id, i) => ({ id, name: i === 0 ? "studio" : `studio ${i + 1}`, online: true, last_seen: null })) } : {}) };
+    x.cloud.also = { name: "W", role: "owner", lock: cloud.head("ws"), lock_requests: 0, ...(ids.length > 0 ? { stations: ids.map((id, i) => ({ id, name: i === 0 ? "studio" : `studio ${i + 1}`, online: true, last_seen: seen.includes(id) ? Math.floor(x.host.nowMs() / 1000) : null })) } : {}) };
     x.cloud.more = [{ id: "w2", name: "日常", emoji: "☀️", role: "owner", lock: cloud.head("w2"), lock_requests: 0 }];
     stationReplies(x.host, cloud.reply);
     before?.(x.host);
@@ -125,10 +127,7 @@ export async function rig(locks: (signer: Signer) => Record<string, Entry>, befo
   const ask = async (name: string, params: Record<string, unknown>): Promise<any> => {
     const n = ++id;
     call(s.core, ui, n, name, params);
-    for (let i = 0; i < 4000 && !done.has(n); i++) {
-      await s.host.time.pass(10);
-      take();
-    }
+    await s.host.time.passUntil(40_000, () => (take(), done.has(n)));
     const a = done.get(n);
     if (!a) throw new Error(`${name}: no answer`);
     await s.host.time.pass(100);

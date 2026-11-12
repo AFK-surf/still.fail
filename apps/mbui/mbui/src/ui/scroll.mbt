@@ -30,8 +30,6 @@ using @view {
   rubber,
   unrubber,
   rubber_at,
-  edge_spring_at,
-  first_when,
   ease_come,
   ease_state,
   ease_end,

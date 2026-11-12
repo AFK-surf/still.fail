@@ -65,7 +65,7 @@ fn host_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
 fn host_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   let z = window_zoom_drawn.val
   // A pinch is an amount of magnification, not a distance on the window.
-  let delta = if (phase / 16 & wheel_mod_pinch) != 0 { 1.0 } else { z }
+  let delta = if ((phase / 16) & wheel_mod_pinch) != 0 { 1.0 } else { z }
   on_wheel(x / z, y / z, dx / delta, dy / delta, phase)
 }
 

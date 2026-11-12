@@ -18,6 +18,8 @@
 ///|
 /// A list's row kept as its nodes: what its build made and said, where it is in the frame's nodes, what it was built
 /// from (its list's room and what built the list), and whether it may be kept at all (`ok`; `why` not).
+// built_frame is read by its tests alone
+#warnings("-unused_field")
 priv struct RowNodes {
   /// its list's id, its item
   list : Int
@@ -27,6 +29,11 @@ priv struct RowNodes {
   mut watch : @signals.Watch
   /// A keyed row's retained drawing, when its contents can be replayed safely.
   mut drawing : RowDrawing?
+  /// what its list did to it as it laid it (Ctx::place_list's `lay`): how far down what comes and goes in it was put
+  /// from where its build laid it, how tall it was cut, whether it was cut; what it drew kept was drawn so
+  mut laid_by : Double
+  mut laid_h : Double
+  mut laid_cut : Bool
   /// The key supplied by ListRows at the position this row was built at.
   mut row_key : String?
   /// the pass of a frame's build it was last laid in (NodesRun's `pass`)
@@ -109,16 +116,15 @@ priv struct RowNodes {
   holder : Ref[RowNodes?]
   /// the parts kept as their nodes among its own, where among them (from its first): their nodes theirs, out of its
   /// own as it is taken out of the frame's and put back with them as it is put back; and those put among them by the
-  /// build going on, and where it began
+  /// build going on
   mut inner : Array[(RowNodes, Int)]
   inner_now : Array[RowNodes]
-  mut building_at : Int
 }
 
 ///|
 /// The rows kept, by list and item.
 // kept across runs: let go of as a run begins (nodes_forget) and as each frame ends for those it did not lay
-let kept_nodes : Map[(Int, Int), RowNodes] = {}
+let kept_nodes : Map[(Int, Int), RowNodes] = Map([])
 
 ///|
 /// Nodes no row nor the frame holds, for a row's to be swapped with.
@@ -498,6 +504,7 @@ fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes
     }
     nodes_run.told = true
     nodes_run.told_by = (list, item)
+    watch_told_moment()
     nodes_run.told_at = @signals.setting_at()
     // (between frames: one owed; in one, the next asked for as it ends: on_frame)
     if !frame_running.val {
@@ -609,6 +616,9 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     item,
     watch,
     drawing: None,
+    laid_by: 0.0,
+    laid_h: -1.0,
+    laid_cut: false,
     row_key: None,
     laid_pass,
     store: [],
@@ -656,7 +666,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     holder,
     inner: [],
     inner_now: [],
-    building_at: 0,
     named: "",
     made_at: None,
   }
@@ -865,7 +874,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.again.clear()
   rn.laid.clear()
   rn.inner_now.clear()
-  rn.building_at = self.count
   {
     census,
     info: self.info_reads.length(),
@@ -1328,6 +1336,7 @@ fn Ctx::held_by(self : Ctx, outer : RowNodes?, rn : RowNodes) -> Unit {
 /// The rows (their list and item) and the parts (their id, -1) the frames built, not kept, since this was last asked
 /// (a test's), each time one was: none of those a build keeping none built to compare with.
 pub fn Tester::rows_built(self : Tester) -> Array[(Int, Int)] {
+  self.reads_own()
   ignore(self)
   let out = nodes_run.built_at.copy()
   nodes_run.built_at.clear()
@@ -1337,6 +1346,7 @@ pub fn Tester::rows_built(self : Tester) -> Array[(Int, Int)] {
 ///|
 /// How many rows the last frame kept as their nodes, and how many it built (a test's, a bench's).
 pub fn Tester::rows_as_nodes(self : Tester) -> (Int, Int) {
+  self.reads_own()
   ignore(self)
   (nodes_run.kept, nodes_run.built)
 }
@@ -1346,6 +1356,7 @@ pub fn Tester::rows_as_nodes(self : Tester) -> (Int, Int) {
 /// every frame's added up: those built again keeping none to hold a frame that kept some among them, where the Tester
 /// checks so (check_looks).
 pub fn Tester::rows_read_built(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   nodes_run.built_read
 }
@@ -1354,7 +1365,7 @@ pub fn Tester::rows_read_built(self : Tester) -> Int {
 /// Why the rows and the parts of the last frame that may not be kept may not (a part's said so), each reason once with
 /// how many (a test's, a bench's).
 pub fn rows_unkept() -> Array[(String, Int)] {
-  let by : Map[String, Int] = {}
+  let by : Map[String, Int] = Map([])
   for _, rn in kept_nodes {
     if !rn.ok && rn.why != "" {
       let why = if rn.item < 0 { "a part: " + rn.why } else { rn.why }

@@ -322,7 +322,7 @@ test "a composer's field: Enter a new line, a long paste handed over, its words 
 
 ///|
 test "a scripted run (MBUI_DRIVE) taps words on screen, types through the input method and waits on what comes" {
-  let taps = Ref::new(0)
+  let taps = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     c.column(w=Fill(1.0), h=Fill(1.0), fn() {
       c.button("按一下", on_press=fn() {
@@ -398,7 +398,7 @@ test "a scripted step waits for nothing settling: a tap goes as soon as its word
   // what the host's page brings is waited for by what it shows
   let log = t.drive("tap 打开\nuntil 页面来了\ntap 按一下\nexit")
   assert_true(log.contains("DRIVE PASS"))
-  assert_true(tapped.val is Some((_, true)), msg="\{tapped.val}")
+  assert_true(tapped.val is Some((_, true)), msg="\{Repr(tapped.val)}")
   t.draw()
 }
 
@@ -428,7 +428,7 @@ test "a scripted step that never sees what it waits for fails within its timeout
 
 ///|
 test "a scripted shot is of the frame just drawn; a host that cannot take it is given 1.5 s" {
-  let frames = Ref::new(0)
+  let frames = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     frames.val = frames.val + 1
     c.text("一张图") |> ignore

@@ -188,7 +188,7 @@ fn MoveRun::at(self : MoveRun, now : Double, frame : Int) -> Double {
     }
     self.dur = move_ms(self.far)
   }
-  let t = whole_ms(now - self.start)
+  let t = gone_ms(now - self.start)
   if t <= 0.0 {
     0.0
   } else if t >= self.dur || self.dur <= 0.0 {
@@ -216,7 +216,7 @@ pub fn Ctx::move_state(
   if self.still() {
     return
   }
-  let names : Map[String, FixedArray[Bool]] = {}
+  let names : Map[String, FixedArray[Bool]] = Map([])
   let vars : Array[String] = []
   for m in moves {
     let (name, props) = m
@@ -237,7 +237,7 @@ pub fn Ctx::move_state(
       }
       match move_props.get(p) {
         Some(ks) => for k in ks { on[k] = true }
-        None => abort("move_state: \{name}'s \{p} is no property a box moves by")
+        None => @halt.saying("move_state: \{name}'s \{p} is no property a box moves by")
       }
     }
   }
@@ -268,7 +268,7 @@ pub fn Ctx::move_state(
     waits_late: true,
     late_at,
   }
-  let what = "a move of \{names.keys().collect()} set out at \{loc}"
+  let what = "a move of \{list_text(names.keys().collect())} set out at \{loc}"
   who.what = what
   self.moving_as(who, run as &Moving, what)
   self.move_runs.push(run)

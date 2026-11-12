@@ -3,22 +3,25 @@
 
 ///|
 /// A live node's values as set (Tree::styled): its words' size, line and the weight and ink of each of them (a piece's
-/// own where it is in pieces, View::words_runs; none where it says none); its padding (left, top, right, bottom) and the
+/// own where it is in pieces, View::words_runs; none where it says none), and the size of words they are drawn at
+/// (View::words_scale's); its padding (left, top, right, bottom) and the
 /// gap between what it holds, in points (none where it has none); its corner; its ground (0: none); the colour of the
 /// edge drawn round it (0: none, nor where it is drawn none wide).
+#derive(Debug)
 pub(all) struct Styled {
   words : Bool
   size : Double
   line : Double
   /// how far apart its letters are set besides their own (WordsLook's)
   tracking : Spacing
+  words_scale : Double
   weights : Array[Int]
   inks : Array[Int64]
   spaces : Array[Double]
   radius : Double
   ground : Int64
   edge : Int64
-} derive(Debug)
+}
 
 ///|
 /// The live nodes the root holds, each one's values as set (Styled), what holds each before it.
@@ -63,6 +66,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
       size: if words { l.words_look.size } else { 0.0 },
       line: if words { l.words_look.line } else { 0.0 },
       tracking: l.words_look.tracking,
+      words_scale: if words { self.words_scale_at(at) } else { 1.0 },
       weights,
       inks,
       spaces: if n.slot {

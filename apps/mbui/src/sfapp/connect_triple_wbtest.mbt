@@ -17,16 +17,16 @@ test "a connect's model control says its model, effort and who runs it in one ro
   for win in [corner_windows[0], corner_windows[5]] {
     let t = screen_in("settings-connect", win, "zh")
     let found = ["Opus 5.5", "高", "自动分配"].map(fn(s) { (s, words_exactly_at(t, s)) })
-    let at = found.map(fn(f) {
+    let at = found.map(fn(f) raise {
       guard f.1 is Some(r) else { fail("\{win.0}: no \{f.0}: \{t.words().map(fn(w) { w.0 }).join("|")}") }
       r
     })
     let middle = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
     for i in 1..<at.length() {
-      assert_true((middle(at[i]) - middle(at[0])).abs() < 1.0, msg="\{win.0}: not one row: \{found}")
-      assert_true(at[i].0 >= at[i - 1].0 + at[i - 1].2, msg="\{win.0}: out of order: \{found}")
+      assert_true((middle(at[i]) - middle(at[0])).abs() < 1.0, msg="\{win.0}: not one row: \{Repr(found)}")
+      assert_true(at[i].0 >= at[i - 1].0 + at[i - 1].2, msg="\{win.0}: out of order: \{Repr(found)}")
     }
-    assert_true(at.iter().all(fn(r) { r.0 >= 0.0 && r.0 + r.2 <= win.1 }), msg="\{win.0}: past the window: \{found}")
+    assert_true(at.iter().all(fn(r) { r.0 >= 0.0 && r.0 + r.2 <= win.1 }), msg="\{win.0}: past the window: \{Repr(found)}")
   }
 }
 

@@ -42,17 +42,17 @@ test "a page's list flung into its end: what it shows at each moment the same at
     let (a, ad, ar) = met_at(platform, 1000.0 / 60.0)
     // (it met its end and showed past it)
     if !a.iter().any(fn(f) { f.2.abs() > 0.01 }) || a.last().unwrap().1 != 40.0 * 50.0 - 844.0 {
-      differ.push("\{platform}: not past its end: \{a}")
+      differ.push("\{platform}: not past its end: \{Repr(a)}")
     }
     for period in [1000.0 / 120.0, 0.0] {
       let (b, bd, br) = met_at(platform, period)
       if ar != br {
-        differ.push("\{platform} at \{period}: at rest at \{br}, at 60 Hz \{ar}")
+        differ.push("\{platform} at \{period}: at rest at \{Repr(br)}, at 60 Hz \{Repr(ar)}")
       }
       for k in 0..<a.length() {
         // (the same moment, however its time was summed: to a millionth of a ms; what shows then to a millionth)
         if (a[k].0 - b[k].0).abs() > 1.0e-6 || (a[k].1 - b[k].1).abs() > 1.0e-6 || (a[k].2 - b[k].2).abs() > 1.0e-6 {
-          differ.push("\{platform} at \{period}: \{b[k]}, at 60 Hz \{a[k]}")
+          differ.push("\{platform} at \{period}: \{Repr(b[k])}, at 60 Hz \{Repr(a[k])}")
           break
         }
         let alike = ad[k].length() == bd[k].length() &&
@@ -61,7 +61,7 @@ test "a page's list flung into its end: what it shows at each moment the same at
             (0).until(ad[k][i].length()).iter().all(fn(j) { (ad[k][i][j] - bd[k][i][j]).abs() <= 1.0e-6 })
           })
         if !alike {
-          differ.push("\{platform} at \{period}: drawn at \{a[k].0} \{bd[k][:imin(3, bd[k].length())]}, at 60 Hz \{ad[k][:imin(3, ad[k].length())]}")
+          differ.push("\{platform} at \{period}: drawn at \{a[k].0} \{Repr(bd[k][:imin(3, bd[k].length())])}, at 60 Hz \{Repr(ad[k][:imin(3, ad[k].length())])}")
           break
         }
       }
@@ -98,7 +98,7 @@ test "a page's list let go of as what it was pulled past its top goes back: noth
     t.draw()
     assert_eq(s.glides_till(), None)
     assert_eq(s.past(tree), 0.0)
-    assert_eq(rest_of("a list's fling, the tree's"), -1.0)
+    assert_true(rest_of("a list's fling, the tree's") <= t.time())
   }
 }
 
@@ -116,7 +116,7 @@ fn bar_held(by : Double) -> (Array[Array[Double]], Array[Array[Double]]) {
   }
   let rows = same_drawn(t)
   // (what else is drawn: the bar)
-  let bar = t.drawn_instances().filter(fn(a) { a[5] == 0.0 && a[0] > 350.0 && a[2] < 20.0 }).map(fn(a) { a[0:5].to_array() })
+  let bar = t.drawn_instances().filter(fn(a) { a[5] == 0.0 && a[0] > 350.0 && a[2] < 20.0 }).map(fn(a) { a[0:5].to_owned() })
   (bar, rows)
 }
 
@@ -195,7 +195,7 @@ test "a page's list grown above what is in sight as it moves by itself: what is 
         (0).until(was.length()).iter().all(fn(i) {
           (0).until(was[i].length()).iter().all(fn(j) { (was[i][j] - now[i][j]).abs() <= 1.0e-6 })
         })
-      assert_true(alike, msg="\{platform} \{name}: drawn \{was[:imin(2, was.length())]}, grown \{now[:imin(2, now.length())]}")
+      assert_true(alike, msg="\{platform} \{name}: drawn \{Repr(was[:imin(2, was.length())])}, grown \{Repr(now[:imin(2, now.length())])}")
       assert_true((y - (x + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at \{y}, was \{x}")
       assert_eq(rest_now, rest, msg="\{platform} \{name}")
       assert_true((end - (end_alone + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at rest at \{end}, not grown \{end_alone}")
@@ -303,11 +303,11 @@ test "a page's list flung down toward its foot, what it holds grown on its way: 
     for platform in [0, 1, 2] {
       let (after, end, most) = grown_down(platform, grown.0, grown.1)
       match after.iter().find_first(fn(f) { f.1 != 0.0 && (f.0 - f.2).abs() > 1.0e-6 }) {
-        Some(f) => fail("\{platform} \{grown}: past its end \{f.1} at \{f.0} of \{f.2}")
+        Some(f) => fail("\{platform} \{Repr(grown)}: past its end \{f.1} at \{f.0} of \{f.2}")
         None => ()
       }
-      assert_true((end - most).abs() < 1.0e-6, msg="\{platform} \{grown}: at rest at \{end} of \{most}")
-      assert_true(platform == 0 || after.iter().any(fn(f) { f.1 != 0.0 }), msg="\{platform} \{grown}: never past its foot")
+      assert_true((end - most).abs() < 1.0e-6, msg="\{platform} \{Repr(grown)}: at rest at \{end} of \{most}")
+      assert_true(platform == 0 || after.iter().any(fn(f) { f.1 != 0.0 }), msg="\{platform} \{Repr(grown)}: never past its foot")
     }
   }
 }
@@ -450,7 +450,7 @@ test "a page's list flung down, what is under it measured shorter as it is let g
     below.set(shrunk_from - (s.most() - at))
     t.draw()
     let rest = s.glides_till()
-    assert_true(rest is Some(r) && r > t.time(), msg="\{platform}: at rest at \{rest}, now \{t.time()}")
+    assert_true(rest is Some(r) && r > t.time(), msg="\{platform}: at rest at \{Repr(rest)}, now \{t.time()}")
     let mut past = false
     let end = t.time() + grown_rest_ms
     while t.time() < end {
@@ -486,4 +486,77 @@ test "a page's list flung down, its foot laid out where it stands and back again
     }
     assert_true(s.at(tree) > at + 100.0, msg="\{platform}: at rest at \{s.at(tree)}, let go at \{at}")
   }
+}
+
+///|
+/// A page's list on the Mac turned a notch of the wheel (`notches` 2: then another as that one eases in, its target
+/// said again, no frame between the two: what a host gives as input is on its frames, so a notch turned between them
+/// is at another moment at each rate), the display's frames `period` apart from then (0: none between): when it said
+/// it would be at rest as the last was turned, where it is at that moment, where it is each 50 ms for half a second
+/// after, and whether it says it moves by itself then.
+fn notch_rests(notches : Int, period : Double) -> (Double?, Double, Array[Double], Double?) {
+  let (t, s) = same_tree(40, 0)
+  let tree = view_tree().unwrap()
+  t.wheel_phase(200.0, 400.0, 40.0, 4)
+  if notches > 1 {
+    t.advance(same_notch_ms)
+    t.wheel_phase(200.0, 400.0, 40.0, 4)
+  }
+  let rest = s.glides_till()
+  if period > 0.0 {
+    t.set_frame_period(period)
+  }
+  // (to the moment said, the display's frames on the way where there are any: run_for_exact)
+  t.run_for_exact(rest.unwrap_or(t.time()) - t.time())
+  let at_end = s.at(tree)
+  let after = []
+  for _ in 0..<10 {
+    t.run_for_exact(met_step_ms)
+    after.push(s.at(tree))
+  }
+  (rest, at_end, after, s.glides_till())
+}
+
+///|
+test "a page's list's wheel notch: when it is at rest said from what it was as it set out alone, the same at any frame rate, and still from then" {
+  let ones = []
+  for notches in [1, 2] {
+    let (rest, at_end, after, then) = notch_rests(notches, 0.0)
+    assert_true(rest is Some(_), msg="\{notches}: not moving by itself")
+    assert_true(after.iter().all(fn(x) { x == at_end }), msg="\{notches}: at rest at \{at_end}, after \{Repr(after)}")
+    assert_eq(then, None)
+    ones.push(rest)
+    for period in [1000.0 / 60.0, 1000.0 / 120.0, 1000.0 / 24.0, 1000.0 / 7.0] {
+      let got = notch_rests(notches, period)
+      assert_eq(got, (rest, at_end, after, then), msg="\{notches} at \{period}: \{Repr(got)}, in one jump \{Repr((rest, at_end, after, then))}")
+    }
+  }
+  // (turned again, said again: at rest later than the one alone)
+  assert_true(ones[1].unwrap() > ones[0].unwrap(), msg="\{Repr(ones)}")
+}
+
+///|
+/// How much is grown above a page's list's rows as a notch of the wheel eases in: a part of a point, so its rows are
+/// set on other pixels than they were.
+let notch_grown_by : Double = 0.3
+
+///|
+test "a page's list grown above by a part of a pixel as a notch eases in: at rest at the moment it says, nothing of it drawn anew after" {
+  let above = @signals.signal(0.0)
+  let (t, s) = same_tree(40, 0, above~)
+  let tree = view_tree().unwrap()
+  t.set_frame_period(1000.0 / 60.0)
+  t.wheel_phase(200.0, 400.0, 40.0, 4)
+  t.run_for(same_notch_ms)
+  above.set(notch_grown_by)
+  t.draw()
+  let rest = s.glides_till().unwrap()
+  t.run_for_exact(rest - t.time())
+  let at = s.at(tree)
+  let drawn = same_drawn(t)
+  for _ in 0..<10 {
+    t.run_for(met_step_ms)
+    assert_eq((s.at(tree), same_drawn(t)), (at, drawn), msg="at \{t.time()}, at rest at \{rest}")
+  }
+  assert_eq(s.glides_till(), None)
 }

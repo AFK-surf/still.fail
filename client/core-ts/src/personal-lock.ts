@@ -6,16 +6,19 @@
 // The key is sealed so that each use asks the person (`user: true`: biometrics or the screen lock). Web pages have none:
 // their code is the cloud's.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect, Schedule } from "effect";
+import { Deferred, Effect, Schedule, Semaphore } from "effect";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { type Entry, canonical, entryHash, signedBytes } from "./lock.ts";
+import { AGAIN_MOST, type LogRules, againOf, hashOf, keep } from "./lock-keep.ts";
+import { type Kind as RigKind, type Signed as RigSigned, signedBytes as rigBytes } from "./rig-form.ts";
 import type { Runner } from "./runtime.ts";
 import { fromUtf8, hex, parseJson, sha256, utf8 } from "./util.ts";
 import { ed25519Ok } from "./vault/verified.ts";
+import type { Asked } from "./views/lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -29,9 +32,19 @@ const KEY = "personal-signer";
 /// one budget a minute, which their reads as a lock moves can use up (as views/lock.ts `Lock` waits, by hand).
 const LIMITED_TRIES = 6;
 const LIMITED_WAIT = "10 seconds";
+/// How many devices approved in workspaces' locks are put on the lock at one time the seed is in hand (`#addApproved`).
+const APPROVED_AT_ONCE = 16;
 /// The key's public half, read without asking anyone.
 const KEY_ID = "personal-signer-id";
 const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
+/// The entries of the lock pinned a station showed that are off its chain (src/lock-keep.ts), kept beside it: the
+/// chain stays where it was (`keptAs`, an array from the genesis, as a core from before reads it), and one from before
+/// keeps none (it reads its chain as it did; this one reads a store without this as none aside).
+const asideAs = (sub: string) => `personal-lock-aside-${hex(utf8(sub))}`;
+/// The roots (genesis hashes) of the chains this device left behind when it began the lock anew, kept beside it.
+const leftAs = (sub: string) => `personal-lock-left-${hex(utf8(sub))}`;
+/// The form of the key a device signs workspaces' locks with (its signer, views/lock.ts `signerOf`).
+const SIGN_KEY = /^ed25519:[0-9a-f]{64}$/;
 const unhex = (h: string) => (/^([0-9a-f]{2})*$/.test(h) ? Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16)) : new Uint8Array());
 const asKey = (id: string) => (id.startsWith("ed25519:") ? unhex(id.slice(8)) : new Uint8Array());
 
@@ -46,7 +59,9 @@ const verifies = (id: string, sig: string, bytes: Uint8Array) => {
   }
 };
 
-export type Device = { key: string; id: string; label: string };
+/// `sign_key`: the key the device signs workspaces' locks with, as its entry on the chain says it (the rules' fold reads
+/// only key, id and label: `signKeys` reads it of the entries).
+export type Device = { key: string; id: string; label: string; sign_key?: string };
 export type Chain = { readonly devices: ReadonlyMap<string, Device>; readonly hash: string | null };
 
 const crypto = {
@@ -55,6 +70,23 @@ const crypto = {
   validKeyId: (id: string) => /^ed25519:[0-9a-f]{64}$/.test(id),
   endpointProof: () => false,
 };
+
+/// The kinds of a workspace's statements, which the rules' chain takes (`person_chain`) and their fold refuses until
+/// every station takes them (station/src/mesh/person-chains.ts STATEMENTS): refused here as there.
+const STATEMENTS = new Set(["ws.member", "ws.member.remove", "ws.station", "ws.station.remove"]);
+
+/// A person log's rules for keeping (src/lock-keep.ts), of `sub`'s log of genesis hash `root`: its chain by the rules'
+/// fork choice, one vote a device (rules/src/lock/chain.mbt `person_chain`).
+function personRules(sub: string, root: string): LogRules {
+  return {
+    chain: (all) => {
+      const out = rules.person_chain_js(all, root, crypto) as J;
+      if ("error" in out) throw new Error(out.error);
+      return { at: out.at, hashes: out.hashes, off: out.off };
+    },
+    pre: (e) => (e?.ws !== personOf(sub) ? "an entry of another lock" : STATEMENTS.has(e.kind) ? `unknown entry kind ${e.kind}` : null),
+  };
+}
 
 /// What a chain says, by the rules every side goes by (rules/src/lock/person.mbt); no chain says none. Null when it does
 /// not hold.
@@ -72,7 +104,7 @@ export function checkChain(entries: readonly Entry[], sub: string): Chain | null
 const folded = new WeakMap<readonly Entry[], { sub: string; chain: Chain | null }>();
 
 /// What a person's device signs for a chat's grant of their phone.
-export type GrantBody = { v: 1; sub: string; station: string; request: string; session: string; chat: string; scope: "hour" | "chat"; exp: number };
+export type GrantBody = { v: 1; sub: string; station: string; request: string; session: string; chat: string; scope: "hour" | "idle" | "eight" | "chat"; exp: number };
 export type SignedGrant = { body: GrantBody; sig: { key: string; sig: string } };
 const grantBytes = (body: unknown) => {
   const tag = utf8("stillfail-phone-grant/1\0");
@@ -111,16 +143,64 @@ export type PersonalEnv = {
   device: () => Effect.Effect<string, CoreError>;
   label: () => string;
   changed: () => void;
+  /// The key this device signs workspaces' locks with (its signer), none while it has none: its entry on the chain
+  /// says it, so any device of the person's that signs in a workspace can put the others in there (`signKeys`).
+  signKey?: () => string | null;
   /// A device taken off: the stations where this lock is bound told, so an older chain brought there counts for nothing.
   told?: (sub: string, chain: Entry[]) => void;
+  /// The person's devices to put on their lock as it stands (`chain`), of what workspaces' locks in safe mode say
+  /// (views/lock.ts `ownLockEnv`, `approvedIn`): each said there the key it would be on it with, was put in there by a
+  /// device signing with one of the keys a device on the chain signs workspaces' locks with (`signers`, as the chain
+  /// records them: a device id is anyone's to write), and will take the chain once on it (put in under this device, or
+  /// under one whose said key signed an entry of it, `signed`). None whose id or key was `ever` on it.
+  approved?: (sub: string, chain: { signers: ReadonlySet<string>; signed: ReadonlySet<string>; ever: { ids: ReadonlySet<string>; keys: ReadonlySet<string> } }) => Device[];
+  /// The keys said in workspaces' locks by the devices that put this device in there, and those that put them in, up
+  /// to the first, each the person's own (views/lock.ts `vouchersIn`, which says what taking them so costs): a chain one
+  /// of those keys signed an entry of is its person's lock (`#putOnBy`).
+  vouchers?: (sub: string) => ReadonlySet<string>;
   /// The person's stations, where the lock is read and brought (the root AGENTS.md, The cloud is the account system):
   /// `read` the chains they keep of it (null when none this device reaches keeps any: older, offline or refusing it),
-  /// `bring` the chain as it is now, how many took it (null: none could be asked; a refusal fails).
+  /// `bring` the chain as it is now, how many took it (null: none could be asked; a refusal fails), `answered` whether
+  /// every station of theirs that may keep it answered a read of it this run (what alone lets a lock be begun with no
+  /// one asked, `beginQuietly`: a lock not known here is no lock not yet). `bring`'s `within`: a call's wait, past
+  /// which, the stations not having answered for it, the way to hear them still (`later`), the cloud asked meanwhile.
+  /// `carry`: after a read, the chain pinned (`chain`) brought to each station just read that lacks some of it and keeps
+  /// what a device brings as another keeper's (views/lock.ts `personalStations`), forked.
   stations?: {
     read: (sub: string, at?: string) => Effect.Effect<Entry[][] | null>;
-    bring: (sub: string, chain: Entry[]) => Effect.Effect<number | null, CoreError>;
+    bring: (sub: string, chain: Entry[], within?: Asked) => Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError>;
+    answered?: (sub: string) => boolean;
+    carry?: (sub: string, chain: Entry[]) => void;
   };
+  /// A wait of ASKED_MS for a call a person waits on (views/lock.ts `asked`); none, the calls wait as long as the
+  /// stations and the cloud take.
+  asked?: () => Asked;
 };
+
+/// The cloud's taking of an entry (`cloud`, waited on) or a station's (`stations`, whether one took it; failing, one
+/// refused it), whichever comes first, the other going on behind (views/lock.ts ASKED_MS: past a call's wait the cloud
+/// is asked too, and the stations still listened to). Only once the stations are over with none taking it is the
+/// cloud's failure the call's; their answers are not cut short by it.
+export function eitherTakes(runner: Runner, cloud: Effect.Effect<unknown, CoreError>, stations: Effect.Effect<boolean, CoreError>): Effect.Effect<void, CoreError> {
+  return Effect.gen(function* () {
+    const said = Deferred.makeUnsafe<CoreError | null>();
+    runner.fork(Effect.flatMap(Effect.result(cloud), (r) => Effect.sync(() => void Deferred.doneUnsafe(said, Effect.succeed(r._tag === "Success" ? null : r.failure)))));
+    const byStations = Effect.flatMap(stations, (took): Effect.Effect<CoreError | null> => (took ? Effect.succeed(null) : Deferred.await(said)));
+    const byCloud = Effect.flatMap(Deferred.await(said), (e): Effect.Effect<CoreError | null, CoreError> => (e === null ? Effect.succeed(null) : Effect.map(stations, (took) => (took ? null : e))));
+    const failed = yield* Effect.raceFirst(byStations, byCloud);
+    if (failed !== null) return yield* Effect.fail(failed);
+  });
+}
+
+/// What a read made within a call's wait brings past it (`refresh`): nothing yet.
+const LATE = Symbol("late");
+
+/// What an entry of a person's own lock is about, for one that lost its place (src/lock-keep.ts `againOf`): the device
+/// (its key) of `device` and `device.remove`; a genesis has none, and is never signed again.
+function subjectOf(e: Entry): string | null {
+  const key = (e.body as J)?.key;
+  return (e.kind === "device" || e.kind === "device.remove") && typeof key === "string" ? `device ${key}` : null;
+}
 
 const PATH = "/v1/me/personal-lock";
 
@@ -128,9 +208,23 @@ export class PersonalLock {
   readonly #env: PersonalEnv;
   /// The chain pinned here, each person's; what the cloud has where this is not it.
   readonly #pinned = new Map<string, Entry[]>();
+  /// The entries of the lock pinned a station showed that are off it (`asideAs`): the chain pinned is the rules'
+  /// choice among them and it.
+  readonly #aside = new Map<string, Entry[]>();
   readonly #seen = new Map<string, Entry[]>();
   readonly #loaded = new Set<string>();
+  /// The roots of the chains this device left behind as it began anew, each person's: the stations may keep one still
+  /// (they refused this device then, so the new chain reached only the cloud), and it is no lock begun elsewhere.
+  readonly #left = new Map<string, Set<string>>();
   #myKey: string | null = null;
+  /// This device's turn to sign each person's lock (`#append`): one entry at a time, each after the chain pinned as it
+  /// begins.
+  readonly #turns = new Map<string, ReturnType<typeof Semaphore.makeUnsafe>>();
+  /// This device's entries that lost their place and were signed again or let be, by hash: once each (`#lost`,
+  /// `#signAgain`).
+  readonly #handled = new Set<string>();
+  /// Of an entry signed again, how many signings it is from the one first signed (AGAIN_MOST at most).
+  readonly #tries = new Map<string, number>();
 
   constructor(env: PersonalEnv) {
     this.#env = env;
@@ -143,60 +237,135 @@ export class PersonalLock {
 
   /// Read from the device once, then from the person's stations (the cloud only when none of them keeps it: older,
   /// offline, or refusing this device): what extends the pinned one is taken, anything else only noted.
-  /// `at`: a station just reached (its address): read of that one alone.
-  refresh(sub: string, at?: string): Effect.Effect<void, CoreError> {
+  /// `at`: a station just reached (its address): read of that one alone. `within`: a call a person waits on, which
+  /// waits on each read only within it where a chain is pinned here; past it, that chain is what the call goes by, and
+  /// the read goes on behind and is taken as it lands (2026-11-12: with the person's one station asleep, opening their
+  /// lock, joining it, 允许 on a phone's request and a rig's calls waited 15 to 30 s; with the cloud's reads unanswered
+  /// too, none answered). With none pinned the read is waited for whole: no lock known here is not no lock, and the
+  /// callers begin one where they find none.
+  refresh(sub: string, at?: string, within?: Asked): Effect.Effect<void, CoreError> {
     const env = this.#env;
     return Effect.gen({ self: this }, function* () {
       if (!this.#loaded.has(sub)) {
         const kept = yield* Effect.orElseSucceed(env.host.storageGet(keptAs(sub)), () => null);
         const said = kept === null ? null : (parseJson(kept) as Entry[] | null);
-        if (Array.isArray(said) && checkChain(said, sub) !== null) this.#pinned.set(sub, said);
+        if (Array.isArray(said) && checkChain(said, sub) !== null) {
+          this.#pinned.set(sub, said);
+          const aside = parseJson(yield* Effect.orElseSucceed(env.host.storageGet(asideAs(sub)), () => null)) as unknown;
+          // (one on the chain now, written before the chain was, is not aside)
+          const on = new Set(said.map(hashOf));
+          if (Array.isArray(aside)) this.#aside.set(sub, (aside as Entry[]).filter((e) => typeof e === "object" && e !== null && !on.has(hashOf(e))));
+        }
+        this.#left.set(sub, yield* this.#leftKept(sub));
         const id = yield* Effect.orElseSucceed(env.host.storageGet(KEY_ID), () => null);
         if (id !== null) this.#myKey = fromUtf8(id);
         this.#loaded.add(sub);
         env.changed();
       }
-      const kept = env.stations ? yield* env.stations.read(sub, at) : null;
-      if (kept !== null) return yield* this.#heard(sub, this.#best(sub, kept), true);
-      const said = (yield* env.cloud(sub, "GET", PATH, null)) as { entries?: Entry[] } | null;
-      yield* this.#heard(sub, Array.isArray(said?.entries) ? said.entries : []);
+      const bound = (this.#pinned.get(sub)?.length ?? 0) > 0 ? within : undefined;
+      // (a read and what is done with what it brings are one work, so that one past the wait is taken all the same)
+      const step = <A>(work: Effect.Effect<A, CoreError>): Effect.Effect<A | typeof LATE, CoreError> =>
+        bound === undefined ? work : Effect.flatMap(bound.wait(Effect.result(work)), (r): Effect.Effect<A | typeof LATE, CoreError> => (r === undefined ? Effect.succeed(LATE) : r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(r.failure)));
+      const stations = env.stations;
+      const kept = stations === undefined ? false : yield* step(Effect.gen({ self: this }, function* () {
+        const chains = yield* stations.read(sub, at);
+        if (chains !== null) {
+          const { chain, more } = this.#best(sub, chains);
+          yield* this.#heard(sub, chain, true, more);
+          stations.carry?.(sub, this.#pinned.get(sub) ?? []);
+        }
+        return chains !== null;
+      }));
+      if (kept !== false) return;
+      yield* step(Effect.gen({ self: this }, function* () {
+        const said = (yield* env.cloud(sub, "GET", PATH, null)) as { entries?: Entry[] } | null;
+        yield* this.#heard(sub, Array.isArray(said?.entries) ? said.entries : []);
+      }));
     });
+  }
+
+  /// A wait for a call a person waits on, one for each of its phases (what is done between two asks of the person):
+  /// its time begins with its first wait, so one made before the person is asked is not spent on them.
+  asked(): Asked | undefined {
+    return this.#env.asked?.();
   }
 
   /// The chains a station told (refusing this device): taken as a read of them is, once what is pinned here was read
   /// (before, the next read takes them: the stations' refusals are what it reads then).
   heardFrom(sub: string, chains: Entry[][]): Effect.Effect<void, CoreError> {
-    return chains.length === 0 || !this.#loaded.has(sub) ? Effect.void : this.#heard(sub, this.#best(sub, chains), true);
+    if (chains.length === 0 || !this.#loaded.has(sub)) return Effect.void;
+    const { chain, more } = this.#best(sub, chains);
+    return this.#heard(sub, chain, true, more);
   }
 
-  /// Of the chains the stations keep (each one a person's lock begun anew): the longest that goes on from the one pinned
-  /// here; none such, the one a station kept last (its latest), as the cloud's would be.
-  #best(sub: string, chains: Entry[][]): Entry[] {
+  /// The roots of the chains this device left behind, as kept on it (none kept, or unreadable: none).
+  #leftKept(sub: string): Effect.Effect<Set<string>> {
+    return Effect.map(Effect.orElseSucceed(this.#env.host.storageGet(leftAs(sub)), () => null), (kept) => {
+      const said = parseJson(kept) as unknown;
+      return new Set(Array.isArray(said) ? said.filter((r): r is string => typeof r === "string") : []);
+    });
+  }
+
+  /// Whether `chain` is one this device left behind as it began anew: it counts for nothing here.
+  #isLeft(sub: string, chain: readonly Entry[]): boolean {
+    const left = this.#left.get(sub);
+    return left !== undefined && left.size > 0 && chain[0] !== undefined && left.has(entryHash(chain[0]));
+  }
+
+  /// Of the chains the stations keep (each one a person's lock begun anew), those of the one pinned here (its genesis):
+  /// the longest that holds (`chain`), and the entries of the others (`more`), kept with it, the rules choosing
+  /// (`#heard`); none such, the one a station kept last (its latest), as the cloud's would be. One this device left
+  /// behind as it began anew is none of them.
+  #best(sub: string, chains: Entry[][]): { chain: Entry[]; more: Entry[] } {
     const pinned = this.#pinned.get(sub) ?? [];
     const root = pinned[0] === undefined ? null : entryHash(pinned[0]);
+    const mine = root === null ? [] : chains.filter((c) => c[0] !== undefined && entryHash(c[0]) === root && !this.#isLeft(sub, c));
     let best: Entry[] | null = null;
-    for (const c of chains) {
-      if (root === null || c[0] === undefined || entryHash(c[0]) !== root || checkChain(c, sub) === null) continue;
-      if (best === null || c.length > best.length) best = c;
-    }
-    if (best !== null) return best;
-    for (const c of chains) if (c.length > 0 && checkChain(c, sub) !== null) best = c;
-    return best ?? [];
+    for (const c of mine) if (checkChain(c, sub) !== null && (best === null || c.length > best.length)) best = c;
+    if (mine.length > 0) return { chain: best ?? [], more: mine.filter((c) => c !== best).flat() };
+    for (const c of chains) if (c.length > 0 && !this.#isLeft(sub, c) && checkChain(c, sub) !== null) best = c;
+    return { chain: best ?? [], more: [] };
   }
 
-  #heard(sub: string, entries: Entry[], stations = false): Effect.Effect<void, CoreError> {
+  /// A chain heard (of the stations, `stations`, or the cloud) and, of the stations, the entries of the others of the
+  /// lock pinned (`more`, `#best`). Of the lock pinned: one that goes on from it is pinned; one behind on it is brought it;
+  /// one that parts from it (another entry at a place pinned) is kept with it and what is aside, and the chain pinned is
+  /// the rules' choice among them (src/lock-keep.ts): a branch of the same lock is no lock begun anew (`replaced`, which
+  /// only a chain of another genesis is). Where this device's own entry lost its place, it is not on the chain pinned:
+  /// `outside` until it is put on again.
+  #heard(sub: string, heard: Entry[], stations = false, more: Entry[] = []): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      // (a chain this device left behind as it began anew: none heard, so the one pinned is brought where it is not)
+      const entries = this.#isLeft(sub, heard) ? [] : heard;
       const was = this.#stands(sub);
       const pinned = this.#pinned.get(sub) ?? [];
       const holds = checkChain(entries, sub) !== null;
       const grows = pinned.length > 0 && holds && entries.length >= pinned.length && pinned.every((e, i) => entryHash(e) === entryHash(entries[i]!));
-      if (grows) {
+      // The one pinned as far as it went some entries ago: who was read is behind on it (a station away while a device
+      // was let in, read alone as its link opened; the cloud, told each entry and never waited on). It is no lock begun
+      // elsewhere: taken for one, the person was warned their devices had been set anew, by one station's being late.
+      const behind = entries.length > 0 && entries.length < pinned.length && entries.every((e, i) => entryHash(e) === entryHash(pinned[i]!));
+      const ofPinned = pinned.length > 0 && entries.length > 0 && entryHash(entries[0]!) === entryHash(pinned[0]!);
+      if ((ofPinned && !grows && !behind) || (pinned.length > 0 && more.length > 0)) {
+        const t = this.#chosen(sub, [...(ofPinned ? entries : []), ...more]);
+        if (t !== null && t.changed) yield* this.#pin(sub, t.kept.entries, t.kept.aside);
+        this.#seen.delete(sub);
+        // (who was read behind on the chain pinned, or keeping none of it: brought it, as below)
+        if (behind || entries.length === 0) {
+          const now = this.#pinned.get(sub) ?? [];
+          if (stations) yield* Effect.ignore(this.#env.stations!.bring(sub, now));
+          else yield* this.#env.cloud(sub, "POST", PATH, { entries: now });
+        }
+      } else if (grows) {
         this.#seen.delete(sub);
         if (entries.length > pinned.length) yield* this.#pin(sub, entries);
-      } else if (pinned.length > 0 && entries.length === 0) {
-        // (the cloud, or the stations, lost it, or never had it: brought back)
+      } else if (pinned.length > 0 && (entries.length === 0 || behind)) {
+        // (the cloud, or the stations, lost it, never had it, or are behind on it: brought back)
         if (stations) yield* Effect.ignore(this.#env.stations!.bring(sub, pinned));
         else yield* this.#env.cloud(sub, "POST", PATH, { entries: pinned });
+      } else if (holds && entries.length > 0 && stations && pinned.length === 0 && (yield* this.#putOnBy(sub, entries))) {
+        yield* this.#pin(sub, entries);
+        this.#seen.delete(sub);
       } else if (holds && entries.length > 0) this.#seen.set(sub, entries);
       else this.#seen.delete(sub);
       // Told only when it changed: what is told retries the stations that refused this device, and each refusal brings
@@ -205,15 +374,152 @@ export class PersonalLock {
     });
   }
 
+  /// Whether `entries` (a chain that holds, heard of the stations by a device with none pinned) is its person's lock as
+  /// joining would have it: this device's key stands on it under this device's id, and some entry of it is signed by a
+  /// key a device that vouches for this one said in a workspace's lock (`vouchers`: those of the person's own up its
+  /// lineage there). That suffices: an entry signed by a device one trusts as its person's
+  /// shows that device took this chain as their lock, and only devices on a chain add to it. Not the entry that put this
+  /// device on: a sibling on the chain may have been the one to add it. A chain's ids are only what its entries say (this
+  /// device's key is no secret, anyone could make a chain naming it); the key that signed is what is checked. One pinned
+  /// already is never left this way.
+  #putOnBy(sub: string, entries: readonly Entry[]): Effect.Effect<boolean> {
+    const env = this.#env;
+    return Effect.gen({ self: this }, function* () {
+      const vouchers = env.vouchers?.(sub);
+      const mine = this.#myKey === null ? undefined : checkChain(entries, sub)?.devices.get(this.#myKey);
+      if (vouchers === undefined || vouchers.size === 0 || mine === undefined) return false;
+      const id = yield* Effect.orElseSucceed(env.device(), () => null);
+      if (mine.id !== id) return false;
+      return entries.some((e) => typeof e.sig?.key === "string" && vouchers.has(e.sig.key));
+    });
+  }
+
+  /// The lock pinned with `brought` kept (src/lock-keep.ts): the chain the rules choose among it, what is aside and
+  /// what was brought; null where they find none (the chain pinned does not hold by them).
+  #chosen(sub: string, brought: Entry[]): ReturnType<typeof keep> | null {
+    const pinned = this.#pinned.get(sub) ?? [];
+    if (pinned.length === 0) return null;
+    try {
+      return keep({ entries: pinned, aside: this.#aside.get(sub) ?? [] }, brought, personRules(sub, entryHash(pinned[0]!)));
+    } catch {
+      return null;
+    }
+  }
+
   /// What is held of `sub`'s lock: the chain pinned and one seen that does not go on from it, by their last entries.
   #stands(sub: string): string {
     const last = (c: Entry[] | undefined) => (c === undefined || c.length === 0 ? "" : `${c.length}:${entryHash(c[c.length - 1]!)}`);
     return `${last(this.#pinned.get(sub))}|${last(this.#seen.get(sub))}`;
   }
 
-  #pin(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
+  /// `entries` pinned, and `aside` kept beside them (by default what was aside, where it is of the same lock and off
+  /// them): what is aside written first, so that a chain written is never without what it moved off (what is aside is
+  /// read less what is on the chain).
+  #pin(sub: string, entries: Entry[], aside?: Entry[]): Effect.Effect<void, CoreError> {
+    const was = this.#pinned.get(sub) ?? [];
+    const same = was[0] !== undefined && entries[0] !== undefined && entryHash(was[0]) === entryHash(entries[0]);
+    const on = new Set(entries.map(hashOf));
+    const had = this.#aside.get(sub) ?? [];
+    const off = aside ?? (same ? had.filter((e) => !on.has(hashOf(e))) : []);
     this.#pinned.set(sub, entries);
-    return Effect.mapError(this.#env.host.storageSet(keptAs(sub), utf8(JSON.stringify(entries))), asCoreError);
+    this.#aside.set(sub, off);
+    const keptAside = off.length === had.length && off.every((e, i) => e === had[i]) ? Effect.void : Effect.mapError(off.length === 0 ? this.#env.host.storageDelete(asideAs(sub)) : this.#env.host.storageSet(asideAs(sub), utf8(JSON.stringify(off))), asCoreError);
+    return Effect.andThen(keptAside, Effect.mapError(this.#env.host.storageSet(keptAs(sub), utf8(JSON.stringify(entries))), asCoreError));
+  }
+
+  /// `roots` kept as left behind (beside the pinned chain, its write failing as the pin's does), never the root of the
+  /// chain pinned now: one begun again in the same second, by the same device, is the same.
+  #leave(sub: string, roots: string[]): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const now = this.root(sub);
+      const had = this.#left.get(sub) ?? (this.#loaded.has(sub) ? new Set<string>() : yield* this.#leftKept(sub));
+      const left = new Set([...had, ...roots].filter((r) => r !== now));
+      this.#left.set(sub, left);
+      if (left.size === had.size && [...left].every((r) => had.has(r))) return;
+      yield* Effect.mapError(this.#env.host.storageSet(leftAs(sub), utf8(JSON.stringify([...left]))), asCoreError);
+    });
+  }
+
+  /// This device's signer, where it has one of the form a chain keeps.
+  #mySignKey(): string | null {
+    const k = this.#env.signKey?.() ?? null;
+    return k !== null && SIGN_KEY.test(k) ? k : null;
+  }
+
+  /// What the chain pinned here last said of each device still on it, by its key: the last entry naming the key (the
+  /// genesis's `device`, or a `device` entry).
+  #lastSaid(sub: string): Map<string, { device: Device; said: J }> {
+    const entries = this.#pinned.get(sub) ?? [];
+    const chain = checkChain(entries, sub);
+    const out = new Map<string, { device: Device; said: J }>();
+    if (chain === null) return out;
+    for (const e of entries) {
+      const said = e.kind === "genesis" ? (e.body as J)?.device : e.kind === "device" ? e.body : null;
+      const d = typeof said?.key === "string" ? chain.devices.get(said.key) : undefined;
+      if (d !== undefined) out.set(d.key, { device: d, said });
+    }
+    return out;
+  }
+
+  /// The keys the person's devices on the chain pinned here sign workspaces' locks with, as each one's last entry says
+  /// it, by the device's id (its base key, what a workspace's lock goes by); a device whose last entry says none, or one
+  /// not of the form, has none.
+  signKeys(sub: string): Map<string, { sign_key: string; label: string }> {
+    const out = new Map<string, { sign_key: string; label: string }>();
+    for (const { device, said } of this.#lastSaid(sub).values()) {
+      const k = said?.sign_key;
+      if (typeof k === "string" && SIGN_KEY.test(k)) out.set(device.id, { sign_key: k, label: device.label });
+    }
+    return out;
+  }
+
+  /// With the seed in hand for something else: this device said again on the chain with the key it signs workspaces'
+  /// locks with, where its entry lacks it or names another (the rules take a device entry for a key on the chain as that
+  /// device said again). Nothing more is asked of the person; a failure only leaves it unsaid until the next time.
+  #restate(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
+    const signKey = this.#mySignKey();
+    const mine = this.#myKey === null ? undefined : this.#lastSaid(sub).get(this.#myKey);
+    if (signKey === null || mine === undefined || mine.said?.sign_key === signKey) return Effect.void;
+    const { key, id, label } = mine.device;
+    return Effect.ignore(this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, true, within), { log: "Unhandled", message: "personal lock: this device said again" });
+  }
+
+  /// With the seed in hand for something else: the person's devices that a device on the lock approved face to face in a
+  /// workspace's lock, and that said there the key they would be on it with (`approved`), put on it, each as it comes
+  /// (one put on, a device it approved comes next), at most APPROVED_AT_ONCE at a time. Nothing more is asked of the
+  /// person; a failure only leaves the rest for the next time. Only downward, and only by the key that signed: the device
+  /// that put one in is matched by its signing key, which only its holder signs with, against those the chain records
+  /// (`signers`), never by its id, which a workspace's manager may write under a key of their own: a device of theirs
+  /// carried onto the person's own lock would be trusted in the person's other workspaces and for their phone. Only one
+  /// that will take the lock once on it (`signed`: the keys that signed it, this device's too): put on and not taking it,
+  /// the stations would let it in once the lock is bound while it held itself as not let in. One whose id or key was
+  /// ever on the lock is not put back this way: taken off, it stays off.
+  #addApproved(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
+    const approved = this.#env.approved;
+    if (approved === undefined) return Effect.void;
+    return Effect.gen({ self: this }, function* () {
+      for (let n = 0; n < APPROVED_AT_ONCE; n++) {
+        const entries = this.#pinned.get(sub) ?? [];
+        const chain = checkChain(entries, sub);
+        if (chain === null) return;
+        const ever = { ids: new Set<string>(), keys: new Set<string>() };
+        const signed = new Set<string>(this.#myKey === null ? [] : [this.#myKey]);
+        for (const e of entries) {
+          const said = e.kind === "genesis" ? (e.body as J)?.device : e.kind === "device" ? e.body : null;
+          if (typeof said?.id === "string") ever.ids.add(said.id);
+          if (typeof said?.key === "string") ever.keys.add(said.key);
+          if (typeof e.sig?.key === "string") signed.add(e.sig.key);
+        }
+        const signers = new Set([...this.signKeys(sub).values()].map((d) => d.sign_key));
+        const d = approved(sub, { signers, signed, ever }).find((x) => !ever.ids.has(x.id) && !ever.keys.has(x.key) && SIGN_KEY.test(x.key));
+        if (d === undefined) return;
+        const { key, id, label, sign_key } = d;
+        let failed = false;
+        const put = this.#append(sub, seed, "device", { key, id, label, ...(sign_key !== undefined && SIGN_KEY.test(sign_key) ? { sign_key } : {}) }, true, within);
+        yield* Effect.ignore(Effect.tapError(put, () => Effect.sync(() => void (failed = true))), { log: "Unhandled", message: "personal lock: a device approved in a workspace put on" });
+        if (failed) return;
+      }
+    });
   }
 
   standing(sub: string): Standing {
@@ -266,17 +572,149 @@ export class PersonalLock {
 
   /// One entry more, signed here, brought to the person's stations and pinned once one took it; to the cloud too, for
   /// the stations and devices from before that read it there, not waited on. Only when no station could be asked
-  /// (older ones, offline), the cloud is what takes it.
-  #append(sub: string, seed: Uint8Array, kind: string, body: unknown): Effect.Effect<void, CoreError> {
+  /// (older ones, offline), or none took it by TAKEN_MS, the cloud is what takes it; past a call's wait (`within`) with
+  /// none having taken it, the cloud is asked too and whichever takes it first is done (`eitherTakes`; views/lock.ts
+  /// ASKED_MS).
+  /// `once`: the cloud, where it is what takes it, asked once and not again when it limits (an entry that rides on
+  /// another act, which is not to wait a minute for it: `#restate`).
+  ///
+  /// One entry at a time (the person's `turn`, a Semaphore of one, as a workspace's lock has, views/lock.ts
+  /// `Lock.append`, whose turn is never waited for inside this one nor this one inside it): signed after the chain pinned
+  /// as the turn begins, brought, and the turn given up once it is pinned, refused, or left to the cloud (no station took
+  /// it). One that lost its place (a station's 409; a read that moved the chain pinned while it was brought) is the turn's
+  /// still (`#lost`), with the seed in hand: done, refused, or signed again after the head.
+  #append(sub: string, seed: Uint8Array, kind: string, body: unknown, once = false, within?: Asked): Effect.Effect<void, CoreError> {
+    return Effect.flatMap(this.#turn(sub).withPermits(1)(this.#signHere(sub, seed, kind, body, once, within, 0)), (rest) => rest);
+  }
+
+  #turn(sub: string): ReturnType<typeof Semaphore.makeUnsafe> {
+    let turn = this.#turns.get(sub);
+    if (turn === undefined) this.#turns.set(sub, (turn = Semaphore.makeUnsafe(1)));
+    return turn;
+  }
+
+  /// In the turn: one entry signed after the chain pinned now (a genesis: none, the one pinned left), brought, and what
+  /// is left of it once the turn is given up (the cloud's taking, then where it landed, `#landed`, in a turn again).
+  /// `tries`: how many signings again of one that lost its place this is (0: the first signing).
+  #signHere(sub: string, seed: Uint8Array, kind: string, body: unknown, once: boolean, within: Asked | undefined, tries: number): Effect.Effect<Effect.Effect<void, CoreError>, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (kind === "genesis") this.#pinned.delete(sub);
       const e = this.#entry(sub, seed, this.#myKey!, kind, body);
+      const chain = [...(e.seq === 0 ? [] : (this.#pinned.get(sub) ?? [])), e];
+      // (signed again: only where the rules still take it after the head; else the lock changed meanwhile)
+      if (tries > 0 && checkChain(chain, sub) === null) return yield* Effect.fail(this.#changed(sub, e));
+      if (tries > 0) this.#tries.set(hashOf(e), tries);
       const toCloud = this.#env.cloud(sub, "POST", PATH, { entries: [e] });
-      const taken = this.#env.stations ? yield* this.#env.stations.bring(sub, [...(e.seq === 0 ? [] : (this.#pinned.get(sub) ?? [])), e]) : null;
-      if (taken !== null && taken > 0) this.#env.runner.fork(Effect.ignore(toCloud));
-      else yield* Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
-      yield* this.#pin(sub, [...(this.#pinned.get(sub) ?? []), e]);
+      const cloudTakes = once ? toCloud : Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
+      const brought = this.#env.stations ? yield* Effect.result(this.#env.stations.bring(sub, chain, within)) : null;
+      // (refused where it was heard: another device's entry at its place, at a station)
+      if (brought !== null && brought._tag === "Failure") {
+        if (brought.failure.code === "lock_refused") return yield* this.#lost(sub, seed, e, once, within, tries, brought.failure, true);
+        return yield* Effect.fail(brought.failure);
+      }
+      const taken = brought === null ? null : brought.success;
+      const landed = this.#landed(sub, seed, e, chain, once, within, tries);
+      const inTurn = (work: Effect.Effect<Effect.Effect<void, CoreError>, CoreError>) => Effect.flatMap(this.#turn(sub).withPermits(1)(work), (rest) => rest);
+      if (typeof taken === "number" && taken > 0) {
+        this.#env.runner.fork(Effect.ignore(toCloud));
+        return yield* landed;
+      }
+      if (taken === null || typeof taken !== "object") return Effect.andThen(cloudTakes, inTurn(landed));
+      // Past the call's wait, none having taken it: the cloud and the stations, whichever takes it first. The turn is
+      // held until one did, or the stations are over with none taking it (left to the cloud).
+      let over = false;
+      const settled = Deferred.makeUnsafe<void>();
+      const done = Deferred.makeUnsafe<void, CoreError>();
+      const stationsTake = Effect.map(taken.later, (n) => {
+        const took = n !== null && n > 0;
+        if (!took) Deferred.doneUnsafe(settled, Effect.void);
+        return took;
+      });
+      this.#env.runner.fork(Effect.onExit(eitherTakes(this.#env.runner, cloudTakes, stationsTake), (exit) => Effect.sync(() => {
+        over = true;
+        Deferred.doneUnsafe(done, exit);
+        Deferred.doneUnsafe(settled, Effect.void);
+      })));
+      yield* Deferred.await(settled);
+      if (!over) return Effect.andThen(Deferred.await(done), inTurn(landed));
+      const r = yield* Effect.result(Deferred.await(done));
+      if (r._tag === "Failure") return Effect.fail(r.failure);
+      return yield* landed;
+    });
+  }
+
+  /// In a turn: `e` (of `chain`, as brought) taken by a station or the cloud, pinned as the chain stands now: a read
+  /// answered while it was brought may have pinned it already (a station's, taken after the station took it: put on
+  /// again, the chain held it twice, and a device let in face to face was brought a lock that does not hold and told it
+  /// was not let in, 2026-11-12), or another entry in its place (two stations, each taking a different one), or a chain
+  /// it does not follow. Never one the chain does not hold. Where the read moved the chain pinned to another branch, the
+  /// entry is kept with it as the stations' entries are (it hangs below the one it was signed after): done where the
+  /// rules' choice is a chain it is on, else it lost its place (`#lost`).
+  #landed(sub: string, seed: Uint8Array, e: Entry, chain: Entry[], once: boolean, within: Asked | undefined, tries: number): Effect.Effect<Effect.Effect<void, CoreError>, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const now = this.#pinned.get(sub) ?? [];
+      const there = now[e.seq];
+      const follows = now.length === e.seq && (e.seq === 0 || entryHash(now[e.seq - 1]!) === e.prev);
+      if (follows) yield* this.#pin(sub, [...now, e]);
+      else if (there === undefined || entryHash(there) !== entryHash(e)) {
+        const t = e.seq === 0 ? null : this.#chosen(sub, chain);
+        if (t !== null && t.changed) yield* this.#pin(sub, t.kept.entries, t.kept.aside);
+        if (!(this.#pinned.get(sub) ?? []).some((x) => hashOf(x) === hashOf(e))) return yield* this.#lost(sub, seed, e, once, within, tries, new CoreError("lock_refused", "another entry took its place", 409), false);
+      }
       this.#seen.delete(sub);
       this.#env.changed();
+      return Effect.void;
+    });
+  }
+
+  /// In the turn, with the seed in hand: `e`, signed here, that lost its place (`refusal`: why, as a station or the chain
+  /// pinned said it; `read`: the stations read first, a station having refused it). Decided by the chain pinned now
+  /// (src/lock-keep.ts `againOf`, its subject the device it is about): done (on the chain, or the same said since its
+  /// parent); refused in words that say what to do (`#changed`: someone did otherwise with that device since, or the
+  /// rules take it no more after the head); refused as it was (its parent the head still, a genesis, or signed again
+  /// AGAIN_MOST times); else signed again after the head, brought, in the same turn.
+  #lost(sub: string, seed: Uint8Array, e: Entry, once: boolean, within: Asked | undefined, tries: number, refusal: CoreError, read: boolean): Effect.Effect<Effect.Effect<void, CoreError>, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      this.#handled.add(hashOf(e));
+      if (e.seq === 0) return yield* Effect.fail(refusal);
+      // (the stations as they stand, waited for: the one that refused answered just now)
+      if (read) yield* Effect.ignore(this.refresh(sub), { log: "Unhandled", message: "personal lock read after a refusal" });
+      const how = againOf(this.#pinned.get(sub) ?? [], this.#aside.get(sub) ?? [], e, subjectOf);
+      if (how === "done") {
+        this.#seen.delete(sub);
+        this.#env.changed();
+        return Effect.void;
+      }
+      if (how === "otherwise") return yield* Effect.fail(this.#changed(sub, e));
+      if (how === "unmoved" || tries >= AGAIN_MOST) return yield* Effect.fail(refusal);
+      return yield* this.#signHere(sub, seed, e.kind, e.body, once, within, tries + 1);
+    });
+  }
+
+  /// An entry that lost its place not signed again, the lock having changed meanwhile: what the person is told, what to
+  /// do (look how it stands, do it again if still wanted), as `lock_refused`; the device by its name.
+  #changed(sub: string, e: Entry): CoreError {
+    const key = (e.body as J)?.key;
+    const said = [...this.#lastSaid(sub).values()].find((d) => d.device.key === key)?.device.label ?? (e.body as J)?.label;
+    const what = typeof said === "string" && said !== "" ? said : t("web-pages.security.appDevice");
+    return new CoreError("lock_refused", t("core-misc.lock.changedMeanwhile", { what }), 409);
+  }
+
+  /// With the seed in hand for something else (where `#restate` runs): this device's entries the chain pinned left (kept
+  /// aside, a read having moved it to another branch while no seed was in hand), each signed again after the head once,
+  /// where that still says what was meant (`#lost`'s rules). Nothing more is asked of the person; one let be just stops.
+  #signAgain(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const lost = [...(this.#aside.get(sub) ?? [])].sort((a, b) => a.seq - b.seq).filter((e) => e.seq > 0 && e.sig?.key === this.#myKey && !this.#handled.has(hashOf(e)));
+      for (const e of lost) {
+        this.#handled.add(hashOf(e));
+        const tries = this.#tries.get(hashOf(e)) ?? 0;
+        const inTurn = Effect.suspend((): Effect.Effect<Effect.Effect<void, CoreError>, CoreError> => {
+          if (tries >= AGAIN_MOST || againOf(this.#pinned.get(sub) ?? [], this.#aside.get(sub) ?? [], e, subjectOf) !== "sign") return Effect.succeed(Effect.void);
+          return this.#signHere(sub, seed, e.kind, e.body, true, within, tries + 1);
+        });
+        yield* Effect.ignore(Effect.flatMap(this.#turn(sub).withPermits(1)(inTurn), (rest) => rest), { log: "Unhandled", message: "personal lock: an entry that lost its place signed again" });
+      }
     });
   }
 
@@ -286,16 +724,51 @@ export class PersonalLock {
       const { id: key, seed: made } = yield* this.#madeKey(reason);
       const id = yield* this.#env.device();
       const seed = made ?? (yield* this.#unseal(reason));
-      this.#pinned.delete(sub);
-      yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label() } });
+      // The chains it leaves behind: the one pinned, and one seen where this device was outside it (a station that
+      // refused this device keeps it still, and is to be brought the new one, not taken for a lock begun elsewhere).
+      // (the one pinned let go of in the turn, as the genesis is signed: `#signHere`)
+      const leaving = [this.#pinned.get(sub), this.#seen.get(sub)].flatMap((c) => (c?.[0] === undefined ? [] : [entryHash(c[0])]));
+      const signKey = this.#mySignKey();
+      // (its wait made after the key's prompt: its time begins at the stations)
+      yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label(), ...(signKey !== null ? { sign_key: signKey } : {}) } }, false, this.asked());
+      yield* this.#leave(sub, leaving);
       return seed;
+    });
+  }
+
+  /// Whether this device could begin its person's lock with no one asked: it seals what it keeps, has made no key of its
+  /// own yet (made now, its seed is in hand once; made before, reading it asks the person), and knows of no lock of
+  /// theirs. What it read of the stations is `beginQuietly`'s to say.
+  mayBeginQuietly(sub: string): boolean {
+    const { host } = this.#env;
+    return host.appKeys === true && host.secureSet !== undefined && this.#loaded.has(sub) && this.#myKey === null && this.standing(sub) === "none";
+  }
+
+  /// The person's lock begun here with no one asked, where the caller found this device the one to (views/lock.ts
+  /// `ownLockFor`): only as `mayBeginQuietly` says, and once every station of theirs that may keep it answered a read
+  /// of it this run (`stations.answered`; one begun before they answered could be a second lock for someone who has
+  /// one). The key is made now and its seed, in hand, also puts on the devices approved in workspaces' locks
+  /// (`#addApproved`). Whether it began.
+  beginQuietly(sub: string): Effect.Effect<boolean, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.mayBeginQuietly(sub) || this.#env.stations?.answered?.(sub) !== true) return false;
+      const { id: key, seed } = yield* this.#madeKey(null);
+      if (seed === null) return false;
+      const id = yield* this.#env.device();
+      const signKey = this.#mySignKey();
+      const begun = this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label(), ...(signKey !== null ? { sign_key: signKey } : {}) } });
+      // Not begun (no station nor the cloud took it): the key just made is forgotten, being on no chain and said
+      // nowhere, so the next try makes one and has its seed in hand; kept, this device could begin only by asking.
+      yield* Effect.tapError(begun, () => Effect.andThen(Effect.ignore(this.#env.host.storageDelete(KEY_ID)), Effect.sync(() => void (this.#myKey = null))));
+      yield* this.#addApproved(sub, seed);
+      return true;
     });
   }
 
   /// Turned on here, where the person has no lock yet (the cloud heard from: not knowing is not none).
   open(sub: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      yield* this.refresh(sub);
+      yield* this.refresh(sub, undefined, this.asked());
       if (this.standing(sub) === "none") yield* this.begin(sub, reason);
       return null;
     });
@@ -306,15 +779,37 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       // (read of the grant's own station alone: every station of the person's asked, one offline held the person's
       // fingerprint back until it timed out, 2026-11-09)
-      const read = yield* Effect.result(this.refresh(sub, body.station));
+      // Two waits: one for the read before the person is asked, one for what is signed after. One begun at the read
+      // would be over once they answered, and stations that answer would not be waited on for what is signed: the
+      // cloud alone would take it (the root AGENTS.md, The cloud is the account system).
+      const read = yield* Effect.result(this.refresh(sub, body.station, this.asked()));
       const standing = this.standing(sub);
       // Not heard from the cloud, no lock known here is not no lock: one begun now would take its place.
       if (read._tag === "Failure" && standing === "none") return yield* Effect.fail(read.failure);
       if (standing === "outside") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       if (standing === "replaced") return yield* Effect.fail(new CoreError("personal_replaced", t("core-misc.personal.replaced")));
       const seed = standing === "none" ? yield* this.begin(sub, reason) : yield* this.#unseal(reason);
+      const within = this.asked();
+      yield* this.#signAgain(sub, seed, within);
+      yield* this.#restate(sub, seed, within);
+      yield* this.#addApproved(sub, seed, within);
       const whole: GrantBody = { v: 1, sub, ...body };
       return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
+    });
+  }
+
+  /// What the person says of a rig of theirs, signed (rig-form.ts: a chat's grant, one taken back, its settings, the
+  /// rig taken into a workspace): refused on a device outside their lock, which a rig is added with (`root`), so there
+  /// is one. `station`: the station it goes through, read of alone.
+  signRig<B>(sub: string, kind: RigKind, body: B, reason: string, station?: string): Effect.Effect<RigSigned<B>, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* Effect.result(this.refresh(sub, station, this.asked()));
+      const standing = this.standing(sub);
+      // (a rig pinned its person's lock as it was added: with none known here, this device is not on the one it pinned)
+      if (standing === "none" || standing === "outside") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      if (standing === "replaced") return yield* Effect.fail(new CoreError("personal_replaced", t("core-misc.personal.replaced")));
+      const seed = yield* this.#unseal(reason);
+      return { body, sig: { key: this.#myKey!, sig: hex(ed25519.sign(rigBytes(kind, body, sha256), seed)) } };
     });
   }
 
@@ -323,6 +818,10 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       const seed = yield* this.#unseal(reason);
+      const within = this.asked();
+      yield* this.#signAgain(sub, seed, within);
+      yield* this.#restate(sub, seed, within);
+      yield* this.#addApproved(sub, seed, within);
       return bodies.map((body) => {
         const whole: GrantBody = { v: 1, sub, ...body };
         return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
@@ -336,11 +835,19 @@ export class PersonalLock {
   }
 
   /// A new device let in here, face to face, signed with `seed` (else the person is asked now): the whole lock then, for
-  /// it to pin.
+  /// it to pin. `device.sign_key`, the key it signs workspaces' locks with as its hello said, goes into its entry.
   addDevice(sub: string, device: Device, reason: string, seed: Uint8Array | null = null): Effect.Effect<Entry[], CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      yield* this.#append(sub, seed ?? (yield* this.#unseal(reason)), "device", device);
+      const signed = seed ?? (yield* this.#unseal(reason));
+      // (one wait for all it signs, made after the person was asked)
+      const within = this.asked();
+      yield* this.#signAgain(sub, signed, within);
+      yield* this.#restate(sub, signed, within);
+      const { key, id, label, sign_key } = device;
+      // (a key not of the form is not written: nothing would read it, `signKeys`)
+      yield* this.#append(sub, signed, "device", { key, id, label, ...(sign_key !== undefined && SIGN_KEY.test(sign_key) ? { sign_key } : {}) }, false, within);
+      yield* this.#addApproved(sub, signed, within);
       return this.#pinned.get(sub) ?? [];
     });
   }
@@ -348,7 +855,13 @@ export class PersonalLock {
   removeDevice(sub: string, key: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      yield* this.#append(sub, yield* this.#unseal(reason), "device.remove", { key });
+      const seed = yield* this.#unseal(reason);
+      const within = this.asked();
+      // (not said again where it takes itself off, nor what it lost signed again)
+      if (key !== this.#myKey) yield* this.#signAgain(sub, seed, within);
+      if (key !== this.#myKey) yield* this.#restate(sub, seed, within);
+      yield* this.#append(sub, seed, "device.remove", { key }, false, within);
+      if (key !== this.#myKey) yield* this.#addApproved(sub, seed, within);
       this.#env.told?.(sub, this.#pinned.get(sub) ?? []);
       return null;
     });
@@ -370,7 +883,9 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       if (this.#env.host.secureAsk) yield* Effect.mapError(this.#env.host.secureAsk(reason), asCoreError);
       this.#pinned.delete(sub);
+      this.#aside.delete(sub);
       yield* Effect.mapError(this.#env.host.storageDelete(keptAs(sub)), asCoreError);
+      yield* Effect.ignore(this.#env.host.storageDelete(asideAs(sub)));
       this.#env.changed();
       return null;
     });

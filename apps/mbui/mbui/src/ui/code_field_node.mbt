@@ -8,13 +8,14 @@
 ///|
 /// How a code field's digits and edges are drawn: its digits' ink (`off` while it takes no typing), its boxes' edges,
 /// the next one's while it has the keys, all of them while the code is wrong and nothing is typed.
+#derive(Eq)
 pub(all) struct CodeInks {
   digits : Int64
   off : Int64
   edge : Int64
   next : Int64
   wrong : Int64
-} derive(Eq)
+}
 
 ///|
 /// What Ctx::code_field draws where nothing else is said.

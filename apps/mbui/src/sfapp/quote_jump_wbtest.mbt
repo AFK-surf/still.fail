@@ -20,13 +20,14 @@ test "a passage found in words, its spaces and line breaks aside; none where it 
 ///|
 test "a quote's card pressed: the list goes to the message it quotes, and only the passage it quotes is lit there" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
   let quote = t.words().filter(fn(w) { w.0.has_prefix("Claude") && w.0.contains("其余的行按估计的高度占位") })
   let (_, qx, qy, qw, qh, _) = quote[0]
   t.tap(qx + qw / 2.0, qy + qh / 2.0)
   // (the middle of its hold, from when it began)
-  let held = flash_rest() - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
+  let flashed = flash_rest()
+  let held = flashed - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
   if held > t.time() {
     t.run_for(held - t.time())
   }
@@ -61,4 +62,6 @@ test "a quote's card pressed: the list goes to the message it quotes, and only t
   t.run_for(flash_ms)
   t.draw()
   assert_eq(grounds_in(t, p.accent).length(), 0)
+  // (over: what a test runs to is still its end as it was told)
+  assert_eq(flash_rest(), flashed)
 }

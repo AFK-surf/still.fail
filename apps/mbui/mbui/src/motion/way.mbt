@@ -113,11 +113,17 @@ pub fn Way::go(
   loc~ : SourceLoc,
 ) -> Unit {
   let (x, v) = self.at(at)
+  // (at rest where it is told to go, and told no speed: no setting out, so nothing said, no start, no frame asked and
+  // nothing that reads it worked out again)
+  if !self.goes_at(at) && x == target && v == 0.0 && velocity.unwrap_or(0.0) == 0.0 {
+    return
+  }
   self.from = x
   self.v0 = velocity.unwrap_or(v)
   self.to = target
   self.spec = spec
   self.start = at
+  ways_said_count.val += 1
   // (motion reduced: there at once, the setting's, whoever tells it)
   self.dur = if @ui.reduced_motion() { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
@@ -158,4 +164,31 @@ pub fn Way::get(self : Way, c : @ui.Ctx) -> Double {
   let t = c.moment()
   c.shows_motion(self.mover, self.goes_at(t))
   self.value_at(t)
+}
+
+///|
+/// Where it is as node `n` draws it: at the moment `n` is drawn at while it goes (that clock followed), where it went
+/// once it is there (View::drawn_while: the clock followed no more). What a binding reads a way by.
+pub fn Way::shown_on(self : Way, n : @view.View) -> Double {
+  self.said()
+  let t = n.drawn_while(fn(at) { self.goes_at(at) })
+  if t == @double.infinity {
+    self.target()
+  } else {
+    // (what it moves, if under a still pointer, worked out again as it ends, not as it goes)
+    n.hand_at_end(self.end())
+    self.value_at(t)
+  }
+}
+
+///|
+/// How many ways were set going (Way::go), since the program began: what a test reads before and after a frame to hold
+/// that the frame set none going (a row taken for another key as its list is laid out is put, never set going), read
+/// as flex's `computes` is, the same on any host.
+// kept across runs: a count read only as a difference, before and after a frame, as flex's `generation`
+let ways_said_count : Ref[Int] = Ref(0)
+
+///|
+pub fn ways_said() -> Int {
+  ways_said_count.val
 }

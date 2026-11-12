@@ -3,6 +3,7 @@
 
 ///|
 fn service_tester(mode : String) -> @ui.Tester {
+  @sf.presenters_reset()
   new_run()
   let src = fixture(mode)
   open_drive_fixture(mode)
@@ -50,24 +51,24 @@ test "a phone's size, in its ⋯: its sizes in a sheet; 移动页面 on, said on
   t.frame()
   t.click(Button, label="更多操作")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("页面尺寸")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_true(t.find("自适应") is Some(_), msg="its sizes")
   assert_true(t.find("自定义") is Some(_), msg="any size")
   // moving the page by a finger, from the sheet (the sheet goes: what it changes is the page under it)
   t.click(Switch, label="移动页面")
   t.frame()
   let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
-  assert_true(p.moving, msg="moving")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(p.moving.get(), msg="moving")
+  presented_rested(t)
   // said on the size key in the ⋯'s place, which stops it at once
   assert_true(t.query(Button, label="停止移动页面") is Some(_), msg="the key says it")
   assert_true(t.query(Button, label="更多操作") is None, msg="in the ⋯'s place")
   t.click(Button, label="停止移动页面")
   t.frame()
-  assert_true(!p.moving, msg="stopped")
+  assert_true(!p.moving.get(), msg="stopped")
   assert_true(t.query(Button, label="更多操作") is Some(_))
 }
 
@@ -124,7 +125,7 @@ test "cookies: several in one header apart (an Expires date's comma kept), each 
 
 ///|
 test "a size chosen: kept on the device (prefs), read as a page opens in a later run" {
-  new_run()
+  fresh_app()
   let kept : Array[Json] = []
   svc_keep.val = fn(patch) { kept.push(patch) }
   keep_size(service_key("ws1/st1", "j-a"), Some({ width: 390, height: Some(844) }))
@@ -134,17 +135,17 @@ test "a size chosen: kept on the device (prefs), read as a page opens in a later
   assert_eq(text(field(Some(kept[1]), "previewSizes"), "ws1/st1\nj-b"), "1280")
   assert_true(field(field(Some(kept[2]), "previewSizes"), "ws1/st1\nj-c") == Some(Json::null()))
   // a later run: nothing chosen since it started, the pages open as the core kept them
-  new_run()
+  fresh_app()
   let prefs : Json = {
     "previewSizes": { "ws1/st1\nj-a": "390x844", "ws1/st1\nj-b": "1280", "ws1/st1\nj-d": "wide" },
   }
   let a = service_page_for("ws1/st1", "j-a", prefs=Some(prefs))
-  assert_true(a.viewport == Some({ width: 390, height: Some(844) }))
+  assert_true(a.viewport.get() == Some({ width: 390, height: Some(844) }))
   let b = service_page_for("ws1/st1", "j-b", prefs=Some(prefs))
-  assert_true(b.viewport == Some({ width: 1280, height: None }))
+  assert_true(b.viewport.get() == Some({ width: 1280, height: None }))
   // one that does not read: as big as the preview
   let d = service_page_for("ws1/st1", "j-d", prefs=Some(prefs))
-  assert_true(d.viewport is None)
+  assert_true(d.viewport.get() is None)
 }
 
 ///|
@@ -153,13 +154,18 @@ test "how far the resources came, from a phone's ⋯: their list in a sheet as t
   t.frame()
   t.click(Button, label="更多操作")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("资源加载 75% · 3/4")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_true(t.find("/app.css") is Some(_), msg="its rows")
   // the last of them where the sheet ends: under it only the sheet's own foot (its padding, the home bar's room)
   let (_, y, _, h) = t.rect_of("/api/builds").unwrap()
   assert_true(844.0 - (y + h) < 80.0, msg="room left under the list: \{844.0 - (y + h)}")
   assert_eq(t.squeeze_faults(), [])
+  // (closed by a press over it, nothing left up)
+  t.tap(195.0, 60.0)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(@sf.presenter_visible())
 }

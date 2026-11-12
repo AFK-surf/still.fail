@@ -32,7 +32,7 @@ pub fn ask_node(
   covered? : () -> Bool = fn() { false },
 ) -> Unit {
   // (the line as it is now, trimmed: followed as it changes)
-  let words = fn() { line.text().trim(chars=" \t\n").to_string() }
+  let words = fn() { line.text().trim(chars=" \t\n").to_owned() }
   let can = fn() { ask_can(words(), value, empty) }
   let said = Ref(false)
   let go = fn() {
@@ -60,10 +60,9 @@ pub fn ask_node(
       .alpha(By(fn() { look().alpha }))
       .scale(By(fn() { look().sx }))
       .offset(By(fn() { (look().dx, look().dy) }))
-      // (a press on it its own: not outside it)
-      .presses(Is(true))
-      .on_press(fn() {  })
       .says(Is(Some(@view.said(Dialog, label=title))))
+      // (a press on it its own: not outside it)
+      |> ground_node
       |> ignore
       let words_in = fn() { look().words }
       // (its title's row: dialog_head's, 1 under its padding's top, as tall as a close button's room at least)

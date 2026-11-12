@@ -9,7 +9,7 @@ fn waiting_chat(calls : Array[Made], wait? : Json? = None, two? : Bool = false) 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(Json::object({})))
     },
     topic_read: fn(name, params) {
@@ -76,7 +76,7 @@ test "one of several agents at work: its line's stop under the pointer stops it 
   let calls : Array[Made] = []
   let t = waiting_chat(calls, two=true)
   let (x, y, _, h) = t.rect_of(@sffixture.working_step).unwrap()
-  t.move(x + 2.0, y + h / 2.0)
+  t.move_to(x + 2.0, y + h / 2.0)
   t.frame()
   guard t.all(Button).iter().find_first(fn(s) { s.label == "停止 Claude" }) is Some(stop) else {
     fail("no stop on Claude's line")
@@ -94,7 +94,7 @@ test "one of several agents at work: its line's stop under the pointer stops it 
   let calls : Array[Made] = []
   let t = waiting_chat(calls)
   let (x, y, _, h) = t.rect_of(@sffixture.working_step).unwrap()
-  t.move(x + 2.0, y + h / 2.0)
+  t.move_to(x + 2.0, y + h / 2.0)
   t.frame()
   assert_true(!t.all(Button).iter().any(fn(s) { s.label.has_prefix("停止") }))
 }

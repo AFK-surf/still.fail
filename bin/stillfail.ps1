@@ -6,12 +6,13 @@
 #   stillfail station enroll <cloud-origin> <token> [--provider comma]
 #   stillfail station id
 #   stillfail lock status|reset                   the workspace lock on this station
+#   stillfail lock reset --workspace <id>         the lock of a workspace it joined
 # The data is in $env:STILLFAIL_DATA, default ~\.stillfail.
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSScriptRoot
 $data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } else { Join-Path $env:USERPROFILE '.stillfail' }
 $station = if ($env:STILLFAIL_STATION_BIN) { $env:STILLFAIL_STATION_BIN } else { Join-Path $here 'mesh\target\release\stillfail-station.exe' }
-$usage = 'usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id | stillfail lock status|reset'
+$usage = 'usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id | stillfail lock status | stillfail lock reset [--workspace <id>]'
 $a = @($args)
 
 function Run([string[]] $more) {
@@ -23,7 +24,7 @@ switch ("$($a[0]) $($a[1])".Trim()) {
   { $a[0] -eq 'start' } { Run (@('run', '--app', $here, '--data', $data) + $a[1..($a.Count)]) }
   { $a[0] -eq 'status' -or $_ -eq 'station status' } { Run @('status', '--data', $data) }
   'station id' { Run @('id', '--data', $data) }
-  { $_ -eq 'lock status' -or $_ -eq 'lock reset' } { Run @('lock', $a[1], '--data', $data) }
+  { $_ -eq 'lock status' -or $_ -eq 'lock reset' } { Run (@('lock', $a[1]) + $(if ($a.Count -gt 2) { $a[2..($a.Count - 1)] } else { @() }) + @('--data', $data)) }
   { $_ -like 'station enroll*' } { Run (@('enroll') + $a[2..($a.Count)] + @('--data', $data)) }
   { $a[0] -eq 'update' } {
     # The channel's latest release, verified by this release's Node (the station's `update`: its signature, newer than
@@ -40,7 +41,7 @@ switch ("$($a[0]) $($a[1])".Trim()) {
     foreach ($line in @($plan)) {
       $key, $value = $line -split '=', 2
       if ($key -eq 'script') { $script = $value }
-      elseif ($key -in 'STILLFAIL_ORIGIN', 'STILLFAIL_CHANNEL', 'STILLFAIL_RELEASE_SHA256', 'STILLFAIL_NODE_SHA256', 'STILLFAIL_INSTALL_LANG') { Set-Item -Path "env:$key" -Value $value }
+      elseif ($key -in 'STILLFAIL_ORIGIN', 'STILLFAIL_CHANNEL', 'STILLFAIL_RELEASE_SHA256', 'STILLFAIL_NODE_SHA256', 'STILLFAIL_INSTALL_LANG', 'STILLFAIL_ARCHIVE') { Set-Item -Path "env:$key" -Value $value }
     }
     if (-not $script) { [Console]::Error.WriteLine('stillfail update: no installer to run'); exit 1 }
     $env:STILLFAIL_DATA = $data

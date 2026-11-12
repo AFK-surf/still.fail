@@ -6,7 +6,10 @@
 // they changed; a topic's first value goes out on the next turn instead. A subscriber's first message is the whole
 // value, the next ones only what changed (delta.ts), and an unchanged value sends nothing; one subscribed `from` another
 // of its subscriptions to the same topic (a list's first rows, more of them asked now) gets its first value as what
-// changed from that one's, not the whole of it again (#firstFrom). Code inside the core can
+// changed from that one's, not the whole of it again (#firstFrom); one asked again by a client that kept what it was
+// sent as it let go of the topic (`have`: the token of what it holds, digest.ts `token`) gets `same` where it is that
+// still, else what changed from that (#first).
+// Code inside the core can
 // `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out. While no page
 // is in view (`inView`), what changed is kept from the subscribers and goes out as one difference per topic once one is.
 import { Effect } from "effect";
@@ -25,9 +28,16 @@ import { readAfresh } from "./markdown.ts";
 import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
+import { token } from "./digest.ts";
+import { work } from "./work.ts";
 
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
+/// How many values let go of keeping them (`keep`) are remembered for a client (#kept), the least recently let go of
+/// forgotten first: the app keeps the lists its places open on, a workspace's eight or so, and its last 4 chats
+/// (apps/mbui/src/sfbase/source.mbt `topic_kept`). One it keeps past these, asked again, is still answered `same`
+/// where its value is the same object still (a token needs nothing remembered), and whole where it is not.
+export const KEPT_PER_CLIENT = 24;
 /// The topics a page opens with, each first subscriber's wait for its first value a trace of its own (`<topic>.open`,
 ///): how long a chat took to show, and how much of that the core spent making it.
 const OPENED = new Set(["chat"]);
@@ -39,6 +49,13 @@ const FLUSH_TOLD_EVERY_MS = 60_000;
 /// What an app acts on while none of its pages is in view (its notices, its icon's badge, a download ready saved, a
 /// copy between stations: the topics it watches whatever page shows): these go out then too.
 const UNSEEN = new Set(["notify", "workspaceMarks", "downloads", "driveTransfers"]);
+
+/// A topic's value's token (digest.ts `token`): of the value object, nothing of it read; one that is no object, of its
+/// content, hashed (counted: work.ts `versions`).
+function tokenOf(v: unknown): string {
+  if (v === null || typeof v !== "object") work.versions++;
+  return token(v);
+}
 
 /// A value or the error a topic shows.
 export type Value = { ok: unknown } | { err: CoreError };
@@ -62,6 +79,8 @@ export interface Source {
   /// Whether a topic with no value yet waits on a station for it (nothing it shows is on the device), not only on what
   /// it is computed from being computed: its subscribers are told so (`waiting`).
   waits?(topic: Topic): boolean;
+  /// The topic's first value has gone out to its subscribers: what only keeps it current from now on may start.
+  opened?(topic: Topic): void;
 }
 
 /// Keeps a watched topic subscribed; `drop` lets the topic go like a UI unsubscribing.
@@ -93,7 +112,8 @@ type Entry = {
   job?: () => void;
   /// The value last sent to the subscribers; the next emission is the difference to it.
   sent?: Value;
-  /// Its value changed without a subscriber; it needs output when a page next asks for it.
+  /// What would go out of it changed without a subscriber (#sentHolds no longer): it needs output when a page next asks
+  /// for it, not `sent`.
   outputDirty?: boolean;
   /// Its value changed while no page was in view: what changed goes out once one is (`inView`).
   unseen?: boolean;
@@ -107,6 +127,8 @@ type Entry = {
   output?: Output;
   /// A page's first subscriber waiting for its first value (OPENED): its trace, and what the core spent making it.
   opening?: { span: Span; workMs: number; computes: number; mdFrom: number; spentFrom: Record<string, number> };
+  /// Its source told its first value went out (or was made where nobody subscribes): `Source.opened`, once.
+  openedTold?: boolean;
   /// Its subscribers told it waits on a station (Source.waits), while it has no value.
   waiting?: boolean;
 };
@@ -132,12 +154,25 @@ export class Store {
   readonly #subscriptions = new Map<string, Topic>();
   /// A keyed subscriber's `from` (`client/id` to the id of the client's other subscription), till its first value goes.
   readonly #from = new Map<string, RequestId>();
+  /// A subscriber's `have` (`client/id` to the token of what it holds), till its first value goes (#first).
+  readonly #have = new Map<string, string>();
+  /// What each client holds of the topics it let go of keeping them (`keep`), by topic key: the value it was last sent,
+  /// whose token its `{id, v}` said, and that token; at most KEPT_PER_CLIENT, the least recently let go of first.
+  /// A subscription asked again with that token gets what changed from it (#first), not the value whole. It is
+  /// cheap: the value is the object that went out (shared, read-only: never a copy, never changed), the one the topic's
+  /// entry holds as `sent` while it lives, so it costs memory only once the topic is evicted or has moved on; and a
+  /// token is given only as a client lets go of a topic it keeps, nothing of the value read for it. One is forgotten as
+  /// a subscription of that client to that topic gets its first message (whatever it is: the client takes what it kept
+  /// out with it too), and all of a client's as it goes (dropClient).
+  readonly #kept = new Map<ClientId, Map<string, { ok: unknown; v: string }>>();
   #source: Source | null = null;
   #idleCount = 0;
   #watchCount = 0;
   #firstPending = new Map<string, Entry>();
   #updatesPending = new Map<string, Entry>();
   #pumping = false;
+  /// Background work waiting till no page waits on the store (`answered`).
+  #whenAnswered: (() => void)[] = [];
   #windowOpen = false;
   #soon = false;
   #held: ((topic: Topic) => unknown) | null = null;
@@ -201,11 +236,12 @@ export class Store {
   }
 
   /// Adds a subscriber; sends the cached value at once if there is one, and starts the topic if it was not live.
-  subscribe(client: ClientId, id: RequestId, topic: Topic, keyed = false, from?: RequestId): void {
+  subscribe(client: ClientId, id: RequestId, topic: Topic, keyed = false, from?: RequestId, have?: string): void {
     this.unsubscribe(client, id);
     const key = topicKey(topic);
     this.#subscriptions.set(`${client}/${id}`, topic);
     if (keyed && from !== undefined) this.#from.set(`${client}/${id}`, from);
+    if (have !== undefined) this.#have.set(`${client}/${id}`, have);
     let entry = this.#topics.get(key);
     const started = entry === undefined;
     if (!entry) {
@@ -224,7 +260,7 @@ export class Store {
       this.#firstPending.set(key, entry);
       this.#wakePending(true);
     }
-    if (cached !== undefined) this.host.emit(client, this.#firstFrom(client, id, topic, cached) ?? to(whole(cached), id));
+    if (cached !== undefined) this.host.emit(client, this.#first(client, id, topic, keyed, cached) ?? to(whole(cached), id));
     else {
       if (entry.waiting === true) this.host.emit(client, { id, waiting: true });
       if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
@@ -239,11 +275,11 @@ export class Store {
       if (resumed) this.#source?.resume?.(topic);
       // A held topic only watched in the core so far (by a view) has never gone out: it does now, not when it next
       // changes (#flush sends nothing of one that has no subscriber).
-      if (cached === undefined && this.#held !== null && holds(topic)) this.invalidate(topic);
+      if (cached === undefined && this.#held !== null && holds(topic)) this.#sendHeld(entry);
     }
     if (entry.outputDirty && this.#held !== null && holds(topic)) {
       // Held values are read from Data, not kept in the entry while only watched.
-      this.invalidate(topic);
+      this.#sendHeld(entry);
     } else if (entry.outputDirty && !entry.emitScheduled) {
       entry.emitScheduled = true;
       this.#scheduleEmit(topic);
@@ -308,13 +344,27 @@ export class Store {
     this.#scheduleEmit(entry.topic);
   }
 
-  unsubscribe(client: ClientId, id: RequestId): void {
+  /// `keep`: the client keeps what it holds of the topic (protocol.ts): answered `{id, v}`, the token of that, the
+  /// last message for `id`: what went to it before (a difference already on its way) it has applied by then. That value
+  /// is remembered for the client (#kept), to send what changed from it as it asks again.
+  unsubscribe(client: ClientId, id: RequestId, keep = false): void {
     const at = `${client}/${id}`;
     const topic = this.#subscriptions.get(at);
-    if (!topic) return;
+    if (!topic) {
+      if (keep) this.host.emit(client, { id, v: null });
+      return;
+    }
     this.#subscriptions.delete(at);
     this.#from.delete(at);
+    this.#have.delete(at);
     const entry = this.#topics.get(topicKey(topic));
+    if (keep) {
+      // (what went to it last: the value it holds, every message to it going out in order; none, where none went)
+      const had = entry?.subscribers.some(([c, i]) => c === client && i === id) ? entry.sent : undefined;
+      const v = had !== undefined && "ok" in had ? tokenOf(had.ok) : null;
+      if (had !== undefined && "ok" in had && v !== null) this.#keep(client, topicKey(topic), had.ok, v);
+      this.host.emit(client, { id, v });
+    }
     if (!entry) return;
     entry.subscribers = entry.subscribers.filter(([c, i]) => !(c === client && i === id));
     if (entry.subscribers.length === 0 && entry.sent === undefined && this.#firstPending.get(topicKey(topic)) === entry) {
@@ -364,10 +414,26 @@ export class Store {
     this.runner.fork(laterSleep(EVICT_AFTER_MS).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
   }
 
-  /// A UI went away: drops all its subscriptions.
+  /// A UI went away: drops all its subscriptions, and what it kept of those it let go of.
   dropClient(client: ClientId): void {
     const ids = [...this.#subscriptions.keys()].filter((k) => k.startsWith(`${client}/`)).map((k) => Number(k.slice(k.indexOf("/") + 1)));
     for (const id of ids) this.unsubscribe(client, id);
+    this.#kept.delete(client);
+  }
+
+  /// Client `client` let go of topic `key` keeping `ok`, of token `v`: remembered for it (#kept), the least recently
+  /// let go of forgotten past KEPT_PER_CLIENT.
+  #keep(client: ClientId, key: string, ok: unknown, v: string): void {
+    let kept = this.#kept.get(client);
+    if (kept === undefined) this.#kept.set(client, (kept = new Map()));
+    kept.delete(key);
+    kept.set(key, { ok, v });
+    if (kept.size > KEPT_PER_CLIENT) kept.delete(kept.keys().next().value!);
+  }
+
+  /// How many values are remembered for `client` (#kept), for tests.
+  keptOf(client: ClientId): number {
+    return this.#kept.get(client)?.size ?? 0;
   }
 
   /// Stores a topic's new value (or its error) and schedules sending it. A topic that is not live is ignored.
@@ -407,6 +473,19 @@ export class Store {
     const schedule = !entry.emitScheduled;
     entry.emitScheduled = true;
     if (schedule) this.#scheduleEmit(topic);
+  }
+
+  /// A held topic's value goes out to its subscribers as it is now: read as its emission goes (#flush, `stale`), from
+  /// Data, or what its source says where Data holds nothing. What reads it in the core is not told it changed: it reads
+  /// it from Data too (value()) and was told of each change as Data made it (changed), so it has what goes out already.
+  /// (`invalidate` here made every view that read it again, nothing changed: the app subscribing a workspace's record,
+  /// which the views of its chat list and marks read, made the marks of the workspace just left again, 8 ms in Hermes
+  /// on a Mac Studio, 2026-11-11.)
+  #sendHeld(entry: Entry): void {
+    entry.stale = true;
+    if (entry.emitScheduled) return;
+    entry.emitScheduled = true;
+    this.#scheduleEmit(entry.topic);
   }
 
   /// Invalidates every live topic `pick` chooses.
@@ -493,6 +572,41 @@ export class Store {
     return this.#firstPending.size > 0;
   }
 
+  /// Whether a page waits on the store: a first value to be made, or, while the pump runs, a change of a topic
+  /// something subscribes to or watches (#nextUpdate) that it is to send in that run.
+  #pagesWait(): boolean {
+    return this.#firstPending.size > 0 || (this.#pumping && this.#nextUpdate(false) !== undefined);
+  }
+
+  /// Background work's turn (the rows of a list loaded behind its first screen, the sync's slices): at once where no page
+  /// waits on the store (#pagesWait), else once the pump has sent what pages wait for. The pump yields to the JS loop
+  /// between topics so that what comes in (a UI's message, a host's answer) is taken, and that yield cannot tell the
+  /// core's other fibers from what came in: each fiber's yield is a turn of the loop of its own (Effect's scheduler a
+  /// `setImmediate` a fiber, in Hermes hermes-globals.ts's `setTimeout(0)`, run in the engine's queue in the order set
+  /// among the tasks posted to it). So work no page waits for waits here itself, told by the pump as it is done (never
+  /// a poll), before each step it takes; it goes on a turn of its own after that, not on the pump's.
+  answered(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (!this.#pagesWait()) return Effect.void;
+      return Effect.callback<void>((resume) => {
+        this.#whenAnswered.push(() => resume(Effect.yieldNow));
+      }).pipe(Effect.andThen(this.answered()));
+    });
+  }
+
+  /// A background step's turn: the JS loop's next (what came in is taken), and then `answered`.
+  turn(): Effect.Effect<void> {
+    return Effect.andThen(Effect.yieldNow, this.answered());
+  }
+
+  /// No page waits on the store any more: the background work waiting for it (`answered`) goes on.
+  #answered(): void {
+    if (this.#whenAnswered.length === 0 || this.#pagesWait()) return;
+    const waiting = this.#whenAnswered;
+    this.#whenAnswered = [];
+    for (const go of waiting) go();
+  }
+
   /// Topics with at least one subscriber (or within their eviction grace).
   liveTopics(): Topic[] {
     return [...this.#topics.values()].map((e) => e.topic);
@@ -531,11 +645,14 @@ export class Store {
       try {
         while (this.#firstPending.size > 0 || this.#updatesPending.size > 0) {
           // A new page takes its turn immediately after background work; alternating while both queues have work
-          // also gives already queued updates a turn if pages keep opening.
-          const first: boolean = this.#firstPending.size > 0 && (this.#updatesPending.size === 0 || !wasFirst);
-          const queue = first ? this.#firstPending : this.#updatesPending;
-          const [key, entry] = queue.entries().next().value!;
-          queue.delete(key);
+          // also gives already queued updates a turn if pages keep opening. An update of a topic nobody subscribes
+          // to or watches (let go of, kept a while for its page coming back) waits behind both: the marks of a
+          // workspace just left were made again, 8 ms in Hermes, ahead of the chat list and the jobs of the one
+          // switched to (2026-11-11).
+          const update = this.#nextUpdate(this.#firstPending.size === 0);
+          const first: boolean = this.#firstPending.size > 0 && (update === undefined || !wasFirst);
+          const [key, entry] = first ? this.#firstPending.entries().next().value! : update!;
+          (first ? this.#firstPending : this.#updatesPending).delete(key);
           if (this.#topics.get(key) !== entry || !entry.emitScheduled) continue;
           wasFirst = first;
           const topic = entry.topic;
@@ -543,16 +660,33 @@ export class Store {
           const spentFrom = this.#tracer !== null ? { ...spent } : null;
           this.#flush(topic);
           this.#heldFor(topic, t0, spentFrom);
-          if (this.#firstPending.size > 0 || this.#updatesPending.size > 0) yield* Effect.yieldNow;
+          if (this.#firstPending.size > 0 || this.#updatesPending.size > 0) {
+            // What comes in meanwhile is taken between topics (a subscribe arriving now answered in this run, in its
+            // order; a run that goes on and on keeps no message out); the core's background work is not: it waits
+            // for what pages wait for (`answered`), told here once that is out.
+            this.#answered();
+            yield* Effect.yieldNow;
+          }
         }
       } finally {
         this.#pumping = false;
+        this.#answered();
         if (!this.runner.closed) {
           if (this.#firstPending.size > 0) this.#wakePending(true);
           else if (this.#updatesPending.size > 0) this.#wakePending(false);
         }
       }
     });
+  }
+
+  /// The update to take next: the first queued of a topic something subscribes to or watches; else, with `idle`, the
+  /// first queued at all.
+  #nextUpdate(idle: boolean): [string, Entry] | undefined {
+    for (const pending of this.#updatesPending) {
+      const entry = pending[1];
+      if (entry.subscribers.length > 0 || entry.watchers.length > 0) return pending;
+    }
+    return idle ? this.#updatesPending.entries().next().value : undefined;
   }
 
   #heldFor(topic: Topic, t0: number, spentFrom: Record<string, number> | null): void {
@@ -668,9 +802,13 @@ export class Store {
     now.waiting = false;
     if (now.subscribers.length === 0) {
       // Internal readers use the value above, not its client representation. Keep the last output for a reopening
-      // page, and make the new one only when there is a subscriber to receive it.
-      now.outputDirty = true;
+      // page, and make the new one only when there is a subscriber to receive it. Out of date only where it is: a
+      // value made again the same (a pref written at every switch of workspace, read whole by several views) left the
+      // chat list it went into sent whole again as its page came back (69 KB, parsed on the app's frame thread), and
+      // `profiles` shaped again (5 ms in Hermes, 2026-11-11). What is held is read from Data, not here: out of date.
+      if (isHeld || !this.#sentHolds(now)) now.outputDirty = true;
       for (const w of changed) w();
+      if (now.value !== undefined) this.#opened(now);
       return;
     }
     if (!this.#inView && now.sent !== undefined && !UNSEEN.has(topic.topic)) {
@@ -725,11 +863,74 @@ export class Store {
     for (const w of changed) w();
     for (const [client, id, keyed] of subscribers) {
       const o = keyed ? keyedOut : out;
-      // (its first value: what changed from its `from`'s, where it has one)
-      const first = sent === undefined && keyed ? this.#firstFrom(client, id, topic, value) : null;
+      // (its first value: `same`, or what changed from what the client holds, where it says so)
+      const first = sent === undefined ? this.#first(client, id, topic, keyed, value) : null;
       if (first) this.host.emit(client, first);
       else if (o) this.host.emit(client, to(o, id));
     }
+    this.#opened(now);
+  }
+
+  /// A topic's first value made and gone out where it has subscribers: its source told so, once (`Source.opened`).
+  #opened(entry: Entry): void {
+    if (entry.openedTold) return;
+    entry.openedTold = true;
+    this.#source?.opened?.(entry.topic);
+  }
+
+  /// Whether what went out of the topic last (`sent`) is what would go out of it now: an error that went out as it is,
+  /// or what its output made of the very value it holds, said in the same words, nothing that making read changed
+  /// since (output.ts `kept`). What makes it otherwise while nobody subscribes: a value made again that differs, or
+  /// one `set` or `update`d (a new object, equal or not); a change kept from the subscribers while no page was in view
+  /// (`unseen`, not shaped); what went out told out of date (#again: the clock moved on past its words, an item's
+  /// computed); the language, the product's name, the minute where it says times in words; the last shaping failed.
+  #sentHolds(entry: Entry): boolean {
+    const { sent, value, output } = entry;
+    if (sent === undefined || value === undefined) return false;
+    if ("err" in value) return sent === value;
+    if (!("ok" in sent) || output === undefined) return false;
+    const at = this.host.nowMs();
+    const kept = output.kept(entry.topic, value.ok, { now: at, offsetMin: this.host.utcOffsetMin(at) }, this.#shaped);
+    return kept !== null && kept.ok === sent.ok;
+  }
+
+  /// The first message of subscriber `id` of `client` (`keyed`: it takes keyed ops) to topic `topic`, whose value going
+  /// out is `value`, where it need not be the value whole; none where it goes whole. In this order:
+  /// - `{id, same: true}` where it was asked with `have` and `value` is the one of that token (the same object), or what
+  ///   changed from what the client was remembered to keep under it (#kept) is nothing: nothing of it sent;
+  /// - its `from`'s (#firstFrom): what changed from another of its subscriptions held now (a list's first rows, more
+  ///   of them asked), which differs from it by the rows asked and what changed this moment; what was kept is as old as
+  ///   the while the topic was let go of, all that changed meanwhile in what changed from it: the lighter as a rule;
+  /// - `{id, delta, kept: true}` where it was asked with `have` and that is the token of what the client was
+  ///   remembered to keep of this topic (#kept): what changed from that, as a held subscriber's change goes (keyed ops
+  ///   for a keyed one of a topic with keyed lists, plain else), unless it weighs more than the value (`heavier`,
+  ///   `largerThan`, as #flush decides).
+  /// An error, nothing remembered, another token (another run's, one forgotten): none. Its `from` and `have` are
+  /// forgotten either way, and what was remembered of the topic for the client: its first message gone, the client keeps
+  /// none of it after.
+  #first(client: ClientId, id: RequestId, topic: Topic, keyed: boolean, value: Value): CoreMessage | null {
+    const at = `${client}/${id}`;
+    const have = this.#have.get(at);
+    this.#have.delete(at);
+    const kept = this.#kept.get(client);
+    const had = kept?.get(topicKey(topic));
+    if (had !== undefined) kept!.delete(topicKey(topic));
+    // The value the client holds still (the same object: its token), nothing worked out; else what changed from what
+    // it holds, where that is remembered (#kept), worked out item by item, never by hashing the value whole (4-5 ms in
+    // Hermes for a chat of 46 KB, longer than sending it whole took): none changed (a value made again equal), `same`.
+    const same = have !== undefined && "ok" in value && tokenOf(value.ok) === have;
+    const spec = keyed ? specOf(topic) : null;
+    const ops = !same && have !== undefined && had !== undefined && had.v === have && "ok" in value ? (spec ? diffKeyed(had.ok, value.ok, spec) : diff(had.ok, value.ok)) : null;
+    if (same || (ops !== null && ops.length === 0)) {
+      this.#from.delete(at);
+      return { id, same: true };
+    }
+    const from = keyed ? this.#firstFrom(client, id, topic, value) : null;
+    this.#from.delete(at);
+    if (from !== null) return from;
+    if (ops === null || !("ok" in value)) return null;
+    if (spec) return heavier(ops as AnyOp[], value.ok) ? null : { id, delta: ops, kept: true };
+    return largerThan(ops as Op[], value.ok) ? null : { id, delta: ops, kept: true };
   }
 
   /// The first value `value` of topic `topic` going to subscriber `id` of `client` as what changed from what its

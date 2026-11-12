@@ -25,7 +25,7 @@ test "under a Tester's own clock its frames and events are journaled, and take n
   t.frame(ms=first_frame_ms)
   assert_eq(hangs(), [])
   let j = journal()
-  assert_true(j.any(fn(e) { e is Work({ what: Frame(_), .. }) }), msg=j.to_string())
+  assert_true(j.any(fn(e) { e is Work({ what: Frame(_), .. }) }), msg=Repr(j).to_string())
   assert_true(j.any(fn(e) { e is Boundary(Presented, _) }))
   // (an event of no time is folded, as what comes often)
   assert_true(j.any(fn(e) { e is Work({ what: Small(_, _), .. }) }))
@@ -85,11 +85,11 @@ test "an event and the frame it asked for, each under the budget, together over 
   }, what="key")
   assert_eq(journal_dirty_at.val, 1015.0)
   assert_false(journal().any(fn(e) { e is Boundary(_, _) }))
-  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 12.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, why: "built" }), 1020.0, 1034.0)
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 12.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, made: 0, let_go: 0, laid: 0, measured: 0, why: "built" }), 1020.0, 1034.0)
   journal_work(Present, 1034.0, 1035.0)
   journal_seal(Presented, 1035.0)
   let h = hangs()
-  assert_eq(h.length(), 1, msg=h.to_string())
+  assert_eq(h.length(), 1, msg=Repr(h).to_string())
   assert_eq(h[0].trigger, LateFrame)
   assert_eq(h[0].sealed_by, Presented)
   assert_eq(h[0].start, 1000.0)
@@ -102,7 +102,7 @@ test "a frame whose work is under its budget is no hang, however long since it w
   let (_, _) = journal_start()
   defer set_work_clock(None)
   journal_dirty_at.val = 1000.0
-  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 8.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, why: "" }), 1200.0, 1210.0)
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 8.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), 1200.0, 1210.0)
   journal_work(Present, 1210.0, 1211.0)
   journal_seal(Presented, 1211.0)
   assert_eq(hangs(), [])
@@ -129,7 +129,7 @@ test "short events are folded, their count and work kept, and still count toward
     let s = 1000.0 + i.to_double()
     journal_work(Event("touch-move"), s, s + 0.5)
   }
-  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 4.0, layout: 0.0, paint: 1.0, nodes: 1, insts: 1, why: "" }), 1040.0, 1045.0)
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 4.0, layout: 0.0, paint: 1.0, nodes: 1, insts: 1, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), 1040.0, 1045.0)
   journal_seal(Presented, 1045.0)
   let j = journal()
   assert_eq(j[0], Work({ what: Small(40, 20.0), start: 1000.0, end: 1039.5, notes: [] }))
@@ -145,7 +145,7 @@ test "a frame's interval closes as it is presented; asked for again as it ends, 
   defer set_work_clock(None)
   t.draw()
   let j = journal()
-  assert_true(j.any(fn(e) { e is Boundary(Presented, 1000.0) }), msg=j.to_string())
+  assert_true(j.any(fn(e) { e is Boundary(Presented, 1000.0) }), msg=Repr(j).to_string())
   // a frame asked for between frames: waited on from then
   clock.val = 1100.0
   h_request_frame()
@@ -186,6 +186,56 @@ test "the app hidden closes its interval, and what it did while shown is said" {
 }
 
 ///|
+test "every frame presented is counted by what it waited on, a finger's moves and a layout before it told apart" {
+  let (_, clock) = journal_start()
+  defer set_work_clock(None)
+  let said : Array[HangSummary] = []
+  hang_summary_told(Some(fn(s) { said.push(s) }))
+  // (the bands written out are the bounds')
+  for i in 0..<frame_band_ms.length() {
+    assert_eq((frame_band(frame_band_ms[i] - 0.5), frame_band(frame_band_ms[i])), (i, i + 1))
+  }
+  assert_eq(journal_bands.length(), 4 * (frame_band_ms.length() + 1))
+  let frame = fn(start : Double, ms : Double, laid : Bool) {
+    journal_laid.val = laid
+    journal_work(Frame({ tree: 0.0, messages: 0.0, build: ms, layout: 0.0, paint: 0.0, nodes: 1, insts: 1, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), start, start + ms)
+    journal_seal(Presented, start + ms)
+    journal_dirty_at.val = -1.0
+  }
+  // nothing moved, nothing laid out: 3 ms; 9 ms (over 120 a second's budget and no hang); 30 ms (a hang as well)
+  frame(1000.0, 3.0, false)
+  frame(1100.0, 9.0, false)
+  frame(1200.0, 30.0, false)
+  assert_eq(hangs().length(), 1)
+  // a finger's move of 5 ms that asks for a frame of 6 ms laying out: 11 ms waited, under a hang's 24
+  clock.val = 1300.0
+  view_event_said(fn() {  }, fn() {
+    clock.val += 5.0
+    h_request_frame()
+  }, what="touch-move")
+  frame(1305.0, 6.0, true)
+  // (the frame after it had no move of its own)
+  frame(1400.0, 2.0, true)
+  assert_eq(hangs().length(), 1)
+  clock.val = 2000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said.length(), 1)
+  assert_eq(said[0].still, [1, 0, 1, 0, 0, 1])
+  assert_eq(said[0].still_laid, [1, 0, 0, 0, 0, 0])
+  assert_eq(said[0].moved, [0, 0, 0, 0, 0, 0])
+  assert_eq(said[0].moved_laid, [0, 0, 1, 0, 0, 0])
+  let j = said[0].json().stringify()
+  assert_true(j.contains("\"frames_by_ms\":{") && j.contains("\"bounds\":[4,8,12,16,24]"), msg=j)
+  assert_true(j.contains("\"still\":[1,0,1,0,0,1]") && j.contains("\"moved_laid\":[0,0,1,0,0,0]"), msg=j)
+  // (counted from none again once said)
+  frame(2100.0, 3.0, false)
+  clock.val = 3000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said[1].still, [1, 0, 0, 0, 0, 0])
+  assert_eq(said[1].moved_laid, [0, 0, 0, 0, 0, 0])
+}
+
+///|
 test "of a frame's why, the code it names alone: no key of what is shown" {
   assert_eq(
     journal_places("the clock read at @mbui/src/sf:motion.mbt:12:3-12:20 (row:chat-01HX, told at page.mbt:40)"),
@@ -198,7 +248,7 @@ test "of a frame's why, the code it names alone: no key of what is shown" {
 test "a hang as JSON: its rule, times from its start, each contributor's kind and a frame's parts" {
   let (_, _) = journal_start()
   defer set_work_clock(None)
-  journal_work(Frame({ tree: 1.0, messages: 2.0, build: 50.0, layout: 3.0, paint: 4.0, nodes: 7, insts: 8, why: "built a.mbt:1" }), 1000.0, 1060.0)
+  journal_work(Frame({ tree: 1.0, messages: 2.0, build: 50.0, layout: 3.0, paint: 4.0, nodes: 7, insts: 8, made: 0, let_go: 0, laid: 0, measured: 0, why: "built a.mbt:1" }), 1000.0, 1060.0)
   journal_seal(Presented, 1061.0)
   let j = hangs()[0].json().stringify()
   assert_true(j.contains("\"trigger\":\"stall\""), msg=j)
@@ -221,4 +271,103 @@ test "many short parts of a kind, each under 1 ms (0.1 at least), summed: what a
   let (part, ms) = told[0].contributors[0].notes[0]
   assert_eq(part, "core topic chat delta")
   assert_true(ms > 59.9 && ms < 60.1, msg=ms.to_string())
+}
+
+///|
+test "a hang says what the app showed as its interval was sealed, not what it shows as it is told; none said, no page" {
+  let (_, clock) = journal_start()
+  defer set_work_clock(None)
+  let told : Array[Hang] = []
+  hangs_told(Some(fn(h) { told.push(h) }))
+  // (none said yet: its JSON has no page, its line none)
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  assert_eq(told[0].page, "")
+  assert_false(told[0].json().stringify().contains("\"page\""), msg=told[0].json().stringify())
+  assert_false(told[0].said().contains("page="), msg=told[0].said())
+  journal_shows("Home")
+  journal_shows("Chat")
+  // a frame asked for while Chat shows, the page changed as the frame runs (its work under way), sealed after
+  view_event_said(fn() {  }, fn() {
+    clock.val += 15.0
+    h_request_frame()
+  }, what="key")
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 40.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), 1080.0, 1122.0)
+  journal_shows("Setting Usage")
+  journal_seal(Presented, 1123.0)
+  assert_eq(told.length(), 2)
+  assert_eq(told[1].page, "Setting Usage")
+  // (what a gate held and sends later says the one sealed under, whatever shows by then)
+  journal_shows("Home")
+  assert_eq(told[1].page, "Setting Usage")
+  let j = told[1].json().stringify()
+  assert_true(j.contains("\"page\":\"Setting Usage\""), msg=j)
+  assert_true(told[1].said().contains("phase=startup page=Setting Usage active="), msg=told[1].said())
+  assert_eq(journal_shown(), "Home")
+}
+
+///|
+test "the summary's counts by what was shown add up to its counts in all, and are counted from none once said" {
+  let (t, clock) = journal_start()
+  defer set_work_clock(None)
+  let said : Array[HangSummary] = []
+  hang_summary_told(Some(fn(s) { said.push(s) }))
+  // a frame before any name is said: under ""
+  t.draw()
+  journal_shows("Home")
+  // a stall, closed idle; an event of 30 ms asking for a frame: a late frame, and the frame counted
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  view_event_said(fn() {  }, fn() {
+    clock.val += 30.0
+    h_request_frame()
+  }, what="key")
+  t.draw()
+  t.draw()
+  journal_shows("Chat")
+  // blocking work, closed idle; a frame
+  view_event_said(fn() {  }, fn() { clock.val += 30.0 }, what="messages")
+  t.draw()
+  journal_shows("Home")
+  t.draw()
+  clock.val += 1000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said.length(), 1)
+  let s = said[0]
+  assert_eq((s.stalls, s.late, s.blocking), (1, 1, 1))
+  let sum = fn(k : Int) { s.by_page.fold(init=0, fn(n, p) { n + [p.1, p.2, p.3, p.4][k] }) }
+  assert_eq((sum(0), sum(1), sum(2), sum(3)), (s.frames, s.stalls, s.late, s.blocking))
+  assert_eq(s.by_page.map(fn(p) { p.0 }), ["", "Home", "Chat"])
+  assert_eq(s.by_page[1].2, 1)
+  assert_eq(s.by_page[1].3, 1)
+  assert_eq(s.by_page[2].4, 1)
+  let j = s.json().stringify()
+  assert_true(j.contains("\"by_page\":{\"\":[") && j.contains("\"Chat\":["), msg=j)
+  // (counted from none again once said, the one shown now first)
+  t.draw()
+  clock.val += 1000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said[1].by_page.map(fn(p) { p.0 }), ["Home"])
+  assert_eq(said[1].by_page[0].1, said[1].frames)
+}
+
+///|
+test "past 32 names what the app shows is other; a run begun again keeps none" {
+  let (_, _) = journal_start()
+  defer set_work_clock(None)
+  for i in 0..<32 {
+    journal_shows("Page \{i}")
+    assert_eq(journal_shown(), "Page \{i}")
+  }
+  journal_shows("Page thirtythree")
+  assert_eq(journal_shown(), "other")
+  journal_shows("Page 0")
+  assert_eq(journal_shown(), "Page 0")
+  journal_shows("Page thirtyfour")
+  assert_eq(journal_shown(), "other")
+  shown_counts[shown_slot.val * 4] += 1
+  journal_reset()
+  assert_eq(journal_shown(), "")
+  assert_eq(shown_names, [])
+  assert_true(shown_counts.iter().all(fn(k) { k == 0 }))
+  journal_shows("Chat")
+  assert_eq(journal_shown(), "Chat")
 }

@@ -16,15 +16,19 @@
 priv struct Attention {
   gone : Array[String]
   mut trouble_seen : String?
+  /// A clearing already asked of this core, until its prefs change or the station has trouble again. A call's
+  /// answer can arrive before the prefs topic; no frame in between sends the same write again.
+  trouble_forgotten : Map[String, (Int, String, String)]
 }
 
 ///|
-let attention : Attention = { gone: [], trouble_seen: None }
+let attention : Attention = { gone: [], trouble_seen: None, trouble_forgotten: {} }
 
 ///|
 fn attention_reset() -> Unit {
   attention.gone.clear()
   attention.trouble_seen = None
+  attention.trouble_forgotten.clear()
 }
 
 ///|
@@ -49,7 +53,8 @@ let attention_size : FixedArray[Double] = [0.0]
 /// 新建对话, 6 under it), 300 wide. With the bell, the stations' trouble not looked at yet (looked at as it opens:
 /// listed while open, then no longer, until the trouble changes, kept on this device) and the services left up long
 /// first; then each workspace's chats that want the viewer, not read since (the one in view's first), 忽略 on the row
-/// pointed at (`decision.dismiss`); pressed, its chat; 通知设置 at its foot.
+/// pointed at (`decision.dismiss`); pressed, its chat; 全部已读 and 通知设置 at its foot, which stays as the rest
+/// scrolls.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let close = fn() { attention_set(false) }
   // (the window turned beside the system's tabs: what it opened from is elsewhere, closed: rail_native.mbt)
@@ -101,11 +106,16 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       },
       // (and a press of it its own, none outside the panel)
       anchor_node?=if railed && !@sf.native_on() { rail_drawn.get("attention") } else { None },
-      look=@sf.beside_look(Px(attention_w), inner=att_list),
-      fn() {
-        attention_rows(c, src, w, railed, close)
-        attention_foot(c, src, w, close)
+      // (its foot under what scrolls, held at the panel's foot: 全部已读 is wanted most when the list is longest,
+      // pengxiao 2026-11-12)
+      look=fn(c, s, body) {
+        @sf.small_panel(c, w=Px(attention_w), fn() {
+          @sf.within_room(c, s, body, inner=att_list)
+          attention_foot(c, src, w, close)
+        })
+        |> ignore
       },
+      fn() { attention_rows(c, src, w, railed, close) },
     )
     |> ignore
   })
@@ -131,7 +141,11 @@ let attention_off_side : Double = 6.0
 ///|
 /// What is wrong with the workspace's stations, in words (the chats' `trouble`, useStationTrouble); "" none.
 fn station_trouble_words(src : Source, w : Workspace) -> String {
-  let chats = @sfbase.chats_topic(src, w.id).value
+  chats_trouble_words(@sfbase.chats_topic(src, w.id).value)
+}
+
+///|
+fn chats_trouble_words(chats : Json?) -> String {
   text(field(chats, "trouble"), "text")
 }
 
@@ -147,18 +161,31 @@ fn trouble_kept(src : Source, w : Workspace, what : String) -> String {
 
 ///|
 fn trouble_keep(src : Source, w : Workspace, what : String, words : Json) -> Unit {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   m[w.id + "\n" + what] = words
-  (src.call)("prefs.set", Json::object({ "trouble": Json::object(m) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "trouble": Json::object(m) }), @sfbase.answer_unread)
 }
 
 ///|
 /// The stations all reached: what was kept of their trouble let go.
 fn trouble_forget(src : Source, w : Workspace) -> Unit {
-  if station_trouble_words(src, w) == "" && (trouble_kept(src, w, "seen") != "" || trouble_kept(src, w, "gone") != "") {
-    trouble_keep(src, w, "seen", Json::null())
-    trouble_keep(src, w, "gone", Json::null())
+  // No value yet (for example just after switching workspaces) says nothing about whether its stations recovered.
+  let chats = @sfbase.chats_topic(src, w.id)
+  guard chats.error is None && chats.value is Some(value) else { return }
+  let seen = trouble_kept(src, w, "seen")
+  let gone = trouble_kept(src, w, "gone")
+  if chats_trouble_words(Some(value)) != "" || (seen == "" && gone == "") {
+    attention.trouble_forgotten.remove(w.id)
+    return
   }
+  let (generation, _) = (src.generation)("prefs", {})
+  let clearing = (generation, seen, gone)
+  if attention.trouble_forgotten.get(w.id) == Some(clearing) { return }
+  attention.trouble_forgotten[w.id] = clearing
+  let patch : Map[String, Json] = Map([])
+  patch[w.id + "\nseen"] = Json::null()
+  patch[w.id + "\ngone"] = Json::null()
+  (src.call)("prefs.set", { "trouble": Json::object(patch) }, @sfbase.answer_unread)
 }
 
 ///|
@@ -181,7 +208,13 @@ fn bell_trouble(src : Source, w : Workspace) -> String {
 /// Whether the rail's bell has its dot: something in its panel, the chats (less what was let go here), the stations'
 /// trouble not looked at or services left up long it has not shown yet.
 pub fn bell_lit(src : Source, w : Workspace) -> Bool {
-  attention_groups(src, w, true).length() > 0 || bell_trouble(src, w) != "" || long_jobs_lit(src, w)
+  // (each read whatever the others hold: what it reads never comes and goes with another's value, its topics held
+  // all along, not let go of as 待处理 comes to list a chat and asked again as it lists none; sfapp's
+  // bell_reads_wbtest)
+  let chats = attention_groups(src, w, true).length() > 0
+  let trouble = bell_trouble(src, w) != ""
+  let jobs = long_jobs_lit(src, w)
+  chats || trouble || jobs
 }
 
 ///|
@@ -245,7 +278,7 @@ let att_sheet : @ui.Style = @ui.css("w=Full")
 /// Each workspace's chats in 待处理 (the core's marks' items), the one in view's first, those let go here left out
 /// when `shown`: (workspace, its name, its chats).
 fn attention_groups(src : Source, w : Workspace, shown : Bool) -> Array[(String, String, Array[Json])] {
-  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
+  let marks = src.topic("workspaceMarks", @sfbase.marks_asked()).get().value
   let groups : Array[(String, String, Array[Json])] = []
   match field(marks, "workspaces") {
     Some(Object(by)) => {
@@ -315,7 +348,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
         let dismiss = if alert && failure != "" {
           Some(fn() {
             attention.gone.push(key)
-            let m : Map[String, Json] = {}
+            let m : Map[String, Json] = Map([])
             m[text(v, "workspace")] = Json::array([Json::string(failure)])
             act(
               src,
@@ -356,7 +389,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
             @sfbase.history_push()
             if g.0 != w.id {
               app.picked.set(g.0)
-              (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), fn(_) {  })
+              (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), @sfbase.answer_unread)
               desk_home()
             }
             let chat : ChatRef = {
@@ -415,7 +448,6 @@ fn attention_item(
     go()
   })
   let hover = c.lit(id) || c.lit(drop)
-  let alert = kind == "alert"
   let b = c.box(style=if hover { att_item_on } else { att_item }, id~, fn() {
     // (its kind in words: role="img")
     let (ground, said) : (@ui.Color, String) = match kind {
@@ -423,8 +455,11 @@ fn attention_item(
       "done" => (@sf.mark_blue, "web-main.chatMark.done")
       _ => (Data(@sf.theme().p.warn_ink), "web-main.attention.waitOne")
     }
-    let dot = c.box(style=att_dot.then(@ui.style(bg=ground)), fn() {  })
-    c.semantics(dot, Image, label=@sf.t(said))
+    c.box(style=att_mark, fn() {
+      let dot = c.box(style=att_dot.then(@ui.style(bg=ground)), fn() {  })
+      c.semantics(dot, Image, label=@sf.t(said))
+    })
+    |> ignore
     c.box(style=att_text, fn() {
       c.text(title, style=att_title) |> ignore
       if line != "" {
@@ -488,14 +523,19 @@ let att_empty : @ui.Style = @ui.css("w=Full p=S2_5")
 let att_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L6)
 
 ///|
-/// A row (item): 6 by 10 in, its dot and words 8 apart, its corner the panel's inner (--panel-in); pointed at, on the
-/// pointer's ground.
+/// A row (item): 6 by 10 in, its dot's column and words 10 apart, its corner the panel's inner (--panel-in); pointed
+/// at, on the pointer's ground. Its words start where a long job's do above it (open_job_row), not 11 left of them.
 // kept across runs: a value (no field of it changes)
-let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2, align=ACenter, radius=@sf.panel_in)
+let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2_5, align=ACenter, radius=@sf.panel_in)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let att_item_on : @ui.Style = att_item.then(@ui.css("bg=Hover"))
+
+///|
+/// Its dot's column: the 16 a long job's dot and a workspace's mark stand in (open_job_mark), the dot in its middle.
+// kept across runs: a value (no field of it changes)
+let att_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
 
 ///|
 /// Its dot, 7 round, in the amber's ink (red gone wrong).

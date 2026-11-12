@@ -11,13 +11,13 @@ fn order_differs(t : Tree) -> Array[String] {
   t.order_again()
   let out = []
   if order != t.order {
-    out.push("order \{order} against \{t.order}")
+    out.push("order \{Repr(order)} against \{Repr(t.order)}")
   }
   if holder != t.order_holder {
-    out.push("holders \{holder} against \{t.order_holder}")
+    out.push("holders \{Repr(holder)} against \{Repr(t.order_holder)}")
   }
   if end != t.order_end {
-    out.push("ends \{end} against \{t.order_end}")
+    out.push("ends \{Repr(end)} against \{Repr(t.order_end)}")
   }
   for i, n in t.nodes {
     if n.live && (of[i] != t.order_of[i] || tops[i] != t.tops[i]) {

@@ -9,17 +9,17 @@
 ///|
 /// The flow being written (None: none is).
 // kept across runs: Flow::start sets it for each flow, as FLOW_EMIT says
-let script : Ref[Array[String]?] = Ref::new(None)
+let script : Ref[Array[String]?] = Ref(None)
 
 ///|
 /// Whether the step after is to be taken at once (after a run_for into a motion).
 // kept across runs: Flow::start sets it for each flow
-let now_next : Ref[Bool] = Ref::new(false)
+let now_next : Ref[Bool] = Ref(false)
 
 ///|
 /// Additional calls whose presence in the live run is incidental to the current step.
 // kept across runs: reset for each flow
-let incidental_calls : Ref[Array[String]] = Ref::new([])
+let incidental_calls : Ref[Array[String]] = Ref([])
 
 ///|
 /// Starts writing the flow, when FLOW_EMIT asks and this is its first order (seed 0).
@@ -44,7 +44,7 @@ fn emit_start(seed : UInt, w : Double, h : Double, env : Array[(String, String)]
 ///|
 /// What the flow does as each step is said (Flow::take_step: taken when the run took it, Replay::step_taken).
 // kept across runs: Flow::start sets it for each flow
-let step_hook : Ref[((String) -> Unit)?] = Ref::new(None)
+let step_hook : Ref[((String) -> Unit)?] = Ref(None)
 
 ///|
 /// A line of the script (a header, `#…`, as it is; a step after a run_for, `now` first).
@@ -87,6 +87,9 @@ fn emit_end() -> Unit {
 /// the station frozen…): said on the script's log there (`log do: WORDS`), nothing here, where the trace has what came
 /// of it.
 pub fn Flow::peer(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   emit("log do: " + words)
   // (the runner does it beside the script (e2e/runner-do.sh) and says when it has: the script waits for its word, the
@@ -96,7 +99,7 @@ pub fn Flow::peer(self : Flow, words : String) -> Unit {
     Some(s) => {
       let n = s.iter().filter(fn(l) { l.has_prefix("log do: ") }).count()
       let first = match words.split(" ").next() {
-        Some(w) => w.to_string()
+        Some(w) => w.to_owned()
         None => words
       }
       emit("done \{n}-\{first}")
@@ -110,6 +113,9 @@ pub fn Flow::peer(self : Flow, words : String) -> Unit {
 /// for this one to ask it): `log do:` and no waiting for its word, as what it does needs the app's next steps (the tap
 /// that asks); what came of it is the trace's, here as anywhere.
 pub fn Flow::peer_aside(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   emit("log do: " + words)
 }
@@ -118,6 +124,9 @@ pub fn Flow::peer_aside(self : Flow, words : String) -> Unit {
 /// What a live run does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, a chat made elsewhere):
 /// nothing here.
 pub fn Flow::before(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   emit("#before " + words)
 }
@@ -140,7 +149,7 @@ fn emit_wait(ms : Double) -> Unit {
 fn page_name(page : @sfapp.Page) -> String {
   match page {
     Files => "files"
-    _ => abort("flow: no MBUI_OPEN_PAGE for this page")
+    _ => @halt.saying("flow: no MBUI_OPEN_PAGE for this page")
   }
 }
 
@@ -176,6 +185,9 @@ let unawaited : Array[String] = ["session.warm", "draft.put", "client.focus", "c
 /// Calls the host may make an incidental number of times while these steps run. This changes script emission only;
 /// explicit `answered` steps still wait for their answers. Pass an empty array once the incidental steps are over.
 pub fn Flow::incidental_calls(self : Flow, calls : Array[String]) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   incidental_calls.val = calls.copy()
 }

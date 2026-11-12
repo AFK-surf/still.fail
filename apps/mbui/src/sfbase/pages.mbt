@@ -4,6 +4,7 @@
 
 ///|
 /// A page of the stack.
+#derive(Eq)
 pub(all) enum Page {
   Home
   /// a chat (chat.mbt)
@@ -37,7 +38,7 @@ pub(all) enum Page {
   Setting(@settings.Route)
   /// a station's screen, seen and driven (screen_view.mbt), over the app as Android's ScreenActivity is
   Screen(ScreenAt)
-} derive(Eq)
+}
 
 ///|
 /// Keep a chat's own reader while its navigation entry remains on the stack, including while another page covers it.
@@ -69,13 +70,26 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 }
 
 ///|
+/// Whether a chat's page is made with its inside nodes (chat_page_made's `body` and `foot`): a bridge while the page
+/// is moved off its old view, deleted at the switch-over; off, the page is as it was. Read as a page is made.
+// kept across runs: chat_page_nodes_at_start as a run begins (reset)
+pub let chat_page_nodes : @signals.Signal[Bool] = @signals.signal(chat_page_nodes_at_start, same=fn(a, b) { a == b })
+
+///|
+/// What chat_page_nodes is as a run begins.
+// kept across runs: a value
+let chat_page_nodes_at_start : Bool = false
+
+///|
 /// A chat's page made once in node `v` of a stack's (entry `serial`'s: nav_view's and nav_flat_view's `made`), and the
 /// new chat that becomes it in place, the same page: what it holds its old view as yet, its island (Nav::page_island),
 /// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
 /// reader held: page_entry_source, page_chat_reader; a new chat from the node's own), again as `key` changes. Over it
 /// a picture flying from its list while under its bar (viewer_flight_slot), and over that what of it is nodes already (`over`: given a node over the island, the chat's source, what the page is now and its
-/// time on top, `stint`). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
-/// what is beside it reads by it too.
+/// time on top, `stint`; made while `drawn` says its entry is drawn: shown, or kept shown in place while the one on top
+/// waits, as its island is). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
+/// what is beside it reads by it too. With chat_page_nodes on as a chat's page is made: its inside nodes, chat `r`'s
+/// messages made by `body` in a column and under them its composer by `foot`, its old view in a node of its own.
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -84,29 +98,62 @@ pub fn chat_page_made(
   key? : () -> String = fn() { "" },
   over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
   stint? : () -> Int = fn() { 0 },
+  drawn? : (Int) -> Bool = fn(serial) { app.nav.shows(serial) },
+  body? : (@view.View, Source, ChatRef) -> Unit,
+  foot? : (@ui.Ctx, Source, ChatRef) -> Unit,
 ) -> Source {
   let retained = page_entry_source(src, v, serial)
   let page_read = page_chat_reader(retained, v, serial)
   let shown = src.owned_by(v)
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-  app.nav.page_island(
-    v,
-    serial,
-    fn(c, page) {
-      page_entry_read(serial, retained, page)
-      page_read(page)
-      build(c, if page is Chat(_) { retained } else { shown }, page)
-    },
-    key~,
-  )
-  .grow(Is(1.0))
-  |> ignore
+  // (with chat_page_nodes on, a chat's made as nodes inside: what it is as it is made)
+  let inside = match (body, foot, @signals.untracked(fn() { app.nav.page_of(serial) })) {
+    (Some(b), Some(f), Some((Chat(r), _))) if @signals.untracked(fn() { chat_page_nodes.get() }) => Some((b, f, r))
+    _ => None
+  }
+  match inside {
+    Some((b, f, r)) =>
+      // a column: the chat's messages growing to what it leaves them, the composer under them at its own height, its
+      // old view in a node of its own as yet (built as the stack's island is, what the page reads read there)
+      v.box(fn(col) {
+        col.grow(Is(1.0)).min_height(Is(Some(0.0))).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+        // (coming to need the viewer while open, felt, as its old view felt it)
+        feel_needed_node(col, retained, r)
+        b(col, retained, r)
+        app.nav.page_island(
+          col,
+          serial,
+          fn(c, page) {
+            page_entry_read(serial, retained, page)
+            page_read(page)
+            f(c, retained, r)
+          },
+          key~,
+          natural=true,
+        )
+        |> ignore
+      })
+      |> ignore
+    None =>
+      app.nav.page_island(
+        v,
+        serial,
+        fn(c, page) {
+          page_entry_read(serial, retained, page)
+          page_read(page)
+          build(c, if page is Chat(_) { retained } else { shown }, page)
+        },
+        key~,
+      )
+      .grow(Is(1.0))
+      |> ignore
+  }
   // (a picture flying from its list drawn here while under its bar, the bar over it: viewer_flight_slot)
   v.box(fn(slot) { viewer_flight_slot(slot, retained, serial, fn() { slot.window() }) }) |> ignore
   match over {
     Some(f) =>
       // (while the page shows, as its old view is built: what it reads let go of while another covers it)
-      v.show(fn() { app.nav.shows(serial) }, fn(o) {
+      v.show(fn() { drawn(serial) }, fn(o) {
         o.over(Is(true)) |> ignore
         f(o, retained, fn() { app.nav.page_of(serial).map(fn(e) { e.0 }) }, stint)
       })
@@ -132,7 +179,7 @@ priv struct PageSource {
 }
 
 ///|
-let page_sources : Map[Int, Array[PageSource]] = {}
+let page_sources : Map[Int, Array[PageSource]] = Map([])
 
 ///|
 priv struct LeftPageChat {
@@ -143,7 +190,7 @@ priv struct LeftPageChat {
 ///|
 // An explicitly absent entry means a navigation entry left before it had a page source. A missing map entry is an
 // older caller that placed a page directly in left_pages and still uses the surrounding source.
-let left_page_sources : Map[Int, LeftPageChat?] = {}
+let left_page_sources : Map[Int, LeftPageChat?] = Map([])
 
 ///|
 let page_source_seen : Ref[Int] = Ref(0)
@@ -155,7 +202,7 @@ priv struct PendingChatReader {
 }
 
 ///|
-let pending_chat_readers : Map[Int, PendingChatReader] = {}
+let pending_chat_readers : Map[Int, PendingChatReader] = Map([])
 
 ///|
 /// Whether a row is still keeping an early reader for this navigation entry.
@@ -252,7 +299,7 @@ pub fn handoff_chat_open(r : ChatRef, reader : TopicLease) -> Unit {
 /// The readers a page handed over as it opened another in its place (open_handing), by the entry opened's serial:
 /// each the entry's as its view is made (page_entry_source), let go once its first build has read what it reads
 /// (page_entry_read).
-let handed_readers : Map[Int, Array[TopicLease]] = {}
+let handed_readers : Map[Int, Array[TopicLease]] = Map([])
 
 ///|
 /// `open` run (a page opening the next in its place: a folder the folder it goes into), with this page's reader of
@@ -309,6 +356,52 @@ fn hand_over(leases : Array[TopicLease], open : () -> Unit) -> Unit {
     Some(had) => had.append(readers)
     None => handed_readers[serial] = readers
   }
+}
+
+///|
+/// The readers a press handed over to a page it shows in a pane in place of the one there, no entry of the stack put on
+/// top (a place's side list's pick: hand_over_shown), by what that page is shown for (`at`): taken as that page is
+/// first built (shown_read), let go at that frame's end, as an entry's are (page_entry_read).
+let handed_shown : Map[String, Array[TopicLease]] = Map([])
+
+///|
+/// `open` run (a press showing a page in a pane in place of the one there: a place's side list's row), `leases` handed
+/// to the page it shows, `at` what that page is shown for (shown_read's): kept past the page that leaves, let go at the
+/// end of the frame the page shown is first built in. What was handed for the same page and not taken yet is let go
+/// first (shown again before it was built).
+pub fn hand_over_shown(at : String, leases : Array[TopicLease], open : () -> Unit) -> Unit {
+  let readers : Array[TopicLease] = []
+  for lease in leases {
+    match prepare_chat_handoff(lease) {
+      Some(reader) => readers.push(reader)
+      None => ()
+    }
+  }
+  match handed_shown.get(at) {
+    Some(had) => for reader in had { reader.release() }
+    None => ()
+  }
+  handed_shown[at] = readers
+  open()
+}
+
+///|
+/// The page shown for `at` (hand_over_shown's) first built: what was handed to it let go once this build has read what
+/// it reads, at its frame's end; what it read is its own reader's by then.
+pub fn shown_read(at : String) -> Unit {
+  match handed_shown.get(at) {
+    Some(readers) => {
+      handed_shown.remove(at)
+      @ui.after_frame(fn() { for reader in readers { reader.release() } })
+    }
+    None => ()
+  }
+}
+
+///|
+/// What a profile's page is shown for (hand_over_shown, shown_read): its station and profile.
+pub fn profile_shown_at(station : String, id : String) -> String {
+  "profile\u{1}" + station + "\u{1}" + id
 }
 
 ///|
@@ -463,16 +556,20 @@ pub using @sf {
 /// one (the link's own, or the row's it was opened from; "" none). `until_gone`: opened for a while only (a login's
 /// page in the station's browser, its tab closed as the login ends): the page goes back by itself once the screen is
 /// gone.
+#derive(Eq)
 pub(all) struct ScreenAt {
   station : String
   screen : String
   title : String
   until_gone : Bool
-} derive(Eq)
+}
 
 ///|
-/// What page `p` is, by its kind alone (no chat's, station's or file's name: the device's performance record says it,
-/// @ui.perf_also "page").
+/// What page `p` is, by its kind alone: a name out of a fixed set written here, never a chat's, station's, session's,
+/// file's, job's or person's id, name, title or path, nor anything typed. What the window thread's hang reports sent
+/// to PostHog say of the page shown (shown_kind, mbui's journal_shows) and the device's performance record says too.
+/// Each is a constructor's literal; a place, data, only as one of `bar_places` (else `other`); a page of the settings
+/// as its route's constructor alone (setting_kind). sfapp's shown_wbtest holds every name a screen comes to.
 pub fn page_kind(p : Page) -> String {
   match p {
     Home => "Home"
@@ -487,9 +584,99 @@ pub fn page_kind(p : Page) -> String {
     PreviewFile(_, _, _, _) => "PreviewFile"
     History(_, _, _) => "History"
     NewChat => "NewChat"
-    Place(place) => "Place " + place
-    Setting(_) => "Setting"
+    Place(place) => "Place " + place_kind(place)
+    Setting(r) => "Setting " + setting_kind(r)
     Screen(_) => "Screen"
+  }
+}
+
+///|
+/// A place of the bar's by its name, as a literal of the places a bar can hold (bars.mbt's bar_places); any other
+/// `other`: what comes in a string is never said as it came.
+fn place_kind(place : String) -> String {
+  match place {
+    "chats" => "chats"
+    "files" => "files"
+    "stations" => "stations"
+    "profiles" => "profiles"
+    "connects" => "connects"
+    "usage" => "usage"
+    "archive" => "archive"
+    "vault" => "vault"
+    _ => "other"
+  }
+}
+
+///|
+/// A page of the settings by its route's constructor alone: no station's address, id or key it carries.
+fn setting_kind(r : @settings.Route) -> String {
+  match r {
+    Home => "Home"
+    Me => "Me"
+    Appearance => "Appearance"
+    Fonts => "Fonts"
+    Workspace => "Workspace"
+    Security => "Security"
+    SecurityOpen => "SecurityOpen"
+    Vault => "Vault"
+    Stations => "Stations"
+    Station(_) => "Station"
+    Profiles(_) => "Profiles"
+    Profile(_, _) => "Profile"
+    Connects(_) => "Connects"
+    Connect(_, _) => "Connect"
+    Memories => "Memories"
+    Memory(_) => "Memory"
+    MemoryDoc(_, _, _) => "MemoryDoc"
+    Usage => "Usage"
+    Archive => "Archive"
+    AdbShare(_) => "AdbShare"
+    NewProfile(_) => "NewProfile"
+    ProfileAccount(_) => "ProfileAccount"
+    VaultItems => "VaultItems"
+    VaultItem(_, _) => "VaultItem"
+    AutoDecisions => "AutoDecisions"
+    AutoCompletion => "AutoCompletion"
+    AutoPolicy(_) => "AutoPolicy"
+    BarSettings => "BarSettings"
+    KeptFiles => "KeptFiles"
+    KeptChat(_, _) => "KeptChat"
+    Changelog => "Changelog"
+    About => "About"
+    Shortcuts => "Shortcuts"
+    LocalStation => "LocalStation"
+    Notifications => "Notifications"
+    Permissions => "Permissions"
+    Archiving => "Archiving"
+    StationArchiving(_) => "StationArchiving"
+    UsagePrices(_) => "UsagePrices"
+    RunSettings(_, _) => "RunSettings"
+  }
+}
+
+///|
+/// What the app shows as a whole (sfapp's shown_now says which): before it can show a workspace (the splash, the
+/// accounts or workspaces still read or failing), the way in signed out, the landing with no workspace, a share sheet
+/// over another app, or a page (the stack's top, the page the pane lands on on 中屏 and 大屏; a window of its own's).
+#derive(Eq)
+pub(all) enum Shown {
+  Starting
+  SignIn
+  Landing
+  Share
+  Shows(Page)
+}
+
+///|
+/// What the app shows by its kind alone (page_kind's for a page): what it tells the window thread's journal as that
+/// changes (mbui's journal_shows), which its hang reports and the device's performance record say.
+pub fn shown_kind(s : Shown) -> String {
+  match s {
+    Starting => "Starting"
+    SignIn => "Sign in"
+    Landing => "Landing"
+    Share => "Share"
+    Shows(p) => page_kind(p)
   }
 }
 
@@ -584,6 +771,16 @@ fn page_entry_left(serial : Int, p : Page) -> Unit {
 }
 
 ///|
+/// The stack's root made `page`'s, the one there put on its shelf and `page`'s entry taken back from it where it is
+/// there (Nav::replace_kept: where what holds the stack keeps pages so, the narrow shell; else as Nav::replace): what a
+/// place of the bar switched to is on 小屏, from the bar, back or the history. A place taken back is as it was left, its
+/// scroll and 连接's 我的 too (the owner, 2026-11-12: 「三样都记得」); one put on the shelf has not left the stack yet, so
+/// nothing is let go of it here (@settings.left is page_entry_left's, as its entry leaves for good).
+pub fn nav_root_kept(page : Page) -> Unit {
+  app.nav.replace_kept(page)
+}
+
+///|
 pub fn new_nav() -> @ui.Nav[Page] {
   // what its own back comes to, back's in the history (app_history.mbt went_back); settings' gear is at the right of
   // every top bar, so it comes in from the right like any page
@@ -659,6 +856,29 @@ pub fn open_page(p : Page) -> Unit {
 }
 
 ///|
+/// What page `p` reads of the core as it is first built, each asked of `ask`, in the order its build asks them: a
+/// chat its view, its draft, its workspace's stations (the names it shows its agents by) and its jobs' summary. A
+/// page not said here asks as its build runs. Only what it reads on every screen, at once: what its build reads
+/// later or on one screen alone is its build's (sfapp's declared_read_wbtest holds each said here read at rest, and
+/// the frame that builds it asking nothing more).
+///
+/// A bridge while pages are built by the old view, as opens_ahead_node's is (apps/mbui/AGENTS.md): only for a page the
+/// old view builds whose first screen reads the core (the chat's, so far; another added only with the coordinator of
+/// the migration, 2026-11-12), not a table every page is put in. A page made as nodes says what it reads where it is
+/// made, and goes from here then.
+pub fn page_opens(p : Page, ask : (String, Map[String, Json]) -> Unit) -> Unit {
+  match p {
+    Chat(r) => {
+      ask("chat", chat_params(r))
+      ask("composer", { "key": Json::string(r.station + ":" + r.session) })
+      ask("stations", stations_asked(workspace_of(r.station)))
+      ask("chatJobs", chat_jobs_summary_params(r))
+    }
+    _ => ()
+  }
+}
+
+///|
 /// Page `p` opened from the page in view (a chat's link in a message): over it, back coming to it again, where the
 /// layout has it (Shell's `open_over`).
 pub fn open_page_over(p : Page) -> Unit {
@@ -672,30 +892,37 @@ pub fn open_page_over(p : Page) -> Unit {
 ///|
 /// A chat the page is of: its station, the session it is opened by (a row's `session`), its title and its station's
 /// name as the row said them (the page shows the view's own once it is read).
+#derive(Eq)
 pub(all) struct ChatRef {
   station : String
   session : String
   title : String
   station_name : String
-} derive(Eq)
+}
 
 ///|
 /// Where a page of a drive is: a station, one of its roots (None: the drive itself, its roots), a path under it.
+#derive(Eq)
 pub(all) struct DriveAt {
   station : String
   root : String?
   path : String
-} derive(Eq)
+}
 
 ///|
 /// As at the start: Home alone on the stack, nothing chosen here yet, nothing said, no page left (the app's reset; a
 /// toast's count goes on, as before it was here).
 pub fn reset() -> Unit {
   app.nav = new_nav()
+  // (the core given no mermaid: a run's core is a new one)
+  mermaid_begin()
   // (no page on its way: a frame with no wide page in it says none, the last run's left as it was)
   page_way_said("", 0.0, ends=0.0)
   // where it has been (app_history.mbt)
   history_reset()
+  last_reset()
+  ahead_reset()
+  switch_reset()
   app.picked.set("")
   @ui.set_motion_chosen(None)
   @ui.set_haptics(true)
@@ -711,6 +938,13 @@ pub fn reset() -> Unit {
   let pending = pending_chat_readers.values().collect()
   pending_chat_readers.clear()
   for reader in pending { stop_pending_chat(reader) }
+  let shown = handed_shown.values().collect()
+  handed_shown.clear()
+  for readers in shown {
+    for reader in readers {
+      reader.release()
+    }
+  }
   let handed = handed_readers.values().collect()
   handed_readers.clear()
   for readers in handed {
@@ -732,8 +966,8 @@ pub fn reset() -> Unit {
   keepings.clear()
   // what was worked out of the core's topics (derived.mbt)
   kept_reset()
-  // how many of each chats' list are asked (rows.mbt)
-  chat_limits_reset()
+  // how many rows each chats' list was told to grow to, the window's height they are worked out of (rows.mbt)
+  chat_windows_reset()
   open_titled.val = ""
   shown_days.clear()
   held_from.clear()
@@ -768,16 +1002,21 @@ pub fn reset() -> Unit {
   go_tos.clear()
   go_to_passages.clear()
   go_to_words.clear()
+  // and where each chat's reader was as a go-to took its list away (jump.mbt)
+  places_back.clear()
+  go_back_offsets.clear()
+  places_back_said.set(0)
   // a new chat while it is made (fresh.mbt)
   fresh_reset()
   // how times are said (message_words.mbt)
-  absolute_times.val = false
+  absolute_times.set(false)
+  // whether a chat's page is made as nodes inside (chat_page_nodes)
+  chat_page_nodes.set(chat_page_nodes_at_start)
   // a chat's list's turns and its messages out of avatars (list_turns.mbt, emit.mbt)
   turns_by.clear()
   emits.clear()
   // words sent flying (flight.mbt)
-  send_flight.set(None)
-  landing_shares.clear()
+  flights_reset()
   // the chats' lists as kept while they show and where they were left (chat_list.mbt)
   readings.clear()
   kept_places.clear()
@@ -795,6 +1034,7 @@ pub fn reset() -> Unit {
   links_reset()
   menu_bar_given.val = ""
   shell.val = bare_shell()
+  beside_room_now.set(false)
   // the page shown alone in a window of its own (window.mbt)
   lone_page.val = None
   windows_open.clear()
@@ -803,7 +1043,7 @@ pub fn reset() -> Unit {
 ///|
 /// Each hold's press as last felt (`what` held: a message's words picked, a link's menu, a page's bar folded): once a
 /// press, whichever of a frame's builds saw it.
-let felt_holds : Map[String, Int] = {}
+let felt_holds : Map[String, Int] = Map([])
 
 ///|
 /// Felt as the hold `what` takes the press it is,

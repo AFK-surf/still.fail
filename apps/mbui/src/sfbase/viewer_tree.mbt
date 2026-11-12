@@ -235,8 +235,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     .ground(By(fn() {
       vw.fly.said()
       vw.fade.said()
-      let now = g.logic_at()
-      let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { g.drawn_at() } else { @double.infinity }
+      let t = g.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })
       // (a film's or a song's under its player's fade too, as the old frame's preview layer laid its ground in the box
       // it faded: its fade twice where it does not fly)
       let under = if vw.played() { vw.fade.value_at(t) } else { 1.0 }
@@ -276,8 +275,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       .over(Is(true))
       .alpha(By(fn() {
         vw.fade.said()
-        let now = canvas.logic_at()
-        vw.fade.value_at(if vw.fade.goes_at(now) { canvas.drawn_at() } else { @double.infinity })
+        vw.fade.value_at(canvas.drawn_while(fn(at) { vw.fade.goes_at(at) }))
       }))
       // (closed: what is on it the viewer's going alone, a finger on it called off then)
       .presses(By(fn() {
@@ -434,7 +432,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
           .words_look(By(fn() {
             // (a size alone said, its line the theme's text_line times it, as Ctx::text has it)
             let size = @sf.theme().t.body
-            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
+            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { @sf.theme().p.muted }))
           |> ignore
@@ -646,6 +644,7 @@ fn native_said(vw : Viewer, src : Source, width : Double) -> NativeSaid? {
     words: [
       "common.close", "web-main.preview.fitKey", "web-main.preview.actualKey", "web-main.annotate.image", "common.copy",
       "web-main.stations.saveToPhotos", "android-chat.file.download", "web-main.preview.rendered", "web-main.preview.source",
+      "android-misc.drive.share",
       "android-misc.drive.player.full", "android-misc.drive.player.unfull",
     ].map(fn(k) { @sf.t(k) }),
   })
@@ -653,6 +652,7 @@ fn native_said(vw : Viewer, src : Source, width : Double) -> NativeSaid? {
 
 ///|
 /// What decides what viewer `vw` says to the system's bars (native_said).
+#derive(Eq)
 struct NativeSaid {
   marking : Bool
   shown : Bool
@@ -672,7 +672,7 @@ struct NativeSaid {
   /// a film turned sideways (its 全屏 there says so)
   sideways : Bool
   words : Array[String]
-} derive(Eq)
+}
 
 ///|
 /// A finger's event on the canvas of viewer `v` (node `canvas`), at its own moment: what the old view's stage worked
@@ -814,7 +814,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
         v.held = false
         return
       }
-      v.image_let_go(c, canvas, src, d, pinched, has_before, has_after)
+      v.image_let_go(c, canvas, src, d, pinched)
     }
   }
 }
@@ -960,8 +960,6 @@ fn Viewer::image_let_go(
   src : Source,
   d : @view.Drag,
   pinched : Bool,
-  has_before : Bool,
-  has_after : Bool,
 ) -> Unit {
   let v = self
   let z = v.zoom
@@ -975,10 +973,8 @@ fn Viewer::image_let_go(
     let width = z.bw + slide_gap
     let base = if v.strip_down > width / 2.0 { -1 } else if v.strip_down < -width / 2.0 { 1 } else { 0 }
     let dx = s - v.strip_down
-    let far = dx.abs() > dmin(80.0, z.bw / 5.0)
     let from_edge = !zoomed || (if dx > 0.0 { v.at_left } else { v.at_right })
-    let flung = from_edge && vx.abs() > 0.3 && (vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
-    let step = if dx != 0.0 && (far || flung) { if dx > 0.0 { -1 } else { 1 } } else { 0 }
+    let step = strip_step(dx, vx, z.bw, from_edge)
     let to = base + step
     if to < 0 {
       v.go(c, src, -1, vx * 1000.0)
@@ -1103,8 +1099,7 @@ fn Viewer::shown_on(self : Viewer, node : @view.View) -> Double {
   let vw = self
   vw.fly.said()
   vw.fade.said()
-  let now = node.logic_at()
-  let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { node.drawn_at() } else { @double.infinity }
+  let t = node.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })
   if vw.flies {
     vw.flight_share_at(t)
   } else {
@@ -1249,7 +1244,7 @@ fn image_steps(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
 }
 
 ///|
-/// A picture's tools in a bar's row `row` (then copy and download): mark and copy once its picture is all here (copied:
+/// A picture's tools in a bar's row `row` (then copy, 移到侧边 and download): mark and copy once its picture is all here (copied:
 /// a check for copied_ms, from the press's moment); download (unable while there is nothing to save; a ring while the
 /// core downloads it; none while it comes). Each `corner` round, in `ink`, its tip in `tips`; each press done at its
 /// moment, what a download asks for told once, as it is asked.
@@ -1330,6 +1325,35 @@ fn image_tools(
     ignore(t)
     r.owns(fn() { (copied_end.val)() }) |> ignore
   })
+  // 移到侧边: where the shell has a side panel for the page under it, a file that opens there (beside_offered): the
+  // whole window closed for its tab
+  row.show(fn() { beside_offered(vw.file.path, vw.file.name) }, fn(r) {
+    @sf.tool_node(
+      r,
+      fn() { { icon: "panel-open", label: @sf.t("web-main.preview.moveBeside"), on: false, disabled: false } },
+      ink,
+      corner,
+      fn() { vw.move_beside() },
+      tip=tips,
+    )
+    |> ignore
+  })
+  // 分享 on a phone (shares_out): what is here handed to the system's share sheet; one told of, read whole first. Not
+  // beside 预览 / 源码 (a table, a page): a phone's floating bar has no room for both with the name (words at 1.3)
+  row.show(fn() { shares_out() && !vw.coming() && !downloading(dl()) && (whole() || vw.told_of()) && !(whole() && (vw.shown_kind() == Some(KCsv) || vw.shown_kind() == Some(KHtml))) }, fn(r) {
+    @sf.tool_node(
+      r,
+      fn() {
+        let here = vw.bytes.get() is Some(_) || (vw.told_of() && !vw.asked_now())
+        { icon: "share", label: @sf.t("android-misc.drive.share"), on: false, disabled: !here }
+      },
+      ink,
+      corner,
+      fn() { vw.ask_share() },
+      tip=tips,
+    )
+    |> ignore
+  })
   // download: what is here saved at once; one told of, read whole first; a ring while the core downloads it
   row.show(fn() { !vw.coming() && !downloading(dl()) }, fn(r) {
     @sf.tool_node(
@@ -1409,7 +1433,7 @@ pub fn file_progress_node(
             // the size so far in bold, where the sentence has it
             let words = pv("android-chat.file.loading.size")
             let (before, after) = match words.find("{size}") {
-              Some(i) => (words.view(end_offset=i).to_owned(), words.view(start_offset=i + 6).to_owned())
+              Some(i) => (words.exact_view(end=i).to_owned(), words.exact_view(start=i + 6).to_owned())
               None => (words, "")
             }
             [
@@ -1423,7 +1447,7 @@ pub fn file_progress_node(
       }))
       .words_look(By(fn() {
         let (size, line) = @ui.tree_theme().text_size(Body)
-        { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { @ui.tree_theme().color(Muted) }))
       |> ignore
@@ -1477,6 +1501,7 @@ pub fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
 ///|
 /// What a flight is drawn by of the thumbnail it flies from (Thumb's but what it draws over its picture), to tell it
 /// changed.
+#derive(Eq)
 struct ThumbDrawn {
   box : (Double, Double, Double, Double)
   seen : (Double, Double, Double, Double)?
@@ -1485,18 +1510,19 @@ struct ThumbDrawn {
   letterbox : Bool
   top_crop : Bool
   picture : String
-} derive(Eq)
+}
 
 ///|
 /// What the stage of a viewer that shows no picture of its own shows (Viewer::content's, as it is told: its kind
 /// sniffed, its bytes, a read failed, what has come of it, 源码): told of (facts), coming, failed, or what the old views
 /// show of it (read in the reader, as it comes, a page, a table, code, a PDF).
+#derive(Eq)
 priv enum OuterStage {
   Hosted
   Coming
   Facts
   Failed
-} derive(Eq)
+}
 
 ///|
 fn Viewer::outer_stage(self : Viewer) -> OuterStage {
@@ -1534,8 +1560,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
     .alpha(By(fn() {
       vw.fly.said()
       vw.fade.said()
-      let now = s.logic_at()
-      vw.words_share(vw.in_at(if vw.fly.goes_at(now) || vw.fade.goes_at(now) { s.drawn_at() } else { @double.infinity }))
+      vw.words_share(vw.in_at(s.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })))
     }))
     // (going, the page's: a press there its own, nothing of it here taking it)
     .presses(By(fn() {
@@ -1562,35 +1587,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
       .over(Is(true))
       |> ignore
     })
-    s.show(fn() { stage() != Hosted }, fn(note) {
-      note.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).gap(Is(14.0)).lines_up(Is(Some(Middle))) |> ignore
-      // (coming or failed, a tap on its stage shows or hides its bars, as the old stage's did: tap_stage; told of,
-      // none)
-      note.presses(Is(true)).on_press(fn() {
-        let now = @signals.untracked(stage)
-        if now == Coming || now == Failed {
-          vw.toggle()
-        }
-      })
-      |> ignore
-      note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
-      note.show(fn() { stage() == Facts }, fn(f) { viewer_facts_node(f, src, vw) })
-      note.show(fn() { stage() == Coming }, fn(f) { viewer_coming_node(f, vw) })
-      note.show(fn() { stage() == Failed }, fn(f) {
-        f.box(fn(w) {
-          w
-          .words(By(fn() { pv_fill("android-chat.file.loadFailed", [("error", vw.error.get().unwrap_or(""))]) }))
-          .words_look(By(fn() {
-            let size = @sf.theme().t.body
-            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
-          }))
-          .ink(By(fn() { @sf.theme().p.muted }))
-          |> ignore
-        })
-        |> ignore
-      })
-      note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
-    })
+    s.show(fn() { stage() != Hosted }, fn(note) { viewer_note_node(note, src, vw, stage) })
   })
   |> ignore
   // 下载 asked on it (Viewer::ask_save): the core told at that change, on by itself whatever becomes of this viewer;
@@ -1600,7 +1597,50 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
       vw.install_after = false
       vw.ask_install()
     }
+    // 分享 asked before its bytes came, handed on as they come (Viewer::ask_share)
+    vw.share_came()
   })
+}
+
+///|
+/// What the stage of viewer `vw` says in its middle in `note` (24 in, 14 apart) where it shows nothing else (`stage`):
+/// told of, coming, failed, its nodes; a tap on it, coming or failed, shows or hides the bars, as the old stage's did
+/// (tap_stage; told of, none). The whole window's (viewer_hosted) and a tab's beside a chat (viewer_tab_node: `bars`
+/// false, no bars to show or hide, so no press of its own either).
+fn viewer_note_node(
+  note : @view.View,
+  src : Source,
+  vw : Viewer,
+  stage : () -> OuterStage,
+  bars? : Bool = true,
+) -> Unit {
+  note.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).gap(Is(14.0)).lines_up(Is(Some(Middle))) |> ignore
+  if bars {
+    note.presses(Is(true)).on_press(fn() {
+      let now = @signals.untracked(stage)
+      if now == Coming || now == Failed {
+        vw.toggle()
+      }
+    })
+    |> ignore
+  }
+  note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+  note.show(fn() { stage() == Facts }, fn(f) { viewer_facts_node(f, src, vw) })
+  note.show(fn() { stage() == Coming }, fn(f) { viewer_coming_node(f, vw) })
+  note.show(fn() { stage() == Failed }, fn(f) {
+    f.box(fn(w) {
+      w
+      .words(By(fn() { pv_fill("android-chat.file.loadFailed", [("error", vw.error.get().unwrap_or(""))]) }))
+      .words_look(By(fn() {
+        let size = @sf.theme().t.body
+        { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
+      }))
+      .ink(By(fn() { @sf.theme().p.muted }))
+      |> ignore
+    })
+    |> ignore
+  })
+  note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
 }
 
 ///|
@@ -1609,12 +1649,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
 fn film_at(vw : Viewer, node : @view.View) -> Double {
   vw.fly.said()
   vw.fade.said()
-  let now = node.logic_at()
-  if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
-    node.drawn_at()
-  } else {
-    @double.infinity
-  }
+  node.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })
 }
 
 ///|
@@ -1836,7 +1871,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
       .words_centered(Is(true))
       .words_look(By(fn() {
         let s = size()
-        { size: s, weight, line: @ui.tree_theme().text_line * s, wrap: true, tracking: @view.letters_own, balance: false }
+        { size: s, weight, line: @ui.tree_theme().text_line * s, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(ink))
       |> ignore
@@ -1864,7 +1899,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
         .words(Is(ext))
         .words_look(By(fn() {
           let s = @sf.theme().t.ui
-          { size: s, weight: 700, line: s, wrap: false, tracking: @view.letters_own, balance: false }
+          { size: s, weight: 700, line: s, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
         }))
         .ink(By(fn() { p().accent_text }))
         |> ignore
@@ -1928,9 +1963,20 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
     // an APK: 安装 first, handed to the system's installer (strong); 下载 then the quieter. As it is read for one, that
     // one at work, saying how much has come in its words; the other not pressed meanwhile
     let apk = @sf.lower(vw.file.name).has_suffix(".apk")
-    let reading_for = fn(install : Bool) { reading() && vw.install_after == install }
-    let label = fn(install : Bool, rest : String) {
-      if !reading_for(install) {
+    // (what it is read for: 0 下载, 1 安装, 2 分享)
+    let reading_for = fn(k : Int) {
+      reading() &&
+      (if vw.install_after {
+        1
+      } else if vw.share_after {
+        2
+      } else {
+        0
+      }) ==
+      k
+    }
+    let label = fn(k : Int, rest : String) {
+      if !reading_for(k) {
         return rest
       }
       let reading_words = @sf.t("web-main.preview.loadingLabel")
@@ -1944,17 +1990,24 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
       }
     }
     if apk {
-      @sf.button_node(r, fn() { label(true, pv("android-chat.file.install")) }, fn() { vw.ask_install() }, tone=Primary, busy=fn() {
-        reading_for(true)
-      }, disabled=fn() { reading_for(false) }, across=true)
+      @sf.button_node(r, fn() { label(1, pv("android-chat.file.install")) }, fn() { vw.ask_install() }, tone=Primary, busy=fn() {
+        reading_for(1)
+      }, disabled=fn() { reading() && !reading_for(1) }, across=true)
       |> ignore
     }
-    @sf.button_node(r, fn() { label(false, @sf.t("web-main.preview.download")) }, fn() { vw.ask_save(@ui.current()) }, tone=if apk {
+    @sf.button_node(r, fn() { label(0, @sf.t("web-main.preview.download")) }, fn() { vw.ask_save(@ui.current()) }, tone=if apk {
       Ghost
     } else {
       Primary
-    }, icon="download", busy=fn() { reading_for(false) }, disabled=fn() { reading_for(true) }, across=true)
+    }, icon="download", busy=fn() { reading_for(0) }, disabled=fn() { reading() && !reading_for(0) }, across=true)
     |> ignore
+    // 分享 on a phone (shares_out), the quieter: read whole, then the system's share sheet
+    if shares_out() {
+      @sf.button_node(r, fn() { label(2, @sf.t("android-misc.drive.share")) }, fn() { vw.ask_share() }, tone=Ghost, icon="share", busy=fn() {
+        reading_for(2)
+      }, disabled=fn() { reading() && !reading_for(2) }, across=true)
+      |> ignore
+    }
   })
 }
 
@@ -2155,4 +2208,23 @@ pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage :
       image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
     }
   })
+}
+
+///|
+/// Which way a picture's strip drawn `dx` across (a picture `bw` wide), let go going `vx` (points a ms), steps: on to the
+/// one beside it (-1 the one before, 1 the one after) landing far enough on from that speed (@ui.lands_past) or flung
+/// that way from its edge, else none (back).
+fn strip_step(dx : Double, vx : Double, bw : Double, from_edge : Bool) -> Int {
+  let far_at = dmin(80.0, bw / 5.0)
+  let far = @ui.lands_past(dx, vx, if dx > 0.0 { far_at } else { -far_at })
+  let flung = from_edge && vx.abs() > 0.3 && (vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
+  if dx != 0.0 && (far || flung) {
+    if dx > 0.0 {
+      -1
+    } else {
+      1
+    }
+  } else {
+    0
+  }
 }

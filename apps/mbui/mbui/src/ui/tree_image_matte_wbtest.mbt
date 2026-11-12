@@ -45,7 +45,7 @@ test "a node's picture at a rect in a matte: one frame its box, the picture over
   let old = matte_tester(true)
   old.draw()
   let was = matte_drawn(old)
-  assert_eq(was.length(), 1, msg="the old view's: \{was}")
+  assert_eq(was.length(), 1, msg="the old view's: \{Repr(was)}")
   let t = matte_tester(false)
   t.draw()
   assert_eq(matte_drawn(t), was, msg="the node's the same")
@@ -57,7 +57,7 @@ test "a node's picture in a matte not decoded yet: the matte alone over its box;
   let t = matte_tester(false, finish=false)
   t.draw()
   assert_eq(matte_drawn(t).length(), 0, msg="no picture yet")
-  assert_true(t.drawn_rects().iter().any(fn(r) { r == (0.0, 0.0, 200.0, 100.0, 0x000000FFL) }), msg="its matte over its box: \{t.drawn_rects()}")
+  assert_true(t.drawn_rects().iter().any(fn(r) { r == (0.0, 0.0, 200.0, 100.0, 0x000000FFL) }), msg="its matte over its box: \{Repr(t.drawn_rects())}")
   for p in t.pending() {
     t.finish(p.0, p.1)
   }

@@ -1,23 +1,22 @@
 import {
+  "mbui/halt",
   "mbui/wasmrt",
   "moonbitlang/core/double",
   "stillfail/core",
   "stillfail/sfapp",
-  "stillfail/sf",
+  "stillfail/sfapp/settings",
   "stillfail/sfcore",
   "stillfail/sfbase",
   "stillfail/sfkept",
   "mbui/ui",
   "mbui/view",
   "mbui/kit",
-  "mbui/motion",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
   "mbui/runfs",
+  "mbui/signals",
 }
-
-import { "mbui/signals" } for "wbtest"
 
 options(
   targets: {

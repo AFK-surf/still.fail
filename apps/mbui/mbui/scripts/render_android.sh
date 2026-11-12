@@ -40,11 +40,15 @@ case "${1:-run}" in
       $ADB exec-in "run-as $APP_ID sh -c 'cat > files/$1.dl'" < $O/$1.dl
       $ADB logcat -c
       $ADB shell am start -n $APP_ID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/$1.dl;MBUI_DL_PNG=$F/$1.png'" >/dev/null
-      # Only this renderer's completion or crash; a system app's crash says nothing about this picture.
-      said=$($ADB logcat --uid="$render_uid" -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
+      # Only this renderer's completion or crash; a system app's crash says nothing about this picture. Its completion
+      # is the line naming the picture (said once it is written, render/main.mbt), not any of its lines: "N of M
+      # instances left out" (#4975) is said before it draws, and the picture read then was none, scheduled
+      # mbui-render-android 42755414965, 2026-11-10.
+      said=$($ADB logcat --uid="$render_uid" -v brief -e "mbui-render: .*/$1\\.png: |FATAL EXCEPTION|Fatal signal" -m 1 | grep -v '^-----')
       echo "$1: $said"
       case "$said" in
-        *"mbui-render: "*"instances"*) ;;
+        *"$1.png: not written"*) $ADB logcat -d -t 200 | tail -60; exit 1 ;;
+        *"$1.png: "*"instances"*) ;;
         *) $ADB logcat -d -t 200 | tail -60; exit 1 ;;
       esac
       $ADB exec-out run-as $APP_ID cat files/$1.png > $2

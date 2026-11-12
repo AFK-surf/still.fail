@@ -1,10 +1,11 @@
 // tiny-skia's PathBuilder.
 
 ///|
+#derive(Eq)
 priv enum PathDirection {
   CW
   CCW
-} derive(Eq)
+}
 
 ///|
 pub(all) struct PathBuilder {

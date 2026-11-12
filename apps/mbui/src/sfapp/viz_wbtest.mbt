@@ -267,7 +267,7 @@ test "the whole window with the window's buttons in the app's top row (a Mac's):
     Some((x, _)) => assert_true(x > 16.0 + 54.0, msg="\{x}")
     None => fail("no way back")
   }
-  assert_true(name[0].1 > 16.0 + 54.0, msg="\{name[0]}")
+  assert_true(name[0].1 > 16.0 + 54.0, msg="\{Repr(name[0])}")
   t.tap_text(tr("common.back"))
   t.frame()
   t.frame()
@@ -359,7 +359,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   let (page, _) = viz_views(t)
   // as tall as it may be: the chat's page under all of what shows of it
   t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":5000}")
@@ -479,7 +479,7 @@ test "expanded fragments scroll while their inline copies grow with their conten
 
 ///|
 test "inline HTML is set in the faces the app is set in, a face still.fail keeps linked from its stylesheet" {
-  new_run()
+  fresh_app()
   // none chosen: the stylesheet's own (no font token at all, an empty one would stand in its place)
   let plain = viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL)
   assert_false(plain.contains("--e-font-body:"))
@@ -495,7 +495,7 @@ test "inline HTML is set in the faces the app is set in, a face still.fail keeps
   // its origin let in for the stylesheet and the files it names, nothing else of it
   assert_true(doc.contains("fonts.googleapis.com https://app.still.fail;"))
   assert_true(doc.contains("fonts.gstatic.com https://app.still.fail;"))
-  new_run()
+  fresh_app()
 }
 
 ///|
@@ -543,7 +543,7 @@ test "a chat left keeps its pages, as the few left before it: gone back to, they
   let chat = key.unsafe_substring(start=0, end=key.length() - "release.html".length())
   let (station, session) = match chat.unsafe_substring(start=5, end=chat.length() - 1).split(":").collect() {
     [a, .. rest] => (a.to_owned(), rest.map(fn(v) { v.to_owned() }).join(":"))
-    _ => abort("no chat in \{key}")
+    _ => @halt.saying("no chat in \{key}")
   }
   viz_chat_left(station, session)
   assert_true(viz_frames.contains(key))

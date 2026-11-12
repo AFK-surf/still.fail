@@ -14,9 +14,9 @@ test "a frame no one asked for that drew something else: the next asked for said
   // (the next frame, asked for, drawing the same as the one between)
   t.frame()
   let frames = t.host_frames()
-  assert_eq(frames.map(fn(f) { (f.asked, f.changed) }), [(false, true), (true, true)], msg="\{frames}")
-  assert_eq(frames[0].damage, [], msg="\{frames}")
-  assert_true(frames[1].damage.length() > 0, msg="\{frames}")
+  assert_eq(frames.map(fn(f) { (f.asked, f.changed) }), [(false, true), (true, true)], msg="\{Repr(frames)}")
+  assert_eq(frames[0].damage, [], msg="\{Repr(frames)}")
+  assert_true(frames[1].damage.length() > 0, msg="\{Repr(frames)}")
 }
 
 ///|
@@ -86,7 +86,7 @@ test "a timer due less than a ms after the host's clock: the host woken for its 
   assert_eq(fired, [due])
   let frames = t.host_frames()
   assert_true(frames.length() > 0, msg="no frame drawn for it")
-  assert_eq(frames[0].at, tick, msg="\{frames.map(f => (f.at, f.asked, f.changed))}")
+  assert_eq(frames[0].at, tick, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed)))}")
 }
 
 ///|
@@ -121,14 +121,14 @@ fn frame_short_of_timer(compare : Bool) -> Unit raise {
   assert_eq(fired, [])
   assert_eq(t.built_why(), "", msg="the frame short of the timer built whole")
   let early = t.host_frames()
-  assert_eq(early.map(f => f.changed), [false], msg="\{early.map(f => (f.at, f.asked, f.changed, f.why))}")
+  assert_eq(early.map(f => f.changed), [false], msg="\{Repr(early.map(f => (f.at, f.asked, f.changed, f.why)))}")
   assert_true(t.fake.wake >= due && t.fake.wake <= due - drawn_short_ms + 1.0, msg="woken again at \{t.fake.wake}")
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   assert_eq(fired, [due])
   let frames = t.host_frames()
   let shown = frames.map(f => (f.at, f.asked, f.changed, f.why))
-  assert_true(frames.length() > 0 && whole_ms(frames[0].at) >= due, msg="\{shown}")
-  assert_true(frames[0].changed && frames[0].why != "", msg="\{shown}")
+  assert_true(frames.length() > 0 && whole_ms(frames[0].at) >= due, msg="\{Repr(shown)}")
+  assert_true(frames[0].changed && frames[0].why != "", msg="\{Repr(shown)}")
   for f in frames {
     assert_true(f.asked, msg="an unasked frame drawn at \{f.at}")
   }
@@ -226,7 +226,7 @@ test "timers set between frames, only frames asked for drawn: each callback at i
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   assert_eq(fired, [start + 50.0, start + 100.0])
   let frames = t.host_frames()
-  assert_true(frames.length() > 0 && frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.length() > 0 && frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
@@ -256,10 +256,10 @@ fn still_view(c : Ctx) -> Unit {
 }
 
 ///|
-/// A timer a message's said handler sets (taken as it comes, as the frame begins, before it is said built whole or
-/// not), the message posted long after the last frame and the view still: due from that frame's moment, and only the
-/// frames asked for drawn, the host woken for it.
-test "a timer set by a message's said handler, the view still: due from the frame that took it, the host woken" {
+/// A timer a message's said handler sets (taken as it comes, at the moment it is posted, between frames), the message
+/// posted long after the last frame and the view still: due from that moment, and only the frames asked for drawn, the
+/// host woken for it.
+test "a timer set by a message's said handler, the view still: due from the moment it was posted, the host woken" {
   let (t, _, fired) = idle_tester()
   let taken : Array[Double] = []
   on_message_said("test.timer_said", fn(_, _) {
@@ -268,18 +268,18 @@ test "a timer set by a message's said handler, the view still: due from the fram
     true
   })
   t.record_host()
-  let first = whole_ms(t.tick_after(t.time()))
+  let first = whole_ms(t.time())
   t.post("test.timer_said", "{}")
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   assert_eq(taken, [first])
   assert_eq(fired, [first + 50.0])
   let frames = t.host_frames()
-  assert_true(frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
 /// The same, the said handler setting only a signal and an effect of it setting the timer.
-test "a timer set by an effect of a signal a message's said handler set: due from the frame that took it" {
+test "a timer set by an effect of a signal a message's said handler set: due from the moment it was posted" {
   let (t, _, fired) = idle_tester()
   let taken : Array[Double] = []
   let came = @signals.signal(0)
@@ -294,14 +294,14 @@ test "a timer set by an effect of a signal a message's said handler set: due fro
     true
   })
   t.record_host()
-  let first = whole_ms(t.tick_after(t.time()))
+  let first = whole_ms(t.time())
   t.post("test.timer_said_signal", "{}")
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   stop()
   assert_eq(taken, [first])
   assert_eq(fired, [first + 50.0])
   let frames = t.host_frames()
-  assert_true(frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
@@ -361,7 +361,7 @@ test "a fiber forked long after the last frame: runs at its moment, after a time
     ("slept", start + 50.0),
   ])
   let frames = t.host_frames()
-  assert_true(frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
@@ -393,7 +393,7 @@ test "a fiber forked long after the last frame: ready at once, run by run_ready"
   let rt = runtime()
   let ran = Ref(0)
   t.fake.wants = false
-  rt.fork(async fn() { ran.val += 1 }) |> ignore
+  rt.fork(fn() { ran.val += 1 }) |> ignore
   assert_true(!rt.idle())
   assert_true(rt.wants_frame())
   assert_true(t.fake.wants)
@@ -409,7 +409,7 @@ test "a scope closed long after the last frame: its fiber cut, its finalizer run
   let rt = runtime()
   let said : Array[String] = []
   let scope = rt.root().child()
-  scope.add_finalizer(async fn() { said.push("finalized") })
+  scope.add_finalizer(fn() { said.push("finalized") })
   scope.fork(async fn() {
     @effect.sleep(timers_fired_ms.to_int() * 10)
     said.push("slept")
@@ -432,7 +432,7 @@ test "a fiber forked between frames, an offscreen frame drawn earlier than its m
   t.advance(idle_ms)
   let since = whole_ms(t.time())
   let ran : Array[Double] = []
-  runtime().fork(async fn() { ran.push(@effect.now().to_double()) }) |> ignore
+  runtime().fork(fn() { ran.push(@effect.now().to_double()) }) |> ignore
   assert_true(t.fake.wants, msg="the host not asked for a frame as it was forked")
   t.fake.wants = false
   frame_offscreen(still_view, 100.0, 100.0, 1.0, at) |> ignore
@@ -470,7 +470,7 @@ test "a fiber forked and a timer due at the same moment: the first set first, wh
       }
       let said : Array[(String, Double)] = []
       let fork = fn() {
-        runtime().fork(async fn() { said.push(("fiber", @effect.now().to_double())) }) |> ignore
+        runtime().fork(fn() { said.push(("fiber", @effect.now().to_double())) }) |> ignore
       }
       let timer = fn() { runtime().after(0, fn() { said.push(("timer", runtime().now().to_double())) }) }
       if fork_first {
@@ -516,7 +516,7 @@ test "a task run at its moment, one made ready at a later moment waiting: that o
   // (run to its sleep, at the last frame's time)
   ignore(runtime().run_ready())
   t.advance(idle_ms)
-  runtime().fork(async fn() {  }) |> ignore
+  runtime().fork(fn() {  }) |> ignore
   frame_offscreen(still_view, 100.0, 100.0, 1.0, at) |> ignore
   assert_eq(seen, [(false, true, 1)])
   assert_eq(runtime().holding().1, 1)
@@ -535,7 +535,7 @@ test "an offscreen frame's view forking a fiber: the host asked for nothing" {
   let view = fn(c : Ctx) {
     if !forked.val {
       forked.val = true
-      c.fork(async fn() { ran.val += 1 }) |> ignore
+      c.fork(fn() { ran.val += 1 }) |> ignore
     }
     still_view(c)
   }
@@ -560,7 +560,7 @@ test "a timer's callback running what is ready, a task made ready after it at th
     said.push("timer")
     ignore(runtime().run_ready())
   })
-  runtime().fork(async fn() { said.push("fiber") }) |> ignore
+  runtime().fork(fn() { said.push("fiber") }) |> ignore
   t.frame()
   assert_eq(said, ["timer", "fiber"])
   assert_true(runtime().idle())
@@ -580,11 +580,11 @@ test "fibers forked between frames at one moment, a seed: in their order; their 
     t.advance(idle_ms)
     let ran : Array[String] = []
     for i in 0..<forked_n {
-      runtime().fork(async fn() {
+      runtime().fork(fn() {
         ran.push("fiber \{i}")
         if i == 0 {
           for j in 0..<forked_n {
-            runtime().fork(async fn() { ran.push("child \{j}") }) |> ignore
+            runtime().fork(fn() { ran.push("child \{j}") }) |> ignore
           }
         }
       })
@@ -599,17 +599,17 @@ test "fibers forked between frames at one moment, a seed: in their order; their 
   let children : Array[Array[String]] = []
   for seed in 1..=8 {
     let o = order(seed, false)
-    let fibers = o.filter(r => r.starts_with("fiber"))
-    assert_eq(fibers, ["fiber 0", "fiber 1", "fiber 2", "fiber 3"], msg="seed \{seed}: \{o}")
+    let fibers = o.filter(r => r.has_prefix("fiber"))
+    assert_eq(fibers, ["fiber 0", "fiber 1", "fiber 2", "fiber 3"], msg="seed \{seed}: \{Repr(o)}")
     assert_eq(o.length(), 2 * forked_n)
     assert_eq(order(seed, false), o, msg="seed \{seed} twice")
     assert_eq(order(seed, true), o, msg="seed \{seed}, a frame between each")
-    let c = o.filter(r => r.starts_with("child"))
+    let c = o.filter(r => r.has_prefix("child"))
     if !children.contains(c) {
       children.push(c)
     }
   }
-  assert_true(children.length() > 1, msg="one order of the children for eight seeds: \{children}")
+  assert_true(children.length() > 1, msg="one order of the children for eight seeds: \{Repr(children)}")
 }
 
 ///|
@@ -646,10 +646,10 @@ test "a timer set between frames with the frame's time ahead of the host's: due 
   let frames = t.host_frames()
   assert_eq(fired, [due])
   let changed = frames.filter(f => f.changed).map(f => f.at)
-  assert_eq(changed.length(), 1, msg="\{frames.map(f => (f.at, f.asked, f.changed))}")
+  assert_eq(changed.length(), 1, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed)))}")
   assert_true(whole_ms(changed[0]) >= due, msg="shown at \{changed[0]}, due \{due}")
   // (the first frame drawn the one it runs in: none drawn before it for nothing)
-  assert_eq(frames[0].at, changed[0], msg="\{frames.map(f => (f.at, f.asked, f.changed))}")
+  assert_eq(frames[0].at, changed[0], msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed)))}")
   for f in frames {
     assert_true(f.asked, msg="an unasked frame drawn at \{f.at}")
   }
@@ -694,11 +694,11 @@ test "a timer set between frames with the frame's time ahead, no frame built aga
   let frames = t.host_frames()
   assert_eq(fired, [due])
   let changed = frames.filter(f => f.changed)
-  assert_eq(changed.length(), 1, msg="\{frames.map(f => (f.at, f.asked, f.changed, f.why))}")
+  assert_eq(changed.length(), 1, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed, f.why)))}")
   assert_true(whole_ms(changed[0].at) >= due, msg="shown at \{changed[0].at}, due \{due}")
   assert_true(changed[0].why != "", msg="run in a frame not built whole at \{changed[0].at}")
   // (the first frame drawn the one it runs in: none drawn before it for nothing)
-  assert_eq(frames[0].at, changed[0].at, msg="\{frames.map(f => (f.at, f.asked, f.changed, f.why))}")
+  assert_eq(frames[0].at, changed[0].at, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed, f.why)))}")
   for f in frames {
     assert_true(f.asked, msg="an unasked frame drawn at \{f.at}")
   }
@@ -752,8 +752,64 @@ test "a moment said on a device's clock of days: drawn to the first of the displ
       t.run_for(ms)
       t.each_frame(None)
       let n = drawn.length()
-      let said = "at \{period} ms a frame, \{off} off the frame: drawn \{drawn.map(fn(d) { d - origin })} ms on, for \{target - origin}"
+      let said = "at \{period} ms a frame, \{off} off the frame: drawn \{Repr(drawn.map(fn(d) { d - origin }))} ms on, for \{target - origin}"
       assert_true(n >= 2 && drawn[n - 1] == first && drawn[n - 2] < target && t.time() == first, msg=said)
     }
   }
+}
+
+///|
+/// What the fake host is posted is told at the moment it is posted on its clock, between frames, as a device's host
+/// tells it (MB_OUTSIDE_POSTED), in the order posted: never as the next frame begins. So a message posted at a moment
+/// comes at that moment at any rate of frames (run again at 60, 120, 24 and 7 a second: MBUI_TEST_FPS), and so does
+/// what it sets off.
+test "what is posted between frames is told at its moment, in its order, at any rate" {
+  let (t, start, _) = idle_tester()
+  let told : Array[(String, Double)] = []
+  on_message_said("test.told_at", fn(json, _) {
+    told.push((json, runtime().now().to_double()))
+    true
+  })
+  // (moments on no rate's frame grid: posts between two frames whatever the rate)
+  let first_gap_ms = 37.0
+  let second_gap_ms = 101.0
+  let after_last_ms = 10.0
+  t.post("test.told_at", "a")
+  t.run_for(first_gap_ms)
+  t.post("test.told_at", "b")
+  t.post("test.told_at", "c")
+  t.run_for(second_gap_ms)
+  t.post("test.told_at", "d")
+  t.run_for(after_last_ms)
+  assert_eq(told, [
+    ("a", start),
+    ("b", start + first_gap_ms),
+    ("c", start + first_gap_ms),
+    ("d", start + first_gap_ms + second_gap_ms),
+  ])
+}
+
+///|
+/// What the fake host is to do at a moment of its own (FakeHost::due) is done at that moment, whatever the frames: the
+/// clock stops there (run_for at any rate of frames: MBUI_TEST_FPS), several at one moment in the order said, one said
+/// for now done before the clock goes on.
+test "what the fake host does at a moment of its own: done then, in its order, at any rate" {
+  let (t, start, _) = idle_tester()
+  let done : Array[(String, Double)] = []
+  let at = fn(name : String) { fn() { done.push((name, runtime().now().to_double())) } }
+  // (two moments of the fake host's own, neither on any rate's frame grid, and a span past both)
+  let first_due_ms = 7.0
+  let later_due_ms = 20.0
+  let past_both_ms = 100.0
+  t.fake.due(start + later_due_ms, "b", at("b"))
+  t.fake.due(start + later_due_ms, "c", at("c"))
+  t.fake.due(start + first_due_ms, "a", at("a"))
+  t.fake.due(start, "now", at("now"))
+  t.run_for(past_both_ms)
+  assert_eq(done, [
+    ("now", start),
+    ("a", start + first_due_ms),
+    ("b", start + later_due_ms),
+    ("c", start + later_due_ms),
+  ])
 }

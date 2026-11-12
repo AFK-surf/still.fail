@@ -202,8 +202,11 @@ fn menu_panel(
               _ => {
                 let iid = ids[n]
                 let r = c.interact(iid, disabled=e.disabled)
-                // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed
-                if r.hovered && pointer_moved(c, iid) && !e.disabled {
+                // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed; the focus
+                // only taken from within the menu (its panel, its items; a submenu's from what holds it) or from
+                // nowhere: not back from what took it at the cause that closed the menu (a dialog an item opened, its
+                // field given the focus as it opens), the pointer still resting on that item as the menu goes
+                if r.hovered && pointer_moved(c, iid) && !e.disabled && (mine || depth > 0 || c.focused_id() == 0) {
                   if !c.has_focus(iid) {
                     c.focus_on(iid)
                   }
@@ -340,7 +343,7 @@ fn typeahead(c : @ui.Ctx, pid : Int, entries : Array[Entry], ids : Array[Int], l
     }
   }
   // the same letter again moves on to the next it starts; more letters stay on the one that matches
-  let first = typed.view(start_offset=0, end_offset=1).to_string()
+  let first = typed.exact_view(start=0, end=1).to_owned()
   let same = typed.iter().all(fn(ch) { ch.to_string() == first })
   let want = if same { first } else { typed }
   let from = if same { at + 1 } else { imax(at, 0) }

@@ -61,7 +61,7 @@ test "a field taken while the input method composes: what is composed not among 
   let stop = @signals.effect(fn() { seen.push(field.text()) })
   let taken = field.take()
   assert_eq(taken, "abcd", msg="taken whole, what was composed with it")
-  assert_eq(seen, ["ab", ""], msg="told once, empty: \{seen}")
+  assert_eq(seen, ["ab", ""], msg="told once, empty: \{Repr(seen)}")
   stop()
 }
 
@@ -74,12 +74,12 @@ test "an editor's own state taken as a Field (Ctx::editor_field) after it was bu
   let seen : Array[String] = []
   let stop = @signals.effect(fn() { seen.push(field.text()) })
   t.text_told("ab", t.time())
-  assert_eq(seen.last(), Some("ab"), msg="typed: told \{seen}")
+  assert_eq(seen.last(), Some("ab"), msg="typed: told \{Repr(seen)}")
   let again = t.ctx().editor_field("own")
   again.set("set through the other")
-  assert_eq(seen.last(), Some("set through the other"), msg="set through the Field taken again: told to the first's \{seen}")
+  assert_eq(seen.last(), Some("set through the other"), msg="set through the Field taken again: told to the first's \{Repr(seen)}")
   field.set("x")
-  assert_eq(seen.last(), Some("x"), msg="set: told \{seen}")
+  assert_eq(seen.last(), Some("x"), msg="set: told \{Repr(seen)}")
   stop()
 }
 
@@ -92,10 +92,10 @@ test "a code field's editor taken as a Field and followed: emptied as asked (cle
   let seen : Array[String] = []
   let stop = @signals.effect(fn() { seen.push(field.text()) })
   t.text_told("12", t.time())
-  assert_eq(field.text(), "12", msg="typed: \{seen}")
+  assert_eq(field.text(), "12", msg="typed: \{Repr(seen)}")
   t.ctx().clear_code_field("code")
   t.draw()
-  assert_eq(field.text(), "", msg="emptied as asked: \{seen}")
-  assert_eq(seen.last(), Some(""), msg="told empty: \{seen}")
+  assert_eq(field.text(), "", msg="emptied as asked: \{Repr(seen)}")
+  assert_eq(seen.last(), Some(""), msg="told empty: \{Repr(seen)}")
   stop()
 }

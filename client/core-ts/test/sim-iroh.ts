@@ -116,6 +116,21 @@ export class SimTime implements HostTime {
     await this.#runDue();
   }
 
+  /// As `pass`, ending at the first timer after which `done()` says: whether it did.
+  async passUntil(ms: number, done: () => boolean): Promise<boolean> {
+    const until = this.#now + ms;
+    await this.#runDue();
+    if (done()) return true;
+    while (this.#timers.length > 0 && this.#timers[0]!.at <= until) {
+      this.#now = this.#timers[0]!.at;
+      await this.#runDue();
+      if (done()) return true;
+    }
+    this.#now = until;
+    await this.#runDue();
+    return done();
+  }
+
   /// Moves on, timer by timer, until `p` is settled; fails once nothing more is set to happen, or after `limitMs`.
   async settle<A>(p: Promise<A>, limitMs = 30 * 60_000): Promise<A> {
     let done = false;

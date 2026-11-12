@@ -58,7 +58,9 @@ let keys_rows_gap : Double = 2.0
 ///|
 /// An action's row: its `name` across what is left, 恢复默认 (`reset_words`) once it is
 /// `changed`, then its keys on a button (keys_record_node: `keys` as they read, subtle where it has `none`); 40 high
-/// at least, 8 apart, in the middle of its line.
+/// at least, 8 apart, in the middle of its line. Where the line has not the room for its name whole beside them, what
+/// follows it goes on in a line of its own under it, at its end, its name the whole of the first; its keys cut short
+/// only where they are wider than a line alone.
 #callsite(autofill(loc))
 pub fn keys_row_node(
   parent : @view.View,
@@ -74,9 +76,24 @@ pub fn keys_row_node(
   loc~ : SourceLoc,
 ) -> Unit {
   parent.box(made_for=loc, fn(r) {
-    r.row(Is(true)).min_height(Is(Some(keys_row_h))).gap(Is(keys_row_gap)).lines_up(Is(Some(Middle))) |> ignore
+    r
+    .row(Is(true))
+    .min_height(Is(Some(keys_row_h)))
+    .gap(Is(keys_row_gap))
+    .wraps(Is(Some(0.0)))
+    .lines_up(Is(Some(Middle)))
+    .lies_along(Is(End))
+    |> ignore
     r.box(fn(l) {
-      l.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+      // (its line as high as the row at least, its words across its middle: a line of a row that wraps is as high as
+      // what is on it, not the row's least)
+      l
+      .grow(Is(1.0))
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
+      .min_height(Is(Some(keys_row_h)))
+      .lies_along(Is(Middle))
+      |> ignore
       words_node(l, name, fn() { keys_row_words }) |> ignore
     })
     |> ignore
@@ -117,6 +134,8 @@ fn keys_record_node(
   parent.box(made_for=loc, fn(b) {
     b
     .row(Is(true))
+    // (on a line of its own and wider than it, giving way down to its least, its keys cut short)
+    .shrink(Is(1.0))
     .min_width(Is(Some(keys_record_w)))
     .height(Is(Some(keys_record_h)))
     .padding(Is((keys_record_x, 0.0, keys_record_x, 0.0)))
@@ -160,7 +179,7 @@ let keys_record_x : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_record_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
+let keys_record_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -130,9 +130,9 @@ test "window tree: a page pushed between frames: where the pages are at a moment
   let (at_160, end, after) = run(false)
   assert_eq(run(true), (at_160, end, after))
   // (the page under it off to the left by its width, edge to edge with it, partway; then the top alone, in place)
-  assert_true(at_160.length() == 2, msg="\{at_160}")
+  assert_true(at_160.length() == 2, msg="\{Repr(at_160)}")
   assert_eq(at_160[1].0 - at_160[0].0, 390.0)
-  assert_true(at_160[1].0 > 0.0 && at_160[1].0 < 390.0, msg="\{at_160}")
+  assert_true(at_160[1].0 > 0.0 && at_160[1].0 < 390.0, msg="\{Repr(at_160)}")
   assert_eq(after, [(0.0, 390.0)])
 }
 
@@ -151,7 +151,7 @@ test "window tree: the window made narrower as a page slides: drawn by the width
   let (at_160, end, end_after) = run(false)
   assert_eq(run(true), (at_160, end, end_after))
   assert_eq(end_after, end)
-  assert_true(at_160.length() == 2 && at_160[0].1 == 300.0 && at_160[1].1 == 300.0, msg="\{at_160}")
+  assert_true(at_160.length() == 2 && at_160[0].1 == 300.0 && at_160[1].1 == 300.0, msg="\{Repr(at_160)}")
   assert_eq(at_160[1].0 - at_160[0].0, 300.0)
 }
 
@@ -186,7 +186,7 @@ test "window tree: a page waited for sets out as what it shows comes, or as its 
     pages_drawn()
   }
   let at_60 = plain(60.0, 160.0)
-  assert_true(at_60.length() == 2 && at_60[1].0 > 0.0 && at_60[1].0 < 390.0, msg="\{at_60}")
+  assert_true(at_60.length() == 2 && at_60[1].0 > 0.0 && at_60[1].0 < 390.0, msg="\{Repr(at_60)}")
   assert_eq(came(false), at_60)
   assert_eq(came(true), at_60)
   let at_110 = plain(110.0, 210.0)
@@ -204,14 +204,15 @@ test "window tree: a page waited for asks no frames while it waits, frames as it
   t.frame_at(t0 + 40.0)
   // (waiting: nothing said to move, no frame asked after this one; what its wait is over at waited for alone, as the
   // old frame's stack waits on it, Nav::comes_when's wake)
-  let waits = "a wake in \{(t0 + 10.0 + 300.0 - (t0 + 40.0)).ceil().to_int()} ms (the window's tree's)"
-  assert_true(!slides() && t.rest_why() == waits, msg="waiting: \{t.moving()} \{t.rest_why()}")
+  // (the tree's wake, said with where it was said: Tree::wake_waited_by)
+  let waits = "a wake in \{(t0 + 10.0 + 300.0 - (t0 + 40.0)).ceil().to_int()} ms (the window's tree's"
+  assert_true(!slides() && t.rest_why().has_prefix(waits), msg="waiting: \{Repr(t.moving())} \{t.rest_why()}")
   told_at(t, t0 + 60.0, fn() { ready.set(true) })
   t.frame_at(t0 + 80.0)
   // (sliding from 60: said to move, frames till it ends)
-  assert_true(slides() && !t.at_rest(), msg="sliding: \{t.moving()} \{t.rest_why()}")
+  assert_true(slides() && !t.at_rest(), msg="sliding: \{Repr(t.moving())} \{t.rest_why()}")
   t.frame_at(t0 + 60.0 + move_most_ms + 10.0)
-  assert_true(!slides() && t.at_rest(), msg="in place: \{t.moving()} \{t.rest_why()}")
+  assert_true(!slides() && t.at_rest(), msg="in place: \{Repr(t.moving())} \{t.rest_why()}")
 }
 
 ///|
@@ -226,14 +227,14 @@ fn waits_over_slide(comes : Bool) -> Unit raise {
   // (`waits`: what its wait is over at, waited for alone, as the old frame's stack waits on it: Nav::comes_when's wake)
   let seen = fn(slides : Bool, at : String, waits : Double?) raise {
     let said = t.moving().iter().any(fn(m) { m.has_prefix("a stack's slide") })
-    assert_eq(said, slides, msg="comes \{comes}, \{at}: \{t.moving()}")
+    assert_eq(said, slides, msg="comes \{comes}, \{at}: \{Repr(t.moving())}")
     if slides {
       assert_true(!t.at_rest(), msg="comes \{comes}, \{at}: frames asked")
     } else {
       match waits {
         Some(w) => {
-          let only = "a wake in \{(w - t.time()).ceil().to_int()} ms (the window's tree's)"
-          assert_true(t.rest_why() == only, msg="comes \{comes}, \{at}: \{t.rest_why()}")
+          let only = "a wake in \{(w - t.time()).ceil().to_int()} ms (the window's tree's"
+          assert_true(t.rest_why().has_prefix(only), msg="comes \{comes}, \{at}: \{t.rest_why()}")
         }
         None => assert_true(t.at_rest(), msg="comes \{comes}, \{at}: \{t.rest_why()}")
       }

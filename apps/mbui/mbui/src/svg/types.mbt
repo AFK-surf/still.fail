@@ -36,11 +36,6 @@ fn Stream::next_byte(self : Stream) -> Int {
 }
 
 ///|
-fn Stream::advance(self : Stream, n : Int) -> Unit {
-  self.pos += n
-}
-
-///|
 fn is_space_b(c : Int) -> Bool {
   c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D
 }
@@ -105,12 +100,12 @@ fn Stream::consume_string(self : Stream, t : String) -> Bool {
 
 ///|
 fn Stream::slice_back(self : Stream, start : Int) -> String {
-  self.text.view(start_offset=start, end_offset=self.pos).to_string()
+  self.text.exact_view(start=start, end=self.pos).to_owned()
 }
 
 ///|
 fn Stream::slice_tail(self : Stream) -> String {
-  self.text.view(start_offset=self.pos).to_string()
+  self.text.exact_view(start=self.pos).to_owned()
 }
 
 ///|
@@ -350,6 +345,7 @@ fn parse_number_list(text : String) -> Array[Double?] {
 // ── lengths ───────────────────────────────────────────────────────────
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum LengthUnit {
   LNone
   Em
@@ -361,13 +357,14 @@ pub(all) enum LengthUnit {
   Pt
   Pc
   Percent
-} derive(Eq, Show, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Length {
   number : Double
   unit : LengthUnit
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn Length::zero() -> Length {
@@ -514,6 +511,7 @@ fn parse_view_box(text : String) -> ViewBox? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Align {
   AlignNone
   XMinYMin
@@ -525,14 +523,15 @@ pub(all) enum Align {
   XMinYMax
   XMidYMax
   XMaxYMax
-} derive(Eq, Show, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct AspectRatio {
   deferred : Bool
   align : Align
   slice : Bool
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn AspectRatio::default() -> AspectRatio {
@@ -620,7 +619,7 @@ fn Stream::parse_func_iri(self : Stream) -> String? {
     return None
   }
   let link = match quote {
-    Some(q) => self.consume_bytes(fn(c) { c != q }).trim_end(chars=" \t\n\r").to_string()
+    Some(q) => self.consume_bytes(fn(c) { c != q }).trim_end(chars=" \t\n\r").to_owned()
     None => self.consume_bytes(fn(c) { c != 0x20 && c != 0x29 })
   }
   if link == "" || link.contains("'") || link.contains("\"") {

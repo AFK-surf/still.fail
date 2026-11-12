@@ -9,6 +9,8 @@ let conf_text : String =
   #| "flows": ["flows/*.drive"],
   #| "scripts": ["scripts/*.sh", "scripts/*.mjs"],
   #| "hosts": ["android/*.java", "src/host/*.m", "src/host/*.c"],
+  #| "run_first": {"starts": ["new_run", "fresh_app"], "reads": ["@sf.t", "tr"]},
+  #| "reset_by_hand": {"names": ["new_run"]},
   #| "counts": {}}
 
 ///|
@@ -668,8 +670,9 @@ test "host-import" {
 test "library-import" {
   let cfg = Config::new(
     @rjson.parse(
-      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"], "imports": ["mbui/", "moonbitlang/", "app/sf", "app/kept"]}}
-      ,
+      (
+        #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"], "imports": ["mbui/", "moonbitlang/", "app/sf", "app/kept"]}}
+      ),
     ) catch {
       _ => panic()
     },
@@ -1992,7 +1995,7 @@ test "motion-length" {
         "src/app/page.mbt",
         "fn v(a : @motion.Anim) -> Unit {\n" +
         "  a.animate(1.0, @motion.tween(350.0, ease=Move))\n" +
-        "  a.animate(1.0, @motion.move(points=300.0))\n" +
+        "  a.animate(1.0, @motion.moved(points=300.0))\n" +
         "  a.animate(1.0, @motion.tween(140.0, ease=Out))\n" +
         "  a.animate(1.0, @motion.tween(300.0, ease=@ui.Move, delay=20.0))\n" +
         "}\n",
@@ -2095,15 +2098,25 @@ test "layout-told" {
         "  let h = room.tall(p)\n" +
         "}\n",
       ),
+      // (what a page's list has in sight, told to a handler at the hand's moments: let through by name; a read-back
+      // beside it still refused)
+      (
+        "src/app/marks.mbt",
+        "fn m(place : @view.ListPlace[Int], p : @view.View) -> Unit {\n" +
+        "  place.on_sight(fn(s) { told(s) })\n" +
+        "  let now = place.sight_now()\n" +
+        "  let w = p.laid_size_told()\n" +
+        "}\n",
+      ),
       ("src/app/card_wbtest.mbt", "test \"t\" {\n  v.laid_size_told() |> ignore\n}\n"),
       ("src/ui/links.mbt", "fn w(v : @view.View) -> Unit {\n  v.pointer_here_told() |> ignore\n}\n"),
       ("src/view/scroll.mbt", "fn w(v : View) -> Unit {\n  v.laid_size_told() |> ignore\n}\n"),
     ],
     "layout-told",
-    4,
+    5,
     cfg~,
   )
-  assert_eq(lines(fs), [2, 2, 3, 4])
+  assert_eq(lines(fs), [2, 2, 3, 4, 4])
 }
 
 ///|
@@ -2202,6 +2215,25 @@ test "old-list" {
       ("src/host/y.mbt", "fn y(c : Ctx) -> Unit {\n  c.list(\"k\", 3, 40.0, fn(i) { row(i) }) |> ignore\n}\n"),
     ],
     "old-list",
+    2,
+  )
+  assert_eq(lines(fs), [2, 4])
+}
+
+///|
+test "list-comes-off" {
+  // a page's list said at once (`at_once=true`): counted (a call each); one said not, a show's at_once, one in a test,
+  // in the framework (src/host here) not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, at_once=true, make) |> ignore\n  v.scrolls_window(s, keys, at_once=false, make) |> ignore\n  v.scrolls_window(\n    s,\n    keys,\n    at_once=true,\n    make,\n  )\n  |> ignore\n  v.show(on, make, at_once=true)\n  v.scrolls_window(s, keys, comes=fn(_) { false }, make) |> ignore\n}\n",
+      ),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  v.scrolls_window(s, keys, at_once=true, make) |> ignore\n}\n"),
+      ("src/host/y.mbt", "fn y(v : @view.View) -> Unit {\n  v.scrolls_window(s, keys, at_once=true, make) |> ignore\n}\n"),
+    ],
+    "list-comes-off",
     2,
   )
   assert_eq(lines(fs), [2, 4])
@@ -2357,8 +2389,9 @@ test "part-place" {
   // one that makes nothing in it (it only sets what it looks like), a page's, and a test's not
   let cfg = Config::new(
     @rjson.parse(
-      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"]}}
-      ,
+      (
+        #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"]}}
+      ),
     ) catch {
       _ => panic()
     },
@@ -2376,4 +2409,112 @@ test "part-place" {
     cfg~,
   )
   assert_eq(fs.map(fn(f) { f.line }), [1, 14])
+}
+
+///|
+test "abort-unsaid" {
+  // an abort of its own, in the app, in mbui and in a test alike (bare, or as @builtin's): counted; a halt that says
+  // its words, another type's abort (a request's), a definition, the words in a comment or a string, and the halt's
+  // own abort excused on its line, not
+  let fs = lint_of(
+    [
+      (
+        "src/app/flow.mbt",
+        "fn start(t : String) -> Unit {\n  if t == \"\" {\n    abort(\"flow: no trace\")\n  }\n  let n : Int = @builtin.abort(\"no n\")\n  ignore(n)\n}\n",
+      ),
+      ("src/ui/tester_wbtest.mbt", "test \"x\" {\n  guard 1 == 2 else { abort(\"no text on screen\") }\n}\n"),
+      (
+        "src/app/said.mbt",
+        "fn start(t : String) -> Unit {\n  // abort(\"in a comment\")\n  if t == \"\" {\n    @halt.saying(\"flow: no trace: abort(it)\")\n  }\n  req.abort()\n}\n\nfn abort(s : String) -> Unit {\n  ignore(s)\n}\n",
+      ),
+      (
+        "src/halt/halt.mbt",
+        "pub fn[T] saying(msg : String) -> T {\n  println(msg)\n  abort(msg) // det-ok(abort-unsaid): the one abort, its words printed above\n}\n",
+      ),
+    ],
+    rule="abort-unsaid",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), [
+    "src/app/flow.mbt:3", "src/app/flow.mbt:5", "src/ui/tester_wbtest.mbt:2",
+  ])
+}
+
+///|
+test "empty-on-done" {
+  found(
+    [
+      (
+        "src/app/view.mbt",
+        "fn v(src : Source) -> Unit {\n  @core.call(\"client.focus\", on_done=fn(_) {  })\n  (src.call)(\"prefs.set\", p, fn(_) {  })\n  (core.call_bytes)(\"fonts.keep\", p, b, fn(_) {  })\n  @ui.native_call(\"adb.open\", p, on_got=fn(_) {  })\n}\n",
+      ),
+    ],
+    "empty-on-done",
+    4,
+  )
+  |> ignore
+  found(
+    [
+      (
+        "src/app/view.mbt",
+        "fn v(src : Source) -> Unit {\n  @core.call(\"client.focus\")\n  (src.call)(\"prefs.set\", p, answer_unread)\n  (src.call)(\"chat.send\", p, fn(r) { said(r) })\n  each(xs, fn(_) {  })\n}\n",
+      ),
+      ("src/app/view_test.mbt", "test \"x\" {\n  (src.call)(\"prefs.set\", p, fn(_) {  })\n}\n"),
+    ],
+    "empty-on-done",
+    0,
+  )
+  |> ignore
+}
+
+///|
+test "the rule panic-test (named so: a test named panic… is one moon expects to stop)" {
+  // a test named `panic …` (one that passes by stopping its program), in a black-box or a white-box file alike: counted;
+  // a test whose name only says the word later, a function so named, the words in a string, not
+  let fs = lint_of(
+    [
+      ("src/view/shared_test.mbt", "test \"panic two of an id\" {\n  ignore(1)\n}\n\ntest \"no panic here\" {\n  ignore(2)\n}\n"),
+      ("src/ui/css_wbtest.mbt", "///|\ntest \"panic css: a block in a block\" {\n  ignore(1)\n}\n"),
+      ("src/ui/said.mbt", "fn panic_said() -> String {\n  \"test \\\"panic x\\\"\"\n}\n"),
+    ],
+    rule="panic-test",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/view/shared_test.mbt:1", "src/ui/css_wbtest.mbt:2"])
+}
+
+///|
+test "read-before-run" {
+  // a test reading the app's words before its run: itself, or by a function of its own file it calls first; after its
+  // new_run, after its Tester, after a function that starts one (here, in another file), or in a function written for
+  // later (a view's), not; outside a test file, not
+  let fs = lint_of(
+    [
+      (
+        "src/app/a_wbtest.mbt",
+        "fn title() -> String {\n  @sf.t(\"t\")\n}\n\ntest \"before\" {\n  let w = @sf.t(\"k\")\n  new_run()\n  ignore(w)\n}\n\ntest \"by its own function\" {\n  let w = title()\n  new_run()\n  ignore(w)\n}\n\ntest \"after\" {\n  new_run()\n  let w = tr(\"k\")\n  ignore(w)\n}\n\ntest \"after a Tester\" {\n  let t = @ui.Tester::new(fn(_c) { ignore(@sf.t(\"k\")) })\n  ignore((t, @sf.t(\"k\")))\n}\n\ntest \"after a helper\" {\n  let t = phone()\n  ignore((t, @sf.t(\"k\")))\n}\n\ntest \"written for later\" {\n  let view = fn() { @sf.t(\"k\") }\n  new_run()\n  ignore(view())\n}\n",
+      ),
+      ("src/app/b_wbtest.mbt", "fn phone() -> Int {\n  new_run()\n  1\n}\n"),
+      ("src/app/c.mbt", "fn said() -> String {\n  @sf.t(\"k\")\n}\n"),
+    ],
+    rule="read-before-run",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/app/a_wbtest.mbt:6", "src/app/a_wbtest.mbt:12"])
+}
+
+///|
+test "reset-by-hand" {
+  // a test putting the app back by hand (new_run) with no Tester after it: counted; one with Tester::new after it, or a
+  // function said to give a Tester back (here, in another file), or a helper that does both itself, not; new_run
+  // defined, called outside a test file, or as a method, not
+  let fs = lint_of(
+    [
+      (
+        "src/app/a_wbtest.mbt",
+        "test \"model\" {\n  new_run()\n  ignore(1)\n}\n\ntest \"screen\" {\n  new_run()\n  let t = @ui.Tester::new(fn(_c) { () })\n  ignore(t)\n}\n\ntest \"by a helper\" {\n  new_run()\n  let t = phone()\n  ignore(t)\n}\n\ntest \"twice, the last none after\" {\n  new_run()\n  let t = phone()\n  ignore(t)\n  new_run()\n}\n",
+      ),
+      ("src/app/b_wbtest.mbt", "fn phone() -> @ui.Tester {\n  new_run()\n  @ui.Tester::new(fn(_c) { () })\n}\n"),
+      ("src/app/app.mbt", "fn new_run() -> Unit {\n  reset()\n}\n\nfn go() -> Unit {\n  new_run()\n  x.new_run()\n}\n"),
+    ],
+    rule="reset-by-hand",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/app/a_wbtest.mbt:2", "src/app/a_wbtest.mbt:22"])
 }

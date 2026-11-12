@@ -1,6 +1,6 @@
 // The app's updates (updates.mbt) over a source of made-up builds: a newer build handed to the host at once, nothing
 // over Home while it comes, a card there only for what wants the person, the settings' version row, nothing asked with
-// no source.
+// no source; a delta from this build handed to the host beside it, its size said as what comes.
 
 ///|
 fn release(news : Array[String]) -> Json {
@@ -51,6 +51,45 @@ test "a newer build: handed to the host at once to be made ready, nothing over H
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("允许安装更新") is None)
   assert_eq(update_stands().ready, "0.1.1")
+}
+
+///|
+test "a newer build with a delta from this build: the delta handed to the host beside it, its size said as what comes; one without, none" {
+  let sha = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+  let with_delta : Json = {
+    "versionCode": 2,
+    "versionName": "0.1.1",
+    "file": "android/stillfail-2.apk",
+    "sha256": "ab",
+    "size": 1000000,
+    "news": ["列表滑得更顺"],
+    "delta": {
+      "file": "android/stillfail-2.apk.from-1.delta",
+      "sha256": sha,
+      "size": 2048,
+      "makesSha256": "ab",
+      "makesSize": 1000000,
+    },
+  }
+  let t = updates_tester(with_delta, [])
+  t.frame()
+  assert_eq(t.update_asked(), [
+    "fetch stillfail-2.apk false delta {\"url\":\"https://example.test/releases/android/stillfail-2.apk.from-1.delta\",\"sha256\":\"\{sha}\",\"size\":2048,\"makes_sha256\":\"ab\",\"makes_size\":1000000}",
+  ])
+  assert_eq(update_stands().note, "2 KB")
+  t.tells_update("{\"phase\":\"waiting\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  assert_eq(update_stands().note, @sf.t("android-misc.updates.waitWifi", args=[("size", "2 KB")]))
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  assert_eq(update_stands().note, "40% · 2 KB")
+  // (the core's answer with no delta: null, as it sends it)
+  let without = release([])
+  if without is Object(o) {
+    o["delta"] = Json::null()
+  }
+  let t = updates_tester(without, [])
+  t.frame()
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false"])
+  assert_eq(update_stands().note, "1000 B")
 }
 
 ///|
@@ -150,7 +189,7 @@ test "none newer: the row offers to check, and asked now says 已是最新" {
 ///|
 ///|
 test "no source: nothing is asked; asked now, it says why" {
-  new_run()
+  fresh_app()
   update_version.val = 1
   let said = []
   update_check(fixture("home"), false, done=fn(w) { said.push(w) })
@@ -211,14 +250,14 @@ fn update_key_marks(busy : Bool) -> (@ui.Tester, Array[String]) {
 ///|
 test "the update key, a build here already waiting on its press: the update's mark (an arrow up in a ring), not download's" {
   let (_, marks) = update_key_marks(false)
-  assert_true(marks.iter().any(fn(m) { m.contains("icon/update") }), msg="\{marks}")
-  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")
+  assert_true(marks.iter().any(fn(m) { m.contains("icon/update") }), msg="\{Repr(marks)}")
+  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{Repr(marks)}")
 }
 
 ///|
 test "the update key while the build goes in: its arrow going up as a station's does (no download's mark), no words, no press" {
   let (t, marks) = update_key_marks(true)
-  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")
+  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{Repr(marks)}")
   assert_true(t.find("重启更新") is None)
   assert_true(t.query(Button, label="重启更新").unwrap().disabled, msg="takes no press while it goes in")
 }

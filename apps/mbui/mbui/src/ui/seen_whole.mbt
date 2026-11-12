@@ -8,7 +8,7 @@
 ///|
 /// The words held seen whole ("" none) and what drew over them first.
 // kept across runs: begun anew by each Tester (Tester::new), each test saying its own
-let seen_whole : Ref[String] = Ref::new("")
+let seen_whole : Ref[String] = Ref("")
 
 ///|
 /// From now on, until said again, nothing of the page is drawn over the words `words` (a node's whole text) on any
@@ -96,8 +96,7 @@ fn Tester::hold_seen_whole_now(self : Tester) -> Unit {
     Some((by, x, y)) => {
       let said = "words held seen whole (seen_whole.mbt) drawn over on a frame drawn \{self.w}×\{self.h} at " +
         "\{self.fake.time}: 「\{words}」 under 「\{by}」 at (\{x.round()}, \{y.round()})"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
     None => ()
   }

@@ -55,6 +55,7 @@ pub struct Zoom {
 /// What a zoom was told to show: the picture's size and the stage's, where it is (scale, x, y) and whether fitted, the
 /// glide or the fling it is on (where a glide goes; a fling's own way its motions'). Where it shows at a moment is a
 /// function of this and of those motions (Zoom::rect).
+#derive(Eq)
 priv struct ZoomSaid {
   nw : Double
   nh : Double
@@ -67,7 +68,7 @@ priv struct ZoomSaid {
   gliding : Bool
   to : (Double, Double, Double)
   flinging : Bool
-} derive(Eq)
+}
 
 ///|
 /// One number's way, said once as it sets out (from where, how fast, to where, by what, from when): where it is at a
@@ -86,17 +87,6 @@ priv struct ZPath {
 ///|
 fn ZPath::new() -> ZPath {
   { from: 0.0, v0: 0.0, to: 0.0, spec: @motion.Snap(0.0), start: 0.0, dur: 0.0, on: false, mover: @ui.Mover::new() }
-}
-
-///|
-impl @ui.Moving for ZPath with rest_at(self, now, frame) {
-  ignore(now)
-  ignore(frame)
-  if self.on {
-    self.end()
-  } else {
-    -1.0
-  }
 }
 
 ///|
@@ -688,7 +678,7 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool,
   // (as long as the furthest of its corners goes; from the moment it is told)
   let far = zmax(zabs(x - self.g_from[1]), zabs(y - self.g_from[2])) +
     zmax(self.nw, self.nh) * zabs(s - self.g_from[0])
-  self.glide.go(0.0, 1.0, @motion.move(over=far), 0.0, t)
+  self.glide.go(0.0, 1.0, @motion.moved(over=far), 0.0, t)
 }
 
 ///|

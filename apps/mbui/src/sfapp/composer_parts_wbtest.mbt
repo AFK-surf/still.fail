@@ -4,11 +4,6 @@
 // a long press letting the keyboard be. Over the fake core of composer_wbtest.mbt.
 
 ///|
-fn the_draft() -> Draft {
-  drafts.get("ws1/st1:s-c1").unwrap()
-}
-
-///|
 /// A PNG's first bytes (IHDR 1600 × 900): what a picture's size is read from.
 fn png_head() -> Bytes {
   Bytes::from_array(
@@ -50,8 +45,12 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   // the picture is not taken out by the tap
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.get().length(), 1)
   t.back()
-  t.run_for(preview_rest() - t.time())
+  let shut = preview_rest()
+  t.run_for(shut - t.time())
   assert_true(viewer.get() is None)
+  // gone: still the end of its way out, whatever is asked after (its way out said to move, Tester::rest_of)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(preview_rest(), shut)
 }
 
 ///|
@@ -96,7 +95,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   t.frame_at(v.fly.end() + @ui.frame_period_default)
   let (cx, cy, cw, ch) = t.get(Button, label=@sf.t("common.close")).rect
   let (cx, cy) = (cx + cw / 2.0, cy + ch / 2.0)
-  t.move(cx, cy)
+  t.move_to(cx, cy)
   t.touch(0, cx, cy)
   t.touch(2, cx, cy)
   t.frames_owed()
@@ -157,7 +156,7 @@ test "a film waiting in the composer, opened, plays from the bytes picked: none 
   let got : Array[(Bytes, Double, Bool)] = []
   (track.read)(1000.0, 100, fn(b, size, more) { got.push((b, size, more)) }) |> ignore
   assert_eq(got.length(), 1)
-  assert_eq(got[0].0, film[1000:1100].to_bytes())
+  assert_eq(got[0].0, film[1000:1100].to_owned())
   assert_eq(got[0].1, 4096.0)
   assert_false(got[0].2)
   assert_eq(named(calls, "station.file.part").length(), 0)
@@ -242,7 +241,7 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
     // (the capsule whiter than its paper: the neutral)
     let ground = @sf.theme().p.neutral_bg
     let drawn = t.drawn_rects().filter(fn(r) { near(r.0, x) && near(r.1, y) && near(r.2, cw) && near(r.3, ch) })
-    assert_true(drawn.iter().any(fn(r) { r.4 == ground }), msg="its ground (platform \{platform}): \{drawn.map(fn(r) { r.4 })}, not \{ground}")
+    assert_true(drawn.iter().any(fn(r) { r.4 == ground }), msg="its ground (platform \{platform}): \{Repr(drawn.map(fn(r) { r.4 }))}, not \{ground}")
     assert_false(t.drawn_shadows().iter().any(fn(s) { near(s.0, x) && near(s.2, cw) }), msg="a shadow under it (platform \{platform})")
     let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.get().filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
@@ -428,10 +427,10 @@ test "Down opens the cache choice and keeps it open for the keyboard" {
   t.draw()
   assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="the choices stay open")
   let first = t.focused().map(fn(n) { n.label })
-  assert_eq(first, Some("接着聊"), msg="Down opens the menu at its first choice, got \{first}")
+  assert_eq(first, Some("接着聊"), msg="Down opens the menu at its first choice, got \{Repr(first)}")
   t.key(@ui.key_code_down)
   let second = t.focused().map(fn(n) { n.label })
-  assert_eq(second, Some("换新上下文"), msg="Down moves to the second choice, got \{second}")
+  assert_eq(second, Some("换新上下文"), msg="Down moves to the second choice, got \{Repr(second)}")
   t.enter()
   t.draw()
   assert_eq(named(calls, "session.settings").length(), 1)
@@ -729,7 +728,7 @@ test "a picture restored in the composer remains visible in the sending message"
   assert_true(points.length() > 0, msg="the sending message has no picture")
   assert_true(points.iter().any(fn(p) {
     t.drawn_images().iter().any(fn(i) { i[8] > 0.9 && p.0 >= i[0] && p.0 <= i[0] + i[2] && p.1 >= i[1] && p.1 <= i[1] + i[3] })
-  }), msg="the sending message did not draw the picture: \{t.drawn_images()}")
+  }), msg="the sending message did not draw the picture: \{Repr(t.drawn_images())}")
 }
 
 ///|
@@ -742,13 +741,13 @@ test "a freshly picked picture remains visible throughout sending" {
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "截图.png", png_head())
   t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
   let tile = t.drawn_images().filter(fn(i) { (i[2] - 56.0).abs() < 0.5 && i[8] > 0.9 })
-  assert_true(tile.length() > 0, msg="no visible picture in the composer: \{t.drawn_images()}")
+  assert_true(tile.length() > 0, msg="no visible picture in the composer: \{Repr(t.drawn_images())}")
   tap_send(t)
-  assert_true(t.drawn_images().iter().any(fn(i) { i[2] >= 55.5 && i[8] > 0.9 }), msg="as it is sent: \{t.drawn_images()}")
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] >= 55.5 && i[8] > 0.9 }), msg="as it is sent: \{Repr(t.drawn_images())}")
   t.run_for(@sfbase.flight_len(true) * 0.4)
-  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 56.5 && i[8] > 0.9 }), msg="on its way: \{t.drawn_images()}")
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 56.5 && i[8] > 0.9 }), msg="on its way: \{Repr(t.drawn_images())}")
   t.run_for(@sfbase.flight_len(true) + @sf.hint_back_ms)
-  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 56.5 && i[8] > 0.9 }), msg="in the message: \{t.drawn_images()}")
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 56.5 && i[8] > 0.9 }), msg="in the message: \{Repr(t.drawn_images())}")
 }
 
 ///|
@@ -781,7 +780,7 @@ test "files sent fly from their tiles to their places in the message, then are i
   // its row in the list (the outbox's, at once): the picture goes to where the message has it
   t.draw()
   t.draw()
-  match @motion.measured_rect(t.ctx(), "flight/to/" + ff.key) {
+  match @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(f, ff.key)) {
     Some((_, _, w, _)) => assert_true(w > 56.0)
     None => fail("the message's picture is not where the flight can see it")
   }

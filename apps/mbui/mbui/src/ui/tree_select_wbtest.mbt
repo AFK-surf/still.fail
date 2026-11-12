@@ -20,7 +20,7 @@ fn tree_picked_tester(picks : Bool, platform? : Int = 0, centered? : Bool = fals
       page.box(fn(n) {
         n
         .width(Is(Some(300.0)))
-        .words_runs(Is(picked_runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .words_runs(Is(picked_runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
         .words_centered(Is(centered))
         |> ignore
       })
@@ -79,12 +79,12 @@ test "a node's words in pieces in a page whose words are picked: dragged over wi
     let t = tree_picked_tester(true)
     let next = dragged_at(t, x0, 51.0, x1, 51.0, t.time(), true)
     t.frame_at(next)
-    assert_eq(t.ctx().selected_text(), old_said, msg="\{case}")
-    assert_true(old_said != "", msg="the old one picked: \{case}")
+    assert_eq(t.ctx().selected_text(), old_said, msg="\{Repr(case)}")
+    assert_true(old_said != "", msg="the old one picked: \{Repr(case)}")
     // (drawn picked where the old one is, as big)
     let old_drawn = old_drawn_now
-    assert_true(old_drawn.length() > 0, msg="the old one drawn picked: \{case}")
-    assert_eq(picked_drawn(t), old_drawn, msg="drawn picked: \{case}")
+    assert_true(old_drawn.length() > 0, msg="the old one drawn picked: \{Repr(case)}")
+    assert_eq(picked_drawn(t), old_drawn, msg="drawn picked: \{Repr(case)}")
     // (pressed under them, where no words are: let go)
     let next = dragged_at(t, 350.0, 250.0, 350.0, 250.0, next + double_click_ms, true)
     t.frame_at(next)
@@ -100,7 +100,7 @@ test "a node's words in pieces picked by none where nothing says its words are, 
     let t = tree_picked_tester(picks, platform~)
     let next = dragged_at(t, 1.0, 51.0, 300.0, 51.0, t.time(), true)
     t.frame_at(next)
-    assert_eq(t.ctx().selected_text(), "", msg="\{case}")
+    assert_eq(t.ctx().selected_text(), "", msg="\{Repr(case)}")
   }
 }
 
@@ -109,10 +109,10 @@ test "a node's words in pieces with its line in its middle: dragged from its fir
   let t = tree_picked_tester(true, centered=true)
   let glyphs = t.drawn_instances().filter(fn(a) { a[5] == 1.0 }).map(fn(a) { (a[0], a[1], a[2], a[3]) })
   glyphs.sort_by(fn(a, b) { a.0.compare(b.0) })
-  assert_true(glyphs[0].0 > 20.0, msg="in its middle: \{glyphs[0]}")
+  assert_true(glyphs[0].0 > 20.0, msg="in its middle: \{Repr(glyphs[0])}")
   // (where its words are said to be (Tester::run_rects) where they are drawn: in its middle too)
   let rs = t.run_rects("hello")
-  assert_true(rs.length() == 1 && (rs[0].0 - glyphs[0].0).abs() < 2.0, msg="run_rects: \{rs} \{glyphs[0]}")
+  assert_true(rs.length() == 1 && (rs[0].0 - glyphs[0].0).abs() < 2.0, msg="run_rects: \{Repr(rs)} \{Repr(glyphs[0])}")
   // (its last move, the fifth of six (dragged_at: the sixth lets go where it is), where the fifth glyph begins)
   let (x0, to) = (glyphs[0].0 + 0.5, glyphs[4].0 + 0.5)
   let next = dragged_at(t, x0, 51.0, x0 + (to - x0) * 6.0 / 5.0, 51.0, t.time(), true)
@@ -120,7 +120,7 @@ test "a node's words in pieces with its line in its middle: dragged from its fir
   let drawn = picked_drawn(t)
   assert_eq(t.ctx().selected_text(), "hell")
   assert_eq(drawn.length(), 1)
-  assert_true((drawn[0].0 - glyphs[0].0).abs() < 2.0, msg="from its first glyph: \{drawn} \{glyphs[0]}")
+  assert_true((drawn[0].0 - glyphs[0].0).abs() < 2.0, msg="from its first glyph: \{Repr(drawn)} \{Repr(glyphs[0])}")
 }
 
 ///|
@@ -138,7 +138,7 @@ test "words picked in a page's list scrolled away and back (the nodes that show 
       page.scrolls_window(s, fn() { keys.get() }, est=22.0, fn(b, i) {
         b.box(fn(n) {
           n
-          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
           |> ignore
         })
         |> ignore
@@ -160,7 +160,7 @@ test "words picked in a page's list scrolled away and back (the nodes that show 
   let said = t.ctx().selected_text()
   assert_true(said.contains("第 0 段") && said.contains("第 1 段 hello"), msg="\{said}")
   let drawn = picked_drawn(t)
-  assert_true(drawn.length() >= 2, msg="drawn picked: \{drawn}")
+  assert_true(drawn.length() >= 2, msg="drawn picked: \{Repr(drawn)}")
   // (frames with something else moving: nothing found again)
   let found = tree_sels_made.val
   for k in 0..<5 {
@@ -199,7 +199,7 @@ fn picked_list_tester(height : @signals.Signal[Double], hidden : @signals.Signal
       page.scrolls_window(s, fn() { Array::makei(40, fn(i) { i }) }, est=22.0, fn(b, i) {
         b.box(fn(n) {
           n
-          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
           |> ignore
         })
         |> ignore
@@ -245,8 +245,8 @@ test "words picked held past a page's list's foot, the list shorter under a poin
   t.frame_at(t.time() + 16.0)
   let state = match tree_edge.val {
     Some(e) =>
-      match e.scroll.shown_by() {
-        Some(v) => "shown by a node, nowhere \{v.shown_nowhere()}, rect \{v.rect()}, speed \{e.speed}"
+      match e.scroll.bind(fn(s) { s.shown_by() }) {
+        Some(v) => "shown by a node, nowhere \{v.shown_nowhere()}, rect \{Repr(v.rect())}, speed \{e.speed}"
         None => "shown by none"
       }
     None => "none"
@@ -291,4 +291,103 @@ test "a node's words in pieces in a page whose words are picked: a finger held s
   t.tap(200.0, 250.0)
   t.draw()
   assert_eq(t.ctx().selected_text(), "")
+}
+
+///|
+test "words picked in a row that scrolls across (a code block's line), held past its end: the row brought on toward the pointer, picked as they come, till the line's end; held past its start, back; let go, still" {
+  let line = "let total = items.map(fn(x) { x.price * x.count }).fold(init=0, fn(a, b) { a + b }) // the end"
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  let s = @view.Scroll::across()
+  set_view_app(fn(root) {
+    root.box(fn(page) {
+      page.lines_up(Is(Some(Start))) |> ignore
+      words_picked(page)
+      page.box(fn(b) {
+        b.width(Is(Some(200.0))) |> ignore
+        b.scrolls(s, fn(held) {
+          held.box(fn(n) {
+            n.words_runs(Is([plain(line)]), ink=0x333333FFL, look={ size: 12.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  // (pressed on its first glyph, held past its end at 300)
+  finger(0, 1.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  finger(1, 300.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  assert_true(tree_edge.val is Some({ speed_across, .. }) && speed_across > 0.0, msg="past its end: brought on")
+  let a0 = s.at(view_app.val.unwrap())
+  let p0 = t.ctx().selected_text()
+  t.frame_at(t.time() + 300.0)
+  let a1 = s.at(view_app.val.unwrap())
+  let p1 = t.ctx().selected_text()
+  assert_true(a1 > a0 + 40.0, msg="brought on: \{a0} \{a1}")
+  assert_true(p1.length() > p0.length() && p1.has_prefix(p0), msg="picked on: \{p0} -> \{p1}")
+  t.frame_at(t.time() + 5000.0)
+  t.frame_at(t.time() + 16.0)
+  assert_eq(t.ctx().selected_text(), line)
+  // (held past its start: back)
+  finger(1, -20.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  let a2 = s.at(view_app.val.unwrap())
+  t.frame_at(t.time() + 300.0)
+  assert_true(s.at(view_app.val.unwrap()) < a2, msg="back")
+  // (let go: still)
+  finger(2, -20.0, 9.0)
+  t.frame_at(t.time() + 16.0)
+  assert_true(tree_edge.val is None)
+  let a3 = s.at(view_app.val.unwrap())
+  t.frame_at(t.time() + 300.0)
+  assert_eq(s.at(view_app.val.unwrap()), a3)
+}
+
+///|
+/// Three paragraphs of words in pieces 300 wide, one under another from 40 down, in a page whose words are picked
+/// (words_picked); the middle one in a block lent a picker that picks none where `none` (a quote's card in a message).
+/// Dragged over with the mouse from the first's start to the last's end: what is picked then.
+fn picked_past_a_block(none : Bool) -> String {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
+  set_view_app(fn(root) {
+    root.box(fn(page) {
+      page.padding(Is((0.0, 40.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
+      words_picked(page)
+      page.box(fn(n) { n.width(Is(Some(300.0))).words_runs(Is([plain("before")]), ink=0x333333FFL, look~) |> ignore })
+      |> ignore
+      page.box(fn(b) {
+        if none {
+          b.lends(@view.runs_picker, fn(_) { Is((0, 0)) }) |> ignore
+        }
+        b.box(fn(n) { n.width(Is(Some(300.0))).words_runs(Is([plain("quoted")]), ink=0x333333FFL, look~) |> ignore })
+        |> ignore
+      })
+      |> ignore
+      page.box(fn(n) { n.width(Is(Some(300.0))).words_runs(Is([plain("after")]), ink=0x333333FFL, look~) |> ignore })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  // (from the first's first glyph, 40 down, to the third's end, 84 down)
+  let next = dragged_at(t, 1.0, 51.0, 299.0, 95.0, t.time(), true)
+  t.frame_at(next)
+  t.ctx().selected_text()
+}
+
+///|
+test "dragged over words in pieces past a block lent a picker that picks none: those of the block none of what is picked, nor copied; a block lent none picked with the rest" {
+  assert_eq(picked_past_a_block(true), "before\nafter")
+  assert_eq(picked_past_a_block(false), "before\nquoted\nafter")
 }

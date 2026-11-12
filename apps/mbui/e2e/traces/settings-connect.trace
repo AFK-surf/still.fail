@@ -1,3 +1,4 @@
+{"settings":{"w":390.0,"h":844.0,"scale":2,"platform":2,"pointing":1,"utc":0,"motion":0,"glass":0,"dark":0,"inset":0,"ime":0,"copy":0,"font":1,"from":"replay"}}
 {"step":"peer connect-put e2e-080726"}
 {"env":{"MBUI_CLOUD":"http://127.0.0.1:28840","MBUI_CORE_ACCOUNT":"{\"sub\":\"alice\",\"email\":\"alice@example.test\",\"name\":\"Name of alice\",\"picture\":\"\",\"access\":\"-\",\"refresh\":\"-\",\"accessExpires\":1794099503}","MBUI_DOWNLOADS_DIR":"/test-worktree/apps/mbui/out/e2e/mac/05-settings_connect/downloads"}}
 {"host":{"localStation":null}}

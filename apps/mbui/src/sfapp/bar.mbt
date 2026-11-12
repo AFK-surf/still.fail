@@ -205,6 +205,8 @@ pub let icon_swap_ms : Double = 300.0
 ///|
 /// One number on a spring (react-spring's tension and friction, mass 1), its way solved
 /// (@ui.SpringPath): `x`, `v` and `to` where it is, how fast it goes and where to, as of this frame (sample).
+// set_at is read by bar_moment_wbtest alone
+#warnings("-unused_field")
 priv struct Spr {
   mut path : @ui.SpringPath?
   /// riding something that moves itself (the ball on a bar chosen coming down: Ride), its way worked out as it set out
@@ -226,11 +228,6 @@ priv struct Spr {
 ///|
 fn spr(start : Double, tension : Double, friction : Double, what : String, rest? : Double = 0.001) -> Spr {
   { path: None, ride: None, x: start, v: 0.0, to: start, tension, friction, rest, what, set_at: 0.0 }
-}
-
-///|
-fn Spr::moving(self : Spr) -> Bool {
-  self.v != 0.0 || self.x != self.to
 }
 
 ///|
@@ -549,9 +546,8 @@ fn Spr::ride_on(
 ///|
 /// One number gliding to where it is sent over a time on a curve, its way said once as it sets out (where
 /// from, how fast, where to, by what, when): where it is at a moment a function of that moment alone (`value` and
-/// `target` as of the moment last sampled, BarModel::sample). `key`: what it is in the motion log.
+/// `target` as of the moment last sampled, BarModel::sample).
 priv struct Glide {
-  key : String
   mut value : Double
   mut target : Double
   mut from : Double
@@ -563,8 +559,8 @@ priv struct Glide {
 }
 
 ///|
-fn glide(key : String, start : Double) -> Glide {
-  { key, value: start, target: start, from: start, v0: 0.0, spec: @motion.Snap(0.0), start: 0.0, dur: 0.0 }
+fn glide(start : Double) -> Glide {
+  { value: start, target: start, from: start, v0: 0.0, spec: @motion.Snap(0.0), start: 0.0, dur: 0.0 }
 }
 
 ///|
@@ -729,7 +725,6 @@ priv struct BarModel {
   mut open : Bool
   mut y0 : Double
   mut o0 : Double
-  mut was_down : Bool
   /// first drawn: everything where it goes at once
   mut placed : Bool
   mut width : Double
@@ -770,9 +765,9 @@ let bar : BarModel = {
   k: spr(1.0, 300.0, 30.0, "bar/k"),
   held: spr(0.0, 420.0, 16.0, "bar/held"),
   up: spr(0.0, ball_down, raise_damping, "bar/up"),
-  vis: glide("vis", 0.0),
-  ball_alpha: glide("ball-alpha", 1.0),
-  ball_scale: glide("ball-scale", 1.0),
+  vis: glide(0.0),
+  ball_alpha: glide(1.0),
+  ball_scale: glide(1.0),
   tints: {},
   ball_x: spr(0.0, 300.0, ball_damping(300.0), "bar/ball-x", rest=ball_rest_within),
   ball_y: spr(0.0, ball_down, ball_damping(ball_down), "bar/ball-y", rest=ball_rest_within),
@@ -785,7 +780,6 @@ let bar : BarModel = {
   open: false,
   y0: 0.0,
   o0: 0.0,
-  was_down: false,
   placed: false,
   width: 0.0,
   swap: None,
@@ -793,7 +787,7 @@ let bar : BarModel = {
   felt: "",
   icon_was: "",
   told: None,
-  icon_swap: glide("icon-swap", 1.0),
+  icon_swap: glide(1.0),
 }
 
 ///|
@@ -824,7 +818,6 @@ fn bar_reset() -> Unit {
   bar.y0 = 0.0
   bar.o0 = 0.0
   bar.placed = false
-  bar.was_down = false
   bar.width = 0.0
   bar.swap = None
   bar.waits = false
@@ -897,10 +890,11 @@ pub fn bar_rest() -> Double {
 
 ///|
 /// When the bar chosen in the panel has landed (the frames' clock, ms): the end of the panel's own spring as it closes
-/// under it; -1 when none is landing. Until then a finger does not take the panel (a bar landing lands untouched): what
-/// a test runs to before it draws the panel up again.
+/// under it, the last one chosen's once it has (its end as it was given, whichever frames were drawn on its way); -1
+/// when none was ever chosen. Until then a finger does not take the panel (a bar landing lands untouched): what a test
+/// runs to before it draws the panel up again.
 pub fn bar_landed() -> Double {
-  match bar.swap_at(bar_clock.now) {
+  match bar.swap {
     Some(s) => s.ends
     None => -1.0
   }
@@ -1278,7 +1272,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // is laid out by besides what it reads: the window, the navigation bar's room, the ground, the place shown and
   // whether it shows
   let t = @sf.theme()
-  let key = "\{c.width} \{c.height} \{nav_foot()} \{t.p.bg} \{t.dark} \{ws.id} \{active} \{shown}"
+  let key = "\{c.width} \{c.height} \{nav_foot()} \{t.p.bg} \{t.dark} \{ws.id} \{@ui.some_text(active)} \{shown}"
   c.kept_as_nodes(
     c.id("bar/kept"),
     key,
@@ -1365,6 +1359,7 @@ let bar_told_now : @signals.Signal[BarTold?] = @signals.signal(None, same=fn(a, 
 /// What the bar is told by the app's state and the window: whether it shows, the notch's action ("" none: closed), the
 /// place shown, the bars (`cur` the one shown, the others the panel's rows), how wide it is laid out (0: not known
 /// yet). Compared whole: told the same again, nothing new.
+#derive(Eq)
 priv struct BarTold {
   shown : Bool
   action : String
@@ -1372,7 +1367,7 @@ priv struct BarTold {
   sets : Array[Array[String]]
   cur : Int
   width : Double
-} derive(Eq)
+}
 
 ///|
 /// What the bar is told in workspace `ws` with `active` the place on top, `shown` whether it shows (narrow_shell's
@@ -1414,7 +1409,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   m.vis.go_by(
     if shown { 1.0 } else { 0.0 },
     if shown {
-      @motion.move(points=bar_drop)
+      @motion.moved(points=bar_drop)
     } else {
       @motion.tween(bar_hide_ms, ease=Leave)
     },
@@ -1513,7 +1508,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
       let on = if lit { 1.0 } else { 0.0 }
       match m.tints.get(id) {
         Some(g) => if landing && i == told.cur { g.snap(on) } else { g.go(on, tint_ms, Out, at~) }
-        None => m.tints[id] = glide("tint/" + id, on)
+        None => m.tints[id] = glide(on)
       }
     }
   }
@@ -1729,8 +1724,6 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let lit = if t.dark { 0xFFFFFFFFL } else { 0x111827FFL }
   // the panel's frame in the window: 22 over the navigation bar (Bar.kt: padding(bottom = 22.dp + navBottom))
   let foot = 22.0 + nav_foot()
-  let fx = 22.0
-  let fy = c.height - foot - panel
   // the panel open: a press anywhere else closes it (and does nothing else: the window's tree's, bar_glass_node); back
   // closes it too (back still said by the old views as they are built, at the moment it is taken)
   if shown && m.mode.get() {
@@ -2235,6 +2228,11 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       m.mode.set(true)
     }
   }
+  // the finger off the bar (lifted, called off): what its press asked ahead let go of now, or once the place it switches
+  // to below has come in (sfbase's place_press_lifted, place_switched)
+  if how is (Tapped | Ended) {
+    @sfbase.place_press_lifted(t)
+  }
   if m.swap_at(t) is Some(_) {
     match how {
       Pressed => m.waits = true
@@ -2265,7 +2263,14 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   // the ball taken by a finger held still on the bar (felt as a long press is)
   let mut took = false
   match how {
-    Pressed => pressed()
+    Pressed => {
+      pressed()
+      // a finger down on a place's tab, the panel shut: what the place opens on asked from now (sfbase's places_ahead)
+      if !m.mode.get() && py >= l.row_top - 4.0 && l.items.length() > 0 {
+        let cs = bar_centres(l.w, m.k_at(t), l.items.length())
+        @sfbase.place_pressed(l.items[imin(l.items.length() - 1, nearest(cs, 4, px))])
+      }
+    }
     Dragging => {
       if l.multi {
         let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / l.reach
@@ -2565,7 +2570,6 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 /// A place's top bar at the stack's root: the place's name, the page's actions
 /// (`@sf.named_actions`), settings at the right edge; frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
-  let t = @sf.theme()
   let actions = @sf.named_actions.val
   @sf.named_actions.val = None
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {

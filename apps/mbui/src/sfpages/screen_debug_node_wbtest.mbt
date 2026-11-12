@@ -173,7 +173,7 @@ test "日志's 卸载 App opens its list beside its row, with keyboard and mouse
   let dialogs = r.t.semantics().filter(fn(s) { !s.hidden && "\{s.role}" == "Dialog" && s.label == tr("web-pages.screen.debug.uninstall") })
   assert_eq(dialogs.length(), 1)
   let (_, dy, _, dh) = dialogs[0].rect
-  assert_true(dy <= ry && ry <= dy + dh || (dy - ry).abs() < 80.0, msg="\{dialogs[0].rect} \{ry}")
+  assert_true((dy <= ry && ry <= dy + dh) || (dy - ry).abs() < 80.0, msg="\{Repr(dialogs[0].rect)} \{ry}")
   d.tab.set(0)
   r.t.resize(390.0, 844.0)
   r.t.run_for(@sf.toast_ms)

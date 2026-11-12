@@ -6,12 +6,13 @@
 
 ///|
 /// What a form field takes: words, an email, a password (dots), a number.
+#derive(Eq, Debug)
 pub(all) enum FieldKind {
   Words
   Email
   Secret
   Number
-} derive(Eq, Show)
+}
 
 ///|
 /// A form's field: its name (its value's key), its label, what it takes, whether it is needed, its placeholder, and
@@ -73,7 +74,7 @@ priv struct FormState {
 ///|
 /// What is wrong with `text` in `f` ("" nothing).
 pub fn field_error(f : FormField, text : String, words? : FormWords = form_words) -> String {
-  let s = text.trim().to_string()
+  let s = text.trim().to_owned()
   if s == "" {
     return if f.required { words.missing } else { "" }
   }
@@ -81,7 +82,7 @@ pub fn field_error(f : FormField, text : String, words? : FormWords = form_words
     Email => {
       let at = s.find("@")
       let ok = match at {
-        Some(i) => i > 0 && s.view(start_offset=i + 1).contains(".") && !s.contains(" ")
+        Some(i) => i > 0 && s.exact_view(start=i + 1).contains(".") && !s.contains(" ")
         None => false
       }
       if !ok {
@@ -116,8 +117,8 @@ pub fn form(
       s
     }
   }
-  let values : Map[String, String] = {}
-  let errors : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
+  let errors : Map[String, String] = Map([])
   let mut entered = false
   let mut pressed = false
   let fi = c.box(w~, gap=16.0, fn() {

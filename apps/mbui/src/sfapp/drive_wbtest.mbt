@@ -39,7 +39,8 @@ fn bar_rested(t : @ui.Tester) -> Unit {
 /// Frames on to where sheet `key` said it is at rest (its springs and its scrim's fade: @kit.sheet_rest).
 fn sheet_rested(t : @ui.Tester, key : String) -> Unit {
   t.draw()
-  let e = @kit.sheet_rest(key)
+  // (the presenters' own, whichever kind draws it: presented_rest)
+  let e = if key == "sf-present" { @sf.presented_rest() } else { @kit.sheet_rest(key) }
   if e > t.time() && e < 1.0e300 {
     t.run_for(e - t.time())
   }
@@ -170,8 +171,9 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
   assert_true(t.find("目录") is Some(_))
   t.tap_text("目录")
   sheet_rested(t, "dv-reader-sheet")
-  assert_true(t.find("第四章 回程") is Some(_))
-  t.tap_text("第四章 回程")
+  // The same title can already be in the text behind the contents sheet; tap the sheet on top.
+  guard t.find_last("第四章 回程") is Some((x, y)) else { fail("chapter not in contents") }
+  t.tap(x, y)
   // the panel sunk away, the jump made, where it is kept once it is still
   sheet_rested(t, "dv-reader-sheet")
   t.run_for(@sf.reader_still_ms)
@@ -185,10 +187,11 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
     // at the fourth chapter (a little before it shows too)
     Some(p) => {
       let ch4 = novel_text().find("第四章").unwrap().to_double()
-      assert_true(number(Some(p), "at") >= ch4 - 300.0)
-      assert_true(number(Some(p), "at") <= ch4 + 50.0)
+      let kept_at = number(Some(p), "at")
+      assert_true(kept_at >= ch4 - 300.0, msg="kept \{kept_at}, chapter \{ch4}")
+      assert_true(kept_at <= ch4 + 50.0, msg="kept \{kept_at}, chapter \{ch4}")
     }
-    None => fail("no place kept: \{fix_places.keys().collect()}")
+    None => fail("no place kept: \{Repr(fix_places.keys().collect())}")
   }
   t.assert_idle()
 }
@@ -202,7 +205,7 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's 
   let log = t.drive(
     "tap icon:plus\ntap Station 文件\nuntil 所有位置\nuntil 主目录\ntap =文档\nuntil 整个文件夹\ntap 发布清单.md\ntap 添加 1 个\ngone 所有位置\n",
   )
-  assert_true(log.contains("EXIT 0"), msg="\{log}")
+  assert_true(log.contains("EXIT 0"), msg="\{Repr(log)}")
   // in the draft as the core keeps it, where it is on the station (sent, the core names it in the message)
   t.draw()
   let files = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
@@ -245,7 +248,7 @@ test "a Markdown file read as a chat's Markdown is drawn, its words searched whe
   t.draw()
   assert_eq(r.matches.length(), 1)
   assert_eq(r.matches[0].chunk, 0)
-  assert_eq(fixture_markdown().view(start_offset=r.matches[0].start).has_prefix("每一项"), true)
+  assert_eq(fixture_markdown().exact_view(start=r.matches[0].start).has_prefix("每一项"), true)
 }
 
 ///|

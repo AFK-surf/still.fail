@@ -1,7 +1,7 @@
 // Execution of named client calls, as Effects. What changes something takes effect in the core at
 // once and answers when its source has it (rule 4); a write to still.fail cloud answers once what it changed is read
-// again (the account topics show it).
-import { Effect } from "effect";
+// again (the account topics show it), or after `REREAD_WAIT_MS` with the reading left to go on.
+import { Deferred, Effect } from "effect";
 import * as brand from "../brand.ts";
 import type { Inner, Progress } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
@@ -35,9 +35,53 @@ export const hooks: {
   /// (views/lock.ts).
   lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }) => CoreError | null;
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
+  /// A member about to be taken out of a workspace or given another role, or a station taken out: so in its lock
+  /// first, by this device's signature where it signs there (views/lock.ts).
+  roster?: (inner: Inner, sub: string, workspace: string, what: Roster) => Effect.Effect<unknown, CoreError>;
+  /// People added to a workspace (the cloud's answer): so in its lock too, with the role given (views/lock.ts).
+  added?: (inner: Inner, sub: string, workspace: string, role: string, answer: unknown) => Effect.Effect<unknown, CoreError>;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
+
+/// What a write to still.fail cloud changes of a workspace's roster, as its lock has one: a member out, a member's
+/// role, a station out.
+export type Roster = { member: string; gone: true } | { member: string; role: string } | { station: string };
+function rosterOf(method: string, path: string, body: unknown): { ws: string; what: Roster } | null {
+  const m = /^\/v1\/workspaces\/([^/]+)\/(members|stations|added)\/([^/]+)$/.exec(path);
+  if (m === null) return null;
+  const [ws, kind, id] = [m[1]!, m[2]!, m[3]!].map((x) => decodeURIComponent(x)) as [string, string, string];
+  // (one added who has not signed in yet is held in the lock under their email: views/lock.ts `pendingOf`)
+  if (kind === "added") return method === "DELETE" ? { ws, what: { member: `pending:${id.trim().toLowerCase()}`, gone: true } } : null;
+  if (method === "DELETE") return { ws, what: kind === "members" ? { member: id, gone: true } : { station: id } };
+  const role = isObject(body) ? body.role : undefined;
+  return method === "PATCH" && kind === "members" && typeof role === "string" ? { ws, what: { member: id, role } } : null;
+}
+
+/// How long a write to still.fail cloud that went through waits for the account's topics read again before it answers:
+/// that read goes on after. 2026-11-11 a member added answered after 3 min 40 s, the POST itself under a second: every
+/// account's topics were read again on a link where the workspace's stations were not reached, and the button turned
+/// all that while (the person took it for not added).
+export const REREAD_WAIT_MS = 3_000;
+
+/// `reread` run to its end, waited on for `REREAD_WAIT_MS` at most; a span under the call's trace says how long it took.
+function rereadAfterWrite(inner: Inner, reread: Effect.Effect<void>, ctx: SpanContext): Effect.Effect<void> {
+  const span = inner.tracer.child("cloud.reread", Kind.Internal, ctx);
+  const done = Deferred.makeUnsafe<void>();
+  inner.runner.fork(
+    Effect.ensuring(
+      reread,
+      Effect.sync(() => {
+        span?.end();
+        Deferred.doneUnsafe(done, Effect.void);
+      }),
+    ),
+  );
+  return Effect.raceFirst(
+    Deferred.await(done),
+    Effect.sleep(REREAD_WAIT_MS).pipe(Effect.andThen(Effect.sync(() => span?.set("stillfail.answered_before", true)))), // timer: a deadline on what a call waits for
+  );
+}
 
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.
 export function execute(inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext): Effect.Effect<unknown, CoreError> {
@@ -99,21 +143,44 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const sub = call.op.target.cloud;
           return Effect.gen(function* () {
             const made = op.method === "POST" && op.path === "/v1/workspaces";
+            // Taken out of a locked workspace, or a member's role changed: so in its lock too, or it would be the cloud's
+            // word alone (it could hold back a credential's end, let one back in, and the lock would still take them as
+            // it says, an admin made a member signing as an admin there still).
+            const roster = rosterOf(op.method, op.path, op.body);
+            if (roster && hooks.roster) yield* hooks.roster(inner, sub, roster.ws, roster.what);
             let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
+            // People added: so in a locked workspace's lock too, with the role given (views/lock.ts `added`).
+            const adding = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/members$/.exec(op.path) : null;
+            if (adding && hooks.added) {
+              const role = isObject(op.body) && typeof op.body.role === "string" ? op.body.role : "member";
+              yield* hooks.added(inner, sub, decodeURIComponent(adding[1]!), role, result);
+            }
             // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
             const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
             if (enrolling && hooks.enrolled) result = yield* hooks.enrolled(inner, sub, decodeURIComponent(enrolling[1]!), result);
             // A workspace made: the invite code kept through signing in is done with.
             if (made) prefs.inviteUsed(inner.data);
-            // A write may rename, join or leave a workspace: what the account's topics show is read again first.
-            if (op.method !== "GET") yield* inner.cloudSync.refreshAll();
+            // A write may rename, join or leave a workspace: what the account's topics show is read again first, for a
+            // while (`REREAD_WAIT_MS`): the write is done, and the topics follow as they are read.
+            if (op.method !== "GET") yield* rereadAfterWrite(inner, inner.cloudSync.refreshAll(), ctx);
+            // An answer on a bug report: its replies read again (the cloud says so too, on the events socket).
+            const answered = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/feedback\//.exec(op.path) : null;
+            if (answered) inner.cloudSync.feedbackChanged(decodeURIComponent(answered[1]!));
             return result;
           });
         }
         break;
       case "prefsSet":
-        // (what is brought after everything else goes by them: fill.ts)
-        return Effect.try({ try: () => (prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs()), inner.fill?.poke(), null), catch: asCoreError });
+        return Effect.try({
+          try: () => {
+            prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs());
+            // (what is brought after everything else goes by these two, fill.ts `bounds`: looked at again only for
+            // them, not for every pref set: the workspace switched to waited on it, the chats' list behind it)
+            if (isObject(call.patch) && ("fillOff" in call.patch || "fillMax" in call.patch)) inner.fill?.poke();
+            return null;
+          },
+          catch: asCoreError,
+        });
       case "keysSet":
         return Effect.try({
           try: () => {

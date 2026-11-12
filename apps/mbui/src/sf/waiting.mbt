@@ -339,7 +339,7 @@ pub(all) struct WaitNote {
 /// Made-up words `n` letters long, for what a page's bones are drawn of (`waiting`'s `sample`): only how long they are
 /// is seen, as a bar.
 pub fn sample_words(n : Int) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for _ in 0..<n {
     out.write_char('字')
   }
@@ -446,9 +446,11 @@ let bones_box : @ui.Style = @ui.css("")
 let wait_pills : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1 gap=S2 align=ACenter")
 
 ///|
-/// A wait as nodes of the window's tree (wait_line's): nothing for a moment but its room, 18 high (later_ms from as it
-/// is made: a wait that ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart, as high as they
-/// are (wait_words: the Ui size, L5's line, both as the system's size of words makes them).
+/// A wait as nodes of the window's tree (wait_line's): nothing for a moment but its room (later_ms from as it is made: a
+/// wait that ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart. Its room is what it will
+/// show from the first: as high as its words, wrapped in what the line leaves them past the spinner (wait_words: the Ui
+/// size, L5's line, both as the system's size of words makes them), 18 at least, so nothing under it moves as they come
+/// (words of two lines no taller then than before). Read out once they are seen.
 #callsite(autofill(loc))
 pub fn wait_line_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> @view.View {
   let long = @signals.signal(false)
@@ -457,24 +459,30 @@ pub fn wait_line_node(parent : @view.View, words : () -> String, loc~ : SourceLo
     .row(Is(true))
     .gap(Is(8.0))
     .lines_up(Is(Some(Middle)))
-    .height(By(fn() { if long.get() { None } else { Some(18.0) } }))
+    .min_height(Is(Some(18.0)))
     |> ignore
     l.at_moment(l.cause_at() + later_ms, fn() { long.set(true) }) |> ignore
-    l.show(fn() { long.get() }, fn(s) { spinner_node(s, size=12.0) |> ignore })
-    l.show(fn() { long.get() }, fn(s) {
-      s.box(fn(w) {
-        w
-        .words(By(words))
-        .words_look(By(fn() {
-          let th = @ui.tree_theme()
-          let (size, own) = th.text_size(Ui)
-          { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false }
-        }))
-        .ink(By(fn() { theme().p.muted }))
-        |> ignore
-      })
+    // (the spinner's room while it is not yet there: one in the other's place along the row, at once)
+    l.pick(fn() { long.get() }, fn(s, on) {
+      if on {
+        spinner_node(s, size=12.0) |> ignore
+      } else {
+        s.width(Is(Some(12.0))).height(Is(Some(12.0))) |> ignore
+      }
+    })
+    l.box(fn(w) {
+      w.shrink(Is(1.0)).min_width(Is(Some(0.0))).hides(By(fn() { !long.get() })) |> ignore
+      w
+      .words(By(words))
+      .words_look(By(fn() {
+        let th = @ui.tree_theme()
+        let (size, own) = th.text_size(Ui)
+        { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
+      }))
+      .ink(By(fn() { if long.get() { theme().p.muted } else { alpha(theme().p.muted, 0.0) } }))
       |> ignore
     })
+    |> ignore
   })
 }
 
@@ -585,7 +593,7 @@ fn wait_pill_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -
       .words_look(By(fn() {
         let th = @ui.tree_theme()
         let (size, _) = th.text_size(Meta)
-        { size, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { theme().p.red }))
       .words_centered(Is(true))

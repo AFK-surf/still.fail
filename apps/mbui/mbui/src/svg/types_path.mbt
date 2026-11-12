@@ -12,17 +12,18 @@ priv enum PSeg {
   PQuad(Bool, Double, Double, Double, Double)
   PSmoothQuad(Bool, Double, Double)
   PArc(Bool, Double, Double, Double, Bool, Bool, Double, Double)
-  PClose(Bool)
+  PClose
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum SimpleSeg {
   SMoveTo(Double, Double)
   SLineTo(Double, Double)
   SCurveTo(Double, Double, Double, Double, Double, Double)
   SQuadTo(Double, Double, Double, Double)
   SClose
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn is_cmd(c : Int) -> Bool {
@@ -153,7 +154,7 @@ fn parse_path_segments(text : String) -> Array[PSeg] {
           _ => None
         }
       }
-      _ => Some(PClose(abs))
+      _ => Some(PClose)
     }
     match seg {
       Some(seg) => out.push(seg)
@@ -180,7 +181,7 @@ fn parse_path_simple(text : String) -> Array[SimpleSeg] {
     let buffer : Array[SimpleSeg] = []
     if prev_simple is Some(SClose) {
       match segment {
-        PMove(_, _, _) | PClose(_) => ()
+        PMove(_, _, _) | PClose => ()
         _ => {
           let ns = SMoveTo(prev_mx, prev_my)
           buffer.push(ns)
@@ -262,7 +263,7 @@ fn parse_path_simple(text : String) -> Array[SimpleSeg] {
         }
         prev_seg = segment
       }
-      PClose(_) => {
+      PClose => {
         if !(prev_simple is Some(SClose)) {
           buffer.push(SClose)
         }

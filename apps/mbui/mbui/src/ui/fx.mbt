@@ -17,7 +17,7 @@ priv struct Life {
 }
 
 ///|
-let lives : Map[Int, Life] = Map::new()
+let lives : Map[Int, Life] = Map([])
 
 ///|
 fn fx_runtime(seed : Int?) -> @effect.Runtime {
@@ -67,9 +67,20 @@ pub fn runtime() -> @effect.Runtime {
 }
 
 ///|
-/// A frame starts at `c.clock`: the runtime goes there (whole milliseconds), its fibers run.
+/// A frame starts at `c.clock`: the runtime goes there (whole milliseconds), its fibers run. They run outside the
+/// frame's reading, as a handler does (frame_body runs under the frame's watch): what a timer or a fiber reads is not
+/// the frame's to follow, so its changing later builds no frame whole (it did, once, till the next frame built whole
+/// read the watch anew), and what it changes is drawn by this frame all the same, read by the view after it. An effect
+/// one makes is owned by nothing (no owner set, whatever was set around the frame): a root of the signals' graph, as
+/// one made in a handler, let go only by the function `@signals.effect` gave back, which its maker keeps (a fiber,
+/// by its scope's finalizer); never the frame's watch's, which let it go as it read the next frame (#5594's fault).
 fn fx_frame_start(c : Ctx) -> Unit {
-  fx.val.frame(whole_ms(c.clock).to_int64())
+  let at = whole_ms(c.clock).to_int64()
+  let was = @signals.set_active_sub(None)
+  let owner = @signals.set_owner(None)
+  fx.val.frame(at)
+  @signals.set_active_sub(was) |> ignore
+  @signals.set_owner(owner) |> ignore
 }
 
 ///|

@@ -12,7 +12,8 @@
 //                                            `agent`: a runtime's process; those started before in the sandbox are ended
 //                                            first (one runtime per sandbox: a session's, or a profile's shared host).
 //                                            `lostFile`: written when the connection is lost (sandbox.ts LOST_EXIT).
-//                                            `silentMs`: how long without a frame is lost (SILENT_MS; tests shorten it).
+//                                            `silentMs`: how long without a frame is lost once the far side was heard
+//                                            (SILENT_MS; tests shorten it); before, SILENT_MS at the least.
 //                                            `root`: {path, persist?}: the station's data directory, made at the same
 //                                            path there (a link to `persist`, storage the sandboxes keep, when given).
 //                                            `dirs`: directories made there. `sync`: what is copied (below).
@@ -256,8 +257,10 @@ function connect(spec) {
   const isDir = (e) => e.dir ?? (!existsSync(e.path) || statSync(e.path).isDirectory());
   send(T.prepare, 0, JSON.stringify({ root: spec.root ?? null, dirs: spec.dirs ?? [], sync: sync.map((e) => ({ path: e.to, mode: e.mode, skip: e.skip, back: e.back, dir: isDir(e) })) }));
   let heard = Date.now();
+  // (until the far side is first heard, SILENT_MS at the least: a shortened silence is for a connection once made, and
+  // ssh's start there took longer than 900 ms on a busy Mac, said not reached, side run 42932766861, 2026-11-11)
   setInterval(() => {
-    if (Date.now() - heard > silent) ssh.kill("SIGKILL");
+    if (Date.now() - heard > (reached ? silent : Math.max(silent, SILENT_MS))) ssh.kill("SIGKILL");
     else send(T.ping, 0);
   }, Math.min(PING_MS, silent / 3));
   const run = spec.program !== undefined;

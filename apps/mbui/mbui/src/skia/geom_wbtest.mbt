@@ -140,5 +140,14 @@ test "find cubic max curvature 1" {
   ]
   let t_values : Array[Float] = [0.0, 0.0, 0.0]
   let n = find_cubic_max_curvature(src, t_values)
-  assert_eq(t_values[:n].to_array(), [0.0, 0.5, 1.0])
+  assert_eq(t_values[:n].to_owned(), [0.0, 0.5, 1.0])
+}
+
+///|
+/// (u32 widths as Rust has them: one past i32's range, as `try_from` refuses, is none)
+fn IntRect::from_xywh64(x : Int, y : Int, width : Int64, height : Int64) -> IntRect? {
+  if width > 2147483647L || height > 2147483647L {
+    return None
+  }
+  IntRect::from_xywh(x, y, width.to_int(), height.to_int())
 }

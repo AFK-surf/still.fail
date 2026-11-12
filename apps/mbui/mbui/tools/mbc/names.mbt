@@ -18,7 +18,7 @@ let same_hash : Ref[Bool] = { val: false }
 /// {content: name}, each named by its content_hash; contents whose hashes are the same numbered apart in the order
 /// of their text.
 fn by_content(contents : Array[Bytes], prefix : Bytes) -> Map[Bytes, Bytes] {
-  let groups : Map[Bytes, Array[Bytes]] = Map::new()
+  let groups : Map[Bytes, Array[Bytes]] = Map([])
   let seen = BSet::new()
   for c in contents {
     if seen.has(c) {
@@ -31,7 +31,7 @@ fn by_content(contents : Array[Bytes], prefix : Bytes) -> Map[Bytes, Bytes] {
       None => groups[h] = [c]
     }
   }
-  let out = Map::new()
+  let out = Map([])
   for h, cs in groups {
     for k, c in sort_bytes(cs) {
       out[c] = cat([prefix, h, if k > 0 { cat([b"_", bint(k)]) } else { b"" }])
@@ -73,7 +73,7 @@ fn fn_type_key(
 ///|
 /// {name: its stable name} for moonc's function types (struct _M0TW…), by their definitions (in moonc's order).
 fn fn_type_names(defs : Map[Bytes, Bytes]) -> Map[Bytes, Bytes] {
-  let keys : Map[Bytes, Bytes] = Map::new()
+  let keys : Map[Bytes, Bytes] = Map([])
   for n, _ in defs {
     let _ = fn_type_key(n, defs, keys, [])
   }
@@ -90,8 +90,8 @@ fn fn_type_names(defs : Map[Bytes, Bytes]) -> Map[Bytes, Bytes] {
       bcmp(a, b)
     }
   })
-  let out = Map::new()
-  let seen : Map[Bytes, Int] = Map::new()
+  let out = Map([])
+  let seen : Map[Bytes, Int] = Map([])
   for n in order {
     let w = named[keys[n]]
     let c = seen.get_or_default(w, 0) + 1
@@ -104,7 +104,7 @@ fn fn_type_names(defs : Map[Bytes, Bytes]) -> Map[Bytes, Bytes] {
 ///|
 /// A name's numbers: re.sub(r'\d+', '#', name), and the numbers
 fn digits_stem(name : Bytes) -> (Bytes, Array[Bytes]) {
-  let buf = @buffer.new()
+  let buf = Buffer()
   let nums = []
   let n = name.length()
   let mut i = 0
@@ -151,8 +151,8 @@ fn stable_names(
   data_text : Map[Bytes, Bytes],
   fn_defs : Map[Bytes, Bytes],
 ) -> Map[Bytes, Bytes] {
-  let groups : Map[Bytes, Array[(Bytes, Array[Bytes])]] = Map::new()
-  let out : Map[Bytes, Bytes] = Map::new()
+  let groups : Map[Bytes, Array[(Bytes, Array[Bytes])]] = Map([])
+  let out : Map[Bytes, Bytes] = Map([])
   let literals : Array[(Bytes, Bytes)] = []
   for name in names {
     if starts(name, b"moonbit_string_literal_") && data_text.contains(name) {
@@ -183,7 +183,7 @@ fn stable_names(
     }
   }
   // (moonc's function types by their definitions)
-  let defs : Map[Bytes, Bytes] = Map::new()
+  let defs : Map[Bytes, Bytes] = Map([])
   for n, d in fn_defs {
     if out.contains(n) {
       defs[n] = d
@@ -196,7 +196,7 @@ fn stable_names(
   }
   // a string literal by its content (two the same, which moonc does not make: numbered apart, in its order)
   let named = by_content(literals.map(fn(x) { x.1 }), b"_Ms")
-  let seen : Map[Bytes, Int] = Map::new()
+  let seen : Map[Bytes, Int] = Map([])
   for x in literals {
     let n = named[x.1]
     let c = seen.get_or_default(n, 0) + 1

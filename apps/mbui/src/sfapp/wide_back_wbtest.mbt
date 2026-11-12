@@ -119,7 +119,7 @@ test "大屏: two chats opened one after the other with no frame between: an ent
   let along = wide_entries(true)
   assert_eq(wide_entries(false), along)
   assert_eq(along.0.1, "s-c3")
-  assert_eq(along.0.0[along.0.0.length() - 2:].to_array(), ["s-c1", "s-c2"])
+  assert_eq(along.0.0[along.0.0.length() - 2:].to_owned(), ["s-c1", "s-c2"])
   assert_eq(along.1, "s-c1")
 }
 
@@ -232,10 +232,10 @@ fn back_forward(how : Int) -> (String, String, (Array[String], String)) {
 ///|
 test "大屏: back then forward, no frame between, by the shell's back, the stack's own, the system's: forward to the chat back left" {
   let by_event = back_forward(2)
-  assert_eq(by_event.1, "s-c2", msg="\{by_event}")
+  assert_eq(by_event.1, "s-c2", msg="\{Repr(by_event)}")
   for how in [0, 1] {
     let got = back_forward(how)
-    assert_eq(got.1, "s-c2", msg="how \{how}: \{got}")
+    assert_eq(got.1, "s-c2", msg="how \{how}: \{Repr(got)}")
   }
   assert_eq(back_forward(0), by_event)
 }
@@ -288,7 +288,7 @@ fn tape_back_forward() -> (String, String, (Array[String], String)) raise {
 ///|
 test "中屏: a chat opened over the page, the stack's own back then forward, no frame between: back to the one under it, forward to it again" {
   let got = tape_back_forward()
-  assert_eq((got.0, got.1), ("s-c1", "s-c2"), msg="\{got}")
+  assert_eq((got.0, got.1), ("s-c1", "s-c2"), msg="\{Repr(got)}")
 }
 
 ///|

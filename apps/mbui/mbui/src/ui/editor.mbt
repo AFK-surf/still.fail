@@ -579,23 +579,25 @@ fn EditorState::typed_told(self : EditorState, before : String, anchor : Int, ca
 ///|
 /// An edit of a field's words or selection by the person (EditorState::typed_told): its words and selection before it
 /// and after it, and what made it.
+#derive(Eq, Debug)
 pub(all) struct FieldEdit {
   was : String
   was_selection : (Int, Int)
   now : String
   selection : (Int, Int)
   by : FieldEditBy
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What made an edit of a field: keys typed (a key, the input method's text), a paste (and words let go on it), an undo
 /// or a redo, the pointer (its caret put or words picked with it).
+#derive(Eq, Debug)
 pub(all) enum FieldEditBy {
   Typed
   Pasted
   Undone
   Pointed
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What the edit changed of its words (words_changed).
@@ -609,12 +611,12 @@ pub fn FieldEdit::span(self : FieldEdit) -> (Int, Int, Int) {
 pub fn words_changed(was : String, now : String) -> (Int, Int, Int) {
   let most = if was.length() < now.length() { was.length() } else { now.length() }
   let mut start = 0
-  while start < most && was.unsafe_charcode_at(start) == now.unsafe_charcode_at(start) {
+  while start < most && was.unsafe_get(start).to_int() == now.unsafe_get(start).to_int() {
     start += 1
   }
   let mut end = 0
   while end < most - start &&
-        was.unsafe_charcode_at(was.length() - 1 - end) == now.unsafe_charcode_at(now.length() - 1 - end) {
+        was.unsafe_get(was.length() - 1 - end).to_int() == now.unsafe_get(now.length() - 1 - end).to_int() {
     end += 1
   }
   (start, was.length() - end, now.length() - end)
@@ -927,11 +929,16 @@ pub fn Ctx::editor(
   st.looked = None
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
   // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id); under a
-  // modal layer of the tree's over that old view, kept for the layer to give back, as Ctx::focus_editor's)
+  // modal layer of the tree's over that old view, kept for the layer to give back, as Ctx::focus_editor's; in a part
+  // not in use, asked still, given as it is built in use again (island_kept_asked))
   if field is Some(_) && st.focus_asked {
     st.focus_asked = false
-    if !view_focus_kept_for(self, id) && island_allows(self.island_said()) {
-      self.focus_moved(id)
+    if !view_focus_kept_for(self, id) {
+      if island_keys(self.island_said()) {
+        self.focus_moved(id)
+      } else if island_kept_asked(self.island_said()) {
+        st.focus_asked = true
+      }
     }
   }
   st.built_frame = self.build_no
@@ -984,7 +991,7 @@ pub fn Ctx::editor(
       self.take_press()
       self.editor_tap = 0
       self.focus_moved(id)
-      if (match st.local(self.press_x, self.press_y) { Some((lx, ly)) => st.pick_word(lx, ly, self.clock); None => false }) {
+      if (match st.local_point(self.press_x, self.press_y) { Some((lx, ly)) => st.pick_word(lx, ly, self.clock); None => false }) {
         self.word_drag = id
       }
       haptic(LongPress)
@@ -1161,6 +1168,7 @@ pub fn Field::composing(self : Field) -> Bool {
 /// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at least
 /// and at most,
 /// `trim`.
+#derive(Eq, Debug)
 pub(all) struct FieldLaid {
   words : String
   font_size : Double
@@ -1170,7 +1178,7 @@ pub(all) struct FieldLaid {
   min_lines : Int
   max_lines : Int
   trim : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// What `field` shows, followed (Field::composed_said), as a plain Ctx::editor of it set so lays it out: for a node of
@@ -1233,7 +1241,7 @@ fn EditorState::on_handle(self : EditorState, x : Double, y : Double) -> Bool {
 /// same. None where it is drawn as nothing: no point of it there, nothing to do with the input. What takes a pointer
 /// in the window turns it so as it takes it (app.mbt); what is in its words' terms already (a trackpad's float,
 /// moved by its own way) is not turned again.
-fn EditorState::local(self : EditorState, x : Double, y : Double) -> (Double, Double)? {
+fn EditorState::local_point(self : EditorState, x : Double, y : Double) -> (Double, Double)? {
   match self.drawn_now() {
     Some((px, py, qx, qy, s)) => if s > 0.0 { Some((px + (x - qx) / s, py + (y - qy) / s)) } else { None }
     None => Some((x, y))
@@ -1305,7 +1313,7 @@ fn EditorState::caret_box(
 /// _CaretPainter): a caret of its own follows the finger's way, not stopping between letters, a little bigger than the
 /// caret and see-through; the field's caret put where it would land, drawn grey there; let go, the one it draws slides
 /// there (float_caret_back_ms) and is the caret again.
-struct FloatCaret {
+priv struct FloatCaret {
   /// where in the window the host said the finger began, and where the caret stood then in the field's words (from
   /// their top left: where it stands, its line's middle)
   fx : Double
@@ -1473,12 +1481,6 @@ fn Ctx::paint_float_caret(
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
 fn Node::hint_shown(self : Node) -> TextLayout {
   self.field_box().hint_shown()
-}
-
-///|
-/// How the field `n` lays its placeholder out without soft wrapping (FieldBox::hint_lay).
-fn Node::hint_lay(self : Node) -> (String) -> TextLayout {
-  self.field_box().hint_lay()
 }
 
 ///|
@@ -2237,7 +2239,7 @@ fn EditorState::pick_at(self : EditorState, by : PickBy) -> Unit {
 /// committed first.
 fn EditorState::widen_by_pointer(self : EditorState, x : Double, y : Double, t : Double) -> Unit {
   // (a pointer's, in the window: where it is in the words, none where they are drawn as nothing)
-  guard self.local(x, y) is Some((x, y)) else { return }
+  guard self.local_point(x, y) is Some((x, y)) else { return }
   self.blink0 = t
   self.menu = false
   self.sel_handles = false

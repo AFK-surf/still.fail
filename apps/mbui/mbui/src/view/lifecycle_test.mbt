@@ -263,6 +263,6 @@ test "the scene's order made again from inside a walk of it (more of it built, l
   // (the three it built drawn, each its words)
   assert_true(after >= before + 3, msg="walked \{before} before it, \{after} after")
   for w in ["甲", "乙", "丙", "丁"] {
-    assert_true(words.contains(w), msg="\{w} walked: \{words}")
+    assert_true(words.contains(w), msg="\{w} walked: \{Repr(words)}")
   }
 }

@@ -90,6 +90,8 @@ const settle = async (...stations: Station[]) => {
     await new Promise((r) => setImmediate(r));
     await Promise.all(stations.map((s) => s.sharing.reconcile()));
   }
+  // What each wrote down of its state, on the disk (it is written off the station's thread).
+  await Promise.all(stations.map((s) => s.sharing.stateWritten()));
 };
 
 const KEY = { id: "deepseek", name: "DeepSeek", access: { kind: "api-provider", provider: "deepseek", key: "sk-secret" }, home: "homes/deepseek", env: {} };
@@ -136,7 +138,7 @@ test("a shared key profile is copied to the other station, key and all; stopping
   assert.equal(copy.id, id);
   assert.equal(copy.access.key, "sk-secret");
   assert.equal(copy.share.borrowed, true);
-  assert.deepEqual(b.sharing.profileView(copy), { id, role: "user", host: A, allow: null, reachable: true });
+  assert.deepEqual(b.sharing.profileView(copy), { id, role: "user", host: A, allow: null, reachable: true, pausable: true });
   // An edit on its host reaches the copy.
   a.config.update((raw) => (raw.profiles[0].access.key = "sk-new"));
   await settle(a, b);
@@ -145,9 +147,25 @@ test("a shared key profile is copied to the other station, key and all; stopping
   await settle(a, b);
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "a disabled key stays disabled on its copy");
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-new", "the key is retained");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).share.hostOff, true);
   a.config.update((raw) => { delete raw.profiles[0].enabled; });
   await settle(a, b);
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, undefined, "enabling propagates too");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).share.hostOff, undefined);
+  // Paused on the borrowing station (accounts/index.ts putProfile): so it stays as its host edits it, disables it and
+  // enables it again.
+  b.config.update((raw) => { const c = raw.profiles.find((p: any) => p.id === id); c.share.paused = true; c.enabled = false; });
+  a.config.update((raw) => (raw.profiles[0].access.key = "sk-newer"));
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-newer");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "the pause here outlives the host's edit");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).share.paused, true);
+  a.config.update((raw) => (raw.profiles[0].enabled = false));
+  await settle(a, b);
+  a.config.update((raw) => { delete raw.profiles[0].enabled; });
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "the host enabling it again does not end the pause here");
+  b.config.update((raw) => { const c = raw.profiles.find((p: any) => p.id === id); delete c.share.paused; delete c.enabled; });
   // The host offline: the copy stays.
   all.delete(A);
   await settle(b);
@@ -573,6 +591,7 @@ test("quota reset notifications continue after a shared Codex account moves to a
   await b.sharing.quotaReset(newHostProfile.id, "before-1");
   await settle(a, b, c);
   assert.equal(received.filter(Boolean).length, before + 1, "a key redeemed before the move is still deduplicated");
+  await a.sharing.stateWritten();
   assert.equal(JSON.parse(readFileSync(join(a.data, "share", "state.json"), "utf8")).moved[shareId], undefined, "a late handover notice is acknowledged");
   await a.sharing.close();
   await b.sharing.close();
@@ -597,6 +616,7 @@ test("a shared skill: copied and linked under its name, edits go back to the hos
   assert.equal(b.sharing.skillView("ember")!.role, "user");
   // An edit on the copy, sent to the host on the version it was made on.
   writeFileSync(join(readlinkSync(link), "SKILL.md"), "---\nname: ember\ndescription: 项目记忆：ember\n---\nfrom mini\n");
+  await b.sharing.stateWritten();
   const state = JSON.parse(readFileSync(join(b.data, "share", "state.json"), "utf8"));
   const base = state.borrowed[id].version;
   const answer = await a.sharing.handle(B, { method: "share.put", id, base, files: { "SKILL.md": Buffer.from("from mini\n").toString("base64") } });

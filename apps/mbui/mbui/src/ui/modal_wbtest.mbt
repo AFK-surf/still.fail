@@ -359,14 +359,45 @@ test "keys under a modal layer: a key catcher of the page's under it gets no key
   on_key(key_of_char('q'), 0)
   on_text(0, "hi", 0, 0)
   assert_true(g().dev.catchers.values().all(fn(st) { st.came.is_empty() }))
-  // over the page's list
-  assert_eq((g().px, g().py), (75.0, 100.0))
+  // over the page's list, the pointer still; the layer come over it a change, what is under it found then
+  // (view_hand_at): the old view's under the layer pointed at no longer
+  assert_eq((view_point.val, g().px), (Some((75.0, 100.0)), -1.0))
   on_key(key_page_down, 0)
   on_key(key_down, 0)
   t.draw()
   assert_eq(offset(under_list), 0.0)
   // over the layer's
   finger(1, 275.0, 100.0)
+  on_key(key_page_down, 0)
+  t.draw()
+  assert_true(offset(top_list) > 0.0)
+}
+
+///|
+test "keys under a modal layer, the pointer moved over the page's list after the layer came: neither the list under it nor its key catcher takes them; the layer's list does" {
+  let on = @signals.signal(false, same=fn(x, y) { x == y })
+  let (t, under_list, top_list) = keyed_window(on)
+  let offset = fn(id : Ref[Int]) {
+    match g().lists.get(id.val) {
+      Some(st) => st.offset()
+      None => -1.0
+    }
+  }
+  on.set(true)
+  t.draw()
+  // the mouse moved over the page's list, the layer on: an input, what is under it found then, the page's list
+  // what the old frame finds under the pointer (old_list_under_pointer), the layer keeping its keys from it
+  finger(1, 75.0, 150.0)
+  assert_eq(view_point.val, Some((75.0, 150.0)))
+  assert_eq(old_list_under_pointer(g()), under_list.val)
+  on_key(key_page_down, 0)
+  on_key(key_down, 0)
+  on_key(key_of_char('q'), 0)
+  t.draw()
+  assert_eq(offset(under_list), 0.0)
+  assert_true(g().dev.catchers.values().all(fn(st) { st.came.is_empty() }))
+  // over the layer's
+  finger(1, 275.0, 150.0)
   on_key(key_page_down, 0)
   t.draw()
   assert_true(offset(top_list) > 0.0)
@@ -429,16 +460,16 @@ test "a scroll bar's thumb of the page held as a modal layer comes over it: let 
     root.box(fn(l) { l.over(Is(true)).modal(By(fn() { on.get() })) |> ignore }) |> ignore
   })
   t.draw()
-  t.move(296.0, 200.0)
+  t.move_to(296.0, 200.0)
   t.run_for(scrollbar_fade_ms)
-  t.move(296.0, 10.0)
+  t.move_to(296.0, 10.0)
   t.press_at(296.0, 10.0)
   assert_true(g().bar_drag != 0)
   on.set(true)
   assert_eq(g().bar_drag, 0)
   on.set(false)
   t.release(296.0, 10.0)
-  t.move(296.0, 103.0)
+  t.move_to(296.0, 103.0)
   t.run_for(scrollbar_fade_ms)
   assert_eq(t.list_offset(), 0.0)
 }
@@ -686,20 +717,20 @@ test "a scroll bar's thumb lit as the pointer comes over it, unlit as it leaves,
   // (each frame judged by what it draws alone)
   t.check_looks(false)
   t.draw()
-  t.move(296.0, 200.0)
+  t.move_to(296.0, 200.0)
   t.run_for(scrollbar_fade_ms)
   let light = thumb_alpha(t)
-  t.move(296.0, 10.0)
+  t.move_to(296.0, 10.0)
   assert_true(thumb_alpha(t) > light)
   // held, called off by a modal layer, let go (the tree's: no input of the old view's), left: unlit
   t.press_at(296.0, 10.0)
   on.set(true)
   on.set(false)
   t.release(296.0, 10.0)
-  t.move(296.0, 103.0)
+  t.move_to(296.0, 103.0)
   assert_eq(thumb_alpha(t), light)
   // over it again, then the pointer out of the window
-  t.move(296.0, 10.0)
+  t.move_to(296.0, 10.0)
   assert_true(thumb_alpha(t) > light)
   on_pointer(7, 0.0, 0.0, 0)
   t.drawn_now()
@@ -816,6 +847,52 @@ test "words being picked on a page through an empty page over it, its layer said
 }
 
 ///|
+test "words picked in a modal layer over a page whose own words lie under them: the page's are no end of what is picked, none of them picked" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  // (the same lines, one over the other: the page's first among the paragraphs laid out)
+  let lines = fn(c : Ctx, one : String, two : String) {
+    c.mouse_drags_lists(false)
+    c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, fn() {
+      c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.selectable(fn() {
+          c.rich([plain(one)], size=15.0) |> ignore
+          c.rich([plain(two)], size=15.0) |> ignore
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  set_view_app(fn(root) {
+    old(root, fn(c) { lines(c, "under one", "under two") }).over(Is(true)) |> ignore
+    root.box(fn(l) {
+      l.over(Is(true)).modal(Is(true)) |> ignore
+      old(l, fn(c) { lines(c, "over one", "over two") }).over(Is(true)) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let (_, y1, _, h1) = t.rect_of("over one").unwrap()
+  let (x2, y2, w2, h2) = t.rect_of("over two").unwrap()
+  // a press, the pointer taken from it to another place, let go there, from the moment `at` (each an input's step
+  // after the one before, a frame after each): what is picked then
+  let picks = fn(x0 : Double, y0 : Double, x1 : Double, y1 : Double, at : Double) -> String {
+    for k, p in [(0, x0, y0), (1, x1, y1), (2, x1, y1)] {
+      t.fake.time = at + k.to_double() * input_step_ms
+      finger(p.0, p.1, p.2)
+      t.frame_at(t.fake.time)
+    }
+    t.ctx().selected_text()
+  }
+  // from the second line's end up to the first's start; then (a press of its own: its moment past the one before's
+  // double click) from the first's start down to the second's end
+  let at = t.time()
+  assert_eq(picks(x2 + w2 - 1.0, y2 + h2 / 2.0, 1.0, y1 + h1 / 2.0, at), "over one\nover two")
+  assert_eq(picks(1.0, y1 + h1 / 2.0, x2 + w2 - 1.0, y2 + h2 / 2.0, at + 3.0 * input_step_ms + double_click_ms), "over one\nover two")
+}
+
+///|
 /// A page (an old view filling it: a stack of two pages, 1 over 0) and an empty old view over it in a layer that is
 /// modal while `on` holds; what its stack was told of a swipe back, by kind (0 begun, 1 moved, 3 called off, 4 done).
 fn stacked_under(on : @signals.Signal[Bool], platform : Int) -> (Tester, Nav[Int], Array[Int]) {
@@ -880,8 +957,8 @@ test "a swipe back from the left edge of a page under a modal layer: none while 
   at(t, t0 + 48.0, 1, 300.0)
   at(t, t0 + 64.0, 2, 300.0)
   t.frame_at(t0 + 64.0 + move_most_ms)
-  assert_true(begun > 0 && told[0] == 0, msg="\{told}")
-  assert_eq(told[begun:].to_array(), [3])
+  assert_true(begun > 0 && told[0] == 0, msg="\{Repr(told)}")
+  assert_eq(told[begun:].to_owned(), [3])
   assert_eq(nav.depth(), 2)
 }
 
@@ -959,7 +1036,7 @@ test "the caret's handle of a field of a page under an empty page in a modal lay
   let t1 = t0 + 7.0 * input_step_ms + double_click_ms
   drag(t1)
   t.frame_at(t1 + 7.0 * input_step_ms)
-  assert_true(field.selection().0 > before.0, msg="\{field.selection()} handle \{st.handle_on} focus \{g().focus_allowed()}")
+  assert_true(field.selection().0 > before.0, msg="\{Repr(field.selection())} handle \{st.handle_on} focus \{g().focus_allowed()}")
 }
 
 ///|
@@ -1022,7 +1099,7 @@ test "the system's back held by what took it as it began: what takes back changi
   for frame_between in [true, false] {
     let msg = "a frame between: \{frame_between}"
     let switched = back_switched(false, frame_between)
-    assert_eq(switched, (["A 0", "A 1", "A 1", "A 4"], [true, true, true, true]), msg="\{msg}: \{switched}")
+    assert_eq(switched, (["A 0", "A 1", "A 1", "A 4"], [true, true, true, true]), msg="\{msg}: \{Repr(switched)}")
     assert_eq(back_switched(true, frame_between).0, ["A 0", "A 1", "A 3"], msg~)
   }
 }
@@ -1090,7 +1167,7 @@ fn back_let_go_of(how : Int) -> (Array[String], Array[Bool], Array[String]) {
   back(80.0, 1, 200.0, 0.6)
   back(96.0, 2, 0.0, 1.0)
   t.frame_at(t0 + 200.0)
-  (by_then, at_own, told[by_then.length():].to_array())
+  (by_then, at_own, told[by_then.length():].to_owned())
 }
 
 ///|
@@ -1187,12 +1264,12 @@ test "the system's back of an old view going on as the window's tree is made ane
     t.frame_at(t0 + 60.0)
     back(80.0, 1, 200.0, 0.6)
     back(96.0, 2, 0.0, 1.0)
-    assert_eq(told.length(), 3, msg="\{how}: \{told}")
+    assert_eq(told.length(), 3, msg="\{how}: \{Repr(told)}")
     // a back of its own after: the one there now
     back(120.0, 0, 0.0, 0.0)
     back(136.0, 2, 0.0, 1.0)
     let now = if how == "tree" { "B" } else { "A" }
-    assert_eq(told[3:].to_array().map(fn(e) { e.0 }), ["\{now} began", "\{now} back"], msg=how)
+    assert_eq(told[3:].to_owned().map(fn(e) { e.0 }), ["\{now} began", "\{now} back"], msg=how)
   }
 }
 

@@ -4,21 +4,27 @@
 // (apps/desktop/src/station.ts); this app runs the station's own installer (mac_app.m, win_station.h, linux_station.h
 // local_station_act), which makes it a service (launchd's, a scheduled task, a systemd user service):
 // - 添加这台 Mac, none here: a one-time token for the workspace (`workspace.enroll`, which the cloud gives only its owner
-//   and admins) and the installer run with it (`install`): downloaded, joined, run as a service;
+//   and admins) and the installer run with it (`install`): downloaded, joined, run as a service; in safe mode with the
+//   workspace lock's hash the answer carries too (`lock`, as 添加 station's command has it), which the station pins
+//   rather than take the cloud's word for who is let in;
 // - 更新到最新版: the installer run without a token (`update`): the station here brought up to the latest release and
 //   run as a service as it is (one still.fail's desktop app ran, with none, becomes one), in the workspaces it is in.
 // How far it is goes on 本机 Station's page as it runs (settings/local_station.mbt).
 
 ///|
 /// What the installer is told (mac_app.m local_install): the cloud, the workspace's token (none: the station here as it
-/// is), the release's channel (a beta app's, the beta's).
-fn local_install_ask(token : String) -> String {
+/// is), with it the workspace lock's hash to pin (`lock`, "" none: not in safe mode; dropped, the station would go by
+/// the cloud's word and let members in unchecked), the release's channel (a beta app's, the beta's).
+fn local_install_ask(token : String, lock? : String = "") -> String {
   let o : Map[String, Json] = {
     "origin": Json::string(cloud_origin()),
     "channel": Json::string(if @ui.env("MBUI_BETA") == "1" { "beta" } else { "stable" }),
   }
   if token != "" {
     o["token"] = Json::string(token)
+    if lock != "" {
+      o["lock"] = Json::string(lock)
+    }
   }
   Json::object(o).stringify()
 }
@@ -43,7 +49,8 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
       Ok(v) =>
         match text(Some(v), "token") {
           "" => failed(tr("web-pages.settings.thisMac.noAnswer"))
-          token => @ui.local_station_act("install " + local_install_ask(token))
+          token =>
+            @ui.local_station_act("install " + local_install_ask(token, lock=text(Some(v), "lock")))
         }
       // refused (not its owner or admin, the workspace's stations full): said, not passed over
       Err(e) => failed(@settings.error_text(e))
@@ -54,7 +61,7 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
 ///|
 /// The account `workspace` is reached through (the `workspaces` topic, as the settings' here_of reads it), "" none.
 fn account_of(src : Source, workspace : String) -> String {
-  match src.topic("workspaces", Map::new()).get().value {
+  match src.topic("workspaces", Map([])).get().value {
     Some(Array(accounts)) =>
       for a in accounts {
         for w in items(Some(a), "workspaces") {
@@ -74,9 +81,9 @@ fn account_of(src : Source, workspace : String) -> String {
 /// none said, the machine as the person would call it.
 pub fn local_machine_name() -> String {
   for name in ["MBUI_MACHINE", "COMPUTERNAME"] {
-    let v = @ui.env(name).trim(chars=" \t\n").to_string()
+    let v = @ui.env(name).trim(chars=" \t\n").to_owned()
     if v != "" {
-      return if v.has_suffix(".local") { v.view(end_offset=v.length() - 6).to_string() } else { v }
+      return if v.has_suffix(".local") { v.exact_view(end=v.length() - 6).to_owned() } else { v }
     }
   }
   if @settings.local_machine_pc() { "PC" } else { "Mac" }

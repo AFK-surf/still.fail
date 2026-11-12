@@ -503,8 +503,8 @@ fn Ctx::paint_list_row(self : Ctx, i : Int, alpha : Double) -> Unit {
     self.paint(i, alpha)
     return
   }
-  let unsafe = self.row_drawing_safe(rn, i)
-  if unsafe != "" {
+  let refusal = self.row_drawing_safe(rn, i)
+  if refusal != "" {
     row_drawing_forget(rn)
     self.paint(i, alpha)
     return

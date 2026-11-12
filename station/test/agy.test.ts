@@ -1,16 +1,21 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { after, test } from "node:test";
-import { AgyDriver, agyEnv, agyHome, agyToken, classifyFailure, geminiDir } from "../src/agents/agy.ts";
+import { AgyDriver, SESSIONS, agyAccountFile, agyConversations, agyEnv, agyHome, agyToken, classifyFailure, geminiDir } from "../src/agents/agy.ts";
 import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 import { allLeft } from "../src/agents/runner.ts";
 import { profileRuntimes } from "../src/agents/profiles.ts";
+import { Accounts, accountEmail, accountEmailSoon } from "../src/accounts/index.ts";
 import { accessKinds, checkProfile, loginCommand } from "../src/accounts/profiles.ts";
 import { LoginManager, type LoginState } from "../src/accounts/login.ts";
 import { checkQuota } from "../src/accounts/quota.ts";
+import { ConfigFile } from "../src/ops/config.ts";
+import { Accounts as SessionAccounts } from "../src/sessions/accounts.ts";
+import { hubConfig } from "../src/sessions/config.ts";
+import { Store } from "../src/store/store.ts";
 import { tr } from "../src/ops/i18n.ts";
 import { platform } from "../src/platform/index.ts";
 import { transcriptPath, readTimeline, isPosting } from "../src/read/transcript.ts";
@@ -130,23 +135,34 @@ test("models are read without a turn, the station's tools or a transcript", asyn
   assert.equal(readFileSync(dump, "utf8").includes(options.mcpToken), false);
 });
 
-test("a handover keeps the running turn, ended once by the next station", async () => {
-  const { options, events, driver } = setup();
-  const s = await driver.open(options, (e) => events.push(e));
-  await s.prompt("hold");
-  await until(() => events.some((e) => e.type === "live" && e.event.kind === "delta" && e.event.text === "first "));
-  const snapshot = s.snapshot();
-  s.detach();
-  await allLeft();
-  const next = new AgyDriver({ data });
-  drivers.push(next);
-  const later: RuntimeEvent[] = [];
-  const adopted = await next.adopt(options, snapshot, (e) => later.push(e));
-  await adopted.abort();
-  await until(() => ended(later).length === 1);
-  assert.equal(ended(events).length, 0);
-  await adopted.dispose();
-});
+for (const crashed of [false, true]) {
+  test(`taking up a running session ${crashed ? "after a crash" : "from a handover"} keeps its turn, configured model and catalog`, async () => {
+    const { options, events, driver } = setup();
+    const configured = { ...options, model: "gemini-3.1-pro" };
+    const s = await driver.open(configured, (e) => events.push(e));
+    await s.prompt("hold");
+    await until(() => events.some((e) => e.type === "live" && e.event.kind === "delta" && e.event.text === "first "));
+    const snapshot = crashed ? null : s.snapshot();
+    s.detach();
+    await allLeft();
+    const next = new AgyDriver({ data });
+    drivers.push(next);
+    const later: RuntimeEvent[] = [];
+    const adopted = await next.adopt(configured, snapshot, (e) => later.push(e));
+    assert.equal(adopted.model, "gemini-3.1-pro");
+    await adopted.abort();
+    await until(() => ended(later).length === 1);
+    assert.equal(ended(events).length, 0);
+    await adopted.prompt("after");
+    await until(() => ended(later).length === 2);
+    const path = transcriptPath("agy", options.profile.home, adopted.id())!;
+    const calls = callsOf("agy", readFileSync(path, "utf8"), false, { model: null, codexId: null });
+    assert.equal(calls.at(-1)?.model, "gemini-3.1-pro");
+    assert.equal(adopted.retune!({ ...options, model: "not-offered" }), false);
+    assert.equal(adopted.retune!({ ...options, model: "gemini-3.5-flash" }), true);
+    await adopted.dispose();
+  });
+}
 
 test("which profiles run it, and none of the machine's Google accounts", (t) => {
   const { options } = setup();
@@ -186,6 +202,7 @@ test("a Google account: signed in in its terminal interface (the way chosen, Goo
     await logins.submitCode("g", " 4/0Ab-code ", "en");
     await wait("done");
     assert.equal(JSON.parse(readFileSync(agyToken(home), "utf8")).token.access_token, "ya29.4/0Ab-code");
+    assert.equal(JSON.parse(readFileSync(agyAccountFile(home), "utf8")).email, "someone@gmail.com");
     assert.equal(agyToken(home), join(geminiDir(home), "antigravity-cli", "antigravity-oauth-token"));
     const signedIn = await check();
     assert.equal(signedIn.state, "ok");
@@ -201,7 +218,7 @@ test("a Google account: signed in in its terminal interface (the way chosen, Goo
   await s.dispose();
 });
 
-test("a Google account's sign-in: refused at once where there is no terminal; its allowance not said; its login command", async () => {
+test("a Google account's sign-in: refused at once where there is no terminal; without a sign-in its allowance says signed out; its login command", async () => {
   const terminal = platform.terminal;
   platform.terminal = () => null;
   const logins = new LoginManager(data, { claude: "claude", codex: "codex", agy: "agy" });
@@ -212,7 +229,196 @@ test("a Google account's sign-in: refused at once where there is no terminal; it
     platform.terminal = terminal;
     await logins.close();
   }
-  const q = await checkQuota({ id: "p", runtime: "agy", home: "/h", access: { kind: "subscription" } } as never, {}, undefined, undefined, "en");
-  assert.deepEqual([q.state, q.detail], ["unsupported", tr("en", "station.quota.agyUnsupported")]);
+  const q = await checkQuota({ id: "p", runtime: "agy", home: join(data, "no-signin"), access: { kind: "subscription" } } as never, {}, undefined, undefined, "en");
+  assert.deepEqual([q.state, q.detail], ["unavailable", tr("en", "station.quota.signInExpired")]);
   assert.equal(loginCommand("agy", "/h"), "HOME=/h/agy agy");
+});
+
+test("an Antigravity CLI account's Gemini and Claude / GPT windows weigh only on their own models in the pool", () => {
+  const cfg = hubConfig(
+    {
+      profiles: [
+        { id: "ag1", name: "AG1", runtime: "agy", home: "/h1", access: { kind: "subscription" }, model: "gemini-4-carbon-medium", models: ["gemini-4-carbon-medium", "claude-opus-5-5-medium"] },
+        { id: "ag2", name: "AG2", runtime: "agy", home: "/h2", access: { kind: "subscription" }, model: "gemini-4-carbon-medium", models: ["gemini-4-carbon-medium", "claude-opus-5-5-medium"] },
+      ],
+    },
+    "/x",
+  );
+  const sessions = new Map<string, any>([
+    ["s-gemini", { key: "s-gemini", runtime: "agy", profile: "ag1", profilePinned: false, model: "gemini-4-carbon-medium", effort: null }],
+    ["s-claude", { key: "s-claude", runtime: "agy", profile: "ag1", profilePinned: false, model: "claude-opus-5-5-medium", effort: null }],
+  ]);
+  const pool = new SessionAccounts({
+    config: () => cfg,
+    store: {
+      getSession: (k: string) => sessions.get(k),
+      setSessionProfile: (k: string, id: string, pinned: boolean) => {
+        const s = sessions.get(k);
+        if (s) {
+          s.profile = id;
+          s.profilePinned = pinned;
+        }
+      },
+      lastTurn: () => ({ endedAt: 1000 }),
+      recentlyCompacted: () => false,
+      compactionsReady: () => false,
+      lastContexts: () => [],
+      compactionPoints: () => new Map(),
+    } as never,
+    running: () => [],
+    clock: { currentTimeMillisUnsafe: () => 2000 } as never,
+  });
+  const ag1Quota = {
+    state: "ok",
+    checkedAt: 1500,
+    windows: [
+      { label: "5 小时 · Gemini", usedPercent: 15, resetsAt: 5000, scope: "gemini" },
+      { label: "每周 · Gemini", usedPercent: 25, resetsAt: 9000, scope: "gemini" },
+      { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: 6000, scope: "3p" },
+      { label: "每周 · Claude / GPT", usedPercent: 40, resetsAt: 9000, scope: "3p" },
+    ],
+  };
+  const ag2Quota = {
+    state: "ok",
+    checkedAt: 1500,
+    windows: [
+      { label: "5 小时 · Gemini", usedPercent: 100, resetsAt: 7000, scope: "gemini" },
+      { label: "每周 · Gemini", usedPercent: 100, resetsAt: 8000, scope: "gemini" },
+      { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: 8500, scope: "3p" },
+      { label: "每周 · Claude / GPT", usedPercent: 50, resetsAt: 9000, scope: "3p" },
+    ],
+  };
+  pool.setHealth((id) => ({
+    check: { state: "ok", detail: "ok", models: ["gemini-4-carbon-medium", "claude-opus-5-5-medium"], checkedAt: 1500 },
+    quota: id === "ag1" ? ag1Quota : ag2Quota,
+  }));
+  // Gemini on ag1 is still healthy even though ag1's Claude / GPT 5h window is at 100%.
+  assert.equal(pool.runOn("s-gemini").id, "ag1");
+  // Claude on ag1 sees only the 3P window (refills at 6000), while ag2's 3P window is also full (8500): stays on ag1 and refills at 6000.
+  assert.equal(pool.refillsAt("s-claude"), 6000);
+});
+
+test("macOS keychain migration: check and email survive `agy` moving `antigravity-oauth-token` into the login keychain, while unsigned and revoked profiles report login", async () => {
+  const dir = join(data, "keychain-accounts");
+  mkdirSync(dir, { recursive: true });
+  const unsignedHome = join(dir, "homes", "unsigned");
+  const preExistingHome = join(dir, "homes", "preexisting");
+  const notedHome = join(dir, "homes", "noted");
+  const noEmailHome = join(dir, "homes", "no-email");
+  const envHome = join(dir, "homes", "env");
+  const apiHome = join(dir, "homes", "api");
+  // `linkTranscripts` creates `agy/sessions` even before a profile has ever signed in.
+  mkdirSync(join(agyHome(unsignedHome), SESSIONS), { recursive: true });
+  mkdirSync(join(geminiDir(unsignedHome), "antigravity-cli"), { recursive: true });
+  // A profile signed in before `account.json` existed, whose token file was migrated to the macOS login keychain by `agy acp`.
+  mkdirSync(agyConversations(preExistingHome), { recursive: true });
+  writeFileSync(join(agyConversations(preExistingHome), "c1.db"), "db");
+  // A profile signed in via station (noted email), then its token file unlinked by `agy` migrating to the keychain.
+  mkdirSync(join(geminiDir(notedHome), "antigravity-cli"), { recursive: true });
+  writeFileSync(agyToken(notedHome), JSON.stringify({ token: { access_token: "ya29.x" }, id_token_email: "someone@gmail.com" }));
+  // A valid token file omitting `id_token_email` still keeps the sign-in marker without stale email attribution.
+  mkdirSync(join(geminiDir(noEmailHome), "antigravity-cli"), { recursive: true });
+  writeFileSync(agyAccountFile(noEmailHome), JSON.stringify({ email: "stale@gmail.com" }));
+  writeFileSync(agyToken(noEmailHome), JSON.stringify({ token: { access_token: "ya29.noemail" } }));
+
+  const hadKeychain = platform.hasKeychain;
+  platform.hasKeychain = true;
+  const store = Store.open(":memory:", null);
+  const config = new ConfigFile(dir);
+  config.update((raw) => {
+    raw.profiles = [
+      { id: "ag-u", name: "Unsigned", runtime: "agy", home: unsignedHome, access: { kind: "subscription" } },
+      { id: "ag-p", name: "PreExisting", runtime: "agy", home: preExistingHome, access: { kind: "subscription" } },
+      { id: "ag-n", name: "Noted", runtime: "agy", home: notedHome, access: { kind: "subscription" } },
+      { id: "ag-env", name: "Env", runtime: "agy", home: envHome, access: { kind: "env" } },
+      { id: "ag-api", name: "Api", runtime: "agy", home: apiHome, access: { kind: "api-provider", provider: "google", key: "bad-key" } },
+    ];
+  });
+  let driverMode: "ok" | "auth" | "crash" = "ok";
+  let driverCalls = 0;
+  const accounts = new Accounts({
+    data: dir,
+    store,
+    config,
+    machine: null,
+    checkOnStart: false,
+    check: (req, lang) =>
+      req.kind === "api-provider"
+        ? Promise.resolve({ state: "failed", detail: "Google refused the key (401)", models: null, checkedAt: 0 })
+        : checkProfile({ ...req, env: {}, machine: false, lang }),
+    quota: async () => ({ state: "ok", windows: [], detail: null, checkedAt: 0 }),
+    agy: () =>
+      ({
+        models: async () => {
+          driverCalls++;
+          if (driverMode === "auth") throw new Error("Authentication required");
+          if (driverMode === "crash") throw new Error("spawn agy ENOENT");
+          return ["gemini-3.5-flash", "gemini-3.1-pro"];
+        },
+      }) as never,
+  });
+  try {
+    // 1. First check notes email, then `agy` unlinks `antigravity-oauth-token` after migrating to keychain.
+    const first = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: notedHome, env: {}, machine: false, lang: "en" });
+    assert.equal(first.state, "ok");
+    assert.match(first.detail, /someone@gmail\.com/);
+    rmSync(agyToken(notedHome));
+    assert.equal(accountEmail("agy", notedHome), "someone@gmail.com");
+    assert.equal(await accountEmailSoon("agy", notedHome), "someone@gmail.com");
+
+    const afterMigration = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: notedHome, env: {}, machine: false, lang: "en" });
+    assert.equal(afterMigration.state, "ok");
+    assert.match(afterMigration.detail, /someone@gmail\.com/);
+
+    // A valid token file without `id_token_email` clears any stale email while keeping the keychain sign-in marker.
+    await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: noEmailHome, env: {}, machine: false, lang: "en" });
+    rmSync(agyToken(noEmailHome));
+    assert.equal(accountEmail("agy", noEmailHome), null);
+    const noEmailAfter = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: noEmailHome, env: {}, machine: false, lang: "en" });
+    assert.equal(noEmailAfter.state, "ok");
+    assert.equal(noEmailAfter.detail, tr("en", "station.profile.signedIn"));
+
+    // 2. Unsigned profile stays `login` without probing `agy acp`.
+    const uCheck = await accounts.check("ag-u", "en");
+    assert.equal(uCheck.state, "login");
+    assert.equal(driverCalls, 0);
+
+    // 3. Both pre-existing and noted keychain-migrated profiles probe `agy acp` and report `ok` with models.
+    const pCheck = await accounts.check("ag-p", "en");
+    assert.equal(pCheck.state, "ok");
+    assert.deepEqual(pCheck.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
+    const nCheck = await accounts.check("ag-n", "en");
+    assert.equal(nCheck.state, "ok");
+    assert.deepEqual(nCheck.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
+
+    // 4. Revoked/missing keychain sign-in (`Authentication required`) flips a subscription check back to `login` while preserving known models.
+    driverMode = "auth";
+    const revoked = await accounts.check("ag-p", "en");
+    assert.equal(revoked.state, "login");
+    assert.equal(revoked.detail, tr("en", "station.profile.signedOut"));
+    assert.deepEqual(revoked.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
+
+    // 5. Non-subscription `agy` profiles (`env` and `api-provider`) never get mapped to `login`:
+    //    `env` reports `failed` (`agyFailed`), and an already-failed `api-provider` key check preserves its `keyRefused` error without spawning `agy acp`.
+    const callsBeforeEnv = driverCalls;
+    const envFailed = await accounts.check("ag-env", "en");
+    assert.equal(envFailed.state, "failed");
+    assert.match(envFailed.detail, /Authentication required/);
+    assert.equal(driverCalls, callsBeforeEnv + 1);
+
+    const apiFailed = await accounts.check("ag-api", "en");
+    assert.equal(apiFailed.state, "failed");
+    assert.equal(apiFailed.detail, "Google refused the key (401)");
+    assert.equal(driverCalls, callsBeforeEnv + 1, "already-failed api-provider check does not spawn agy acp");
+
+    // 6. Non-auth launch error still reports `failed`.
+    driverMode = "crash";
+    const crashed = await accounts.check("ag-n", "en");
+    assert.equal(crashed.state, "failed");
+    assert.match(crashed.detail, /ENOENT/);
+  } finally {
+    platform.hasKeychain = hadKeychain;
+    await accounts.close();
+    store.close();
+  }
 });

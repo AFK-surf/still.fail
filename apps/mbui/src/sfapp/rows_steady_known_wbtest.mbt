@@ -6,6 +6,12 @@
 ///|
 fn init {
   @ui.rows_steady_known([
+    // (words sent in a chat, the core answering 300 to 700 ms after: a row above them goes 82 in a frame as it comes,
+    // every screen, at 60 and 120)
+    ("src/sfapp/core_pace_rows_wbtest.mbt", 1),
+    // (大屏 at 1.3, the chat's panel opened and closed: a row of the chat goes 14 one way, stands 217 ms and comes back
+    // 2.8, at 60 and 120)
+    ("src/sfapp/daily_paths_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
   ])
 }

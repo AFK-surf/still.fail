@@ -58,7 +58,7 @@ pub struct TextLayout {
 }
 
 ///|
-struct Glyph {
+priv struct Glyph {
   u : Double
   v : Double
   gw : Double
@@ -75,7 +75,7 @@ struct Glyph {
 
 ///|
 /// The strings shaped in one font (size, weight, style) with one letter spacing.
-struct FontShapes {
+priv struct FontShapes {
   size : Double
   weight : Int
   style : Int
@@ -84,7 +84,7 @@ struct FontShapes {
 }
 
 ///|
-struct TextCache {
+priv struct TextCache {
   fonts : Array[FontShapes]
   // strings shaped, in all fonts
   mut shaped : Int
@@ -115,8 +115,8 @@ struct TextCache {
 let text_cache : TextCache = {
   fonts: [],
   shaped: 0,
-  metrics: Map::new(),
-  glyphs: Map::new(),
+  metrics: Map([]),
+  glyphs: Map([]),
   atlas: None,
   colour_atlas: None,
   fresh: [],
@@ -265,7 +265,7 @@ fn glyphs_still(kept : Array[(Int, Double, Double)], sc : Double) -> Bool {
 /// How many times as large as the host makes its glyphs (the window's pixels a point) what is painted now draws its
 /// words: a shot's pixels a point over the window's (shot.mbt), 1 elsewhere.
 // kept across runs: set only while a shot is painted, within one frame's paint, and put back
-let words_zoom : Ref[Double] = Ref::new(1.0)
+let words_zoom : Ref[Double] = Ref(1.0)
 
 ///|
 /// The glyphs of words `text`, shaped as `s` is in `size`, `weight`, `style` and `spacing`, shaped again words_zoom
@@ -418,7 +418,7 @@ fn is_cjk(c : Int) -> Bool {
 /// Whether any of the words is in a CJK font's characters (is_cjk).
 fn words_cjk(text : String) -> Bool {
   for i in 0..<text.length() {
-    if is_cjk(text.unsafe_charcode_at(i)) {
+    if is_cjk(text.unsafe_get(i).to_int()) {
       return true
     }
   }
@@ -475,7 +475,7 @@ fn font_shapes(size : Double, weight : Int, style : Int, spacing : Double) -> Ma
       return f.map
     }
   }
-  let map = Map::new()
+  let map = Map([])
   text_cache.fonts.push({ size, weight, style, spacing, map })
   map
 }
@@ -600,11 +600,11 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
           }
         None => ()
       }
-      let starts = Array::new(capacity=m)
-      let lens = Array::new(capacity=m)
-      let adv = Array::new(capacity=m)
-      let keys = Array::new(capacity=m)
-      let cu = Array::new(capacity=m)
+      let starts = Array(capacity=m)
+      let lens = Array(capacity=m)
+      let adv = Array(capacity=m)
+      let keys = Array(capacity=m)
+      let cu = Array(capacity=m)
       let mut i = 0
       while i < m {
         let st = out[i * 4].to_int()
@@ -956,7 +956,7 @@ let no_glyph : Glyph = {
 ///|
 /// The glyphs in the atlas by their places ("u v", as an instance has them): their keys.
 fn glyph_keys() -> Map[String, Int] {
-  let at : Map[String, Int] = {}
+  let at : Map[String, Int] = Map([])
   text_cache.glyphs.each(fn(key, g) { if g.plot >= 0 { at["\{g.u} \{g.v}"] = key } })
   at
 }
@@ -1110,7 +1110,7 @@ fn one_line(texts : Array[String]) -> Array[String]? {
     }
   }
   let blank = fn(ch : Char) { ch == ' ' || ch == '\t' || is_nl(ch.to_int()) }
-  let out = texts.map(fn(_) { StringBuilder::new() })
+  let out = texts.map(fn(_) { StringBuilder() })
   let n = chars.length()
   let mut said = false
   let mut i = 0

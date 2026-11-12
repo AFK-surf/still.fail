@@ -19,15 +19,21 @@ fn outbox_chat(calls : Array[Made], out : Json, offline? : Bool = false) -> @ui.
 }
 
 ///|
-fn outgoing(state : String, final? : Bool = false, error? : String = "", waits? : String = "") -> Json {
+fn outgoing(
+  state : String,
+  refused? : Bool = false,
+  error? : String = "",
+  waits? : String = "",
+  at? : Double = 0.0,
+) -> Json {
   {
     "id": "o-1",
     "text": "这条还在路上",
     "state": Json::string(state),
-    "final": Json::boolean(final),
+    "final": Json::boolean(refused),
     "error": Json::string(error),
     "waits": Json::string(waits),
-    "createdAt": 0,
+    "createdAt": Json::number(at),
     "time": { "createdAt": { "at": 0, "ago": "刚刚", "full": "10/19 06:40:00", "until": "", "past": true } },
   }
 }
@@ -69,7 +75,7 @@ test "what did not go says 未发送 under it; 重试 asks the core to send it a
 ///|
 test "what was refused as it is says why, and 编辑 in place of 重试 puts its words back in the composer as it drops it" {
   let calls : Array[Made] = []
-  let t = outbox_chat(calls, outgoing("failed", final=true, error="a.jpg 的上传源已丢失"))
+  let t = outbox_chat(calls, outgoing("failed", refused=true, error="a.jpg 的上传源已丢失"))
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("发送失败：a.jpg 的上传源已丢失") is Some(_))
   assert_true(t.query(Button, label="重试") is None)
@@ -78,7 +84,7 @@ test "what was refused as it is says why, and 编辑 in place of 重试 puts its
   assert_eq(named(calls, "chat.retry").length(), 0)
   // (its words in the composer's field, to be sent anew)
   let typed = named(calls, "composer.text").map(fn(m) { text(Some(m.params), "text") })
-  assert_true(typed.contains("这条还在路上"), msg="\{typed}")
+  assert_true(typed.contains("这条还在路上"), msg="\{Repr(typed)}")
 }
 
 ///|
@@ -108,11 +114,20 @@ test "正在发送 shows under what is on its way only once it has been a while 
 }
 
 ///|
+test "a chat opened on what has been on its way a while says 正在发送 under it at once, its wait counted from when it was sent" {
+  let calls : Array[Made] = []
+  // (sent 5 s before the source's time of day: the fixture's, 0)
+  let t = outbox_chat(calls, outgoing("sending", at=-5000.0))
+  t.draw()
+  assert_true(outbox_seen(t, "正在发送"))
+}
+
+///|
 test "once the station has it, what was sent says its time under it, not 正在发送, till its message takes its place" {
   let calls : Array[Made] = []
   let t = outbox_chat(calls, outgoing("sent"))
   t.run_for(@sfpages.sending_shows_ms)
   assert_true(!outbox_seen(t, "正在发送"))
-  assert_true(outbox_seen(t, "刚刚"), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(outbox_seen(t, "刚刚"), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_true(t.find("未发送") is None)
 }

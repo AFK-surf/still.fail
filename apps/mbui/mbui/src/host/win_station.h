@@ -12,6 +12,7 @@
 #include <taskschd.h>
 #include <oleauto.h>
 #include <wctype.h>
+#include "station_install.h"  // what the installer is handed
 
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "oleaut32.lib")
@@ -314,22 +315,6 @@ static void local_begin(const char *verb, WCHAR *command, const WCHAR *channel) 
   want_frame = 1;
 }
 
-// an ask's string field, as UTF-16 (malloc'd), "" none
-static WCHAR *ask_text(const jv *ask, const char *key) {
-  const char *s = jtext(ask, key);
-  int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
-  WCHAR *w = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
-  if (w) MultiByteToWideChar(CP_UTF8, 0, s, -1, w, n);
-  return w;
-}
-
-// what may go in a PowerShell's single-quoted string: no quote, nothing but what a URL or a token is made of
-static int ps_plain(const WCHAR *s) {
-  for (; *s; s++)
-    if (!(iswalnum(*s) || wcschr(L":/.-_~?&=%+", *s))) return 0;
-  return 1;
-}
-
 void mb_host_local_station_act(moonbit_string_t action) {
   int n = Moonbit_array_length(action);
   WCHAR *a = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
@@ -337,38 +322,34 @@ void mb_host_local_station_act(moonbit_string_t action) {
   memcpy(a, action, (size_t)n * sizeof(WCHAR));
   WCHAR data[MAX_PATH], path[MAX_PATH * 2];
   local_data(data, MAX_PATH);
-  // `install {…}`, `update {…}`: the station's installer, install.ps1 of the cloud (`origin`), a token or none, the
-  // channel the app is on
+  // `install {…}`, `update {…}`: the station's installer, install.ps1 of the cloud (`origin`), a token or none (with it
+  // the workspace lock's hash, if any), the channel the app is on
   if (!wcsncmp(a, L"install ", 8) || !wcsncmp(a, L"update ", 7)) {
     int install = a[0] == L'i';
     const WCHAR *json = a + (install ? 8 : 7);
     int u = WideCharToMultiByte(CP_UTF8, 0, json, -1, NULL, 0, NULL, NULL);
     char *j8 = (char *)malloc((size_t)u + 1);
     if (j8) WideCharToMultiByte(CP_UTF8, 0, json, -1, j8, u, NULL, NULL);
-    jv ask;
-    const char *p = j8;
-    int ok = j8 && jparse(&p, &ask, 0) && ask.kind == 'o';
-    WCHAR *origin = ok ? ask_text(&ask, "origin") : NULL, *token = ok ? ask_text(&ask, "token") : NULL;
-    int beta = ok && !strcmp(jtext(&ask, "channel"), "beta");
-    if (ok) jv_free(&ask);
+    // (what it is handed: station_install.h, held by its test)
+    station_ask ask;
+    int ok = j8 && station_ask_read(j8, &ask);
     free(j8);
-    if (origin && token && (!wcsncmp(origin, L"https://", 8) || !wcsncmp(origin, L"http://", 7)) && ps_plain(origin) &&
-        ps_plain(token)) {
-      size_t cap = wcslen(origin) + wcslen(token) + 200;
-      WCHAR *command = (WCHAR *)calloc(cap, sizeof(WCHAR));
-      // (OutputEncoding: what it says in UTF-8, as local_run reads it; by default the system's code page, GBK in Chinese)
-      if (command)
-        _snwprintf(command, cap,
-                   L"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ([scriptblock]::Create((irm '%ls/install.ps1'))) %ls\"",
-                   origin, token);
-      if (command) local_begin(install ? "install" : "update", command, beta ? L"beta" : NULL);
+    char *c8 = ok ? station_ps_command(&ask) : NULL;
+    WCHAR *command = NULL;
+    if (c8) {
+      int w = MultiByteToWideChar(CP_UTF8, 0, c8, -1, NULL, 0);
+      command = (WCHAR *)calloc((size_t)w + 1, sizeof(WCHAR));
+      if (command) MultiByteToWideChar(CP_UTF8, 0, c8, -1, command, w);
+      free(c8);
+    }
+    if (command) {
+      local_begin(install ? "install" : "update", command, ask.beta ? L"beta" : NULL);
     } else {
       AcquireSRWLockExclusive(&local_lock);
       local_set(&local_failed, L"origin");
       ReleaseSRWLockExclusive(&local_lock);
     }
-    free(origin);
-    free(token);
+    if (ok) station_ask_free(&ask);
     free(a);
     return;
   }

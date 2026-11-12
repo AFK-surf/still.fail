@@ -6,11 +6,12 @@
 
 ///|
 /// How a file of the looks stands: on its way, here (its size), or not had (why, in the core's words).
+#derive(Eq)
 pub(all) enum LooksFile {
   LooksComing
   LooksHere(Int)
   LooksFailed(String)
-} derive(Eq)
+}
 
 ///|
 /// The looks' files asked for this run, by name (`<drawing>/<name>`).
@@ -19,7 +20,7 @@ let looks_files : @sf.LiveMap[String, LooksFile] = @sf.LiveMap::new()
 ///|
 /// What is told each file's bytes once it is here, by name: asked again with it after it failed (looks_files_again).
 // kept across runs: put back as a run begins (faces_reset)
-let looks_files_here : Map[String, (Bytes) -> Unit] = {}
+let looks_files_here : Map[String, (Bytes) -> Unit] = Map([])
 
 ///|
 fn looks_files_reset() -> Unit {
@@ -70,15 +71,16 @@ pub fn looks_files_again(src : Source, files : Array[String]) -> Unit {
 ///|
 /// How `files` (asked with looks_file) stand together: all here (Ready), one failed (Failed: the first one's why), else
 /// on their way, how far (the share of their bytes here: None while one's size is not known yet).
+#derive(Eq)
 pub(all) enum LooksStand {
   LooksReady
   LooksGoing(Double?)
   LooksNotHad(String)
-} derive(Eq)
+}
 
 ///|
 pub fn looks_stand(src : Source, files : Array[String]) -> LooksStand {
-  let going = field(src.topic("fonts", Map::new()).get().value, "share")
+  let going = field(src.topic("fonts", Map([])).get().value, "share")
   let mut got = 0.0
   let mut whole = 0.0
   let mut known = true

@@ -15,6 +15,7 @@ import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { facts } from "../accounts/catalog.ts";
 import { seesImages } from "../accounts/models.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
@@ -68,6 +69,19 @@ const literal = (text: string) => text.replaceAll("{{", "{​{");
 /// for (none: dsh's default), with the effort in the route's terms (none: the route's default).
 export type DshSetup = { patch: Json[]; provider?: string; model?: string; effort?: string };
 
+/// A model's window and most output as the model catalog says them, for a model pi-ai has no entry of its own for (any
+/// on the station's route). Without them it takes its default window (256K before dsh 0.2.2, 1M since) and 128K of
+/// output: a 200K model was never compacted before its provider refused it, and Opus 5.5 (1M) on dsh 0.2.1 had a turn
+/// failed as an overflow once a request's input passed 256K (FB-17). The output only where it leaves room in the
+/// window; none known, pi-ai's own.
+function capacity(model: string): { contextWindow?: number; maxTokens?: number } {
+  const known = facts(model);
+  const window = known?.context;
+  if (window === undefined || !Number.isInteger(window) || window <= 0) return {};
+  const output = known?.output;
+  return { contextWindow: window, ...(output !== undefined && Number.isInteger(output) && output > 0 && output < window ? { maxTokens: output } : {}) };
+}
+
 /// The patch for a session: dsh's ACP server off and the station's driver in; the profile's provider as a route of
 /// its own and its model; the station's instructions after dsh's own; transcripts kept uncompressed (read/transcript.ts
 /// reads them). A profile that brings its own configuration (custom variables) keeps dsh's routes.
@@ -81,7 +95,7 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
   let chosenEffort: string | undefined;
   if (route?.kind === "pi") {
     if (model === undefined) throw new Error("the profile names no model for DeepSeek Harness");
-    const entry: Json = { id: model, ...(seesImages(model) ? { input: ["text", "image"] } : {}) };
+    const entry: Json = { id: model, ...(seesImages(model) ? { input: ["text", "image"] } : {}), ...capacity(model) };
     const provider: Json = { displayName: route.name, api: route.api, baseURL: route.baseURL, apiKeyEnv: DSH_KEY, models: [entry] };
     if (route.headers) provider.headers = expandRoute(route.headers, sessionRoute);
     // pi-ai gives a reasoning model's instructions the "developer" role on an OpenAI protocol at an address it does not
@@ -240,11 +254,11 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
   }
 
   /// What the station before had handled says the session and where its turn stands.
-  protected crashed(options: OpenOptions, lines: Iterable<string>, _info: RunnerInfo, events: Events) {
+  protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, _info: RunnerInfo, events: Events) {
     const turn: Turn = { busy: false, prompted: false, aborting: false, closed: false };
     const live = new LiveFromDsh();
     let sessionId = options.resume ?? "";
-    for (const line of lines) {
+    for await (const line of lines) {
       const message = parseLine("dsh", line);
       if (message === undefined) continue;
       if (message.id === OPEN && typeof message.session === "string") sessionId = message.session;

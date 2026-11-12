@@ -8,7 +8,11 @@
 //   an event stream's first event, the next sent only once the page has said it has the first (an answer a line at a
 //   time reaches the page as it is sent, not once the WebView's buffer is full);
 //   what the page shows grabbed (a PNG);
-//   a page of HTML (kind 2) that says hello and answers a script the same way.
+//   a page of HTML (kind 2) that says hello and answers a script the same way;
+//   with MBUI_SITECHECK_BIG=<n> (Android: host_contract.sh sets it to 3/10 of the app's Java heap), a page of HTML of n
+//   bytes, which says it began and it ended: a page that large opens, the host holding it no more than once over
+//   (0.1.8278 and 0.1.8569 stopped by OutOfMemoryError, a 10 MB page given to loadDataWithBaseURL as a base64 string
+//   of all of it: #5737).
 // Each step on the log as `SITECHECK <step> <what>`, then `SITECHECK done` and the app's end.
 
 ///|
@@ -126,13 +130,36 @@ fn site_check_page_open() -> Unit {
         if w == "page-hello" {
           p.script("__ping('two')")
         } else if w == "page-pong two" {
-          site_check_log("done")
-          @hostapi.exit(0)
+          let big = @string.parse_int(@ui.env("MBUI_SITECHECK_BIG")) catch { _ => 0 }
+          if big > 0 {
+            site_check_big_open(big)
+          } else {
+            site_check_log("done")
+            @hostapi.exit(0)
+          }
         }
       None => ()
     }
   })
   cell.val = Some(p)
+  site_check_page.val = Some(p)
+}
+
+///|
+/// The large page's check: `n` bytes of HTML, most of them a comment, its first script saying it began and its last
+/// that it was read to its end.
+fn site_check_big_open(n : Int) -> Unit {
+  site_check_log("big asked \{n}")
+  let head = "<!doctype html><html><body style=\"margin:0;background:#a74\"><script>mbuiHost.post('big-start')</script><!--"
+  let foot = "--><script>mbuiHost.post('big-end')</script></body></html>"
+  let html = head + "x".repeat(n - head.length() - foot.length()) + foot
+  let p = @ui.NativeView::page(html, said=fn(w) {
+    site_check_log("page " + w)
+    if w == "big-end" {
+      site_check_log("done")
+      @hostapi.exit(0)
+    }
+  })
   site_check_page.val = Some(p)
 }
 

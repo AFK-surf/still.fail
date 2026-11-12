@@ -26,11 +26,19 @@
 #   scripts/host_contract.sh HOST kinds         the kinds of what the host tells done (outside) named as
 #        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/chk outside-kinds)
 #   scripts/host_contract.sh mac update         a newer build of the app put in its place by the host and opened
-#        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), one signed otherwise refused (below)
-#   scripts/host_contract.sh linux update       (a session bus) the same on Linux: its build for this machine put in
-#        place by its own installer and opened, another machine's refused
+#        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), made from a delta from this one (still.fail's
+#        scripts/delta.ts, Node 24), one signed otherwise refused (below)
+#   scripts/host_contract.sh linux update       (a session bus) the same on Linux: its build for this machine made from a
+#        delta, put in place by its own installer and opened; with a delta not as it is said, downloaded whole; another
+#        machine's refused
 #   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
+#   scripts/host_contract.sh linux posted       what the host posts from outside the frames told between frames, not
+#        taken as a frame begins (kitdemo's MBUI_POSTCHECK, src/kitdemo/gallery/postcheck.mbt)
+#   scripts/host_contract.sh mac op             how a run of 1Password's `op` ended told between frames and read, with a
+#        stand-in `op` first on PATH and with none (kitdemo's MBUI_OPCHECK, src/kitdemo/gallery/opcheck.mbt)
+#   scripts/host_contract.sh linux picked       what the system's picker gave told between frames, not taken as a frame
+#        begins (kitdemo's MBUI_PICKCHECK with MBUI_PICK_FILES, src/kitdemo/gallery/pickcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
 #        run's script (MBUI_DRIVE `notice`, as the desktop's click): what it opens given to the app (kitdemo's
 #        MBUI_NOTICECHECK, src/kitdemo/gallery/noticecheck.mbt)
@@ -203,6 +211,10 @@ run() {
       # the system's events over the run (its activities stopped, destroyed, relaunched, its configuration changed, a
       # dialog over it): kept beside the run's log, what says why when the system disturbed it
       $ADB logcat -b events -d > "${2%.log}.events.log" 2>/dev/null || true
+      # a crash the run ended on (FATAL EXCEPTION is an end above, so android_end says nothing of it): what was thrown
+      # and where, kept beside the log and said here
+      $ADB logcat -b crash -d -v brief > "${2%.log}.crash.log" 2>/dev/null || true
+      if [ -s "${2%.log}.crash.log" ]; then echo "the run's crash:"; head -30 "${2%.log}.crash.log"; fi
       return $r ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -433,7 +445,16 @@ case $CMD in
     # begun by what the page said before it: a script and its answer, the cookies (where the host keeps them), an event
     # stream's events as they are sent (the next sent once the page has the first), what the page shows grabbed, a
     # page of HTML the same; the run ends itself (SITECHECK done)
-    run "MBUI_SITECHECK=1" $O/site.log || true
+    # (Android: then a page of 3/10 of the app's Java heap, which must open and be read to its end: one the host holds
+    # a few times over, as loadDataWithBaseURL's base64 of all of it did, stops the app, OutOfMemoryError: #5737)
+    BIG=
+    if [ "$H" = android ]; then
+      heap=$($ADB shell getprop dalvik.vm.heapgrowthlimit | tr -d '\r')
+      case $heap in *m) heap=$(( ${heap%m} * 1024 * 1024 )) ;; *g) heap=$(( ${heap%g} * 1024 * 1024 * 1024 )) ;; *) heap= ;; esac
+      [ -n "$heap" ] || { echo "site contract ($H): the app's Java heap not told (dalvik.vm.heapgrowthlimit)"; exit 1; }
+      BIG=" MBUI_SITECHECK_BIG=$(( heap * 3 / 10 ))"
+    fi
+    run "MBUI_SITECHECK=1$BIG" $O/site.log || true
     grep -aq "SITECHECK done" $O/site.log || { echo "site contract ($H): the run did not end its check"; grep -a "SITECHECK\|view " $O/site.log | tail -20; exit 1; }
     scripts/chk site "$O/site.log" "$H"
     ;;
@@ -502,6 +523,25 @@ s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$1" > "$1/port"
       SRV=$!
       read -r PORT < "$1/port"
     }
+    # delta_for PACKAGE OLD: PACKAGE's raw form (U/PACKAGE.raw: a .tar.gz's tar, a .zip stored) made from the folder OLD
+    # by a delta (U/PACKAGE.from-1.delta), as still.fail's releases make them (scripts/delta.ts, on Node 24: the
+    # repository's .node-version); DELTA what the core would hand the host with it (served by `serve`, at PORT),
+    # DELTA_WRONG the same saying another sha256, DELTA_SIZE its size, RAW_SHA what it makes
+    delta_for() {
+      local tool=$D/../../../../scripts/delta.ts
+      node -e 'process.exit(+process.versions.node.split(".")[0] >= 24 ? 0 : 1)' ||
+        { echo "update contract: scripts/delta.ts needs Node 24 (.node-version), this is $(node --version)"; return 1; }
+      node "$tool" raw "$U/$1" "$U/$1.raw" && node "$tool" make --old "$2" --new "$U/$1.raw" --out "$U/$1.from-1.delta" || return 1
+      set -- $(node -e '
+const { createHash } = require("crypto"), { readFileSync } = require("fs");
+const [port, delta, raw] = process.argv.slice(1), d = readFileSync(delta), r = readFileSync(raw);
+const said = (sha256) => JSON.stringify({ url: `http://127.0.0.1:${port}/${require("path").basename(delta)}`, sha256, size: d.length,
+  makes_sha256: createHash("sha256").update(r).digest("hex"), makes_size: r.length });
+console.log(said(createHash("sha256").update(d).digest("hex")), said("0".repeat(64)), d.length, createHash("sha256").update(r).digest("hex"));' \
+        "$PORT" "$U/$1.from-1.delta" "$U/$1.raw")
+      DELTA=$1 DELTA_WRONG=$2 DELTA_SIZE=$3 RAW_SHA=$4
+      [ -n "$RAW_SHA" ]
+    }
     if [ "$H" = linux ]; then
       # (Linux, a session bus: dbus-run-session's) a newer build put in the app's place by the host (kitdemo's
       # MBUI_UPDATECHECK; src/host/linux_update.h): kitdemo installed as an app of its own (dev.mbui.kitdemo.update: a
@@ -547,17 +587,37 @@ INSTALL
       if ! grep -aq '"phase":"failed".*another machine' "$U/refused.log"; then
         kill $SRV; wait $SRV 2> /dev/null || true; echo "update contract (linux): another machine's build was not refused"; exit 1
       fi
-      # (2 opened again with this run's environment: handed 2 again, not newer, it ends itself)
-      MBUI_UPDATECHECK="$(asked "kitdemo-2-$arch-linux.tar.gz")" timeout 60 "$EXE" > "$U/updated.log" 2>&1 || true
+      # 2 handed with a delta from 1 (still.fail's scripts/delta.ts: 1's installed folder to 2's raw tar, the tar in
+      # its .tar.gz), as the core hands one the feed lists: the host makes the raw tar from it and the installed files,
+      # checks it against the sha256 it is told, installs it as the .tar.gz; then, 1 put back, the same with a delta
+      # whose sha256 is wrong: not used, said so, and 2 downloaded whole (mbui's src/host/linux_update.h)
+      delta_for "kitdemo-2-$arch-linux.tar.gz" "$U/v1/kitdemo" || { kill $SRV; exit 1; }
       ok=1
-      scripts/chk logwait --log "$U/updated.log" --line "UPDATECHECK version 2" --deadline 60 > /dev/null || ok=0
+      # (2 opened again with this run's environment: handed 2 again, not newer, it ends itself: its `failed`, waited
+      # for before 1 is put back, so it reads 1's VERSION no more)
+      updated() {
+        MBUI_UPDATECHECK="$2" timeout 60 "$EXE" > "$U/$1" 2>&1 || true
+        scripts/chk logwait --log "$U/$1" --line "UPDATECHECK version 2" --deadline 60 > /dev/null || ok=0
+        [ $ok = 0 ] || scripts/chk logwait --log "$U/$1" --line '"phase":"failed"' --deadline 60 > /dev/null || ok=0
+        grep -a "UPDATECHECK\|^update:" "$U/$1"
+        cat "$CACHE/update.log" 2> /dev/null || true
+        [ "$(cat "$U/app/VERSION")" = 0.1.2 ] || { kill $SRV; echo "update contract (linux): the app at 1's place is $(cat "$U/app/VERSION"), not 0.1.2 ($1)"; exit 1; }
+        [ $ok = 1 ] || { kill $SRV; echo "update contract (linux): 2 was put in place but did not run ($1)"; exit 1; }
+        rm -rf "$CACHE"
+      }
+      updated updated.log "$(asked "kitdemo-2-$arch-linux.tar.gz")|$DELTA"
+      # (1's own line: 2, opened again, has no delta to make, its installed files not 1's)
+      if ! grep -aq "^update: kitdemo-2-$arch-linux.tar.gz.raw made from a delta of $DELTA_SIZE bytes, sha256 $RAW_SHA as the feed says" "$U/updated.log"; then
+        kill $SRV; echo "update contract (linux): 2 was not made from the delta"; exit 1
+      fi
+      sh "$U/v1/kitdemo/install.sh"
+      updated whole.log "$(asked "kitdemo-2-$arch-linux.tar.gz")|$DELTA_WRONG"
       kill $SRV; wait $SRV 2> /dev/null || true
-      grep -a "UPDATECHECK\|^update:" "$U/updated.log"
-      cat "$CACHE/update.log" 2> /dev/null || true
-      [ "$(cat "$U/app/VERSION")" = 0.1.2 ] || { echo "update contract (linux): the app at 1's place is $(cat "$U/app/VERSION"), not 0.1.2"; exit 1; }
-      [ $ok = 1 ] || { echo "update contract (linux): 2 was put in place but did not run"; exit 1; }
-      rm -rf "$CACHE"
-      echo "update contract (linux): refused another machine's build; put 2 in 1's place and opened it"
+      if ! grep -aq "^update: delta not used: not downloaded (incomplete)" "$U/whole.log" ||
+        ! grep -aq "^update: kitdemo-2-$arch-linux.tar.gz downloaded, sha256 " "$U/whole.log"; then
+        echo "update contract (linux): with a delta whose sha256 is wrong, 2 was not downloaded whole"; exit 1
+      fi
+      echo "update contract (linux): refused another machine's build; put 2 in 1's place, made from a delta, and opened it; a delta not as the feed says not used, 2 downloaded whole"
       exit 0
     fi
     # (macOS) a newer build put in the app's place by the host (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/
@@ -606,9 +666,15 @@ INSTALL
     if ! grep -aq '"phase":"failed".*not signed as this app' "$U/refused.log"; then
       kill $SRV; wait $SRV 2> /dev/null || true; echo "update contract: a build signed otherwise was not refused"; exit 1
     fi
-    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_UPDATECHECK="$(asked 2)" "$EXE" > "$U/updated.log" 2>&1 || true
+    # 2 handed with a delta from 1 (1's bundle to 2's raw zip, its entries stored), as the core hands one the feed
+    # lists: the host makes the raw zip from it and 1's files, checks it against the sha256 it is told and goes on with
+    # it as with the zip (mac_app.m's update_by_delta)
+    delta_for kitdemo-2.zip "$U/v1/kitdemo.app" || { kill $SRV; exit 1; }
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_UPDATECHECK="$(asked 2)|$DELTA" "$EXE" > "$U/updated.log" 2>&1 || true
     kill $SRV; wait $SRV 2> /dev/null || true
     grep -a "UPDATECHECK\|^update:" "$U/updated.log"
+    grep -aq "^update: kitdemo-2.zip.raw made from a delta of $DELTA_SIZE bytes, sha256 $RAW_SHA as the feed says" "$U/updated.log" ||
+      { echo "update contract: 2 was not made from the delta"; exit 1; }
     v=$(plutil -extract CFBundleVersion raw "$U/v1/kitdemo.app/Contents/Info.plist")
     [ "$v" = 2 ] || { echo "update contract: the app at 1's place is $v, not 2"; exit 1; }
     # opened again (by `open`, once 1 had ended), as the shell that did it says on the update's log; then its process,
@@ -620,7 +686,7 @@ INSTALL
     pid=$(pgrep -f "^$EXE") || { echo "update contract: 2 was opened but is not running"; exit 1; }
     kill $pid
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
-    echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+    echo "update contract (mac): refused one signed otherwise; put 2 in 1's place, made from a delta, and opened it" ;;
   badge)
     [ "$H" = linux ] || { echo "badge contract: Linux's"; exit 1; }
     # a dock's side: what is said on the bus heard from before the app starts, and what the app gives when asked
@@ -778,15 +844,19 @@ INSTALL
     env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_A11YCHECK=1 ./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$A/run.log" 2>&1 &
     pid=$(cat /proc/$!/winpid)
     client=0
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w test/host/a11ycheck.ps1)" -AppId "$pid" > "$A/client.log" 2>&1 || client=1
+    # the client's own deadline is 40 s; this one is for a UI Automation call that never returns (once 2.5 minutes,
+    # #5629's run 43093853929, cancelled by the job's limit with its log lost): the client stopped, its steps said
+    # so far tell where, and the app ended so that the wait for it ends
+    timeout 60 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w test/host/a11ycheck.ps1)" -AppId "$pid" > "$A/client.log" 2>&1 || client=$?
+    [ $client = 0 ] || { echo "a11y contract (windows): the client ended $client (124: stopped at 60 s)"; taskkill //F //PID "$pid" > /dev/null 2>&1; }
     wait
-    tr -d '\r' < "$A/client.log" | grep -a "A11YCHECK"
-    grep -a "A11YCHECK" "$A/run.log"
+    tr -d '\r' < "$A/client.log" | grep -a "A11YCHECK" || true
+    grep -a "A11YCHECK" "$A/run.log" || true
     [ $client = 0 ] && grep -aq "A11YCHECK button ControlType.Button" "$A/client.log" &&
       grep -aq "A11YCHECK check ControlType.CheckBox Off" "$A/client.log" &&
       grep -aq "A11YCHECK field ControlType.Edit read-only False" "$A/client.log" &&
       grep -aq "A11YCHECK activated written by a reader" "$A/run.log" ||
-      { echo "a11y contract (windows): not read out and pressed as told"; tail -20 "$A/client.log"; exit 1; }
+      { echo "a11y contract (windows): not read out and pressed as told"; tail -20 "$A/client.log"; tail -20 "$A/run.log"; exit 1; }
     echo "a11y contract (windows): a field, a button and a checkbox read out by UI Automation, words written in the field and the button pressed through it" ;;
   secret)
     [ "$H" = windows ] || { echo "secret contract: Windows' (Android's marks it in Host.java; the others put words)"; exit 1; }
@@ -838,6 +908,54 @@ INSTALL
     esac
     # (the browser's host pictures no window: drive 4)
     [ "$H" = web ] || scripts/chk images $O/images.log ;;
+  posted)
+    # (Linux) what the host posts from outside the frames (a package asked of an installer it has none for, said on the
+    # system channel: mb_post) told between frames (MB_OUTSIDE_POSTED), not taken as a frame begins (kitdemo's
+    # MBUI_POSTCHECK, src/kitdemo/gallery/postcheck.mbt): the app ends 0 only where it was offered between frames.
+    [ "$H" = linux ] || { echo "posted contract: Linux only (the web's: test/web/posted.test.mjs)"; exit 1; }
+    r=0
+    run "MBUI_POSTCHECK=1" $O/posted.log || r=$?
+    grep -a "POSTCHECK" $O/posted.log || true
+    if [ $r != 0 ] || ! grep -aq "POSTCHECK offered between frames" $O/posted.log; then
+      echo "posted contract (linux): what was posted not told between frames"; tail -20 $O/posted.log; exit 1
+    fi
+    echo "posted contract (linux): told between frames" ;;
+  op)
+    # (macOS) a run of `op` (apple_passwords.m: Homebrew's and 1Password's places, then PATH) with a stand-in first on
+    # PATH that prints `[{"opcheck":true}]` and ends 0, then with none anywhere: each told between frames (MB_OUTSIDE_OP)
+    # and read (kitdemo's MBUI_OPCHECK, src/kitdemo/gallery/opcheck.mbt). The places looked in before PATH must hold no
+    # `op` on this machine, or the stand-in is not the one run: said so, and failed.
+    [ "$H" = mac ] || { echo "op contract: macOS only (Windows' looks for op.exe: no stand-in made here)"; exit 1; }
+    for p in /opt/homebrew/bin/op /usr/local/bin/op /usr/bin/op; do
+      [ -x "$p" ] && { echo "op contract (mac): $p is installed on this machine, run before any stand-in"; exit 1; }
+    done
+    mkdir -p "$O/opbin"
+    printf '#!/bin/sh\necho %s\nexit 0\n' "'[{\"opcheck\":true}]'" > "$O/opbin/op"
+    chmod +x "$O/opbin/op"
+    for c in ran missing; do
+      if [ $c = ran ]; then path="$PWD/$O/opbin:/usr/bin:/bin"; else path="/usr/bin:/bin"; fi
+      r=0
+      run "MBUI_OPCHECK=$c PATH=$path" $O/op-$c.log || r=$?
+      grep -a "OPCHECK" $O/op-$c.log || true
+      if [ $r != 0 ] || ! grep -aq "OPCHECK told between frames" $O/op-$c.log; then
+        echo "op contract (mac, $c): not told between frames, or not read as it ended"; tail -20 $O/op-$c.log; exit 1
+      fi
+    done
+    echo "op contract (mac): a run ended and none to run, each told between frames and read" ;;
+  picked)
+    # (Linux) what the system's picker gave (MBUI_PICK_FILES: a file of the run's, no dialog) told between frames, not
+    # taken as a frame begins (kitdemo's MBUI_PICKCHECK, src/kitdemo/gallery/pickcheck.mbt): the app ends 0 only where
+    # what reads it was told between frames.
+    [ "$H" = linux ] || { echo "picked contract: Linux only"; exit 1; }
+    mkdir -p "$O"
+    printf 'picked\n' > "$O/picked.txt"
+    r=0
+    run "MBUI_PICKCHECK=1 MBUI_PICK_FILES=$PWD/$O/picked.txt" $O/picked.log || r=$?
+    grep -a "PICKCHECK" $O/picked.log || true
+    if [ $r != 0 ] || ! grep -aq "PICKCHECK taken between frames: 1 files" $O/picked.log; then
+      echo "picked contract (linux): what was picked not told between frames"; tail -20 $O/picked.log; exit 1
+    fi
+    echo "picked contract (linux): told between frames" ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened
@@ -926,5 +1044,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y, fontscale; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y, fontscale, posted, picked, op; ios: free, done)" >&2; exit 1 ;;
 esac

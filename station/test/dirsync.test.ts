@@ -15,7 +15,7 @@ import { signalGroup } from "../src/ops/group.ts";
 import { LOOK_MS } from "../src/jobs/admit.ts";
 import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { blobId, listLocal } from "../src/jobs/dirsync.ts";
-import { MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, hash, readJson, writeJson } from "../src/jobs/remote.ts";
+import { MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, hash, readJson, writeJson, written } from "../src/jobs/remote.ts";
 import { DISK_LOW_BYTES } from "../src/ops/disk.ts";
 import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "../src/mesh/peer.ts";
 import { type Json, Store } from "../src/store/store.ts";
@@ -44,6 +44,16 @@ async function until(_what: string, check: () => boolean) {
 
 const FOREVER = "tail -f /dev/null";
 
+/// `clean` asked again while it answers pending, as an agent is told to (a removal answers early, after
+/// CLEAN_ANSWER_MS of the machine's time, while its lane is still busy: on a loaded CI runner it did, and the test
+/// read `pending` as the clean let through). Its answer, or what it refused with.
+async function cleaned(use: (name: string, args: Json) => Promise<any>, mirror: string): Promise<any> {
+  for (;;) {
+    const answer = await use("station_task", { action: "clean", mirror });
+    if (answer?.pending !== true) return answer;
+  }
+}
+
 function testClock() {
   const scope = Effect.runSync(Scope.make());
   cleanup.push(() => Effect.runPromise(Scope.close(scope, Exit.void)).catch(() => undefined));
@@ -69,11 +79,8 @@ const cloudOf = (station: string, peers: string[]): any =>
     relays: () => [],
   });
 
-/// A machine with room for every task (jobs/admit.ts): its CPUs idle, its memory under no pressure.
-const idle: Machine = (() => {
-  let t = 0;
-  return { cpus: () => 8, ticks: () => [0, (t += 1000)] as [number, number], pressure: async () => "normal" as const };
-})();
+/// A machine with room for every task (jobs/admit.ts): its memory under no pressure.
+const idle: Machine = { pressure: async () => "normal" as const };
 
 /// A source station A and a target B of workspace "ws", A's requests to B over the station transport (in memory). `old`:
 /// B answers as a station from before directory sync would. `asked`: the methods A asked B, in order. `queue`: B's jobs
@@ -358,7 +365,7 @@ describe("dirsync", { concurrency: true }, () => {
       await until("the first result is being downloaded", () => p.state.held.length > 0);
       const mirrors = await p.use("station_task", { action: "mirrors" });
       assert.equal(mirrors.mirrors.find((m: Json) => m.name === "back-race").busy, true);
-      await assert.rejects(p.use("station_task", { action: "clean", mirror: "back-race" }), /in use/);
+      await assert.rejects(cleaned(p.use, "back-race"), /in use/);
       await p.use("station_task", { key: "second", action: "prepare", command: "echo second > trace", dir, back: ["trace"] });
       await assert.rejects(p.use("station_task", { key: "second", action: "start" }), /first.*(collect|bring|result)/i);
     } finally {
@@ -383,7 +390,7 @@ describe("dirsync", { concurrency: true }, () => {
     assert.match(notice, /not brought back.*station_file.*release/);
     await p.use("station_task", { key: "next", action: "prepare", command: "echo second > trace", dir });
     await assert.rejects(p.use("station_task", { key: "next", action: "start" }), /first.*(collect|bring|result)/i);
-    await assert.rejects(p.use("station_task", { action: "clean", mirror: "failed-back" }), /in use/);
+    await assert.rejects(cleaned(p.use, "failed-back"), /in use/);
     p.state.failFileGet = false;
     await p.use("station_file", { key: "first", direction: "download", path: "failed-back/trace", local: "saved-trace" });
     assert.equal(readFileSync(join(p.home, "saved-trace"), "utf8"), "first\n");
@@ -582,7 +589,8 @@ describe("dirsync", { concurrency: true }, () => {
     await until("it is committed", () => p.state.asked.includes("sync.commit"));
     const last = await p.use("station_task", { key: "k", action: "start" });
     assert.equal(last.sync.sent.files, 1);
-    assert.equal(last.job.state, "running");
+    // Started: running, or (`wc` is quick, and the start's record is written before it answers) already ended.
+    assert.ok(["running", "exited"].includes(last.job.state), last.job.state);
     assert.equal(p.state.asked.filter((m) => m === "sync.begin").length, 1);
     await until("it ends", () => p.b.store.getJob(last.job.id)!.state !== "running");
     // A start after that is one asked again: the same job (its sync only finds the task started).
@@ -667,7 +675,7 @@ describe("dirsync", { concurrency: true }, () => {
     mkdirSync(own);
     writeFileSync(join(own, "keep"), "x\n");
     const later = Date.now() + MIRROR_IDLE_MS + 60_000;
-    usedAt(p, { fresh: later - 1000 });
+    await usedAt(p, { fresh: later - 1000 });
     await p.b.remote.sweep(later);
     assert.ok(!existsSync(p.mirror("old")), "the unused mirror went");
     assert.ok(existsSync(join(p.mirror("fresh"), "c.txt")), "the one used within the day stays");
@@ -698,7 +706,7 @@ describe("dirsync", { concurrency: true }, () => {
     await p.b.remote.relieve(now);
     assert.deepEqual(left(), ["older", "recent", "busy"], "the longest unused went, and only it");
     // Still low: the rest go, but the one used within the hour and the one a task runs in.
-    usedAt(p, { recent: now - 60_000 });
+    await usedAt(p, { recent: now - 60_000 });
     p.disk.free = () => DISK_LOW_BYTES - 1;
     await p.b.remote.relieve(now);
     assert.deepEqual(left(), ["recent", "busy"]);

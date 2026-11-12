@@ -44,19 +44,19 @@ fn player_told(f : @sfreplay.Flow) -> Unit {
 
 ///|
 test "45-drive-play" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-play"), seed~)
     // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
     f.before("drive-media 105609")
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-105609")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("影音")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("第01集.mp4")
     f.see("片尾曲.m4a")
     f.tap("第01集.mp4")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("1 / 2")
     let first = opened_after(f, -1)
     player_opened(f, first)
@@ -64,11 +64,11 @@ test "45-drive-play" {
     player_told(f)
     f.see("第一句字幕")
     f.back()
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("第02集.mp4")
     // opened again: on from where it was left
     f.tap("第01集.mp4")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("1 / 2")
     let again = opened_after(f, first)
     player_opened(f, again)
@@ -87,17 +87,17 @@ test "45-drive-play" {
     player_told(f)
     f.see("/ 0:04")
     f.back()
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     // A native player chooses its own read sizes; opening the song may cause a different number of reads live.
     // The song's filename is still awaited below, and the three films must still be read to their ends.
     f.incidental_calls(["drive.read"])
     f.tap("片尾曲.m4a")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("片尾曲.m4a")
     let song = opened_after(f, next)
     player_opened(f, song)
     f.back()
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.incidental_calls([])
     f.see("片尾曲.m4a")
     // each film read through the core to its end, as the run's player had it (the song, left at once, is not)

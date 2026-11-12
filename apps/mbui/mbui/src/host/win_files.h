@@ -1,7 +1,8 @@
 // Files from outside the app on Windows, as mac_app.m has them: picked through the system's own dialog (pick.mbt:
 // IFileOpenDialog over the window, on a thread of its own, so the window goes on drawing behind it), and let go on the
 // window from outside (ui/drop.mbt: the window an OLE drop target, Explorer's files as it holds them over it), each
-// read whole on a thread of its own and told as the next frame begins (MB_OUTSIDE_PICK). A file over 1 GB, or one
+// read whole on a thread of its own and told as it is done, between frames (MB_OUTSIDE_PICK: WM_MB_PICKED, never left
+// for a frame to take as it begins). A file over 1 GB, or one
 // that cannot be read, is left out (as still.fail's composer refuses one so big). Folders let go come with their files,
 // named by their way down from where they were dropped ("照片/2026/a.jpg"), each folder itself named with a "/" at its
 // end and no bytes (so an empty one is made too); the system's hidden files of a folder (Thumbs.db, desktop.ini) left
@@ -189,7 +190,7 @@ static void pick_read(win_pick *p) {
   p->state = f.n > 0 ? 1 : -1;
   ReleaseSRWLockExclusive(&picks_lock);
   InterlockedExchange(&p->done, 1);
-  mb_app_wake();
+  mb_app_picked();
 }
 
 static void pick_paths_add(win_pick *p, const WCHAR *path) {
@@ -275,7 +276,7 @@ static int32_t drop_pick(WCHAR **paths, int n) {
   return pick_begin(p);
 }
 
-// the picks read since the last frame, told before it is drawn (draw_frame)
+// the picks read since the app was last told, told it now, between frames (win_app.c's WM_MB_PICKED)
 static void pick_tell(mb_outside_fn tell) {
   for (int i = 0; i < PICK_MOST; i++) {
     win_pick *p = &picks[i];

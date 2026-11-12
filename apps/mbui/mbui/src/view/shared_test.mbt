@@ -248,7 +248,7 @@ test "motion reduced: there at once, the old one let go of" {
 ///|
 test "a row of a list flies to the detail as it is picked, from its own place" {
   let picked : @signals.Signal[Int?] = @signals.signal(None, same=fn(a, b) { a == b })
-  let rows : Map[Int, @view.View] = {}
+  let rows : Map[Int, @view.View] = Map([])
   let big : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(p) {
@@ -294,12 +294,19 @@ test "a row of a list flies to the detail as it is picked, from its own place" {
 }
 
 ///|
-test "panic two of an id made at once fails the test" {
-  let tree = @view.Tree::new(fn(root) {
-    root.show(fn() { true }, fn(s) {
-      s.box(fn(a) { a.shared(Is("x"), straight) |> ignore }) |> ignore
-      s.box(fn(b) { b.shared(Is("x"), straight) |> ignore }) |> ignore
+test "two of an id made at once: a fault, told, the change still ended whole" {
+  // (told, not stopped (boundary_test's faults_kept): a test that stopped here stopped in the middle of the change, its
+  // batch never ended, and every test after it in the process ran on a graph that told nothing: 185 of view's 435 on
+  // wasm-gc, 2026-11-11)
+  let told = faults_kept(fn() {
+    let tree = @view.Tree::new(fn(root) {
+      root.show(fn() { true }, fn(s) {
+        s.box(fn(a) { a.shared(Is("x"), straight) |> ignore }) |> ignore
+        s.box(fn(b) { b.shared(Is("x"), straight) |> ignore }) |> ignore
+      })
     })
+    tree.frame(400.0, 800.0, now=0.0) |> ignore
   })
-  tree.frame(400.0, 800.0, now=0.0) |> ignore
+  assert_eq(told, ["shared: x let go of or made more than once in one change"])
+  assert_eq(@signals.batch_depth(), 0, msg="the change it faulted in ended")
 }

@@ -4,6 +4,8 @@
 # mb_render_init_offscreen), twice (the program run anew each time): the pictures, the same to the byte, and the
 # machine.
 #   scripts/render_windows.sh            out/render/{controls-1,controls-2,controls}.png, machine.txt
+#   scripts/render_windows.sh build      the renderer and its draw lists, for a separate job to draw
+#   scripts/render_windows.sh draw       draw with that build and those lists, without building them again
 #   scripts/render_windows.sh against    out/render/controls.png against goldens/render/windows-controls.png, on the
 #                                        machine they were made on (goldens/render/windows.txt)
 set -e
@@ -14,10 +16,13 @@ cd "$D/.."
 O=out/render
 pwq() { powershell -NoProfile -Command "$1" | tr -d '\r'; }
 case "${1:-run}" in
-  run)
+  build)
     rm -rf $O
     render_dl $O/controls.dl
     APP=render bash "$D/win.sh" build
+    ;;
+  run|draw)
+    if [ "${1:-run}" = run ]; then bash "$D/render_windows.sh" build; fi
     EXE=out/win/mod/_build/native/release/build/render/render.exe
     # WARP pinned (.github/actions/warp: Microsoft.Direct3D.WARP's d3d10warp.dll, WARP_DLL), beside the program, which
     # loads it before the system's: the pictures drawn by one WARP whatever the runner's image has (an image rolled

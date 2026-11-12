@@ -71,7 +71,7 @@ test "what holds others drawn again as kept round what changed in it, as drawn a
   }
   let kept = t.drawn_text()
   assert_eq(kept, kept_tester(clock, card).drawn_text(), msg="the bar's words changed")
-  assert_true(again[2] > 0 && again[3] > 0, msg="the body drawn again as kept: \{again}")
+  assert_true(again[2] > 0 && again[3] > 0, msg="the body drawn again as kept: \{Repr(again)}")
   // (a card's words changed each time: the bar and the three other cards kept, drawn again as kept)
   let t = kept_tester(clock, card)
   let again = []
@@ -83,7 +83,7 @@ test "what holds others drawn again as kept round what changed in it, as drawn a
   }
   let kept = t.drawn_text()
   assert_eq(kept, kept_tester(clock, card).drawn_text(), msg="a card's words changed")
-  assert_true(again[2] >= 4 && again[3] >= 4, msg="the bar and the other cards drawn again as kept: \{again}")
+  assert_true(again[2] >= 4 && again[3] >= 4, msg="the bar and the other cards drawn again as kept: \{Repr(again)}")
 }
 
 ///|
@@ -155,5 +155,5 @@ test "a list's row changed each time drawn with its parts that did not change as
     kept_rows(at, third).drawn_text()
   }
   assert_eq(kept, fresh, msg="its words as they are now")
-  assert_true(again[2] > again[0] && again[3] > again[0], msg="its badge drawn again as kept: \{again}")
+  assert_true(again[2] > again[0] && again[3] > again[0], msg="its badge drawn again as kept: \{Repr(again)}")
 }

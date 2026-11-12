@@ -48,7 +48,7 @@ fn film_in_chat(platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double
 fn film_frame_answered(t : @ui.Tester) -> Unit {
   let asked = t.views().filter(fn(l) { l.has_prefix("control ") })
   guard asked.last() is Some(l) else { return }
-  let view = l.split(" ").to_array()[1].to_string()
+  let view = l.split(" ").to_array()[1].to_owned()
   let frame = fixture_file_png("演示录屏.mp4")
   t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"\{hex_bytes(frame)}\"}") |> ignore
   t.draw()
@@ -131,7 +131,7 @@ test "a picture under a chat's bar: the bar over it every frame till it is out f
   for screen in [(0, 1280.0), (2, 390.0)] {
     for top in [10.0, -100.0] {
       let faults = picture_under_bar_faults(top, screen.0, screen.1)
-      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{faults}")
+      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{Repr(faults)}")
     }
   }
 }
@@ -141,7 +141,7 @@ test "a film under a chat's bar: the bar over it every frame till it is out from
   for screen in [(0, 1280.0), (2, 390.0)] {
     for top in [10.0, -100.0] {
       let faults = picture_under_bar_faults(top, screen.0, screen.1, film=true)
-      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{faults}")
+      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{Repr(faults)}")
     }
   }
 }

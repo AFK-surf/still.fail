@@ -25,7 +25,7 @@ test "关于: 服务条款 and 隐私政策 open still.fail's pages" {
 /// The page scrolled until `words` are well inside the window: down while they are past it or not built yet (the list
 /// builds rows a little past its foot too), up while they are under the page's bar or over it.
 fn shown_on_page(t : @ui.Tester, words : String) -> Unit {
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<10 {
     match t.find(words) {
       Some((_, y)) if y < shown_top => t.wheel(195.0, 400.0, -300.0)

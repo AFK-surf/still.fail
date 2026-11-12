@@ -184,14 +184,15 @@ export class DevinDriver extends AcpDriver<DevinSession> {
   }
 }
 
+type TurnUsage = { run: string; calls: number; lastCall: string; context: number; window: number };
+
 export class DevinSession extends AcpSession {
   protected readonly steersByPrompt = true;
   /// The `model` config option's values (a family's variant each): what another model between turns is set to.
   private families: string[] = [];
-  /// The turn's counts so far (each model call's, as usage_update says them once and again), the context its last call
-  /// had and the model's window.
-  private usage: { calls: number; counts: ReturnType<typeof callOf>; context: number; window: number } | null = null;
-  private lastCall = "";
+  /// The running turn's call count and last call seen (each call's counts are said twice, the second time as its
+  /// agent's), and the context and window its latest call reported.
+  private usage: TurnUsage | null = null;
 
   constructor(driver: DevinDriver, events: Events, options: OpenOptions) {
     super(driver, events, new KeptTranscript("devin", join(devinHome(options.profile.home), SESSIONS)));
@@ -212,35 +213,55 @@ export class DevinSession extends AcpSession {
   }
 
   protected kept() {
-    return { families: this.families };
+    return { families: this.families, usage: this.usage };
   }
 
   protected taken(snapshot: Json) {
     this.families = Array.isArray(snapshot.families) ? snapshot.families : [];
+    const u = snapshot.usage;
+    this.usage = u && typeof u === "object" && typeof u.run === "string" && typeof u.calls === "number"
+      ? {
+          run: u.run,
+          calls: u.calls,
+          lastCall: typeof u.lastCall === "string" ? u.lastCall : "",
+          context: typeof u.context === "number" ? u.context : 0,
+          window: typeof u.window === "number" ? u.window : 0,
+        }
+      : null;
   }
 
-  /// Each call's counts are said twice (the second time as its agent's): counted once.
+  /// Each call's counts are said twice (the second time as its agent's): counted once, and written as it comes so a
+  /// long turn's spend and context are live and survive a handover or crash.
   protected updated(update: Json) {
     if (update?.sessionUpdate !== "usage_update") return;
     const counts = callOf(update);
     const said = JSON.stringify(counts);
-    if (said === this.lastCall) return;
-    this.lastCall = said;
-    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-    const u = (this.usage ??= { calls: 0, counts: { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 }, context: 0, window: 0 });
+    const run = this.owner !== null ? this.owner.slice(this.owner.indexOf(":") + 1) : uuid();
+    const u = (this.usage ??= { run, calls: 0, lastCall: "", context: 0, window: 0 });
+    if (said === u.lastCall) return;
+    u.lastCall = said;
     u.calls += 1;
-    u.counts.inputTokens += counts.inputTokens;
-    u.counts.cacheReadTokens += counts.cacheReadTokens;
-    u.counts.outputTokens += counts.outputTokens;
+    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
     if (n(update.used) > 0) u.context = n(update.used);
     if (n(update.size) > 0) u.window = n(update.size);
+    this.transcript?.keep(this.sessionId, {
+      type: "usage",
+      run: u.calls === 1 ? u.run : `${u.run}:${u.calls}`,
+      model: this.model,
+      usage: counts,
+      calls: 1,
+      context: u.context,
+      window: u.window,
+    });
   }
 
-  /// The turn's usage, into the transcript before its end.
-  protected ending(id: string) {
-    if (this.usage !== null) this.transcript?.keep(this.sessionId, { type: "usage", run: id.slice(id.indexOf(":") + 1), model: this.model, usage: this.usage.counts, calls: this.usage.calls, context: this.usage.context, window: this.usage.window });
+  protected ending() {
     this.usage = null;
-    this.lastCall = "";
+  }
+
+  protected override cutShort(said: string) {
+    this.usage = null;
+    super.cutShort(said);
   }
 
   /// Into the running turn, read at its next step: a prompt given while it runs, answered with the turn.

@@ -96,8 +96,8 @@ let film_picture : Int = 7
 
 ///|
 test "a Tester over a live host: the words laid out and drawn by its text, the faces given to it, the pictures decoded there" {
-  let host = FilmHost::{ faces: [], turns: Ref::new(0), freed: [], put: [] }
-  let made = Ref::new(false)
+  let host = FilmHost::{ faces: [], turns: Ref(0), freed: [], put: [] }
+  let made = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if !made.val {
@@ -133,7 +133,7 @@ test "a Tester over a live host: the words laid out and drawn by its text, the f
     }
   }
   // (each where it was put last: the face given as it was first drawn, it was drawn again)
-  let last : Map[Int, (Int, Int)] = {}
+  let last : Map[Int, (Int, Int)] = Map([])
   for p in host.put {
     last[p.0] = (p.1, p.2)
   }
@@ -155,7 +155,7 @@ let inst_numbers = 60
 ///|
 test "a failed drawing must not be written as an old film frame" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
-  let drawn = Ref::new(0)
+  let drawn = Ref(0)
   let written : Array[Int] = []
   let film = t.film(
     "tap go\ntap go\nexit",
@@ -178,7 +178,7 @@ test "a failed drawing must not be written as an old film frame" {
 test "a film stops when a frame cannot be written" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   let written : Array[Int] = []
-  let drawn = Ref::new(0)
+  let drawn = Ref(0)
   let film = t.film(
     "tap go\ntap go\nexit",
     draw=fn(_) {
@@ -215,7 +215,7 @@ test "a film cannot begin without its first drawing" {
 test "a film at 120 Hz can draw a different picture for each frame" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   t.set_frame_period(1000.0 / 120.0)
-  let shown = Ref::new(0.0)
+  let shown = Ref(0.0)
   let pictures : Array[Double] = []
   let film = t.film(
     "tap go\ntap go\nexit",
@@ -303,7 +303,7 @@ test "a requested frame of a scripted scene is the same picture that its film wr
     let t = @ui.Tester::new(film_frame_view(Ref(0)))
     t.set_frame_period(1000.0 / 120.0)
     let (reached, logs) = t.film_frame(script, k)
-    assert_true(reached, msg="frame \{k}: \{logs}")
+    assert_true(reached, msg="frame \{k}: \{Repr(logs)}")
     assert_eq(t.frame_hash(), pictures[k], msg="frame \{k}")
   }
   let t = @ui.Tester::new(film_frame_view(Ref(0)))

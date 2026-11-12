@@ -8,6 +8,7 @@
 
 ///|
 /// What the system's pickers offer.
+#derive(Eq)
 pub(all) enum PickKind {
   /// the photo picker: pictures, more than one
   Photos
@@ -15,7 +16,7 @@ pub(all) enum PickKind {
   Files
   /// a photo taken with the camera now
   Camera
-} derive(Eq)
+}
 
 ///|
 /// A file picked: its name and its bytes; or, one too big to be read whole (a video), held by the host: `held` its id
@@ -109,7 +110,7 @@ pub fn Pick::files(self : Pick) -> Array[Picked]? {
               bytes,
               held: ga_int(held).to_int(),
               size: ga_int(size).to_double(),
-              src: src.to_string(),
+              src: src.to_owned(),
             })
           _ =>
             out.push({ name: pk_name(self.id, i), bytes, held: 0, size: bytes.length().to_double(), src: "" })

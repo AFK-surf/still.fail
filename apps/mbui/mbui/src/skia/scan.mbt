@@ -5,7 +5,7 @@
 ///|
 /// What scan conversion draws with (Blitter): spans, runs of alpha, columns, pairs, rects and masks. A blitter
 /// implements what its callers use.
-trait Blitter {
+priv trait Blitter {
   blit_h(Self, x : Int, y : Int, width : Int) -> Unit
   blit_anti_h(Self, x : Int, y : Int, alpha : FixedArray[Int], runs : FixedArray[Int]) -> Unit
   blit_v(Self, x : Int, y : Int, height : Int, alpha : Int) -> Unit
@@ -15,10 +15,11 @@ trait Blitter {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FillRule {
   Winding
   EvenOdd
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn fill_rect_nonaa(rect : Rect, clip : ScreenIntRect, blitter : &Blitter) -> Unit {
@@ -673,27 +674,27 @@ impl Blitter for SuperBlitter with blit_h(self, x, y, width) {
 
 ///|
 impl Blitter for SuperBlitter with blit_anti_h(_self, _x, _y, _alpha, _runs) {
-  abort("SuperBlitter: blit_anti_h")
+  @halt.saying("SuperBlitter: blit_anti_h")
 }
 
 ///|
 impl Blitter for SuperBlitter with blit_v(_self, _x, _y, _height, _alpha) {
-  abort("SuperBlitter: blit_v")
+  @halt.saying("SuperBlitter: blit_v")
 }
 
 ///|
 impl Blitter for SuperBlitter with blit_anti_h2(_self, _x, _y, _a0, _a1) {
-  abort("SuperBlitter: blit_anti_h2")
+  @halt.saying("SuperBlitter: blit_anti_h2")
 }
 
 ///|
 impl Blitter for SuperBlitter with blit_anti_v2(_self, _x, _y, _a0, _a1) {
-  abort("SuperBlitter: blit_anti_v2")
+  @halt.saying("SuperBlitter: blit_anti_v2")
 }
 
 ///|
 impl Blitter for SuperBlitter with blit_rect(_self, _rect) {
-  abort("SuperBlitter: blit_rect")
+  @halt.saying("SuperBlitter: blit_rect")
 }
 
 ///|

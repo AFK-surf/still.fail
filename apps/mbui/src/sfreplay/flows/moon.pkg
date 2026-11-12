@@ -1,8 +1,8 @@
 import {
   "moonbitlang/core/double",
-  "moonbitlang/core/json",
   "stillfail/core",
   "stillfail/sfreplay",
+  "stillfail/sfcore",
   "stillfail/sfapp",
   "stillfail/sfbase",
   "stillfail/sffixture",
@@ -10,4 +10,4 @@ import {
   "stillfail/sf",
   "mbui/ui",
   "mbui/kit",
-}
+} for "test"

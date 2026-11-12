@@ -51,7 +51,7 @@ test "composer over messages: pressing its capsule does not pick or scroll words
   let y = top + 4.0
   let before = t.list_offset()
   t.press_at(200.0, y)
-  t.move(300.0, y)
+  t.move_to(300.0, y)
   t.run_for(cover_mouse_hold_ms)
   assert_eq(t.ctx().selected_text(), "")
   assert_eq(t.list_offset(), before)

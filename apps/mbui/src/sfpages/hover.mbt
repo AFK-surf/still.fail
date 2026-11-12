@@ -83,10 +83,10 @@ let hover_now : Ref[(String, Int)?] = Ref(None)
 let hover_shut : Ref[Bool] = Ref(false)
 
 ///|
-let hover_open : Map[String, Bool] = {}
+let hover_open : Map[String, Bool] = Map([])
 
 ///|
-let hover_holds : Map[String, Int] = {}
+let hover_holds : Map[String, Int] = Map([])
 
 ///|
 /// Whether card `key` is kept open by what was pressed in it.
@@ -241,15 +241,29 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
       c.box(style=agent_card_who, fn() {
         c.text(text(s, "agentText"), style=agent_card_label) |> ignore
         if account is Some(_) || windows.length() > 0 {
-          c.box(style=agent_card_account, fn() {
-            c.box(style=agent_card_name_room, fn() {
-              c.text(text(account, "name"), style=agent_card_line) |> ignore
+          // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
+          let chips = fn(key : String) {
+            if windows.length() > 0 {
+              @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), key~)
+            }
+          }
+          // beside its account's name where the line has the room for both whole; else under it, at the line's end as
+          // before (a third chip, its model's own week, left an account named by its email 98 of 246: Ctx::box one_of)
+          c.box(style=agent_card_account_ways, one_of=true, fn() {
+            c.box(style=agent_card_account, fn() {
+              c.box(style=agent_card_name_room, fn() {
+                c.text(text(account, "name"), style=agent_card_line) |> ignore
+              })
+              |> ignore
+              chips("agent-card/quota")
             })
             |> ignore
-            // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
-            if windows.length() > 0 {
-              @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), key="agent-card/quota")
-            }
+            c.box(style=agent_card_account_under, fn() {
+              c.box(style=agent_card_line_box, fn() { c.text(text(account, "name"), style=agent_card_line_cut) |> ignore })
+              |> ignore
+              chips("agent-card/quota/under")
+            })
+            |> ignore
           })
           |> ignore
         }
@@ -360,7 +374,7 @@ fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
       match opt_number(wait, "seconds") {
         Some(sec) if sec > 0.0 => {
           // at its most it stands still
-          if now - from < sec * second_ms {
+          if now < from + sec * second_ms {
             each_second(c, now - from)
           }
           let ran = if now < from + sec * second_ms { now - from } else { sec * second_ms }
@@ -508,7 +522,7 @@ priv struct GoneLine {
 }
 
 ///|
-let ran_lines : Map[Int, RanLines] = {}
+let ran_lines : Map[Int, RanLines] = Map([])
 
 ///|
 fn hover_reset() -> Unit {
@@ -945,6 +959,24 @@ let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").the
 let agent_card_chips_in : Double = @ui.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - agent_card_head_pad
 
 ///|
+/// The ways its account's line is said: across the head.
+// kept across runs: a value (no field of it changes)
+let agent_card_account_ways : @ui.Style = @ui.css("row w=Full")
+
+///|
+/// Its account's name a line and what is left of it under it, at the line's end, where one line has not the room for
+/// both: the capsules in the ground's corner as agent_card_account has them.
+// kept across runs: a value (no field of it changes)
+let agent_card_account_under : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd").then(
+  @ui.style(mb=@sf.room_of(agent_card_chips_in), mr=@sf.room_of(agent_card_chips_in)),
+)
+
+///|
+/// Its account's name on a line of its own: cut at its end only where the card itself is narrower than it.
+// kept across runs: a value (no field of it changes)
+let agent_card_line_cut : @ui.TextStyle = agent_card_line.then(@ui.text_style(w=Cut))
+
+///|
 /// Words that lead somewhere: their whole line.
 // kept across runs: a value (no field of it changes)
 let agent_card_link_box : @ui.Style = @ui.css("row w=Full align=ACenter")
@@ -960,9 +992,112 @@ let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 ///|
 /// Its stop: a circle 24 on the red's ground (as its pill with words was), its icon 12.
 // kept across runs: a value (no field of it changes)
-let agent_card_stop_box : @ui.Style = @ui.css(
+let agent_card_stop_box : @ui.Style = @ui.css((
   #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter bg=DangerBg hovered{bg=Hover}
-)
+))
 
 ///|
 let agent_card_stop_icon : Double = 12.0
+
+///|
+/// usage_tiles' figures as nodes in `parent`, as `card` says them now: what it cost, the cache's hit rate, how full its
+/// context is (how much of how much over it while it is pointed at, in `tips`). With `context`, its context's tile
+/// opens what can be done to it beside itself (`busy`: a spinner, not pressed; `compacts`: that it can be compacted
+/// said once it is filling up). None before it has made a call.
+pub fn usage_tiles_node(
+  parent : @view.View,
+  card : () -> Json?,
+  tips : @sf.TipLayer,
+  context? : (@sf.Beside) -> Unit,
+  busy? : () -> Bool = fn() { false },
+  compacts? : () -> Bool = fn() { false },
+) -> Unit {
+  let cost = fn() { text(card(), "cost") }
+  let cache = fn() { field(card(), "cache") }
+  let ctx = fn() { field(card(), "context") }
+  let figure_style = fn(level : String) {
+    if level == "red" {
+      agent_card_figure_red
+    } else if level == "amber" {
+      agent_card_figure_amber
+    } else {
+      agent_card_figure
+    }
+  }
+  let plain = fn(t : @view.View, figure : () -> String, name : () -> String, level : () -> String) -> @view.View {
+    t.box(fn(b) {
+      @sf.style_node(b, fn() { agent_card_tile })
+      @sf.words_node(b, figure, fn() { figure_style(level()) }) |> ignore
+      @sf.words_node(b, name, fn() { agent_card_tile_name }) |> ignore
+    })
+  }
+  // (each tile's share of the row: what shows it takes it)
+  let across = fn(t : @view.View) { t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore }
+  parent.show(fn() { cost() != "" || cache() is Some(_) || ctx() is Some(_) }, fn(o) {
+    o.box(fn(r) {
+      @sf.style_node(r, fn() { agent_card_tiles_row })
+      r.show(fn() { cost() != "" }, fn(t) {
+        across(t)
+        plain(t, cost, fn() { @sf.t("web-main.chat.agentCard.cost") }, fn() { "" }) |> ignore
+      })
+      r.show(fn() { cache() is Some(Object(_)) }, fn(t) {
+        across(t)
+        plain(t, fn() { text(cache(), "text") }, fn() { @sf.t("web-main.chat.agentCard.cache") }, fn() { "" }) |> ignore
+      })
+      let unknown = fn() { flag(ctx(), "unknown") }
+      let figure = fn() {
+        if unknown() {
+          text(ctx(), "text")
+        } else {
+          number(ctx(), "percent").round().to_int().to_string() + "%"
+        }
+      }
+      let level = fn() { if unknown() { "" } else { text(ctx(), "level") } }
+      r.show(fn() { ctx() is Some(Object(_)) }, fn(t) {
+        across(t)
+        match context {
+          Some(open) =>
+            t.box(fn(b) {
+              @sf.style_node(b, fn() { agent_card_tile_button })
+              @sf.presses_node(b, fn() {
+                if !@signals.untracked(busy) {
+                  let (x, y, w, h) = b.placed_window_now()
+                  open(At(x, y, w, h))
+                }
+              })
+              b.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-pages.chat.contextActions"))) })) |> ignore
+              @sf.words_node(b, figure, fn() { figure_style(level()) }) |> ignore
+              b.box(fn(m) {
+                @sf.style_node(m, fn() { agent_card_tile_more })
+                @sf.words_node(m, fn() {
+                  if compacts() && (level() == "amber" || level() == "red") {
+                    @sf.t("web-mobile.agent.contextCompactable")
+                  } else {
+                    @sf.t("web-main.chat.agentCard.context")
+                  }
+                }, fn() { agent_card_tile_name })
+                |> ignore
+                m.pick(busy, fn(i, now) {
+                  if now {
+                    @sf.spinner_node(i, size=11.0) |> ignore
+                  } else {
+                    @sf.icon_node(i, "chevron-right", 11.0, By(fn() { @sf.theme().p.muted })) |> ignore
+                  }
+                })
+              })
+              |> ignore
+            })
+            |> ignore
+          None =>
+            t.pick(unknown, fn(k, unknown_now) {
+              let tile = plain(k, figure, fn() { @sf.t("web-main.chat.agentCard.context") }, level)
+              if !unknown_now {
+                @sf.tip_node(tips, tile, fn() { text(ctx(), "text") }) |> ignore
+              }
+            })
+        }
+      })
+    })
+    |> ignore
+  })
+}

@@ -13,7 +13,7 @@ let glide_list_w : Double = 280.0
 fn glide_drawn(t : @ui.Tester) -> Array[String] {
   kept_drawn(t).filter(fn(line) {
     // ("inst", then its numbers in 1/64ths: its left the first)
-    let f = line.split(" ").map(fn(v) { v.to_string() }).collect()
+    let f = line.split(" ").map(fn(v) { v.to_owned() }).collect()
     f.length() > 1 && glide_number(f[1]) < (glide_list_w * 64.0).to_int()
   })
 }

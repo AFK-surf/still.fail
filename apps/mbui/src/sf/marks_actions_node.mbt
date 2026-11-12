@@ -7,6 +7,7 @@
 /// whether something is drawn to keep and nothing is being made (`ready`: 下载 and 添加到对话 able); whether the marked
 /// picture is being made; whether there is a chat's draft to put it in; and their words: 取消's, 下载's (read out, its
 /// tip), 添加到对话's, and what that one says while it is made.
+#derive(Eq, Debug)
 pub(all) struct MarksActionsSaid {
   error : String
   ready : Bool
@@ -16,7 +17,7 @@ pub(all) struct MarksActionsSaid {
   download : String
   put : String
   making : String
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The red of why making the marked picture failed (marks_actions's).
@@ -67,7 +68,7 @@ pub fn marks_actions_node(
   let meta = fn(weight : Int) -> @view.WordsLook {
     let th = @ui.tree_theme()
     let (size, _) = th.text_size(Meta)
-    { size, weight, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
+    { size, weight, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   }
   parent.box(made_for=loc, fn(row) {
     row.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(marks_actions_apart)) |> ignore

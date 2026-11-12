@@ -340,7 +340,9 @@ test("a phone asked for in a chat: a card to the person its agent works for, gra
   assert.equal(w.cards.length, 1);
   assert.equal(w.cards[0]!.card.assignee, "pat@example.com");
   assert.deepEqual(w.cards[0]!.card.adb, { request: "p1", reason: "install the build and look at its first screen", lasts: "chat" });
-  assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "本对话直到归档", "拒绝"]);
+  assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "闲置 1 小时后失效", "本对话 8 小时内", "本对话直到归档", "拒绝"]);
+  // (an hour unused recommended, as a device's grant is)
+  assert.deepEqual(w.cards[0]!.card.options.filter((o: any) => o.recommended).map((o: any) => o.label), ["闲置 1 小时后失效"]);
   // Asked again before it is decided: the same request, no second card.
   assert.equal((await w.grants.ask("s1", "again")).id, "p1");
   assert.equal(w.cards.length, 1);
@@ -440,18 +442,13 @@ test("a granted card says how its station's adb holds the phone, and its agent i
   assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "ended", scope: "chat", why: "已收回" });
 });
 
-test("its owner's 默认最长授权: the card offers no longer, and a longer grant is refused", async () => {
+test("every card offers every length (默认最长授权 went), and any is granted", async () => {
   const w = world();
-  assert.equal(w.grants.lastsOf("pat@example.com"), "chat");
-  assert.equal(w.grants.setLasts("Pat@example.com", "hour", 10), null);
-  // an older setting (another device's, said late) does not take its place
-  assert.equal(w.grants.setLasts("pat@example.com", "chat", 5), null);
-  assert.equal(w.grants.lastsOf("pat@example.com"), "hour");
   await w.grants.ask("s1", "x");
-  assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "拒绝"]);
-  assert.equal(w.cards[0]!.card.adb.lasts, "hour");
-  assert.match(w.grants.decide("pat@example.com", "p1", "chat", "work-a")!, /默认最长授权/);
-  assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
+  assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "闲置 1 小时后失效", "本对话 8 小时内", "本对话直到归档", "拒绝"]);
+  assert.equal(w.cards[0]!.card.options.find((o: any) => o.recommended)?.label, "闲置 1 小时后失效");
+  assert.equal(w.cards[0]!.card.adb.lasts, "chat");
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat", "work-a"), null);
 });
 
 test("refused, the agent is told, and a request of an archived chat is not granted", async () => {
@@ -483,5 +480,49 @@ test("who holds the other end of a loopback connection is told by its port", asy
   } finally {
     child.kill("SIGKILL");
     server.close();
+  }
+});
+
+test("any member's phone asked for (device_use): the card goes to that person, named in the chat; one request each, handed back alone", async () => {
+  const w = world();
+  try {
+    const r = await w.grants.ask("s1", "check the Pixel", false, undefined, "Kim@Example.com");
+    assert.equal(r.owner, "kim@example.com");
+    assert.equal(w.cards.at(-1)!.card.assignee, "kim@example.com");
+    // Asked again of the same person: that request; of another: one more.
+    assert.equal((await w.grants.ask("s1", "again", false, undefined, "kim@example.com")).id, r.id);
+    const mine = await w.grants.ask("s1", "my own phone");
+    assert.equal(mine.owner, "pat@example.com");
+    assert.notEqual(mine.id, r.id);
+    assert.equal(w.grants.decide("kim@example.com", r.id, "hour", "work-a"), null);
+    // Handed back by whose: that one alone ends.
+    assert.deepEqual(w.grants.release("s1", "kim@example.com").map((x) => x.id), [r.id]);
+    assert.equal(w.grants.get(mine.id)!.status, "pending");
+  } finally {
+    w.db.close();
+  }
+});
+
+test("a phone granted until idle an hour: kept while the chat uses it, ended an hour after it last did; eight hours fixed", async () => {
+  const w = world();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    assert.equal(w.grants.decide("pat@example.com", "p1", "idle", "work-a"), null);
+    w.pass(50 * 60_000);
+    w.grants.used("p1", true);
+    w.pass(50 * 60_000);
+    assert.equal(w.grants.held("s1").length, 1, "used 50 minutes ago: held");
+    w.pass(11 * 60_000);
+    assert.deepEqual(w.grants.held("s1"), []);
+    assert.equal(w.grants.get("p1")!.why, "闲置超时");
+    await w.grants.ask("s1", "again");
+    assert.equal(w.grants.decide("pat@example.com", "p2", "eight", "work-a"), null);
+    w.pass(7 * 3600_000);
+    assert.equal(w.grants.held("s1").length, 1);
+    w.pass(3600_000);
+    assert.deepEqual(w.grants.held("s1"), []);
+    assert.match(w.grants.decide("pat@example.com", "p2", "week" as any, "work-a")!, /no such request|scope|already/);
+  } finally {
+    w.db.close();
   }
 });

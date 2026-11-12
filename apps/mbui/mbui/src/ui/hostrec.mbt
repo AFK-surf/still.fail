@@ -68,14 +68,14 @@ fn rec_image_ready(id : Int, out : FixedArray[Double]) -> Unit {
 ///|
 /// The kept answers of pictures and PDFs, by their lines' heads ("ib|…", "is|…", "pn|…", "ps|…", "pi|…").
 fn host_answers_of(lines : String) -> Map[String, Json] {
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for v in lines.split("\n") {
     let line = v.to_owned()
     let start = match line.find("TEXTREC ") {
       Some(i) => i + 8
       None => if line.has_prefix("{") { 0 } else { continue }
     }
-    let j = @json.parse(line.view(start_offset=start).to_owned()) catch {
+    let j = @json.parse(line.exact_view(start=start).to_owned()) catch {
       _ => continue
     }
     guard j is Object(m) else { continue }

@@ -10,7 +10,7 @@ fn cc_tester(calls? : Array[Made] = []) -> @ui.Tester {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -61,7 +61,7 @@ fn cc_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
   seen.push(open())
   t.draw()
   seen.push(open())
-  assert_true(shown, msg="its threads shown: \{seen}")
+  assert_true(shown, msg="its threads shown: \{Repr(seen)}")
   seen
 }
 

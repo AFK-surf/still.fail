@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { Adb } from "../src/adb.ts";
 import { CoreError, HostError } from "../src/error.ts";
-import type { Entry } from "../src/lock.ts";
+import { type Entry, entryHash } from "../src/lock.ts";
 import type { Mesh } from "../src/mesh.ts";
 import { PersonalLock, checkChain, grantHolds } from "../src/personal-lock.ts";
 import { Runner } from "../src/runtime.ts";
@@ -38,9 +38,11 @@ function cloud() {
 
 /// The person's stations, as station/src/mesh/person-chains.ts keeps their lock: each chain by its first entry, the
 /// longer taken where it goes on from the one kept, one at odds refused. `up`: whether any of them is reached.
+/// `taking`: what lands on the device once a station took what it was brought and before its answer does (a read made
+/// meanwhile, answered first), once.
 function stations() {
   const kept = new Map<string, Entry[]>();
-  const say = { up: true, read: 0, brought: 0, at: [] as (string | undefined)[] };
+  const say = { up: true, read: 0, brought: 0, at: [] as (string | undefined)[], taking: null as (() => Effect.Effect<void, CoreError>) | null };
   const root = (c: Entry[]) => JSON.stringify(c[0]);
   return {
     kept,
@@ -55,7 +57,9 @@ function stations() {
           const [short, long] = had.length <= chain.length ? [had, chain] : [chain, had];
           if (!short.every((e, i) => JSON.stringify(e) === JSON.stringify(long[i]))) return Effect.fail(new CoreError("lock_refused", "at odds with the one kept", 409));
           kept.set(root(chain), long);
-          return Effect.succeed(1);
+          const taking = say.taking;
+          say.taking = null;
+          return taking === null ? Effect.succeed(1) : Effect.map(taking(), () => 1);
         }),
     },
   };
@@ -81,8 +85,10 @@ function device(c: ReturnType<typeof cloud>, name: string, at?: ReturnType<typeo
   const runner = new Runner(host.time.clock);
   // (how often it tells its lock changed: each time, the stations that refused it are asked again)
   const told = { n: 0 };
-  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => void told.n++, ...(at ? { stations: at.env } : {}) });
-  return { host, runner, lock, asks, id, told };
+  // (the key it signs workspaces' locks with: none until a test gives it one)
+  const signs = { key: null as string | null };
+  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => void told.n++, signKey: () => signs.key, ...(at ? { stations: at.env } : {}) });
+  return { host, runner, lock, asks, id, told, signs };
 }
 
 const body = (over: Record<string, unknown> = {}) => ({ station: STATION, request: "p1", session: "sess", chat: "chat", scope: "hour" as const, exp: 2_000_000_000, ...over });
@@ -157,10 +163,12 @@ test("a person's devices read and bring their lock at their stations, the cloud 
     await b.runner.run(b.lock.addDevice(SUB, other("22"), "why"));
     await a.runner.run(a.lock.refresh(SUB));
     assert.equal(a.lock.entries(SUB).length, 3);
-    // a, behind (it did not read since), signs at odds with what the stations keep: refused there, as the cloud did.
+    // a, behind (it did not read since), signs at odds with what the stations keep: refused there, its entry lost its
+    // place; the stations read, it is signed again after b's, its seed in hand (personal-lock-signs-again.test.ts).
     await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
     const out = await a.runner.run(Effect.result(a.lock.addDevice(SUB, other("44"), "why")));
-    assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused");
+    assert.equal(out._tag, "Success", JSON.stringify(out));
+    assert.deepEqual(a.lock.entries(SUB).slice(3).map((e) => (e.body as { key: string }).key), [other("33").key, other("44").key], "after b's");
     // None of the stations reached: the cloud is what it is read of and brought to, as before.
     c.say.down = false;
     st.say.up = false;
@@ -170,6 +178,39 @@ test("a person's devices read and bring their lock at their stations, the cloud 
   } finally {
     a.runner.shutdown();
     b.runner.shutdown();
+  }
+});
+
+test("a station behind on its person's lock, read alone, is brought it: the lock is not taken for one begun anew elsewhere", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const other = (n: string) => ({ key: `ed25519:${n.repeat(32)}`, id: n.repeat(32), label: n });
+    await a.runner.run(a.lock.addDevice(SUB, other("22"), "why"));
+    assert.equal(a.lock.entries(SUB).length, 2);
+    assert.equal(a.lock.standing(SUB), "member");
+    // The one station reached now is one that was away as the device was let in: it keeps the lock as far as its first
+    // entry. Its link opens, and it alone is read.
+    for (const [k, ch] of [...st.kept]) st.kept.set(k, ch.slice(0, 1));
+    const brought = st.say.brought;
+    await a.runner.run(a.lock.refresh(SUB, STATION));
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.equal(a.lock.entries(SUB).length, 2);
+    // (and it is brought what it lacks, as one that kept none is)
+    assert.ok(st.say.brought > brought, "the station behind was brought the lock");
+    assert.deepEqual([...st.kept.values()].map((ch) => ch.length), [2]);
+    // The cloud behind the same way (it is told each entry and not waited on), and no station reached: read of it, the
+    // lock is the one pinned still, and the cloud is brought what it lacks.
+    c.kept.entries = c.kept.entries.slice(0, 1);
+    st.say.up = false;
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.equal(a.lock.entries(SUB).length, 2);
+    assert.equal(c.kept.entries.length, 2);
+  } finally {
+    a.runner.shutdown();
   }
 });
 
@@ -228,6 +269,10 @@ test("a grant holds only for what was signed, by a key on the lock, in its time,
     const flipped = (t.sig.sig[0] === "0" ? "1" : "0") + t.sig.sig.slice(1);
     assert.equal(holds(grantOf({ ...t, sig: { ...t.sig, sig: flipped } })), null, "its signature changed, the right one checked before");
     assert.equal(holds(grantOf(signed)), 2_000_000_000, "and the right one still holds");
+    // An hour unused or eight hours (2026-11-10): signed as such, held as such, and no other.
+    const idle = await a.runner.run(a.lock.signGrant(SUB, body({ scope: "idle" }), "why"));
+    assert.equal(holds({ ...grantOf(idle), scope: "idle" }), 2_000_000_000);
+    assert.equal(holds({ ...grantOf(idle), scope: "eight" }), null, "another length");
   } finally {
     a.runner.shutdown();
     b.runner.shutdown();
@@ -424,3 +469,192 @@ test("grants from before signatures are signed at one go, the person asked once,
     a.runner.shutdown();
   }
 });
+
+test("each device's entry on its person's lock says the key it signs workspaces' locks with; a device with another says it again, once, the next time its key is in hand", async () => {
+  // (a device let in where no workspace bound the person's lock, or before one did, signed nowhere: no workspace's lock
+  // held its key, and the person's did not say it; the locks' end to end, round 12, 2026-11-10)
+  const c = cloud();
+  const a = device(c, "a");
+  const b = device(c, "b");
+  const A1 = "ed25519:" + "a1".repeat(32), A2 = "ed25519:" + "a2".repeat(32), B1 = "ed25519:" + "b1".repeat(32);
+  const C = { key: "ed25519:" + "cc".repeat(32), id: "cc".repeat(32), label: "c" };
+  const C1 = "ed25519:" + "c1".repeat(32), C2 = "ed25519:" + "c2".repeat(32);
+  // deno-lint-ignore no-explicit-any
+  const bodyOf = (e: Entry | undefined) => e?.body as any;
+  try {
+    a.signs.key = A1;
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    assert.equal(bodyOf(c.kept.entries[0]).device.sign_key, A1, "the genesis says it");
+    const bKey = await b.runner.run(b.lock.makeKey());
+    await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: b.id, label: "b", sign_key: B1 }, "why"));
+    assert.equal(bodyOf(c.kept.entries[1]).sign_key, B1, "and the entry that puts one on");
+    assert.deepEqual([...a.lock.signKeys(SUB)], [[a.id, { sign_key: A1, label: "a" }], [b.id, { sign_key: B1, label: "b" }]], "by the device's id");
+    // Said again with another: the last one counts. Taken off: none.
+    await a.runner.run(a.lock.addDevice(SUB, { ...C, sign_key: C1 }, "why"));
+    await a.runner.run(a.lock.addDevice(SUB, { ...C, sign_key: C2 }, "why"));
+    assert.equal(a.lock.signKeys(SUB).get(C.id)?.sign_key, C2);
+    await a.runner.run(a.lock.removeDevice(SUB, C.key, "why"));
+    assert.equal(a.lock.signKeys(SUB).has(C.id), false, "off the lock");
+    // One not of the form is none, though the device is on the lock.
+    await a.runner.run(a.lock.addDevice(SUB, { ...C, sign_key: "ed25519:" + "CC".repeat(32) }, "why"));
+    assert.ok(a.lock.chain(SUB)!.devices.has(C.key));
+    assert.equal(a.lock.signKeys(SUB).has(C.id), false, "not of the form");
+    // This device signs with another key now: said again on the next act its key is in hand for, the person asked no
+    // more than for that act, and not again after.
+    a.signs.key = A2;
+    const length = c.kept.entries.length;
+    const asked = a.asks.n;
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    assert.equal(a.asks.n, asked + 1);
+    assert.equal(c.kept.entries.length, length + 1);
+    assert.deepEqual([c.kept.entries[length]!.kind, bodyOf(c.kept.entries[length])], ["device", { key: bodyOf(c.kept.entries[0]).device.key, id: a.id, label: "a", sign_key: A2 }]);
+    assert.equal(a.lock.signKeys(SUB).get(a.id)?.sign_key, A2);
+    assert.notEqual(checkChain(c.kept.entries, SUB), null, "as the rules take it");
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await a.runner.run(a.lock.signGrants(SUB, [body()], "why"));
+    assert.equal(c.kept.entries.length, length + 1, "not again");
+  } finally {
+    a.runner.shutdown();
+    b.runner.shutdown();
+  }
+});
+
+test("a device that began its person's lock anew while the stations refused it does not take the chain it left, which they keep still, for one begun elsewhere", async () => {
+  // (every device lost, the person began again on a new one; let in later, it read the old chain at the stations and
+  // warned of a theft, and the lock was never bound; the locks' end to end, round 12, 2026-11-10)
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  const k = device(c, "k", st);
+  const z = device(c, "z", st);
+  const rootOf = (chain: Entry[]) => JSON.stringify(chain[0]);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const old = a.lock.entries(SUB);
+    // The new device, refused by every station, sees the old lock (outside it) and begins anew: to the cloud alone.
+    st.say.up = false;
+    await k.runner.run(k.lock.refresh(SUB));
+    assert.equal(k.lock.standing(SUB), "outside");
+    await k.runner.run(k.lock.restart(SUB, "why"));
+    const mine = k.lock.entries(SUB);
+    assert.equal(rootOf(c.kept.entries), rootOf(mine));
+    assert.deepEqual([...st.kept.values()], [old], "the stations keep only the old one");
+    // Let in: the stations answer with the old chain alone. Its own lock still, and the stations brought the new one.
+    st.say.up = true;
+    await k.runner.run(k.lock.refresh(SUB));
+    assert.equal(k.lock.standing(SUB), "member");
+    assert.deepEqual(st.kept.get(rootOf(mine)), mine, "brought to the stations");
+    await k.runner.run(k.lock.heardFrom(SUB, [old]));
+    assert.equal(k.lock.standing(SUB), "member", "nor told by a refusal");
+    // The core started again over the same storage, a station that keeps only the old chain: the same.
+    st.kept.delete(rootOf(mine));
+    const again = new PersonalLock({ host: k.host, runner: k.runner, cloud: c.call, device: () => Effect.succeed(k.id), label: () => "k", changed: () => {}, stations: st.env });
+    await k.runner.run(again.refresh(SUB));
+    assert.equal(again.standing(SUB), "member");
+    assert.deepEqual(st.kept.get(rootOf(mine)), mine);
+    // A lock another device began anew later is not one this device left: begun elsewhere.
+    await z.runner.run(z.lock.restart(SUB, "why"));
+    st.kept.delete(rootOf(mine));
+    await k.runner.run(again.refresh(SUB));
+    assert.equal(again.standing(SUB), "replaced");
+  } finally {
+    a.runner.shutdown();
+    k.runner.shutdown();
+    z.runner.shutdown();
+  }
+});
+
+test("a device that began anew the lock it had pinned, while the stations could not be asked, brings them the new one", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const old = a.lock.entries(SUB);
+    st.say.up = false;
+    // (a minute on: begun again in the same second, the same device's genesis would be the same)
+    await a.host.time.pass(60_000);
+    await a.runner.run(a.lock.restart(SUB, "why"));
+    const mine = a.lock.entries(SUB);
+    assert.notDeepEqual(mine, old);
+    st.say.up = true;
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.deepEqual(st.kept.get(JSON.stringify(mine[0])), mine);
+  } finally {
+    a.runner.shutdown();
+  }
+});
+
+const kinds = (chain: Entry[]) => JSON.stringify(chain.map((e) => [e.seq, e.kind]));
+
+test("an entry a station took, read of it again before its answer came, is on the lock once: the new device takes the lock it is brought", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  const n = device(c, "n", st);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    // The station takes the new device's entry; a read of it (told the lock changed on its event stream) is answered
+    // and taken before its answer to the entry is (2026-11-12: a real station's run, the new device told it was not
+    // let in).
+    st.say.taking = () => a.lock.refresh(SUB);
+    const nKey = await n.runner.run(n.lock.makeKey());
+    const whole = await a.runner.run(a.lock.addDevice(SUB, { key: nKey, id: n.id, label: "n" }, "why"));
+    assert.equal(st.say.taking, null, "the read landed while the entry was being brought");
+    assert.notEqual(checkChain(whole, SUB), null, `the lock brought to the new device holds: ${kinds(whole)}`);
+    assert.equal(kinds(whole), kinds([...st.kept.values()][0]!), "the entry is on it once, as the station keeps it");
+    assert.deepEqual(a.lock.entries(SUB), whole);
+    assert.equal(a.lock.standing(SUB), "member");
+    await n.runner.run(n.lock.joined(SUB, whole));
+    assert.equal(n.lock.standing(SUB), "member");
+  } finally {
+    a.runner.shutdown();
+    n.runner.shutdown();
+  }
+});
+
+// Which of the two entries keeps the place is the rules' fork choice (src/lock-keep.ts), the stations' too: here by its
+// second step, a removal winning at equal weight (2026-11-12; before, any other entry at the place refused this one,
+// and the case was built of two device entries, whose order is the two signers' tie values).
+for (const lost of [true, false])
+  test(`an entry a station took, another device's entry heard at its place before its answer came: ${lost ? "refused as a station's 409 is where it loses, the lock pinned holding" : "pinned where it wins by the rules, the other kept aside"}`, async () => {
+    const c = cloud();
+    const st = stations();
+    // (b's stations: another of the person's, that took b's entry where a's station took a's)
+    const st2 = stations();
+    const a = device(c, "a", st);
+    const b = device(c, "b", st2);
+    const other = (n: string) => ({ key: `ed25519:${n.repeat(32)}`, id: n.repeat(32), label: n });
+    try {
+      c.say.down = true;
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await a.runner.run(a.lock.addDevice(SUB, other("22"), "why"));
+      const bKey = await b.runner.run(b.lock.makeKey());
+      const whole = await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: b.id, label: "b" }, "why"));
+      for (const [k, ch] of st.kept) st2.kept.set(k, ch);
+      await b.runner.run(b.lock.joined(SUB, whole));
+      // b's entry: the removal of 22 (it wins) where a's is a device put on; else the other way round.
+      if (lost) await b.runner.run(b.lock.removeDevice(SUB, other("22").key, "why"));
+      else await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
+      const theirs = [...st2.kept.values()][0]!;
+      st.say.taking = () => a.lock.heardFrom(SUB, [theirs]);
+      const out = await a.runner.run(Effect.result(lost ? a.lock.addDevice(SUB, other("44"), "why") : a.lock.removeDevice(SUB, other("22").key, "why")));
+      assert.equal(st.say.taking, null, "the other chain was heard while the entry was being brought");
+      const pinned = a.lock.entries(SUB);
+      assert.notEqual(checkChain(pinned, SUB), null, `the lock pinned holds: ${kinds(pinned)}`);
+      if (lost) {
+        assert.deepEqual(pinned, theirs, "the chain heard is the one pinned, the entry that lost its place not on it");
+        assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused", JSON.stringify(out));
+      } else {
+        assert.equal(out._tag, "Success", JSON.stringify(out));
+        assert.deepEqual(pinned.slice(0, 3), theirs.slice(0, 3));
+        assert.equal(pinned.length, 4, `the entry once: ${kinds(pinned)}`);
+        assert.equal(pinned[3]!.kind, "device.remove");
+        assert.notEqual(entryHash(pinned[3]!), entryHash(theirs[3]!));
+      }
+    } finally {
+      a.runner.shutdown();
+      b.runner.shutdown();
+    }
+  });

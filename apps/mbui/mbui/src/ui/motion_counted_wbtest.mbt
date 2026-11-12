@@ -5,10 +5,8 @@
 ///|
 fn init {
   motion_counted([
-    "src/ui/island_moved_wbtest.mbt",
     "src/ui/layout_wbtest.mbt",
     "src/ui/list_retained_paint_wbtest.mbt",
-    "src/ui/list_scroll_same_wbtest.mbt",
     "src/ui/old_gives_wbtest.mbt",
     "src/ui/scroll_node_wbtest.mbt",
   ])

@@ -13,7 +13,6 @@ priv struct Laid {
   in_b : Ref[(() -> Unit)?]
   b_go : @signals.Signal[Int]
   done_in_b : Ref[Int]
-  builds_a : Ref[Int]
 }
 
 ///|
@@ -25,23 +24,21 @@ fn laid_islands(spec? : () -> Spec = fn() { tween(push_ms, ease=Linear) }, two? 
   let in_b : Ref[(() -> Unit)?] = Ref(None)
   let b_go = @signals.signal(0, same=fn(a, b) { a == b })
   let done_in_b = Ref(0)
-  let builds_a = Ref(0)
   let view_a = fn(c : @ui.Ctx) {
-    builds_a.val = builds_a.val + 1
     poked.get() |> ignore
     c.column(fn() {
       c.box(h=Px(top.get()), fn() {  }) |> ignore
       let n = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.text("a box") |> ignore })
-      layout(c, n, "laid/a", by="\{top.get()}", spec=if two { move() } else { spec() })
+      layout(c, n, "laid/a", by="\{top.get()}", spec=if two { moved() } else { spec() })
       if two {
         c.box(h=Px(top.get()), fn() {  }) |> ignore
         let m = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.text("a second box") |> ignore })
-        layout(c, m, "laid/b", by="\{top.get()}", spec=move())
+        layout(c, m, "laid/b", by="\{top.get()}", spec=moved())
       }
       // (its ground, and how far over its place it is drawn, read here: what reads it built again as it goes)
       let over = reshaped_over(c, "laid/ground")
       let g = c.box(w=Fill(1.0), h=Px(40.0 + top.get()), bg=0x3366CCFFL, fn() { c.text("over \{over.round()}") |> ignore })
-      reshape(c, g, "laid/ground", by="\{top.get()}", spec=if two { move() } else { spec() })
+      reshape(c, g, "laid/ground", by="\{top.get()}", spec=if two { moved() } else { spec() })
     })
     |> ignore
   }
@@ -75,7 +72,7 @@ fn laid_islands(spec? : () -> Spec = fn() { tween(push_ms, ease=Linear) }, two? 
   })
   t.draw()
   frame_by_clock(t)
-  { t, top, poked, in_b, b_go, done_in_b, builds_a }
+  { t, top, poked, in_b, b_go, done_in_b }
 }
 
 ///|
@@ -127,7 +124,7 @@ test "a box pushed down by what B set as it was built, after A was: A built agai
   let passes = passes_of(l, fn() { frame_by_clock(l.t) })
   assert_eq(l.done_in_b.val, 1, msg="B did it once")
   // (built with the old top; again with the new, the move told; again for it, the same way: none told)
-  assert_eq(passes, [3], msg="the frame B set it in: \{passes}")
+  assert_eq(passes, [3], msg="the frame B set it in: \{Repr(passes)}")
   assert_eq(l.t.drawn_of("a box"), Some(was))
   l.t.run_for(push_midway_ms)
   let y = l.t.drawn_of("a box").unwrap().1
@@ -156,12 +153,12 @@ test "a box moving, then the frames as it goes and the one it gets to its end in
     frame_by_clock(l.t)
   }
   l.t.each_frame(None)
-  assert_true(passes.length() > 2, msg="\{passes}")
+  assert_true(passes.length() > 2, msg="\{Repr(passes)}")
   // (going all the way: drawn lower each frame till it is there)
-  assert_true(ys.iter().any(fn(y) { y > was.1 && y < was.1 + 40.0 }), msg="on its way: \{ys}")
-  assert_eq(ys[ys.length() - 1], was.1 + 40.0, msg="\{ys}")
+  assert_true(ys.iter().any(fn(y) { y > was.1 && y < was.1 + 40.0 }), msg="on its way: \{Repr(ys)}")
+  assert_eq(ys[ys.length() - 1], was.1 + 40.0, msg="\{Repr(ys)}")
   // (a frame painted alone, nothing built: none)
-  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{passes}")
+  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{Repr(passes)}")
 }
 
 ///|
@@ -372,7 +369,7 @@ test "a box pushed down, its ease changed by what B set as it was built (the sam
   in_b(l, fn() { curve.set(true) })
   let passes = passes_of(l, fn() { frame_by_clock(l.t) })
   assert_eq(l.done_in_b.val, 1, msg="B did it once")
-  assert_eq(passes, [3], msg="built with the first ease, again with the second (told), again for it: \{passes}")
+  assert_eq(passes, [3], msg="built with the first ease, again with the second (told), again for it: \{Repr(passes)}")
   l.t.run_for(push_midway_ms)
   // (halfway in time: ease-in not yet half of the way; ease-out past it)
   let y = l.t.drawn_of("a box").unwrap().1
@@ -470,7 +467,7 @@ test "a box measured let go: what reads its size reads it the same in that frame
   frame_by_clock(l.t)
   frame_by_clock(l.t)
   l.t.each_frame(None)
-  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{passes}")
+  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{Repr(passes)}")
   assert_eq(l.builds_a.val, builds, msg="built again after")
   assert_true(l.t.at_rest(), msg=l.t.rest_why())
 }

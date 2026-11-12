@@ -6,22 +6,23 @@
 // shown. A code the page asks that the password manager did not give is typed on the card; where only the person can go
 // on (a captcha, a code by mail), the card opens the tab's screen, and they say when they signed in. Signed in, kept in
 // their vault as they chose on the card (登录后存入密钥库, the default, or not), approved here in place: no card of its
-// own. Answered on screen, the card stays as it is until out of sight, then one line says how it went, as a vault
-// request's does (vault_ask_card).
+// own. Answered, on screen or not, the card goes as its room closes from that moment and one line saying how it went
+// comes in its place, as a vault request's does (vault_ask_card).
 
 ///|
 /// What the password manager is asked of for a sign-in's card, between frames: the run of `op` under way, the logins to
-/// pick from, and what was had of the one picked.
+/// pick from (signals: what is made once of the card follows them), and what was had of the one picked.
 priv struct SignInRun {
-  mut run : @hostapi.OpRun?
-  mut choices : Array[@hostapi.PasswordLogin]
+  run : @signals.Signal[@hostapi.OpRun?]
+  choices : @signals.Signal[Array[@hostapi.PasswordLogin]]
   mut picked : String
   mut username : String
   mut password : String
 }
 
 ///|
-let signin_runs : Map[String, SignInRun] = {}
+// kept across runs: emptied by signin_reset
+let signin_runs : @sf.LiveMap[String, SignInRun] = @sf.LiveMap::new()
 
 ///|
 /// Where each card's asking is (by its id): "" nothing asked, listing / getting / otp (1Password asked), auto (the
@@ -46,7 +47,7 @@ let signin_saving : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// Each card's code field.
-let signin_code : Map[String, @ui.Field] = {}
+let signin_code : Map[String, @ui.Field] = Map([])
 
 ///|
 fn signin_reset() -> Unit {
@@ -64,7 +65,7 @@ fn signin_run(id : String) -> SignInRun {
   match signin_runs.get(id) {
     Some(r) => r
     None => {
-      let r = { run: None, choices: [], picked: "", username: "", password: "" }
+      let r = { run: @signals.signal(None), choices: @signals.signal([]), picked: "", username: "", password: "" }
       signin_runs[id] = r
       r
     }
@@ -76,7 +77,7 @@ fn signin_run(id : String) -> SignInRun {
 fn signin_stop(id : String) -> Unit {
   match signin_runs.get(id) {
     Some(r) => {
-      match r.run {
+      match r.run.untracked() {
         Some(run) => run.end()
         None => ()
       }
@@ -120,7 +121,7 @@ fn signin_start(core : @settings.Core, station : String, ask : SignInAsk) -> Uni
 fn signin_op(_core : @settings.Core, _station : String, ask : SignInAsk, args : Array[String], step : String) -> Unit {
   match @hostapi.op_run(args) {
     Some(r) => {
-      signin_run(ask.id).run = Some(r)
+      signin_run(ask.id).run.set(Some(r))
       signin_steps[ask.id] = step
     }
     None => signin_said(ask.id, @sf.t("android-misc.screen.fill.noOp"))
@@ -131,7 +132,7 @@ fn signin_op(_core : @settings.Core, _station : String, ask : SignInAsk, args : 
 /// One of the site's logins picked (or the only one): its account and password asked for.
 fn signin_pick(core : @settings.Core, station : String, ask : SignInAsk, l : @hostapi.PasswordLogin) -> Unit {
   let r = signin_run(ask.id)
-  r.choices = []
+  r.choices.set([])
   r.picked = l.id
   signin_op(core, station, ask, ["item", "get", l.id, "--fields", "label=username,label=password", "--reveal", "--format", "json"], "getting")
 }
@@ -140,10 +141,10 @@ fn signin_pick(core : @settings.Core, station : String, ask : SignInAsk, l : @ho
 /// The run under way ended: what it said taken (once).
 fn signin_took(core : @settings.Core, station : String, ask : SignInAsk) -> Unit {
   let r = signin_run(ask.id)
-  guard r.run is Some(run) else { return }
-  guard run.done() is Some(d) else { return }
+  guard r.run.untracked() is Some(run) else { return }
+  guard @signals.untracked(fn() { run.done() }) is Some(d) else { return }
   run.end()
-  r.run = None
+  r.run.set(None)
   let step = signin_steps.get(ask.id).unwrap_or("")
   // (a login without a one-time code: sent without one; the page asks it on the card if it wants one)
   if step == "otp" {
@@ -166,7 +167,7 @@ fn signin_took(core : @settings.Core, station : String, ask : SignInAsk) -> Unit
       } else if found.length() == 1 {
         signin_pick(core, station, ask, found[0])
       } else {
-        r.choices = found
+        r.choices.set(found)
         signin_steps[ask.id] = "choosing"
       }
     }
@@ -189,7 +190,7 @@ fn signin_took(core : @settings.Core, station : String, ask : SignInAsk) -> Unit
 /// What the password manager gave sent to the station, for the card's site only (the station types it into the tab
 /// only while it is on that site); forgotten here once it went.
 fn signin_send(core : @settings.Core, station : String, ask : SignInAsk, username : String, password : String, code : String) -> Unit {
-  let login : Map[String, Json] = {}
+  let login : Map[String, Json] = Map([])
   if username != "" {
     login["username"] = Json::string(username)
   }
@@ -293,7 +294,7 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
   let id = ask.id
   // a run under way: its end taken once it came (after this frame); the autofill service's pick, once it came
   match signin_runs.get(id) {
-    Some({ run: Some(r), .. }) if r.done() is Some(_) => c.tell("signin-took/" + id, fn() { signin_took(core, station, ask) })
+    Some({ run, .. }) if run.get() is Some(r) && r.done() is Some(_) => c.tell("signin-took/" + id, fn() { signin_took(core, station, ask) })
     _ => ()
   }
   let step = signin_steps.get(id).unwrap_or("")
@@ -407,7 +408,7 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
   let asking = step == "listing" || step == "getting" || step == "otp" || step == "sending"
   @sf.ask_buttons(c, fn() {
     if step == "choosing" {
-      for i, l in signin_run(id).choices {
+      for i, l in signin_run(id).choices.get() {
         let words = if l.username == "" { l.title } else { l.title + " · " + l.username }
         let picked = l
         @sf.button(c, words, key="signin/" + id + "/pick/\{i}", tone=if i == 0 { Primary } else { Ghost }, on_press=fn() {
@@ -474,7 +475,7 @@ fn signin_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, as
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
-      let open = l.turns.in_turn(c, "signin/" + m.ts, !decided, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+      let open = l.turns.in_turn(c, "signin/" + m.ts, !decided)
       let start_at = l.turns.start("signin/" + m.ts)
       under_post(
         c,
@@ -500,7 +501,7 @@ fn signin_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, as
         close=@motion.Snap(0.0),
         fn() {
           signin_outcome(c, ask, here.inline, history=Some(("signin/" + key, fn(id) {
-            card_history(c, "signin/" + key, id, fn(p) {
+            card_history(c, id, fn(p) {
               @sf.ask_words(p, @sf.t("android-misc.signin.title", args=[("site", ask.site)]), ask.reason)
             })
           })))

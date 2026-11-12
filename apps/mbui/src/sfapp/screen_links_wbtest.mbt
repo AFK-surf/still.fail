@@ -25,7 +25,7 @@ fn screen_links_core(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
     stream: fn(_name, params, _bytes, on_value, _done) {
@@ -72,7 +72,7 @@ fn inks_of(t : @ui.Tester, words : String) -> Array[Int64] {
 fn image_line(t : @ui.Tester, part : String) -> String {
   for line in t.drawlist().split("\n") {
     if line.contains(part) {
-      return line.to_string()
+      return line.to_owned()
     }
   }
   ""
@@ -94,24 +94,15 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
   assert_true(t.find("发布清单 - localhost") is None)
   t.wheel(195.0, 400.0, 2000.0)
   t.run_for(@ui.move_most_ms)
-  // 共享调试 bare in a sentence: its title, a link; alone: its card
+  // 共享调试 bare in a sentence: its title, a link; alone: a link too, no card that asks anything (2026-11-11)
   assert_true(t.run_rects("共享调试").length() > 0)
   assert_eq(t.run_rects("https://still.fail/w/ws1/s/st1/adb").length(), 0)
-  assert_true(t.find("允许 Willow 的 agent 调试此设备？") is Some(_))
+  assert_true(t.find("允许 Willow 的 agent 调试此设备？") is None)
   // a link to anywhere else as it was
   assert_true(t.run_rects("https://example.com/login-v2").length() > 0)
-  // the title in the sentence opens the link, the card too, as a tap on the link would
+  // the title in the sentence opens the link, as a tap on the link would
   t.tap_run("共享调试")
   assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
-  // the card's 详情: the page it shows, here, whatever host its link was written with (2026-10-30: one under another
-  // host than the cloud's went to the browser)
-  guard adb_button_at(t, "详情") is Some((x, y)) else { fail("the card's 详情") }
-  t.tap(x, y)
-  t.draw()
-  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
-  assert_true(app.nav.top() == Setting(AdbShare("ws1/st1")))
-  t.back()
-  t.run_for(@ui.move_most_ms)
   scroll_to_words(t, "Ana 正在查看")
   t.tap_text("Ana 正在查看")
   t.frame()
@@ -180,7 +171,7 @@ fn preview_gap(t : @ui.Tester) -> Double {
 }
 
 ///|
-/// A button on 共享调试's card by its words, where it has one: its middle.
+/// A button by its words, where one shows: its middle.
 fn adb_button_at(t : @ui.Tester, label : String) -> (Double, Double)? {
   for s in t.semantics() {
     if s.role == @ui.Role::Button && s.label == label && !s.hidden {
@@ -192,86 +183,22 @@ fn adb_button_at(t : @ui.Tester, label : String) -> (Double, Double)? {
 }
 
 ///|
-test "共享调试's card: lent from the chat where the phone has all it takes; else what it lacks first, its page a tap away" {
+test "共享调试 alone in a paragraph: a link, nothing in the chat lending the phone to the station" {
   let t = screen_links_core([], [], [])
   t.wheel(195.0, 400.0, 2000.0)
   t.run_for(@ui.move_most_ms)
-  // all it takes (the fixture's phone): the question, and 共享 lending to this station from here, the page not opened
-  assert_true(t.find("一小时后自动停止") is Some(_))
-  guard adb_button_at(t, "共享") is Some((x, y)) else { fail("the card's 共享") }
-  t.tap(x, y)
-  t.draw()
-  let started = t.native_asked().filter(fn(a) { a.0 == "adb.start" })
-  assert_eq(started.length(), 1)
-  guard started[0].1 is Object(m) else { fail("adb.start's params") }
-  assert_eq(m.get("station"), Some(Json::string("ws1/st1")))
-  assert_eq(m.get("name"), Some(Json::string("Willow")))
-  assert_eq(t.opened(), [])
-  for c in t.native_calls() {
-    t.answer_native(c.0, {})
+  assert_true(t.find("一小时后自动停止") is None)
+  for label in ["共享", "停止共享", "查看步骤", "详情"] {
+    assert_true(adb_button_at(t, label) is None, msg=label)
   }
+  // (alone: its title, as one bare in a sentence)
+  // (its paragraph's words, the link at their start)
+  let alone = t.words().filter(fn(w) { w.0 == "共享调试" })
+  guard alone.last() is Some(w) else { fail("the link alone: \{Repr(t.words().map(fn(w) { w.0 }))}") }
+  t.tap(w.1 + 8.0, w.2 + w.4 / 2.0)
   t.draw()
-  // Developer options off (said by the host as the app comes back): the card says so, no 共享; 查看步骤, the page
-  t.post("native:adb.phone", adb_phone_of(developer=false).stringify())
-  t.draw()
-  assert_true(t.find("需要先打开开发者选项") is Some(_))
-  assert_true(adb_button_at(t, "共享") is None)
-  guard adb_button_at(t, "查看步骤") is Some((x, y)) else { fail("the card's 查看步骤") }
-  t.tap(x, y)
-  t.draw()
-  assert_eq(t.opened(), [])
-  assert_true(app.nav.top() == Setting(AdbShare("ws1/st1")))
-  t.back()
-  t.run_for(@ui.move_most_ms)
-  // Wireless debugging off, which the app may turn on itself: 共享 again, turning it on as it lends
-  t.post("native:adb.phone", adb_phone_of(can_switch=true).stringify())
-  t.draw()
-  guard adb_button_at(t, "共享") is Some((x, y)) else { fail("the card's 共享, the app turning Wireless debugging on") }
-  t.tap(x, y)
-  t.draw()
-  let asked = t.native_asked().map(fn(a) { a.0 })
-  assert_eq(asked.filter(fn(n) { n == "adb.switch" }).length(), 1)
-  assert_eq(asked.filter(fn(n) { n == "adb.start" }).length(), 2)
-}
-
-///|
-test "共享调试's card while it is lent there: how it stands, 停止共享 stopping it" {
-  let calls : Array[Made] = []
-  let t = screen_links_core([], [], calls, over=fn(name, topic) {
-    if name == "adbCard" {
-      { ..topic, value: Some({ "title": "共享调试", "line": "共享中 · 剩余 58 分钟", "sharing": true, "lendable": true }) }
-    } else {
-      topic
-    }
-  })
-  t.wheel(195.0, 400.0, 2000.0)
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("正在共享调试给 Willow") is Some(_))
-  assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
-  guard adb_button_at(t, "停止共享") is Some((x, y)) else { fail("the card's 停止共享") }
-  t.tap(x, y)
-  t.draw()
-  assert_eq(calls.filter(fn(m) { m.name == "adb.stop" }).length(), 1)
-}
-
-///|
-test "共享调试's card on a device with no adb to lend: why, and nothing to press" {
-  let t = screen_links_core([], [], [], over=fn(name, topic) {
-    if name == "adbCard" {
-      { ..topic, value: Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false }) }
-    } else {
-      topic
-    }
-  })
-  t.wheel(195.0, 400.0, 2000.0)
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("仅安卓 app 支持共享调试") is Some(_))
-  assert_true(adb_button_at(t, "共享") is None)
-  assert_true(adb_button_at(t, "详情") is None)
-  t.tap_text("仅安卓 app 支持共享调试")
-  t.draw()
-  assert_eq(t.opened(), [])
-  assert_eq(t.native_asked().length(), 0)
+  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"], msg="\{Repr(alone)}")
+  assert_eq(t.native_asked().filter(fn(a) { a.0 == "adb.start" }), [])
 }
 
 ///|
@@ -292,7 +219,7 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
   assert_eq(field(Some(p), "codecs"), Some(["jpeg"]))
   let first_view = text(Some(p), "view")
   // scrolled up until its card is not built: cancelled
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<12 {
     if t.find("林 正在查看") is None {
       break
@@ -430,9 +357,9 @@ test "a preview goes on while its card's row is drawn again, not built: asked fo
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
   t.set_rows_on_pixels(true)
   // frames with nothing from outside (the pointer moved about the chat): its row drawn again as it was
-  t.move(100.0, 300.0)
-  t.move(140.0, 300.0)
-  t.move(180.0, 300.0)
+  t.move_to(100.0, 300.0)
+  t.move_to(140.0, 300.0)
+  t.move_to(180.0, 300.0)
   t.run_for(peek_ms)
   assert_eq(streams.length(), 1)
   assert_eq(running(streams, cancelled).length(), 1)

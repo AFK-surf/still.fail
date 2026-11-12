@@ -64,7 +64,8 @@ fn settings_core_of(
     push: fn(r) {
       match r {
         @settings.Route::Home => open_page(Settings)
-        _ => open_page(Setting(r))
+        // (an account's page once what it shows is answered, the screen as it was meanwhile: account_open.mbt)
+        _ => open_answered(src, route_asks(w.id, r), fn() { open_page(Setting(r)) })
       }
     },
     pop: fn() { go_back() |> ignore },
@@ -72,7 +73,7 @@ fn settings_core_of(
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it
-      let stations = src.topic("stations", { "scope": Json::string(w.id) }).get().snapshot()
+      let stations = station_rows(src, w.id)
       let mut name = ""
       match stations.value {
         Some(Array(a)) =>
@@ -154,6 +155,7 @@ fn settings_core_of(
     face_failed: face_failed,
     own_code_face: own_code_preview,
     read_only: if src.read_only { read_only_words } else { "" },
+    devices_on: src.asks_devices,
   }
 }
 

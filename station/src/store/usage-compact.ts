@@ -63,8 +63,14 @@ const contextChange = `CREATE TRIGGER usage_compact_context_change AFTER UPDATE 
       END;`;
 
 export function hasCompactUsage(db: DatabaseSync): boolean {
-  return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get() !== undefined;
+  if (compactInstalled.has(db)) return true;
+  const installed = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get() !== undefined;
+  // Once there, known for that connection and not asked again at each usage record: the schema migrates forward only,
+  // and nothing drops it. Not there is asked again: another connection (the process before, at a handover) may make it.
+  if (installed) compactInstalled.add(db);
+  return installed;
 }
+const compactInstalled = new WeakSet<DatabaseSync>();
 
 /// A bounded journal of future changes lets a reader reuse its own snapshot of unchanged hours. It starts empty:
 /// installing it neither walks nor modifies existing statistics. A NULL minute invalidates a session's ownership.
@@ -312,6 +318,7 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
       db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY CHECK (id = 1)); INSERT INTO usage_retired_detail VALUES (1)");
     }
     db.exec("COMMIT");
+    compactInstalled.add(db);
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
@@ -609,7 +616,8 @@ type SavedContext = { runtimeSession: string; model: string | null; contextWindo
   contextTokens?: number; cacheMs?: number; rereadCost?: number };
 type Recent = { calls: RecentCall[]; turns: { id: string | null; compacted: boolean }[]; uncertain: boolean; saved?: SavedContext };
 type ContextOwner = { runtime: string; model: string; fast: number };
-type ContextSnapshot = { state: Recent; stored: boolean; invalid: boolean; after: number | null };
+/// `owner`: which totals row holds it now (none: none does).
+export type ContextSnapshot = { state: Recent; stored: boolean; invalid: boolean; after: number | null; owner: ContextOwner | null };
 
 function contextOwner(db: DatabaseSync, session: string): ContextOwner | undefined {
   return db.prepare(`SELECT context_runtime AS runtime, context_model AS model, context_fast AS fast
@@ -617,17 +625,15 @@ function contextOwner(db: DatabaseSync, session: string): ContextOwner | undefin
 }
 
 function contextSnapshot(db: DatabaseSync, session: string): ContextSnapshot {
-  const row = db.prepare(`SELECT t.compact_context AS state, sc.context_uncertain AS invalid, sc.context_after AS after
+  const row = db.prepare(`SELECT t.compact_context AS state, sc.context_uncertain AS invalid, sc.context_after AS after,
+      sc.context_runtime AS runtime, sc.context_model AS model, sc.context_fast AS fast
     FROM usage_minute_scope sc LEFT JOIN usage_totals t ON t.session = sc.session AND t.runtime = sc.context_runtime
       AND t.model = sc.context_model AND t.fast = sc.context_fast WHERE sc.session = ?`).get(session) as
-    { state: string | null; invalid: number; after: number | null } | undefined;
+    { state: string | null; invalid: number; after: number | null; runtime: string | null; model: string; fast: number } | undefined;
   const invalid = row?.invalid === 1;
   return { state: row?.state == null ? { calls: [], turns: [], uncertain: invalid } : JSON.parse(row.state) as Recent,
-    stored: row?.state != null, invalid, after: row?.after ?? null };
-}
-
-function recent(db: DatabaseSync, session: string): Recent {
-  return contextSnapshot(db, session).state;
+    stored: row?.state != null, invalid, after: row?.after ?? null,
+    owner: row == null || row.runtime == null ? null : { runtime: row.runtime, model: row.model, fast: row.fast } };
 }
 
 // After an edit, there may be a later main call among the old rows. The session/time index gives an upper bound on
@@ -639,9 +645,10 @@ function reliableTail(snapshot: ContextSnapshot): boolean {
 
 // Put context on the same totals row that this call already changed. The pointer changes only when the model,
 // runtime or speed changes, so recording the next call does not dirty a separate context page.
-function keepRecent(db: DatabaseSync, session: string, owner: ContextOwner, state: Recent): void {
-  const previous = contextOwner(db, session);
-  if (previous && (previous.runtime !== owner.runtime || previous.model !== owner.model || previous.fast !== owner.fast)) {
+/// `previous`: the owner as a snapshot of this transaction read it (none given: read here).
+function keepRecent(db: DatabaseSync, session: string, owner: ContextOwner, state: Recent, previous: ContextOwner | null = contextOwner(db, session) ?? null): void {
+  const same = previous !== null && previous.runtime === owner.runtime && previous.model === owner.model && previous.fast === owner.fast;
+  if (previous && !same) {
     db.prepare(`UPDATE usage_totals SET compact_context = NULL WHERE session = ? AND runtime = ? AND model = ? AND fast = ?`)
       .run(session, previous.runtime, previous.model, previous.fast);
   }
@@ -649,6 +656,8 @@ function keepRecent(db: DatabaseSync, session: string, owner: ContextOwner, stat
     VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
     ON CONFLICT (session, runtime, model, fast) DO UPDATE SET compact_context = excluded.compact_context`)
     .run(session, owner.runtime, owner.model, owner.fast, JSON.stringify(state));
+  // The pointer to it already says it: nothing to write.
+  if (same) return;
   db.prepare(`INSERT INTO usage_minute_scope (session, ws, done, context_runtime, context_model, context_fast)
     VALUES (?, (SELECT ws FROM sessions WHERE key = ?), 1, ?, ?, ?)
     ON CONFLICT (session) DO UPDATE SET context_runtime = excluded.context_runtime, context_model = excluded.context_model,
@@ -659,19 +668,20 @@ function keepRecent(db: DatabaseSync, session: string, owner: ContextOwner, stat
 
 /// A saved summary can seed a context only while it still represents every call and the current runtime session.
 /// This is one session's existing summary and totals, not a read of its old calls. An uncertain snapshot is left out.
-export function seedCompactContext(db: DatabaseSync, session: string): void {
+/// The snapshot it read, where it wrote none (the same transaction's next step reads on from it: `noteCompactContexts`).
+export function seedCompactContext(db: DatabaseSync, session: string): ContextSnapshot | null {
   const snapshot = contextSnapshot(db, session);
-  if (snapshot.stored || snapshot.invalid) return;
+  if (snapshot.stored || snapshot.invalid) return snapshot;
   const row = db.prepare(`SELECT u.usage, s.runtime_session_id AS runtime, r.at AS began
     FROM session_usage u JOIN sessions s ON s.key = u.session
     LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE u.session = ?`).get(session) as
     { usage: string; runtime: string | null; began: number | null } | undefined;
-  if (row === undefined || row.runtime === null || row.began === null) return;
+  if (row === undefined || row.runtime === null || row.began === null) return snapshot;
   const old = JSON.parse(row.usage) as Record<string, unknown>;
   const total = db.prepare("SELECT COALESCE(SUM(calls), 0) AS n FROM usage_totals WHERE session = ? AND calls > 0").get(session) as { n: number };
   if (old.modelCalls !== total.n || typeof old.lastCallAt !== "number" || old.lastCallAt < row.began
     || (old.model !== null && typeof old.model !== "string")
-    || (old.contextWindow !== null && typeof old.contextWindow !== "number")) return;
+    || (old.contextWindow !== null && typeof old.contextWindow !== "number")) return snapshot;
   const saved: SavedContext = { runtimeSession: row.runtime, model: old.model as string | null,
     contextWindow: old.contextWindow as number | null, lastCallAt: old.lastCallAt };
   for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
@@ -679,9 +689,10 @@ export function seedCompactContext(db: DatabaseSync, session: string): void {
   }
   const owner = db.prepare("SELECT runtime, model, fast FROM usage_totals WHERE session = ? ORDER BY runtime, model, fast LIMIT 1")
     .get(session) as ContextOwner | undefined;
-  if (!owner) return;
+  if (!owner) return snapshot;
   const state: Recent = { calls: [], turns: [], uncertain: false, saved };
-  keepRecent(db, session, owner, state);
+  keepRecent(db, session, owner, state, snapshot.owner);
+  return null;
 }
 
 export function savedCompactContext(db: DatabaseSync, session: string): SavedContext | null {
@@ -694,8 +705,11 @@ export function savedCompactContext(db: DatabaseSync, session: string): SavedCon
 }
 
 /// The last five contexts and whether the last two turns compacted are bounded session statistics, not a copy of every call.
-export function noteCompactContexts(db: DatabaseSync, session: string, runtime: string, calls: [UsageCall, UsageFor][]): void {
-  const state = recent(db, session);
+/// `read`: the snapshot this transaction read of it already (`seedCompactContext`'s), the calls since inserted with
+/// compact_counted, which no trigger takes the context back for.
+export function noteCompactContexts(db: DatabaseSync, session: string, runtime: string, calls: [UsageCall, UsageFor][], read: ContextSnapshot | null = null): void {
+  const snapshot = read ?? contextSnapshot(db, session);
+  const state = snapshot.state;
   let changed = false;
   let target: UsageCall | undefined;
   for (const [call, of] of calls) {
@@ -743,8 +757,8 @@ export function noteCompactContexts(db: DatabaseSync, session: string, runtime: 
     changed = true;
     target = call;
   }
-  const owner = target ? { runtime, model: target.model ?? "", fast: target.fast ? 1 : 0 } : contextOwner(db, session);
-  if (changed && owner) keepRecent(db, session, owner, state);
+  const owner = target ? { runtime, model: target.model ?? "", fast: target.fast ? 1 : 0 } : snapshot.owner;
+  if (changed && owner) keepRecent(db, session, owner, state, snapshot.owner);
 }
 
 export function compactContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {

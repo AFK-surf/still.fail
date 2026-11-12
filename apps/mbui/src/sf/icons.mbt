@@ -3,16 +3,16 @@
 // (mbui's Ctx::shapes), at whatever size and colour, nothing made first.
 
 ///|
-let made : Map[String, Bool] = {}
+let made : Map[String, Bool] = Map([])
 
 ///|
 /// The shapes of each icon, picture and ring drawn, by what it is, its size and its colour: what is drawn is the same
 /// shapes again, not worked out each frame.
-let shapes_made : Map[String, Array[@ui.Shape]] = {}
+let shapes_made : Map[String, Array[@ui.Shape]] = Map([])
 
 ///|
 /// An icon or a picture as drawn: its shapes and the name its node says.
-struct DrawnShapes {
+priv struct DrawnShapes {
   shapes : Array[@ui.Shape]
   name : String
 }
@@ -20,16 +20,16 @@ struct DrawnShapes {
 ///|
 /// The icons drawn, by name, size and colour (`icon`): found by those, its name said once, not written out in words
 /// (a size and a colour in figures) for each icon on every frame.
-let icons_made : Map[(String, Double, Int64), DrawnShapes] = {}
+let icons_made : Map[(String, Double, Int64), DrawnShapes] = Map([])
 
 ///|
 /// Icons' parts drawn, by name, parts, size and ink (`icon_parts_shapes`): what breathes or lights in steps drawn in
 /// each step's ink found again, not cut from the icon's numbers anew each step.
-let parts_made : Map[(String, Array[Int], Double, Int64), Array[@ui.Shape]] = {}
+let parts_made : Map[(String, Array[Int], Double, Int64), Array[@ui.Shape]] = Map([])
 
 ///|
 /// The pictures drawn, by key, width, scale and tint (picture.mbt draw_drawable), as icons_made.
-let pictures_made : Map[(String, Double, Double, Int64?), DrawnShapes] = {}
+let pictures_made : Map[(String, Double, Double, Int64?), DrawnShapes] = Map([])
 
 ///|
 /// Every Tester starts as the app does (mbui's on_reset): the images made here gone with its own, nothing waited on or
@@ -43,6 +43,7 @@ fn init {
     pictures_made.clear()
     tiles_made.clear()
     copied_at.clear()
+    code_wrapped.clear()
     dark_set.set(None)
     accent_set.set("")
     custom_hue_kept.val = 210
@@ -157,7 +158,7 @@ pub fn video_capsule(
   let fade = fn(on : Bool) { @motion.tween(half, ease=Out, delay=if on { comes_at } else { 0.0 }) }
   let length_k = @motion.told(c, key + "/length", if shown { 0.0 } else { 1.0 }, spec=fade(!shown))
   let share_k = @motion.told(c, key + "/share", if shown { 1.0 } else { 0.0 }, spec=fade(shown))
-  let reshape = if to_wider { @motion.move() } else { @motion.move(delay=half) }
+  let reshape = if to_wider { @motion.moved() } else { @motion.moved(delay=half) }
   c.layer(fn() {
     let foot = if corner == message_file_corner {
       video_capsule_foot
@@ -204,16 +205,18 @@ pub fn video_capsule(
 
 ///|
 /// A video's capsule (video_capsule's, as a node, at rest: nothing coming) laid over `parent`, in its foot's start corner
-/// concentric with a message's file's: a small play mark and how long it is (`duration`, none where that is not known)
-/// on the video's shade.
+/// concentric with a message's file's (or `corner`, a quote's picture's): a small play mark and how long it is
+/// (`duration`, none where that is not known) on the video's shade.
 #callsite(autofill(loc))
-pub fn video_capsule_node(parent : @view.View, duration : Double, loc~ : SourceLoc) -> Unit {
+pub fn video_capsule_node(parent : @view.View, duration : Double, corner? : Double = message_file_corner, loc~ : SourceLoc) -> Unit {
   let length = if duration > 0.0 { clock(duration) } else { "" }
   parent.box(made_for=loc, fn(foot) {
     foot.over(Is(true)) |> ignore
-    style_node(foot, fn() { video_capsule_foot })
+    // (concentric with its corner as high as it is drawn: higher than said where its words' line is, box_at)
+    style_node(foot, fn() { video_capsule_foot_at(corner, words_box_high(video_capsule_h, video_capsule_words, foot.words_scale())) })
     foot.box(fn(b) {
-      style_node(b, fn() { video_capsule_box })
+      // (as high as its words' line where the system's size of words draws it higher than the capsule: box_at)
+      style_node(b, fn() { box_at(video_capsule_kept, video_capsule_box, video_capsule_h, video_capsule_words, b.words_scale()) })
       b.box(fn(row) {
         style_node(row, fn() { video_capsule_row })
         icon_node(row, "play", video_capsule_mark, Is(white)) |> ignore
@@ -229,8 +232,26 @@ pub fn video_capsule_node(parent : @view.View, duration : Double, loc~ : SourceL
 }
 
 ///|
+/// Where a video's capsule `h` high stands over its video in its foot's start corner, `corner` round (a message's
+/// file's, or a quote's picture's): concentric with it (video_capsule_foot where it is as high as said).
+fn video_capsule_foot_at(corner : Double, h : Double) -> @ui.Style {
+  if corner == message_file_corner && h == video_capsule_h {
+    video_capsule_foot
+  } else if corner == message_file_corner {
+    video_capsule_foot.then(@ui.style(p=room_of(@ui.capsule_in(message_file_corner, h))))
+  } else {
+    video_capsule_foot.then(@ui.style(p=room_of(capsule_fit(corner, h, video_capsule_alone_in))))
+  }
+}
+
+///|
+// kept across runs: the last theme and size of words a video's capsule was asked at and its box (box_at), worked out
+// again for any other
+let video_capsule_kept : Ref[WordsBoxKept?] = Ref(None)
+
+///|
 /// How far each video's capsule last said it had come: what it fades out with once it is here.
-let video_capsule_last : Map[String, Double] = {}
+let video_capsule_last : Map[String, Double] = Map([])
 
 ///|
 /// The capsule's height, its play mark's and its ring's.
@@ -286,7 +307,7 @@ let video_capsule_words : @ui.TextStyle = @ui.text_style(size=Caption, color=whi
 /// leadSlot's copies, each showing one part of the icon).
 pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double = 16.0, color? : Int64) -> Int {
   let color = color.unwrap_or(theme().p.text)
-  let key = "icon/\{name}/\{parts}/\{size}/\{color}"
+  let key = "icon/\{name}/\{@ui.list_text(parts)}/\{size}/\{color}"
   let shapes = match shapes_made.get(key) {
     Some(s) => s
     None => {
@@ -334,6 +355,14 @@ fn icon_traced(
   color? : Int64,
 ) -> Int {
   let color = color.unwrap_or(theme().p.text)
+  let data = icon_traced_data(name, trace)
+  c.shapes(icon_shapes(data, size / 24.0, color), w=Px(size), h=Px(size), name="sf/icon/\{name}/\{size}/\{color}")
+}
+
+///|
+/// Icon `name`'s numbers with its lines as `trace` gives them (icon_traced's), for icon_shapes: a mark drawn on or back
+/// along its strokes, in an old view or a node (sync_key_node).
+fn icon_traced_data(name : String, trace : (Int, Array[Double]) -> Array[Array[Double]]) -> Array[Double] {
   let data : Array[Double] = []
   match icon_numbers(name) {
     Some(d) => {
@@ -344,7 +373,7 @@ fn icon_traced(
         let n = d[i + 2].to_int()
         let end = i + 3 + 2 * n
         if d[i].to_int() != 2 {
-          for pts in trace(line, d[i + 3:end].to_array()) {
+          for pts in trace(line, d[i + 3:end].to_owned()) {
             if pts.length() >= 4 {
               data.push(0.0)
               data.push(w)
@@ -361,7 +390,7 @@ fn icon_traced(
     }
     None => ()
   }
-  c.shapes(icon_shapes(data, size / 24.0, color), w=Px(size), h=Px(size), name="sf/icon/\{name}/\{size}/\{color}")
+  data
 }
 
 ///|
@@ -443,7 +472,7 @@ fn icon_numbers(name : String) -> Array[Double]? {
 }
 
 ///|
-let icon_read : Map[String, Array[Double]] = {}
+let icon_read : Map[String, Array[Double]] = Map([])
 
 ///|
 /// The numbers in `text`, each a space from the next, as icons.py writes them ("-12", "0.562"): its digits read as one
@@ -493,7 +522,7 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
     let kind = data[i].to_int()
     let w = data[i + 1]
     let n = data[i + 2].to_int()
-    let pts = data[i + 3:i + 3 + 2 * n].to_array().map(fn(v) { v * k })
+    let pts = data[i + 3:i + 3 + 2 * n].to_owned().map(fn(v) { v * k })
     i = i + 3 + 2 * n
     if kind == 2 {
       if w > 0.0 || fills.length() == 0 {

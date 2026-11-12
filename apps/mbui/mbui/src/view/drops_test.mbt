@@ -63,9 +63,9 @@ fn drops_row(
 ///|
 test "drops: a row 400 wide holding four 100 wide: all of them, no ⋯; 260 wide: the last two left out, the ⋯ in, none of them drawn, pressed by id or by a screen reader, read out, taking input; 400 again: the same nodes back" {
   let w = @signals.signal(400.0, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
-  let ids : Map[String, @view.NodeId] = {}
-  let views : Map[String, @view.View] = {}
+  let pressed : Map[String, Int] = Map([])
+  let ids : Map[String, @view.NodeId] = Map([])
+  let views : Map[String, @view.View] = Map([])
   let t = drops_row(w, pressed, ids, views)
   let outs = fn() { ["b1", "b2", "b3", "b4", "more"].filter(fn(k) { views[k].left_out() }) }
   assert_eq(outs(), ["more"], msg="400: all four, no ⋯")
@@ -102,8 +102,8 @@ test "drops: a row 400 wide holding four 100 wide: all of them, no ⋯; 260 wide
 test "drops: what a node left out hosts not read out by its id; that node let go and another made in its place, room for it: the new one not left out" {
   let w = @signals.signal(150.0, same=fn(a, b) { a == b })
   let shown = @signals.signal(true, same=fn(a, b) { a == b })
-  let ids : Map[String, @view.NodeId] = {}
-  let views : Map[String, @view.View] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
+  let views : Map[String, @view.View] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(row) {
@@ -148,7 +148,7 @@ test "drops: what a node left out hosts not read out by its id; that node let go
 test "drops: a finger held on a node as its row leaves it out, then let go: told called off once, nothing after" {
   let w = @signals.signal(400.0, same=fn(a, b) { a == b })
   let seen : Array[@view.Drag] = []
-  let ids : Map[String, @view.NodeId] = {}
+  let ids : Map[String, @view.NodeId] = Map([])
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(row) {

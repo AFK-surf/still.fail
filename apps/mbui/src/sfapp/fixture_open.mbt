@@ -121,6 +121,18 @@ pub fn open_fixture(mode : String) -> Unit {
     "chat-model-accounts" => @sfpages.open_triple_accounts(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
     "chat-find" => @sfpages.find_preset(side_key(r), "截图")
+    // the long chat of two people (outline_fixture.mbt), the list away from its end, at a message of 昨天's; its
+    // outline opened from what shows (its rail on a wide page, else its round button), words typed in it
+    // (chat-outline-long: one of 240 said by people, its list holding the last forty, its outline open)
+    "chat-outline-away" | "chat-outline" | "chat-outline-find" | "chat-outline-bringing" | "chat-outline-long" => {
+      let top = if mode == "chat-outline-long" { @sffixture.outline_long_away_seq } else { @sffixture.outline_away_seq }
+      @sfbase.kept_places[side_key(r)] = { top, offset: 0.0, bottom: -1.0 }
+      match mode {
+        "chat-outline" | "chat-outline-bringing" | "chat-outline-long" => @sfpages.outline_preset(side_key(r), "")
+        "chat-outline-find" => @sfpages.outline_preset(side_key(r), "签名")
+        _ => ()
+      }
+    }
     // the sheet that publishes the chat, what a snapshot would hold read
     "chat-publish" => {
       @sfpages.publish_set(r, 7.0, @sffixture.fix_preview())
@@ -268,9 +280,15 @@ pub fn open_fixture_mode(mode : String) -> Unit {
     title: "整理发布清单",
     station_name: "Willow",
   }
-  if mode == "chat-flash" || mode == "chat-flash-mine" {
-    // opened from a notification at a message (Ana's, or yours), its flash held at its peak (slice 10's)
-    open_chat_at(rich, if mode == "chat-flash" { 4.0 } else { 6.0 }, held=true)
+  if mode == "chat-flash" || mode == "chat-flash-mine" || mode == "chat-flash-notice" {
+    // opened from a notification at a message (Ana's, yours, or still.fail's notice), its flash held at its peak
+    // (slice 10's)
+    let seq = match mode {
+      "chat-flash" => 4.0
+      "chat-flash-mine" => 6.0
+      _ => 1.0
+    }
+    open_chat_at(rich, seq, held=true)
   } else if mode.has_prefix("chat") {
     open_chat(rich)
     // the cards' states (chat_fixture.mbt): chat-cards, chat-answering
@@ -386,7 +404,8 @@ pub fn open_fixture_over(mode : String, src : Source) -> Unit {
 /// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
 /// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet);
 /// the files' favorite picker with no one station in view, which station first (files-add-folder: its rows' grounds under the
-/// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card).
+/// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card); a new
+/// workspace, empty and with an invite code found wrong (new-workspace, new-workspace-code).
 pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   // slice 8's panels over the chat (decide_fixture.mbt)
   open_decide_panels(mode, src)
@@ -406,6 +425,14 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   }
   if mode == "chat-station-sheet" {
     @sfpages.ref_panel_put(src, "ws1/st1:s-c1", "ws1/st1", "ref-发布清单.md", "发布清单.md")
+  }
+  // a new workspace over Home: nothing typed yet; and named, an invite code typed that still.fail cloud found wrong
+  // (what is wrong with it under its field)
+  if mode == "new-workspace" {
+    @sfpages.new_workspace_put(src, name="", code="", error_code="")
+  }
+  if mode == "new-workspace-code" {
+    @sfpages.new_workspace_put(src, name="产品团队", code="ABCD-1234-EFGH", error_code="invite_code_invalid")
   }
 }
 
@@ -431,7 +458,7 @@ fn fixture_station_files(src : Source) -> Unit {
 /// The screen's file read (`json`, its text): its topics and calls as a source over the made-up one's other parts
 /// (pictures, files), and its pages opened over Home.
 pub fn fixture_json(json : String) -> Source {
-  let screen = @json.parse(json) catch { _ => abort("the screen's JSON does not parse") }
+  let screen = @json.parse(json) catch { _ => @halt.saying("the screen's JSON does not parse") }
   let topics : Array[(Json, Json)] = []
   for t in items(Some(screen), "topics") {
     match (field(Some(t), "topic"), field(Some(t), "value")) {
@@ -533,6 +560,35 @@ pub fn open_mode(mode : String) -> Unit {
       "newchat-preset-add" => @sfpages.new_chat_ask("preset-add")
       "newchat-preset-new-add" => @sfpages.new_chat_ask("preset-new-add")
       "newchat-preset-new-browse" => @sfpages.new_chat_ask("preset-new-browse")
+      // (the picker in a folder of repositories; 从 Git 克隆; a new one's dialog with a clone under way and one failed)
+      "newchat-preset-new-browse-repos" => @sfpages.new_chat_ask("preset-new-browse-repos")
+      "newchat-preset-new-clone" => @sfpages.new_chat_ask("preset-new-clone")
+      "newchat-preset-new-clones" => {
+        let clones : Array[Json] = [
+            {
+              "id": "c-bad",
+              "url": "acme/private",
+              "repo": "github.com/acme/private",
+              "name": "private",
+              "state": "failed",
+              "error": "仓库不存在或没有权限",
+              "by": "me@example.com",
+              "startedAt": 1793500000000.0,
+            },
+            {
+              "id": "c-web",
+              "url": "acme/shop",
+              "repo": "github.com/acme/shop",
+              "name": "shop",
+              "state": "cloning",
+              "error": "",
+              "by": "me@example.com",
+              "startedAt": 1793500000000.0,
+            },
+          ]
+        @sffixture.new_fix.clones.push_iter(clones.iter())
+        @sfpages.new_chat_ask("preset-new-clones")
+      }
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
       "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" | "newchat-providers-model-far" =>
         @sfpages.new_chat_ask("model")
@@ -546,10 +602,22 @@ pub fn open_mode(mode : String) -> Unit {
     // 已归档: on the wide frame the sidebar's list of them, the newest beside it (lists.mbt archive_pane); laid out
     // Small its page
     app.nav.push(Archived)
+  } else if mode == "place-stations-tasks" {
+    // the stations' place with those that only run tasks in its list (the settings' rigs_fixture.mbt), the first of
+    // them picked: its page beside the list
+    app.nav.replace(Place("stations"))
+    @sfdesk.place_pick_station("ws1", "ws1/aa11")
+  } else if mode == "place-stations-devices" {
+    // the stations' place with the workspace's devices under its stations (the settings' devices_fixture.mbt)
+    app.nav.replace(Place("stations"))
+  } else if mode == "place-profiles-offer" {
+    // the profiles' place with Willow's own Codex login offered with its allowance (settings-profiles-offer's)
+    @settings.fixture_page("settings-profiles-offer") |> ignore
+    app.nav.replace(Place("profiles"))
   } else if mode.has_prefix("place-") {
     // a place of the rail's in the wide frame: place-stations, place-profiles, place-connects,
     // place-usage
-    app.nav.replace(Place(mode.view(start_offset=6).to_string()))
+    app.nav.replace(Place(mode.exact_view(start=6).to_owned()))
   } else if mode.has_prefix("files-") {
     // the files' page in the wide frame at Willow's 文档: files-columns (设计稿 open beside it, chosen),
     // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two

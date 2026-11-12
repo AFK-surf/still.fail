@@ -211,7 +211,7 @@ fn rpad(s : String, n : Int) -> String {
 
 ///|
 fn json_string(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('"')
   for ch in s {
     match ch {
@@ -303,7 +303,7 @@ fn main {
   } else {
     let out = []
     for part in wanted.split(",") {
-      let p = part.to_string()
+      let p = part.to_owned()
       if scene_names.contains(p) || glass_scene_names.contains(p) {
         out.push(p)
       } else {

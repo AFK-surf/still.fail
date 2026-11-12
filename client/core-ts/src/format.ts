@@ -207,8 +207,11 @@ export function windowName(label: string, lang: Lang = current()): string {
   return label;
 }
 
-/// A quota window marked by its length (5H, W, M, 3D), and where it goes among the others.
+/// A quota window marked by its length (5H, W, M, 3D), and where it goes among the others. One that is a single
+/// model's (每周 · Fable) is marked by the model, after the account's of its length: two chips both W told nothing apart.
 export function windowMark(label: string): [string, number] {
+  const of = label.indexOf(" · ");
+  if (of >= 0 && label.slice(of + 3).trim() !== "") return [label.slice(of + 3).trim(), windowMark(label.slice(0, of))[1]];
   if (label.startsWith("每月") || label.startsWith("Monthly")) return ["M", 3];
   if (label.startsWith("每周") || label.startsWith("Weekly")) return ["W", 2];
   const lead = (unit: string) => {
@@ -221,6 +224,22 @@ export function windowMark(label: string): [string, number] {
   if (h !== null) return [`${h}H`, 0];
   const d = lead(" 天") ?? lead(" day");
   return d !== null ? [`${d}D`, 1] : [label, 1];
+}
+
+/// When two windows share the same group suffix (5 小时 · Gemini and 每周 · Gemini), add the length mark so their chips
+/// do not both read "Gemini".
+export function windowMarks(labels: string[]): [string, number][] {
+  const raw = labels.map(windowMark);
+  const counts = new Map<string, number>();
+  for (const [m] of raw) counts.set(m, (counts.get(m) ?? 0) + 1);
+  return labels.map((label, i) => {
+    const [m, order] = raw[i]!;
+    if ((counts.get(m) ?? 0) <= 1) return [m, order];
+    const of = label.indexOf(" · ");
+    if (of < 0) return [m, order];
+    const [len] = windowMark(label.slice(0, of));
+    return [`${m} ${len}`, order];
+  });
 }
 
 /// Bytes in gigabytes, one decimal below 100.
@@ -479,7 +498,16 @@ export function runtimeLabel(runtime: string): string {
   return RUNTIME_NAMES[runtime] ?? "Claude Code";
 }
 
-/// A connect's link to Slack in words, and its dot.
+/// The runtimes by their short names (the app's accounts page's tags): said where how a model runs follows its name in
+/// a model control's panel, and only there; everywhere else, its control and its menu among them, the full name, where
+/// the short one is learned from (the user, 2026-11-10: 「agent runtime 可以用缩写，比如 CC，DSH」).
+const RUNTIME_SHORT: Record<string, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK", cursor: "Cursor", devin: "Devin", hermes: "Hermes", agy: "AGY" };
+
+export function runtimeShort(runtime: string): string {
+  return RUNTIME_SHORT[runtime] ?? "CC";
+}
+
+/// A connect's link to its platform in words, and its dot.
 export function connection(state: unknown, kind?: string | null): [string, string] {
   switch (str(get(state, "state")) ?? "") {
     case "connected":
@@ -493,7 +521,7 @@ export function connection(state: unknown, kind?: string | null): [string, strin
     case "disabled":
       return [said("core-logic.format.connection.disabled"), "offline"];
     default:
-      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : "core-logic.format.connection.no_slack"), "offline"];
+      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : kind === "comma" ? "core-logic.format.connection.no_comma" : "core-logic.format.connection.no_slack"), "offline"];
   }
 }
 

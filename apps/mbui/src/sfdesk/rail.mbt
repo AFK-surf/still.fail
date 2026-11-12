@@ -167,13 +167,13 @@ fn list_place(mode : Int) -> String {
 fn rail_top_h(bar : Bool) -> Double {
   if bar {
     0.0
-  } else if @ui.window_keys_left() && wide.tape {
+  } else if @ui.window_keys_left() && wide.tape.get() {
     // (its first place's middle on the line of the sidebar's first row beside it, under the window's buttons: worked
     // out as that row's is, not read back from the frame's)
     tape_brand_under_buttons() + band_new_top + band_row_h() / 2.0 - rail_item_side / 2.0
   } else if @ui.window_keys_left() {
     dmax(rail_top_inset + rail_gap, @ui.window_points_to_content(side_top_inset))
-  } else if wide.tape {
+  } else if wide.tape.get() {
     // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
     dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
   } else {
@@ -211,7 +211,7 @@ fn rail_box_w(bar : Bool, moving : FoldLook?) -> Double {
     None =>
       if bar {
         rail_closed_w
-      } else if wide.tape {
+      } else if wide.tape.get() {
         rail_shown_w + rail_tape_more()
       } else {
         rail_shown_w + rail_window_in() - rail_in_px
@@ -311,7 +311,7 @@ let mark_folded_from : Double = 0.4
 /// the tape, a panel beside the page's as it is, the page's ground, which a phone's lists and pages share (the user,
 /// 2026-10-25: the medium screen's grounds the phone's, no other colours).
 pub fn apart_ground() -> Int64 {
-  if wide.tape {
+  if wide.tape.get() {
     @sf.theme().p.bg
   } else {
     closed_ground()
@@ -374,7 +374,7 @@ fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () 
         app.filters[w.id] = f
         // (kept once, whichever build asked: Ctx::tell)
         tell("rail/list-filter", fn() {
-          (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
+          (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), @sfbase.answer_unread)
         })
       }
       // the chats again: the chat last open stays open beside the list
@@ -438,7 +438,7 @@ pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       _ => (0.0, 0.0, 0.0, 0.0)
     }
     @sfpages.workspace_menu(c, src, at)
-    rail_transfers_list(c, src, w)
+    rail_transfers_list(src, w)
   }
 }
 
@@ -466,7 +466,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let extra = rail_in_view(src, w)
   let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
   let entries : Array[@kit.Entry] = []
-  let icons : Map[String, String] = {}
+  let icons : Map[String, String] = Map([])
   if away.length() > 0 {
     entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
     for i in away {
@@ -505,7 +505,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         at=(ax, dmax(ay, rail_menu_clear), aw, ah),
         row_end=fn(c, s) {
           if s.entry.value.has_prefix("go:") {
-            let i = s.entry.value.view(start_offset=3).to_string()
+            let i = s.entry.value.exact_view(start=3).to_owned()
             rail_menu_add(c, i, rail_label(src, i), s.hot, on_press=fn() {
               let next = kept.copy()
               next.push(i)
@@ -526,7 +526,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
     Some("reset") => rail_keep(src, w.id, words_in(items(rail_view(src), "default")))
     Some("customize") => wide.editing.set(true)
-    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.view(start_offset=3).to_string())
+    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.exact_view(start=3).to_owned())
     _ => ()
   }
 }
@@ -722,11 +722,6 @@ let rail_dash_r : Double = 11.75
 
 ///|
 let rail_dash_at : Double = -0.5
-
-///|
-/// A place while the rail is changed: outlined, its corner the editing frame's.
-// kept across runs: a value (no field of it changes)
-let rail_editing : @ui.Style = @ui.css("radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)

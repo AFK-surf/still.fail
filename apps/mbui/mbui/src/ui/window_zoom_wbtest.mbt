@@ -44,7 +44,7 @@ test "window zoom: a host press and accessibility agree at both extremes" {
     assert_eq(t.ctx().window_size(), (400.0 / zoom, 300.0 / zoom))
     assert_eq(window_corner(), 16.0 / zoom)
     let line = t.a11y_said().split("\n").find_first(fn(s) { s.contains("Zoom test") }).unwrap()
-    let fields = line.split("\u{1F}").map(fn(s) { s.to_string() }).to_array()
+    let fields = line.split("\u{1F}").map(fn(s) { s.to_owned() }).to_array()
     assert_eq((fields[7], fields[8]), (width, height), msg="zoom \{zoom}")
     host_pointer(0, 75.0 * zoom, 20.0 * zoom, 0)
     host_pointer(2, 75.0 * zoom, 20.0 * zoom, 0)
@@ -77,8 +77,8 @@ test "window zoom: an embedded page is placed and rendered at the same size as i
     }, w=400.0, h=300.0)
     set_window_zoom(zoom)
     t.frame()
-    assert_true(t.views().contains(place), msg="position at zoom \{zoom}: \{t.views()}")
-    assert_true(t.views().contains(scale), msg="page scale at zoom \{zoom}: \{t.views()}")
+    assert_true(t.views().contains(place), msg="position at zoom \{zoom}: \{Repr(t.views())}")
+    assert_true(t.views().contains(scale), msg="page scale at zoom \{zoom}: \{Repr(t.views())}")
     page.val.unwrap().close()
   }
 }

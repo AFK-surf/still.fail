@@ -145,7 +145,7 @@ test "window tree: a made page become another of its kind in place: the same nod
   view_event(fn() { nav.become("m2") })
   t.draw()
   assert_eq(log.made, ["m1"])
-  assert_true(t.find("m2 1") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("m2 1") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // (become an old view's: its nodes let go once, the old view there)
   view_event(fn() { nav.become("c") })
   t.draw()
@@ -230,22 +230,28 @@ test "window tree: a made page's time on top its own entry's: kept while another
 }
 
 ///|
-test "window tree: a made page in the hand by a scripted run's drag (its steps taken as each frame ends, as a film's): each frame it moves in the hand says a page held by a finger; at rest again, none" {
+test "window tree: a made page in the hand by a scripted run's drag (its steps taken after each frame's work, as a device's input between frames): each frame that drew it in the hand says a page held by a finger, none other does; at rest again, none" {
   let (t, nav, _, _) = made_stack()
   pushed(t, nav, "m1")
   let held = Ref(0)
   let missed : Array[Int] = []
+  let said_free : Array[Int] = []
+  // (in the hand as the frame was drawn: as the step of the frame before left it, nothing between the two)
+  let drawn_held = Ref(nav.mode == 3)
   t.drive("drag 4 400 60 0 300\nwait 800\nexit", each=fn(_) {
-    if nav.mode == 3 {
+    if drawn_held.val {
       held.val += 1
       if !g().page_in_hand {
         missed.push(g().frame_no)
       }
+    } else if g().page_in_hand {
+      said_free.push(g().frame_no)
     }
+    drawn_held.val = nav.mode == 3
   })
   |> ignore
   assert_true(held.val > 3, msg="frames in the hand: \{held.val}")
-  assert_eq(missed, [])
+  assert_eq((missed, said_free), ([], []))
   // (let go short of a third: back where it was, at rest, no page in the hand)
   assert_eq(nav.depth(), 2)
   assert_eq(nav.mode, 0)
@@ -260,18 +266,18 @@ test "window tree: a made page come back to tells what reads its time on top the
   t.back()
   t.run_for(nav.rest() - t.time() + 16.0)
   let again = (log.stints["m1"])()
-  assert_eq(log.seen["m1"].last(), Some(again), msg="by a back: \{log.seen["m1"]}")
+  assert_eq(log.seen["m1"].last(), Some(again), msg="by a back: \{Repr(log.seen["m1"])}")
   pushed(t, nav, "m3")
   view_event(fn() { nav.pop() |> ignore })
   t.run_for(nav.rest() - t.time() + 16.0)
   let then = (log.stints["m1"])()
   assert_true(then != again)
-  assert_eq(log.seen["m1"].last(), Some(then), msg="by the stack's pop: \{log.seen["m1"]}")
+  assert_eq(log.seen["m1"].last(), Some(then), msg="by the stack's pop: \{Repr(log.seen["m1"])}")
   // (popped as an app pops it from outside any event: what reads its time on top told the new one all the same)
   pushed(t, nav, "m4")
   nav.pop() |> ignore
   t.run_for(nav.rest() - t.time() + 16.0)
   let last = (log.stints["m1"])()
   assert_true(last != then)
-  assert_eq(log.seen["m1"].last(), Some(last), msg="by a pop from outside an event: \{log.seen["m1"]}")
+  assert_eq(log.seen["m1"].last(), Some(last), msg="by a pop from outside an event: \{Repr(log.seen["m1"])}")
 }

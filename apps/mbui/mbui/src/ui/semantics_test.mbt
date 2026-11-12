@@ -1,6 +1,6 @@
 ///|
 test "the semantics tree: widgets with their state, words named by what holds them, hidden parts left out" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(gap=4.0, fn() {
       c.text("Settings", size=20.0) |> ignore
       btn(c, "Save") |> ignore
@@ -37,10 +37,10 @@ test "the semantics tree: widgets with their state, words named by what holds th
 
 ///|
 test "the theme: words, and the old button, take their colours from it unless told" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       c.text("a") |> ignore
-      c.with_theme({ ..Theme::light(), fg: 0x112233FFL, accent: 0x445566FFL }, fn() {
+      c.with_theme({ ..@ui.Theme::light(), fg: 0x112233FFL, accent: 0x445566FFL }, fn() {
         c.text("b") |> ignore
         c.button("c") |> ignore
       })
@@ -49,7 +49,7 @@ test "the theme: words, and the old button, take their colours from it unless to
     |> ignore
   })
   let glyphs = t.drawn_glyphs()
-  assert_eq(glyphs[0].2, Theme::light().fg)
+  assert_eq(glyphs[0].2, @ui.Theme::light().fg)
   assert_eq(glyphs[1].2, 0x112233FFL)
   assert_eq(glyphs[2].2, 0xFFFFFFFFL)
   assert_eq(glyphs[3].2, 0x778899FFL)
@@ -58,7 +58,7 @@ test "the theme: words, and the old button, take their colours from it unless to
 
 ///|
 test "aspect: a box's height follows its width" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     let i = c.box(w=Px(160.0), aspect=16.0 / 9.0, fn() {  })
     c.semantics(i, Image, label="picture")
   })
@@ -69,8 +69,8 @@ test "aspect: a box's height follows its width" {
 
 ///|
 test "aspect: a box's height follows its width as its most leaves it" {
-  let t = Tester::new(fn(c) {
-    let i = c.box(style=style(w=Full, max_w=Fixed(160.0)), aspect=16.0 / 9.0, fn() {  })
+  let t = @ui.Tester::new(fn(c) {
+    let i = c.box(style=@ui.style(w=Full, max_w=Fixed(160.0)), aspect=16.0 / 9.0, fn() {  })
     c.semantics(i, Image, label="picture")
   }, w=640.0, h=480.0)
   let (_, _, w, h) = t.get(Image, label="picture").rect

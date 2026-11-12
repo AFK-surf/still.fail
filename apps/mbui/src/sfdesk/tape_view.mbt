@@ -211,12 +211,13 @@ fn tape_room_now() -> TapeRoom {
 ///|
 /// Where what the tape moves goes, as the state is now (`r`, the one in use): how far the tape is moved (no finger's
 /// pull), how wide the page's panel is, where the sidebar's column ends, how far behind each panel is.
+#derive(Eq)
 priv struct TapeTo {
   x : Double
   page : Double
   col : Double
   behind : FixedArray[Double]
-} derive(Eq)
+}
 
 ///|
 fn tape_to_of(r : TapeRoom) -> TapeTo {
@@ -286,11 +287,7 @@ fn tape_x_at(r : TapeRoom, t : Double) -> Double {
 fn tape_drawn_at(n : @view.View) -> Double {
   tape_goes.said.get() |> ignore
   tape_goes.way.said()
-  if tape_goes.way.goes_at(n.logic_at()) {
-    n.drawn_at()
-  } else {
-    @double.infinity
-  }
+  n.drawn_while(fn(t) { tape_goes.way.goes_at(t) })
 }
 
 ///|
@@ -318,7 +315,7 @@ fn tape_moves_from(at : Double, change : () -> Unit) -> Unit {
     }
     let far = dmax(dmax((to.x - x).abs(), (to.page - page).abs()), (to.col - col).abs())
     tape_goes.way.put(0.0)
-    tape_goes.way.go(1.0, @motion.move(over=far), at~)
+    tape_goes.way.go(1.0, @motion.moved(over=far), at~)
     tape_said()
     tape_rest_at(tape_goes.way.ends_at())
   })
@@ -413,6 +410,17 @@ fn tape_to(p : TapePane, at : Double) -> Unit {
 }
 
 ///|
+/// A key that asks for what is in the page (its composer: Space, 按空格输入) pressed at `at` while the tape holds the
+/// window with the page behind: the page brought over at that moment, as a press on what shows of it brings it
+/// (tape_cover), what the key asked given it as the page is in use (Ctx::focus_field's ask kept till then).
+fn tape_page_for_key(at : Double) -> Unit {
+  if wide.tape.get() && wide.tape_at.get() != Page {
+    wide.tape_ask.set(Some(Page))
+    tape_take_ask(at) |> ignore
+  }
+}
+
+///|
 /// Whether the page's panel shows the page on top, as it does once the core has given what it shows or its wait is over:
 /// one put in place as tape_page_wait says, one pushed over the one in place as the stack says (Nav::top_waits: its
 /// wait the stack's, Nav::held_by), each at its causes.
@@ -449,11 +457,7 @@ fn tape_let_go(p : TapePane, v : Double, at : Double) -> Unit {
   @signals.untracked(fn() {
     let ends = tape_ends(tape_room_now())
     let span = tape_x_of(ends, p) - tape_x_of(ends, wide.tape_at.get())
-    let k = if span == 0.0 { 0.0 } else { tape_pull_clamp(ends, p, wide.tape_drag.get()) / span }
-    let fling = v.abs() > tape_fling
-    let toward = fling && (v > 0.0) == (span > 0.0)
-    let away = fling && !toward
-    if toward || (k > tape_pull_over && !away) {
+    if tape_goes_over(tape_pull_clamp(ends, p, wide.tape_drag.get()), span, v) {
       tape_to(p, at)
     } else {
       tape_moves_from(at, fn() {
@@ -627,7 +631,7 @@ fn tape_settle(chat : String, open : String, known : Bool, at : Double) -> Unit 
 /// file's head): the page brought over once `ready` says the core has given what it shows of the page put on it, `most`
 /// ms after it was put there at the latest.
 pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : Double) -> Unit {
-  wide.tape = true
+  wide.tape.set(true)
   tape_goes.node = Some(v)
   tape_goes.ready = ready
   tape_goes.most = most
@@ -664,7 +668,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     wide.tape_pull.set(None)
     wide.tape_drag.set(0.0)
     wide.tape_backing = false
-    wide.tape = false
+    wide.tape.set(false)
     @hostapi.window_buttons_down(0.0, @ui.move_ms(bar_in_now()))
   })
   |> ignore
@@ -770,6 +774,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     row.box(fn(side) {
       tape_goes.parts.push(side)
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
+      tape_in_use(side, Side)
       tape_swipes(side, Side)
       // (the block, the tree's: its ground, the rail and a place's sidebar not made once in it, dock_node)
       side.box(fn(b) {
@@ -819,7 +824,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }))
       |> ignore
       tape_swipes(page, Page)
-      tape_panel_box(page, 0.0, fn(pane) { tape_page_pane(pane, src) })
+      tape_panel_box(page, Page, 0.0, fn(pane) { tape_page_pane(pane, src) })
       tape_cover(page, Page, fn() { tape_panel_room(page) })
     })
     |> ignore
@@ -832,7 +837,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }))
       |> ignore
       tape_swipes(panel, Panel)
-      tape_panel_box(panel, bar_gap_now(), fn(pane) { tape_side_node(pane, src) })
+      tape_panel_box(panel, Panel, bar_gap_now(), fn(pane) { tape_side_node(pane, src) })
       tape_cover(panel, Panel, fn() {
         let (_, t, _, b) = tape_panel_room(panel)
         (bar_gap_now(), t, 0.0, b)
@@ -904,10 +909,22 @@ fn tape_panel_room(n : @view.View) -> (Double, Double, Double, Double) {
 }
 
 ///|
-/// The panel in column `n`, its room round it (tape_panel_room) and `before` it (the side panel's 8 from the page's),
-/// what `held` puts in it.
-fn tape_panel_box(n : @view.View, before : Double, held : (@view.View) -> Unit) -> Unit {
+/// Whether panel `p` (what node `n` holds of it: the sidebar's column, its rail and sidebar; a panel's room, all it shows
+/// but its cover, which is the tape's: tape_cover) is the one in use as the keyboard has it
+/// (View::in_use): from the moment the tape is asked to it (its way there on) to the moment it is asked to another,
+/// wide.tape_at set at the cause's moment. Behind, nothing of it is gone to by Tab or given the focus (the rail, the
+/// sidebar, a page's bar, its old view and the composer in it, the side panel), what in it has the focus letting it go
+/// then; a press, a long press, a drag or the pointer on what shows of it are as they are (tape_cover).
+fn tape_in_use(n : @view.View, p : TapePane) -> Unit {
+  n.in_use(By(fn() { wide.tape_at.get() == p })) |> ignore
+}
+
+///|
+/// The panel `p` in column `n`, its room round it (tape_panel_room) and `before` it (the side panel's 8 from the
+/// page's), what `held` puts in it; in use as the keyboard has it while it is the one in use (tape_in_use).
+fn tape_panel_box(n : @view.View, p : TapePane, before : Double, held : (@view.View) -> Unit) -> Unit {
   n.box(fn(room) {
+    tape_in_use(room, p)
     room
     .over(Is(true))
     .padding(By(fn() {
@@ -944,6 +961,10 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
         // or pulled over, its own widgets read out)
         .says(By(fn() { Some(@view.said(Button, label=tape_words(p))) }))
         .hides(By(fn() { wide.tape_at.get() == p }))
+        // (the page's, while the sidebar is in use: a stop of the keyboard's after the sidebar's own, Enter or Space
+        // bringing the page over as a press does; the keyboard's one way to it, all of the page behind taking none:
+        // tape_in_use)
+        .focusable(By(fn() { p == Page && wide.tape_at.get() == Side }))
         // (pressed by a screen reader: brought over at that moment, as a tap brings it; a finger and the pointer its
         // gesture's, as ever: what drags a node is what a press on it finds)
         .on_press(fn() {
@@ -973,6 +994,23 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
           },
         )
         |> ignore
+        // (the keyboard's focus on it: a ring in the panel it covers, the theme's gap and width in from its edges,
+        // concentric with its corners)
+        cover.show(fn() { cover.focus_shown() }, fn(ring) {
+          let inset = fn() {
+            let t = @ui.tree_theme()
+            t.focus_gap + t.focus_w
+          }
+          ring
+          .over(Is(true))
+          .margin(By(fn() {
+            let i = inset()
+            (i, i, i, i)
+          }))
+          .radius(By(fn() { @ui.concentric(@sf.tape_corner, inset()) }))
+          .edge(By(fn() { (@ui.tree_theme().focus_w, @ui.tree_theme().focus) }))
+          |> ignore
+        })
       },
     )
   })
@@ -1143,14 +1181,15 @@ fn tape_side_at(side : @view.View) -> SideAt {
 /// A chat's side panel on the tape in node `pane` (tape_panel_box's, 6 in from the bars, 8 from the page's): an agent's
 /// history in front, the tree's, its ground, corners and line round what is in it as the page's panel's are
 /// (tape_page_pane), the panel's room beside the system's column its ground alone (side_history_node, its top an
-/// island built as tape_panel_built builds); else its island (tape_panel_built).
+/// island built as tape_panel_built builds); a file in the viewer so too (side_view_node); else its island
+/// (tape_panel_built).
 fn tape_side_node(pane : @view.View, src : Source) -> Unit {
   let tips = @sf.TipLayer::new(fn() { tape_goes.node })
   let history = fn() {
     match tape_shown_side() {
       Some(ChatSide(r)) =>
         match tape_side_shown(src, r).1 {
-          front if side_history_tab(front) => Some((r, front))
+          front if side_node_tab(front) => Some((r, front))
           _ => None
         }
       _ => None
@@ -1181,7 +1220,7 @@ fn tape_side_node(pane : @view.View, src : Source) -> Unit {
     |> ignore
     @ui.tree_corners_linked(q, fn() { Some(tape_pane_corners(Panel, true)) })
     // (what it reads its own, let go as the history leaves the front or the panel goes)
-    side_history_node(q, src.owned_by(q), r, agent, tips, fn(n, build, natural) {
+    let behind = fn(n : @view.View, build : (@ui.Ctx) -> Unit, natural : Bool) {
       island(
         n,
         fn(c) {
@@ -1195,7 +1234,13 @@ fn tape_side_node(pane : @view.View, src : Source) -> Unit {
         },
         natural,
       )
-    })
+    }
+    // (a file in the viewer: the panel's bar, then the file's tools and stage, as beside the page)
+    if @sfbase.view_tab_file(agent) is Some(_) {
+      side_view_node(q, src.owned_by(q), r, agent, behind)
+    } else {
+      side_history_node(q, src.owned_by(q), r, agent, tips, behind)
+    }
   })
 }
 
@@ -1398,7 +1443,7 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   c.mouse_drags_lists(pane_finger())
   wide.side_place = side_place()
   side_follow(c, src, w.id)
-  wide.tape = true
+  wide.tape.set(true)
   wide.crowded = false
   side_crowded()
   wide.peeking.set(false)
@@ -1437,5 +1482,16 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
 /// and closed from its end (the user, 2026-11-05: its name twice, its × alone in a row of its own; 2026-11-06: its × among
 /// the chat's actions in a Duo's system bars read as another thing's, so there too it is the bar's own).
 fn screen_tab_alone(tabs : Array[String]) -> Bool {
-  wide.tape && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
+  wide.tape.get() && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
+}
+
+///|
+/// Whether the one pulled `pulled` of its way `span` over, let go going `v` (px a second), is brought over: flung toward
+/// it, or landing past tape_pull_over of the way on from that speed (@ui.lands_past) and not flung away.
+fn tape_goes_over(pulled : Double, span : Double, v : Double) -> Bool {
+  let fling = v.abs() > tape_fling
+  let toward = fling && (v > 0.0) == (span > 0.0)
+  let away = fling && !toward
+  let over = span != 0.0 && @ui.lands_past(pulled, v / 1000.0, tape_pull_over * span)
+  toward || (over && !away)
 }

@@ -18,7 +18,7 @@ test "signed out: the sign-in page" {
 ///|
 test "signed out in a desktop's window: 登录或注册 alone, no wider than the desktop app's; a phone's across the page" {
   new_run()
-  let pressed = Ref::new(0)
+  let pressed = Ref(0)
   let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   // no words but its own
@@ -275,7 +275,7 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
     None => fail("no title")
   }
   tap_home_filter(t)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("监控中") is Some(_))
   t.tap_text("我参与的")
   assert_true(t.find("首页的列表改成按天分组") is Some(_))
@@ -377,7 +377,7 @@ test "a pending card's long question gives way to its lead on a narrow row" {
       t.draw()
       assert_eq(t.lines_of(lead), [lead])
       let narrow = t.lines_of(rest)
-      assert_true(narrow.length() == 1 && narrow[0].has_suffix("…"), msg="\{lead}: \{narrow}")
+      assert_true(narrow.length() == 1 && narrow[0].has_suffix("…"), msg="\{lead}: \{Repr(narrow)}")
       assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
       width.set(800.0)
       t.frame()
@@ -424,6 +424,73 @@ test "a row held long: its menu (固定, 重命名, 归档, 分享…), the chat
 }
 
 ///|
+/// Whether the row at `ry` is lifted in the last frame: a card of its own casting a shadow there.
+fn row_lifted(t : @ui.Tester, ry : Double) -> Bool {
+  t.drawn_shadows().iter().any(fn(s) { s.2 > 200.0 && s.1 < ry + 30.0 && s.1 + s.3 > ry - 20.0 && (s.6 & 0xFFL) > 0L })
+}
+
+///|
+/// The sheets drawn in the last frame (not the tab bar's glass): each its top.
+fn sheet_tops(t : @ui.Tester) -> Array[Double] {
+  t.drawn_glass().filter(fn(g) { g.3 > 100.0 }).map(fn(g) { g.1 })
+}
+
+///|
+test "a row held long, its 分享…: the next level in the menu's sheet, one sheet all the way, the row lifted still; back is back to its menu" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (_, ry) = t.find("夜里的构建又失败了").unwrap()
+  hold_row(t, "夜里的构建又失败了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_lifted(t, ry))
+  let top0 = sheet_tops(t)
+  assert_eq(top0.length(), 1)
+  // (every rule the screen is held to, as the menu has it: its next level adds no fault)
+  let held = t.audit()
+  t.tap_text("分享…")
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1)
+    assert_true(row_lifted(t, ry))
+  }
+  assert_true(t.find("复制会话链接") is Some(_) && t.find("重命名") is None)
+  assert_true(sheet_tops(t)[0] > top0[0] + 20.0, msg="\{Repr(sheet_tops(t))} \{Repr(top0)}")
+  let added = t.audit().filter(fn(f) { !held.contains(f) })
+  assert_eq(added, [])
+  t.back()
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1)
+    assert_true(row_lifted(t, ry))
+  }
+  assert_true(t.find("重命名") is Some(_) && t.find("复制会话链接") is None)
+  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{Repr(sheet_tops(t))} \{Repr(top0)}")
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting() && !row_lifted(t, ry))
+}
+
+///|
+test "a row held long, its 重命名: the question in its menu's place, the row lifted still till that goes" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (_, ry) = t.find("夜里的构建又失败了").unwrap()
+  hold_row(t, "夜里的构建又失败了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_lifted(t, ry))
+  t.tap_text("重命名")
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1)
+    assert_true(row_lifted(t, ry))
+  }
+  assert_true(t.find("保存") is Some(_))
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting() && !row_lifted(t, ry))
+}
+
+///|
 test "a row held and let down as its menu goes: its shadow fades with its card, none without it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
@@ -441,7 +508,7 @@ test "a row held and let down as its menu goes: its shadow fades with its card, 
         if s.2 > 200.0 && near(s.1, s.3) && bare.val is None {
           let a = (s.6 & 0xFFL).to_double()
           if !cards.iter().any(fn(r) { a <= (r.4 & 0xFFL).to_double() / 255.0 * whole + 1.0 }) {
-            bare.val = Some("shadow \{s} over cards \{cards}")
+            bare.val = Some("shadow \{Repr(s)} over cards \{Repr(cards)}")
           }
         }
       }
@@ -467,7 +534,7 @@ test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin
       let felt = t.haptics().length()
       t.tap_text("固定")
       assert_eq(named(calls, "chat.pin").length(), 1)
-      assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+      assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
     }
     // (a fixture row from a station before pins has none)
     None => ()
@@ -715,7 +782,7 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   tap_home_filter(t)
   // (the menu open, built again from it)
   t.draw()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(mine())
   t.tap_text("我参与的")
   // half way: the list switched from going out to the left, the one picked coming in from the right (where words
@@ -764,7 +831,7 @@ test "under it all the page's own ground, dark too (the host cleared to blue the
 test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我参与的, 监控中 and 已归档, the list shown checked" {
   let t = tester("home")
   tap_home_filter(t)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   for words in ["全部会话", "我参与的", "监控中", "已归档"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
@@ -861,7 +928,7 @@ test "a toast is a capsule while its words fit a line; its 撤销 a capsule in i
     let calls : Array[Made] = []
     let t = if wide { wide_tester(calls) } else { wide_tester(calls, w=390.0, h=844.0, platform=2) }
     let (bare, _) = rested_toast(t, "已复制", "")
-    assert_true((bare.3 - 2.0 * @sf.toast_r).abs() < 0.5, msg="\{wide} \{bare}")
+    assert_true((bare.3 - 2.0 * @sf.toast_r).abs() < 0.5, msg="\{wide} \{Repr(bare)}")
     t.run_for(@sf.toast_ms + @kit.presence_out_ms)
     let ((x, y, w, h), button) = rested_toast(t, "已归档", "撤销")
     let (bx, by, bw, bh) = button.unwrap()
@@ -883,7 +950,7 @@ test "a chat archived from its row: said at once by its title, its station not a
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       if name != "chat.archive" {
         (base.call)(name, params, done)
       }
@@ -916,7 +983,7 @@ test "a toast naming a long title with its 撤销: inside the screen, its 撤销
     let ((x, y, tw, th), button) = rested_toast(t, words, "撤销")
     let (bx, by, bw, bh) = button.unwrap()
     assert_true(x >= 0.0 && x + tw <= w, msg="\{wide} \{x} \{tw}")
-    assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{button}")
+    assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{Repr(button)}")
     t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
   }
 }
@@ -939,7 +1006,7 @@ test "a toast naming a title that wraps: its 撤销 whole, as wide as beside a s
       let ((x, y, tw, th), button) = rested_toast(t, words, "撤销")
       let (bx, by, bw, bh) = button.unwrap()
       assert_true((bw - short_w).abs() < 0.5, msg="\{wide} \{words} \{bw} \{short_w}")
-      assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{button}")
+      assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{Repr(button)}")
       // its words whole too, as laid out
       let drawn = t.words().filter(fn(w) { w.0 == "撤销" })
       assert_eq(drawn.length(), 1)
@@ -954,7 +1021,7 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
@@ -1065,7 +1132,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@sf.later_ms + @kit.presence_in_ms)
   t.tap_text("工作区 1")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_true(@sf.presenting())
   let last = "工作区 20"
   let (_, foot_y) = t.find("登录其他账号").unwrap()
@@ -1084,7 +1151,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
       break
     }
     held_drag(t, x, from_y, from_y - 60.0)
-    sheet_rested(t, "sf-present")
+    presented_rested(t)
   }
   assert_true(in_view(), msg="the last workspace scrolled into the sheet")
   t.tap_text(last)
@@ -1134,87 +1201,81 @@ test "a phone's Home: the bell opens 待处理, 全部已读 reads the unread an
 }
 
 ///|
-test "Home asks the core for a page of its chats, and a page more while it has more and is shown near their end" {
-  // (the whole list of 1400 chats went to the app as it opened, a screen of them shown: 2026-11-08)
-  new_run()
+/// A made-up core whose chats' list of ws1 says it has 10 more rows than it gives, till it is told a window past those it
+/// gives: what it is told of the list's window (`chats.window`'s rows) and what of it is let go of put in `told`, `left`.
+fn more_source(told : Array[Int], left : Array[String]) -> Source {
   let base = fixture("home")
-  let limits : Array[Int] = []
-  let left : Array[Int] = []
-  let src : Source = {
+  let windowed = @signals.signal(false)
+  {
     ..base,
     topic_read: fn(name, params) {
       let t = base.topic(name, params).get().snapshot()
-      guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
-      let limit = n.to_int()
-      if !limits.contains(limit) {
-        limits.push(limit)
-      }
-      // more past the first page; none past the second
+      guard name == "chats" && !windowed.get() else { return t }
       match t.value {
-        Some(Object(v)) if limit == @sfbase.chats_page => {
+        Some(Object(v)) => {
           let more = v.copy()
           more["more"] = Json::number(10.0)
           { ..t, value: Some(Json::object(more)) }
         }
         _ => t
       }
+    },
+    call: fn(name, params, done) {
+      if name == "chats.window" {
+        match field(Some(params), "rows") {
+          Some(Number(n, ..)) => told.push(n.to_int())
+          _ => ()
+        }
+        windowed.set(true)
+      }
+      (base.call)(name, params, done)
     },
     leave: fn(name, params, reason) {
       if name == "chats" {
-        match params.get("limit") {
-          Some(Number(n, ..)) => left.push(n.to_int())
-          _ => ()
-        }
+        left.push(Json::object(params).stringify())
       }
       (base.leave)(name, params, reason)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.move_most_ms)
-  // its few rows end within the screen: the page after asked for at once, the first let go of; none after it
-  assert_eq(limits, [@sfbase.chats_page, 2 * @sfbase.chats_page])
-  assert_eq(left, [@sfbase.chats_page])
 }
 
 ///|
-test "Home's rows stay while a page more of them is on its way, not its skeleton" {
-  // (the list went to its skeleton for the core's round trip each time a page more was asked: 2026-11-08)
+test "Home's list near its end while the core has more is told a window past what it holds, once, its list let go of never" {
+  // (the whole list of 1400 chats went to the app as it opened, a screen of them shown: 2026-11-08; a page more was
+  // another topic, the list whole again: 2026-11-11)
   new_run()
-  let base = fixture("home")
-  let answered = @signals.signal(false)
-  let left : Array[Int] = []
-  let src : Source = {
-    ..base,
-    topic_read: fn(name, params) {
-      let t = base.topic(name, params).get().snapshot()
-      guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
-      match t.value {
-        Some(Object(v)) if n.to_int() == @sfbase.chats_page => {
-          let more = v.copy()
-          more["more"] = Json::number(10.0)
-          { ..t, value: Some(Json::object(more)) }
-        }
-        Some(_) if !answered.get() => { ..t, value: None }
-        _ => t
-      }
-    },
-    leave: fn(name, params, reason) {
-      if name == "chats" && params.get("limit") is Some(Number(n, ..)) {
-        left.push(n.to_int())
-      }
-      (base.leave)(name, params, reason)
-    },
-  }
+  let told : Array[Int] = []
+  let left : Array[String] = []
+  let src = more_source(told, left)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfbase.chats_limit("ws1", "all"), 2 * @sfbase.chats_page)
-  assert_true(t.find("整理发布清单") is Some(_))
+  let shown = @signals.untracked(fn() {
+    match chats_of(src, "ws1", "all").0 {
+      Some(v) => v.days.fold(init=0, fn(n, d) { n + d.items.length() })
+      None => 0
+    }
+  })
+  // its few rows end within the screen: more asked for at once (a step past them, or the screen's first window, whichever
+  // came first: one), none after it
+  assert_eq(told.length(), 1)
+  assert_true(told[0] >= shown + @sfbase.window_step(844.0) || told[0] == @sfbase.first_window(844.0))
+  assert_true(told[0] > shown)
   assert_eq(left, [])
-  // the page more come: shown, the first let go of
-  answered.set(true)
+}
+
+///|
+test "Home's rows stay while its window grows, not its skeleton" {
+  // (the list went to its skeleton for the core's round trip each time a page more was asked: 2026-11-08)
+  new_run()
+  let told : Array[Int] = []
+  let left : Array[String] = []
+  let src = more_source(told, left)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
+  assert_eq(told.length(), 1)
   assert_true(t.find("整理发布清单") is Some(_))
-  assert_eq(left, [@sfbase.chats_page])
+  assert_eq(t.bones_drawn(), 0)
+  assert_eq(left, [])
 }
 
 ///|
@@ -1260,5 +1321,5 @@ test "Home's long list held and dragged: a frame moves the list's header alone, 
   let (_, y1) = t.find("整理发布清单").unwrap()
   t.release(195.0, 460.0)
   assert_true(y1 < y0 - 100.0, msg="the list moved from \{y0} to \{y1}")
-  assert_eq(others, [], msg="\{looks} of 40 frames of the looks alone; \{others}")
+  assert_eq(others, [], msg="\{looks} of 40 frames of the looks alone; \{Repr(others)}")
 }

@@ -8,20 +8,20 @@ import * as ts from "../src/agents/instructions.ts";
 import { NOTES, latest, untold, REWRITTEN } from "../src/agents/migrations.ts";
 
 test("the session instructions name the session's places, and a project only when it has one", () => {
-  const plain = ts.sessionInstructions("/w/s/workspace", null, "/w/repos", "/w/agent/MEMORY.md");
+  const plain = ts.sessionInstructions("/w/s/workspace", null, "/w/repos", "/w/agent/MEMORY.md", "");
   for (const place of ["/w/s/workspace", "/w/repos", "/w/agent/MEMORY.md"]) assert.ok(plain.includes(place), place);
   assert.ok(!plain.includes("Project directory"));
-  const project = ts.sessionInstructions("/w/s/workspace", "/p", "/w/repos", "/w/agent/MEMORY.md");
+  const project = ts.sessionInstructions("/w/s/workspace", "/p", "/w/repos", "/w/agent/MEMORY.md", "");
   assert.ok(project.includes("- Project directory: /p. This session began outside still.fail"));
   assert.equal(project.replace(/- Project directory: [^\n]*\n/, ""), plain);
   assert.ok(!plain.includes("<memory"), "no memory where there is none");
 });
 
-test("the session instructions tell the memory they name, as it is now", () => {
+test("the session instructions tell the memory they name, as it is now", async () => {
   const dir = mkdtempSync(join(tmpdir(), "instructions-"));
   const path = join(dir, "MEMORY.md");
   writeFileSync(path, "# lessons\n- one\n");
-  assert.ok(ts.sessionInstructions("/w/s/workspace", null, "/w/repos", path).endsWith(`\n\n<memory path="${path}">\n# lessons\n- one\n</memory>`));
+  assert.ok(ts.sessionInstructions("/w/s/workspace", null, "/w/repos", path, await ts.readMemory(path)).endsWith(`\n\n<memory path="${path}">\n# lessons\n- one\n</memory>`));
   rmSync(dir, { recursive: true, force: true });
 });
 

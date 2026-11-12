@@ -26,7 +26,7 @@ fn open_jobs_tester(long : Json, calls? : Array[(String, Json)] = []) -> @ui.Tes
 ///|
 /// The ripples over the row of `words` (its last drawn) as a finger goes down on it and slowly on up the list, 6 a move
 /// (past the slop at the second), each move drawn as it comes; with where the words are then.
-fn scrolled_from(words : String) -> Array[(Int, Double)] raise {
+fn scrolled_from(words : String) -> Array[(Int, Double)] {
   let t = open_jobs_tester(@sffixture.long_screens_view())
   let (x, y) = t.find_last(words).unwrap()
   let seen = []
@@ -62,6 +62,25 @@ test "what is left up long, a row tapped: its chat, the service's page over it" 
   match app.nav.top() {
     Service(station, id) => assert_eq((station, id), ("ws1/st1", "j-web"))
     _ => fail("no service's page")
+  }
+}
+
+///|
+test "what is left up long, a task run here for another station's chat: that chat, on its own station" {
+  // (Studio running a task for a chat of another station: its row opened Studio's chat by that one's id, a chat Studio
+  // has not, and the page waited for good; 2026-11-12)
+  let job = match @sffixture.long_job() {
+    Object(m) => m.copy()
+    _ => {}
+  }
+  job["service"] = Json::boolean(false)
+  job["chat"] = { "id": "s-elsewhere", "title": "修登录", "archived": false, "station": "ws1/st2" }
+  job["whereText"] = Json::string("Studio · 修登录 · 来自 Willow")
+  let t = open_jobs_tester({ "groups": [{ "key": "jobs", "head": "长时间运行的后台任务 · 1", "jobs": [Json::object(job)] }], "lit": false, "ids": [] })
+  t.tap_text("Studio · 修登录 · 来自 Willow · 3 小时")
+  match app.nav.top() {
+    Chat(r) => assert_eq((r.station, r.session, r.title), ("ws1/st2", "s-elsewhere", "修登录"))
+    _ => fail("no chat")
   }
 }
 

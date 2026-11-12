@@ -22,6 +22,15 @@ fn pages_coming(c : @ui.Ctx, older : Bool) -> Unit {
 }
 
 ///|
+/// The page before that could not be read, in its place: why, the core asking for it again a while after.
+fn older_failed(c : @ui.Ctx, why : String) -> Unit {
+  c.box(style=older_row, fn() {
+    c.text(@sf.t("web-main.chat.olderFailed", args=[("why", why)]), style=older_failed_words) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// A chat with nothing in it yet (chatEmpty).
 fn chat_empty(c : @ui.Ctx) -> Unit {
   c.box(style=empty_row, fn() { c.text(@sf.t("web-main.chat.empty"), style=chat_empty_words) |> ignore }) |> ignore
@@ -48,7 +57,7 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   match (here.list, here.view.thread) {
     (Some(l), Some(thread)) if asking is Some(_) || lead == "dismissed" => {
       let key = here.station + "/" + thread.to_int().to_string()
-      let open = l.turns.in_turn(c, "need/" + key, asking is Some(_), close_turn_ms, seen=seen_in(c, here, None))
+      let open = l.turns.in_turn(c, "need/" + key, asking is Some(_))
       let start_at = l.turns.start("need/" + key)
       under_post(
         c,
@@ -95,7 +104,7 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
     _ => c.text(words, style=said) |> ignore
   }
   match here.view.state_ask {
-    Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false, state=true) }) |> ignore
+    Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false) }) |> ignore
     None => ()
   }
 }
@@ -205,13 +214,20 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
       // the station took it: its time under it, as its message has it, until the message takes its place
       let at = c.box(fn() { message_time(c, "o:" + o.id, o.time) })
       match flight_here(here) {
-        Some(f) if f.text != "" => c.look(at, @ui.look(alpha=flight_settled_of(c, f)))
+        // (how settled they are read as it is painted, not as its row is built)
+        Some(f) if f.text != "" => c.look_by(at, fn() { @ui.look(alpha=flight_settled_of(c, f)) })
         _ => ()
       }
     } else {
       let words = if o.waits != "" { o.waits } else { @sf.t("web-main.chat.sending") }
-      // (shown once it has been on its way a while: from when its row was first drawn)
-      let shows = @kit.after(c, "sending/" + o.id, true, sending_shows_ms)
+      // (shown once it has been on its way a while, counted from when it was sent (the time of day): a chat opened on
+      // one long on its way shows it at once, and the row taken over by the core's, its id another, goes on as it was;
+      // from when its row was first drawn as well, for a source whose time of day stands still)
+      let gone = (src.now)() - o.created_at
+      let shows = gone >= sending_shows_ms || @kit.after(c, "sending/" + o.id, true, sending_shows_ms)
+      if !shows {
+        c.wake_in(sending_shows_ms - gone)
+      }
       let w = c.box(style=msg_waiting, fn() {
         @sf.progress_spinner(c, "sending/" + o.id, o.progress, size=waiting_spin) |> ignore
         c.text(words, style=msg_time) |> ignore
@@ -239,7 +255,7 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
     let note = c.box(style=unsent_note, fn() {
       @sf.icon(c, "info", size=unsent_icon, color=p.red) |> ignore
       c.text(
-        if o.final && o.error != "" {
+        if o.refused && o.error != "" {
           @sf.t("web-main.draft.notSent", args=[("error", o.error)])
         } else {
           @sf.t("web-main.chat.unsent")
@@ -253,7 +269,7 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
     } else {
       @sf.t("web-main.chat.notSent")
     }, repeats=true)
-    if o.final {
+    if o.refused {
       // refused as it is (a file this station does not have): its words back in the composer, to be sent anew
       let draft = here.station + ":" + here.session
       let words = o.text
@@ -536,8 +552,8 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
     st.important_next = None
     swap.snap(c, 1.0)
     reveal.snap(c, 0.0)
-    // A list can reserve this row's turn in the future, while the message above it is still landing. A delayed
-    // tween waits for that turn; an already-started turn catches up from its declared start.
+    // Its coming can be set later than now (ListRows' `from`: words sent above it still landing): the tween is
+    // delayed to it; one already set out goes on from its declared start.
     let later = dmax(at - c.moment(), 0.0)
     reveal.animate(c, 1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
   } else {
@@ -629,7 +645,7 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       st.places = activity_change_places(old_cells, new_cells, visible)
       reveal.animate(c, 1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
       let widened = dmin(c.words_across(st.words, style, mono=st.mono), visible) - dmin(c.words_across(st.was, style, mono=st.was_mono), visible)
-      swap.animate(c, 1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
+      swap.animate(c, 1.0, @motion.moved(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
     }
   }
   let k = swap.get(c)
@@ -797,7 +813,7 @@ priv struct Steady {
 }
 
 ///|
-let steadies : Map[String, Steady] = {}
+let steadies : Map[String, Steady] = Map([])
 
 ///|
 /// What the rows keep of their own, let go (the package's reset).
@@ -864,6 +880,10 @@ let newer_row : @ui.Style = @ui.css("w=Full pt=S2 pb=S1 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let empty_row : @ui.Style = @ui.css("w=Full py=S8 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let older_failed_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

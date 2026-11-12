@@ -467,7 +467,7 @@ fn apply_lookup(ctx : ApplyContext, input_len : Int, match_end : Int, records : 
       next = next - delta
     }
     // copy_within(next..count, next + delta)
-    let moved = ctx.match_positions[next:count].to_array()
+    let moved = ctx.match_positions[next:count].to_owned()
     for k in 0..<moved.length() {
       ctx.set_match_position(next + delta + k, moved[k])
     }

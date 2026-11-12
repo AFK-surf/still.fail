@@ -273,7 +273,7 @@ fn is_condition_passed(doc : SDoc, node : Int, opt : Options) -> Bool {
   match doc.attr(node, "requiredFeatures") {
     Some(features) =>
       for f in features.split(" ") {
-        if !svg_features.contains(f.to_string()) {
+        if !svg_features.contains(f.to_owned()) {
           return false
         }
       }
@@ -282,13 +282,13 @@ fn is_condition_passed(doc : SDoc, node : Int, opt : Options) -> Bool {
   match doc.attr(node, "systemLanguage") {
     Some(langs) => {
       for lang in langs.split(",") {
-        let lang = lang.trim(chars=" \t\n\r").to_string()
+        let lang = lang.trim(chars=" \t\n\r").to_owned()
         if opt.languages.contains(lang) {
           return true
         }
         match lang.find("-") {
           Some(idx) => {
-            let prefix = lang.view(end_offset=idx).to_string()
+            let prefix = lang.exact_view(end=idx).to_owned()
             if opt.languages.contains(prefix) {
               return true
             }

@@ -6,7 +6,7 @@ test "the controls page under a Tester over ios_controls's kept text draws, fram
   let t = @ui.Tester::new(fn(c) { gallery(c, "controls") }, w=402.0, h=778.0, text=run_ios_controls, run=run_ios_controls, scale=3.0, time=305389283.3333334 - 16.0, stable=true, platform=1)
   let frames = t.replay_frames(run_ios_controls)
   let apart = frames.filter(fn(f) { f.1 != f.2 })
-  println("frames \{frames.length()}, apart \{apart.length()}, text missing \{t.text_missing()}")
+  println("frames \{frames.length()}, apart \{apart.length()}, text missing \{Repr(t.text_missing())}")
   if apart.length() > 0 {
     println("first apart: frame \{apart[0].0}")
     for line in t.drawn_text().split("\n") {

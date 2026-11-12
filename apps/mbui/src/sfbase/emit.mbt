@@ -10,12 +10,26 @@
 // over the list.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Pose {
   Fold
   Float
   Spit
   Return
-} derive(Eq, Show)
+}
+
+///|
+/// By its name, as tests count frames by a turn's pose: what `derive(Show)` wrote.
+pub impl Show for Pose with output(self, logger) {
+  logger.write_string(
+    match self {
+      Fold => "Fold"
+      Float => "Float"
+      Spit => "Spit"
+      Return => "Return"
+    },
+  )
+}
 
 ///|
 pub fn Pose::ms(self : Pose) -> Double {
@@ -106,7 +120,7 @@ pub fn Emits::read(self : Emits) -> Unit {
 }
 
 ///|
-pub let emits : Map[String, Emits] = {}
+pub let emits : Map[String, Emits] = Map([])
 
 ///|
 pub fn emits_of(key : String) -> Emits {
@@ -242,7 +256,7 @@ pub fn emit_folded(e : Emits, agent : String) -> Bool {
 /// room opening in the list as the activity's closes, on the list's one way.
 pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
   e.read()
-  let out : Map[String, Bool] = {}
+  let out : Map[String, Bool] = Map([])
   for q in e.queue {
     out[q.1] = true
   }
@@ -348,8 +362,8 @@ pub fn pose_clock(c : @ui.Ctx, ms : Double, at : Double?) -> @motion.Anim {
 
 ///|
 /// The poses played on, a frame at a time (ChatMotion.play): each to its end, then the next; the next waiting starts
-/// once none plays. They take one turn among what changes the list's height (`turns`, ChatMotion.start): the first
-/// waiting starts as it comes, from then, and it is over once none is left. Not watched, all of it at once.
+/// once none plays. They take one turn of their own (`turns`: Turns::emits, the only one a chat's list still takes;
+/// ChatMotion.start): asked as the first comes, it starts at the next step, and it is over once none is left. Not watched, all of it at once.
 /// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
 /// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
@@ -367,7 +381,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) 
   }
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
-    turns.over(c, Emits, turns.moment(c))
+    turns.over(c, Emits)
     return
   }
   if e.current is None {
@@ -464,7 +478,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) 
         emit_next(c, e, t.agent, at~)
         // none left: their turn is over where this one was declared to end
         if e.current is None {
-          turns.over(c, Emits, at)
+          turns.over(c, Emits)
         }
       }
     }
@@ -709,7 +723,7 @@ pub fn glyph_change(ms : Double, turn : Double, index : Int, salt : Int, incomin
 ///|
 /// A number from 0 to 1 for glyph `i` of message `salt`, the same each time (a hash: no chance in it).
 fn glyph_noise(i : Int, salt : Int) -> Double {
-  let mut h = (i * 374761393 + salt * 668265263).to_uint()
+  let mut h = (i * 374761393 + salt * 668265263).reinterpret_as_uint()
   h = (h ^ (h >> 13)) * 1274126177U
   h = h ^ (h >> 16)
   (h & 0xFFFFU).reinterpret_as_int().to_double() / 65535.0

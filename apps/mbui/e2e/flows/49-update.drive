@@ -1,7 +1,8 @@
-# The app keeping itself current (Updates.kt): a newer build in the local cloud's releases (release-seed: this APK as
-# version 0.1.1), found by the core's app.update at the start; settings' 关于 row says 更新到 0.1.1; in 关于, its version
-# row's button 更新到 0.1.1 pressed, it is downloaded, checked against its sha256 and handed to the system's installer,
-# which asks the person to confirm.
+# The app keeping itself current (Updates.java): a newer build in the local cloud's releases (release-seed: this APK
+# built again as version 2, 0.1.1, with a delta to it from this one), found by the core's app.update at the start;
+# settings' 关于 row says 更新到 0.1.1; in 关于, its version row's button 更新到 0.1.1 pressed, it is made from the delta
+# and the installed APK, checked against its sha256 and handed to the system's installer, which asks the person to
+# confirm.
 #only android
 #env MBUI_UPDATE_FEED=android
 #before release-seed

@@ -64,18 +64,14 @@ priv struct Departure {
 }
 
 ///|
-/// A flight under way: its id, the new node, the old one's copy (none once let go), its start and length, how far along
-/// it is at each ms, how far off the new one's place and size it set out, the look it set out from, the layer it is
-/// drawn over, and what ends it (its binding and its end on the timeline).
+/// A flight under way: the new node, the old one's copy (none once let go), its start and length, how far along it is
+/// at each ms, the layer it is drawn over, and what ends it (its binding and its end on the timeline).
 priv struct Flying {
-  id : String
   node : NodeId
   mut ghost : NodeId?
   start : Double
   dur : Double
   along : (Double) -> Double
-  d : (Double, Double, Double, Double)
-  from : FromLook
   top : Int
   mut stop : () -> Unit
 }
@@ -434,7 +430,13 @@ fn Tree::pairs_now(self : Tree) -> Unit {
     let come = made.filter(fn(a) { self.nodes[a.at].share == Some(id) })
     let living = self.shared_live.get(id).unwrap_or(0) - gone.length()
     if gone.length() > 1 || come.length() > 1 {
-      self.fault(come.get(0).unwrap_or(gone[0].node), "shared: \{id} let go of or made more than once in one change")
+      // (the node it is told under: one made, else one let go of; never both looked up, as `unwrap_or(gone[0]…)`
+      // did, which with none let go stopped the run on an index out of bounds before the fault was told)
+      let under = match come.get(0) {
+        Some(c) => c
+        None => gone[0].node
+      }
+      self.fault(under, "shared: \{id} let go of or made more than once in one change")
     } else if come.length() == 1 && living > 1 {
       self.fault(come[0], "shared: \{id} made while another of it lives")
     } else if gone.length() == 1 && come.length() == 1 {
@@ -548,14 +550,11 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
   let at = self.cause_now()
   let top = self.top_node_of(to.at)
   let f : Flying = {
-    id: d.id,
     node: to,
     ghost: Some({ at: ghost, gen: g.gen }),
     start: at,
     dur: ms,
     along,
-    d: dd,
-    from: d.look,
     top,
     stop: fn() {  },
   }
@@ -625,7 +624,7 @@ fn Tree::lift_marked(self : Tree, at : Int) -> Unit {
   self.look_marked_at(at)
   self.composed.push({ at, gen: n.gen })
   self.places_rev = self.places_rev + 1
-  self.hits = self.hits + 1
+  self.hits_bump()
 }
 
 ///|
@@ -667,7 +666,7 @@ fn Tree::flying_of(self : Tree, at : Int) -> Flying? {
 fn Tree::lifted_order(self : Tree) -> Unit {
   self.order_whole = true
   self.order_due = true
-  self.hits = self.hits + 1
+  self.hits_bump()
   self.draws_rev = self.draws_rev + 1
   self.draws_any_rev = self.draws_any_rev + 1
   self.marked()

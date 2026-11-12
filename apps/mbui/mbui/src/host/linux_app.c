@@ -121,6 +121,7 @@ static void schedule(void) {
 
 // asked for from any thread (an image decoded, a message posted): its frame on the main thread
 static gint waking;
+static gint posting;  // a told of what was posted asked of the main loop, not yet run (mb_post_wake)
 static gboolean wake_idle(gpointer data) {
   (void)data;
   g_atomic_int_set(&waking, 0);
@@ -132,8 +133,22 @@ void mb_app_wake(void) {
   if (g_atomic_int_compare_and_exchange(&waking, 0, 1)) g_idle_add_full(G_PRIORITY_HIGH_IDLE, wake_idle, NULL, NULL);
 }
 
-// A message posted from outside the frames (post.h), on whatever thread: a frame asked for.
-static void mb_post_wake(void) { mb_app_wake(); }
+// A message posted from outside the frames (post.h), on whatever thread: the app told on the main loop, between frames
+// (MB_OUTSIDE_POSTED, ui's messages_between), as the Mac's host tells it (mac_app.m): it takes what changes only
+// signals then and asks for a frame only where something is left for one. Never taken as a frame begins: there the
+// frame has read what it does again before what came is taken, and a change only the window's tree reads went unseen
+// till something else built the frame whole (the web and Linux, 2026-11-11).
+static gboolean posted_idle(gpointer data) {
+  (void)data;
+  g_atomic_int_set(&posting, 0);
+  if (outside_cb) outside_cb(MB_OUTSIDE_POSTED, 0, 0);
+  else mb_app_wake();
+  return G_SOURCE_REMOVE;
+}
+
+static void mb_post_wake(void) {
+  if (g_atomic_int_compare_and_exchange(&posting, 0, 1)) g_idle_add_full(G_PRIORITY_HIGH_IDLE, posted_idle, NULL, NULL);
+}
 
 double mb_app_scale(void) { return scale; }
 
@@ -321,7 +336,6 @@ static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data) {
   mb_players_upload();
   mb_images_tell(outside_cb);
   device_tell(outside_cb);
-  pick_tell(outside_cb);
   update_tell(outside_cb);
   mb_views_tell(outside_cb);
   int w = gtk_widget_get_width(GTK_WIDGET(a)), h = gtk_widget_get_height(GTK_WIDGET(a));
@@ -668,7 +682,12 @@ static void app_state(void) {
   if (!state_cb || !win) return;
   int shown = gtk_widget_get_mapped(win);
   int front = shown && gtk_window_is_active(GTK_WINDOW(win));
-  state_cb((shown ? 1 : 0) | (front ? 2 : 0));
+  // (told only as it changes: the same said again tells the app nothing, and draws nothing)
+  static int told = -1;
+  int s = (shown ? 1 : 0) | (front ? 2 : 0);
+  if (s == told) return;
+  told = s;
+  state_cb(s);
   schedule();
 }
 
@@ -1354,7 +1373,9 @@ double mb_host_mem_bytes(void) {
 
 // Files picked (pick.mbt): GTK's file dialog (the desktop portal's chooser where there is one), more than one; pictures
 // for the photo picker, anything for the file picker, no camera. Each read whole as the dialog answers (no file held
-// by the host yet), told as the next frame begins (pick_tell).
+// by the host yet), told then on the main loop, between frames (picks_wake: never left for a frame to take as it
+// begins). MBUI_PICK_FILES="<path>|<path>…" answers every ask with those files, no dialog (scripted runs; host_contract.sh
+// linux picked), told so too.
 typedef struct {
   int state;  // 0 asking, 1 answered, -1 called off or failed
   int told;
@@ -1365,6 +1386,22 @@ static pick *picks;
 static int npicks = 1;  // ids from 1
 
 static pick *pick_of(int32_t id) { return id > 0 && id < npicks ? &picks[id] : NULL; }
+
+// The picks answered since the app was last told, told now, between frames (pick_tell): what was picked taken into
+// what reads it as it comes (ui's outside_take), a frame asked for only where something reads it.
+static int picks_telling;
+static gboolean picks_idle(gpointer data) {
+  (void)data;
+  picks_telling = 0;
+  if (outside_cb) pick_tell(outside_cb);
+  else schedule();
+  return G_SOURCE_REMOVE;
+}
+static void picks_wake(void) {
+  if (picks_telling) return;
+  picks_telling = 1;
+  g_idle_add_full(G_PRIORITY_HIGH_IDLE, picks_idle, NULL, NULL);
+}
 
 static void pick_done(GObject *src, GAsyncResult *res, gpointer data) {
   pick *k = pick_of(GPOINTER_TO_INT(data));
@@ -1384,7 +1421,7 @@ static void pick_done(GObject *src, GAsyncResult *res, gpointer data) {
   }
   if (files) g_object_unref(files);
   g_object_unref(src);
-  schedule();
+  picks_wake();
 }
 
 int32_t mb_host_pick_start(int32_t kind) {
@@ -1394,6 +1431,23 @@ int32_t mb_host_pick_start(int32_t kind) {
   int id = npicks++;
   picks[id] = (pick){0, 0, g_ptr_array_new_with_free_func(g_free),
                      g_ptr_array_new_with_free_func((GDestroyNotify)g_bytes_unref)};
+  const char *canned = getenv("MBUI_PICK_FILES");
+  if (canned && *canned) {
+    pick *k = &picks[id];
+    char **paths = g_strsplit(canned, "|", -1);
+    for (int i = 0; paths[i]; i++) {
+      char *data_ = NULL;
+      gsize n = 0;
+      if (*paths[i] && g_file_get_contents(paths[i], &data_, &n, NULL)) {
+        g_ptr_array_add(k->names, g_path_get_basename(paths[i]));
+        g_ptr_array_add(k->bytes, g_bytes_new_take(data_, n));
+      }
+    }
+    g_strfreev(paths);
+    k->state = k->names->len > 0 ? 1 : -1;
+    picks_wake();
+    return id;
+  }
   GtkFileDialog *d = gtk_file_dialog_new();
   if (what == 1) {
     GtkFileFilter *f = gtk_file_filter_new();
@@ -1409,7 +1463,7 @@ int32_t mb_host_pick_start(int32_t kind) {
   return id;
 }
 
-// The picks answered since the last frame, told before it is drawn.
+// The picks answered since the app was last told, told it (picks_idle).
 static void pick_tell(mb_outside_fn tell) {
   for (int i = 1; i < npicks; i++)
     if (picks[i].state != 0 && !picks[i].told) {

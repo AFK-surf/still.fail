@@ -52,12 +52,6 @@ fn fdot6_div(a : Int, b : Int) -> Int {
 }
 
 ///|
-fn fdot6_can_convert_to_fdot16(n : Int) -> Bool {
-  let max_dot6 = 2147483647 >> (16 - 6)
-  n.abs() <= max_dot6
-}
-
-///|
 fn fdot6_small_scale(value : Int, dot6 : Int) -> Int {
   ((value * dot6) >> 6) & 0xFF
 }
@@ -114,11 +108,12 @@ fn fdot16_fast_div(a : Int, b : Int) -> Int {
 let max_coeff_shift : Int = 6
 
 ///|
+#derive(Eq)
 priv enum EdgeKind {
   ELine
   EQuad
   ECubic
-} derive(Eq)
+}
 
 ///|
 /// An edge: its line now (x, dx, first and last y, winding; prev and next in the active list, -1 for none), and for

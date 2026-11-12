@@ -12,7 +12,7 @@ fn corners_drawn(kind : Double, x : Double, y : Double) -> ((Double, Double, Dou
       return ((c.inst[b + 36], c.inst[b + 37], c.inst[b + 38], c.inst[b + 39]), c.inst[b + 4])
     }
   }
-  abort("nothing of kind \{kind} drawn at \{x},\{y}")
+  @halt.saying("nothing of kind \{kind} drawn at \{x},\{y}")
 }
 
 ///|
@@ -103,7 +103,7 @@ fn foot_nodes() -> (Node, Node) {
   }
   match (panel, box) {
     (Some(p), Some(b)) => (p, b)
-    _ => abort("no panel and box at its foot")
+    _ => @halt.saying("no panel and box at its foot")
   }
 }
 
@@ -123,7 +123,7 @@ test "corners: a box across a panel's foot keeps one corner for all four: concen
     t.draw()
     let (p, b) = foot_nodes()
     assert_eq(corners4(p), (34.0, follow, follow, 34.0))
-    assert_true(b.radii is None && b.radius == 26.0, msg="\{corners4(b)}")
+    assert_true(b.radii is None && b.radius == 26.0, msg="\{Repr(corners4(b))}")
     assert_eq(t.corner_faults(), [])
   }
   // 4 in: following each foot corner it lies in would make its corners unlike (30 at its left, 6 at its right, 26
@@ -133,13 +133,13 @@ test "corners: a box across a panel's foot keeps one corner for all four: concen
   let (_, b) = foot_nodes()
   assert_eq(corners4(b), (26.0, 26.0, 26.0, 26.0))
   let faults = t.corner_faults()
-  assert_true(faults.length() == 1 && faults[0].contains("bottom left"), msg="\{faults}")
+  assert_true(faults.length() == 1 && faults[0].contains("bottom left"), msg="\{Repr(faults)}")
   // a square window: the panel 34 all round, the box 8 in the card's 26 all round
   let t = Tester::new(foot_panel(8.0, InnerOr(Exact(26.0))), w=400.0, h=200.0)
   t.draw()
   let (p, b) = foot_nodes()
   assert_true(p.radii is None && p.radius == 34.0)
-  assert_true(b.radii is None && b.radius == 26.0, msg="\{corners4(b)}")
+  assert_true(b.radii is None && b.radius == 26.0, msg="\{Repr(corners4(b))}")
   assert_eq(t.corner_faults(), [])
 }
 
@@ -158,7 +158,7 @@ test "corners: radius=Inner follows the container's corners where it fills it; i
   t.draw()
   let (_, b) = foot_nodes()
   assert_eq(corners4(b), (inner, inner, inner, inner))
-  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("would not be alike") }), msg="\{t.corner_faults()}")
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("would not be alike") }), msg="\{Repr(t.corner_faults())}")
 }
 
 ///|
@@ -177,7 +177,7 @@ fn foot_nodes_filled() -> (Node, Node) {
   }
   match (panel, box) {
     (Some(p), Some(b)) => (p, b)
-    _ => abort("no panel and box filling it")
+    _ => @halt.saying("no panel and box filling it")
   }
 }
 
@@ -238,9 +238,9 @@ test "a band grown up into its panel's top corner, its corner there cut off by t
   // 10 in from the side: its top left well inside the panel's corner, at different distances: said
   let t = Tester::new(band_panel(28.0, 10.0), w=400.0, h=200.0, corners_held=false)
   t.draw()
-  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg="\{t.corner_faults()}")
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg="\{Repr(t.corner_faults())}")
   // the panel cutting nothing: its square corner shows past the panel's curve, its own: said
   let t = Tester::new(band_panel(28.0, 0.0, clips=false), w=400.0, h=200.0, corners_held=false)
   t.draw()
-  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg="\{t.corner_faults()}")
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg="\{Repr(t.corner_faults())}")
 }

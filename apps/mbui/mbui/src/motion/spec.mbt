@@ -9,6 +9,7 @@
 /// ratio, stiffness and the visibility threshold it rests within (and a
 /// delay, ms, held at its start: ListMotion.kt Delayed); a tween of so many
 /// ms on a curve after a delay; or there at once (after a delay).
+#derive(Eq, Debug)
 pub(all) enum Spec {
   Spring(Double, Double, Double, Double)
   Tween(Double, @ui.Ease, Double)
@@ -18,7 +19,7 @@ pub(all) enum Spec {
   Snap(Double)
   /// one of Motion's transitions (transition.mbt: spring_to, tween_to, keyframes_to, inertia_to)
   Motion(Transition)
-} derive(Eq, Show)
+}
 
 ///|
 /// Compose's spring(dampingRatio, stiffness, visibilityThreshold): by
@@ -52,7 +53,7 @@ pub fn tween(ms : Double, ease~ : @ui.Ease, delay? : Double = 0.0) -> Spec {
 /// fast as it went (or as the hand let it go: Anim::animate's `velocity`). `points`: how many points one of its units
 /// is (a progress from 0 to 1 over a way 300 points long: 300); `over`: how far it goes, said for it (what moves
 /// together, the furthest of them: Spec::over).
-pub fn move(points? : Double = 1.0, over? : Double = -1.0, delay? : Double = 0.0) -> Spec {
+pub fn moved(points? : Double = 1.0, over? : Double = -1.0, delay? : Double = 0.0) -> Spec {
   Moved(points, over, delay)
 }
 
@@ -289,8 +290,8 @@ pub fn Spec::duration(self : Spec, from : Double, to : Double, v : Double) -> Do
 
 ///|
 /// Where `spec` is `ms` after it started from `from` to `to` with velocity
-/// `v` (per second), and how fast (per second): as Compose plays it, its
-/// time in whole milliseconds, at its end once its duration `dur` is out.
+/// `v` (per second), and how fast (per second): its time as it is (@ui.gone_ms: on the moments' grid, never whole
+/// milliseconds), at its end once its duration `dur` is out.
 pub fn Spec::value_at(
   self : Spec,
   ms : Double,
@@ -299,7 +300,7 @@ pub fn Spec::value_at(
   to : Double,
   v : Double,
 ) -> (Double, Double) {
-  let t = @ui.whole_ms(ms)
+  let t = @ui.gone_ms(ms)
   match self {
     // where its generator is (it may end elsewhere than `to`: inertia, keyframes)
     Motion(tr) => {
@@ -307,12 +308,13 @@ pub fn Spec::value_at(
         return (from, v)
       }
       let g = tr.generator(from, to, v)
-      let u = dmin(t, dur) - tr.delay
-      return (g.next(u).value, if t >= dur { 0.0 } else { g.velocity(u, initial=v) })
+      let end = @ui.gone_ms(dur)
+      let u = (if t >= end { dur } else { t }) - tr.delay
+      return (g.next(u).value, if t >= end { 0.0 } else { g.velocity(u, initial=v) })
     }
     _ => ()
   }
-  if t >= dur {
+  if t >= @ui.gone_ms(dur) {
     return (to, 0.0)
   }
   match self {

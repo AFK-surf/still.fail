@@ -5,9 +5,6 @@
 let dbl_epsilon : Double = 2.220446049250313e-16
 
 ///|
-let dbl_epsilon_err : Double = 2.220446049250313e-16 * 4.0
-
-///|
 let flt_epsilon_half : Double = 1.1920928955078125e-7 / 2.0
 
 ///|
@@ -51,11 +48,6 @@ fn d_bound(x : Double, lo : Double, hi : Double) -> Double {
 ///|
 fn d_between(x : Double, a : Double, b : Double) -> Bool {
   (a - x) * (b - x) <= 0.0
-}
-
-///|
-fn d_precisely_zero(x : Double) -> Bool {
-  x.abs() < dbl_epsilon_err
 }
 
 ///|
@@ -282,7 +274,7 @@ fn Cubic64::search_roots(
   extrema += 1
   extreme_ts[extrema] = 1.0
   // (sort_by cmp_f64: a stable sort, NaNs equal to all)
-  let sorted = extreme_ts[0:extrema].to_array()
+  let sorted = extreme_ts[0:extrema].to_owned()
   insertion_sort(sorted)
   for i in 0..<extrema {
     extreme_ts[i] = sorted[i]

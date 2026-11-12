@@ -21,7 +21,7 @@ fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
 /// (useStationDrive: as the view has its stations), on a station it can start on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   new_keys(c, src, w)
-  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
+  let v = src.topic("newChat", @sfpages.new_chat_asked(w.id)).get().value
   let frame = new_frame(src, w)
   let station = field(v, "station")
   let address = text(station, "station")
@@ -69,7 +69,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   // (on the tape, laid out Medium, its panel is a panel of its own beside the page's, as a chat's: the frame's,
   // tape_side)
-  if wide.tape {
+  if wide.tape.get() {
     with_bar()
     return
   }
@@ -84,6 +84,7 @@ fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   c.key_context("Chat")
   c.on_action("composer.focus", fn() {
     guard !switcher_open() else { return false }
+    tape_page_for_key(c.moment())
     c.focus_field(writing(src, "new:" + w.id).field)
     true
   })
@@ -93,7 +94,7 @@ fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// The station workspace `w`'s new chat starts on, where the stations lend their files (useStationDrive: as the view
 /// has its stations): its 文件 tab is had; None where it is not (blocked, no station, none with a drive).
 fn new_drive_station(src : Source, w : Workspace) -> String? {
-  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
+  let v = src.topic("newChat", @sfpages.new_chat_asked(w.id)).get().value
   let station = field(v, "station")
   let address = text(station, "station")
   let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""
@@ -114,7 +115,7 @@ fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : @motion.An
   let files = new_files_open(src, w.id)
   let left = fn() { @sfpages.new_chat_left(c, src, w, frame, v, up, fade) }
   // (on the tape its panel is the frame's: the page alone)
-  if wide.tape {
+  if wide.tape.get() {
     left()
     return
   }
@@ -158,7 +159,7 @@ fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
   let open = new_files_open(src, ws)
   side_changing("new:" + ws, if open { ["files"] } else { [] }, if open { "files" } else { "" }, on)
   let call = if on { "chat.tabs.open" } else { "chat.tabs.close" }
-  (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, fn(_) {  })
+  (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, @sfbase.answer_unread)
 }
 
 ///|

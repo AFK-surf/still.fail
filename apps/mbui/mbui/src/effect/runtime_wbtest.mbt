@@ -13,7 +13,7 @@ test "a task made ready between frames at the last seq, no timer: the frame runs
   let rt = Runtime::new()
   rt.seq = last_seq - 1
   let ran : Array[Int64] = []
-  rt.fork(async fn() { ran.push(now()) }) |> ignore
+  rt.fork(fn() { ran.push(now()) }) |> ignore
   // (said before the frame: a run killed after it hung in the frame, not in building)
   println("seq edge: the frame starts")
   rt.frame(frame_ms)

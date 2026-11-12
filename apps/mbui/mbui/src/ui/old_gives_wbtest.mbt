@@ -56,14 +56,14 @@ fn gives_said(t : Tester, ids : Map[String, @view.View], rows : Int) -> String {
   }
   t.wheel(200.0, 60.0, -(30.0 * rows.to_double() + 600.0))
   t.run_for(move_most_ms)
-  "h \{h} foot \{foot} last \{last} whole \{whole}"
+  "h \{h} foot \{some_text(foot)} last \{some_text(last)} whole \{whole}"
 }
 
 ///|
 test "old gives: as tall as what it holds asks while the window has the room; held shorter, its list giving way and scrolling to its last row above its foot; each frame as built whole" {
   let out = []
   for n in [3, 40] {
-    let (rows, at, built, ids) = (@signals.signal(n), @signals.signal((0.0, 0.0)), Ref(0), Map::new())
+    let (rows, at, built, ids) = (@signals.signal(n), @signals.signal((0.0, 0.0)), Ref(0), Map([]))
     let t = gives_tester(600.0, rows, at, built, ids)
     out.push(gives_said(t, ids, n))
   }
@@ -76,9 +76,9 @@ test "old gives: as tall as what it holds asks while the window has the room; he
 ///|
 test "old gives: opened in a short window and grown, the same as opened in the tall one; its rows more then fewer, as tall as each asks" {
   // (opened in the tall one, first)
-  let (rows2, at2, built2, ids2) = (@signals.signal(40), @signals.signal((0.0, 0.0)), Ref(0), Map::new())
+  let (rows2, at2, built2, ids2) = (@signals.signal(40), @signals.signal((0.0, 0.0)), Ref(0), Map([]))
   let direct = gives_said(gives_tester(600.0, rows2, at2, built2, ids2), ids2, 40)
-  let (rows, at, built, ids) = (@signals.signal(40), @signals.signal((0.0, 0.0)), Ref(0), Map::new())
+  let (rows, at, built, ids) = (@signals.signal(40), @signals.signal((0.0, 0.0)), Ref(0), Map([]))
   let t = gives_tester(300.0, rows, at, built, ids)
   let short = gives_said(t, ids, 40)
   t.resize(400.0, 600.0)
@@ -100,7 +100,7 @@ test "old gives: opened in a short window and grown, the same as opened in the t
 
 ///|
 test "old gives: moved, painted alone: nothing built nor laid out, as tall" {
-  let (rows, at, built, ids) = (@signals.signal(40), @signals.signal((0.0, 0.0)), Ref(0), Map::new())
+  let (rows, at, built, ids) = (@signals.signal(40), @signals.signal((0.0, 0.0)), Ref(0), Map([]))
   let t = gives_tester(600.0, rows, at, built, ids)
   // (laid out the same twice: what comes after it may be painted alone, as old_natural_wbtest has it)
   t.clock_frame()

@@ -111,7 +111,7 @@ test "Queue: shut down, takes end once it is empty and offers fail" {
 
 ///|
 test "Queue: an interrupted taker loses nothing (many seeds)" {
-  @effect.for_seeds(count=50, fn(seed) {
+  @effect.for_seeds(count=50, fn(seed) raise {
     let rt = @effect.Runtime::new(seed~)
     let q : @effect.Queue[Int] = @effect.Queue::bounded(2)
     let got = []
@@ -152,7 +152,7 @@ test "Queue: an interrupted taker loses nothing (many seeds)" {
 
 ///|
 test "Semaphore: never more holders than permits (many seeds); released however it ends" {
-  @effect.for_seeds(count=50, fn(seed) {
+  @effect.for_seeds(count=50, fn(seed) raise {
     let rt = @effect.Runtime::new(seed~)
     let sem = @effect.Semaphore::new(2)
     let holding = Ref(0)

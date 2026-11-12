@@ -23,12 +23,11 @@ fn setting_tester(
   h? : Double = 900.0,
   ready? : () -> Unit = fn() {  },
   host? : (@ui.Tester) -> Unit = fn(_) {  },
+  env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
   @sfbase.reset()
   reset()
   @settings.reset()
-  // (as the app begins anew: a prior Tester's keyed page rows do not belong to this one)
-  @sf.page_rows_reset()
   @sffixture.fixture_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
@@ -58,6 +57,7 @@ fn setting_tester(
     w~,
     h~,
     platform~,
+    env~,
   )
   // (what the device's host says from the start: a performance record kept)
   host(t)
@@ -178,7 +178,7 @@ fn laid_wide(w : Double) -> Bool {
 /// pressed.
 fn scrolled_to(t : @ui.Tester, w : Double, words : String) -> Unit {
   let x = w / 2.0
-  t.move(x, 450.0)
+  t.move_to(x, 450.0)
   for _ in 0..<12 {
     match t.find(words) {
       Some((_, y)) if y < 40.0 => t.wheel(x, 450.0, -300.0)

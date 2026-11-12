@@ -16,7 +16,8 @@
 #     link flags), APP_KIND (what the app packs: a change builds Gradle's outputs anew), and the functions app_libs
 #     (alongside the compile: .so files into $jni, before the link), app_assets (alongside: into $apk/assets, before
 #     Gradle) and app_cmd (commands of its own)
-# VARIANT=release builds the project's release build type (default debug).
+# VARIANT=release builds the project's release build type (default debug). MBUI_SYMBOLS=<file>: libmbui.so's function
+# symbols written there (below, after the link).
 # MBUI_WASM_THUNKS=<thunks.c> builds an app's Wasm shell instead (still.fail's scripts/wasm-app.sh: no C of the app's,
 # its program a .wasm of its own): the host, the hook's C, src/host/wasm_shell.c, those thunks, MBUI_WASM_STUBS and
 # wasmtime; its APK packed again only when what it is made of changed. `put FILE NAME` puts a file in the app's files.
@@ -55,7 +56,12 @@ M=$OUT/mod
 [ -z "${JAVA_HOME:-}" ] && [ -x /usr/libexec/java_home ] && export JAVA_HOME=$(/usr/libexec/java_home -v 20 2>/dev/null || /usr/libexec/java_home)
 export ANDROID_HOME=$SDK
 size() { wc -c < "$1" | tr -d ' '; }
-CFLAGS="-I$MOON_HOME/include -I$ROOT/src/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM"
+# MoonBit's runtime allocates with mimalloc (mimalloc_obj, below), as moon's own native builds do (the Mac's and
+# Windows' apps). It was bionic's scudo only because moon ships mimalloc as a macOS object alone; measured 2026-11-11
+# (a 349 KB `chat` message @json.parse'd and let go, the same C, only the allocator differing), scudo took 2.8 times
+# as long to decode it and 5 times as long to let it go (a phone: 7.3-15 ms and 2.4-4.9 against 2.6-5.3 and
+# 0.7-0.85). What is given up, and why it stays so: mbui's AGENTS.md, The Android app's allocator.
+CFLAGS="-I$MOON_HOME/include -I$ROOT/src/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC"
 
 sync() {
   mkdir -p $M/src
@@ -117,6 +123,30 @@ wasmtime_lib() {
   cp -p $WT/lib/libwasmtime.so $jni/
 }
 
+# mimalloc (MIT), the version in moon's prebuilt libmoonbitrun.o, so Android runs the Mac's and Windows' allocator: its
+# source release fetched once by its checksum, its one-file build (src/static.c) compiled for the ABI as its CMake
+# builds the static library in release, by way of src/host/mimalloc_android.c (libc's calls in its raw system calls'
+# place: Android's seccomp filter killed x86_64's raw access(2)). Without its override of malloc (MI_MALLOC_OVERRIDE
+# unset): only MoonBit's runtime calls it (mi_malloc, mi_free; mi_register_deferred_free only were
+# MOONBIT_TRIAL_DELETION on), and the JVM, Skia, Hermes and the Rust shell in the same process keep the system's; its
+# symbols hidden, so libmbui.so exports none of them. Prints its object.
+MI_VERSION=2.1.7
+mimalloc_obj() {
+  local mi=$OUT/mimalloc-$MI_VERSION tmp
+  if [ ! -f $mi/src/static.c ]; then
+    tmp=$OUT/mimalloc-$$
+    rm -rf $tmp && mkdir -p $tmp
+    curl -fsSL --retry 3 -o $tmp/mimalloc.tar.gz \
+      "https://github.com/microsoft/mimalloc/archive/refs/tags/v$MI_VERSION.tar.gz"
+    [ "$(shasum -a 256 $tmp/mimalloc.tar.gz | awk '{print $1}')" = 0eed39319f139afde8515010ff59baf24de9e47ea316a315398e8027d198202d ] \
+      || { echo "android.sh: mimalloc: not the release asked for" >&2; exit 1; }
+    tar xzf $tmp/mimalloc.tar.gz -C $tmp
+    rm -rf $mi && mv $tmp/mimalloc-$MI_VERSION $mi && rm -rf $tmp
+  fi
+  shell_objs $OUT/mimalloc-$ABI "$CC" "-O3 -fPIC -DNDEBUG -DMI_SECURE=0 -fvisibility=hidden -I$mi/include -I$mi/src" "" \
+    $ROOT/src/host/mimalloc_android.c
+}
+
 now() { python3 -c 'import time;print(time.time())'; }
 secs() { python3 -c "print(f'{$2-$1:.1f}')"; }
 
@@ -131,6 +161,9 @@ case "${1:-build}" in
     rm -rf "${apk:?}"
     mkdir -p $jni $apk/assets
     LIBS= HBC=
+    # (mimalloc beside the rest: its object linked with the others)
+    mimalloc_obj > $OUT/mimalloc-obj.txt 2> $OUT/mimalloc.log &
+    MIO=$!
     if type app_libs >/dev/null 2>&1; then
       app_libs > $OUT/app-libs.log 2>&1 &
       LIBS=$!
@@ -183,6 +216,8 @@ case "${1:-build}" in
         --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
         $EXTRA "$GEN" > $OUT/objs.txt
     fi
+    wait $MIO || { cat $OUT/mimalloc.log; exit 1; }
+    cat $OUT/mimalloc-obj.txt >> $OUT/objs.txt
     T2=$(now)
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
     T3=$(now)
@@ -191,6 +226,22 @@ case "${1:-build}" in
     "$D/mbc" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
       $APP_LINK -lGLESv3 -llog -lz -lm -Wl,--no-undefined
     T4=$(now)
+    # MBUI_SYMBOLS=<file>: the library's function symbols written there, `<address> <name>` a line, xz'd (still.fail's
+    # release keeps them to name the frames of its crash reports: its scripts/crash-symbols.ts). Read from the library
+    # as linked, before the APK's packing strips it (scripts/apk), its addresses the same; written whether or not the
+    # link above was skipped. Never the build's failure: a warning, and none.
+    if [ -n "${MBUI_SYMBOLS:-}" ]; then
+      rm -f "$MBUI_SYMBOLS"
+      if mkdir -p "$(dirname "$MBUI_SYMBOLS")" && "$TC/llvm-nm" -n --defined-only $SO > $OUT/symbols.nm \
+        && awk '$2 ~ /^[tTwW]$/ { print $1, $3 }' $OUT/symbols.nm | xz -6 > "$MBUI_SYMBOLS.part" \
+        && [ -s "$MBUI_SYMBOLS.part" ] && mv "$MBUI_SYMBOLS.part" "$MBUI_SYMBOLS"; then
+        echo "android.sh: symbols $(size "$MBUI_SYMBOLS") bytes ($(awk '$2 ~ /^[tTwW]$/' $OUT/symbols.nm | wc -l | tr -d ' ') functions) in $(secs $T4 $(now)) s: $MBUI_SYMBOLS"
+      else
+        rm -f "$MBUI_SYMBOLS.part"
+        echo "android.sh: warning: no symbols written to $MBUI_SYMBOLS" >&2
+      fi
+      rm -f $OUT/symbols.nm
+    fi
     echo "libmbui.so $(size $SO) bytes in $(secs $T0 $T4) s"
     if [ -n "$HBC" ]; then wait $HBC || { cat $OUT/app-assets.log; exit 1; }; cat $OUT/app-assets.log; fi
     if [ -n "$DEX" ]; then wait $DEX || { cat $OUT/apk-dex.log; exit 1; }; cat $OUT/apk-dex.log; fi

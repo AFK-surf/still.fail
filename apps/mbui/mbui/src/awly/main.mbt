@@ -91,7 +91,7 @@ fn min_max(s : Sz) -> @flex.Dim {
     Px(v) => Pt(v)
     Frac(v) => Pct(v * 100.0)
     NoSize => Auto
-    _ => abort("only pixels and percentages bound a size")
+    _ => @halt.saying("only pixels and percentages bound a size")
   }
 }
 

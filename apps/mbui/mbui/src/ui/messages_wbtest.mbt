@@ -14,7 +14,7 @@ test "messages posted between frames are handed on as the next frame begins, in 
   })
   // what the view saw as it built: the messages handed on before it
   let seen : Array[Int] = []
-  let late : Ref[Bool] = Ref::new(false)
+  let late : Ref[Bool] = Ref(false)
   let t = Tester::new(
     fn(c) {
       seen.push(got.length())
@@ -127,16 +127,16 @@ test "MSG lines kept on the tape and given again by replay_frames draw the same 
 test "bytes beside a message are kept on the tape as they were" {
   let b = b"\x00\x01\x02\xfd\xfe\xff\x10"
   for n in 0..=b.length() {
-    let part = Bytes::from_array(b.to_array()[0:n].to_array())
+    let part = Bytes::from_array(b.to_array()[0:n].to_owned())
     assert_eq(@codec.from_base64(@codec.base64(part)), part)
   }
 }
 
 ///|
-test "panic assert_idle with a message posted that no frame took" {
+test "assert_idle with a message posted that no frame took: not idle, said (Tester::idle_said, what it stops on)" {
   let t = Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
   t.post("test.a", "1")
-  t.assert_idle()
+  assert_eq(t.idle_said(), Some("Tester::assert_idle: not idle: 1 messages posted that no frame took (on test.a)"))
 }
 
 ///|
@@ -180,7 +180,7 @@ test "what the outside says comes at its moment, however the clock is run on: a 
   on_message("test.a", fn(j, _) { got.push((j, g().clock)) })
   // a kept conversation's message due 437 ms on (off the display's frames)
   let at = t.time() + 437.0
-  let due = Ref::new(at)
+  let due = Ref(at)
   t.between_frames(
     fn() {
       if t.time() >= due.val {
@@ -251,6 +251,43 @@ test "a message that changes only a signal, taken as it comes: what read it buil
   assert_eq(handed, ["other"])
   // the frame that took the first: the one row that read it built, the others kept; the second's, every row built
   let (kept, built) = ends[posted[0]]
-  assert_true(built == 1 && kept > 10, msg="\{ends[posted[0]]}")
-  assert_true(ends[posted[1]].1 >= 20, msg="\{ends[posted[1]]}")
+  assert_true(built == 1 && kept > 10, msg="\{Repr(ends[posted[0]])}")
+  assert_true(ends[posted[1]].1 >= 20, msg="\{Repr(ends[posted[1]])}")
+}
+
+///|
+test "what the outside says at one moment is told at it between a host's frames, all of it at once in the order it came, at every rate of frames" {
+  // (three due together off the display's frames, one after: what a kept conversation's core sent)
+  // (on from where each Tester's clock starts)
+  let said : Array[(Double, String)] = [(437.0, "a"), (437.0, "b"), (437.0, "c"), (500.25, "d")]
+  let seen : Array[(Double, Array[(String, Double)])] = []
+  for period in [1000.0 / 7.0, 1000.0 / 24.0, 1000.0 / 60.0, 1000.0 / 120.0] {
+    let got : Array[(String, Double)] = []
+    // (what is drawn reads nothing the messages change: they are signals' to say, not the frame's)
+    let t = Tester::new(fn(c) { c.text("at") |> ignore }, w=100.0, h=100.0)
+    let start = t.time()
+    // (told as it comes, between frames: a core's message that changes only signals, as the app's is)
+    on_message_said("test.at", fn(j, _) {
+      got.push((j, t.time()))
+      true
+    })
+    t.set_frame_period(period)
+    let next = Ref(0)
+    t.between_frames(
+      fn() {
+        while next.val < said.length() && start + said[next.val].0 <= t.time() + 1.0e-9 {
+          t.post("test.at", said[next.val].1)
+          next.val += 1
+        }
+      },
+      due=fn() { if next.val < said.length() { start + said[next.val].0 } else { @double.infinity } },
+    )
+    t.come_to(start + 600.0)
+    seen.push((start, got))
+  }
+  for i, run in seen {
+    let (start, got) = run
+    let want = said.map(fn(x) { (x.1, start + x.0) })
+    assert_eq(got, want, msg="rate \{i}: \{Repr(got)}")
+  }
 }

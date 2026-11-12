@@ -1,7 +1,6 @@
 // An agent's history as a page of the narrow shell's stack made once as nodes (narrow_made's): its bar, the agent at
 // its head with what can be done to it and its tabs (seg_node), what the core says is worth a look, then its steps or
-// its details. Its steps are nodes (sfpages' history_steps_node); what is worth a look (its quota's chips) and its
-// details (a list of one row) are one old view in it as yet, as its words waiting their bones are.
+// its details, all of it nodes (its steps sfpages' history_steps_node).
 
 ///|
 /// The history's tab: its steps (0) or its details (1), the same for every history while the app runs.
@@ -10,7 +9,7 @@ let history_tab : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// The history of agent `key` of chat `r` made once in node `v`, its steps opened at `entry` (a transcript entry),
-/// else at its newest; under the status bar and over the navigation bar as `frame` says; `serial` the stack's page it is.
+/// else at its newest; under the status bar and over the navigation bar as `frame` says.
 fn history_node(
   v : @view.View,
   src : Source,
@@ -18,7 +17,7 @@ fn history_node(
   key : String,
   entry : Int?,
   frame : () -> PageFrame,
-  serial : Int,
+  _serial : Int,
 ) -> Unit {
   let src = src.owned_by(v)
   let chat = fn() { src.topic("chat", chat_params(r)).get() }
@@ -53,59 +52,31 @@ fn history_node(
   )
   // its head, once the chat says what the agent is
   v.show(fn() { agent() is Some(_) }, fn(h) { history_head_node(h, src, r, agent) })
-  // the agent's history followed from then on as long as the page is, whichever tab reads it (the steps' nodes or the
-  // details' old view, each made as its tab is shown): not let go and asked again as the tabs change
+  // the agent's history followed from then on as long as the page is, whichever tab reads it (each made as its tab is
+  // shown): not let go and asked again as the tabs change
   let held : Ref[@sfbase.TopicLease?] = Ref(None)
   v.reacts(fn() { agent() is Some(_) }, fn(known) {
     if known && held.val is None {
       held.val = Some(src.lease_topic("history", history_params(r, key)))
     }
   })
-  // under it, an old view: on the steps' tab what is worth a look (its quota's chips) alone, as tall as it is, the
-  // steps under it nodes; else what is worth a look and the details under it, all the room left (its details' list
-  // scrolling in it), or the chat's words in their bones while it is read the first time. What either tab reads is
-  // followed as long as the page is (its source the page's: the history's topic not let go and asked again as the tabs
-  // change). Built as the stack builds its page's old view: its lists' places and what they keep the page's own.
-  v.pick(fn() { agent() is Some(_) && history_tab.get() == 0 }, fn(p, steps) {
-    if steps {
-      p.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    } else {
-      p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    }
-    app.nav.page_island(
-      p,
-      serial,
-      fn(c, _page) {
-        match agent() {
-          None =>
-            waiting_messages(
-              c,
-              match chat().error {
-                Some(e) => Some(error_words(e))
-                None => None
-              },
-            )
-          Some(_) as a => {
-            history_summary(c, a)
-            if !steps {
-              c.box(style=history_body_box, fn() { history_details(c, src, r, key, a) }) |> ignore
-            }
-          }
-        }
-        // a Slack user's name tapped: its menu (link_menu.mbt)
-        link_menu_layer(c)
-      },
-      natural=steps,
-      gives=steps,
-    )
-    .grow(Is(if steps { 0.0 } else { 1.0 }))
-    .shrink(Is(1.0))
-    .min_height(Is(Some(0.0)))
-    |> ignore
+  // under it, what is worth a look (its quota's chips), as tall as it is; on the details' tab its details under it,
+  // all the room left, scrolling in it; while the chat does not say what the agent is yet, its rows in their bones
+  // (what could not be read over them in red)
+  let tips = @sf.TipLayer::new(fn() { Some(v) })
+  v.show(fn() { agent() is None }, fn(w) {
+    w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    @sf.waiting_node(w, fn(s) { @sfpages.steps_sample_node(s, r.station, key, tips) }, error=fn() {
+      match chat().error {
+        Some(e) => error_words(e)
+        None => ""
+      }
+    }, fill=true)
   })
+  v.show(fn() { agent() is Some(_) }, fn(h) { history_summary_node(h, agent, tips) })
+  v.show(fn() { agent() is Some(_) && history_tab.get() == 1 }, fn(d) { history_details_node(d, src, r, key, agent, tips) })
   // its steps, as every pane draws them (sfpages' history_steps_node.mbt), the room left; opened at an entry, brought
   // to it once
-  let tips = @sf.TipLayer::new(fn() { Some(v) })
   v.show(fn() { agent() is Some(_) && history_tab.get() == 0 }, fn(s) {
     s.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     let lkey = "history/" + r.station + "/" + key
@@ -119,11 +90,6 @@ fn history_node(
     @sfpages.history_steps_node(s, src, r.station, key, tips)
   })
 }
-
-///|
-/// What the history's old view holds under what is worth a look: its details, all the room left.
-// kept across runs: a value (no field of it changes)
-let history_body_box : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// The history's head: the agent's model's mark with its state's badge, its name (cut short where what it does and

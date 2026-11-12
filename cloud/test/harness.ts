@@ -76,6 +76,8 @@ export async function harness(
     /** Push notifications: the VAPID key (base64url point and scalar), the FCM service account's JSON. */
     vapid?: { publicKey: string; privateKey: string };
     fcm?: string;
+    /** FCM_SERVICE_ACCOUNT_MORE: the other product's projects' accounts. */
+    fcmMore?: string;
     apns?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
@@ -88,6 +90,13 @@ export async function harness(
     access?: true;
     /** Another cloud's releases its own bucket lacks some of (RELEASES_UPSTREAM, https://upstream.test/releases): its answer to each file asked there. */
     upstream?: (file: string, request: OutboundRequest) => { status: number; body?: string; headers?: Record<string, string> };
+    /** The other product's origins answered as that product (GUESTS, guests.ts), and the secret forwarded requests carry. */
+    guests?: unknown[];
+    forwardSecret?: string;
+    /** Moved into another cloud (FORWARD_TO): where its requests go, answered by `push` as every other outbound one. */
+    forwardTo?: string;
+    /** MOVING: accounts moving between clouds (move.ts). */
+    moving?: true;
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -182,14 +191,19 @@ export async function harness(
         ...(options.statusRepo ? { STATUS_REPO: options.statusRepo } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
+        ...(options.fcmMore ? { FCM_SERVICE_ACCOUNT_MORE: options.fcmMore } : {}),
         ...(options.apns ? { APNS_KEY: options.apns } : {}),
+        ...(options.guests ? { GUESTS: JSON.stringify(options.guests) } : {}),
+        ...(options.forwardSecret ? { FORWARD_SECRET: options.forwardSecret } : {}),
+        ...(options.forwardTo ? { FORWARD_TO: options.forwardTo } : {}),
+        ...(options.moving ? { MOVING: "1" } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
         ...(options.mail ? { TEST_MAIL: "1" } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       r2Buckets: ["RELEASES"],
       durableObjects: {
-        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS"][i], { className, useSQLite: true }])),
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus", "Station"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS", "STATIONS"][i], { className, useSQLite: true }])),
         RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
       },
       outboundService: async (request) => {
@@ -267,6 +281,38 @@ export async function harness(
   const fetchOld = (on: "main" | "admin" | "preview", path: string, init?: RequestInit) => mf.dispatchFetch({ main: oldOrigin, admin: oldAdminOrigin, preview: oldPreviewOrigin }[on] + path, init as any);
   /** A request straight to one of the Workers ("api", "relay", "static"), whatever the routes say. */
   const fetchWorker = async (name: string, url: string, init?: RequestInit) => ((await mf.getWorker(name)) as unknown as { fetch(url: string, init?: RequestInit): Promise<Response> }).fetch(url, init);
+  /** One of the API's Durable Objects, by its binding and name, with the test hooks test/worker.ts gives it. */
+  // deno-lint-ignore no-explicit-any
+  const object = async (binding: "DIRECTORY" | "ACCOUNTS" | "STATIONS", name: string): Promise<any> => {
+    const namespace: any = await mf.getDurableObjectNamespace(binding, "api");
+    return namespace.get(namespace.idFromName(name));
+  };
+  /**
+   * Once what still.fail cloud tells devices' and stations' objects after a change has got there (the Directory's
+   * deliveries go out as the change answers): the barrier a test waits at instead of waiting a while.
+   */
+  const settled = async () => (await object("DIRECTORY", "primary")).settled();
+  /**
+   * Once everything still.fail cloud sends on a socket for what was done or said before now has arrived: where a test
+   * reads a socket. The runtime answers "ping" itself, in the socket's order. By the first pong, what the socket said
+   * before has reached its object; `settled` then waits for that to be answered and for what the Directory tells; the
+   * second pong comes after everything those sent.
+   */
+  const heard = async (ws: { send(data: string): void; addEventListener(type: "message", on: (event: { data: unknown }) => void): void; removeEventListener(type: "message", on: (event: { data: unknown }) => void): void }) => {
+    const pong = () =>
+      new Promise<void>((resolve) => {
+        const on = (event: { data: unknown }) => {
+          if (event.data !== "pong") return;
+          ws.removeEventListener("message", on);
+          resolve();
+        };
+        ws.addEventListener("message", on);
+        ws.send("ping");
+      });
+    await pong();
+    await settled();
+    await pong();
+  };
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -367,6 +413,9 @@ export async function harness(
     fetchBeta,
     fetchOld,
     fetchWorker,
+    object,
+    settled,
+    heard,
     begin,
     complete,
     exchange,

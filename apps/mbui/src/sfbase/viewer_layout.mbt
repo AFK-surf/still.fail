@@ -26,7 +26,7 @@ pub fn viewer_folder_label(src : Source, station : String, root : String, folder
     return dv_name(folder)
   }
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   let roots = match dv_stations(src, ws).0 {
@@ -132,3 +132,30 @@ pub let plain_small_side : Double = 16.0
 
 ///|
 pub let plain_small_foot : Double = 48.0
+
+///|
+/// How far down a document starts on its stage: over the whole window, `under` under the system's status bar (where
+/// the floating bar or the bar across the top leaves it: viewer_top); in a tab beside a chat (Viewer's `beside`), `own`
+/// under the tab's tools, nothing of the window's bars over it.
+fn Viewer::stage_top(self : Viewer, c : @ui.Ctx, under : Double, own : Double) -> Double {
+  if self.beside {
+    own
+  } else {
+    viewer_top(c) + under
+  }
+}
+
+///|
+/// What a stage's list (its scroll, what it laid out) is kept by: the whole window's `key`; a tab's its own, the two
+/// shown at once (全屏 from the tab).
+fn Viewer::stage_key(self : Viewer, key : String) -> String {
+  if self.beside {
+    "beside/" + key
+  } else {
+    key
+  }
+}
+
+///|
+/// Code, words and Markdown in a tab beside a chat: this far under its tools.
+let beside_text_top : Double = 16.0

@@ -34,6 +34,7 @@ fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme) ->
           wrap: true,
           tracking: @view.letters_own,
           balance: false,
+          max_lines: 0,
         })
         |> ignore
       })
@@ -72,7 +73,7 @@ test "words in pieces on a node: each piece in its weight and ink (else the word
   let (t, laid) = runs_pair(pieces, 80.0, Theme::light())
   let (old, new) = runs_drawn(t)
   assert_eq(new, old, msg="wrapped")
-  assert_true(laid().1 > 22.0, msg="more than a line: \{laid()}")
+  assert_true(laid().1 > 22.0, msg="more than a line: \{Repr(laid())}")
 }
 
 ///|
@@ -93,7 +94,7 @@ fn shaped_words(
   t.tabular_wider(0.5)
   t.ui_face_wider(0.1)
   let node : Ref[@view.View?] = Ref(None)
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     set_tree_theme(fn() { { ..Theme::light(), tabular: tabular.get() } })
     // (the app's words' face given before any words are made, `face`)
@@ -178,7 +179,7 @@ test "a node's words made whole, longer than the window is tall: moved so their 
     at.set(200.0 - h)
     t.draw()
     assert_eq(view_paint_work.made, made, msg="\{what}: moved, not made again")
-    assert_eq(last_line().length(), 3, msg="\{what}: its last line seen whole, its three glyphs: \{last_line()}")
+    assert_eq(last_line().length(), 3, msg="\{what}: its last line seen whole, its three glyphs: \{Repr(last_line())}")
     if pieces is Some(_) {
       let inked = t.drawn_glyphs().filter(fn(g) { g.2 == red && g.1 >= 200.0 - 22.0 && g.1 < 200.0 })
       assert_eq(inked.length(), 3, msg="\{what}: the last piece in its ink, there")
@@ -252,7 +253,7 @@ test "a node's words made once, drawn frame after frame while an old view draws 
     })
     |> ignore
     root.box(fn(n) {
-      n.words(Is("AB"), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+      n.words(Is("AB"), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
     })
     |> ignore
   })
@@ -306,7 +307,7 @@ test "a node's words hidden (what holds them faded out) hold no room in the atla
   let first_shown = @signals.signal(true, same=fn(a, b) { a == b })
   let second_there = @signals.signal(false, same=fn(a, b) { a == b })
   let (one, two) = (letters(0x4E00, 40), letters(0x5000, 40))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(h) {
@@ -327,7 +328,7 @@ test "a node's words hidden (what holds them faded out) hold no room in the atla
   second_there.set(true)
   t.draw()
   let (drawn, want) = drawn_and_held(200.0, two)
-  assert_true(!want.contains((-1.0, -1.0)), msg="the second's glyphs each in the atlas: \{want}")
+  assert_true(!want.contains((-1.0, -1.0)), msg="the second's glyphs each in the atlas: \{Repr(want)}")
   assert_eq(drawn, want, msg="the second whole, drawn from them")
   second_there.set(false)
   first_shown.set(true)
@@ -363,7 +364,7 @@ test "a node's words made as the atlas has no room for them this frame (an old v
     })
     |> ignore
     root.show(fn() { there.get() }, fn(n) {
-      n.offset(Is((0.0, 100.0))).words(Is(word), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+      n.offset(Is((0.0, 100.0))).words(Is(word), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
     })
   })
   t.draw()
@@ -372,12 +373,12 @@ test "a node's words made as the atlas has no room for them this frame (an old v
   there.set(true)
   t.draw()
   let (_, want) = drawn_and_held(100.0, word)
-  assert_true(want.contains((-1.0, -1.0)), msg="no room for some of it as it is made: \{want}")
+  assert_true(want.contains((-1.0, -1.0)), msg="no room for some of it as it is made: \{Repr(want)}")
   // (the old view's words gone: room again; the node's words and look the same)
   crowd.set(-1)
   t.draw()
   let (drawn, want) = drawn_and_held(100.0, word)
-  assert_true(!want.contains((-1.0, -1.0)), msg="room again, the first frame: its glyphs each in the atlas: \{want}")
+  assert_true(!want.contains((-1.0, -1.0)), msg="room again, the first frame: its glyphs each in the atlas: \{Repr(want)}")
   assert_eq(drawn, want, msg="drawn whole the first frame there is room")
   // (the frame after: the same, its content composed again, not made again)
   let made = view_paint_work.made
@@ -420,9 +421,9 @@ test "the pointer within a node under an old view's layer over all of it: within
     |> ignore
   })
   t.draw()
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   let tree = view_app.val.unwrap()
-  assert_true(told.last() == Some(true), msg="within, nothing over it: \{told}")
+  assert_true(told.last() == Some(true), msg="within, nothing over it: \{Repr(told)}")
   assert_true(tree.pointed_now() == band_id.val, msg="pointed at, nothing over it")
   assert_eq(t.cursor(), ResizeY, msg="its shape, nothing over it")
   // (the layer opened over the pointer that stays, the frames after it; moved under it; closed: never told otherwise)
@@ -432,7 +433,7 @@ test "the pointer within a node under an old view's layer over all of it: within
   t.draw()
   assert_true(tree.pointed_now() is None, msg="what it points at the layer's")
   assert_eq(t.cursor(), Crosshair, msg="the layer's shape")
-  t.move(30.0, 25.0)
+  t.move_to(30.0, 25.0)
   t.draw()
   t.touch(0, 30.0, 25.0)
   t.draw()
@@ -443,19 +444,19 @@ test "the pointer within a node under an old view's layer over all of it: within
   t.draw()
   t.draw()
   assert_eq(t.cursor(), ResizeY, msg="its shape again, the layer gone")
-  assert_true(!told[from:].iter().any(fn(w) { !w }), msg="never told it is not within: \{told[from:]}")
+  assert_true(!told[from:].iter().any(fn(w) { !w }), msg="never told it is not within: \{Repr(told[from:])}")
   assert_true(@signals.untracked(fn() { told.last() }) == Some(true), msg="within throughout")
   // (out of the window, as the host tells it, no frame drawn: not within then; the frame after the same)
   on_pointer(7, -1.0, -1.0, 0)
-  assert_true(told.last() == Some(false), msg="out of the window: not within, as it is told: \{told}")
+  assert_true(told.last() == Some(false), msg="out of the window: not within, as it is told: \{Repr(told)}")
   t.draw()
   assert_true(told.last() == Some(false), msg="out of the window: the frame after the same")
   // (back in, then a finger down, no frame drawn: no pointer, not within then; the frame after the same)
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   t.draw()
   assert_true(told.last() == Some(true), msg="back in: within")
   t.touch_raw(0, 1, 200.0, 200.0, t.time())
-  assert_true(told.last() == Some(false), msg="a finger down: no pointer, not within, as it is told: \{told}")
+  assert_true(told.last() == Some(false), msg="a finger down: no pointer, not within, as it is told: \{Repr(told)}")
   t.touch_raw(2, 1, 200.0, 200.0, t.time())
   t.draw()
   assert_true(told.last() == Some(false), msg="a finger: the frame after the same")
@@ -521,7 +522,7 @@ test "a row of the tree's that moves the window, as the old view's top row does:
   assert_eq(old_row.0, [1, 1, 1], msg="the old view's: moved by the primary button on its blank alone")
   assert_eq(node_row.0, old_row.0, msg="the tree's: moved as the old view's is")
   assert_eq(node_row.1, old_row.1, msg="the focus as the old view's leaves it")
-  assert_eq(node_row.1[0:2].to_array(), [true, true], msg="the focus kept by a press on the blank, either button")
+  assert_eq(node_row.1[0:2].to_owned(), [true, true], msg="the focus kept by a press on the blank, either button")
   assert_eq(node_row.2, old_row.2, msg="its button pressed as the old view's is")
 }
 
@@ -531,7 +532,7 @@ test "a node's words in a line shorter than their font, measured again as lines 
   t.check_looks(false)
   set_web_lines(false)
   // (a font taller than its line: 20 in lines of 14)
-  let look : @view.WordsLook = { size: 20.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 20.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   let node : Ref[@view.View?] = Ref(None)
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
@@ -560,7 +561,7 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   t.ui_face_wider(0.1)
   let words = @signals.signal("界面草图", same=fn(a, b) { a == b })
   let parts : Ref[(@view.View?, @view.View?, @view.View?)] = Ref((None, None, None))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(row) {
       row.row(Is(true)).width(Is(Some(300.0))) |> ignore
@@ -580,7 +581,7 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   let now = fn() { (a.laid_size().0, b.laid_size().0, held.laid_size().0) }
   let alike = fn(at : String) raise {
     let (wa, wb, ww) = now()
-    assert_true((wb - dmax(150.0, ww)).abs() < 0.01 && (wa + wb - 300.0).abs() < 0.01, msg="\{at}: \{(wa, wb, ww)}")
+    assert_true((wb - dmax(150.0, ww)).abs() < 0.01 && (wa + wb - 300.0).abs() < 0.01, msg="\{at}: \{Repr((wa, wb, ww))}")
   }
   alike("short words: each its share")
   assert_eq(b.laid_size().0, 150.0, msg="short words: its share")
@@ -590,7 +591,7 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   assert_true(longer > 150.0, msg="longer words: wider than its share: \{longer}")
   assert_true(face_add(@hostapi.face_ui, "/fonts/ui.ttf"), msg="given")
   alike("their face wider")
-  assert_true(b.laid_size().0 > longer + 1.0, msg="their face wider: wider still: \{now()}")
+  assert_true(b.laid_size().0 > longer + 1.0, msg="their face wider: wider still: \{Repr(now())}")
   face_clear(@hostapi.face_ui)
   alike("their face gone")
   assert_eq(b.laid_size().0, longer, msg="their face gone: as before")
@@ -605,7 +606,7 @@ test "a row that leaves out what has not the room (View::fits) counts what is ke
   t.check_looks(false)
   let w = @signals.signal(300.0, same=fn(a, b) { a == b })
   let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(row) {
       row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
@@ -637,7 +638,7 @@ test "kept whole in a row that leaves out what has not the room (View::fit_whole
   t.check_looks(false)
   let w = @signals.signal(300.0, same=fn(a, b) { a == b })
   let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.box(fn(row) {
       row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
@@ -745,7 +746,7 @@ test "words and words in pieces in a node that clips, 100 down the window: drawn
   let (plain, runs) = (0x112233FFL, 0x445566FFL)
   let down = @signals.signal(100.0, same=fn(a, b) { a == b })
   let clips = @signals.signal(true, same=fn(a, b) { a == b })
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(p) {
@@ -883,7 +884,7 @@ fn runs_whole_tester(
       b.width(Is(Some(w))).lines_up(Is(Some(Start))) |> ignore
       b.box(fn(n) {
         n
-        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
         .runs_look(By(fn() { { ..@view.runs_plain, code_ground: ground.get() } }))
         |> ignore
       })
@@ -970,4 +971,62 @@ test "words in pieces on a node, code's ground coming, changing colour and going
       fail("at \{g}: the old's alone:\n\{only_old.join("\n")}\nthe node's alone:\n\{only_new.join("\n")}")
     }
   }
+}
+
+///|
+/// A window 400 by 300 (a mouse's): the window's tree's top row (44 high, View::moves_window) over an old view whose
+/// target lies under it and below it (200 to 369 across, 80 down: a message scrolled under a chat's bar), and over all
+/// of it a small key of the old frame's root (24 by 32 at 370, 6: a window's own button, reached from 6 round it). Each
+/// press: where (x, y), and after it how many times the window was moved, the key pressed, the old view's target pressed.
+fn top_row_over_old(presses : Array[(Double, Double)]) -> Array[(Int, Int, Int)] {
+  let key_pressed = Ref(0)
+  let under_pressed = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      // (the old views where the tree has them, then over all of it the root's layer, as an app's window's buttons)
+      old_views_here(c)
+      c.layer(fn() {
+        let key = c.id("key")
+        c.on_press(key, fn() { key_pressed.val += 1 })
+        c.box(id=key, ml=370.0, mt=6.0, w=Px(24.0), h=Px(32.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    tree=fn(root) {
+      old(root, fn(c) {
+        let under = c.id("under")
+        c.on_press(under, fn() { under_pressed.val += 1 })
+        c.box(id=under, ml=200.0, w=Px(169.0), h=Px(80.0), fn() {  }) |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+      root.box(fn(o) {
+        o.over(Is(true)) |> ignore
+        o.box(fn(top) { top.height(Is(Some(44.0))).moves_window(Is(true)) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  let out = []
+  for p in presses {
+    let (x, y) = p
+    on_pointer(0, x, y, 0)
+    on_pointer(2, x, y, 0)
+    t.draw()
+    out.push((t.window_drags(), key_pressed.val, under_pressed.val))
+  }
+  out
+}
+
+///|
+test "the window's tree's top row over an old view's target: a small key of the old frame's root reached from round it there as over an old view's top row; the row's blank moves the window; the old view's target takes no press under the row, its own below it" {
+  let got = top_row_over_old([(380.0, 22.0), (368.0, 22.0), (100.0, 20.0), (250.0, 20.0), (250.0, 60.0)])
+  assert_eq(got[0], (0, 1, 0), msg="on the key: the key's: \{Repr(got)}")
+  assert_eq(got[1], (0, 2, 0), msg="2 before the key, over the old view's target under the row: the key's, as its room reaches: \{Repr(got)}")
+  assert_eq(got[2], (1, 2, 0), msg="the row's blank: the window moved: \{Repr(got)}")
+  assert_eq(got[3], (2, 2, 0), msg="the row over the old view's target: the window moved, the target not pressed: \{Repr(got)}")
+  assert_eq(got[4], (2, 2, 1), msg="the old view's target below the row: its own: \{Repr(got)}")
 }

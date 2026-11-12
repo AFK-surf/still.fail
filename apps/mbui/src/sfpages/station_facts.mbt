@@ -75,3 +75,58 @@ let station_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive"
 /// Down: a ring in the quiet words' grey (parts.css.ts statusDot: inset 1.5 of --muted), seen on any ground.
 // kept across runs: a value (no field of it changes)
 let station_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full border=B1_5 border_color=Muted")
+
+///|
+/// Under the name of a station that only runs tasks (rig `r`: the core's `rigs`), in its figures' place: that it only
+/// runs tasks, then whose it is and how it is.
+pub fn rig_figures(c : @ui.Ctx, r : Json?) -> Unit {
+  @sf.list_row_line(c, fn() { c.text(@sf.t("web-pages.rigs.mode.tasks"), style=station_words()) |> ignore })
+  @sf.list_row_line(c, fn() { c.text(@settings.rig_whose(r) + " · " + @settings.rig_state(r), style=station_words()) |> ignore })
+}
+
+///|
+/// station_state's, as nodes, in `parent` (a row: the end of a station's name's line), of station `s` as it is now: up
+/// or away (the rail's dot), then its agents at work (in the accent) or, away, when it was last seen.
+pub fn station_state_node(parent : @view.View, s : () -> Json?) -> Unit {
+  let online = fn() { flag(s(), "online") }
+  let running = fn() { number(field(field(s(), "overview"), "counts"), "running") }
+  parent.box(fn(b) {
+    @sf.style_node(b, fn() { station_state_box })
+    b.box(fn(d) { @sf.style_node(d, fn() { if online() { station_dot_on } else { station_dot_off } }) }) |> ignore
+    b.show(fn() { !online() }, fn(w) { @sf.words_node(w, fn() { text(s(), "summary") }, station_words) |> ignore })
+    b.show(fn() { online() && running() > 0.0 }, fn(w) {
+      @sf.words_node(
+        w,
+        fn() { @sf.t("web-pages.stations.page.runningShort", args=[("n", running().to_int().to_string())]) },
+        fn() { station_words().then(station_busy) },
+      )
+      |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+/// station_figures', as nodes, in `parent` (the column under a station's name), of station `s` as it is now: while it
+/// is up, a line of what is left of its CPU, memory and disk in brief (@sf.meter_chips_brief_node) and a line of how
+/// this device reaches it (the core's `stationNet`, as it says it: 未连接 while there is none).
+pub fn station_figures_node(parent : @view.View, src : Source, s : () -> Json?) -> Unit {
+  let net = src.topic("stationNet", { "station": Json::string(text(@signals.untracked(s), "station")) })
+  parent.show(fn() { flag(s(), "online") }, fn(f) {
+    @sf.list_row_line_node(f, fn(l) { @sf.meter_chips_brief_node(l, fn() { items(field(s(), "host"), "meters") }) })
+    @sf.list_row_line_node(f, fn(l) {
+      @sf.words_node(l, fn() {
+          let n = net.get().value
+          match n {
+            Some(Object(_)) =>
+              match text(field(n, "rtt"), "text") {
+                "" => text(n, "path")
+                rtt => text(n, "path") + " · " + rtt
+              }
+            _ => @sf.t("web-pages.stations.netNone")
+          }
+        }, station_words)
+      |> ignore
+    })
+  })
+}

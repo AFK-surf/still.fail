@@ -128,7 +128,7 @@ pub fn row_took(c : @ui.Ctx) -> Bool {
 /// A station's name, as the workspace's stations list has it (its address while not known).
 pub fn station_name(src : Source, station : String) -> String {
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   match dv_stations(src, ws).0 {
@@ -144,10 +144,17 @@ pub fn station_name(src : Source, station : String) -> String {
 ///|
 /// What a change set going said should it fail (useAct): 没能{what}：{error}; `done` once done, if said.
 pub fn act_done(c : @ui.Ctx, what : String, done? : String = "") -> (Result[Json, Json]) -> Unit {
+  ignore(c)
+  act_said(what, done~)
+}
+
+///|
+/// act_done's, for a handler of a node (no Ctx): 没能{what}：{error} in the toast should it fail; `done` once done.
+fn act_said(what : String, done? : String = "") -> (Result[Json, Json]) -> Unit {
   fn(r) {
     match r {
-      Ok(_) => if done != "" { say(c, done) }
-      Err(e) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(e))]))
+      Ok(_) => if done != "" { toast_later(done) }
+      Err(e) => toast_later(@sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(e))]))
     }
   }
 }
@@ -160,24 +167,30 @@ pub fn copy_path(c : @ui.Ctx, abs : String) -> Unit {
 }
 
 ///|
-/// The folder read again (drive.refresh), once at a time.
-pub fn refresh_folder(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
+/// The folder read again (drive.refresh), once at a time: the core reads it of the station and says the folder's
+/// topic (`drive`, by its station, root and path) anew, what is in it or why it could not be read, to what holds it.
+/// Said where nothing is being built (a node's handler); an old view's build says it by refresh_folder_told.
+pub fn refresh_folder(src : Source, at : DriveAt) -> Unit {
   let root = at.root.unwrap_or("")
   let key = at.station + "\n" + root + "\n" + at.path
   if held.refreshing.contains(key) {
     return
   }
   held.refreshing[key] = true
-  c.tell("refresh/" + key, fn() {
-    (src.call)(
-      "drive.refresh",
-      { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) },
-      fn(r) {
-        held.refreshing.remove(key)
-        (act_done(c, @sf.t("web-pages.drive.refreshWhat")))(r)
-      },
-    )
-  })
+  (src.call)(
+    "drive.refresh",
+    { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) },
+    fn(r) {
+      held.refreshing.remove(key)
+      (act_said(@sf.t("web-pages.drive.refreshWhat")))(r)
+    },
+  )
+}
+
+///|
+/// refresh_folder from an old view's build (a press it took): told once its frame's builds are over (Ctx::tell).
+pub fn refresh_folder_told(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
+  c.tell("refresh/" + at.station + "\n" + at.root.unwrap_or("") + "\n" + at.path, fn() { refresh_folder(src, at) })
 }
 
 ///|
@@ -262,6 +275,16 @@ pub fn open_entry(
     }
     _ => save_entry(c, src, in_, e)
   }
+}
+
+///|
+/// A drive's row's 在侧边打开 (`e` in `in_`): a file the preview shows, where it is offered (beside_offered: a side panel
+/// for the page in view, a kind that opens there), opened in a tab beside it; None for anything else.
+fn entry_beside(in_ : DriveAt, e : DvEntry) -> (() -> Unit)? {
+  guard !e.dir && opener_of(e.kind) == "preview" else { return None }
+  let file = dv_file(in_.station, in_.root.unwrap_or(""), in_.path, e)
+  guard @sfbase.beside_offered(file.path, e.name) else { return None }
+  Some(fn() { open_drive_file(file, [], beside=true) })
 }
 
 ///|
@@ -462,7 +485,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     menu.push(Some(@sf.menu_item_of(@sf.t(if a.hidden { "web-pages.drive.hideHidden" } else { "web-pages.drive.showHidden" }), fn() {
       b.arrange_as(c, src, hidden=!a.hidden)
     })))
-    menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", fn() { refresh_folder(c, src, at) })))
+    menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", fn() { refresh_folder_told(c, src, at) })))
     menu
   }
   // (short of room for the list beside the preview, the preview gives way: the list keeps a few names' width)
@@ -659,6 +682,10 @@ fn row_items(
   item(@sf.t("web-pages.drive.open"), "eye", fn() {
     open_entry(c, src, "page", in_, e, [e], fn(to) { (f.go)(to, false) })
   })
+  match entry_beside(in_, e) {
+    Some(open) => item(@sf.t("web-main.preview.openBeside"), "panel-open", open)
+    None => ()
+  }
   if !e.dir {
     item(@sf.t("web-pages.drive.download"), "download", fn() { save_entry(c, src, in_, e) })
     item(@sf.t("android-misc.drive.share"), "external", fn() { share_entry(c, src, in_, e) })
@@ -762,7 +789,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   // Less frequent actions stay named in the folder's menu, apart from the view and creation controls in the bar.
   let more : Array[@sf.MenuItem?] = [
     Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", disabled=refreshing(at), fn() {
-      refresh_folder(c, src, at)
+      refresh_folder_told(c, src, at)
     })),
     Some(@sf.menu_item_of(
       @sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", name)]),
@@ -1673,9 +1700,9 @@ let empty_box : @ui.Style = @ui.css("w=Full pt=S14 pb=S14 px=S6 gap=S3 align=ACe
 /// What is held over the list (drop): over all of it, its words and mark in the middle, the page's ground at 82%
 /// under them, ringed in the accent.
 // kept across runs: a value (no field of it changes)
-let drop_box : @ui.Style = @ui.css(
+let drop_box : @ui.Style = @ui.css((
   #|w=Full h=Full gap=S2 align=ACenter justify=JCenter radius=Xl2 bg=A(Bg,O80) border=B2 border_color=A(Accent,O60)
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -63,11 +63,13 @@ jobs:
           RELEASE_BUILD: ${{ inputs.build }}
   tests:
     needs: guard
+    permissions: { contents: read, actions: read }
     uses: ./.github/workflows/mbui-check.yml
-  # Built and signed beside the tests (needs the guard alone), uploaded only once every tests job passed
-  # (scripts/testflight-tests.sh, at the root: it waits on GitHub, which has no event to wait for, and mbui's detlint keeps fixed waits out of its scripts): waiting for them before building made a release ~10.5 min (build 25, 2026-11-02).
+  # Queued tests can outlast the release's ten minutes. Start its build and signing only after the tests finish.
+  # The explicit skip_tests choice still permits uploading after failed tests.
   release:
-    needs: guard
+    needs: [guard, tests]
+    if: ${{ !cancelled() && needs.guard.result == 'success' && (inputs.skip_tests || needs.tests.result == 'success') }}
     runs-on: xcode-27
     timeout-minutes: 10
     # Configure required reviewers, prevent self-review, and main-only deployment rules.

@@ -6,7 +6,7 @@ test "a picture returning to a rounded card keeps all four thumbnail corners thr
   for corners in [(40.0, 40.0, 40.0, 40.0), (40.0, 10.0, 30.0, 20.0)] {
     new_run()
     let a = flight_photo()
-    @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
+    @sfbase.sent_picture_kept(@sfbase.sent_key("ws1/st1", a.path), "sent-key")
     let src = fixture("chat")
     // (the card an old view the window's tree hosts, the viewer beside it as the shells have it: sfbase's viewer_node,
     // its stage the window)
@@ -63,6 +63,6 @@ test "a picture returning to a rounded card keeps all four thumbnail corners thr
         }
       }
     }
-    assert_eq(bad, 0, msg="\{corners}: pixels changing at a corner")
+    assert_eq(bad, 0, msg="\{Repr(corners)}: pixels changing at a corner")
   }
 }

@@ -1,8 +1,14 @@
 // What changed in still.fail, for people (the `changelog` topic, scripts/changelog.ts): still.fail cloud's
 // changelog with what each part has out on this app's channel, one tab a part (this app's first; this app's alone where
 // they would all be the same, as the stable channel's are: a release an entry, each every part's), by day, newest first;
-// and what this app got since it
-// was last shown here (`news`, until `changelog.seen`). Kept on the device (table `changelog`). The sync reads it as
+// and what this app got since it was last shown here (`news`, until `changelog.seen`). Only the tab asked (`part`; this
+// app's where none is said, or one there is not) has its days, its first `limit` changes (a page, `PAGE`, where none is
+// said), the others' none, and `more` says how many it has past those: a page more is asked with a larger `limit`,
+// `from` the subscription the app holds, and goes as what changed from it (store.ts `#firstFrom`; collections.ts keys
+// the tabs, days and changes). The newest `SHOWN` of the feed are what any tab can reach. The beta's feed has thousands
+// of entries; every tab of its newest 200 whole was ~190 KB each time the page opened (2026-11-11). Asked with `news`,
+// that alone, no tab made: what the chats' list reads of it for its card (the whole was 125 KB on a phone, sent again
+// each time the list came back, 2026-11-10). Kept on the device (table `changelog`). The sync reads it as
 // the core starts and each time still.fail cloud's events socket opens (rule 6: never because it is shown); `app.update`
 // reads it too when it finds a build of this app the changelog kept was read before (`brings`).
 import { Effect } from "effect";
@@ -22,6 +28,8 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 
 const SHOWN = 200;
+/// The changes of a tab sent where its `limit` is not said: what the page asks first.
+const PAGE = 30;
 const NEWS = 20;
 const TABLE = "changelog";
 
@@ -93,12 +101,15 @@ export class Changelog implements Owner {
     return topic.topic === "changelog";
   }
 
-  compute(): Value {
-    return { ok: this.value() };
+  compute(topic: Topic): Value {
+    if (topic.news === true) return { ok: this.value(true) };
+    const limit = typeof topic.limit === "number" ? topic.limit : PAGE;
+    return { ok: this.value(false, typeof topic.part === "string" ? topic.part : null, limit) };
   }
 
+  /// Both go out again: the whole, and its news alone.
   #changed(): void {
-    this.#store.invalidate({ topic: "changelog" });
+    this.#store.invalidateAll((topic) => topic.topic === "changelog");
   }
 
   /// What the device's host said it is: its app, and its build's number.
@@ -159,7 +170,10 @@ export class Changelog implements Owner {
     return typeof app === "string" ? app : "";
   }
 
-  value(): J {
+  /// The changelog as this app shows it; `newsOnly`: what it got since it was last shown alone (`changelog` asked with
+  /// `news`), its tabs none. Else every tab there is, but only tab `part`'s days (the first's where it is none of them),
+  /// its first `limit` changes, and how many it has past those (`more`).
+  value(newsOnly: boolean = false, part: string | null = null, limit: number = PAGE): J {
     const device: J = this.#data.record(TABLE, "device") ?? null;
     const app = this.#app();
     const build = int(get(device, "build"));
@@ -167,32 +181,46 @@ export class Changelog implements Owner {
     const feed = this.#data.record(TABLE, "feed") as J;
     if (feed === undefined) return { app, build, tabs: [], loading: !this.#failed, error: this.#failed ? t("core-misc.changelog.unreadable") : null };
     const released = get(feed, "released") ?? null;
+    const news: J[] = [];
+    const shown = arr(get(feed, "entries")).slice(0, SHOWN);
+    for (const entry of shown) {
+      if (news.length >= NEWS) break;
+      const it = item(entry, app, build, released);
+      if (it === null || !it.mine) continue;
+      const version = it.version as number;
+      if (build !== null && version <= build && seen !== null && version > seen) news.push(it);
+    }
+    const said = news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null;
+    if (newsOnly) return { app, build, tabs: [], news: said, loading: false };
+    // Each tab's changes (those `item` reads as one), by where they are in the feed.
+    const all = tabsOf(app);
+    const of = new Map<string, J[]>(all.map((tab) => [tab, []]));
+    for (const entry of shown) {
+      if (item(entry, app, build, released) === null) continue;
+      const parts: string[] = arr(get(entry, "parts")).filter((p): p is string => typeof p === "string");
+      for (const tab of all) if (inTab(tab, parts)) of.get(tab)!.push(entry);
+    }
+    // A tab a part only where they part what is said: where each would list the same changes, this app's alone.
+    const listed = all.map((tab) => of.get(tab)!.map((e) => e.version).join(","));
+    const parted = listed.every((l) => l === listed[0]) ? all.slice(0, 1) : all;
+    const asked = part !== null && parted.includes(part) ? part : parted[0]!;
     const now = this.#host.nowMs();
     const offset = this.#host.utcOffsetMin(now);
-    const news: J[] = [];
-    const tabs = tabsOf(app).map((part) => ({ part, label: t(`core-misc.changelog.tab.${part}`), days: [] as J[] }));
-    for (const entry of arr(get(feed, "entries")).slice(0, SHOWN)) {
-      const it = item(entry, app, build, released);
-      if (it === null) continue;
-      const version = it.version as number;
-      if (it.mine && build !== null && version <= build && seen !== null && version > seen && news.length < NEWS) news.push(it);
+    const entries = of.get(asked)!;
+    const days: J[] = [];
+    for (const entry of entries.slice(0, Math.max(limit, 0))) {
       const ms = (typeof get(entry, "at") === "number" ? entry.at : 0) * 1000;
-      const label = format.dayLabel(ms, now, offset);
       // the day it is of where the device is: which day of the list it is, the same whatever else that day lists or
       // what the list leaves off (its label only says it)
       const day = format.localDay(ms, offset);
-      const parts: string[] = arr(get(entry, "parts")).filter((p): p is string => typeof p === "string");
-      for (const tab of tabs) {
-        if (!inTab(tab.part, parts)) continue;
-        const shown = item(entry, app, build, released, tab.part);
-        const last = tab.days[tab.days.length - 1];
-        if (last && last.day === day) last.entries.push(shown);
-        else tab.days.push({ day, label, entries: [shown] });
-      }
+      const it = item(entry, app, build, released, asked);
+      const change = { version: it.version, versionName: it.versionName, lines: it.lines, has: it.has, note: it.note };
+      const last = days[days.length - 1];
+      if (last && last.day === day) last.entries.push(change);
+      else days.push({ day, label: format.dayLabel(ms, now, offset), entries: [change] });
     }
-    // A tab a part only where they part what is said: where each would list the same changes, this app's alone.
-    const listed = tabs.map((tab) => tab.days.flatMap((d) => d.entries.map((e: J) => e.version)).join(","));
-    const parted = listed.every((l) => l === listed[0]) ? tabs.slice(0, 1) : tabs;
-    return { app, build, tabs: parted, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
+    const tabs = parted.map((tab) => ({ part: tab, label: t(`core-misc.changelog.tab.${tab}`), days: tab === asked ? days : [] }));
+    const more = entries.length - Math.max(limit, 0);
+    return { app, build, tabs, news: said, loading: false, ...(more > 0 ? { more } : {}) };
   }
 }

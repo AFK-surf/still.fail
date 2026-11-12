@@ -9,8 +9,8 @@ let rule_names : Array[String] = [
   "after-build-input", "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
   "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell", "fixture-import",
   "motion-spring", "built-by-hand", "layout-read-back", "motion-length", "tester-branch", "frame-number", "ui-current",
-  "build-clock", "build-motion", "old-list", "old-island", "old-panel",
-  "click-read", "key-read", "part-place", "layout-told",
+  "build-clock", "build-motion", "old-list", "list-comes-off", "old-island", "old-panel",
+  "click-read", "key-read", "part-place", "layout-told", "abort-unsaid", "empty-on-done", "panic-test", "read-before-run", "reset-by-hand",
 ]
 
 ///|
@@ -46,6 +46,7 @@ let rule_words : Map[String, String] = {
   "build-clock": "the frames' clock read where it is followed (Ctx::now, now_before, now_of, cycle, shows_motion; ui's clock_read, clock_read_here, frame_clock): read as a frame is built, the frame's one watch is told by the clock and the whole frame is built again each frame while it is read (a spinner on a page: every frame of its turn). What moves by the clock is read where it is drawn, given its moment there (Ctx::cycle_look's phase; a look's, a move's closure, Ctx::look_by, moved_by); a stamp or a moment woken at is the moment (Ctx::moment, wake_in, every); what changes when a motion ends is said by that end, a moment declared. Counted where they are called, built or painted alike (a lexer cannot tell which: mbui's old parts read it as they paint too), and only fall",
   "old-panel": "a panel presented with what it holds drawn by the old immediate-mode view (@sf.panel's body and foot, Ctx's): what a panel holds is the window's tree's (@sf.panel_nodes: its body and foot made once as nodes, drawn by the tree on every screen); counted so the ones left only go, and the old body's path goes from the presenters once none is",
   "build-motion": "an animated value read as a frame is built (@motion.animate's value, Anim::get, Way::get, outside what a frame's paint is given): what is built from it is built again each frame it moves, the whole frame with it. Tell it as it is built (@motion.told, Anim::follow) and read it where it is drawn, given to a paint taker (Ctx::look_by, moved_by, bg_by, ink_by, notch_by, cut_across_by, glyphs_by, cycle_look); what is built while it comes or goes follows its declared end (Anim::over, ends). Counted where it is read, so the ones left (a size laid out by it, a colour or a shape no paint taker draws) only fall",
+  "list-comes-off": "a page's list said at once (View::scrolls_window's at_once=true: its keys there and gone at once, what its blocks hold each its own way): what comes or goes by data down a column, and what a block holds, makes its way in the list's one way, the framework's (the owner's 方案 A, 2026-11-09); each list said so as its rows were given their way is switched on one at a time, before and after shown to the owner, so the ones left only go",
   "old-list": "a long list laid out by the old immediate-mode view (Ctx::list, the library's rows_list, desk_lanes, panel_list over it): a list is the window's tree's (a page made once, page_node; View::each in what scrolls, View::scrolls_window); counted so the ones left only go, and Ctx::list goes from mbui with its fast paths once none is",
   "old-island": "an old immediate-mode view hosted in a node of the window's tree (@ui.old: its Ctx built again as its frame is, inside a page made once): what is left of the old view where its part has no node yet (a code's boxes, a panel's body, a lock's gate), counted so the ones left only go, and @ui.old goes from mbui with Ctx once none is",
   "tester-branch": "what runs in the app asks whether a Tester runs it (its fake host, `fake.val`; a switch only a Tester sets, detlint.json `tester.names`): what differs under a Tester is its fake host's answer (@hostapi.Host, mbui's ui/fake_host.mbt) or what the Tester does itself after a frame (its own files, `tester.files`), never a path of the app's of its own",
@@ -66,12 +67,17 @@ let rule_words : Map[String, String] = {
   "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's sf/motion.mbt)",
   "built-by-hand": "the app says by hand that what was built is to be built again (Ctx::forget_parts, built_from_changed): what changed is a signal (same= by its value), read where it is used, and what read it is built again by itself, nothing else; a kept build that differs from one built whole is a read not followed, made followed, never covered by building more",
   "layout-read-back": "the app reads back where or how large something was laid out (Ctx::rect_of, laid_size, laid_rect) for what it builds: the first frame has none and draws it wrong, a change lays the frame out again; say it as layout (a box's own rules, by the width it is given, Ctx::place_by_size, cover), a press by what took it (c.hovered, press_within); a flight's ends by @motion.measure",
-  "layout-told": "what is made reads back what the layout came to, told as a change once all is laid out (View::laid_size_told, went_told, pointer_here_told): it is made again by it and laid out again, the layout's result flowing back into what this layout made; make it by the room it is given as that layout comes to it (View::by_room: Room::width, Room::tall), say it as layout (min_width/max_width `within`), or as the framework's own (a scroll's reach, a beside's side); counted, so those left only go",
+  "layout-told": "what is made reads back what the layout came to, told as a change once all is laid out (View::laid_size_told, went_told, pointer_here_told): it is made again by it and laid out again, the layout's result flowing back into what this layout made; make it by the room it is given as that layout comes to it (View::by_room: Room::width, Room::tall), say it as layout (min_width/max_width `within`), or as the framework's own (a scroll's reach, a beside's side); counted, so those left only go. What a page's list has in sight, told to handlers (ListPlace::on_sight, ListPlace::sight_now) at the moments the hand is found again, for the accounts they keep and tell the core of, is let through by name: never read as a frame is built, nor bound to what is made",
   "motion-spring": "the app makes a spring of its own (@motion.spring, motion_spring, Ctx::spring): a spring is one of @motion's (move_spring, sheet_spring, lift_spring), as a timed motion's curve is one of @ui.Ease's (the app's sf/motion.mbt, Curves)",
-  "motion-length": "a move given a length of its own (a tween on Move): a thing moved takes as long as its way is far, from where it is as it is told (@motion.move, @ui.move_ms; the app's sf/motion.mbt, Curves: the user, 2026-10-30, 「有些动效不应该固定播放时间，因为它的距离是不固定的」)",
+  "motion-length": "a move given a length of its own (a tween on Move): a thing moved takes as long as its way is far, from where it is as it is told (@motion.moved, @ui.move_ms; the app's sf/motion.mbt, Curves: the user, 2026-10-30, 「有些动效不应该固定播放时间，因为它的距离是不固定的」)",
   "motion-read": "the app reads whether a motion runs (moving()): what is shown, what takes a press, when state is let go follow from the cause and the motion's declared end (ends()); what only draws by it says so on its line (det-ok)",
   "corners-each": "a box's corners said not all alike (Corners, LinkedEach): only a design's, each looked at and kept, never what came by the way (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design); say why where it is said and list it in the app's sf/align.mbt (四角不一致的), then raise its count: mbui itself never works corners out unlike each other",
   "cursor-hand": "the pointer's hand said over something (Ctx::cursor(…, Hand)): what takes presses shows it by itself (its click read: Ctx::clicked, a part's Response; its press taken without it said, Ctx::takes_presses: a slider), and nothing else does; what takes presses as a ground (a stage, the room round a list's rows) says Arrow",
+  "abort-unsaid": "an abort of its own (abort(…)): on wasm-gc, where the tests run off CI, it prints nothing of its words, the test only `failed: Error` with no place; stop with @halt.saying(…) (mbui/halt), which prints the words and the line that said them first",
+  "empty-on-done": "an empty on_done (or a source's call's `done`, `fn(_) {  }`): to the core it reads the answer, awaited and the frame after it built whole for nothing; a call whose answer nobody reads gives none (@core.call with no on_done), or the app's answer_unread for a source's call; a native call's empty on_got the same (give none)",
+  "panic-test": "a test that passes by stopping its program (`test \"panic …\"`): stopped in the middle of what it asked (a change, a layout, a frame), it leaves the process there, and on wasm-gc the tests after it in the same program run on from it (view's shared_test's left the signals' batch open: 185 of view's 435 failed after it, 2026-11-11). Ask it as an app's run on a host does, its fault told and not stopping the run (`@view.faults_stop` false, `@view.fault_told` given: view's boundary_test faults_kept), and assert the words it said (a check that stops: the step saying what is wrong asserted, ui css_read, Tester::idle_said, flex reuse_refused); none is left",
+  "read-before-run": "a test reads the app's words or language (detlint.json `run_first.reads`: @sf.t, tr) before it starts its own run of the app (`run_first.starts`: new_run, fresh_app; Tester::new, or a function that starts one first): what it reads then is the app as the test before it in the process left it. gate_wbtest's last test leaves the core's prefs saying English; landing_node_wbtest's first, reading its titles' words before its new_run, looked for English ones in the Chinese its run drew, and failed only where the two files ran in one process, which CI's grouping changes with the rate and the files' seconds (#5433, 2026-11-11). Start the run first, then read what it shows",
+  "reset-by-hand": "a test puts the app back by hand (new_run) and makes no Tester after it: the app's reset is then left marked as done for a Tester to come (sfapp's reset_by_hand), and that Tester is the next test's, which starts from the app as this one left it, not as at the start (2026-11-11); a test that makes no Tester puts it back with fresh_app(), which leaves nothing marked",
   "host-delay": "a host does something a fixed time later (postDelayed, dispatch_after, SetTimer, setTimeout): do it on the event it waits for (a callback, a listener, the system's word); a time the app asked for (its wake) says so on its line (det-ok)",
 }
 
@@ -86,6 +92,11 @@ let layout_read_back : Array[String] = ["rect_of", "laid_size", "laid_rect"]
 ///|
 /// what the layout came to, told back as a change to make things by (layout-told)
 let layout_told : Array[String] = ["laid_size_told", "went_told", "pointer_here_told"]
+
+///|
+/// what a page's list has in sight, told to handlers at the hand's moments (list_sight.mbt): let through layout-told by
+/// name, read by a handler for its accounts, never by what is made
+let layout_told_handlers : Array[String] = ["on_sight", "sight_now"]
 
 ///|
 /// what @math works out by the engine on js (implementation-approximated in ECMAScript): @dmath's in their place
@@ -257,19 +268,18 @@ priv struct Finding {
   line : Int
   mut what : String
   mut excused : String? // its det-ok's reason
-  mut excused_some : Bool
 }
 
 ///|
 fn finding(rule : String, file : String, line : Int, what : String) -> Finding {
-  { rule, file, line, what, excused: None, excused_some: false }
+  { rule, file, line, what, excused: None }
 }
 
 ///|
 fn under(rel : String, prefixes : Array[String]) -> Bool {
   prefixes.iter().any(fn(p) {
     let q = if p.has_suffix("/") {
-      p.view(end_offset=p.length() - 1).to_string()
+      p.exact_view(end=p.length() - 1).to_owned()
     } else {
       p
     }

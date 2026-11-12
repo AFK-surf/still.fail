@@ -22,7 +22,7 @@ priv struct FlatMadeLog {
 fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool], FlatMadeLog) {
   let log : FlatMadeLog = { made: [], serials: [], dropped: [], heads: [], heads_dropped: [], left: [] }
   // (what each entry's page said of itself, by the entry: its head says it)
-  let said : Map[Int, @signals.Signal[String]] = {}
+  let said : Map[Int, @signals.Signal[String]] = Map([])
   let said_of = fn(k : Int) {
     match said.get(k) {
       Some(s) => s
@@ -179,7 +179,7 @@ test "a flat stack's page made or drawn by its old view as what `made` reads say
   let nav = Nav::new("a")
   let t = Tester::new(fn(_c) {  }, w=390.0, h=600.0)
   set_view_app(fn(root) {
-    nav_flat_view(root, nav, fn(c, p) { c.text("old " + p, size=12.0) |> ignore }, fn(_) { true }, 0.0, made=fn(p) {
+    nav_flat_view(root, nav, fn(c, p) { c.text("old " + p, size=12.0) |> ignore }, fn(_) { true }, 0.0, made=fn(_) {
       // (made where it is narrow, none where its width is not known yet)
       let w = width.get()
       if w <= 0.0 || w >= 640.0 {

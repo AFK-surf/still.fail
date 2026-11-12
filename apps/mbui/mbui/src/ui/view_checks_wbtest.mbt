@@ -22,7 +22,7 @@ test "contrast: a node of the tree's words too faint on its ground found, as mad
   let first = t.contrast_faults().filter(fn(f) { f.contains("faint words") })
   let made = view_painted().made
   let again = t.contrast_faults().filter(fn(f) { f.contains("faint words") })
-  assert_eq((first.length(), again.length(), view_painted().made), (1, 1, made), msg="\{first} \{again}")
+  assert_eq((first.length(), again.length(), view_painted().made), (1, 1, made), msg="\{Repr(first)} \{Repr(again)}")
 }
 
 ///|
@@ -73,7 +73,7 @@ fn held_covered(covered : Bool) -> ((String, Double, Double)?, (String, Double, 
 ///|
 test "words held seen whole: a node of the tree's words drawn over by another's solid ground found, first and as kept drawn again; beside them, none" {
   let (first, again, kept) = held_covered(true)
-  assert_true(first is Some(_) && again is Some(_) && kept, msg="\{first} \{again} \{kept}")
+  assert_true(first is Some(_) && again is Some(_) && kept, msg="\{Repr(first)} \{Repr(again)} \{kept}")
   let (first, again, _) = held_covered(false)
   assert_eq((first, again), (None, None))
 }
@@ -143,8 +143,8 @@ fn icon_faults(ink : Int64, covered : Bool, alpha : Double) -> (Array[String], A
 ///|
 test "contrast: a node of the tree's icon too faint on its ground found, as an old view's is, as made and kept drawn again; covered, unseen or strong enough, none" {
   let (first, again) = icon_faults(0xDDDDDDFFL, false, 1.0)
-  assert_true(first.length() == 1 && again == first, msg="\{first} \{again}")
-  assert_true(first[0].contains("under \{contrast_icon_least}"), msg="\{first}")
+  assert_true(first.length() == 1 && again == first, msg="\{Repr(first)} \{Repr(again)}")
+  assert_true(first[0].contains("under \{contrast_icon_least}"), msg="\{Repr(first)}")
   assert_eq(icon_faults(0xDDDDDDFFL, true, 1.0), ([], []))
   assert_eq(icon_faults(0xDDDDDDFFL, false, 0.0), ([], []))
   assert_eq(icon_faults(0x333333FFL, false, 1.0), ([], []))
@@ -203,7 +203,7 @@ fn grey_shape_faults(w : Double, h : Double) -> Array[String] {
 test "contrast: a node of the tree's shape checked as the whole shape is, not by its pieces: a narrow tall one a line, a small one an icon" {
   assert_eq(grey_shape_faults(20.0, 100.0), [])
   let small = grey_shape_faults(16.0, 16.0)
-  assert_true(small.length() == 1 && small[0].has_prefix("icon"), msg="\{small}")
+  assert_true(small.length() == 1 && small[0].has_prefix("icon"), msg="\{Repr(small)}")
 }
 
 ///|
@@ -235,5 +235,5 @@ test "contrast: a node of the tree's icon after an old view whose field's handle
   assert_true(g().editors.get(g().focus).unwrap().handle_on)
   let icons = fn() { t.contrast_faults().filter(fn(f) { f.has_prefix("icon (a node of the window's tree's)") }) }
   let first = icons()
-  assert_true(first.length() == 1 && icons() == first, msg="\{first}")
+  assert_true(first.length() == 1 && icons() == first, msg="\{Repr(first)}")
 }

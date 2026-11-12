@@ -1,7 +1,8 @@
 // The update's contract (scripts/host_contract.sh mac update, linux update): on a real host, the app a bundle signed as
 // the build it is handed (Linux: a folder installed as an app, its VERSION beside it),
-// MBUI_UPDATECHECK=<url>|<sha256>|<size>|<name>: that build handed to the host to make ready (@hostapi.update_fetch,
-// as still.fail's app hands it what the core found) and, once ready, put in this one's place (update_apply), this
+// MBUI_UPDATECHECK=<url>|<sha256>|<size>|<name>[|<delta>]: that build handed to the host to make ready
+// (@hostapi.update_fetch, as still.fail's app hands it what the core found; <delta> the JSON it hands with a delta from
+// this build, {"url","sha256","size","makes_sha256","makes_size"}) and, once ready, put in this one's place (update_apply), this
 // build's version on the log
 // (`UPDATECHECK version N`), then how it goes each time that changes (`UPDATECHECK state {…}`). Once the new build
 // is in place the host quits this app and opens that one; one it does not take is `failed`, and why, on the log, and
@@ -17,13 +18,18 @@ let update_check_said : Ref[String] = Ref("")
 pub fn update_check_run(c : @ui.Ctx, asked : String) -> Unit {
   if !update_check_asked.val {
     update_check_asked.val = true
-    match asked.split("|").map(fn(s) { s.to_string() }).to_array() {
-      [url, sha256, size, name] => {
-        @hostapi.log("UPDATECHECK version \{@hostapi.app_version()}")
-        let size = @string.parse_int(size) catch { _ => 0 }
-        @ui.update_fetch(url, sha256, size.to_double(), name, true)
-      }
-      _ => @hostapi.log("UPDATECHECK MBUI_UPDATECHECK is url|sha256|size|name")
+    let fetch = fn(url : String, sha256 : String, size : String, name : String, delta : String) {
+      @hostapi.log("UPDATECHECK version \{@hostapi.app_version()}")
+      let size = @string.parse_int(size) catch { _ => 0 }
+      @ui.update_fetch(url, sha256, size.to_double(), name, true, delta)
+    }
+    match asked.split("|").map(fn(s) { s.to_owned() }).to_array() {
+      [url, sha256, size, name] => fetch(url, sha256, size, name, "")
+      [url, sha256, size, name, delta] => fetch(url, sha256, size, name, delta)
+      _ =>
+        @hostapi.log(
+          "UPDATECHECK MBUI_UPDATECHECK is url|sha256|size|name[|delta]",
+        )
     }
   }
   // (how it goes: each change of it brings a frame of its own, ui's outside_update)

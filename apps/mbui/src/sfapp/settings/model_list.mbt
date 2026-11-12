@@ -65,7 +65,7 @@ fn model_list(
       @sf.over_rows(c, fn() {
         c.box(style=model_filter_room, fn() { words = field_box(c, key + "/filter", tr("android-chat.run.model.search")) }) |> ignore
       })
-      words.trim(chars=" ").to_string().to_lower()
+      words.trim(chars=" ").to_owned().to_lower()
     } else {
       ""
     }

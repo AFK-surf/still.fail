@@ -4,6 +4,7 @@
 // that returned a Bool still does; the components return this (or it with their value: Changed).
 
 ///|
+#derive(Debug)
 pub(all) struct Response {
   /// the widget's id (0: none, nothing happens to it)
   id : Int
@@ -24,7 +25,7 @@ pub(all) struct Response {
   gained_focus : Bool
   /// the widget's value changed this frame (said by the widget: Response::changed_to)
   changed : Bool
-} derive(Show)
+}
 
 ///|
 /// A response of nothing (a widget not there, disabled).
@@ -195,7 +196,7 @@ pub fn Ctx::handed_hold(self : Ctx) -> (Double, Double)? {
 
 ///|
 /// The hold handed here (Ctx::handed_hold) taken by what it is held on: none to take after it.
-pub fn Ctx::handed_taken(self : Ctx) -> Unit {
+pub fn Ctx::handed_taken(_self : Ctx) -> Unit {
   match view_handed.val {
     Some(h) => h.taken = true
     None => ()

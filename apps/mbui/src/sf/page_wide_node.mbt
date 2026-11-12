@@ -8,13 +8,14 @@
 ///|
 /// What a wide page made once holds, in its order: what stands over it, its head, its blocks by their keys, the room
 /// at its foot.
+#derive(Eq, Hash)
 priv enum WideItem {
   WideTop
   WideHead
   WideLead
   WideBlock(String)
   WideFoot
-} derive(Eq, Hash)
+}
 
 ///|
 /// A wide page made once (wide_page's) in node `v`: under what stands over it as the frame says (`frame`'s top), its
@@ -35,6 +36,7 @@ fn wide_page_node(
   about : () -> String,
   tips : TipLayer,
   head : ((@view.View) -> Unit)?,
+  near_foot : (Double, () -> Bool, () -> Unit)?,
   loc~ : SourceLoc,
 ) -> Unit {
   let items = fn() -> Array[WideItem] {
@@ -56,7 +58,8 @@ fn wide_page_node(
   }
   v.box(made_for=loc, fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, at_once=true, near_foot?, fn(s, item) {
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
@@ -466,11 +469,12 @@ let desk_list_gap : Double = 2.0
 /// (on none: Xl2's); lit under the hand where it `goes`. Its words desk_list_title's (strong: bolder; one that `acts` in
 /// the link's ink), what it says wide_value's, its chevron (an arrow out where it goes `out`) 16 in the muted ink; its
 /// note and what is wrong under its first line, wide_list_note's, 2 apart; what is `below` as link_row_node has it.
+/// `press`: what is done as the row (given it) is pressed (link_row_made's `pressed_by`).
 #callsite(autofill(loc))
 fn wide_link_row_node(
   parent : @view.View,
   title : () -> String,
-  press : () -> Unit,
+  press : (@view.View) -> () -> Unit,
   value : () -> String,
   value_bad : () -> Bool,
   value_dot : () -> Bool,
@@ -522,6 +526,13 @@ fn wide_link_row_node(
   // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
   // neighbour's, none of the two drawn over each other; desk_list_link)
   let reach = at.list && goes && in_pane_node(parent)
+  // (where it stands across in a panel's body, row_line's: panel_row_at; on a group's card in one, as on a page's card,
+  // as the narrow row's; elsewhere as ever)
+  let pin = panel_in_of(parent)
+  let (out, side) = match panel_row_at(pin, own=desk_list_out, card=on_card_node(parent)) {
+    Some(p) => (p.out, p.side)
+    None => (0.0, text_in)
+  }
   parent.box(made_for=loc, fn(o) {
     if reach {
       o
@@ -536,8 +547,17 @@ fn wide_link_row_node(
     .gap(Is(12.0))
     // (its words a row's room in at its sides, 10 over and under: the old view's wide_list_row_ground; in a panel's
     // card none of its own where it is not pressed, none in the card's corners: wide_list_row)
-    .padding(Is((text_in, wide_row_over, text_in, wide_row_over)))
-    .radius(By(fn() { if at.list { if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) } } else { @ui.tree_theme().corner(Xl2) } }))
+    .margin(Is((-out, 0.0, -out, 0.0)))
+    .padding(Is((side, wide_row_over, side, wide_row_over)))
+    .radius(By(fn() {
+      if pin.small {
+        small_panel_inner(r_menu)
+      } else if at.list {
+        if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) }
+      } else {
+        @ui.tree_theme().corner(Xl2)
+      }
+    }))
     .min_height(By(fn() { Some(theme().items.least) }))
     // (a face across its middle, as its words: the old view's, row_top only where it is not a face)
     .lines_up(By(fn() { Some(if under() && !face { Start } else { Middle }) }))
@@ -549,7 +569,7 @@ fn wide_link_row_node(
     }
     if goes {
       (if reach { o } else { r }).ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-      presses_node(r, press)
+      presses_node(r, press(r))
       r.says(By(fn() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) })) |> ignore
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as a list's title's line at least,

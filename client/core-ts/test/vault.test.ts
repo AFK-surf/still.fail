@@ -24,7 +24,7 @@ import {
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
-import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
+import { BOX_KEY, BOX_PUB, UNLOCK_MS, waitingAs, waitingChecks } from "../src/views/vault.ts";
 import { read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { type Answers, base, entry, started, stationLater, stationReplies, status } from "./station-fixture.ts";
@@ -179,6 +179,7 @@ function fakeStation() {
   const plainGrants: unknown[] = [];
   // Secrets agents asked to keep, approved: where they went.
   const saves: unknown[] = [];
+  const described: unknown[] = [];
   const plainSaves: unknown[] = [];
   const uses: unknown[] = [];
   const plainLock = { on: false };
@@ -284,10 +285,19 @@ function fakeStation() {
         r.status = "granted";
         return { ok: true };
       }
+      case "POST /vault/described": {
+        // Taken only once its item here says so (its copy brought first).
+        const r = requests.find((q) => q.id === body.request);
+        const l = r ? items.get(r.item)?.listing : undefined;
+        if (!r || !r.describe || l?.name !== r.describe.name || (l.about ?? "") !== r.describe.about) return status(409, { error: "not here", code: "vault_refused" });
+        described.push(body);
+        r.status = "granted";
+        return { ok: true };
+      }
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, plainSaves, reply };
+  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, described, plainSaves, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -313,7 +323,7 @@ async function rig(web = false, two = false, more: Answers = {}) {
   });
   const genesis = lockOf({ id: me.signer!.id, signBytes: (b) => me.signer!.signBytes(b) }, phone, other);
   const lock = { head: { seq: 0, hash: entryHash(genesis), genesis: entryHash(genesis) }, entries: [genesis], requests: [] };
-  const ui = s.core.connect();
+  let ui = s.core.connect();
   const values = new Map<number, unknown>();
   const done = new Map<number, Record<string, unknown>>();
   let id = 100;
@@ -354,7 +364,19 @@ async function rig(web = false, two = false, more: Answers = {}) {
       return values.get(n) as any;
     };
   };
-  return { ...s, st, st2, phone, other, lock, me, ask, watch, take, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
+  /// The app started anew on the same host: what it keeps (its database, its secure storage) as it was, nothing of the
+  /// run before in memory (the keys unsealed). Topics watched before are not watched again.
+  const restart = async () => {
+    await Effect.runPromise(s.core.inner.data.written);
+    s.core.close();
+    s.host.takeEmitted();
+    s.core = await Core.create(s.host, { clock: s.host.time.clock, sample: 0, wire: () => (wire ? wire(s.host) : new HostWire(s.host)) });
+    await s.host.time.pass(500);
+    ui = s.core.connect();
+    r.core = s.core;
+  };
+  const r = { ...s, st, st2, phone, other, lock, me, ask, watch, take, restart, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
+  return r;
 }
 
 /// One more entry of the rig's lock, signed by `by` (this device's signer, the owner's, by default), the lock put in
@@ -899,6 +921,34 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   r.core.close();
 });
 
+test("vault calls: an agent's request to rename an item: answered as one to keep, the item opened and written as its next version saying so (its listing too), then told; nothing granted", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const v = [...r.st.vaults.values()][0]!;
+  const { id } = (await r.ask("vault.putItem", { vault: v.id, plain: { kind: "token", name: "127.0.0.1 登录态", fields: { value: "t-1" }, domains: [], notes: "" }, listing: { name: "127.0.0.1 登录态", kind: "token", modes: ["proxy"], hosts: ["127.0.0.1"] } })) as { id: string };
+  const ask: Request = {
+    id: "r_d", ws: "ws", vault: v.id, item: id, session: "k1", chat: "7", mode: "proxy", reason: "认不出来", box: "", at: 1, status: "pending",
+    describe: { name: "UniFi 后台", about: "经 Studio 转发到 127.0.0.1:8443", was: { name: "127.0.0.1 登录态", about: "" } },
+  };
+  r.st.requests.push(ask);
+  r.push("vault-request", ask);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  const row = vaults().requests[0];
+  assert.deepEqual([row.itemName, row.describe, row.howText], ["127.0.0.1 登录态", { name: "UniFi 后台", about: "经 Studio 转发到 127.0.0.1:8443", wasAbout: "" }, "名称改为：UniFi 后台\n说明改为：经 Studio 转发到 127.0.0.1:8443"]);
+  await r.ask("vault.approve", { request: "r_d", scope: "once" });
+  const written = r.st.items.get(id)!;
+  assert.ok(signedOk(written, TAG.item));
+  assert.deepEqual([written.version, written.listing], [1, { name: "UniFi 后台", kind: "token", modes: ["proxy"], hosts: ["127.0.0.1"], about: "经 Studio 转发到 127.0.0.1:8443" }]);
+  const opened = (await r.ask("vault.open", { item: id })).plain;
+  assert.deepEqual([opened.name, opened.notes, opened.fields], ["UniFi 后台", "经 Studio 转发到 127.0.0.1:8443", { value: "t-1" }]);
+  assert.deepEqual(r.st.described, [{ request: "r_d" }]);
+  assert.deepEqual(r.st.grants, [], "it grants nothing");
+  r.core.close();
+});
+
 test("vault calls: a secret an agent asks the person to type in: what they typed written into their vault (nothing to open), the chat given it; nothing typed, nothing kept", async () => {
   const r = await rig();
   r.putLock();
@@ -1100,6 +1150,159 @@ test("a device taken out of the lock that held a vault's key: the owner's device
   r.core.close();
 });
 
+// A keying anew stopped half-way: the vault's next version written under a new key, an item not written again under
+// it (the device closed or cut off, or the station refused that write). Nothing wrote it again, and it could not be
+// opened anywhere: its key was forgotten here, and the version sealing it for this device let go.
+
+/// The rig's own vault, one item in it, the phone given its key and then taken out of the lock: keyed anew by this
+/// device, the station refusing the item's write under the new key once (`also`: what else is put in the vault
+/// first). The item left under the earlier key, as the station and this device hold it.
+async function keyedAnewHalfWay(r: Awaited<ReturnType<typeof rig>>, also?: (id: string) => Promise<void>) {
+  r.putLock();
+  const { made: id, words } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  await also?.(id);
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  assert.equal(r.st.vaults.get(id)!.seq, 1, "the phone given the key");
+  const refuse = { left: 1 };
+  stationReplies(r.host, (req) => {
+    if (req.url.includes("/v1/workspaces/ws/lock")) return r.lock;
+    if (refuse.left > 0 && req.method === "PUT" && req.url.endsWith("/vault/items")) {
+      refuse.left--;
+      return status(500, { error: "the link went down" });
+    }
+    return r.st.reply(req);
+  });
+  grow(r, "device.remove", { id: r.phone.hex });
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  r.take();
+  assert.equal(refuse.left, 0, "the item's write refused");
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch], [2, 1], "keyed anew");
+  const i = r.st.items.get(put.id)!;
+  assert.deepEqual([i.version, i.epoch], [0, 0], "the item left under the earlier key");
+  const fresh = openSeal(recoveryPair(fromWords(words)).priv, v.recovery!, keyContext("ws", id, 1));
+  return { id, item: put.id, fresh };
+}
+
+/// The vault's record as this device holds it.
+const heldVault = (r: Awaited<ReturnType<typeof rig>>) => r.core.inner.data.record("vault", "ws") as { before?: Record<string, Record<string, Vault>> };
+
+/// That the station holds `item` written again under the vault's new key (`fresh`, epoch 1) at its next version,
+/// signed by this device, its secret as it was.
+function carriedOn(r: Awaited<ReturnType<typeof rig>>, id: string, item: string, fresh: Uint8Array, value: string) {
+  const i = r.st.items.get(item)!;
+  assert.deepEqual([i.version, i.epoch], [1, 1], "written again under the new key, its next version");
+  assert.equal(i.sig.key, r.me.signer!.id);
+  assert.equal(JSON.parse(new TextDecoder().decode(decrypt(fresh, i.ct, itemContext("ws", id, item, 1, 1)))).fields.value, value);
+}
+
+test("a keying anew stopped half-way (an item's write under the new key refused): the item is carried on as it is opened, with the keys still unsealed here", async () => {
+  const r = await rig();
+  const { id, item, fresh } = await keyedAnewHalfWay(r);
+  const asked = r.host.secureAsked.length;
+  assert.equal((await r.ask("vault.open", { item })).plain.fields.value, "ghp_x");
+  assert.equal(r.host.secureAsked.length, asked, "the keys unsealed here: the person not asked");
+  carriedOn(r, id, item, fresh, "ghp_x");
+  r.core.close();
+});
+
+test("a keying anew stopped half-way, the app started anew since (no key unsealed): opening the item asks for the box key once, carries it on and opens it", async () => {
+  const r = await rig();
+  const { id, item, fresh } = await keyedAnewHalfWay(r);
+  await r.restart();
+  await r.host.time.pass(500);
+  assert.deepEqual([r.st.items.get(item)!.version, r.st.items.get(item)!.epoch], [0, 0], "nothing carried on with nobody asked: no key unsealed");
+  const asked = r.host.secureAsked.length;
+  assert.equal((await r.ask("vault.open", { item })).plain.fields.value, "ghp_x");
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY], "asked once");
+  carriedOn(r, id, item, fresh, "ghp_x");
+  r.core.close();
+});
+
+test("a member's device that did not key the vault anew (told the new version while an item is still under the earlier key) carries it on as it opens it", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  const otherCert = sign({ v: 1 as const, ws: "ws", device: r.other.hex, box: boxPublic(fill(9)), at: 2000 }, TAG.box, r.other);
+  r.st.boxes.set(r.other.hex, otherCert);
+  r.push("vault-box", otherCert);
+  // s2's vault, this person in it, keyed for this device; an item s2's device wrote in it.
+  const id = "v_01M4871X3MTC0903ZX5CPB8JH9";
+  const [k0, k1] = [fill(11), fill(21)];
+  const seal = (c: BoxCert, key: Uint8Array, epoch: number, n: number) => ({ cert: c, wrapped: sealWith(c.box, key, keyContext("ws", id, epoch), fill(n)) });
+  const v0 = sign({ v: 1 as const, ws: "ws", id, seq: 0, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 0, keys: [seal(otherCert, k0, 0, 12), seal(mine, k0, 0, 13)], at: 2000 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v0);
+  r.push("vault", v0);
+  await r.host.time.pass(200);
+  const itemId = "i_01JAKEEP000000000000000C4R";
+  const plain = { kind: "token", name: "Deploy", fields: { value: "dk_1" }, domains: [], notes: "" };
+  const i0 = sign({ v: 1 as const, ws: "ws", vault: id, id: itemId, version: 0, epoch: 0, ct: encryptWith(k0, utf8(JSON.stringify(plain)), itemContext("ws", id, itemId, 0, 0), fill(1, 12)), at: 2000 }, TAG.item, r.other);
+  r.st.items.set(itemId, i0);
+  r.push("vault-item", i0);
+  await r.host.time.pass(200);
+  // s2's device keys it anew and stops before writing the item again.
+  const v1 = sign({ v: 1 as const, ws: "ws", id, seq: 1, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 1, keys: [seal(otherCert, k1, 1, 14), seal(mine, k1, 1, 15)], at: 2001 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v1);
+  r.push("vault", v1);
+  await r.host.time.pass(200);
+  const asked = r.host.secureAsked.length;
+  assert.equal((await r.ask("vault.open", { item: itemId })).plain.fields.value, "dk_1");
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY], "asked once");
+  carriedOn(r, id, itemId, k1, "dk_1");
+  r.core.close();
+});
+
+test("an item under the earlier key that the lock did not take then (made up by a station, signed by someone not in the vault) is not carried on: still refused, nothing written", async () => {
+  const r = await rig();
+  const forgedId = "i_01JAKEEP000000000000000F0G";
+  const { id, item, fresh } = await keyedAnewHalfWay(r, async (id) => {
+    const plain = { kind: "token", name: "x", fields: { value: "planted" }, domains: [], notes: "" };
+    const forged = sign({ v: 1 as const, ws: "ws", vault: id, id: forgedId, version: 0, epoch: 0, ct: encryptWith(fill(5), utf8(JSON.stringify(plain)), itemContext("ws", id, forgedId, 0, 0), fill(2, 12)), at: 2000 }, TAG.item, r.other);
+    r.st.items.set(forgedId, forged);
+    r.push("vault-item", forged);
+    await r.host.time.pass(200);
+  });
+  const forged = r.st.items.get(forgedId)!;
+  await fails(r.ask("vault.open", { item: forgedId }), "vault_untrusted");
+  assert.equal(r.st.items.get(forgedId), forged, "not written again");
+  // (the item its owner's device wrote, carried on as the vault was looked at)
+  carriedOn(r, id, item, fresh, "ghp_x");
+  assert.equal((await r.ask("vault.open", { item })).plain.fields.value, "ghp_x");
+  r.core.close();
+});
+
+test("the version kept of an earlier key is let go once the vault's items, read of its station again, show nothing under that key", async () => {
+  const r = await rig();
+  const { id, item } = await keyedAnewHalfWay(r);
+  const kept = heldVault(r).before?.[id]?.["0"];
+  assert.deepEqual([kept?.seq, kept?.epoch], [1, 0], "the last version of the earlier key kept, its item under it");
+  await r.ask("vault.open", { item });
+  // (not as it is carried on: an item another device wrote under that key meanwhile may be told only after)
+  assert.equal(heldVault(r).before?.[id]?.["0"]?.seq, 1, "kept until the station is read again");
+  r.core.inner.stations.snapshot("ws/st");
+  await r.host.time.pass(500, 10);
+  assert.equal(heldVault(r).before?.[id], undefined, "let go: nothing under it any more");
+  r.core.close();
+});
+
+test("a keying anew stopped half-way: the station read again (its connection opened) while the keys are unsealed here carries the item on, nobody asked", async () => {
+  const r = await rig();
+  const { id, item, fresh } = await keyedAnewHalfWay(r);
+  const asked = r.host.secureAsked.length;
+  r.core.inner.stations.snapshot("ws/st");
+  await r.host.time.pass(500, 10);
+  assert.equal(r.host.secureAsked.length, asked, "nobody asked");
+  carriedOn(r, id, item, fresh, "ghp_x");
+  r.core.close();
+});
+
 test("a device taken out of the lock and put back in as the vault is keyed anew without it: given the new key", async () => {
   const r = await rig();
   r.putLock();
@@ -1178,6 +1381,178 @@ test("a version keyed for this device told before the lock that lets it in again
   await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
   await r.host.time.pass(500, 10);
   assert.equal(team()?.keyed, true, `keyed for this device: ${JSON.stringify(team())}`);
+  r.core.close();
+});
+
+// A vault waiting to be keyed anew (views/vault.ts `waitingAs`). The owner's decision, 2026-11-10: with the vault's
+// station off, a device taken out left the vault gone for everyone (「条目不存在」) until that station was back; the
+// devices left now read it meanwhile, and change nothing in it.
+
+/// Vault `id` of `owner`'s (s2, the rig's `other`, by default), this person in it, keyed under `vaultKey` for each of
+/// `certs`, and an item of it whose value is `value`, both signed by `by` (s2's device by default); told by the station.
+function teamVault(r: Awaited<ReturnType<typeof rig>>, id: string, vaultKey: Uint8Array, certs: BoxCert[], value: string, by: ReturnType<typeof key> = r.other, owner = "s2") {
+  const v = sign({ v: 1 as const, ws: "ws", id, seq: 0, owner, name: "Team", members: owner === "s2" ? ["s2", "s1"] : [owner], epoch: 0, keys: certs.map((c, n) => ({ cert: c, wrapped: sealWith(c.box, vaultKey, keyContext("ws", id, 0), fill(30 + n)) })), at: 2000 }, TAG.vault, by);
+  const itemId = `i_${id.slice(3)}K`;
+  const plain = { kind: "token", name: "Deploy", fields: { value }, domains: [], notes: "" };
+  const item = sign({ v: 1 as const, ws: "ws", vault: id, id: itemId, version: 0, epoch: 0, ct: encryptWith(vaultKey, utf8(JSON.stringify(plain)), itemContext("ws", id, itemId, 0, 0), fill(5, 12)), at: 2000 }, TAG.item, by);
+  r.st.vaults.set(id, v);
+  r.st.items.set(itemId, item);
+  r.push("vault", v);
+  return { v, item };
+}
+
+test("a device taken out while the vault's station takes no write: the devices left list the vault and open its items, change nothing in it and are told the station it waits for; the station back, it is keyed anew and written on", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  // The phone set up and given the key of this person's own vault (unsealed here).
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  assert.ok(r.st.vaults.get(id)!.keys.some((k) => k.cert.device === r.phone.hex));
+  // s2's vault, this person a member: keyed for s2's device, this one and the phone.
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  const otherCert = sign({ v: 1 as const, ws: "ws", device: r.other.hex, box: boxPublic(fill(9)), at: 2000 }, TAG.box, r.other);
+  const team = "v_01M4871X3MTC0903ZX5CPB8JH9";
+  const { item: teamItem } = teamVault(r, team, fill(11), [otherCert, mine, phoneCert], "dep_1");
+  await r.host.time.pass(500);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const listed = () => vaults().vaults.map((v: any) => v.id).sort();
+  assert.deepEqual(listed(), [id, team].sort());
+  // The vault's station takes no write (its machine asleep): what is put there waits for it.
+  const waiting: (() => void)[] = [];
+  const frozen = { on: true };
+  stationLater(r.host, (req) => (frozen.on && req.method === "PUT" && req.url.includes("/vault/") ? new Promise((resolve) => waiting.push(() => resolve(jsonResponse(200, r.st.reply(req))))) : undefined));
+  // The phone taken out of the lock, the lock read as the cloud tells of it.
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: r.phone.hex });
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  r.take();
+  assert.ok(waiting.length >= 1, "the owner's device keys its vault anew, the station not taking it yet");
+  assert.deepEqual([r.st.vaults.get(id)!.epoch, r.st.vaults.get(team)!.seq], [0, 0]);
+  // Both read meanwhile: the owner's own and s2's, of which this person is a member.
+  assert.deepEqual(listed(), [id, team].sort(), "listed still");
+  // Each row says it waits, and on which station.
+  const waits = (v: string) => vaults().vaults.find((row: any) => row.id === v)?.waits;
+  assert.deepEqual([waits(id), waits(team)], ["studio", "studio"]);
+  assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  assert.equal((await r.ask("vault.open", { item: teamItem.id })).plain.fields.value, "dep_1");
+  const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: team });
+  assert.deepEqual(shown().items.map((i: any) => i.id), [teamItem.id]);
+  // Nothing changed in either, the station it waits for named.
+  const items = r.st.items.size;
+  for (const [v, name] of [[id, t("core-misc.vault.personal")], [team, "Team"]] as const) {
+    await assert.rejects(r.ask("vault.putItem", { vault: v, plain: { kind: "token", name: "new", fields: { value: "n" } } }), (e: Error & { code?: string }) => {
+      assert.equal(e.code, "vault_waiting", e.message);
+      assert.equal(e.message, t("core-misc.vault.waiting", { name, station: "studio" }));
+      return true;
+    });
+  }
+  await fails(r.ask("vault.deleteItem", { vault: team, item: teamItem.id }), "vault_waiting");
+  await fails(r.ask("vault.setLasts", { vault: id, lasts: "once" }), "vault_waiting");
+  await fails(r.ask("vault.delete", { vault: id }), "vault_waiting");
+  assert.equal(r.st.items.size, items, "nothing written");
+
+  // The station takes writes again: the owner's vault keyed anew (the next epoch, the phone holding no key), shown,
+  // its item opened under the new key, and written on.
+  frozen.on = false;
+  for (const go of waiting.splice(0)) go();
+  await r.host.time.pass(1000, 10);
+  r.take();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [1, ["ab".repeat(32)]]);
+  assert.equal(r.st.items.get(put.id)!.epoch, 1);
+  assert.ok(listed().includes(id));
+  assert.ok(!("waits" in vaults().vaults.find((row: any) => row.id === id)), "keyed anew, it waits no more");
+  assert.equal(waits(team), "studio", "s2's waits on");
+  assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  const added = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "new", fields: { value: "n" } } });
+  assert.equal(r.st.items.get(added.id)!.epoch, 1);
+  // s2's waits on: its owner's device, not here, keys it anew.
+  await fails(r.ask("vault.putItem", { vault: team, plain: { kind: "token", name: "new", fields: { value: "n" } } }), "vault_waiting");
+  assert.equal((await r.ask("vault.open", { item: teamItem.id })).plain.fields.value, "dep_1");
+  r.core.close();
+});
+
+test("the device taken out reads nothing of a vault waiting to be keyed anew without it", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  const otherCert = sign({ v: 1 as const, ws: "ws", device: r.other.hex, box: boxPublic(fill(9)), at: 2000 }, TAG.box, r.other);
+  const team = "v_01M4871X3MTC0903ZX5CPB8JHA";
+  const { item } = teamVault(r, team, fill(11), [otherCert, mine], "dep_1");
+  await r.host.time.pass(500);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  assert.ok(vaults().vaults.some((v: any) => v.id === team));
+  // This device taken out of the lock (by the phone, the person's other device), as it is here.
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: "ab".repeat(32) }, r.phone);
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  r.take();
+  assert.deepEqual(vaults().vaults, [], "none listed");
+  const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: team });
+  assert.deepEqual(shown().items, []);
+  await fails(r.ask("vault.open", { item: item.id }), "vault_not_signer");
+  r.core.close();
+});
+
+test("a vault version no lock ever took (signed by a device never in it) is not read as waiting to be keyed anew: not listed, not opened", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  // This person's own, keyed for this device and the phone, signed by a key the lock never named.
+  const odd = "v_01M4871X3MTC0903ZX5CPB8JHB";
+  const { item } = teamVault(r, odd, fill(11), [mine, phoneCert], "odd_1", key(fill(20)), "s1");
+  await r.host.time.pass(500);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  assert.ok(!vaults().vaults.some((v: any) => v.id === odd));
+  // The phone taken out: a key of it for a device no longer in the lock, as one waiting would hold.
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: r.phone.hex });
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  r.take();
+  const heldOdd = (r.core.inner.data.record("vault", "ws") as any).vaults[odd] as Vault;
+  assert.equal(waitingAs(r.core.inner, "ws", checkLock(r.lock.entries, 4000), heldOdd), null, "no prefix of the lock took it");
+  assert.ok(!vaults().vaults.some((v: any) => v.id === odd), "not listed");
+  await fails(r.ask("vault.open", { item: item.id }), "vault_unknown");
+  assert.equal(r.st.vaults.get(odd)!.seq, 0, "not keyed anew either");
+  r.core.close();
+});
+
+test("whether a vault waits to be keyed anew is found once for a lock's entries and its version, not again as it is asked", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  const otherCert = sign({ v: 1 as const, ws: "ws", device: r.other.hex, box: boxPublic(fill(9)), at: 2000 }, TAG.box, r.other);
+  const team = "v_01M4871X3MTC0903ZX5CPB8JHC";
+  teamVault(r, team, fill(11), [otherCert, mine, phoneCert], "dep_1");
+  await r.host.time.pass(500);
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: r.phone.hex });
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  const lock = checkLock(r.lock.entries, 4000);
+  const v = (r.core.inner.data.record("vault", "ws") as any).vaults[team] as Vault;
+  const was = waitingAs(r.core.inner, "ws", lock, v);
+  assert.ok(was !== null, "waiting");
+  assert.ok(waitingChecks.count >= 1, "the lock's prefixes checked");
+  // (the same version as another object, as what is held is made anew at every change: found by what it is)
+  const searched = waitingChecks.count;
+  assert.equal(waitingAs(r.core.inner, "ws", lock, { ...v }), was, "the same lock found");
+  assert.equal(waitingChecks.count, searched, "no prefix checked again");
   r.core.close();
 });
 

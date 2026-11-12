@@ -5,22 +5,22 @@
 test "turns: rows coming and what changes under a post go the moment they are asked, together, none waiting" {
   new_run()
   let tu = turns_of("test")
-  let phase = Ref::new(0)
+  let phase = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
-      tu.step(c, -1.0)
+      tu.step(c)
       match phase.val {
         0 => {
-          ignore(tu.in_turn(c, "k", false, close_turn_ms, seen=true))
+          ignore(tu.in_turn(c, "k", false))
           phase.val = 1
         }
         1 => {
-          ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
-          tu.admit(c, "a", row_turn_ms)
-          tu.admit(c, "b", row_turn_ms)
+          ignore(tu.in_turn(c, "k", true))
+          tu.admit(c, "a")
+          tu.admit(c, "b")
           phase.val = 2
         }
-        _ => ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
+        _ => ignore(tu.in_turn(c, "k", true))
       }
       c.box(fn() {  }) |> ignore
     },
@@ -31,8 +31,6 @@ test "turns: rows coming and what changes under a post go the moment they are as
   t.draw()
   t.draw()
   assert_eq(tu.shown.get("k"), Some(true))
-  assert_false(tu.waiting.contains("a"))
-  assert_false(tu.waiting.contains("b"))
   let at = tu.started_at("k")
   assert_true(at >= 0.0)
   assert_eq(tu.started_at("a"), at)
@@ -44,10 +42,10 @@ test "turns: rows coming and what changes under a post go the moment they are as
 test "turns: what goes from under a post on screen goes at once, as out of sight (no frame of the list's says which)" {
   new_run()
   let tu = turns_of("test")
-  let shown = Ref::new(true)
+  let shown = Ref(true)
   let t = @ui.Tester::new(
     fn(c) {
-      ignore(tu.in_turn(c, "k", shown.val, close_turn_ms, seen=true))
+      ignore(tu.in_turn(c, "k", shown.val))
       c.box(fn() {  }) |> ignore
     },
     w=100.0,

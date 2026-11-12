@@ -15,7 +15,7 @@ priv enum MermaidChart {
 
 ///|
 // kept across runs: the core's answers, by what was asked (mermaid_ask)
-let mermaid_charts : Map[String, MermaidChart] = {}
+let mermaid_charts : Map[String, MermaidChart] = Map([])
 
 ///|
 // kept across runs: how many answers came (a signal: a frame drawing a chart reads it, and comes again as one does)
@@ -23,8 +23,22 @@ let mermaid_made : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 // kept across runs: whether the core was given mermaid (`mermaid.load`), as the core keeps it while it runs; false
-// again where it says it has none (a core started anew)
+// again where it says it has none (a core started anew), and as a run begins (mermaid_begin: a run's core is a new one)
 let mermaid_given : Ref[Bool] = Ref(false)
+
+///|
+/// A run begins with its core given no mermaid yet: a run's core is a core started anew, which has none till it is
+/// given it, whatever the run before gave the one it had. As a Tester begins a run (mbui's on_reset), unless what runs
+/// the app began it already (sf's run_begun_by_app: then as it did, its reset's).
+fn init {
+  @ui.on_reset(fn() { if !(@sf.run_begun_by_app.val)() { mermaid_begin() } })
+}
+
+///|
+/// No mermaid given to the core (a run begun).
+fn mermaid_begin() -> Unit {
+  mermaid_given.val = false
+}
 
 ///|
 /// How wide a chart that fills its width (a gantt) is made: drawn as the others are, the column's where that is less.
@@ -41,7 +55,7 @@ fn mermaid_hex(rgba : Int64, ground : Int64) -> String {
     (c * a + g * (255 - a) + 127) / 255
   }
   let hex = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_char('#')
   for shift in [24, 16, 8] {
     let v = mix(shift)
@@ -149,7 +163,7 @@ fn mermaid_ways(c : @ui.Ctx, station : String, place : String, svg : Bytes, w : 
     c.on_press(full, fn() {
       let a : Attachment = {
         name: "Mermaid.svg",
-        path: "draft:mermaid/" + @zip.sha256(svg).view(end_offset=16).to_owned(),
+        path: "draft:mermaid/" + @zip.sha256(svg).exact_view(end=16).to_owned(),
         size: svg.length().to_double(),
         width: w,
         height: h,

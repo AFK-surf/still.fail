@@ -78,12 +78,12 @@ fn bcmp(a : BytesView, b : BytesView) -> Int {
 
 ///|
 fn sub(t : Bytes, i : Int, j : Int) -> Bytes {
-  t[i:j].to_bytes()
+  t[i:j].to_owned()
 }
 
 ///|
 fn cat(parts : Array[Bytes]) -> Bytes {
-  let buf = @buffer.new()
+  let buf = Buffer()
   for p in parts {
     buf.write_bytes(p)
   }
@@ -236,7 +236,7 @@ fn replace_all(t : Bytes, from : Bytes, to : Bytes) -> Bytes {
   if from.length() == 0 {
     return t
   }
-  let buf = @buffer.new()
+  let buf = Buffer()
   let mut i = 0
   while true {
     let k = find(t, from, i)
@@ -261,11 +261,6 @@ fn clen(t : BytesView) -> Int {
     }
   }
   n
-}
-
-///|
-fn b(s : String) -> Bytes {
-  utf8(s)
 }
 
 ///|
@@ -369,16 +364,6 @@ fn[V] BTab::set(self : BTab[V], k : Bytes, v : V) -> Unit {
 }
 
 ///|
-fn[V] BTab::get(self : BTab[V], k : BytesView) -> V? {
-  let at = self.find(k)
-  if at < 0 {
-    None
-  } else {
-    Some(self.vals[at])
-  }
-}
-
-///|
 fn[V] BTab::length(self : BTab[V]) -> Int {
   self.keys.length()
 }
@@ -414,7 +399,7 @@ fn BSet::add(self : BSet, x : Bytes) -> Unit {
 /// Adds t[s:e] (copied only when it is not there yet)
 fn BSet::add_range(self : BSet, t : BytesView, s : Int, e : Int) -> Unit {
   if self.t.find_range(t, s, e) < 0 {
-    self.t.set(t[s:e].to_bytes(), ())
+    self.t.set(t[s:e].to_owned(), ())
   }
 }
 
@@ -592,7 +577,7 @@ fn sha1(data : BytesView) -> FixedArray[UInt] {
 fn sha1_hex(data : BytesView, n : Int) -> Bytes {
   let h = sha1(data)
   let hex = b"0123456789abcdef"
-  let buf = @buffer.new()
+  let buf = Buffer()
   for i in 0..<n {
     let word = h[i / 8]
     let nib = (word >> (28 - 4 * (i % 8))) & 0xFU

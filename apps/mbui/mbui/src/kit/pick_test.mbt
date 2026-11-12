@@ -31,7 +31,7 @@ test "held still on words: the word under the finger is picked; sliding on widen
   assert_eq((p.a, p.b), (0, 5))
   // sliding on to the end: from the word first held to the word under the finger
   let (_, _, rw, _) = t.rect_of("alpha beta gamma delta").unwrap()
-  t.move(rx + rw - 2.0, y)
+  t.move_to(rx + rw - 2.0, y)
   assert_eq((p.a, p.b), (0, 22))
   t.release(rx + rw - 2.0, y)
   t.draw()

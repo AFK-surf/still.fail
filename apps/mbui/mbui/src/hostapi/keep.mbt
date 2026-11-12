@@ -18,6 +18,7 @@
 
 ///|
 /// How a file is kept.
+#derive(Eq, Debug)
 pub(all) enum KeepWay {
   /// where the system keeps downloads, nothing asked (iOS: the Files sheet)
   Downloads
@@ -26,7 +27,19 @@ pub(all) enum KeepWay {
   /// a picture or a film into the phone's photo album (iOS Photos, Android's Pictures or Movies); where there is none, as
   /// Downloads
   Photos
-} derive(Eq, Show)
+}
+
+///|
+/// By its name, as tests write where a file was kept: what `derive(Show)` wrote.
+pub impl Show for KeepWay with output(self, logger) {
+  logger.write_string(
+    match self {
+      Downloads => "Downloads"
+      Choose => "Choose"
+      Photos => "Photos"
+    },
+  )
+}
 
 ///|
 /// How a keep stands.

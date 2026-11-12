@@ -38,7 +38,7 @@ priv struct RsShown {
   by : String
   open : Array[String]
   opened : Bool
-} derive(Eq)
+}
 
 ///|
 // kept across runs: said as a station's 进程 is chosen in; station_page_reset empties it
@@ -189,20 +189,20 @@ fn rs_sample(c : @ui.Ctx, core : Core) -> Unit {
 /// The made-up machine rs_sample draws (and its node, resources_node's bones).
 fn rs_sample_view() -> Json {
   let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
-  let use = fn(k : Double) -> Json { { "cpu": Json::number(k), "memory": Json::number(k * 2.0) } }
+  let usage = fn(k : Double) -> Json { { "cpu": Json::number(k), "memory": Json::number(k * 2.0) } }
   let group = fn(i : Int, n : Int, k : Double, processes : Array[Int]) -> Json {
     {
       "key": Json::string("sample" + i.to_string()),
       "title": w(n),
       "kindText": w(2),
-      "use": use(k),
+      "use": usage(k),
       "processes": Json::array(
         processes.mapi(fn(j, m) {
           Json::object({
             "key": Json::string("sample" + i.to_string() + "/" + j.to_string()),
             "name": w(m),
             "pid": Json::number((j + 1).to_double()),
-            "use": use(k / 2.0),
+            "use": usage(k / 2.0),
           })
         }),
       ),
@@ -303,7 +303,7 @@ priv struct RsLayout {
   widths : Array[Double]
   stacked : Bool
   share : Bool
-} derive(Eq)
+}
 
 ///|
 /// The layout of table `id` (as wide as it is laid out: read back) for `rows` (each row's use, and whether its sorted
@@ -467,11 +467,7 @@ fn rs_figures(
 /// Whose a chat's row is: its chat opened from its title, where it has one.
 fn rs_title(c : @ui.Ctx, core : Core, key : String, g : Json?, style : @ui.TextStyle) -> Unit {
   let chat = field(g, "chat")
-  let thread = match field(chat, "thread") {
-    Some(Number(n, ..)) => n.to_int64().to_string()
-    _ => ""
-  }
-  let session = if thread != "" { thread } else { text(chat, "session") }
+  let session = text(chat, "session")
   if chat is Some(Object(_)) && session != "" {
     let id = c.id("resources-chat/" + key)
     c.on_press(id, fn() {

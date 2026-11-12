@@ -5,7 +5,7 @@
 
 ///|
 test "70-card-motion" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("card-motion"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -31,7 +31,7 @@ test "70-card-motion" {
     // (the list come to its end after the card, its 忽略 in view under it: at a quicker pace it is still gliding there)
     let glide = f.t.rest_of("a list gliding")
     if glide > f.t.time() {
-      f.run_to(glide)
+      f.run_to(fn() { glide })
     }
     f.see("=忽略")
     f.tap_now("=忽略") |> ignore
@@ -42,9 +42,9 @@ test "70-card-motion" {
     f.gone("=设置页 083209")
     let closing = @sfapp.under_rest()
     if closing > f.t.time() {
-      f.run_to(closing)
+      f.run_to(fn() { closing })
     }
-    f.check(f.t.rest_of("under/") < 0.0, "something under the post moves till \{f.t.rest_of("under/")}")
+    f.check(f.t.rest_of("under/") <= f.t.time(), "something under the post moves till \{f.t.rest_of("under/")}")
     f.end()
   })
 }

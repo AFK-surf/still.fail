@@ -8,6 +8,7 @@
 /// What is drawn topmost at (x, y) in the window and what holds it out to the root (Tree::topmost_at,
 /// Tree::sources_of), as sources_said says them; or why nothing is said.
 pub fn Tester::sources_at(self : Tester, x : Double, y : Double) -> String {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return "no window's tree" }
   guard tree.topmost_at(x, y) is Some(id) else { return "nothing is drawn at \{x},\{y}" }
@@ -17,6 +18,7 @@ pub fn Tester::sources_at(self : Tester, x : Double, y : Double) -> String {
 ///|
 /// The same for the words `s` where they are drawn last (over the others: Tester::find_last's), the node drawing them.
 pub fn Tester::sources_of(self : Tester, s : String) -> String {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return "no window's tree" }
   let mut found : @view.NodeId? = None
@@ -81,7 +83,7 @@ fn Ctx::old_source_said(self : Ctx, i : Int) -> String {
     return ""
   }
   // (each old view's box, the node hosting it)
-  let hosts : Map[Int, @view.NodeId] = {}
+  let hosts : Map[Int, @view.NodeId] = Map([])
   for id, at in old_boxes {
     hosts[at] = id
   }
@@ -130,15 +132,20 @@ fn tree_source_said(id : @view.NodeId, paren? : Bool = false) -> String {
 
 ///|
 /// Every rule the screen as it is now is held to, at once: a press's room (the old view's and the window's tree's),
-/// what is squeezed, the spacing, the corners, the contrast (each check's own lines, its rule first, what it names said
-/// with where the source made it). For the agent that changed a screen to run after the change, in the place of
-/// judging a picture by eye: none, and the screen keeps them all. Contrast draws a frame of its own (as
-/// Tester::contrast_faults says); what is drawn after is as before.
+/// what is squeezed, the spacing, the corners, the contrast, words a box with its height said does not hold (each
+/// check's own lines, its rule first, what it names said with where the source made it). For the agent that changed a screen to run after the change, in the place of
+/// judging a picture by eye: none, and the screen keeps them all. Contrast draws a frame of its own and then the
+/// screen back, both at the last frame's moment (Tester::contrast_faults): what is read right after it (the words, the
+/// draw list) and the clock are as they were before it.
 pub fn Tester::audit(self : Tester) -> Array[String] {
+  // (a key's focus left unjudged as the frames stopped short of where its ways end: printed only, for now,
+  // tester_focus_off.mbt)
+  self.focus_off_left() |> ignore
   self.room_faults() +
   self.tree_room_faults() +
   self.squeeze_faults() +
   self.gap_faults() +
   self.corner_faults() +
-  self.contrast_faults()
+  self.contrast_faults() +
+  self.fixed_outgrown()
 }

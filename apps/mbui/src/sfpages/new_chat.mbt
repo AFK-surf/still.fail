@@ -57,11 +57,25 @@ pub fn new_chat_ask(what : String) -> Unit {
 }
 
 ///|
+/// Workspace `ws`'s new chat as the core is asked it (`newChat`: where it starts, what it runs on, the stations it
+/// can): one ask wherever it is read.
+pub fn new_chat_asked(ws : String) -> Map[String, Json] {
+  { "scope": Json::string(ws) }
+}
+
+///|
+/// What workspace `ws`'s new chat opens on, asked of `ask` (sfbase's opens_answered): its view, or why it has none.
+/// While it is not, the page shows its stations as read (in their bones).
+pub fn new_chat_opens(ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  @sfbase.opens_answered(ask("newChat", new_chat_asked(ws)))
+}
+
+///|
 /// A new chat in workspace `w` (NewChat, NewChatScreen): while its stations are read, the page as it will be on the
 /// station it last started on, its composer taking words but sending nothing; with none at all, the first to add;
 /// with none up, said so; nothing to run a chat with yet, its first step; else the page on the station it starts on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFrame) -> Unit {
-  let topic = src.topic("newChat", { "scope": Json::string(w.id) }).get().snapshot()
+  let topic = src.topic("newChat", new_chat_asked(w.id)).get().snapshot()
   let v = topic.value
   c.box(style=new_ground, fn() {
     c.box(style=new_bar_room, fn() { (frame.bar)(c) }) |> ignore
@@ -203,7 +217,7 @@ fn new_narrow(
   c.box(style=new_scene_room, fn() {
     c.list("new/scene", 1, new_scene_guess, fn(_) {
       c.box(style=new_scene_column, fn() {
-        let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
+        let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, frame, v, station, state) })
         // fading where it is (as it is drawn); back, the chat not made
         match state {
           Going(up, _) => c.look_by(scene, fn() { @ui.look(alpha=1.0 - up.get(c)) })
@@ -241,7 +255,7 @@ fn new_narrow(
             if !going {
               new_notices(c, v, station, width)
             }
-            c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, frame, v, station, state) }) |> ignore
+            c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, v, station, state) }) |> ignore
           })
           if !going {
             c.box(style=@ui.style(w=Fixed(width)), fn() {
@@ -286,7 +300,6 @@ fn new_narrow(
 fn new_scene_narrow_body(
   c : @ui.Ctx,
   src : Source,
-  w : Workspace,
   frame : NewChatFrame,
   v : Json?,
   station : Json?,
@@ -314,7 +327,6 @@ fn new_choosers(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  frame : NewChatFrame,
   v : Json?,
   station : Json?,
   state : NewState,
@@ -346,7 +358,6 @@ fn new_sample_view() -> Json {
     "model": "sample",
     "pick": {
       "value": { "runtime": "claude", "model": "sample" },
-      "options": [{ "model": "sample" }],
       "valueOption": { "name": Json::string(@sf.sample_words(6)) },
       "efforts": ["low"],
     },
@@ -355,7 +366,8 @@ fn new_sample_view() -> Json {
 
 ///|
 /// Where it runs and what it runs on: the station's control (its mark, its name; pressed, the stations through the
-/// presenters) and the model's (model_triple.mbt, its panel through them too); with nothing to run it with, the way to
+/// presenters) and the model's (model_triple.mbt, drawn of the face the page has of it, its panel through them too, asked
+/// as it opens); with nothing to run it with, the way to
 /// where models are enabled; while its profiles are read, what it runs on breathing in its place. `floating`: over
 /// the composer (narrow: capsules of its glass), else in its row (wide).
 fn new_controls(
@@ -377,12 +389,9 @@ fn new_controls(
   if flag(v, "waiting") {
     // (its profiles read: a made-up model's, in its bones)
     @sf.bones(c, fn() {
-      model_triple(c, @sfbase.sample_source, "sample", "new", up=true, page=field(Some(new_sample_view()), "pick"), small=true, floating~)
+      model_triple(c, @sfbase.sample_source, "sample", "new", face=field(Some(new_sample_view()), "pick"), small=true, floating~)
     })
-  } else if p is None ||
-    items(p, "options").length() == 0 ||
-    text(v, "runtime") == "" ||
-    field(v, "model") is None {
+  } else if p is None || text(v, "runtime") == "" || field(v, "model") is None {
     // nothing to run it with: the way to where models are enabled
     new_capsule(c, "new/models", @sf.t("web-main.newChat.noModels"), floating, fn() {
       c.text(@sf.t("web-main.newChat.noModels"), style=new_capsule_words) |> ignore
@@ -396,7 +405,8 @@ fn new_controls(
     if !c.in_bones() && take_asked("model") {
       open_triple(address, "new")
     }
-    model_triple(c, src, address, "new", up=true, page=p, small=true, floating~)
+    // (its face, as the page has it: its panel asked as the hand comes to it, opened whole once answered)
+    model_triple(c, src, address, "new", face=p, small=true, floating~)
   }
 }
 
@@ -415,7 +425,7 @@ fn new_station_control(
   let t = @sf.theme()
   let from = c.id("new/station")
   let open = fn() {
-    @sf.panel(@sf.t("android-chat.new.station.pick"), fn(c, close) { station_rows(c, src, w, v, close) }, from=Of(from))
+    @sf.panel_nodes(@sf.t("android-chat.new.station.pick"), fn(n, close) { station_rows_node(n, src, w, v, close) }, from=Of(from))
   }
   new_capsule(
     c,
@@ -475,40 +485,60 @@ fn take_asked(what : String) -> Bool {
 }
 
 ///|
-/// Where a new chat runs (the mobile pickStation): the workspace's stations up now, each its
-/// mark beside its name, the one it starts on checked, and what the stations' list says of it (station_facts.mbt: its
-/// agents at work, what is left of its machine, how this device reaches it); picked, the core has it (`newChat.pick`).
-fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () -> Unit) -> Unit {
-  let p = @sf.theme().p
+/// Where a new chat runs (the mobile pickStation), in node `n` (its panel's body): the workspace's stations as `v` said
+/// them as it opened, each its mark beside its name, the one it starts on checked, and what the stations' list says of
+/// it (station_facts.mbt: its agents at work, what is left of its machine, how this device reaches it, followed as it
+/// changes); picked, the core has it (`newChat.pick`) and the panel closes, showing what it showed till it is gone.
+fn station_rows_node(n : @view.View, src : Source, w : Workspace, v : Json?, close : () -> Unit) -> Unit {
   let current = text(field(v, "station"), "station")
   for s in items(v, "stations") {
     let st = Some(s)
-    let id = c.id("pick-station/" + text(st, "station"))
-    c.on_press(id, fn() {
-      @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
-      close()
-    })
-    // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in)
-    let row = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
-      c.box(style=station_row_mark_box, fn() {
-        @sf.station_icon(c, text(st, "emoji"), text(st, "icon"), station_row_mark, p.text)
+    let here = text(st, "station") == current
+    n.box(fn(row) {
+      // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in_node; its ground under a mouse, as
+      // panel_row_in's `hovered`)
+      @sf.style_node(row, fn() { station_row.then(@sf.panel_row_in_node(row)) })
+      row.ground(By(fn() { if @sf.hovered_in_node(row) || row.focus_shown() { @sf.theme().p.hover } else { 0L } })) |> ignore
+      @sf.rippled_node(row, fn() {
+        @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
+        close()
+      }, @sf.row_corner, fn() { text(st, "name") })
+      // (read out checked or not: the one it starts on)
+      row.says(Is(Some(@view.said(Button, label=text(st, "name"), check=if here { On } else { Off })))) |> ignore
+      row.box(fn(m) {
+        @sf.style_node(m, fn() { station_row_mark_box }, in_row=true)
+        if @sf.has_station_mark(text(st, "emoji"), text(st, "icon")) {
+          @sf.station_mark_node(m, fn() { text(st, "emoji") }, fn() { text(st, "icon") }, station_row_mark, fn() {
+            @sf.theme().p.text
+          }, fn() { 0 })
+        } else {
+          @sf.icon_node(m, "server", station_row_mark, By(fn() { @sf.theme().p.text })) |> ignore
+        }
       })
       |> ignore
-      c.box(style=station_row_words, fn() {
-        c.box(style=station_row_head, fn() {
-          c.text(text(st, "name"), style=station_row_name) |> ignore
-          station_state(c, st)
-          if text(st, "station") == current {
-            @sf.icon(c, "check", size=new_mark, color=p.accent) |> ignore
+      row.box(fn(col) {
+        @sf.style_node(col, fn() { station_row_words }, in_row=true)
+        // (giving way to its mark beside it where its name is long, as the old one's grow did: its name cut short)
+        col.min_width(Is(Some(0.0))) |> ignore
+        col.box(fn(head) {
+          @sf.style_node(head, fn() { station_row_head })
+          // (as long as there is room, what follows it at the line's end: station_row_name's w=grow, a node's own)
+          @sf.words_node(head, fn() { text(st, "name") }, fn() { station_row_name })
+          .grow(Is(1.0))
+          .shrink(Is(1.0))
+          .min_width(Is(Some(0.0)))
+          |> ignore
+          station_state_node(head, fn() { st })
+          if here {
+            @sf.icon_node(head, "check", new_mark, By(fn() { @sf.theme().p.accent })) |> ignore
           }
         })
         |> ignore
-        station_figures(c, src, st)
+        station_figures_node(col, src, fn() { st })
       })
       |> ignore
-      @sf.press_ripple(c, id, @sf.row_corner)
     })
-    c.semantics(row, Button, id~, label=text(st, "name"), check=if text(st, "station") == current { On } else { Off })
+    |> ignore
   }
 }
 
@@ -863,7 +893,7 @@ fn new_send(
   }
   // sent, felt as a key's light tap (a no as something refused)
   @ui.haptic(KeyboardTap)
-  let words = d.text.get().trim(chars=" \n\t").to_string()
+  let words = d.text.get().trim(chars=" \n\t").to_owned()
   remember_sent_pictures(src, d, station)
   // (as its message will have them: taken out of the draft as it is sent)
   let up = up_files(d)
@@ -879,21 +909,20 @@ fn new_send(
   // its words, its quotes and its files from where they were typed, their cards and their tiles, into their row in
   // the chat's list, in it from now (sent_local), the list coming up with them, the composer held as tall as it is
   // till they set out
-  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
   @sfbase.flight_carry_start(
     c,
     d.key,
     words,
     flying_quotes(c, src, d, station) + flying_files(c, src, d),
     field=d.field,
-    hold=fn(c, ms) { composer_hold(c, d.key, 0.0, box, ms) },
+    shaped=composer_shapes_sent(c, src, d, station),
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
     marks~,
     runs~,
   )
-  let row = sent_local(c, rk, None, words, up, going~, quotes~, runs~)
-  @sfbase.flight_carry_into(c, d.key, draft, rk, row, hold=fn(c, ms) { composer_hold(c, draft, 0.0, box, ms) })
+  let row = sent_local(rk, None, words, up, going~, quotes~, runs~, now=(src.now)())
+  @sfbase.flight_carry_into(c, d.key, draft, rk, row)
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)
   fresh.sending.set(true)

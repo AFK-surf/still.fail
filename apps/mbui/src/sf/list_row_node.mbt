@@ -33,8 +33,8 @@ pub fn list_row_node(
   loc~ : SourceLoc,
 ) -> Unit {
   style_node(row, fn() {
-    let l = theme().chat_list
-    let look = (if high { l.row } else { l.item }).then(list_row_in(at))
+    // (a chat's as high as its lines are at the system's size of words: list_looks)
+    let look = (if high { list_looks(row).row } else { theme().chat_list.item }).then(list_row_in(at))
     if slotted {
       look.then(list_row_square)
     } else {
@@ -46,7 +46,8 @@ pub fn list_row_node(
     Some(m) =>
       row.box(made_for=loc, fn(k) {
         style_node(k, fn() { list_row_mark }, in_row=true)
-        k.height(By(fn() { Some(theme().chat_list.head_h) })) |> ignore
+        // (as high as its first line: list_looks)
+        k.height(By(fn() { Some(list_looks(k).head_h) })) |> ignore
         m(k)
       })
       |> ignore
@@ -58,7 +59,7 @@ pub fn list_row_node(
     // what stands in its foot's end corner (a chat's people and agents, concentric with the row's corner: aside_end),
     // the line reaching into the row's room for it where it must)
     text.box(fn(h) {
-      style_node(h, fn() { theme().chat_list.head })
+      style_node(h, fn() { list_looks(h).head })
       let reach = fn() {
         let l = theme().chat_list
         if at != Whole && end_slot > 0.0 {
@@ -124,12 +125,70 @@ pub fn list_row_node(
 }
 
 ///|
+/// A row's looks at a size of words (list_looks_at): a chat's row's, its first line's and the lines' under it, and its
+/// first line's height.
+priv struct ListLooks {
+  row : @ui.Style
+  head : @ui.Style
+  meta : @ui.Style
+  head_h : Double
+}
+
+///|
+/// A row's looks in `v`'s tree (list_looks_at): the theme's at the system's size of words there, followed as either
+/// changes (View::words_scale).
+fn list_looks(v : @view.View) -> ListLooks {
+  list_looks_at(theme().chat_list, v.words_scale())
+}
+
+///|
+/// A row's looks of list `l` at the system's size of words `scale`, each line as high as its words' line as drawn at that
+/// size where that is higher than the theme's (view_line's way: its leading at that size, or its share of its size
+/// there), a chat's row higher than the theme's by as much as its two lines are, whatever they say (so rows of a kind
+/// are as high): heights fixed, as the theme's are, so a row is laid out without its words measured. Where none is
+/// higher (the default size), the theme's own styles. Kept for the last list and size asked (list_looks_kept): the
+/// same asked again is the same looks, made once.
+fn list_looks_at(l : ChatList, scale : Double) -> ListLooks {
+  match list_looks_kept.val {
+    Some((k, s, looks)) if physical_equal(k, l) && s == scale => return looks
+    _ => ()
+  }
+  let line = fn(style : @ui.TextStyle) {
+    let look = @ui.style_words(style)
+    if look.line < 0.0 {
+      -look.line * @ui.sp_at(scale, look.size)
+    } else {
+      @ui.sp_at(scale, look.line)
+    }
+  }
+  let head_h = dmax(l.head_h, line(l.title))
+  let meta_h = dmax(l.meta_h, line(l.last))
+  let grown = head_h - l.head_h + (meta_h - l.meta_h)
+  let looks = if grown > 0.0 {
+    {
+      row: l.row.then(@ui.style(h=Fixed(l.row_h + grown))),
+      head: l.head.then(@ui.style(h=Fixed(head_h))),
+      meta: l.meta.then(@ui.style(h=Fixed(meta_h))),
+      head_h,
+    }
+  } else {
+    { row: l.row, head: l.head, meta: l.meta, head_h: l.head_h }
+  }
+  list_looks_kept.val = Some((l, scale, looks))
+  looks
+}
+
+///|
+// kept across runs: the last list and size of words asked and their looks (list_looks_at), worked out again for any other
+let list_looks_kept : Ref[(ChatList, Double, ListLooks)?] = Ref(None)
+
+///|
 /// A line under a row's first line (list_row_line's) in `parent`: as high as a chat's second line, its parts beside each
 /// other, made by `body`.
 #callsite(autofill(loc))
 pub fn list_row_line_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
   parent.box(made_for=loc, fn(l) {
-    style_node(l, fn() { theme().chat_list.meta })
+    style_node(l, fn() { list_looks(l).meta })
     body(l)
   })
   |> ignore

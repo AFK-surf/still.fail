@@ -38,10 +38,16 @@ const SPECS: Record<string, Spec> = {
   sessions: items("key"),
   jobs: items("id"),
   history: { fields: { items: items("key") } },
+  // (by the date: a heading changing at midnight patches it, its seqs not sent again)
+  chatOutline: { fields: { days: { key: ["date"] } } },
+  // (a page more of a tab: its new days and changes alone, a day it ends in patched)
+  changelog: { fields: { tabs: { key: ["part"], item: { fields: { days: { key: ["day"], item: { fields: { entries: items("version") } } } } } } } },
   vaults: { fields: { vaults: items("id"), requests: items("id") } },
   vaultItems: { fields: { items: items("id") } },
   driveTransfers: { fields: { transfers: { key: ["station", "id"] } } },
   downloads: { fields: { downloads: items("id") } },
+  // (a job's log's lines by their numbers, log-lines.ts: a line more put, the first gone dropped, the last rewritten patched)
+  jobLog: { fields: { lines: items("n") } },
   // (a station's item changes as it says something new, each a few seconds: the others go out as they went)
   stations: items("station"),
   newChat: { fields: { stations: items("station") } },

@@ -1,7 +1,7 @@
 ///|
 /// What is kept for each of the window tree's nodes, by its index, the node's making kept with it (an index made again
 /// is another node, none of this one's): looked up for each node drawn every frame, so by its index, no hash of its id.
-struct ByNode[V] {
+priv struct ByNode[V] {
   mut slots : Array[(Int, V)?]
   mut count : Int
 }
@@ -29,7 +29,8 @@ fn[V] ByNode::contains(self : ByNode[V], id : @view.NodeId) -> Bool {
 
 ///|
 /// `v` kept for node `id`, in place of what was kept for it or for another made at its index before.
-fn[V] ByNode::op_set(self : ByNode[V], id : @view.NodeId, v : V) -> Unit {
+#alias("_[_]=_")
+fn[V] ByNode::put(self : ByNode[V], id : @view.NodeId, v : V) -> Unit {
   guard id.at >= 0 else { return }
   while self.slots.length() <= id.at {
     self.slots.push(None)
@@ -52,11 +53,6 @@ fn[V] ByNode::remove(self : ByNode[V], id : @view.NodeId) -> Unit {
 fn[V] ByNode::clear(self : ByNode[V]) -> Unit {
   self.slots = []
   self.count = 0
-}
-
-///|
-fn[V] ByNode::length(self : ByNode[V]) -> Int {
-  self.count
 }
 
 ///|

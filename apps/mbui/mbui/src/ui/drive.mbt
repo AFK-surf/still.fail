@@ -32,8 +32,9 @@
 //   pasten N TEXT               TEXT repeated to N characters, pasted
 //   wheel DY [MODS]             the list under the middle of the window scrolled by DY (with MODS held: cmd, ctrl,
 //                               alt, shift joined by +; ⌘ and a wheel over a picture zoom it)
-//   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
-//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, a wheel's (a trackpad's)
+//   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY at once, as a test's Flow::wheel_at
+//                               gives it (no notch eased in: what is pressed next finds it where it went)
+//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, the same
 //   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
 //   hover TEXT                  the pointer moved onto the lowest TEXT, where the frame has it
 //   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, where the frame has it
@@ -78,7 +79,11 @@
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
 //                               value) answered, and a frame drawn after it, within the timeout: the run's k-th
 //                               `answered CALL` line its k-th answer, counted from the run's start (one come before
-//                               the step that acted ahead of the line is as good), each line an answer of its own
+//                               the step that acted ahead of the line is as good), each line an answer of its own.
+//                               What is counted is the core's answers as they come, whether the app reads them or
+//                               not: where the app's conversation with its core is kept (drive_heard, its
+//                               MBUI_CORE_TRACE), each answer heard there; else each wait on the core that ended
+//                               (one whose answer nobody reads is awaited by nothing, so not counted there)
 //   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") or
 //                               begins with it (a prefix: a gallery's content://media/) decoded, from its address or
 //                               from bytes handed over for it (Ctx::image_bytes, add_image)
@@ -171,6 +176,9 @@ priv struct Driver {
   // before them moved the focus, and they went into the field it focused (2026-11-05, the vault's editor on Android:
   // a host's words in the name's field)
   mut typed : String
+  // a wheel's words followed (`wheel`): the window's tree's node drawing the words nearest where it turned, those
+  // words, where they were drawn as it turned and last said, and when it turned (None: none followed)
+  mut wheel_follow : (@view.NodeId, String, Double, Double, Double)?
 }
 
 ///|
@@ -208,17 +216,18 @@ fn drive_init() -> Unit {
 
 ///|
 /// The moments of a script's line a run's tracer is told of (@ui.trace_steps).
+#derive(Eq, Debug)
 pub(all) enum StepMoment {
   /// the line begun, before anything of it is done (a tap still waiting for its words to be on screen)
   Began
   /// its input handed to the app as the host sends it (the press, the words typed, the key): the frame it goes in
   Acted
-} derive(Eq, Show)
+}
 
 ///|
 /// Who is told each line of a script as it begins and as it acts (@ui.trace_steps): a run's record of it.
 // kept across runs: the app's own, set once as it starts
-let steps_tracer : Ref[((String, StepMoment) -> Unit)?] = Ref::new(None)
+let steps_tracer : Ref[((String, StepMoment) -> Unit)?] = Ref(None)
 
 ///|
 /// Each line of a scripted run's script (MBUI_DRIVE) given to `step` as written (`tap 发消息`, `until …`): as it
@@ -255,10 +264,12 @@ fn runner_said(done : Map[String, String], j : String) -> Unit {
 
 ///|
 fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
-  let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_string() }).to_array()
+  // (the answers heard counted from the run's start, as the waits ended are)
+  heard_answers.clear()
+  let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_owned() }).to_array()
   // what the runner has done, as the host posts it (done_watch.h: {"done": X, "said": WORDS}), the frame its post
   // wakes taking it
-  let runner_done : Map[String, String] = {}
+  let runner_done : Map[String, String] = Map([])
   let watching = done_dir != "" && h_drive(9, done_dir)
   if watching {
     on_message("runner", fn(j, _) { runner_said(runner_done, j) })
@@ -297,6 +308,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     seen_frame: -1,
     dir,
     said_taken: 0,
+    wheel_follow: None,
     typed: "",
   })
   let watched = if watching { " (the runner's directory \{done_dir} watched)" } else { "" }
@@ -312,7 +324,8 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 
 ///|
 /// What of the window's tree shows `what` (its words, `=WORDS` exactly, `field:WORDS` a field by the words in it,
-/// `icon:NAME` what it draws is called so: View::drawn_as; or is called `what`, its label whole: View::says), the
+/// `icon:NAME` what it draws is called so: View::drawn_as; `img:NAME` a picture whose source, or shapes whose name,
+/// contains NAME, as on_screen_nodes' `img:`; or is called `what`, its label whole: View::says), the
 /// middle of each where it is drawn, in the window, as it is made, however faded this frame (made transparent, coming
 /// in), as on_screen_nodes finds an old view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
 /// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
@@ -335,6 +348,14 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
       (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
+    } else if what.has_prefix("img:") {
+      // a picture by its source, or shapes by what they are called (View::drawn_as: a glyph's "…/glyph/NAME"), its
+      // name containing what follows: on_screen_nodes' `img:` of an old view's image and drawable, the same rule
+      let name = what.unsafe_substring(start=4, end=what.length())
+      match d.image {
+        Some((src, _, _)) => src.contains(name)
+        None => d.shapes.length() > 0 && tree.drawn_name(d.id).contains(name)
+      }
     } else if what.has_prefix("switch:") {
       // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
       let label = what.unsafe_substring(start=7, end=what.length())
@@ -529,7 +550,8 @@ fn on_screen_nodes(
   let icon = if what.has_prefix("icon:") {
     Some("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
   } else if what.has_prefix("img:") {
-    // an image by its source (a chat's file: its key ends with the file's name)
+    // an image by its source (a chat's file: its key ends with the file's name), or a drawable by its name (the window's
+    // tree's the same: tree_on_screen's `img:`)
     Some(what.unsafe_substring(start=4, end=what.length()))
   } else {
     None
@@ -551,7 +573,7 @@ fn on_screen_nodes(
       None =>
         // a box by what it is called (its label, whole), as Compose's test finds a node by its contentDescription
         (n.kind == kind_box && n.label != "" && field is None && n.label == exact.unwrap_or(what)) ||
-        (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
+        ((n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
         (match field {
           // a field by the words in it (`field:WORDS`), not its placeholder
           Some(w) => n.kind == kind_editor && field_words_of(c, n).contains(w)
@@ -560,7 +582,7 @@ fn on_screen_nodes(
               Some(e) => n.text == e
               None => n.text.contains(what)
             }
-        })
+        }))
     }
     // (not what a page's bones are made of: not there yet, bones.mbt)
     if hit && n.bones == 0L && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {
@@ -617,6 +639,18 @@ fn screen_words(c : Ctx) -> String {
         words.push(n.text)
       }
     }
+  }
+  // (and the window's tree's: a page made of nodes said too, not an empty screen)
+  match view_app.val {
+    Some(tree) =>
+      for e in tree.drawn() {
+        let w = view_words_found(e)
+        let y = e.y + e.h / 2.0
+        if w != "" && e.bones == 0L && y >= 0.0 && y <= c.height {
+          words.push(w)
+        }
+      }
+    None => ()
   }
   let all = words.join(" | ")
   if all.length() > 1500 {
@@ -761,13 +795,16 @@ fn press(x : Double, y : Double, up : Bool) -> Unit {
 }
 
 ///|
-/// Runs the script's steps due this frame (after it was drawn): steps that only look run on at once; one that acts
+/// Runs the script's steps due this frame (after it was presented and all of its own work done, where a device's input
+/// comes: on_frame): steps that only look run on at once; one that acts
 /// ends the frame's turn, so the app sees it before the next (its input's frames). The run asks for no frame of its
 /// own: what it waits for on screen comes with a frame (an input's, a message's, a motion's, the host's event); what
 /// it waits for in time (a step's timeout, a hold let go, a pause, a shot taken by another) is a wake at that time.
 fn drive_frame(c : Ctx) -> Unit {
   drive_steps(c)
   guard driver.val is Some(d) else { return }
+  // (on the frames that come after it, none asked for of its own: what the wheel set moving draws them)
+  wheel_followed(d)
   let now = h_now()
   let mut at = @double.infinity
   let soon = fn(t : Double) { if t < at { at = t } }
@@ -792,6 +829,119 @@ fn drive_frame(c : Ctx) -> Unit {
   }
   if at < @double.infinity {
     c.wake_at_time(dmax(at, now), later=true)
+  }
+}
+
+///|
+/// How long the words nearest a wheel are followed after it (wheel_followed).
+let wheel_follow_ms : Double = 1500.0
+
+///|
+/// The window's tree's node drawing words nearest (x, y), those words, and where they are drawn (their middle's y).
+fn tree_words_near(x : Double, y : Double) -> (@view.NodeId, String, Double)? {
+  guard view_app.val is Some(tree) else { return None }
+  let mut best : (@view.NodeId, String, Double)? = None
+  let mut far = @double.infinity
+  for d in tree.drawn() {
+    let words = view_words_found(d)
+    if words == "" || d.bones != 0L || d.w <= 0.0 || d.h <= 0.0 {
+      continue
+    }
+    let (mx, my) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
+    let dist = (mx - x).abs() + (my - y).abs()
+    if dist < far {
+      far = dist
+      best = Some((d.id, words, my))
+    }
+  }
+  best
+}
+
+///|
+/// What a scripted run's `wheel` says of itself, in its log: where it turned, what took it (the window's tree's node
+/// found there and the one that took it, or the old frame's, wheel_went), what was moving as it turned (the page's
+/// way in among it), and the words nearest it, followed after it for wheel_follow_ms (wheel_followed): whether what
+/// it scrolled moved, and stayed. So a wheel that did nothing is told from one undone after.
+fn wheel_said(
+  d : Driver,
+  x : Double,
+  y : Double,
+  dy : String,
+  near : (@view.NodeId, String, Double)?,
+  moving : Array[String],
+) -> Unit {
+  let named = fn(id : @view.NodeId?) {
+    match (id, view_app.val) {
+      (Some(i), Some(tree)) => {
+        let name = tree.drawn_name(i)
+        "\{i.at}" + (if name == "" { "" } else { " (" + name + ")" })
+      }
+      _ => "none"
+    }
+  }
+  let last = @view.wheel_last
+  let found : @view.NodeId? = if last.found_at >= 0 { Some({ at: last.found_at, gen: last.found_gen }) } else { None }
+  let took : @view.NodeId? = if last.took_at >= 0 { Some({ at: last.took_at, gen: last.took_gen }) } else { None }
+  // (what of an old view's scrolls where it went, as it stands now the wheel has moved it)
+  let old_said = fn() {
+    let target = wheel_old_target.val
+    if target == 0 {
+      "nothing that scrolls there"
+    } else {
+      "what scrolls there, \{target}" +
+      (match g().lists.get(target) {
+        Some(st) => if st.wheel_moves(number(dy)) { ", a list not at its end that way" } else { ", a list at its end that way" }
+        None => ""
+      })
+    }
+  }
+  let went = match wheel_went.val {
+    1 => "the window's tree"
+    2 => "the old view the tree hosts there: " + old_said()
+    3 => old_said()
+    _ => "nowhere"
+  }
+  let words = match near {
+    Some((_, w, wy)) => "\"" + w + "\" at y \{wy}"
+    None => "no words of the tree's"
+  }
+  h_log(
+    "DRIVE wheel \{dy} at \{x.to_int()},\{y.to_int()}: went to \{went}; the tree's found \{named(found)}, taken by \{named(took)}; nearest " +
+    words + "; moving: " + (if moving.length() == 0 { "nothing" } else { moving.join("; ") }),
+  )
+  d.wheel_follow = match near {
+    Some((id, w, wy)) => Some((id, w, wy, wy, h_now()))
+    None => None
+  }
+}
+
+///|
+/// The words a wheel followed (wheel_said), this frame: said where they moved (by half a point or more) since last
+/// said, gone, or where they are on the first frame after wheel_follow_ms (none asked for: a frame comes as something
+/// moves, so none drawn means nothing moved).
+fn wheel_followed(d : Driver) -> Unit {
+  guard d.wheel_follow is Some((id, words, y0, last, t0)) else { return }
+  let after = (h_now() - t0).to_int()
+  let drawn = match view_app.val {
+    Some(tree) => tree.drawn().iter().find_first(fn(e) { e.id == id })
+    None => None
+  }
+  match drawn {
+    None => {
+      h_log("DRIVE wheel +\{after} ms: \"\{words}\" no longer drawn")
+      d.wheel_follow = None
+    }
+    Some(e) => {
+      let y = e.y + e.h / 2.0
+      if (y - last).abs() >= 0.5 {
+        h_log("DRIVE wheel +\{after} ms: \"\{words}\" at y \{y}")
+        d.wheel_follow = Some((id, words, y0, y, t0))
+      }
+      if h_now() > t0 + wheel_follow_ms {
+        h_log("DRIVE wheel +\{after} ms: \"\{words}\" ends at y \{y}, from \{y0}")
+        d.wheel_follow = None
+      }
+    }
   }
 }
 
@@ -854,7 +1004,7 @@ fn drive_steps(c : Ctx) -> Unit {
     let waited = now - d.since
     // (`now STEP`: STEP)
     let line = if line.has_prefix("now ") {
-      line.unsafe_substring(start=4, end=line.length()).trim(chars=" ").to_string()
+      line.unsafe_substring(start=4, end=line.length()).trim(chars=" ").to_owned()
     } else {
       line
     }
@@ -1044,14 +1194,14 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         match d.runner_done.get(arg) {
           Some(said) =>
-            match said.trim(chars=" \n\r\t").to_string() {
+            match said.trim(chars=" \n\r\t").to_owned() {
               "" | "ok" if cmd == "done" => {
                 h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
                 next()
               }
               // (what the runner found, typed: the code another device shows, as a person reads it off and types it)
               words if cmd == "typedone" && words.has_prefix("ok ") => {
-                let typed = words.view(start_offset=3).to_string()
+                let typed = words.exact_view(start=3).to_owned()
                 if h_drive(0, typed) {
                   if c.editors.contains(c.focus) {
                     d.typed = typed
@@ -1113,7 +1263,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "tapxy" => {
-        let xy = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        let xy = arg.split(" ").map(fn(v) { number(v.to_owned()) }).to_array()
         let x = if xy[0] < 0.0 { c.width + xy[0] } else { xy[0] }
         let y = if xy[1] < 0.0 { c.height + xy[1] } else { xy[1] }
         press(x, y, true)
@@ -1146,7 +1296,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "holdon" => {
         // `holdon MS DX DY MOVE TEXT`: held still on TEXT MS, then dragged DX DY over MOVE ms (a long press slid on)
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         if words.length() < 5 {
           drive_fail(c, d, "holdon MS DX DY MOVE TEXT")
           return
@@ -1174,7 +1324,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "drag" | "dragon" => {
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         let (x, y, rest) = if cmd == "drag" {
           if words.length() < 4 {
             drive_fail(c, d, "drag X Y DX DY [MS]")
@@ -1215,7 +1365,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "backswipe" => {
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         d.bdx = number(words[0])
         d.bms = 300.0
         d.bedge = 0
@@ -1308,12 +1458,12 @@ fn drive_steps(c : Ctx) -> Unit {
       "wheel" => {
         // (DY, then what is held with it: cmd, ctrl, alt, shift joined by +, as a key's are said)
         let (dy, held) = match arg.find(" ") {
-          Some(i) => (arg.view(end_offset=i).to_string(), arg.view(start_offset=i + 1).to_string())
+          Some(i) => (arg.exact_view(end=i).to_owned(), arg.exact_view(start=i + 1).to_owned())
           None => (arg, "")
         }
         let mut mods = 0
         for m in held.split("+") {
-          match m.to_string() {
+          match m.to_owned() {
             "cmd" => mods = mods | wheel_mod_cmd
             "ctrl" => mods = mods | wheel_mod_ctrl
             "alt" | "option" => mods = mods | wheel_mod_alt
@@ -1325,12 +1475,17 @@ fn drive_steps(c : Ctx) -> Unit {
             }
           }
         }
-        on_wheel(c.width / 2.0, c.height / 2.0, 0.0, number(dy), mods * 16)
+        let (wx, wy) = (c.width / 2.0, c.height / 2.0)
+        // (what is there as it turns, and the words nearest it followed after: wheel_said)
+        let near = tree_words_near(wx, wy)
+        let moving = c.moving_now()
+        on_wheel(wx, wy, 0.0, number(dy), mods * 16)
+        wheel_said(d, wx, wy, dy, near, moving)
         acted()
         return
       }
       "move" => {
-        let xy = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        let xy = arg.split(" ").map(fn(v) { number(v.to_owned()) }).to_array()
         if xy.length() < 2 {
           drive_fail(c, d, "move X Y")
           return
@@ -1373,8 +1528,10 @@ fn drive_steps(c : Ctx) -> Unit {
             on_pointer(0, x, y, 2)
             on_pointer(2, x, y, 2)
           }
-          "wheelxat" => on_wheel(x, y, dy, 0.0, 4)
-          _ => on_wheel(x, y, 0.0, dy, 4)
+          // (at once, as a test's replay gives the same step (src/sfreplay: Flow::wheel_at's t.wheel): a notch's ease
+          // under way when the next step presses would come out as far as the frames drawn meanwhile took it)
+          "wheelxat" => on_wheel(x, y, dy, 0.0, 0)
+          _ => on_wheel(x, y, 0.0, dy, 0)
         }
         acted()
         return
@@ -1433,7 +1590,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "trackpad" => {
         // (the keyboard's trackpad: begun at the window's top left, its finger moved to DX DY from there, let go)
-        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let words = arg.split(" ").map(fn(v) { v.to_owned() }).to_array()
         let u = text_float_unit
         match words {
           ["begin"] => on_text(text_float_begin, "", 0, 0)
@@ -1448,7 +1605,7 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "resize" => {
-        let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        let wh = arg.split(" ").map(fn(v) { number(v.to_owned()) }).to_array()
         if wh.length() < 2 {
           drive_fail(c, d, "resize W H")
           return
@@ -1467,7 +1624,7 @@ fn drive_steps(c : Ctx) -> Unit {
             d.shot_at = now
             return
           }
-        } else if now - d.shot_at >= shot_taker_ms {
+        } else if now >= d.shot_at + shot_taker_ms {
           next()
         } else {
           return
@@ -1600,12 +1757,12 @@ fn Tester::drive_while(
 
 ///|
 /// A size a scripted run asked of the window, for the tester's next frame (a host's window resizes itself).
-let tester_size : Ref[(Double, Double)?] = Ref::new(None)
+let tester_size : Ref[(Double, Double)?] = Ref(None)
 
 ///|
 /// A key as a script names it (drive's `key`): its code and modifiers.
 fn key_named(name : String) -> (Int, Int)? {
-  let parts = name.split("+").map(fn(v) { v.to_string() }).to_array()
+  let parts = name.split("+").map(fn(v) { v.to_owned() }).to_array()
   let mut mods = 0
   for i in 0..<(parts.length() - 1) {
     match parts[i] {
@@ -1650,6 +1807,14 @@ fn key_named(name : String) -> (Int, Int)? {
 /// subscription's "core: KEY").
 fn Driver::count_answers(self : Driver) -> Unit {
   let come = runtime().outside_ended_since(self.counted)
+  // (the conversation heard: each answer as it came, read by the app or not; the waits' ends are of the same answers)
+  if heard_on.val {
+    for name, n in heard_answers {
+      self.answers[name] = n
+    }
+    self.counted = self.counted + come.length()
+    return
+  }
   for w in come {
     if w.has_prefix("core: ") {
       let rest = w.unsafe_substring(start=6, end=w.length())
@@ -1723,4 +1888,57 @@ fn first_words(c : Ctx, i : Int) -> String {
     k = c.nodes[k].next
   }
   ""
+}
+
+///|
+/// Whether the app's conversation with its core is heard (drive_heard: it is kept, the app's MBUI_CORE_TRACE).
+// kept across runs: once heard, the conversation is kept for the whole process
+let heard_on : Ref[Bool] = Ref(false)
+
+///|
+/// The calls the app made, by the id it gave each, as heard (drive_heard), till an answer for it came.
+// kept across runs: emptied of each as its answer comes
+let heard_calls : Map[Int, String] = Map([])
+
+///|
+/// How many answers came for each call by its name since the run began, as heard (drive_heard): what `answered`
+/// counts.
+// kept across runs: emptied as a run begins (drive_start)
+let heard_answers : Map[String, Int] = Map([])
+
+///|
+/// A line of the app's conversation with its core as it is kept (src/core/trace.mbt's `{"out":…}`, `{"in":…}`), told
+/// to a driven run where it is kept: a call going out, and the core's answer to it (`ok` or `error`) coming in, so
+/// `answered CALL` counts the core's answers as they come, whether the app reads them or not. Only where the
+/// conversation is kept already (the app's MBUI_CORE_TRACE, a scripted run's): nothing waits on it, nothing reads more.
+pub fn drive_heard(line : String) -> Unit {
+  heard_on.val = true
+  let out = line.has_prefix("{\"out\":")
+  if out && !line.contains("\"call\":") {
+    return
+  }
+  if !out && !(line.contains("\"ok\":") || line.contains("\"error\":")) {
+    return
+  }
+  guard (try Some(@json.parse(line)) catch { _ => None }) is Some(Object(o)) else { return }
+  match (o.get("out"), o.get("in")) {
+    (Some(Object(m)), _) =>
+      match (m.get("id"), m.get("call")) {
+        (Some(Number(id, ..)), Some(String(name))) => heard_calls[id.to_int()] = name
+        _ => ()
+      }
+    (_, Some(Object(m))) =>
+      match m.get("id") {
+        Some(Number(id, ..)) if m.contains("ok") || m.contains("error") =>
+          match heard_calls.get(id.to_int()) {
+            Some(name) => {
+              heard_calls.remove(id.to_int())
+              heard_answers[name] = heard_answers.get(name).unwrap_or(0) + 1
+            }
+            None => ()
+          }
+        _ => ()
+      }
+    _ => ()
+  }
 }

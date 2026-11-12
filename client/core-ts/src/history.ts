@@ -333,9 +333,35 @@ type Item =
 /// A group's thinking and calls, in the order they came: a thought by its timeline index, a call by its step.
 type Row = { thought: number } | { step: number };
 
+/// Whether a transcript entry begins an item whatever stands before it: a prompt, the agent's own words, a message it
+/// posts, a state it ends its turn with. A thought or any other call goes on with the group before it, a result with
+/// its call.
+export function beginsItem(e: J): boolean {
+  const kind = typeof e?.kind === "string" ? e.kind : "";
+  if (kind === "tool_result" || kind === "thinking") return false;
+  if (kind !== "tool_call") return true;
+  if (e.subagent === true) return false;
+  const name = toolName(typeof e.tool === "string" ? e.tool : "");
+  const a = args(typeof e.text === "string" ? e.text : "");
+  return (name === "chat_post" && typeof a?.text === "string") || (name === "chat_state" && typeof a?.kind === "string");
+}
+
+/// How many of a page's first entries go on with an item begun before it (a group's calls and thoughts, a call's
+/// result): all of them where none begins one.
+export function carriedOver(timeline: readonly J[]): number {
+  const at = timeline.findIndex(beginsItem);
+  return at < 0 ? timeline.length : at;
+}
+
 export function presentHistory(live: J, cx: Context): J {
-  const timeline: J[] = (Array.isArray(live?.timeline) ? live.timeline : []).map(worded);
-  const base = typeof live?.first === "number" ? live.first : 0;
+  const held: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
+  const from = typeof live?.first === "number" ? live.first : 0;
+  // A page's first entries that go on with an item begun on the page before are left to that page: an item is shown
+  // whole, and is the same item (its key, what it counts) however many pages are loaded. Shown in part, a group cut by
+  // a page became another item as the page before came (its key its first loaded entry), and what was read jumped.
+  const carried = from > 0 ? carriedOver(held) : 0;
+  const timeline: J[] = (carried > 0 ? held.slice(carried) : held).map(worded);
+  const base = from + carried;
   const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
   const flag = (e: J, k: string): boolean => e?.[k] === true;
 

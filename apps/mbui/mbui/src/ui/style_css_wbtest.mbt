@@ -134,31 +134,45 @@ test "css: state blocks" {
 }
 
 ///|
-test "panic css: a property it does not know" {
-  css("wdth=S4") |> ignore
+/// What css says of `text` where it cannot read it (css_read: what css stops with), "read" where it can.
+fn css_said(text : String) -> String {
+  match css_read(text) {
+    Ok(_) => "read"
+    Err(said) => said
+  }
 }
 
 ///|
-test "panic css: a token not of the property's type" {
-  css("px=Full") |> ignore
+test "css: a property it does not know: said, where (css_read: what css stops with)" {
+  inspect(css_said("wdth=S4"), content="css: no property wdth at 5 in \"wdth=S4\"")
 }
 
 ///|
-test "panic css: a block in a block" {
-  css("hovered{pressed{bg=Hover}}") |> ignore
+test "css: a token not of the property's type: said, where (css_read: what css stops with)" {
+  inspect(css_said("px=Full"), content="css: no Space Full at 7 in \"px=Full\"")
 }
 
 ///|
-test "panic css: a block not closed" {
-  css("hovered{bg=Hover") |> ignore
+test "css: a block in a block: said, where (css_read: what css stops with)" {
+  inspect(css_said("hovered{pressed{bg=Hover}}"), content="css: a block in a block at 16 in \"hovered{pressed{bg=Hover}}\"")
 }
 
 ///|
-test "panic css: items not apart" {
-  css("bg=A(Fg,O5)px=S2") |> ignore
+test "css: a block not closed: said, where (css_read: what css stops with)" {
+  inspect(css_said("hovered{bg=Hover"), content="css: a block not closed at 16 in \"hovered{bg=Hover\"")
 }
 
 ///|
-test "panic css: a number not read exactly" {
-  css("w=Fixed(0.12345678901234567)") |> ignore
+test "css: items not apart: said, where (css_read: what css stops with)" {
+  inspect(css_said("bg=A(Fg,O5)px=S2"), content="css: an item not ended by a space at 11 in \"bg=A(Fg,O5)px=S2\"")
+}
+
+///|
+test "css: a number not read exactly: said, where (css_read: what css stops with)" {
+  inspect(css_said("w=Fixed(0.12345678901234567)"), content="css: a number with more digits than read exactly at 26 in \"w=Fixed(0.12345678901234567)\"")
+}
+
+///|
+test "css_read: what it reads, read" {
+  inspect(css_said("w=Full px=S2 hovered{bg=Hover}"), content="read")
 }

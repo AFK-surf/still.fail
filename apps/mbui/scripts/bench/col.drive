@@ -1,0 +1,7 @@
+# 小屏, nothing driven: a plain column alone (src/sfbench/col_scene.mbt: 17 or 170 rows, a spinner over it). At rest, a
+# row put in at its middle (the scene's 1000 ms) and taken out again (2000 ms), each its own change.
+timeout 9000
+until row 0
+log measure
+wait 2600
+exit

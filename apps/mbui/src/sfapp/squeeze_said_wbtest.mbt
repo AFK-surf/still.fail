@@ -32,7 +32,7 @@ test "squeeze: every screen fits what people, agents and stations wrote in it at
     }
     for mode in said_modes {
       let at = "\{win.0}-zh \{mode}"
-      let t = screen_in(mode, win, "zh", said=true)
+      let t = screen_in(mode, win, "zh", said=true, motion_judged=false)
       let faults = t.squeeze_faults()
       let known = said_known.get(at).unwrap_or(0)
       if faults.length() != known {
@@ -75,4 +75,4 @@ let said_modes : Array[String] = [
 ///|
 /// What each screen still has squeezed with what people wrote at its longest, by window, language and screen: the bar
 /// it may only fall from. A screen not listed has none.
-let said_known : Map[String, Int] = Map::new()
+let said_known : Map[String, Int] = Map([])

@@ -157,20 +157,20 @@ fn sr_said(key : String, args : Array[(String, String)], hi : Int64, scale? : Do
     match rest.find("{") {
       None => break
       Some(i) => {
-        let after = rest.view(start_offset=i + 1).to_owned()
+        let after = rest.exact_view(start=i + 1).to_owned()
         match after.find("}") {
           None => break
           Some(j) => {
-            let name = after.view(end_offset=j).to_owned()
+            let name = after.exact_view(end=j).to_owned()
             if i > 0 {
-              runs.push(@ui.span(rest.view(end_offset=i).to_owned()))
+              runs.push(@ui.span(rest.exact_view(end=i).to_owned()))
             }
             let value = match args.iter().find_first(fn(a) { a.0 == name }) {
               Some(a) => a.1
               None => "{" + name + "}"
             }
             runs.push(@ui.span(value, color=hi, weight=700, scale~))
-            rest = after.view(start_offset=j + 1).to_owned()
+            rest = after.exact_view(start=j + 1).to_owned()
           }
         }
       }
@@ -241,7 +241,7 @@ fn sr_arg(args : Array[(String, String)], name : String) -> String {
 /// The first number in `words` (「近 7 天 agent 跨设备执行了 312 个任务」: 312; 「今天用了 3 台设备」: 3), "" for none: what the
 /// view says only in a sentence, said alone.
 fn sr_num(words : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in words {
     if (ch >= '0' && ch <= '9') || (ch == '.' && buf.to_string() != "") {
       buf.write_char(ch)
@@ -251,7 +251,7 @@ fn sr_num(words : String) -> String {
   }
   let n = buf.to_string()
   if n.has_suffix(".") {
-    n.view(end_offset=n.length() - 1).to_owned()
+    n.exact_view(end=n.length() - 1).to_owned()
   } else {
     n
   }

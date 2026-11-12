@@ -1,0 +1,91 @@
+// An account's page opened only once what it shows is answered. Its page reads its station (`station`: the profile as
+// the station has it) and the account (`profile`, one account whole: views/views.ts), and the list it is opened from
+// holds neither (its rows are what they draw, ProfileRow), so an account's page opened at the press would show its
+// bones till they came, where it opened whole before the list's rows were rows. So the press asks them, and the page
+// opens as they are answered (press_wait: at once where they are already, else the moment they are, while what it was
+// pressed in stays as it was); meanwhile the screen stays as it was (the coordinator of the migration, 2026-11-12:
+// opening an account's page draws no bones).
+
+///|
+/// The workspace a station's topics are asked of (settings' station_scope): its address's, `ws` for one without it.
+fn account_scope(ws : String, station : String) -> String {
+  if station.contains("/") {
+    @settings.workspace_of(station)
+  } else {
+    ws
+  }
+}
+
+///|
+/// What a profile's page on station `station` (of workspace `ws`), profile `id`, reads as it opens: its station whole
+/// and the account it is of (settings' station_read, profile_read).
+pub fn profile_page_asks(ws : String, station : String, id : String) -> Array[(String, Map[String, Json])] {
+  let scope = Json::string(account_scope(ws, station))
+  [
+    ("station", { "scope": scope, "station": Json::string(station) }),
+    ("profile", { "scope": scope, "station": Json::string(station), "id": Json::string(id) }),
+  ]
+}
+
+///|
+/// What an account's page of all its stations reads as it opens: the account by its key (settings'
+/// profile_by_key_read).
+pub fn account_page_asks(ws : String, key : String) -> Array[(String, Map[String, Json])] {
+  [("profile", { "scope": Json::string(ws), "key": Json::string(key) })]
+}
+
+///|
+/// What the settings' route `r` reads of the core before it may open (open_answered): a profile's page and an
+/// account's; none for any other route, which opens at once.
+pub fn route_asks(ws : String, r : @settings.Route) -> Array[(String, Map[String, Json])] {
+  match r {
+    Profile(station, id) => profile_page_asks(ws, station, id)
+    ProfileAccount(key) => account_page_asks(ws, key)
+    _ => []
+  }
+}
+
+///|
+/// `asks` asked of `src` now and held by what is returned till what opens has read them: whether each is answered (a
+/// value, or an error the page says), and what holds them.
+fn asked_now(src : Source, asks : Array[(String, Map[String, Json])]) -> (() -> Bool, Array[TopicLease]) {
+  let leases = asks.map(fn(a) { src.lease_topic(a.0, a.1) })
+  let answered = fn() {
+    leases.iter().all(fn(l) {
+      match l.follow() {
+        Some(t) => t.value is Some(_) || t.error is Some(_)
+        // (let go of: nothing to wait for)
+        None => true
+      }
+    })
+  }
+  (answered, leases)
+}
+
+///|
+/// `open` (what puts an account's page on top: the settings' push) done once each of `asks` is answered, asked of `src`
+/// now; at once where they are answered already. What they ask is handed to the entry `open` puts on top, which takes
+/// it as its view is made and lets it go at the end of the frame of its first build (pages.mbt hand_over); let go at
+/// once where nothing was put on top, and where the press waits no more. Made in a press's handler, as press_wait is.
+pub fn open_answered(src : Source, asks : Array[(String, Map[String, Json])], open : () -> Unit) -> Unit {
+  if asks.is_empty() || src.read_only {
+    open()
+    return
+  }
+  let (answered, leases) = asked_now(src, asks)
+  press_wait(answered, fn() { hand_over(leases, open) }, let_go=fn() { leases.each(fn(l) { l.cancel() }) }) |> ignore
+}
+
+///|
+/// `show` (what shows an account's page in a pane in place of the one there, no entry put on top: a place's side
+/// list's pick) done once each of `asks` is answered, as open_answered; what they ask handed to the page shown for
+/// `at`, taken as it is first built and let go at that frame's end (pages.mbt hand_over_shown, shown_read).
+pub fn show_answered(src : Source, asks : Array[(String, Map[String, Json])], at : String, show : () -> Unit) -> Unit {
+  if asks.is_empty() || src.read_only {
+    show()
+    return
+  }
+  let (answered, leases) = asked_now(src, asks)
+  press_wait(answered, fn() { hand_over_shown(at, leases, show) }, let_go=fn() { leases.each(fn(l) { l.cancel() }) })
+  |> ignore
+}

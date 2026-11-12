@@ -97,12 +97,13 @@ pub struct NativeView {
 /// canvas given it from where it went down (a pinch's first finger then where it is now). A mouse's wheel goes the
 /// same way: `VerticalOut` and `Through` give the canvas the wheel's upright scroll; `PinchOut` keeps a trackpad's
 /// pinch from the page (the canvas takes none of its own on the Mac yet).
+#derive(Eq, Debug)
 pub(all) enum Touch {
   All
   Through
   PinchOut
   VerticalOut
-} derive(Eq, Show)
+}
 
 ///|
 fn touch_name(t : Touch) -> String {
@@ -344,10 +345,10 @@ pub fn NativeView::script(self : NativeView, js : String) -> Unit {
 fn script_hash(js : String) -> String {
   let mut h = 0x811c9dc5U
   for i in 0..<js.length() {
-    h = (h ^ js.unsafe_charcode_at(i).reinterpret_as_uint()) * 0x01000193U
+    h = (h ^ js.unsafe_get(i).to_int().reinterpret_as_uint()) * 0x01000193U
   }
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for k in 0..<8 {
     let d = ((h >> (28 - 4 * k)) & 15U).reinterpret_as_int()
     out.write_char(digits.get_char(d).unwrap())
@@ -509,14 +510,15 @@ pub fn NativeView::frames(self : NativeView) -> Array[Double]? {
 ///|
 /// The video's frame showing at `ms` grabbed whole at its own size, as a PNG (`grabbed` once it is here); a page's (or
 /// a site's) view, what its page shows now, at its view's size in device pixels (`ms` not read). One grab of a view at
-/// a time: asked again before the last one's `grabbed` is taken, it aborts.
+/// a time: asked again before the last one's `grabbed` is taken, a fault (@view.fault: a test stops on it, a run on a
+/// host is told it) and that grab not made.
 pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
   if self.id != 0 && !self.closed {
     // (one grab of a view at a time: its ticket is the view's)
     if outside_tickets.contains(outside_key(outside_grab, self.id)) {
       let s = "NativeView::grab_frame: view \{self.id} grabs a frame already: one at a time, its `grabbed` taken first"
-      println(s)
-      abort(s)
+      @view.fault(s)
+      return
     }
     outside_start(outside_grab, self.id, "a frame of view \{self.id} grabbed")
     self.grab_since = view_now()
@@ -533,8 +535,8 @@ pub fn NativeView::grab_shown(self : NativeView, side : Double) -> Unit {
   if self.id != 0 && !self.closed {
     if outside_tickets.contains(outside_key(outside_grab, self.id)) {
       let s = "NativeView::grab_shown: view \{self.id} grabs a frame already: one at a time, its `grabbed` taken first"
-      println(s)
-      abort(s)
+      @view.fault(s)
+      return
     }
     outside_start(outside_grab, self.id, "the frame view \{self.id} shows grabbed")
     self.grab_since = view_now()
@@ -1106,7 +1108,7 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
 /// node was laid out, stayed there, out of step with its hole. The hole's move (and scale) taken to the view's content
 /// and clip, the clip cut by where the hole's own clip was taken.
 fn Ctx::follow_holes(self : Ctx) -> Unit {
-  let at : Map[Int, Int] = {}
+  let at : Map[Int, Int] = Map([])
   let a = self.inst
   let mut k = 0
   while k < self.ninst {

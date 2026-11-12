@@ -5,7 +5,7 @@
 // for kept on the device: GRANTS_KEY). Only a host with TCP reaches adbd.
 import { Marks } from "./reactive.ts";
 import { Deferred, Effect, Fiber, Scope } from "effect";
-import type { AdbCall, Offer } from "./adb-parse.ts";
+import { type AdbCall, type Offer, type PhoneScope, SCOPE_SECONDS } from "./adb-parse.ts";
 import { CoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { current, t } from "./i18n.ts";
@@ -73,6 +73,9 @@ export type AdbEnv = {
   /// The person's own lock (personal-lock.ts): whose a workspace's grants are, who this device speaks for, and how it
   /// joins (views/pair.ts).
   personal: PersonalLock;
+  /// A device taken off the person's lock here (`removal`, by its id there), then out of the workspaces' locks where
+  /// they bound it (views/lock.ts `takeOffBound`, `withBound`): the removal's own answer. None, the removal alone.
+  tookOff?: <E>(sub: string, id: string, removal: Effect.Effect<null, E>) => Effect.Effect<null, E>;
   subOf: (workspace: string) => string | null;
   /// The accounts signed in here: each has a lock of its own.
   subs: () => { sub: string; email: string }[];
@@ -514,7 +517,10 @@ class Lend {
       const body = fromUtf8(new Uint8Array(parts.flatMap((p) => [...p])));
       const said = message(body) ?? "";
       if (reply.status === 200) return { message: said, ...((parseJson(utf8(body)) as J) ?? {}) };
-      return yield* Effect.fail(CoreError.invalid(said === "" ? t("core-misc.adb.failed", { status: reply.status }) : said));
+      // (the station's code where it gives one, which an app goes by: `adb_grant_refused`, station/src/adb/link.ts)
+      const code = (parseJson(utf8(body)) as J)?.code;
+      const words = said === "" ? t("core-misc.adb.failed", { status: reply.status }) : said;
+      return yield* Effect.fail(typeof code === "string" && code !== "" ? new CoreError(code, words) : CoreError.invalid(words));
     });
   }
 }
@@ -532,8 +538,6 @@ export class Adb {
   /// This person's chats' grants of their phone (and requests waiting), by station address and id.
   readonly #grants = new Map<string, Map<string, J>>();
   readonly #retold = new Retold();
-  /// Their 默认最长授权 as last set here or said by a station.
-  #lasts: "hour" | "chat" = "chat";
   /// Whether the grants kept on the device were read (`adbShare` `known`): before, none known is not none granted.
   #known = false;
   /// This phone's 共享调试 switch (ON_KEY): it lends only while on.
@@ -634,8 +638,10 @@ export class Adb {
         return this.#of(call.sub, (sub) => this.#env.personal.open(sub, t("core-misc.personal.reason.open")));
       case "personalJoin":
         return this.#of(call.sub, (sub) => Effect.gen({ self: this }, function* () {
-          yield* Effect.forEach(this.#env.subs(), (a) => Effect.ignore(this.#env.personal.refresh(a.sub), { log: "Unhandled", message: "personal lock read" }), { discard: true });
-          yield* this.#env.personal.refresh(sub);
+          // (one wait for the call's reads: past it, the locks as pinned here, the reads going on behind)
+          const within = this.#env.personal.asked();
+          yield* Effect.forEach(this.#env.subs(), (a) => Effect.ignore(this.#env.personal.refresh(a.sub, undefined, within), { log: "Unhandled", message: "personal lock read" }), { discard: true });
+          yield* this.#env.personal.refresh(sub, undefined, within);
           yield* this.#env.personal.makeKey();
           // Every account here the other device can let it in to, on the one code.
           const others = this.#env.personal.outside(this.#env.subs().map((a) => a.sub));
@@ -646,7 +652,15 @@ export class Adb {
       case "personalCancel":
         return Effect.sync(() => (this.#env.pair.cancel(), null));
       case "personalRemove":
-        return this.#of(call.sub, (sub) => this.#env.personal.removeDevice(sub, call.key, t("core-misc.personal.reason.remove")));
+        return this.#of(call.sub, (sub) => Effect.suspend(() => {
+          const personal = this.#env.personal;
+          const removal = personal.removeDevice(sub, call.key, t("core-misc.personal.reason.remove"));
+          // (by the id the person's lock says for that key before it is taken off; not where this device takes itself
+          // off: it signs for them in no workspace's lock after)
+          const id = personal.chain(sub)?.devices.get(call.key)?.id;
+          const itself = personal.view(sub).devices.some((d: { key: string; me: boolean }) => d.key === call.key && d.me);
+          return id === undefined || itself || this.#env.tookOff === undefined ? removal : this.#env.tookOff(sub, id, removal);
+        }));
       case "personalForget":
         return this.#of(call.sub, (sub) => this.#env.personal.forget(sub, t("core-misc.personal.reason.forget")));
       case "personalRestart":
@@ -667,16 +681,6 @@ export class Adb {
         return Effect.as(Effect.forEach(ids, (request) => Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request }), (r) => {
           this.heard(call.station, (r as J)?.request);
         }), { discard: true }), null);
-      }
-      case "lasts": {
-        // at once here, then told to every station this person's grants are read from (the latest `at` wins there)
-        this.#lasts = call.lasts;
-        seenOf(this.#env.store).touch();
-        const at = Math.floor(this.#env.host.nowMs());
-        return Effect.as(
-          Effect.forEach([...this.#grants.keys()], (station) => Effect.ignore(this.#legacy.askAt(station, { op: "lasts", lasts: call.lasts, at }), { log: "Unhandled", message: "debugging lasts told" }), { concurrency: "unbounded", discard: true }),
-          null,
-        );
       }
     }
   }
@@ -712,7 +716,7 @@ export class Adb {
         if (sub !== null) bySub.set(sub, [...(bySub.get(sub) ?? []), g]);
       }
       for (const [sub, grants] of bySub) {
-        const bodies = grants.map((g) => ({ station: g.station as string, request: g.id as string, session: g.session as string, chat: g.chat as string, scope: g.scope as "hour" | "chat", exp: g.exp as number }));
+        const bodies = grants.map((g) => ({ station: g.station as string, request: g.id as string, session: g.session as string, chat: g.chat as string, scope: g.scope as PhoneScope, exp: g.exp as number }));
         const signed = yield* this.#env.personal.signGrants(sub, bodies, t("core-misc.personal.reason.confirm"));
         for (const [i, g] of grants.entries()) {
           const r = yield* this.#legacy.askAt(g.station, { op: "sign", request: g.id, signed: signed[i] });
@@ -731,7 +735,7 @@ export class Adb {
   }
 
   /// What this device signs to allow a chat a phone.
-  #signed(station: string, request: string, scope: "hour" | "chat"): Effect.Effect<J, CoreError> {
+  #signed(station: string, request: string, scope: PhoneScope): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const sub = this.#subAt(station);
       if (sub === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noAccount")));
@@ -739,7 +743,7 @@ export class Adb {
       if (this.#grants.get(station)?.get(request) === undefined) yield* this.readGrants(station);
       const g = this.#grants.get(station)?.get(request);
       if (g === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
-      const exp = Math.floor(this.#env.host.nowMs() / 1000) + (scope === "hour" ? 3600 : 30 * 86400);
+      const exp = Math.floor(this.#env.host.nowMs() / 1000) + SCOPE_SECONDS[scope];
       return yield* this.#env.personal.signGrant(sub, { station, request, session: g.session, chat: g.chat, scope, exp }, t("core-misc.personal.reason.grant"));
     });
   }
@@ -812,7 +816,6 @@ export class Adb {
       return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
         const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
         if (list === null) return;
-        if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
         // (one from before signatures drops them: said on its cards, nothing allowed there would lend)
         if ((r as J)?.signs === true) this.#old.delete(station);
         else this.#old.add(station);
@@ -845,7 +848,8 @@ export class Adb {
         ...shown,
         ...(sub !== null ? { sub } : {}),
         ...(whole.status === "granted" ? { held: this.#holds(whole) !== null, unsigned: whole.signed == null } : {}),
-        ...(whole.status === "pending" && standing !== "member" ? { join: true } : {}),
+        // (no lock yet is no step: allowing it begins the lock by itself, PersonalLock.signGrant)
+        ...(whole.status === "pending" && (standing === "outside" || standing === "replaced") ? { join: true } : {}),
         ...(this.#old.has(whole.station) ? { oldStation: true } : {}),
       };
       const key = JSON.stringify([g.station, grantChat(g)]);
@@ -896,7 +900,7 @@ export class Adb {
 
   /// The lending a person has something to do for, of those grants made: one whose station's adb waits to be paired
   /// with this phone, else the first. What the topic's own fields say, the pairing dialog's code goes to (its
-  /// notification, AdbCodeReader: they name no station) and an ask naming none is of (2026-10-30: a phone lent to a
+  /// notification: it names no station) and an ask naming none is of (2026-10-30: a phone lent to a
   /// second station was paired with the first, already paired, and the second never).
   #focus(): Lend | undefined {
     const lends = [...this.#lends.values()];
@@ -919,7 +923,7 @@ export class Adb {
     const screens = [...new Set([this.#legacy, ...this.#lends.values()].flatMap((l) => l.value().screens as string[]))];
     const personal = this.#env.subs().map(({ sub, email }) => ({ ...this.#env.personal.view(sub), email, pair: this.#env.pair.state(sub) }));
     const toConfirm = this.#allGrants().filter((g) => this.#toConfirm(g)).length;
-    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts, screens, personal, toConfirm };
+    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, screens, personal, toConfirm };
   }
 
   card(station: string): J {

@@ -74,12 +74,13 @@ test "通知 made once: a kind's banner turned shows at once, kept till the core
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
-      notify.set(base.topic("notify", Map::new()).get().value)
+      notify.set(base.topic("notify", Map([])).get().value)
       notify_over(base, notify, marks, calls)
     })
     let banner = @sf.t("web-pages.notifications.ways.banner")
     t.click(Button, label=@sf.t("web-pages.notifications.kinds.wait"))
-    t.draw()
+    // (its ways make their way in under it: pressed once there)
+    t.run_for(@ui.move_most_ms)
     assert_eq(switch_said(t, banner), Some(On), msg=at)
     t.click(Switch, label=banner)
     t.draw()
@@ -118,7 +119,7 @@ test "通知 made once: the badge's tile turned shows at once and its kinds' swi
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform=0, h=2400.0, over=fn(base) {
-      notify.set(base.topic("notify", Map::new()).get().value)
+      notify.set(base.topic("notify", Map([])).get().value)
       marks.set(base.topic("workspaceMarks", { "workspace": Json::string("ws1") }).get().value)
       notify_over(base, notify, marks, calls)
     })
@@ -158,7 +159,7 @@ test "通知 made once: the banner's tile turned while that is on its way: a spi
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
-      notify.set(base.topic("notify", Map::new()).get().value)
+      notify.set(base.topic("notify", Map([])).get().value)
       notify_over(base, notify, marks, calls)
     })
     let banner = @sf.t("web-pages.notifications.ways.banner")
@@ -194,7 +195,7 @@ test "通知 made once, as the system has notifications: not asked yet, asked of
       let marks : @signals.Signal[Json?] = @signals.signal(None)
       let calls = []
       let over = fn(base : Source) {
-        notify.set(notify_with(base.topic("notify", Map::new()).get().value, [("permission", Json::string(state))]))
+        notify.set(notify_with(base.topic("notify", Map([])).get().value, [("permission", Json::string(state))]))
         notify_over(base, notify, marks, calls)
       }
       // (the device's system as the core says it: asked of it only where it has not been)
@@ -222,7 +223,7 @@ test "通知 made once, its settings read the first time: their cards in their b
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let kept : Ref[Json?] = Ref(None)
     let t = setting_tester(Notifications, w, platform~, over=fn(base) {
-      kept.val = base.topic("notify", Map::new()).get().value
+      kept.val = base.topic("notify", Map([])).get().value
       notify_over(base, notify, marks, [])
     })
     assert_true(t.find(@sf.t("web-pages.notifications.ways.title")) is None, msg=at)
@@ -243,7 +244,7 @@ test "通知 made once: each workspace's switch turns it; notifications off, the
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
-      notify.set(base.topic("notify", Map::new()).get().value)
+      notify.set(base.topic("notify", Map([])).get().value)
       notify_over(base, notify, marks, calls)
     })
     assert_eq(switch_said(t, "个人"), Some(Off), msg=at)
@@ -278,5 +279,33 @@ test "通知 made once: a kind opened shows its ways and the preview its banner;
     t.draw()
     assert_eq(t.get(Button, label=failed).expanded, Some(false), msg=at)
     assert_true(t.all(Switch, label=@sf.t("web-pages.notifications.ways.banner")).is_empty(), msg=at)
+  }
+}
+
+///|
+test "通知 made once: the preview's banner says the last notice's words on two lines at most, the second ending in an ellipsis, as its style says (notify_banner_body)" {
+  let long = "智能体已经跑完了这次的构建和测试，一共改了十二个文件，其中有三个测试没有过，需要你看一下失败的原因再决定要不要继续往下做。"
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
+      {
+        ..base,
+        topic_read: fn(name, params) {
+          if name == "notices" {
+            let said : Json = { "items": [{ "kind": "failed", "title": "构建", "body": long }] }
+            { value: Some(said), error: None, version: 1 }
+          } else {
+            base.topic(name, params).get().snapshot()
+          }
+        },
+      }
+    })
+    let failed = @sf.t("web-pages.notifications.kinds.failed")
+    t.click(Button, label=failed)
+    t.draw()
+    let lines = t.lines_of("智能体已经")
+    assert_eq(lines.length(), 2, msg="\{at}: \{Repr(lines)}")
+    assert_true(lines[1].has_suffix("…"), msg="\{at}: \{Repr(lines)}")
   }
 }

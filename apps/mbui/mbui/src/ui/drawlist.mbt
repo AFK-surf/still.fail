@@ -36,6 +36,7 @@
 ///|
 /// What the last frame drew, as a draw list (the file's head); `bytes`: with the pictures handed over as bytes in it.
 pub fn Tester::drawlist(self : Tester, bytes? : Bool = false) -> String {
+  self.reads_own()
   ignore(self)
   drawlist_of(g(), bytes~)
 }
@@ -44,6 +45,7 @@ pub fn Tester::drawlist(self : Tester, bytes? : Bool = false) -> String {
 /// The images the last frame drew that the app handed over as bytes (Ctx::image_bytes, add_image), in the list's
 /// order: their sources and bytes, for a renderer beside the draw list (its `.img<N>` files).
 pub fn Tester::drawlist_images(self : Tester) -> Array[(Int, String, Bytes)] {
+  self.reads_own()
   ignore(self)
   let out : Array[(Int, String, Bytes)] = []
   for k, e in drawn_images(g()) {
@@ -58,13 +60,13 @@ pub fn Tester::drawlist_images(self : Tester) -> Array[(Int, String, Bytes)] {
 ///|
 /// The images drawn in the last frame, in the order the instances first draw them: (id, source, px).
 fn drawn_images(c : Ctx) -> Array[(Int, String, Int)] {
-  let by_id : Map[Int, (String, Int)] = {}
+  let by_id : Map[Int, (String, Int)] = Map([])
   image_cache.each(fn(src, es) {
     for e in es {
       by_id[e.id] = (src, e.px)
     }
   })
-  let seen : Map[Int, Bool] = {}
+  let seen : Map[Int, Bool] = Map([])
   let out : Array[(Int, String, Int)] = []
   for k in 0..<c.ninst {
     let b = k * inst_size
@@ -118,13 +120,13 @@ fn font_and_text(sk : String) -> ((Double, Int, Int), String)? {
     }
   }
   let skip = parts[0].length() + parts[1].length() + parts[2].length() + 3
-  Some(((n(parts[0]), n(parts[1]).to_int(), n(parts[2]).to_int()), sk.view(start_offset=skip).to_owned()))
+  Some(((n(parts[0]), n(parts[1]).to_int(), n(parts[2]).to_int()), sk.exact_view(start=skip).to_owned()))
 }
 
 ///|
 /// What glyph `key` is, by the kept text: (font, cluster, words), by the rule the format says.
 fn glyph_names() -> Map[Int, ((Double, Int, Int), Int, String)] {
-  let named : Map[Int, ((Double, Int, Int), Int, String)] = {}
+  let named : Map[Int, ((Double, Int, Int), Int, String)] = Map([])
   // shorter words, then words before in UTF-16 order, then a lower cluster; by themselves (-1) before any
   let better = fn(a : ((Double, Int, Int), Int, String), b : ((Double, Int, Int), Int, String)) -> Bool {
     if (a.1 < 0) != (b.1 < 0) {
@@ -178,10 +180,32 @@ fn glyph_names() -> Map[Int, ((Double, Int, Int), Int, String)] {
 fn no_glyph_name(k : Int) -> String {
   if text_table.val is Some(_) {
     let s = "Tester::drawlist: instance \{k} draws a glyph the host's kept text does not have"
-    println(s)
-    abort(s)
+    @halt.saying(s)
   }
   " 0 0 0 -1 \"\""
+}
+
+///|
+/// What the host's kept text lacks of what was drawn (Tester::new's `text`), said; None where it lacks nothing. The words
+/// a draw list stops with (drawlist_of): the two are one checking.
+fn drawlist_lacks() -> String? {
+  match text_table.val {
+    Some(t) if t.missing.length() > 0 =>
+      Some(
+        "Tester::drawlist: the host's kept text lacks \{t.missing.length()} of what was drawn (record its text again): " +
+        t.missing[:5].to_owned().join(", "),
+      )
+    _ => None
+  }
+}
+
+///|
+/// What Tester::drawlist would stop on, said (drawlist_lacks: the host's kept text lacking what was drawn); None where
+/// it would not.
+pub fn Tester::drawlist_said(self : Tester) -> String? {
+  self.reads_own()
+  ignore(self)
+  drawlist_lacks()
 }
 
 ///|
@@ -189,14 +213,9 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   // over a host's kept text, what it lacks was shaped by the fake host: its glyphs' atlas places are not the host's,
   // and named by the host's they would be drawn as other glyphs (a renderer's picture of words never drawn). Said, not
   // drawn
-  match text_table.val {
-    Some(t) if t.missing.length() > 0 => {
-      let s = "Tester::drawlist: the host's kept text lacks \{t.missing.length()} of what was drawn (record its text again): " +
-        t.missing[:5].to_array().join(", ")
-      println(s)
-      abort(s)
-    }
-    _ => ()
+  match drawlist_lacks() {
+    Some(s) => @halt.saying(s)
+    None => ()
   }
   let sb = StringBuilder()
   // (fading towards a cut across: 9 and its 60 numbers; down: 8 and 56; an outer clip: 7 and 52; a box's corners each its own: 6 and 40;
@@ -267,8 +286,8 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   let key_at = glyph_keys()
   let names = glyph_names()
   // each glyph drawn, numbered as first drawn, by its name (one name, one number)
-  let glyph_no : Map[String, Int] = {}
-  let inst_glyph : Map[Int, Int] = {}
+  let glyph_no : Map[String, Int] = Map([])
+  let inst_glyph : Map[Int, Int] = Map([])
   for k in 0..<c.ninst {
     let o = k * inst_size
     let kind = c.inst[o + 5]
@@ -299,7 +318,7 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
     }
   }
   // each image drawn, numbered as first drawn
-  let image_no : Map[Int, Int] = {}
+  let image_no : Map[Int, Int] = Map([])
   for n, e in drawn_images(c) {
     image_no[e.0] = n
     sb.write_string("image \{n} \{e.2} " + Json::string(e.1).stringify())
@@ -354,8 +373,8 @@ pub fn drawlist_first_unlike(a : String, b : String) -> (Int, String, String)? {
   let lb = b.split("\n").to_array()
   let n = if la.length() > lb.length() { la.length() } else { lb.length() }
   for i in 0..<n {
-    let x = la.get(i).map(fn(v) { v.to_string() }).unwrap_or("")
-    let y = lb.get(i).map(fn(v) { v.to_string() }).unwrap_or("")
+    let x = la.get(i).map(fn(v) { v.to_owned() }).unwrap_or("")
+    let y = lb.get(i).map(fn(v) { v.to_owned() }).unwrap_or("")
     if i >= la.length() || i >= lb.length() || !dl_line_same(x, y) {
       return Some((i + 1, x, y))
     }
@@ -374,13 +393,13 @@ fn dl_line_same(x : String, y : String) -> Bool {
     return false
   }
   // (only the lines of numbers: a glyph's or an image's words, and bytes' base64, word for word)
-  match wx.get(0).map(fn(w) { w.to_string() }) {
+  match wx.get(0).map(fn(w) { w.to_owned() }) {
     Some("window") | Some("clear") | Some("i") => ()
     _ => return false
   }
   for k in 0..<wx.length() {
-    let p = wx[k].to_string()
-    let q = wy[k].to_string()
+    let p = wx[k].to_owned()
+    let q = wy[k].to_owned()
     if p == q {
       continue
     }

@@ -150,7 +150,7 @@ fn notify(first : ReactiveNode) -> Unit {
     // (a watch marked as it is notified, whatever batch it is in: what it holds told it may be stale before it is told
     // so as the batch ends: Watch::on_marked)
     if effect.kind is WatchNode {
-      guard effect.own is WatchOwned(o) else { abort("a watch without its own") }
+      guard effect.own is WatchOwned(o) else { @halt.saying("a watch without its own") }
       o.marked_by = setting.val
       match o.marked {
         Some(f) if !o.resting => f()
@@ -273,6 +273,18 @@ pub fn end_batch() -> Unit {
 }
 
 ///|
+/// The batch ended, as `end_batch`; but where a flush is under way, what it set is left to that flush, run in its turn
+/// after what was queued before it, not in a flush begun inside it. Not alien-signals': its endBatch flushes inside the
+/// effect that ends the batch, so a flush of N effects each ending a batch ran them each inside the one before, N deep
+/// (Tree::at_cause: a change marking 400 structures overflowed the stack, 2026-11-12).
+pub fn end_batch_in_turn() -> Unit {
+  run.batch_depth -= 1
+  if run.batch_depth == 0 && run.flushing == 0 {
+    flush()
+  }
+}
+
+///|
 /// A signal holding `initial`.
 pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
   let state : SignalState[T] = { current: initial, pending: initial, same }
@@ -320,24 +332,45 @@ pub fn[T] computed_following(getter : (T?) -> T, dependency : Computed[Unit], sa
 }
 
 ///|
-/// An effect: `fn` run now, and again as what it read changes; the function that stops it.
-pub fn effect(f : () -> Unit) -> () -> Unit {
-  effect_of(fn() {
-    f()
-    None
-  })
+/// An effect: `fn` run now, and again as what it read changes; the function that stops it. `loc`: where it was made,
+/// said only where it is made as a watch reads (effect_in_watch), kept nowhere.
+#callsite(autofill(loc))
+pub fn effect(f : () -> Unit, loc~ : SourceLoc) -> () -> Unit {
+  effect_of(
+    fn() {
+      f()
+      None
+    },
+    loc,
+  )
 }
 
 ///|
 /// An effect whose run returns its cleanup, run before it runs again and as it is stopped.
-pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
-  effect_of(fn() { Some(f()) })
+#callsite(autofill(loc))
+pub fn effect_cleanup(f : () -> (() -> Unit), loc~ : SourceLoc) -> () -> Unit {
+  effect_of(fn() { Some(f()) }, loc)
 }
 
 ///|
-fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
+/// Told as an effect is made while a watch reads (Watch::read): it is that watch's whatever owner is set (owner_now
+/// takes what is reading first), and is let go as the watch reads anew, what it follows followed no longer (kitdemo's
+/// pick and op checks, made in an after_build as a frame's watch read: nothing took the host's word, 2026-11-12). ui
+/// says it as a fault (frame_watch.mbt), told where it was made; None: nothing told.
+pub let effect_in_watch : Ref[((SourceLoc) -> Unit)?] = Ref(None)
+
+///|
+fn effect_of(f : () -> (() -> Unit)?, loc : SourceLoc) -> () -> Unit {
   let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=EffectOwn(f))
   let parent = owner_now()
+  match parent {
+    Some(p) if p.kind is WatchNode =>
+      match effect_in_watch.val {
+        Some(told) => told(loc)
+        None => ()
+      }
+    _ => ()
+  }
   let prev_sub = set_active_sub(Some(e))
   let prev_owner = set_owner(Some(e))
   match parent {
@@ -456,7 +489,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
   let flags = e.flags
   // (a watch told: what it read changed, it says so; what it read stays followed till it reads anew, Watch::read)
   if e.kind is WatchNode {
-    guard e.own is WatchOwned(o) else { abort("a watch without its own") }
+    guard e.own is WatchOwned(o) else { @halt.saying("a watch without its own") }
     // (at rest: stale, nothing it read asked whether it changed; it reads anew as it wakes, rest)
     if o.resting {
       e.flags = WATCHING
@@ -515,7 +548,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
     run.cycle += 1
     run.run_depth += 1
     if e.kind is EffectNode {
-      guard e.own is EffectOwn(f) else { abort("an effect without its fn") }
+      guard e.own is EffectOwn(f) else { @halt.saying("an effect without its fn") }
       e.cleanup = f()
     }
     run.run_depth -= 1
@@ -661,6 +694,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
     }
     // (where, for what it tells to say: Signal::set_at)
     set_at.val = Some(loc)
+    sets_count.val += 1
     let node = self.0
     node.flags = MUTABLE | DIRTY
     match node.subs {
@@ -732,7 +766,7 @@ fn effect_scope_oper(e : ReactiveNode) -> Unit {
   // (a watch stopped, by itself or by what owns it: it follows nothing from here, so it is stale, and gone: what kept
   // it by what it read keeps nothing by it, Watch::gone)
   if e.kind is WatchNode {
-    guard e.own is WatchOwned(o) else { abort("a watch without its own") }
+    guard e.own is WatchOwned(o) else { @halt.saying("a watch without its own") }
     o.stale = true
     o.gone = true
   }
@@ -972,7 +1006,8 @@ pub fn watch(changed : () -> Unit) -> Watch {
 /// What `f` makes, all it reads followed by the watch in place of what the last read read; not stale after it unless
 /// what it read changed as it ran (a value it read set later in it), and then `changed` is called at its end, or it
 /// was touched as it ran (Watch::touch), which it keeps. What
-/// was reading before it does not read what it reads.
+/// was reading before it does not read what it reads. An effect `f` makes is the watch's, whatever owner is set, and
+/// is let go as it reads anew (told: effect_in_watch).
 pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   // (at rest: read, nothing followed, till it wakes and reads anew)
   if self.own.resting {
@@ -1136,6 +1171,17 @@ let setting : Ref[SourceLoc?] = Ref(None)
 /// is not the place of some earlier set.
 pub fn setting_at() -> SourceLoc? {
   setting.val
+}
+
+///|
+/// How many sets changed a value so far: what reads it before and after says whether any came between (ui's
+/// Ctx::held, whether more came after what told a build).
+// kept across runs: a count read only as a difference
+let sets_count : Ref[Int] = Ref(0)
+
+///|
+pub fn sets_said() -> Int {
+  sets_count.val
 }
 
 ///|

@@ -35,7 +35,7 @@ fn cut_drawn(tree : Bool, words : String, w : Double) -> (Int, Array[Int]) {
       root.box(fn(col) {
         col.width(Is(Some(w))).lines_up(Is(Some(Start))) |> ignore
         col.box(fn(t) {
-          t.words(Is(words), look={ size: 25.0, weight: 400, line: 30.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
+          t.words(Is(words), look={ size: 25.0, weight: 400, line: 30.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }) |> ignore
         })
         |> ignore
       })
@@ -60,6 +60,6 @@ test "one line cut short in a box too narrow for it: its last glyph the ellipsis
   let (old_last, old_all) = cut_drawn(false, "查看价目表 →", 140.0)
   let (new_last, new_all) = cut_drawn(true, "查看价目表 →", 140.0)
   assert_true(ellipsis >= 0 && arrow >= 0 && ellipsis != arrow, msg="the ellipsis \{ellipsis}, the arrow \{arrow}")
-  assert_eq((old_last, new_last), (ellipsis, ellipsis), msg="old \{old_all}, new \{new_all}")
+  assert_eq((old_last, new_last), (ellipsis, ellipsis), msg="old \{Repr(old_all)}, new \{Repr(new_all)}")
   assert_eq(new_all, old_all)
 }

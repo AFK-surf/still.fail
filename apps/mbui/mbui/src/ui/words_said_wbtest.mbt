@@ -27,8 +27,8 @@ test "words said: under a modal layer of the window's tree, a field among them, 
   assert_true(
     all.contains("下面的字") && all.contains("下面的字段") && all.contains("上面的字") && all.contains("上面的字段") &&
     all.contains("上面的第二行"),
-    msg="\{all}",
+    msg="\{Repr(all)}",
   )
-  assert_true(!said.contains("下面的字") && !said.contains("下面的字段"), msg="\{said}")
-  assert_true(said.contains("上面的字") && said.contains("上面的字段") && said.contains("上面的第二行"), msg="\{said}")
+  assert_true(!said.contains("下面的字") && !said.contains("下面的字段"), msg="\{Repr(said)}")
+  assert_true(said.contains("上面的字") && said.contains("上面的字段") && said.contains("上面的第二行"), msg="\{Repr(said)}")
 }

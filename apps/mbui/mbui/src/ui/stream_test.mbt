@@ -10,8 +10,8 @@ priv struct Screen {
 
 ///|
 fn screen(h264? : Bool = true) -> Screen {
-  let cell : Ref[@ui.Stream?] = Ref::new(None)
-  let on = Ref::new(true)
+  let cell : Ref[@ui.Stream?] = Ref(None)
+  let on = Ref(true)
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -25,7 +25,7 @@ fn screen(h264? : Bool = true) -> Screen {
     h264~,
   )
   let acks = []
-  let broke = Ref::new(0)
+  let broke = Ref(0)
   let s = @ui.Stream::new(shown=fn(ts) { acks.push(ts) }, broken=fn() { broke.val += 1 })
   cell.val = Some(s)
   t.draw()
@@ -229,7 +229,7 @@ test "a run's words of its streams, said again, show the same frames at the same
 test "a run's tape replayed: its stream events taken at the frames they were taken at; its host's H.264 as it said" {
   // when each frame was said shown (the frame's time)
   let acks : Array[(Double, Double)] = []
-  let cell : Ref[@ui.Stream?] = Ref::new(None)
+  let cell : Ref[@ui.Stream?] = Ref(None)
   let view = fn(c : @ui.Ctx) {
     match cell.val {
       Some(s) => c.stream(s) |> ignore
@@ -270,7 +270,7 @@ test "a host whose decoder is driven from here: told what to do, its words taken
   assert_eq(v.acks, [])
   v.t.stream_codec_said(id, "arr 1")
   v.t.draw()
-  assert_eq(v.t.stream_fed(id)[2:].to_array(), [
+  assert_eq(v.t.stream_fed(id)[2:].to_owned(), [
     "do queue 1 0 100 1 bytes=5", "do release 1 0 100", "do latch 100 1 640 360",
   ])
   v.t.draw()
@@ -298,5 +298,5 @@ test "driven from here: a decoder that fails before its frame arrived, the frame
   assert_eq(v.acks, [100.0, 200.0])
   assert_eq(v.s.shown_at(), Some(200.0))
   let fed = v.t.stream_fed(id)
-  assert_eq(fed[fed.length() - 3:].to_array(), ["do drop 1", "do release 2 0 200", "do latch 200 1 640 360"])
+  assert_eq(fed[fed.length() - 3:].to_owned(), ["do drop 1", "do release 2 0 200", "do latch 200 1 640 360"])
 }

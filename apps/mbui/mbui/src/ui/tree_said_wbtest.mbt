@@ -189,7 +189,7 @@ test "a layer of the old frame's over everything, modal: the tree's buttons unde
   })
   t.draw()
   let tree_button = t.semantics().filter(fn(s) { s.label == "树的" })
-  assert_true(tree_button.length() == 1 && tree_button[0].hidden, msg="\{tree_button}")
+  assert_true(tree_button.length() == 1 && tree_button[0].hidden, msg="\{Repr(tree_button)}")
   g().ask_action(tree_button[0].id, Activate)
   t.draw()
   assert_eq(pressed.val, 0)
@@ -211,7 +211,7 @@ test "what can be done to a node of the tree's: Activate where a press does some
   let said = t.a11y_said()
   let line = fn(role : String, label : String) {
     for l in said.split("\n") {
-      let f = l.split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+      let f = l.split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
       if f.length() == 16 && f[3] == role && f[9] == label {
         return Some(f)
       }

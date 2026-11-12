@@ -18,7 +18,7 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
   for w in want {
     let (curve, ys) = w
     for i, t in ts {
-      assert_true(near(curve.at(t), ys[i], 1.0e-6), msg="\{curve} at \{t}: \{curve.at(t)} not \{ys[i]}")
+      assert_true(near(curve.at(t), ys[i], 1.0e-6), msg="\{Repr(curve)} at \{t}: \{curve.at(t)} not \{ys[i]}")
     }
   }
   assert_eq(@ui.Out.at(0.0), 0.0)
@@ -79,15 +79,15 @@ test "a Move told on from a way under way leaves as fast as it went, and is ther
   assert_true(near_end.abs() < 0.5, msg="\{near_end}")
   // an Anim told anew mid-way: on from where it is as fast as it went, as long as what is left of its way
   let a = @motion.Anim::new(0.0)
-  let s = @motion.move()
+  let s = @motion.moved()
   assert_eq(s.duration(0.0, 400.0, 0.0), @ui.move_ms(400.0))
   assert_eq(s.duration(380.0, 400.0, 0.0), @ui.move_ms(20.0))
   let (x1, v1) = s.value_at(0.0, s.duration(380.0, 400.0, 900.0), 380.0, 400.0, 900.0)
   assert_eq((x1, v1), (380.0, 900.0))
   ignore(a)
   // a progress of 0 to 1 over 300 points: as long as those
-  assert_eq(@motion.move(points=300.0).duration(0.0, 1.0, 0.0), @ui.move_ms(300.0))
-  assert_eq(@motion.move(over=40.0).duration(0.0, 1.0, 0.0), @ui.move_ms(40.0))
+  assert_eq(@motion.moved(points=300.0).duration(0.0, 1.0, 0.0), @ui.move_ms(300.0))
+  assert_eq(@motion.moved(over=40.0).duration(0.0, 1.0, 0.0), @ui.move_ms(40.0))
 }
 
 ///|
@@ -151,21 +151,21 @@ test "springs end as Compose reckons their duration" {
 }
 
 ///|
-test "a tween goes by whole milliseconds on its curve, after its delay" {
+test "a tween goes on its curve by the time as it is, after its delay" {
   let s = @motion.tween(300.0, ease=Out, delay=100.0)
   let dur = s.duration(0.0, 10.0, 0.0)
   assert_eq(dur, 400.0)
   let (x0, _) = s.value_at(50.0, dur, 0.0, 10.0, 0.0)
   assert_eq(x0, 0.0)
   let (x1, _) = s.value_at(250.9, dur, 0.0, 10.0, 0.0)
-  assert_true(near(x1, 10.0 * @ui.Out.at(150.0 / 300.0), 1.0e-9))
+  assert_true(near(x1, 10.0 * @ui.Out.at(150.9 / 300.0), 1.0e-9))
   let (x2, v2) = s.value_at(400.0, dur, 0.0, 10.0, 0.0)
   assert_eq((x2, v2), (10.0, 0.0))
 }
 
 ///|
 test "an animated value starts the frame it is asked in, and follows its target" {
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   // the tween's length
   let tween_ms = 160.0
   let seen : Array[Double] = []
@@ -212,8 +212,12 @@ test "an animated value starts the frame it is asked in, and follows its target"
   // on its way still, to its own end
   let end = kept.val.unwrap().ends_at()
   assert_true(end > t.time())
+  assert_eq(kept.val.unwrap().ended_at(), end)
   t.run_for(end - t.time())
   assert_eq(seen[seen.length() - 1], 0.0)
+  // over: what a test asks of when it stopped is its end as it was told, not "none moves" (ends_at's -1)
+  assert_eq(kept.val.unwrap().ends_at(), -1.0)
+  assert_eq(kept.val.unwrap().ended_at(), end)
   t.assert_idle()
 }
 
@@ -238,7 +242,7 @@ test "a frame built again for an animated value going says which: its key and th
 
 ///|
 test "a spring told anew mid-way goes on as fast as it went" {
-  let to = Ref::new(0.0)
+  let to = Ref(0.0)
   let seen : Array[Double] = []
   let kept : Ref[@motion.Anim?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
@@ -275,7 +279,7 @@ test "a spring told anew mid-way goes on as fast as it went" {
 
 ///|
 test "a keyed node moved for its cause is drawn from where it was, then goes there" {
-  let before = Ref::new(true)
+  let before = Ref(true)
   let mut id = 0
   let t = @ui.Tester::new(fn(c) {
     id = c.id("moved")
@@ -309,7 +313,7 @@ test "a keyed node moved for its cause is drawn from where it was, then goes the
 
 ///|
 test "a keyed node moved by what holds it, its cause the same, is in its new place at once" {
-  let above = Ref::new(40.0)
+  let above = Ref(40.0)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
@@ -336,8 +340,8 @@ let caused_midway_ms : Double = 100.0
 
 ///|
 test "a keyed node on its way, moved by what holds it, goes on with its own move from its new place" {
-  let above = Ref::new(40.0)
-  let words = Ref::new("one line")
+  let above = Ref(40.0)
+  let words = Ref("one line")
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
@@ -403,8 +407,8 @@ test "a keyed node driven to its place, moved again on the way, goes on from whe
 }
 
 ///|
-test "layout_rest: a keyed node's move ends when its spring says, the same whenever asked; -1 at rest" {
-  let before = Ref::new(true)
+test "layout_rest: a keyed node's move ends when its spring says, the same whenever asked, and once at rest; -1 before it moved" {
+  let before = Ref(true)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       if before.val {
@@ -426,13 +430,13 @@ test "layout_rest: a keyed node's move ends when its spring says, the same whene
   assert_eq(@motion.layout_rest("moved"), end)
   t.run_for(end - t.time())
   assert_eq(drawn_y(t, 0xFF0000FFL), 0.0)
-  assert_eq(@motion.layout_rest("moved"), -1.0)
+  assert_eq(@motion.layout_rest("moved"), end)
   t.assert_idle()
 }
 
 ///|
 test "shown and hidden: in by its enter, out by its exit, then gone" {
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   let looks : Array[@ui.Look?] = []
   let enter = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0, ease=Out), fade_spec=@motion.tween(180.0, ease=Out))
   let exit = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0, ease=Out), fade_spec=@motion.tween(150.0, ease=Out))
@@ -475,7 +479,7 @@ fn trans_ms(tr : @motion.Trans) -> Double {
 ///|
 test "a list's row gone leaves by a copy; the rest close over it, late" {
   let keys = @signals.signal(["a", "b", "c", "d"])
-  let ids : Map[String, Int] = {}
+  let ids : Map[String, Int] = Map([])
   let t = @ui.Tester::new(
     fn(c) {
       let ks = keys.get()
@@ -516,7 +520,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   // c's own close over b, to its end (d's the same; b's copy gone before)
   t.run_for(@motion.layout_rest("row/c") - t.time())
   assert_eq(t.drawn_of("c").unwrap().1, 40.0)
-  assert_eq(@motion.layout_rest("row/d"), -1.0)
+  assert_true(@motion.layout_rest("row/d") <= t.time())
   // a row new to the list comes in
   keys.set(["e", "a", "c", "d"])
   t.frame()
@@ -549,7 +553,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
 
 ///|
 test "a list held at its end, a row gone: what is over it comes down over its place, what is under it stays" {
-  let keys = Ref::new(Array::makei(20, fn(i) { i }))
+  let keys = Ref(Array::makei(20, fn(i) { i }))
   let t = @ui.Tester::new(
     fn(c) {
       let ks = keys.val
@@ -639,15 +643,16 @@ test "a list's rows alike at its start and its end are none of its change: only 
   t.frame()
   assert_true(@motion.layout_rest("row/n") > t.time())
   assert_true(@motion.layout_rest("row/x") > t.time())
+  // (none of them moving: y's end, over, before now)
   for k in ["p", "q", "y", "r", "s"] {
-    assert_eq(@motion.layout_rest("row/" + k), -1.0, msg=k)
+    assert_true(@motion.layout_rest("row/" + k) <= t.time(), msg=k)
   }
 }
 
 ///|
 test "an action can take a measured node from where it was drawn with its parent" {
-  let down = Ref::new(10.0)
-  let show = Ref::new(true)
+  let down = Ref(10.0)
+  let show = Ref(true)
   let t = @ui.Tester::new(fn(c) {
     let parent = c.box(w=Px(100.0), h=Px(100.0), fn() {
       if show.val {
@@ -740,12 +745,12 @@ fn spring_value(spec : @motion.Spec, from : Double, to : Double, v : Double, ms 
 ///|
 test "springs match Compose's own FloatSpringSpec, frame for frame" {
   // printed by Compose's animation-core 1.10.1 itself (scripts/compose_ref.sh)
-  let move = 2.0 * 3.141592653589793 / (1.2 * 0.28)
+  let omega = 2.0 * 3.141592653589793 / (1.2 * 0.28)
   let sheet = 2.0 * 3.141592653589793 / (1.2 * 0.32)
   let cases : Array[(@motion.Spec, Double, Double, Double, Double, Array[Double])] = [
     (@motion.spring(), 0.0, 1.0, 0.0, 171.0, [0.0, 0.12842241, 0.3653931, 0.57653147, 0.8986603, 0.9795784, 1.0, 1.0]),
     (@motion.row_spring, 100.0, 0.0, 0.0, 354.0, [100.0, 96.32119, 87.23453, 75.95016, 44.20961, 23.001738, 11.24473, 2.414866]),
-    (@motion.Spring(1.0, move * move, 0.5, 0.0), 66.0, 0.0, 0.0, 372.0, [66.0, 63.573936, 57.58083, 50.137196, 29.194187, 15.195139, 7.4312854, 1.597196]),
+    (@motion.Spring(1.0, omega * omega, 0.5, 0.0), 66.0, 0.0, 0.0, 372.0, [66.0, 63.573936, 57.58083, 50.137196, 29.194187, 15.195139, 7.4312854, 1.597196]),
     (@motion.motion_spring(0.24, bounce=0.08, threshold=0.001), 0.9, 1.0, 0.0, 276.0, [0.9, 0.9049251, 0.9167734, 0.9309648, 0.9673801, 0.98751396, 0.9960531, 1.0]),
     (@motion.Spring(1.0, sheet * sheet, 0.5, 0.0), 600.0, 0.0, 0.0, 576.0, [600.0, 582.698, 538.4667, 481.358, 307.9814, 178.07419, 97.186775, 26.170254]),
     (@motion.Spring(1.0, sheet * sheet, 0.5, 0.0), 300.0, 600.0, 3000.0, 476.0, [300.0, 345.59494, 388.46097, 425.50986, 504.42215, 549.62573, 574.1537, 593.5585]),
@@ -761,7 +766,7 @@ test "springs match Compose's own FloatSpringSpec, frame for frame" {
       let got = spring_value(spec, from, to, v, ms)
       // Compose's are floats
       let eps = 2.0e-6 * dmax2(from.abs(), to.abs()) + 1.0e-6
-      assert_true(near(got, want[i], eps), msg="\{spec} at \{ms}: \{got} not \{want[i]}")
+      assert_true(near(got, want[i], eps), msg="\{Repr(spec)} at \{ms}: \{got} not \{want[i]}")
     }
   }
 }
@@ -789,14 +794,14 @@ test "tweens match Compose's own FloatTweenSpec, frame for frame" {
     let dur = spec.duration(0.0, 1.0, 0.0)
     for i, ms in at {
       let got = spec.value_at(ms, dur, 0.0, 1.0, 0.0).0
-      assert_true(near(got, want[i], 2.0e-6), msg="\{spec} at \{ms}: \{got} not \{want[i]}")
+      assert_true(near(got, want[i], 2.0e-6), msg="\{Repr(spec)} at \{ms}: \{got} not \{want[i]}")
     }
   }
 }
 
 ///|
 test "a look moves what is drawn, never where it is tapped" {
-  let taps = Ref::new(0)
+  let taps = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(40.0), min_h=40.0, fn() {  }) |> ignore
@@ -824,7 +829,7 @@ test "a look moves what is drawn, never where it is tapped" {
 
 ///|
 test "what is faded to nothing is tapped where it is laid out" {
-  let taps = Ref::new(0)
+  let taps = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("faded")
     c.on_press(id, fn() {
@@ -844,9 +849,9 @@ test "what is faded to nothing is tapped where it is laid out" {
 test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
   // a sheet over a button: shown, the sheet is tapped; let go of, it is drawn while it fades and the button under it
   // is tapped at once
-  let shown = Ref::new(true)
-  let under = Ref::new(0)
-  let over = Ref::new(0)
+  let shown = Ref(true)
+  let under = Ref(0)
+  let over = Ref(0)
   let sheet_ms = 300.0
   let t = @ui.Tester::new(fn(c) {
     let u = c.id("under")
@@ -891,7 +896,7 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
 ///|
 test "what is drawn cut while it opens is tapped whole, where it is laid out" {
   // a box growing up from its foot (the composer's capsule): its line above what is drawn yet is tapped at once
-  let taps = Ref::new(0)
+  let taps = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("line")
     c.on_press(id, fn() {
@@ -916,7 +921,7 @@ test "what is drawn cut while it opens is tapped whole, where it is laid out" {
 test "what is moved into a box that cuts it from outside it is drawn there" {
   // a row laid out wholly below the box it is in, a button in it drawn moved up into the box: drawn (its row is not
   // left out for being outside), and tapped where it is laid out (cut away: nowhere)
-  let taps = Ref::new(0)
+  let taps = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(110.0), min_h=110.0, fn() {  }) |> ignore
@@ -969,7 +974,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
       if ask {
         // started here, at this frame's time: its end said at once
         if v.ends_at() != c.moment() + fade_ms {
-          abort("an Anim told in a frame did not say its end there")
+          @halt.saying("an Anim told in a frame did not say its end there")
         }
       }
     }
@@ -1045,12 +1050,12 @@ test "a list's row moved by something else just after its rows changed is in its
   tall_a.set(true)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
-  assert_eq(@motion.layout_rest("row/c"), -1.0)
+  assert_true(@motion.layout_rest("row/c") <= t.time())
 }
 
 ///|
 test "layout_rest: a list's row gone, when its copy has left; its copy said to move by its key" {
-  let keys = Ref::new(["a", "b", "c"])
+  let keys = Ref(["a", "b", "c"])
   let t = @ui.Tester::new(
     fn(c) {
       let ks = keys.val
@@ -1082,15 +1087,15 @@ test "layout_rest: a list's row gone, when its copy has left; its copy said to m
   let leaving = t.instances()
   // run to it: the copy gone, nothing of b left to wait for
   t.run_for(end - t.time())
-  assert_eq(@motion.layout_rest("row/b"), -1.0)
+  assert_true(@motion.layout_rest("row/b") <= t.time())
   assert_true(t.instances() < leaving, msg="\{t.instances()} \{leaving}")
 }
 
 ///|
 test "run_for: what its last frame says starts there is drawn at that moment, its end known as run_for returns" {
   let shown = 300.0
-  let fade : Ref[@motion.Anim?] = Ref::new(None)
-  let begun = Ref::new(-1.0)
+  let fade : Ref[@motion.Anim?] = Ref(None)
+  let begun = Ref(-1.0)
   let t = @ui.Tester::new(fn(c) {
     let a = @motion.anim(c, "toast-fade", 1.0)
     fade.val = Some(a)
@@ -1116,8 +1121,8 @@ test "a chain of tweens each from the one before's declared end, whichever frame
   // was seen at its end
   let lengths = [100.0, 70.0, 130.0]
   let segs : Array[@motion.Anim] = [@motion.Anim::new(0.0), @motion.Anim::new(0.0), @motion.Anim::new(0.0)]
-  let k = Ref::new(-1)
-  let seen_end = Ref::new(false)
+  let k = Ref(-1)
+  let seen_end = Ref(false)
   let seen : Array[(Double, Int, Double)] = []
   let t = @ui.Tester::new(fn(c) {
     let i = k.val
@@ -1149,12 +1154,12 @@ test "a chain of tweens each from the one before's declared end, whichever frame
     t.run_for(if until - t.time() < look_ms { until - t.time() } else { look_ms })
   }
   // each frame: the segment it is in, as far on as the time since the chain's start says (once its segment is told;
-  // in whole ms, as a motion's time goes)
+  // on the moments' grid, as a motion's time goes: @ui.gone_ms)
   let ends = [start + lengths[0], start + lengths[0] + lengths[1], start + lengths[0] + lengths[1] + lengths[2]]
   for f in seen {
     let (now, j, v) = f
     let from = if j == 0 { start } else { ends[j - 1] }
-    let want = if now >= ends[j] { 1.0 } else { (now - from).floor() / lengths[j] }
+    let want = if now >= ends[j] { 1.0 } else { @ui.gone_ms(now - from) / lengths[j] }
     assert_true(near(v, want, 1.0e-9), msg="at \{now} segment \{j}: \{v} not \{want}")
   }
   // the last one's end: the three lengths from the first's start, exactly
@@ -1166,8 +1171,8 @@ test "a chain of tweens each from the one before's declared end, whichever frame
 test "a chain caught up after a while unseen: what is over is there at once, only the one under way said to move" {
   let lengths = [100.0, 70.0, 130.0]
   let segs : Array[@motion.Anim] = [@motion.Anim::new(0.0), @motion.Anim::new(0.0), @motion.Anim::new(0.0)]
-  let shown = Ref::new(true)
-  let k = Ref::new(-1)
+  let shown = Ref(true)
+  let k = Ref(-1)
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
@@ -1215,7 +1220,7 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
 test "a chain with motion reduced: each there at once, its end the moment it was told, the whole chain in one build" {
   let lengths = [100.0, 70.0, 130.0]
   let segs : Array[@motion.Anim] = [@motion.Anim::new(0.0), @motion.Anim::new(0.0), @motion.Anim::new(0.0)]
-  let k = Ref::new(-1)
+  let k = Ref(-1)
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
@@ -1260,7 +1265,7 @@ let reshape_midway_ms : Double = 100.0
 
 ///|
 test "a box reshaped for its cause: what it holds there at once, its ground from the shape it had to the new one" {
-  let lines = Ref::new(1)
+  let lines = Ref(1)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       let b = c.box(w=Px(100.0), h=Px(20.0 * lines.val.to_double()), bg=0xFF0000FFL, fn() {
@@ -1306,7 +1311,7 @@ fn moved_box(there : Ref[Bool], carry : Bool) -> @ui.Tester {
 
 ///|
 test "a box gone with what it holds (carry): what is new in it carried on its ground, as far from its nearer edges, until it is there" {
-  let there = Ref::new(false)
+  let there = Ref(false)
   let t = moved_box(there, true)
   there.val = true
   t.frame()
@@ -1325,8 +1330,8 @@ test "a box gone with what it holds (carry): what is new in it carried on its gr
 
 ///|
 test "a resize interrupting a carried box reports only its change of shape" {
-  let stage = Ref::new(0)
-  let over = Ref::new(0.0)
+  let stage = Ref(0)
+  let over = Ref(0.0)
   let t = @ui.Tester::new(fn(c) {
     // As a list does for its composer, read its last measured height and the moving shape during the build.
     @motion.measured(c, "carried/height") |> ignore
@@ -1350,7 +1355,7 @@ test "a resize interrupting a carried box reports only its change of shape" {
 
 ///|
 test "a box changed in its place (no carry): what is new in it is in its place from the first" {
-  let there = Ref::new(false)
+  let there = Ref(false)
   let t = moved_box(there, false)
   there.val = true
   t.frame()
@@ -1373,7 +1378,7 @@ fn drawn_corners(t : @ui.Tester, color : Int64) -> (Double, Double, Double, Doub
 
 ///|
 test "a box reshaped for its cause: each of its ground's corners goes its own way from the shape it had" {
-  let lines = Ref::new(1)
+  let lines = Ref(1)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       // (one line: all four 10; two: its foot's corners each its own, as a composer's across a panel's foot)
@@ -1397,8 +1402,8 @@ test "a box reshaped for its cause: each of its ground's corners goes its own wa
   t.run_for(reshape_midway_ms)
   let (tl, tr, br, bl) = drawn_corners(t, 0xFF0000FFL)
   assert_eq((tl, tr), (10.0, 10.0))
-  assert_true(br > 2.0 && br < 10.0 && bl > 10.0 && bl < 18.0, msg="\{(br, bl)}")
-  assert_true((10.0 - br - (bl - 10.0)).abs() < 0.001, msg="\{(br, bl)}")
+  assert_true(br > 2.0 && br < 10.0 && bl > 10.0 && bl < 18.0, msg="\{Repr((br, bl))}")
+  assert_true((10.0 - br - (bl - 10.0)).abs() < 0.001, msg="\{Repr((br, bl))}")
   t.run_for(@motion.layout_rest("box") - t.time())
   assert_eq(drawn_corners(t, 0xFF0000FFL), (10.0, 10.0, 2.0, 18.0))
   t.assert_idle()
@@ -1406,9 +1411,9 @@ test "a box reshaped for its cause: each of its ground's corners goes its own wa
 
 ///|
 test "a box at its page's foot opened from its foot (foot) as a keyboard lifts it in the same frame: its foot there at once, only its growing up on its way" {
-  let lines = Ref::new(1)
+  let lines = Ref(1)
   // (how far a keyboard has lifted what is at the page's foot: 0 down)
-  let lift = Ref::new(0.0)
+  let lift = Ref(0.0)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       c.box(w=Px(100.0), h=Px(200.0 - lift.val - 20.0 * lines.val.to_double()), fn() {  }) |> ignore
@@ -1440,7 +1445,7 @@ test "a box at its page's foot opened from its foot (foot) as a keyboard lifts i
 
 ///|
 test "a box resized by what holds it, its cause the same, has its ground its new shape at once" {
-  let w = Ref::new(100.0)
+  let w = Ref(100.0)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       let b = c.box(w=Px(w.val), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
@@ -1481,7 +1486,7 @@ test "a measured node tells what reads its corners when they change without chan
 
 ///|
 test "placed: drawn where what it reads is as this frame lays it out, never a frame behind" {
-  let room = Ref::new(0.0)
+  let room = Ref(0.0)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       c.box(w=Px(10.0), h=Px(room.val), fn() {  }) |> ignore
@@ -1521,7 +1526,7 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   // never told: over
   assert_true(seen[seen.length() - 1])
   // told in a frame: not over till its end (200 ms on), over from then
-  let told = Ref::new(false)
+  let told = Ref(false)
   let t2 = @ui.Tester::new(fn(c) {
     if !told.val {
       told.val = true
@@ -1536,4 +1541,189 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   t2.run_for(reshape_ms - reshape_midway_ms)
   assert_true(a.over(t2.ctx()))
   ignore(t)
+}
+
+///|
+/// Words in a box sliding across by the clock (Ctx::moved_by, a page going), each glyph drawn by a look worked out from
+/// where it is in its measured words (measured_rect, as a message's glyphs come out: emit's): the frames of the slide
+/// painted alone, nothing built nor laid out, each drawn as building it whole draws it (the Tester's own check, as in
+/// every test), the measured words' place where they are drawn. Found in a replay (new_chat_test: a glyph drawn 0.03
+/// off as the page it was in slid away).
+test "a measured node in what slides by the clock: read where it is drawn as each frame is painted alone" {
+  let go = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let slide = @motion.anim(c, "slide", 0.0)
+      if go.val {
+        go.val = false
+        slide.animate(c, 1.0, @motion.tween(slide_ms, ease=Out))
+      }
+      let page = c.box(w=Px(300.0), h=Px(100.0), fn() {
+        let words = c.text("a line of words")
+        @motion.measure(c, words, "slid-words")
+        c.glyphs_by(words, fn(at) {
+          let dy = match @motion.measured_rect(c, "slid-words") {
+            Some((x, _, _, _)) => (at.x - x) * 0.013
+            None => 0.0
+          }
+          { alpha: 1.0, dx: 0.0, dy, scale: 1.0, sx: 1.0 }
+        })
+      })
+      c.moved_by(page, fn(w, _) { (slide.get(c) * w * 0.731, 0.0) })
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  t.frame()
+  go.val = true
+  t.draw()
+  // (the slide's frames as a display draws them, each painted alone: what is checked against building it whole)
+  let ends = t.time() + slide_ms
+  let mut alone = 0
+  while t.time() < ends {
+    t.frame()
+    if t.built_why() == "" && t.painted_why() != "" {
+      alone = alone + 1
+    }
+  }
+  assert_true(alone > 3, msg="painted alone: \{alone}")
+}
+
+///|
+/// How long the slide above takes.
+let slide_ms : Double = 300.0
+
+///|
+/// A box 100 wide, 20 high a line, reshaped for its lines on a Move of `turn_ms`; told (`stop`, at that moment) to stop
+/// what moves for its cause where it goes (stop_for).
+fn lined_box(lines : Ref[Int], stop : Ref[Double]) -> @ui.Tester {
+  @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let b = c.box(w=Px(100.0), h=Px(20.0 * lines.val.to_double()), bg=0xFF0000FFL, fn() {  })
+      let by = "\{lines.val} lines"
+      @motion.reshape(c, b, "box", by~, spec=@motion.tween(turn_ms, ease=Move))
+      if stop.val >= 0.0 {
+        @motion.stop_for(c, by, stop.val)
+        stop.val = -1.0
+      }
+    })
+    |> ignore
+  })
+}
+
+///|
+let turn_ms : Double = 300.0
+
+///|
+/// How soon after it is turned back a box is looked at to see its speed as it turned (a ms: well inside any frame).
+let turn_look_ms : Double = 1.0
+
+///|
+/// A frame's length at 60 a second, as a display draws them.
+let turn_frame_ms : Double = 1000.0 / 60.0
+
+///|
+test "a box growing turned back on its way: on from its speed a little past where it was, then back to its shape; never stopped dead as it turned" {
+  let lines = Ref(1)
+  let t = lined_box(lines, Ref(-1.0))
+  let h = fn() { drawn_box(t, 0xFF0000FFL).3 }
+  lines.val = 3
+  t.frame()
+  t.run_for(turn_ms / 3.0)
+  let a = h()
+  t.run_for(turn_frame_ms)
+  let b = h()
+  assert_true(b > a, msg="growing: \{a} then \{b}")
+  // turned back: one line again; its speed the same either side of that moment (turn_look_ms on), not turned at
+  // once nor from rest
+  lines.val = 1
+  t.frame()
+  let turned = h()
+  t.run_for(turn_look_ms)
+  let on = h()
+  let speed = (b - a) / turn_frame_ms
+  assert_true(on - turned > 0.4 * speed, msg="on up from its speed (\{speed} a ms) as it turned: \{turned} then \{on}")
+  t.run_for(turn_frame_ms - turn_look_ms)
+  let d = h()
+  // then down to its one line, the one turn only
+  let mut prev = d
+  let mut down = false
+  let rest = @motion.layout_rest("box")
+  while t.time() + turn_frame_ms < rest {
+    t.run_for(turn_frame_ms)
+    let x = h()
+    if x < prev {
+      down = true
+    } else {
+      assert_true(!down || x == prev, msg="back up at \{t.time()} after it came down: \{prev} then \{x}")
+    }
+    prev = x
+  }
+  t.run_for(rest - t.time())
+  assert_true(down)
+  assert_eq(h(), 20.0)
+  t.assert_idle()
+}
+
+///|
+/// Where the box growing from one line to three, told to stop at `ms` into it (`late`: told a frame after that
+/// moment, of it), comes to rest; and where it was a frame after that moment, and at it.
+fn stopped_box(ms : Double, late : Bool) -> (Double, Double, Double) {
+  let lines = Ref(1)
+  let stop = Ref(-1.0)
+  let t = lined_box(lines, stop)
+  let h = fn() { drawn_box(t, 0xFF0000FFL).3 }
+  lines.val = 3
+  t.frame()
+  t.run_for(ms)
+  let at = t.time()
+  let there = h()
+  if late {
+    t.run_for(turn_frame_ms)
+    stop.val = at
+    t.frame()
+  } else {
+    stop.val = at
+    t.frame()
+    t.run_for(turn_frame_ms)
+  }
+  let after = h()
+  t.run_for(@ui.move_most_ms)
+  t.assert_idle()
+  (there, after, h())
+}
+
+///|
+test "a box growing told to stop for its cause: on from its speed, slowing to rest short of its new shape; where it rests the moment's, not the frames'" {
+  let (there, after, rest) = stopped_box(turn_ms / 4.0, false)
+  assert_true(after > there, msg="on from its speed, not stopped dead: \{there} then \{after}")
+  assert_true(rest > after && rest < 60.0, msg="slowing to rest short of its 60: \{after} then \{rest}")
+  let (there_late, after_late, rest_late) = stopped_box(turn_ms / 4.0, true)
+  assert_eq(there_late, there)
+  assert_true((after_late - after).abs() < 0.001, msg="a frame after the moment, told of it then: \{after_late} / \{after}")
+  assert_true((rest_late - rest).abs() < 0.001, msg="at rest, told of it a frame late: \{rest_late} / \{rest}")
+}
+
+///|
+test "a box growing told to stop at a moment after its frame's: stopped as at the frame's, no abort" {
+  // (a press's moment ahead of the frame it is built in, a device behind its input: Android's, 2026-11-10, words sent
+  // again 118 ms after the frame's moment aborted the app in Anim::animate)
+  let lines = Ref(1)
+  let stop = Ref(-1.0)
+  let t = lined_box(lines, stop)
+  let h = fn() { drawn_box(t, 0xFF0000FFL).3 }
+  lines.val = 3
+  t.frame()
+  t.run_for(turn_ms / 4.0)
+  let there = h()
+  stop.val = t.time() + 118.0
+  t.frame()
+  t.run_for(turn_frame_ms)
+  let after = h()
+  assert_true(after > there, msg="on from its speed: \{there} then \{after}")
+  t.run_for(@ui.move_most_ms)
+  t.assert_idle()
+  let rest = h()
+  assert_true(rest >= after && rest < 60.0, msg="slowing to rest short of its 60: \{after} then \{rest}")
 }

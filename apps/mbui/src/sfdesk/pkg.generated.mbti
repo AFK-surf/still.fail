@@ -128,6 +128,8 @@ pub fn folder_name(@sfbase.DvStation, @sfbase.DriveAt) -> String
 
 pub fn folder_page(@ui.Ctx, @sfbase.Source, FolderOf, NarrowOf?, front_it? : () -> Unit) -> Unit
 
+pub fn frame_opens(@sfbase.Source, String, (String, Map[String, @json.Json]) -> @sfbase.TopicState) -> Bool
+
 pub fn go_to(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, (@sfbase.DriveAt) -> Unit) -> Unit
 
 pub fn go_to_open() -> Unit
@@ -220,6 +222,8 @@ pub let pane_makes : @ref.Ref[Bool]
 
 pub fn pane_node() -> @view.View?
 
+pub fn pane_opens(String, @sfbase.Page, (String, Map[String, @json.Json]) -> @sfbase.TopicState) -> Bool
+
 pub fn pane_page_id() -> Int32
 
 pub fn pane_parts(@sfbase.DriveAt, Array[@sfbase.DvStation]) -> (String, String)
@@ -260,7 +264,9 @@ pub fn rail_stations_label(@sfbase.Source, String) -> String
 
 pub let rail_w : Double
 
-pub fn refresh_folder(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
+pub fn refresh_folder(@sfbase.Source, @sfbase.DriveAt) -> Unit
+
+pub fn refresh_folder_told(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 
 pub fn refreshing(@sfbase.DriveAt) -> Bool
 
@@ -553,6 +559,7 @@ pub(all) struct NarrowOf {
   back : () -> Unit
 }
 
+#derive(Eq)
 pub(all) struct PickAt {
   station : String
   station_name : String

@@ -22,6 +22,7 @@
 //   screen-files-going, -done (-dark)   two files sent to its machine: going (the first under a free name), then there
 //   screen-center, -stats (-dark)       driving a Windows desktop that changes its scale: 控制中心 open; the view's
 //                                       figures open
+//   screen-keys (-dark)                 the same, 按键 open by the keyboard (组合键, F1–F12…)
 //   screen-simulator, -center, -logs,   driving an iOS Simulator: its page, what debugs an app beside the picture; 控制中心
 //     -apps, -device (-dark)            open; its 日志 open; its 重启 App open; 设备 showing
 //   screen-login-fill, -pick (-dark)    driving a tab whose focus is in github.com's password field: 用 1Password
@@ -63,7 +64,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     return
   }
   let m = if mode.has_suffix("-dark") {
-    mode.view(end_offset=mode.length() - 5).to_owned()
+    mode.exact_view(end=mode.length() - 5).to_owned()
   } else {
     mode
   }
@@ -75,6 +76,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     "screen-trackpad" | "screen-trackpad-command" => {
       // a finger moved right, slowly (ScreenViewerTest: the pointer near 0.66 of the frame)
       u.pad.x = 0.66
+      u.pad.placed = true
       if m == "screen-trackpad-command" {
         u.held.mods = mod_meta
       }
@@ -85,6 +87,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"
+    "screen-keys" => u.asked_panel = "keys"
     "screen-stats" => u.asked_panel = "net"
     "screen-simulator-center" => u.asked_panel = "center"
     "screen-simulator-logs" => u.asked_panel = "logs"
@@ -177,6 +180,57 @@ pub fn screen_fixture_stream(
         None,
         None,
       )
+    // driving, then 李雷 takes it (its notice said); or only looking while 李雷 drives, then 接管 (its notice said): the
+    // screens at rest are screen-agent-driving's and screen-live's (the picture comes after the take)
+    "screen-taken" | "screen-took" => {
+      let taken = m == "screen-taken"
+      on_value(
+        {
+          "state": screen_fix_state(
+            "live",
+            taken,
+            true,
+            ["李雷"],
+            "",
+            Some(if taken { [] } else { ["李雷"] }),
+            Some(!taken),
+            Some(if taken { "控制 · 李雷也在看" } else { "只看 · 李雷 正在控制" }),
+            None,
+            None,
+            None,
+          ),
+        },
+        None,
+      )
+      let st = match
+        screen_fix_state(
+          "live",
+          !taken,
+          true,
+          ["李雷"],
+          "",
+          Some(if taken { ["李雷"] } else { [] }),
+          Some(taken),
+          Some(if taken { "只看 · 李雷 正在控制" } else { "控制 · 李雷也在看" }),
+          None,
+          None,
+          None,
+        ) {
+        Object(m) => m.copy()
+        _ => {}
+      }
+      if taken {
+        st["watchOnly"] = Json::number(1.0)
+        st["taken"] = Json::number(1.0)
+        st["takenBy"] = Json::array([Json::string("李雷")])
+      } else {
+        st["took"] = Json::number(1.0)
+        st["tookFrom"] = Json::array([Json::string("李雷")])
+      }
+      on_value({ "state": Json::object(st) }, None)
+      on_value({ "config": { "codec": "jpeg", "width": 1280.0, "height": 720.0 } }, None)
+      on_value({ "frame": { "key": true, "ts": 1000.0 } }, Some(screen_fix_jpeg()))
+    }
     "screen-read-only" => live(false, false, ["李雷"], None, None, None, None, None, None)
     "screen-not-drivable" =>
       live(
@@ -238,7 +292,7 @@ pub fn screen_fixture_stream(
     "screen-clipboard-driving" =>
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
     "screen-clipboard-old-station" => live(true, true, [], None, None, None, None, None, None)
-    "screen-center" | "screen-stats" => {
+    "screen-center" | "screen-stats" | "screen-keys" => {
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
         Object(m) => m.copy()
@@ -426,20 +480,6 @@ fn screen_fix_one_password() -> Unit {
       (0, "[{\"id\":\"username\",\"label\":\"username\",\"value\":\"\{who}\"},{\"id\":\"password\",\"label\":\"password\",\"purpose\":\"PASSWORD\",\"value\":\"pw-\{who}\"}]", "")
     } else {
       (1, "", "unknown command")
-    }
-  })
-}
-
-///|
-/// This device's passkeys as the tests have them (the Tester's): github.com's signs (credential 09 09, its authenticator
-/// data, signature and user handle); any other site's none (the person told no passkey of it here).
-fn screen_fix_passkeys() -> Unit {
-  @ui.fake_passkey_asks.clear()
-  @ui.fake_passkey.val = Some(fn(rp, _client, _uv, _ids) {
-    if rp == "github.com" {
-      "0\u{1f}0909\u{1f}abcdef\u{1f}070707\u{1f}05\u{1f}\u{1f}"
-    } else {
-      "1\u{1f}\u{1f}\u{1f}\u{1f}\u{1f}NotAllowedError\u{1f}"
     }
   })
 }

@@ -30,8 +30,62 @@
 let frame_told_at : Ref[String] = Ref("")
 
 ///|
+/// When what the frames' watch was told of since the frame before was told (each moment once, as told): the moment of
+/// its cause (the window's tree's, an event's or a moment's falling due as it tells it), else the frame's being drawn,
+/// else the host's now between frames.
+// kept across runs: put back as each frame is decided
+let frame_told_moments : Array[(Double, String)] = []
+
+///|
+/// The moments the build under way was told by (frame_told_moments, as the frame was decided): what a wait asked in it
+/// without its own `since` counts from (Ctx::held), the latest of them.
+// kept across runs: set as each frame is decided
+let build_causes : Array[(Double, String)] = []
+
+///|
+/// How many sets there had been as a watch was last told (watch_told_moment): what came after it was told is no cause
+/// it has a moment of, a watch told once till it is read.
+// kept across runs: a count read only as a difference
+let told_sets : Ref[Int] = Ref(0)
+
+///|
+/// How many sets there had been as the frame being drawn began (on_frame): what it sets itself (its clock) told
+/// nothing before it.
+// kept across runs: set as each frame begins
+let frame_start_sets : Ref[Int] = Ref(0)
+
+///|
+/// Whether more sets came after the last telling before the build under way was decided (build_causes): a cause of it
+/// that may be later than the moment it was told at, said where a wait counts from that (Ctx::held, held_causes).
+// kept across runs: set as each frame is decided
+let build_told_more : Ref[Bool] = Ref(false)
+
+///|
+/// The moment of what is told now (frame_told_moments').
+/// Said with where it came from: `tree` (an event, a moment falling due, a structure's change), `frame` (told as a frame
+/// was drawn: under a Tester, what its fake host tells as each frame is about to begin, a posted message among it, at
+/// the frame's moment), `between` (the host's now between frames).
+fn told_moment() -> (Double, String) {
+  match tree_cause() {
+    Some(m) => (m, "tree")
+    None => if frame_moment.val >= 0.0 { (frame_moment.val, "frame") } else { (h_now(), "between") }
+  }
+}
+
+///|
+/// What the frames' watch is told now: its moment kept, once.
+fn watch_told_moment() -> Unit {
+  told_sets.val = @signals.sets_said()
+  let m = told_moment()
+  if !frame_told_moments.iter().any(fn(x) { x.0 == m.0 }) {
+    frame_told_moments.push(m)
+  }
+}
+
+///|
 /// The frames' watch told between frames or as one begins: where, the first time since the frame before.
 fn watch_told_at() -> Unit {
+  watch_told_moment()
   if frame_told_at.val == "" {
     frame_told_at.val = @signals.last_set_at()
   }
@@ -351,6 +405,19 @@ fn init {
 }
 
 ///|
+/// An effect made as the frame's watch reads (a build, an after_build, a Ctx::tell: frame_body under frame_watch_of's
+/// read) is that watch's, let go as it reads the next frame, whatever owner is set: a fault (@signals.effect_in_watch).
+/// (What is handed on as the frame begins, the messages left for it and the window's runtime's timers and fibers, runs
+/// outside that reading: take_messages, fx_frame_start.)
+fn init {
+  @signals.effect_in_watch.val = Some(fn(loc) {
+    @view.fault(
+      "an effect made as a frame is read (a build, an after_build, a Ctx::tell) is let go as the next frame is read: make it in a handler, or in @signals.untracked with its owner set (@signals.set_owner); made at \{loc}",
+    )
+  })
+}
+
+///|
 /// The frames' clock (ms), followed only before `end` (Ctx::now): what moves till then and is still from then on (a
 /// spring's way, a fade), built again each frame till it is.
 #callsite(autofill(loc))
@@ -400,6 +467,8 @@ fn frame_inputs_read() -> Unit {
 /// were applied (`looks`: it has some); whether the next may be built from nothing it did not read (it left nothing to
 /// come of its own: looks_left); the soonest moment anything but a look or a paint asked to be drawn at (-1: none),
 /// from its build on.
+// `built` is read by its tests alone
+#warnings("-unused_field")
 priv struct LooksBase {
   /// its instances, kept only where it has looks (a frame of the looks alone draws them again)
   mut inst : FixedArray[Double]
@@ -520,6 +589,9 @@ fn looks_reset() -> Unit {
   list_hand_forget()
   layout_said.val = ""
   frame_told_at.val = ""
+  frame_told_moments.clear()
+  build_causes.clear()
+  build_told_more.val = false
   layout_clock_at.val = ""
   frame_watches_let_go()
   looks_base.n = 0
@@ -585,11 +657,23 @@ fn looks_apply(c : Ctx) -> Unit {
   list_looks(c)
   // (the window's tree's endless decorations on the resident clock (View::cycle_resident): its next step woken for,
   // said later, as a look's here is: nothing built for it; a step nobody can see waits)
-  match view_app.val {
-    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(), later=true)
-    _ => ()
+  if view_resident_read() {
+    match view_app.val {
+      Some(tree) => c.wake_at_time(tree.resident_next(), later=true)
+      None => ()
+    }
   }
   in_looks.val = false
+}
+
+///|
+/// Whether the window's tree draws an endless decoration on the resident clock where it can be seen
+/// (@view.Tree::resident_read): its next step is the looks' to ask for, a frame of its looks alone's too.
+fn view_resident_read() -> Bool {
+  match view_app.val {
+    Some(tree) => tree.resident_read() && app_visible()
+    None => false
+  }
 }
 
 ///|
@@ -622,7 +706,11 @@ fn list_looks(c : Ctx) -> Unit {
       Some(end) if c.clock < end => {
         c.cycling = true
         looks_own.cycling = true
-        c.wake_at_time(end)
+        // (a frame at its end, not waited for: the glide's end is its column's motion's (on_glides, said moving till
+        // then), and what is waited for is put down only as a frame is built, which a frame of the looks alone is not:
+        // waited for here, it stayed after the rest, a Tester on a host keeping groups drawing every display frame
+        // after a fling till its next input and never at rest, glide_wake_wbtest)
+        c.wake_at_time(end, later=true)
       }
       _ => ()
     }
@@ -839,6 +927,11 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
     // the host draws again of it found from those headers alone, h_present)
     looks_apply(c)
     looks_heads_only.val = true
+  } else if view_resident_read() {
+    // (the window's tree's endless decorations alone (View::cycle_resident): nothing of the old view by the clock, the
+    // tree's resident step woken for as a frame built whole asks it, else the step asked for last, now come, is asked
+    // again and the next never)
+    looks_apply(c)
   }
   c.t_build = 0.0
   c.t_layout = 0.0
@@ -894,6 +987,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   messages_arrive()
   // (a Tester's fake host's answers come by the frame, told as it begins: what waits on them reads them)
   answers_by_the_frame()
+  // (and what is taken as it comes, a pick's, a native call's: taken now into what reads it)
+  takers_by_the_frame()
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
@@ -1006,6 +1101,12 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   }
   built_why.val = if why != "" { why } else { laid_why }
   frame_told_at.val = ""
+  build_causes.clear()
+  for m in frame_told_moments {
+    build_causes.push(m)
+  }
+  build_told_more.val = !frame_told_moments.is_empty() && frame_start_sets.val > told_sets.val
+  frame_told_moments.clear()
   frame_built.val = true
   if why != "" || laid_why != "" {
     looks_drawn.val = false
@@ -1134,6 +1235,7 @@ fn frame_read_told(set_as_read : () -> Array[String]) -> Unit {
     watch_told_at()
   } else if frame_running.val {
     g().wants_frame = true
+    watch_told_moment()
     let by = set_as_read()
     watch_said.val = if by.is_empty() {
       "a value it read changed as the frame ended, set at \{@signals.last_set_at()}"

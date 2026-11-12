@@ -181,20 +181,22 @@ priv struct Desk {
 /// window's tree's (its words in pieces: which tree it is of, by its number (view_tree_made), the row of a list made by
 /// its key it is in and where it is in that row (View::row_place): the same paragraph while its row's key is there,
 /// scrolled away and back, whatever node shows it then; another once another row is where it was); none.
+#derive(Eq, Hash)
 priv enum SelKey {
   NoSel
   Para(Int)
   Words(Int, @view.NodeId, Array[Int])
-} derive(Eq, Hash)
+}
 
 ///|
 /// Which layer words picked with the pointer are in, the only one a selection picks in (as a browser's started in a
 /// dialog stays in it): an old view's (overlay.mbt: its id; 0 the page), or one of the window's tree's (where in its
 /// stack of layers: Tree::stack_of, -1 in none).
+#derive(Eq)
 priv enum SelLayer {
   OldLayer(Int)
   TreeLayer(Int)
-} derive(Eq)
+}
 
 ///|
 priv struct SelTarget {
@@ -268,6 +270,9 @@ priv struct Picked {
   mut spans : Map[SelKey, SelSpan]
   mut dragging : Bool
   mut list : Int
+  /// the box scrolled sideways the press went down in (Ctx::sideways: a code block's line, a wide table; 0 none),
+  /// scrolled toward the pointer held past its start or its end
+  mut across : Int
   mut layer : SelLayer
   mut made : Int
   /// picked by a finger (finger_select.mbt): held on a word, its ends' handles, the system's text menu over it; the
@@ -290,6 +295,7 @@ let picked : Picked = {
   spans: {},
   dragging: false,
   list: 0,
+  across: 0,
   layer: OldLayer(0),
   made: 0,
   finger: false,
@@ -468,7 +474,9 @@ let mark_cursor_at : Int = 6
 ///|
 /// What is said of the target `id` as it is built, marked on its node (the way there's 1: what a frame
 /// says is what its nodes hold, kept with them). Said of an id whose node is not made yet, it is marked on it as it is
-/// (Ctx::id_built). The shape said last is the one.
+/// (Ctx::id_built); one that has no node at all (a link in rich words) keeps it in the frame's `marks_ahead`, which a
+/// list's row or a part kept as its nodes says again each frame it is kept (built_used), its build not run. The shape
+/// said last is the one.
 fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
   if id == 0 {
     return
@@ -478,7 +486,15 @@ fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
       let n = self.nodes[i]
       n.marks = with_marks(n.marks, m, cursor)
     }
-    _ => self.marks_ahead[id] = with_marks(self.marks_ahead.get(id).unwrap_or(0), m, cursor)
+    _ => {
+      self.marks_ahead[id] = with_marks(self.marks_ahead.get(id).unwrap_or(0), m, cursor)
+      // (an id whose node this build makes later has it marked on it then, and what is said again of it then is
+      // read by nothing: its node, kept, holds it)
+      built_used(fn() {
+        let c = g()
+        c.marks_ahead[id] = with_marks(c.marks_ahead.get(id).unwrap_or(0), m, cursor)
+      })
+    }
   }
 }
 
@@ -804,7 +820,7 @@ pub fn Ctx::selected_text(self : Ctx) -> String {
 fn selected_words() -> String {
   let spans : Array[SelSpan] = picked.spans.values().filter(fn(s) { s.a < s.b }).collect()
   spans.sort_by(fn(p, q) { order_cmp(p.at, q.at) })
-  spans.map(fn(s) { s.text.view(start_offset=s.a, end_offset=s.b).to_string() }).join("\n")
+  spans.map(fn(s) { s.text.clamped_view(start=s.a, end=s.b).to_owned() }).join("\n")
 }
 
 ///|
@@ -1101,11 +1117,12 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   let x = x + picked.grab_x
   let y = y + picked.grab_y
   // the paragraphs laid out: their words and where they stand in the page, now (a finger's: of the old view it picked
-  // in, as a dialog's selection stays in it)
+  // in, as a dialog's selection stays in it); only those a press may pick (Ctx::sel_at's old_owner_open): a page's
+  // words lying under a modal layer's (a file read over its chat) are no end of what is picked in it, nor between
   let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
-    t.layer == picked.layer && (!picked.finger || t.island == picked.island)
+    t.layer == picked.layer && (!picked.finger || t.island == picked.island) && old_owner_open(t.island)
   })
-  let drawn : Map[SelKey, SelSpan] = {}
+  let drawn : Map[SelKey, SelSpan] = Map([])
   for t in laid {
     if !drawn.contains(t.base) {
       drawn[t.base] = { a: 0, b: 0, text: t.text, at: t.at }
@@ -1147,10 +1164,10 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   } else {
     (picked.to, picked.from)
   }
-  let known : Map[SelKey, SelSpan] = {}
+  let known : Map[SelKey, SelSpan] = Map([])
   picked.spans.each(fn(k, s) { if !drawn.contains(k) { known[k] = s } })
   drawn.each(fn(k, d) { known[k] = d })
-  let spans : Map[SelKey, SelSpan] = {}
+  let spans : Map[SelKey, SelSpan] = Map([])
   known.each(fn(k, s) {
     let n = s.text.length()
     let a = if k == lo.base {
@@ -1189,6 +1206,7 @@ fn Ctx::select_after_layout(self : Ctx) -> Unit {
     self.select_to(self.px, self.py)
   }
   self.select_edge()
+  self.select_edge_across()
 }
 
 ///|
@@ -1233,12 +1251,77 @@ fn Ctx::select_edge(self : Ctx) -> Unit {
 }
 
 ///|
+/// Words being picked with the pointer held past the start or the end of the box scrolled sideways the press went
+/// down in (a code block's line, a wide table), as it was last laid out: it scrolls toward the pointer at
+/// select_edge's pace for how far past it is, words coming as it does (select_after_layout), till the pointer comes
+/// back in or lets go, as a browser's overflowing box does.
+fn Ctx::select_edge_across(self : Ctx) -> Unit {
+  let id = picked.across
+  if id == 0 {
+    return
+  }
+  guard sideways.get(id) is Some(st) else { return }
+  let mut v = 0.0
+  if picked.dragging && self.down {
+    let mut k = self.scroll_ids.length() - 1
+    while k >= 0 && self.scroll_ids[k] != id {
+      k = k - 1
+    }
+    if k >= 0 {
+      let (start, end) = (self.scroll_rects[k * 4], self.scroll_rects[k * 4 + 2])
+      v = if end <= start {
+        0.0
+      } else if self.px < start {
+        -(start - self.px + select_edge_least) * select_edge_rate
+      } else if self.px > end {
+        (self.px - end + select_edge_least) * select_edge_rate
+      } else {
+        0.0
+      }
+    }
+  }
+  let was = st.x
+  sideways_edge_to(self, st, v)
+  // (scrolled under a pointer that stays where it is: the words come to it now, drawn so in this frame)
+  if st.x != was && !tree_picking() {
+    self.select_to(self.px, self.py)
+  }
+}
+
+///|
+/// Box `st` gone on at the pace it was last said (px a ms) since then, said on at `v` from now (0: still where it is).
+fn sideways_edge_to(c : Ctx, st : Sideways, v : Double) -> Unit {
+  if st.edge_v != 0.0 {
+    let x = dclamp(st.x + st.edge_v * dmax(0.0, c.clock - st.edge_t), 0.0, dmax(st.max, 0.0))
+    if x != st.x {
+      st.x = x
+      st.rest = -1.0
+      st.vel = 0.0
+      c.sideways_scrolled(st)
+    }
+  }
+  st.edge_v = v
+  st.edge_t = c.clock
+  // (a motion while it goes (Sideways' rest_at): frames come, each taking it on and the words under the pointer there)
+  if v != 0.0 {
+    c.moving(st.mover, st as &Moving, what="a box scrolled sideways toward words picked past its edge")
+  }
+}
+
+///|
 /// The list words were picked in scrolls no more toward the pointer (it let go, or they did).
 fn select_edge_stop() -> Unit {
   tree_edge_stop()
   if picked.list != 0 {
     g().edge_scroll(picked.list, 0.0)
     picked.list = 0
+  }
+  if picked.across != 0 {
+    match sideways.get(picked.across) {
+      Some(st) => sideways_edge_to(g(), st, 0.0)
+      None => ()
+    }
+    picked.across = 0
   }
 }
 
@@ -1348,6 +1431,8 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
       picked.layer = target.layer
       // (the list it lies in: sideways boxes in it scroll it no way the pointer goes up or down)
       picked.list = if picked.dragging { outer_scroll(self, x, y) } else { 0 }
+      // (the box scrolled sideways it lies in, the same way across)
+      picked.across = if picked.dragging { across_scroll(self, x, y) } else { 0 }
       // (a paragraph of the window's tree's: the column it is in, the same way)
       if picked.dragging {
         tree_edge_from(target)

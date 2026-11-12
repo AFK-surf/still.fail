@@ -15,7 +15,6 @@ priv enum MdInline {
   /// its address, its words, and what it is to as the core says (refLinks.ts linkTo: the tree's `to`)
   Link(String, Array[MdInline], LinkTo)
   Image(String, String)
-  SoftBreak
   HardBreak
 }
 ///|
@@ -24,9 +23,13 @@ priv struct MdItem { task : Bool?; blocks : Array[MdBlock] }
 priv struct MdList { ordered : Bool; start : Int; tight : Bool; items : Array[MdItem] }
 ///|
 /// How a table's column is aligned (GFM's `:--`, `:-:`, `--:`; none said).
+// never drawn: a table's columns are not aligned as said
+#warnings("-unused_constructor")
 priv enum MdAlign { Plain; Left; Center; Right }
 ///|
 /// `md`, `csv`: the table to copy, as Markdown and as CSV, as the core wrote it (markdown.ts tableMarkdown, tableCsv).
+// align is never drawn: a table's columns are not aligned as said
+#warnings("-unused_field")
 priv struct MdTable { align : Array[MdAlign]; head : Array[Array[MdInline]]; rows : Array[Array[Array[MdInline]]]; md : String; csv : String }
 ///|
 priv enum MdBlock {
@@ -46,7 +49,7 @@ fn md_plain(xs : Array[MdInline]) -> String {
     match x {
       Text(s) | Code(s) | FileRef(s, _, _, _) | Formula(s, _) | Image(_, s) => out.write_string(s)
       Emph(c) | Strong(c) | Strike(c) | Link(_, c, _) => out.write_string(md_plain(c))
-      SoftBreak | HardBreak => out.write_string(" ")
+      HardBreak => out.write_string(" ")
     }
   }
   out.to_string()
@@ -56,7 +59,7 @@ fn md_words(j : Json, text : String) -> String? {
   match j {
     String(s) => Some(s)
     Array([Number(a,..),Number(b,..)]) if a >= 0.0 && b >= a && b <= text.length().to_double() =>
-      Some(text.view(start_offset=a.to_int(), end_offset=b.to_int()).to_string())
+      Some(text.clamped_view(start=a.to_int(), end=b.to_int()).to_owned())
     _ => None
   }
 }
@@ -126,7 +129,7 @@ fn core_blocks(nodes : Array[Json], text : String) -> Array[MdBlock] {
       "table" => {
         let rows = kids.map(fn(r) { let (_,cells,_) = md_parts(r); cells.map(fn(c) { let (_,k,_) = md_parts(c); core_inlines(k,text) }) })
         let align = math_array(math_field(a,"align")).map(fn(x) { match math_string(x) { "left" => MdAlign::Left; "center" => MdAlign::Center; "right" => MdAlign::Right; _ => MdAlign::Plain } })
-        out.push(Table({ align, head:if rows.length()>0 {rows[0]}else{[]}, rows:if rows.length()>1 {rows[1:].to_array()}else{[]}, md:math_string(math_field(a,"md")), csv:math_string(math_field(a,"csv")) }))
+        out.push(Table({ align, head:if rows.length()>0 {rows[0]}else{[]}, rows:if rows.length()>1 {rows[1:].to_owned()}else{[]}, md:math_string(math_field(a,"md")), csv:math_string(math_field(a,"csv")) }))
       }
       "hr" => out.push(Rule)
       _ => if kids.length() > 0 { out.append(core_blocks(kids,text)) }
@@ -189,10 +192,11 @@ pub fn md_node_depth(node : Json) -> Int? {
 ///|
 /// What a link is to, as the core says (refLinks.ts linkTo, with each link of its Markdown and of a person's words):
 /// a chat's (`chat`: drawn as a reference to it), a screen's, a station's 共享调试 or a chat's web service's (`card`:
-/// "screen", "adb", "service"; a card alone in a paragraph, its title bare in a sentence), and what names it (`station`,
+/// "screen", "adb", "service"; a card alone in a paragraph, but 共享调试's, its title bare in a sentence), and what names it (`station`,
 /// `screen`, `job`); a pull request's or an issue's (`peek`: "pull", "issue": its card over it that one's, bars while it
 /// is read). `bare`: its words are its address (a Markdown link's: it may read as what it names). Nothing here reads a
 /// link's address for it.
+#derive(Eq)
 pub(all) struct LinkTo {
   chat : Bool
   card : String
@@ -201,7 +205,7 @@ pub(all) struct LinkTo {
   job : String
   peek : String
   bare : Bool
-} derive(Eq)
+}
 
 ///|
 /// A link to none of those: a web page's, a file's.

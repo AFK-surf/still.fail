@@ -264,7 +264,7 @@ fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
         placeholder_color=t.p.subtle,
         caret_color=t.p.accent,
       )
-      let q = r.text.trim(chars=" \t\n").to_string()
+      let q = r.text.trim(chars=" \t\n").to_owned()
       if q != archive_side.q {
         archive_side.q = q
         archive_side.limit = archive_side_page
@@ -587,7 +587,7 @@ fn todo_shown(src : Source, w : Workspace) -> Bool {
 fn band_h(src : Source, w : Workspace) -> Double {
   side_top_h() +
   band_row_h() +
-  (if wide.tape {
+  (if wide.tape.get() {
     band_new_top + side_new_under + band_new_tape_over()
   } else {
     band_pane_top() + band_pane_under()

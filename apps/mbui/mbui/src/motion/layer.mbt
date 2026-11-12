@@ -23,6 +23,7 @@
 /// How something comes or goes (Compose's EnterTransition / ExitTransition): at its far end its opacity is `fade`, its
 /// scale `scale` (about `ox`, `oy`), it is `dx`, `dy` off its place; the opacity goes by `fade_spec`, the rest by
 /// `spec`.
+#derive(Eq)
 pub(all) struct Trans {
   fade : Double
   scale : Double
@@ -36,7 +37,7 @@ pub(all) struct Trans {
   /// come in over it, they going before it as it goes (Look's `words`), so that never are its words and what it is put
   /// over both seen in one place (sf/motion.mbt rule 4)
   ground_first : Bool
-} derive(Show, Eq)
+}
 
 ///|
 /// A transition: fadeIn/Out to `fade`, scaleIn/Out to `scale`, slideIn/Out by `dx`, `dy`; all by `spec` unless the
@@ -132,6 +133,8 @@ priv struct Moving {
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
   mut fly : (Double, Double, Double, Double, Double, Double)?
+  /// the same worked out once this frame is laid out (fly_by), in its place
+  mut fly_by : (() -> (Double, Double, Double, Double, Double, Double))?
   /// placed by its own look but flying over rows, which must make room for it
   mut flying_placed : Bool
   /// its own ground changes shape for its cause (reshape), by `spec`
@@ -162,9 +165,11 @@ priv struct Rec {
   mut y : Double
   mut w : Double
   mut h : Double
+  /// the node it was laid out as, in the layout of the frame it was last seen in (`seen`)
+  mut node : Int
   /// How a measured node was drawn after all of its ancestors' looks were applied.
   mut drawn : @ui.DrawnState?
-  mut ref : Int
+  mut anchor : Int
   /// the frame it was last laid out in (what this frame's builds of it read: layout_entry)
   mut seen : Int
   /// whether what lays it out is built (from its first layout until it is no longer built: rec_unbuilt), and whether
@@ -260,8 +265,9 @@ fn Rec::new() -> Rec {
     y: 0.0,
     w: 0.0,
     h: 0.0,
+    node: -1,
     drawn: None,
-    ref: 0,
+    anchor: 0,
     seen: -10,
     alive: false,
     read: false,
@@ -501,6 +507,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     kept_drawn: false,
     scope: 0,
     fly: None,
+    fly_by: None,
     flying_placed: false,
     reshape: false,
     carry: false,
@@ -700,6 +707,20 @@ pub fn fly(
 }
 
 ///|
+/// Node `i` flown as `fly` flies it, from where and how far on as `at` gives them (x, y, scale, px, py, ps), worked out
+/// once this frame is laid out as `placed`'s are: what is read there of a way going on (where words sent are on theirs)
+/// is read as the frame is laid out, not as it is built, so that what builds it is not built again each frame it goes.
+pub fn fly_by(c : @ui.Ctx, i : Int, at : () -> (Double, Double, Double, Double, Double, Double)) -> Unit {
+  let e = moving_of(c, i)
+  if e.name == "" {
+    e.name = "fly"
+  }
+  e.fly = Some((0.0, 0.0, 1.0, 1.0, 1.0, 1.0))
+  e.fly_by = Some(at)
+  c.stratum(i, Flying)
+}
+
+///|
 /// A node placed by its own look flies over list rows, which leave its drawn room clear.
 pub fn flying_placed(c : @ui.Ctx, i : Int) -> Unit {
   let e = moving_of(c, i)
@@ -776,6 +797,28 @@ fn rec_unread(k : Int) -> Unit {
 }
 
 ///|
+/// The shape of what is reshaped for cause `by` (reshape's `by`: its ground's way) told at moment `at` to stop where it
+/// goes (Anim::stop_at): on from where it was then and as fast, slowing to rest, left there, short of where it is laid
+/// out, till its next cause (the coordinator of the migration, 2026-11-10: a composer growing a line as words sent from
+/// it hold it: the words gone, it grows no further for them). Only its shape: where it and its parts are placed goes on
+/// to where they are laid out, which no next cause would set going again (a box sent from as it opened, its place
+/// halfway there for good). One rule with a way set off again the other way (layout_entry): a motion changed carries
+/// its speed.
+pub fn stop_for(c : @ui.Ctx, by : String, at : Double) -> Unit {
+  if by == "" {
+    return
+  }
+  mo.recs.each(fn(_, r) {
+    if r.alive && r.by == by {
+      let way = ground_way(r, (r.x, r.y, r.w, r.h))
+      if way > 0.0 {
+        r.gp.stop_at(c, at, points=way)
+      }
+    }
+  })
+}
+
+///|
 /// How far over its laid out top the ground of the shape keyed `key` (reshape) is drawn now, on its way from the shape
 /// it had (less than 0 while it is drawn lower: growing up to it): what stands on it moves with it so, in the same
 /// frame. 0 at rest, and while it goes from where it was with what it holds (`carry`: to another place, not another
@@ -812,13 +855,26 @@ pub fn reshape_way(c : @ui.Ctx, key : String) -> (Double, Double)? {
 }
 
 ///|
+/// The frame the measured nodes were last laid out in (after_layout): their records' nodes (Rec's `node`) are that
+/// layout's.
+// kept across runs: said as each frame is laid out
+let measures_laid_in : Ref[Int] = Ref(-1)
+
+///|
 /// Where the node kept as `key` (measure) was last laid out, in the window: x, y, w, h (None before it was, or once what
-/// lays it out is no longer built: rec_unbuilt).
+/// lays it out is no longer built: rec_unbuilt). Read as the frame is painted, where it is then: a frame painted alone
+/// places what the clock moves (Ctx::moved_by, a page sliding) where it is now, nothing laid out, and what reads it as
+/// it is painted (a look by Ctx::look_by, a glyph's by Ctx::glyphs_by) reads it there with what it is in, as laying
+/// the frame out there reads it.
 pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
-  ignore(c)
   measure_read(measure_at, motion_key("measure\u{1}" + key), name=key)
   measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
+    // (its node the frame's: laid out in the layout the frame is painted from)
+    Some(r) if r.alive && r.node >= 0 && r.seen == measures_laid_in.val && c.painting() => {
+      let (x, y, _, _) = c.node_rect(r.node)
+      Some((x, y, r.w, r.h))
+    }
     Some(r) if r.alive => Some((r.x, r.y, r.w, r.h))
     _ => None
   }
@@ -936,13 +992,14 @@ fn carrier(c : @ui.Ctx, i : Int) -> (Moving, Rec)? {
 ///|
 /// When the node keyed `key` (layout, entering) is at its place and in (whole ms, the frames' clock): the latest of
 /// its move's ends and its entrance's (Anim::ends_at); a row gone from its list, when its copy has left (its fade's
-/// and its move's ends); before now (-1) when it is at rest or the key is not known; +inf when told to move in the
+/// and its move's ends); once at rest, the latest end each was given (Anim::ended_at, before now); -1 when the key is
+/// not known or none of it moved; +inf when told to move in the
 /// frame just drawn (it starts at the next: the frame owed, Tester::draw). Only read.
 pub fn layout_rest(key : String) -> Double {
   let k = motion_key(key)
   let mut e = -1.0
   let at = fn(a : Anim) {
-    let x = a.ends_at()
+    let x = a.ended_at()
     if x > e {
       e = x
     }
@@ -1047,7 +1104,7 @@ pub fn list_keys(
     lm.names = keys
     return id
   }
-  let ks : Array[Int] = Array::new(capacity=nk)
+  let ks : Array[Int] = Array(capacity=nk)
   for i in 0..<lead {
     ks.push(before[i])
   }
@@ -1066,11 +1123,11 @@ pub fn list_keys(
   }
   lm.changed_frame = frame
   // (the rows between, before and now)
-  let old : Map[Int, Int] = {}
+  let old : Map[Int, Int] = Map([])
   for i in lead..<(nb - tail) {
     old[before[i]] = i
   }
-  let fresh : Map[Int, Int] = {}
+  let fresh : Map[Int, Int] = Map([])
   for i in lead..<(nk - tail) {
     fresh[ks[i]] = i
   }
@@ -1082,7 +1139,7 @@ pub fn list_keys(
   // which of the rows there before and now went ahead of others (those alike at the start and the end went ahead of
   // none)
   let mut kept_i = 0
-  let kept_before : Map[Int, Int] = {}
+  let kept_before : Map[Int, Int] = Map([])
   let mut j = 0
   for i in lead..<(nb - tail) {
     if fresh.contains(before[i]) {
@@ -1160,7 +1217,7 @@ pub fn list_keys(
     lm.unghost.remove(k)
   }
   let stale : Array[Int] = []
-  lm.arrived.each(fn(k, at) { if now - at >= 500.0 { stale.push(k) } })
+  lm.arrived.each(fn(k, at) { if now >= at + 500.0 { stale.push(k) } })
   for k in stale {
     lm.arrived.remove(k)
   }
@@ -1212,7 +1269,7 @@ pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
   match mo.lists.get(list) {
     Some(lm) =>
       match lm.lifted.get(motion_key(key)) {
-        Some(at) if c.moment() - at < lift_ms => {
+        Some(at) if c.moment() < at + lift_ms => {
           // (read by what is built: built again each frame while it passes over the others, Ctx::shows_motion)
           c.shows_motion(lm.lift_mover, true)
           c.moment() - at
@@ -1322,7 +1379,7 @@ pub fn reveal_height(c : @ui.Ctx, key : String) -> Double {
 /// shows is laid out (layout_entry), kept while what asks for the room (reveal, reveal_height) is built, its room shut
 /// too; let go with that (reveal_kept).
 // kept across runs: forgotten as a Tester starts anew (reset)
-let reveal_heights : Map[Int, Double] = {}
+let reveal_heights : Map[Int, Double] = Map([])
 
 ///|
 /// Room `k` asked by what is built now: its height kept while that is built, let go once it is not.
@@ -1371,7 +1428,14 @@ pub fn reveal(
     // (as big as its room is open and gone by half, as a list's row coming and going where it is: what a card under a
     // post holds not cut by its room as it closes, 2026-10-31 the user: 「特殊情况下消息列表还是会出现比较明显的裁剪」
     // 「比如选择决策」)
-    c.look_by(inner, fn() { c.held_look(inner, share) })
+    // (read where it is as it is painted: a list's row it is in, kept as its nodes, put back elsewhere among the frame's)
+    let held = c.node_held(inner)
+    c.look_by(inner, fn() {
+      match held.at() {
+        Some(i) => c.held_look(i, share)
+        None => @ui.still_look
+      }
+    })
     let soft = @ui.cut_soft((natural - shown) / 2.0, shown / 2.0)
     c.fade_to(inner, outer, top=soft, foot=soft)
   }
@@ -1396,8 +1460,9 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   // (the frame being made: each build of it lays it out from where the last frame drew it, and what changed in it (a
   // list's rows, a foot moved) changed for every build of it; what holds a frame's identity, none of its causes: kept)
   let frame = c.frame_number()
+  measures_laid_in.val = frame
   let still = c.still()
-  let scrolled : Map[Int, Double] = {}
+  let scrolled : Map[Int, Double] = Map([])
   // (shapes first: what is carried on one's ground is placed by where that is this frame)
   let order = mo.entries.filter(fn(e) { e.reshape })
   if !order.is_empty() {
@@ -1415,7 +1480,8 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     laid_once(
       c,
       fn() {
-        for e in if order.is_empty() { mo.entries } else { order } {
+        let entries_in_order = if order.is_empty() { mo.entries } else { order }
+        for e in entries_in_order {
           // (what its move reads, read for what draws its node: the part's or the row's kept, whoever told it: Ctx::reads_for)
           c.reads_for(e.node, fn() { layout_entry(c, e, still, frame, scrolled) })
         }
@@ -1449,20 +1515,20 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 /// (where to, by what), set out again as long as that one, so what moves together for one cause (a composer's ground,
 /// its words, its ＋ and its send) is on one clock (sf/motion.mbt: as long as its way is far).
 // kept across runs: cleared as each frame's layout begins, taken as it ends (after_layout)
-let together : Map[String, (Double, Array[(Anim, Double, Spec, Double?)])] = {}
+let together : Map[String, (Double, Array[(Anim, Double, Spec, Double?)])] = Map([])
 
 ///|
 /// For each cause (`by`) a shape set off for at a moment said (reshape's `at`): that moment, from which what moves for
 /// it this frame sets out.
 // kept across runs: cleared as each frame's layout begins
-let cause_at : Map[String, Double] = {}
+let cause_at : Map[String, Double] = Map([])
 
 ///|
 /// For each cause (`by`) a shape set off for from its foot (reshape's `foot`): the frame it did, and how far its foot
 /// moved in that frame for nothing it changes for, which what moves with it takes at once. Kept for the frame, not for
 /// one build of it: a build again of that frame (its rows kept or not) reads what the first did.
 // (forgotten as the app is reset: frames are counted again from there, a cause's frame of before no frame of now)
-let foot_moved : Map[String, (Int, Double)] = {}
+let foot_moved : Map[String, (Int, Double)] = Map([])
 
 ///|
 /// How far the foot of the shape set off for cause `by` from its foot in frame `frame` moved for nothing it changes for
@@ -1767,6 +1833,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       r.y = ny
       r.w = nw
       r.h = nh
+      r.node = e.node
       r.rad = radii
       r.seen = frame
       rec_built(c, e.kept, r)
@@ -1792,7 +1859,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
     }
     if e.key != 0 {
       let li = c.list_above(e.node)
-      let (ref, scope_node, rx, ry) = if li >= 0 {
+      let (anchor, scope_node, rx, ry) = if li >= 0 {
         let (lx, ly, _, _) = c.node_rect(li)
         let (pl, pt, _, _) = c.node_pad(li)
         let s = match scrolled.get(li) {
@@ -1836,7 +1903,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_x = r.x
         r.was_y = r.y
         r.was_vy = r.vy
-        r.was_ref = r.ref
+        r.was_ref = r.anchor
         r.was_alive = r.alive
         r.ox.step(c)
         r.oy.step(c)
@@ -1864,8 +1931,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_hh = r.hh
         r.g_now = false
       }
-      let lm = if li >= 0 { mo.lists.get(ref) } else { None }
-      let was_seen = r.was_alive && r.was_ref == ref
+      let lm = if li >= 0 { mo.lists.get(anchor) } else { None }
+      let was_seen = r.was_alive && r.was_ref == anchor
       // its list held at its foot as its rows changed (one gone, at its end): all it showed put down as far as they
       // lost, its place in it the same, moved so for that change all the same (the rows over a row gone come down
       // over it, those under it stay), and one come into view over them so comes down with them, from out of view
@@ -2009,7 +2076,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             let toward = (cx + dx) * vx <= 0.0 && (cy + dy) * vy <= 0.0
             let carried = sets_out_from_rest(spec) && toward && (vx.abs() > part_moving || vy.abs() > part_moving)
             let spec = if carried {
-              move(over=carried_way(cx + dx, vx, cy + dy, vy))
+              moved(over=carried_way(cx + dx, vx, cy + dy, vy))
             } else {
               spec.delayed(delay)
             }
@@ -2078,7 +2145,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
                 match l.arrived.get(e.key) {
                   Some(at) => {
                     l.arrived.remove(e.key)
-                    c.moment() - at < 400.0
+                    c.moment() < at + 400.0
                   }
                   None => false
                 }
@@ -2143,11 +2210,12 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           }
           // (set off again while it went: a Move on from that speed (move_path), past its new shape a little where it
           // went toward it fast and back, not from rest on its curve, stopped dead (the user, 2026-11-09: 「冲过一点再弹回」))
-          // (only toward its new shape: turned back, from rest, as its parts are)
-          let v = if v > 0.0 { v } else { 0.0 }
-          let spec = if sets_out_from_rest(spec) && v > reshape_moving {
+          // (turned back too: on from its speed the other way, slowing on its Move's way past where it was a little, then
+          // back to its new shape, not from rest, stopped dead as it turned (sizes_steady); the coordinator of the
+          // migration, 2026-11-10: a composer growing a line let go of by words sent from it before it has grown)
+          let spec = if sets_out_from_rest(spec) && v.abs() > reshape_moving {
             let way = ground_way(r, laid)
-            move(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
+            moved(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
           } else {
             spec
           }
@@ -2187,11 +2255,11 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       r.vy = vy
       r.w = nw
       r.h = nh
-      r.ref = ref
+      r.anchor = anchor
       r.seen = frame
       rec_built(c, e.key, r)
       r.exit = e.exit
-      r.list = ref
+      r.list = anchor
       r.scope_node = scope_node
       match e.exit {
         // what it draws kept, for its copy should it leave its list
@@ -2259,7 +2327,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         None => ()
       }
     }
-    match e.fly {
+    match (match e.fly_by { Some(at) => Some(at()); None => e.fly }) {
       Some((fx, fy, fs, px, py, ps)) => {
         let s = fs + (1.0 - fs) * ps
         let x = fx + (nx - fx) * px
@@ -2362,24 +2430,24 @@ fn draw_ghosts(c : @ui.Ctx, li : Int) -> Unit {
 /// What reads where a node kept by its key lies (measured_rect: where a flight lands) as it is built, told as it moves:
 /// a signal by the key, made as it is first read.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_at : Map[Int, @signals.Signal[Int]] = {}
+let measure_at : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// What reads how big a node kept by its key is, or whether it is laid out (measured, measured_size, measured_rect: a
 /// measure, a reveal's content) as it is built, told as that changes, not as it moves (a page it is on sliding in): a
 /// signal by the key, made as it is first read.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_size : Map[Int, @signals.Signal[Int]] = {}
+let measure_size : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// What reads only how tall a node kept by its key is (measured), told as that changes, not as it gets wider.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_tall : Map[Int, @signals.Signal[Int]] = {}
+let measure_tall : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// What reads the resolved corners of a measured node, independently of its position and size.
 // kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
-let measure_radii : Map[Int, @signals.Signal[Int]] = {}
+let measure_radii : Map[Int, @signals.Signal[Int]] = Map([])
 
 ///|
 /// Measure `key` read of `said` as what is built is built: built again as what it reads of it changes.
@@ -2456,7 +2524,7 @@ fn measured_now(r : Rec?) -> (Double, Double, Double, Double, (Double, Double, D
 /// `f`, the measures it tells told only once it is done, each whose kept came out otherwise than before it: a build of
 /// the frame again lays it out as the first did, and two nodes measured by one key (two pages' alike) each told in it.
 fn measures_told_once(c : @ui.Ctx, f : () -> Unit) -> Unit {
-  let was : Map[Int, (Double, Double, Double, Double, (Double, Double, Double, Double), Bool)] = {}
+  let was : Map[Int, (Double, Double, Double, Double, (Double, Double, Double, Double), Bool)] = Map([])
   mo.recs.each(fn(k, r) { was[k] = measured_now(Some(r)).unwrap() })
   let held = []
   let outer = measures_held.val
@@ -2481,12 +2549,12 @@ fn measures_told_once(c : @ui.Ctx, f : () -> Unit) -> Unit {
 ///|
 /// The keys of the measures read while the frame probe counts (@ui.perf_counting), by their hash.
 // kept across runs: the performance record's, read by nothing else
-let measure_names : Map[Int, String] = {}
+let measure_names : Map[Int, String] = Map([])
 
 ///|
 /// How often each measure read told what read it since the record last asked, by its key and why.
 // kept across runs: the performance record's, read by nothing else
-let measure_told : Map[String, Int] = {}
+let measure_told : Map[String, Int] = Map([])
 
 ///|
 /// Measure `key` telling what reads it, for `why`: counted for the performance record ("measures:", the most told
@@ -2513,7 +2581,7 @@ fn measures_said(span : Double) -> String {
     let c = b.1.compare(a.1)
     if c != 0 { c } else { a.0.compare(b.0) }
   })
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for i, e in all {
     if i >= 6 {
       break

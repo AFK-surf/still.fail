@@ -316,19 +316,6 @@ fn Ctx::motion_owed(self : Ctx) -> Bool {
   owed
 }
 
-///|
-/// When the last of what is said to move is at rest (-1: none moves).
-fn Ctx::motion_end(self : Ctx) -> Double {
-  let mut last = -1.0
-  for e in self.movers {
-    let r = e.m.rest_at(self.clock, self.frame_no)
-    if r > last {
-      last = r
-    }
-  }
-  last
-}
-
 // ── a spring, solved ─────────────────────────────────────────────────────────
 
 ///|
@@ -376,10 +363,10 @@ pub fn SpringPath::at(self : SpringPath, now : Double) -> (Double, Double) {
     return (self.x0, self.v0)
   }
   if self.moves {
-    let (d, v) = move_path(self.x0 - self.to, self.v0 / 1000.0, dmax(0.0, now - self.t0), self.dur)
+    let (d, v) = move_path(self.x0 - self.to, self.v0 / 1000.0, dmax(0.0, @flex.time_gone(now, self.t0)), self.dur)
     return (self.to + d, v * 1000.0)
   }
-  let (d, v) = spring_at(self.x0 - self.to, self.v0, self.k, self.c, dmax(0.0, now - self.t0) / 1000.0)
+  let (d, v) = spring_at(self.x0 - self.to, self.v0, self.k, self.c, dmax(0.0, @flex.time_gone(now, self.t0)) / 1000.0)
   (self.to + d, v)
 }
 

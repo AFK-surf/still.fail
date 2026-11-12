@@ -18,7 +18,9 @@
 // most hourly unless asked now: /releases/<feed>/latest.json, an AppRelease; its `file` under /releases/). No source
 // is given by default: src/stillfail gives the cloud's for MBUI_UPDATE_FEED=<feed> (the local cloud's in e2e). A
 // source of a release elsewhere answers the same AppRelease (versionCode, versionName, file: a path under the source's
-// releases or a whole https URL, sha256, size, news).
+// releases or a whole https URL, sha256, size, news) and may say a delta from this build (`delta`, the core's pick of the
+// feed's): handed to the host beside the build, which makes the build of it and downloads it whole if that fails, and
+// what the app says is downloaded is the delta's size, since that is what comes.
 //
 // A person wants the latest version; checking and fetching are not their business (the user, 2026-10-31: 「从第一性
 // 原理出发」).
@@ -55,11 +57,12 @@ pub(all) struct UpdateSource {
 ///|
 /// What the last check asked now answered, where it found no newer build: nothing yet (or a newer one), none newer, or
 /// why it could not ask.
+#derive(Eq, Debug)
 pub(all) enum UpdateSaid {
   Unsaid
   NoneNewer
   CouldNot(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// How an update stands: the newer build found, the person's check under way, what the last check asked now
@@ -141,7 +144,7 @@ pub fn cloud_updates(src : Source, feed : String, origin : String) -> UpdateSour
       // comma-separated, as the station and the desktop app take them (a test's own releases, a dev cloud's)
       let keys = @ui.env("STILLFAIL_RELEASE_KEYS")
         .split(",")
-        .map(fn(k) { k.trim().to_string() })
+        .map(fn(k) { k.trim().to_owned() })
         .filter(fn(k) { k != "" })
         .map(Json::string)
         .collect()
@@ -268,7 +271,7 @@ pub fn update_auto_on() -> Unit {
 fn update_file_name(v : Json) -> String {
   let file = text(Some(v), "file")
   match file.rev_find("/") {
-    Some(i) => file.view(start_offset=i + 1).to_owned()
+    Some(i) => file.exact_view(start=i + 1).to_owned()
     None => file
   }
 }
@@ -280,9 +283,49 @@ fn update_fetch_found(v : Json, now : Bool) -> Unit {
   match update.source {
     Some(source) => {
       let file = text(Some(v), "file")
-      @ui.update_fetch((source.url)(file), text(Some(v), "sha256"), number(Some(v), "size"), update_file_name(v), now)
+      let delta = match update_delta(v) {
+        Some(d) =>
+          Json::object({
+            "url": Json::string((source.url)(text(Some(d), "file"))),
+            "sha256": Json::string(text(Some(d), "sha256")),
+            "size": Json::number(number(Some(d), "size")),
+            "makes_sha256": Json::string(text(Some(d), "makesSha256")),
+            "makes_size": Json::number(number(Some(d), "makesSize")),
+          }).stringify()
+        None => ""
+      }
+      @ui.update_fetch(
+        (source.url)(file),
+        text(Some(v), "sha256"),
+        number(Some(v), "size"),
+        update_file_name(v),
+        now,
+        delta,
+      )
     }
     None => ()
+  }
+}
+
+///|
+/// The delta from this build the build `v` (an AppRelease) comes with, none where it has none.
+fn update_delta(v : Json) -> Json? {
+  match v {
+    Object(o) =>
+      match o.get("delta") {
+        Some(Object(_) as d) => Some(d)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// How many bytes the build `v` downloads: its delta's where it comes with one, else its package's.
+fn update_size(v : Json) -> Double {
+  match update_delta(v) {
+    Some(d) => number(Some(d), "size")
+    None => number(Some(v), "size")
   }
 }
 
@@ -388,7 +431,7 @@ pub fn update_error(e : String) -> String {
   match e {
     "incomplete" => @sf.t("android-misc.updates.incomplete")
     e if e.has_prefix("status ") =>
-      @sf.t("android-misc.updates.httpStatus", args=[("status", e.view(start_offset=7).to_string())])
+      @sf.t("android-misc.updates.httpStatus", args=[("status", e.exact_view(start=7).to_owned())])
     e => e
   }
 }
@@ -397,13 +440,14 @@ pub fn update_error(e : String) -> String {
 /// How the update goes as the host tells it (@ui.update_state's JSON): its phase (idle, waiting, downloading,
 /// retrying, ready, allow, installing, failed), how far (-1 not known), what went wrong, the build it is about (its
 /// file's name), and whether one ready is put in place by itself while the app is out of sight.
+#derive(Eq)
 priv struct UpdateHow {
   phase : String
   percent : Int
   error : String
   file : String
   away : Bool
-} derive(Eq)
+}
 
 ///|
 /// How the update goes, worked out of the host's word as that changes (a computed of @ui.update_state, a signal the
@@ -485,7 +529,7 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Quiet | Latest | CouldNot(_) => (check, "", false, None)
     Checking => (check, @sf.t("android-settings.version.checking"), true, None)
     Offered(v, waiting~) => {
-      let size = number(Some(v), "size")
+      let size = update_size(v)
       (
         // (the first of the update's three stages, 有新版本, 正在下载, 重启以更新到: 2026-11-03 the user, 「所有能看到更新的
         // 地方，一定要有三个阶段」; pressed, downloaded now)
@@ -505,7 +549,7 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Coming(v, part) => {
       // (how far and how big, or that it goes on once the network is back: a line there all the way it comes, the
       // row as tall)
-      let size = number(Some(v), "size")
+      let size = update_size(v)
       let said = [
         match part {
           Some(p) => "\{(p * 100.0).floor().to_int()}%"
@@ -596,16 +640,16 @@ pub fn update_dialog(src : Source) -> Unit {
     return
   }
   let (title, lead) = update_dialog_words()
-  @sf.panel(
+  @sf.panel_nodes(
     title,
-    fn(c, _) { update_dialog_body(c) },
+    fn(v, _) { update_dialog_body(v) },
     from=Unanchored,
     description=lead,
     live=fn() {
       let (title, lead) = update_dialog_words()
       (title, "", lead)
     },
-    foot=fn(c, close) { update_dialog_foot(c, src, close) },
+    foot=fn(v, close) { update_dialog_foot(v, src, close) },
   )
   update.dialog = @sf.last_presented()
 }
@@ -648,95 +692,174 @@ fn update_dialog_now() -> UpdateNow {
 let update_news_most : Int = 5
 
 ///|
-/// What the dialog holds: while still.fail cloud is asked, a bar going to and fro; for a newer build, what it brings
-/// (its first few, 还有 n 项), then how it stands as 关于's row says it (update_stands: its line; what went wrong in red)
-/// under its bar, each whole on its line: the bar there in every stage (empty offered, full ready, how far while it
-/// comes, sweeping while it is under way unknown how far), the dialog as tall all the way (2026-11-06 the user,
-/// 「这玩意儿为啥老抖动」「高度抖动」: the bar came and went with each stage, the dialog shorter and taller again).
-fn update_dialog_body(c : @ui.Ctx) -> Unit {
+/// What the dialog holds, as it shows it: asking still.fail cloud, nothing more to say (none newer, or why it could not
+/// ask: its title and the line under it say it), or a newer build (update_dialog_body).
+#derive(Eq)
+priv enum UpdateHolds {
+  Asking
+  Said
+  Newer
+}
+
+///|
+fn update_holds() -> UpdateHolds {
   match update_dialog_now() {
-    Quiet | Checking =>
-      c.box(style=update_body.then(@sf.panel_words_in()), fn() { @sf.progress(c, "update/asking", None) }) |> ignore
-    Latest | CouldNot(_) => ()
-    Offered(v, ..) | Coming(v, _) | Ready(v, ..) | Allow(v) | Installing(v) | Failed(v, _) as now => {
-      let news : Array[String] = []
-      for n in items(Some(v), "news") {
-        if n is String(line) {
-          news.push(line)
-        }
-      }
-      let stands = update_stands()
-      c.box(style=update_body.then(@sf.panel_words_in()), fn() {
-        for i, line in news {
-          if i >= update_news_most {
-            c.text(@sf.t("android-settings.changelog.more", args=[("n", (news.length() - i).to_string())]), style=@sf.pg_note) |> ignore
-            break
-          }
-          c.text(line, style=update_news_line) |> ignore
-        }
-        c.box(style=update_going, fn() {
-          let part = if stands.going {
-            stands.part
-          } else if now is (Ready(_, ..) | Allow(_)) {
-            Some(1.0)
-          } else {
-            Some(0.0)
-          }
-          c.box(style=update_bar_room, fn() { @sf.progress(c, "update/part", part) }) |> ignore
-          let said = match now {
-            Coming(_, _) | Installing(_) => stands.label + (if stands.note == "" { "" } else { " · " + stands.note })
-            _ => stands.note
-          }
-          if said != "" {
-            c.text(said, style=if now is Failed(_, _) { @sf.pg_note_bad } else { @sf.pg_note }) |> ignore
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    }
+    Quiet | Checking => Asking
+    Latest | CouldNot(_) => Said
+    _ => Newer
   }
 }
 
 ///|
-/// What the dialog's foot offers: 取消 while still.fail cloud is asked; 确定 where none is newer; 重试 where it could not
-/// ask; for a newer build 稍后 (关闭 once it comes by itself) and what is the person's to do: 下载 (offered), 重启更新
-/// (turning while it comes or is put in place), the leave to install apps, 重试 (failed).
-fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
-  match update_dialog_now() {
-    Quiet | Checking =>
-      @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost, on_press=fn() {
-        close()
-      }) |> ignore
-    Latest =>
-      @sf.button(c, @sf.t("common.confirm"), key="update/ok", tone=Primary, on_press=fn() {
-        close()
-      }) |> ignore
-    CouldNot(_) => {
-      @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost, on_press=fn() {
-        close()
-      }) |> ignore
-      @sf.button(c, @sf.t("common.retry"), key="update/retry", tone=Primary, on_press=fn() {
-        update_ask_now(src)
-      }) |> ignore
-    }
-    now => {
-      let going = now is (Coming(_, _) | Installing(_))
-      @sf.button(c, @sf.t(if going { "common.close" } else { "desktop.update.later" }), key="update/later", tone=Ghost, on_press=fn() {
-        close()
-      }) |> ignore
-      let label = match now {
-        Offered(_, ..) => @sf.t("desktop.update.download")
-        Allow(_) => @sf.t("android-misc.updates.allow")
-        Failed(_, _) => @sf.t("common.retry")
-        _ => @sf.t("desktop.update.restart")
+/// What the dialog holds, in node `v` (its body's), made once as it opens: while still.fail cloud is asked, a bar going
+/// to and fro; for a newer build, what it brings (its first few, 还有 n 项), then how it stands as 关于's row says it
+/// (update_stands: its line; what went wrong in red) under its bar, each whole on its line, bound to how it stands: the
+/// bar there in every stage (empty offered, full ready, how far while it comes, sweeping while it is under way unknown
+/// how far), the dialog as tall all the way (2026-11-06 the user, 「这玩意儿为啥老抖动」「高度抖动」: the bar came and went
+/// with each stage, the dialog shorter and taller again).
+fn update_dialog_body(v : @view.View) -> Unit {
+  // (none newer, or why it could not ask: nothing, its title and the line under it straight over its foot as the old
+  // body's, the panel's body none of its room; asking, or a newer build, one in the other's place)
+  v.show(fn() { update_holds() != Said }, fn(s) {
+    s.pick(fn() { update_holds() == Newer }, fn(b, newer) {
+      if newer {
+        update_newer_node(b)
+      } else {
+        b.box(fn(col) {
+          @sf.style_node(col, fn() { update_body.then(@sf.panel_words_in_node(col)) })
+          update_bar(col, fn() { None })
+        })
+        |> ignore
       }
-      // (the person's check under way: the key turning, as it does while the build comes)
-      @sf.button(c, label, key="update/go", tone=Primary, busy=going || update.checking.get(), on_press=fn() {
-        update_go(src)
-      }) |> ignore
+    })
+  })
+}
+
+///|
+/// A newer build in the dialog, in node `v`: what it brings, its bar and how it stands under it.
+fn update_newer_node(v : @view.View) -> Unit {
+  let now = fn() { update_dialog_now() }
+  let news = fn() -> Array[String] {
+    let out : Array[String] = []
+    match now() {
+      Offered(v, ..) | Coming(v, _) | Ready(v, ..) | Allow(v) | Installing(v) | Failed(v, _) =>
+        for n in items(Some(v), "news") {
+          if n is String(line) {
+            out.push(line)
+          }
+        }
+      _ => ()
     }
+    out
   }
+  v.box(fn(col) {
+    @sf.style_node(col, fn() { update_body.then(@sf.panel_words_in_node(col)) })
+    // (its first few, by where they stand)
+    col.each(
+      fn() {
+        let all = news()
+        all.mapi(fn(i, line) { (i, line) }).filter(fn(x) { x.0 < update_news_most })
+      },
+      fn(x) { x.0 },
+      fn(row, x) { @sf.words_node(row, fn() { x.get().1 }, fn() { update_news_line }) |> ignore },
+    )
+    col.show(fn() { news().length() > update_news_most }, fn(more) {
+      @sf.words_node(
+        more,
+        fn() { @sf.t("android-settings.changelog.more", args=[("n", (news().length() - update_news_most).to_string())]) },
+        fn() { @sf.pg_note },
+      )
+      |> ignore
+    })
+    col.box(fn(going) {
+      @sf.style_node(going, fn() { update_going })
+      let part = fn() {
+        let stands = update_stands()
+        if stands.going {
+          stands.part
+        } else if now() is (Ready(_, ..) | Allow(_)) {
+          Some(1.0)
+        } else {
+          Some(0.0)
+        }
+      }
+      going.box(fn(room) {
+        @sf.style_node(room, fn() { update_bar_room })
+        update_bar(room, part)
+      })
+      |> ignore
+      let said = fn() {
+        let stands = update_stands()
+        match now() {
+          Coming(_, _) | Installing(_) => stands.label + (if stands.note == "" { "" } else { " · " + stands.note })
+          _ => stands.note
+        }
+      }
+      going.show(fn() { said() != "" }, fn(w) {
+        @sf.words_node(w, said, fn() { if now() is Failed(_, _) { @sf.pg_note_bad } else { @sf.pg_note } }) |> ignore
+      })
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The dialog's bar in `parent`, as wide as it, how far `part` says (None: sweeping), in the accent on the line's ink
+/// (@sf.progress's).
+fn update_bar(parent : @view.View, part : () -> Double?) -> Unit {
+  @sf.progress_node(parent, part, fn() { @ui.tree_theme().line }, fn() { @sf.theme().p.accent }) |> ignore
+}
+
+///|
+/// What the dialog's foot offers, in node `v` (its foot's), bound to how the update stands: 取消 while still.fail cloud
+/// is asked; 确定 where none is newer; 重试 where it could not ask; for a newer build 稍后 (关闭 once it comes by itself)
+/// and what is the person's to do: 下载 (offered), 重启更新 (turning while it comes or is put in place), the leave to
+/// install apps, 重试 (failed).
+fn update_dialog_foot(v : @view.View, src : Source, close : () -> Unit) -> Unit {
+  let now = fn() { update_dialog_now() }
+  let going = fn() { now() is (Coming(_, _) | Installing(_)) }
+  // (none newer: its 确定 alone; each a place of the foot's, its share of a sheet's foot as a button standing there)
+  @sf.foot_place_node(v, fn() { !(now() is Latest) }, fn(b) {
+    @sf.button_node(
+      b,
+      fn() {
+        match now() {
+          Quiet | Checking | CouldNot(_) => @sf.t("common.cancel")
+          _ => @sf.t(if going() { "common.close" } else { "desktop.update.later" })
+        }
+      },
+      close,
+      tone=Ghost,
+    )
+    |> ignore
+  })
+  // (still.fail cloud asked: its 取消 alone)
+  @sf.foot_place_node(v, fn() { !(now() is (Quiet | Checking)) }, fn(b) {
+    @sf.button_node(
+      b,
+      fn() {
+        match now() {
+          Latest => @sf.t("common.confirm")
+          CouldNot(_) | Failed(_, _) => @sf.t("common.retry")
+          Offered(_, ..) => @sf.t("desktop.update.download")
+          Allow(_) => @sf.t("android-misc.updates.allow")
+          _ => @sf.t("desktop.update.restart")
+        }
+      },
+      fn() {
+        match @signals.untracked(now) {
+          Latest => close()
+          CouldNot(_) => update_ask_now(src)
+          _ => update_go(src)
+        }
+      },
+      tone=Primary,
+      // (the person's check under way: the key turning, as it does while the build comes)
+      busy=fn() { !(now() is (Latest | CouldNot(_))) && (going() || update.checking.get()) },
+    )
+    |> ignore
+  })
 }
 
 ///|

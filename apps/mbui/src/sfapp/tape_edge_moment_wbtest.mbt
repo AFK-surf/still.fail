@@ -6,6 +6,7 @@
 /// What an edge's run comes to (edge_seen): whether the edge is held as the finger goes down; held once the tree is
 /// brought to the hold's end; the sidebar's width after each move; held after the release; the pane in use as the press
 /// on the page is let go (no frame after it), and once the tape's move had its while.
+#derive(Eq, Debug)
 priv struct EdgeSeen {
   down : Bool
   held : Bool
@@ -13,7 +14,7 @@ priv struct EdgeSeen {
   after : Bool
   pressed : @sfdesk.TapePane
   rest : @sfdesk.TapePane
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// 中屏 on the tape (a finger's, 720 wide), the sidebar in use: a finger down on the sidebar's edge at `t0`, held
@@ -86,8 +87,8 @@ test "中屏: the sidebar's edge on the tape held, dragged and let go by a finge
     rest: @sfdesk.TapePane::Page,
   }
   let none = edge_seen(false)
-  assert_eq(stepped, want, msg="frames all along: \{stepped}; no frame: \{none}")
-  assert_eq(none, want, msg="no frame: \{none}")
+  assert_eq(stepped, want, msg="frames all along: \{Repr(stepped)}; no frame: \{Repr(none)}")
+  assert_eq(none, want, msg="no frame: \{Repr(none)}")
 }
 
 ///|
@@ -124,8 +125,8 @@ test "中屏: what shows of the page where the sidebar's edge reaches over it pr
   let want = (@sfdesk.TapePane::Page, @sfdesk.TapePane::Page)
   let stepped = edge_page_pressed(true)
   let none = edge_page_pressed(false)
-  assert_eq(stepped, want, msg="frames before: \{stepped}; none: \{none}")
-  assert_eq(none, want, msg="none: \{none}")
+  assert_eq(stepped, want, msg="frames before: \{Repr(stepped)}; none: \{Repr(none)}")
+  assert_eq(none, want, msg="none: \{Repr(none)}")
 }
 
 ///|
@@ -184,7 +185,7 @@ test "中屏: the sidebar's edge held by a finger, the touch called off by the s
   let m = tape_chat(0, 720.0, 840.0)
   let (mx, my) = edge_middle(m, "调整侧边栏宽度")
   let tip = fn() { m.semantics().filter(fn(s) { s.role == Tooltip && s.label == "调整侧边栏宽度" }).length() }
-  m.move(mx, my)
+  m.move_to(mx, my)
   m.run_for(@sf.edge_tip_ms * 2.0)
   assert_eq(tip(), 1, msg="its tip shown")
   @ui.view_tree().unwrap().event(m.time(), fn() { @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page)) })
@@ -232,7 +233,7 @@ let edge_look_ms : Double = @sf.edge_bar_ms
 ///|
 /// The sidebar's edge's bar where it is drawn, left of where the page's 收起侧边栏 is: across less that, how high, its
 /// ink; none drawn (hidden).
-fn edge_bar_drawn(t : @ui.Tester) -> (Double, Double, Int64)? raise {
+fn edge_bar_drawn(t : @ui.Tester) -> (Double, Double, Int64)? {
   let page = covered(t, "收起侧边栏").unwrap().0
   match t.drawn_rects().filter(fn(r) { r.2 == @sf.edge_bar_w && r.0 < page }) {
     [r, ..] => Some((r.0 - page, r.3, r.4))
@@ -287,7 +288,7 @@ test "中屏: the sidebar's edge by a mouse: hidden at rest; pointed at, its bar
   let s12 = @ui.Space::px(S12)
   assert_true(edge_bar_drawn(t) is None, msg="at rest: hidden")
   // (pointed at: shown, long, the strong line's grey)
-  t.move(ex, ey)
+  t.move_to(ex, ey)
   t.run_for(edge_look_ms)
   guard edge_bar_drawn(t) is Some((x1, h1, on_ink)) else { fail("on it: not shown") }
   assert_eq(h1, s12, msg="on it: long")
@@ -296,10 +297,10 @@ test "中屏: the sidebar's edge by a mouse: hidden at rest; pointed at, its bar
   t.run_for(edge_look_ms)
   assert_true(@sfdesk.wide.edge_held.get(), msg="pressed: in hand")
   guard edge_bar_drawn(t) is Some((x2, h2, held_ink)) else { fail("in hand: not shown") }
-  assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{(x2, h2, held_ink)}, on it \{(x1, on_ink)}")
+  assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{Repr((x2, h2, held_ink))}, on it \{Repr((x1, on_ink))}")
   assert_eq((said_at(t, "调整侧边栏宽度").unwrap(), covered(t, "收起侧边栏").unwrap()), (room, page), msg="in hand: where it was")
   // (dragged 20 wider: the width, the page beside it and the edge 20 on, its bar with it)
-  t.move(ex + 20.0, ey)
+  t.move_to(ex + 20.0, ey)
   t.run_for(edge_look_ms)
   assert_eq(@sfdesk.wide.side_w.get(), 260.0, msg="dragged")
   assert_eq(covered(t, "收起侧边栏").unwrap().0, page.0 + 20.0, msg="the page as far on")

@@ -28,10 +28,11 @@ struct Through {
 /// Why a finger held on a cover is handed on (Tree::on_through): held still long (View::gesture's `through`: a hold
 /// already, what lies under it's), or moved past the slop before the hold a node drags only once held (`held_first`:
 /// a finger come down at (x0, y0), moved to where it is: no hold of anything's).
+#derive(Eq, Debug)
 pub(all) enum Handed {
   Held
   Moved(Double, Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What hosts the tree tells of a hold it hands on (View::gesture's `through`): `f` given what it went to (what a node
@@ -45,7 +46,8 @@ pub fn Tree::on_through(self : Tree, f : (Target, Double, Double, Double, Handed
 ///|
 /// What hosts the tree asks of what a node hosts: what takes a press at (x, y) in the window there (`f` given the node
 /// hosting it: who it is, as its host knows it; None: nothing), as the finger goes down and as a hold is handed to it
-/// (View::gesture's `through`: only to the one found as it went down). Not said: nothing.
+/// (View::gesture's `through`: only to the one found as it went down), and as a press or the pointer on it is found
+/// (where it has nothing, what is drawn over it is reached from round it: Tree::reached). Not said: nothing.
 pub fn Tree::hosts_at(self : Tree, f : (NodeId, Double, Double) -> Int?) -> Unit {
   self.hosts_at = f
 }
@@ -76,7 +78,7 @@ fn Tree::through_found(self : Tree, id : NodeId, x : Double, y : Double, t : Dou
 /// What a finger at (x, y) finds under node `id` (as Tree::target_at finds, of what is drawn before it and neither it
 /// nor held by it), and what of what a node hosts is there (Tree::hosts_at).
 fn Tree::target_under(self : Tree, id : NodeId, x : Double, y : Double) -> (Target, Int?) {
-  let at = self.logic_at()
+  let at = self.logic_said()
   let found : Array[Target] = []
   let past = Ref(false)
   self.each_drawn_scaled(fn(c, cx, cy, _, s) {
@@ -118,7 +120,7 @@ fn Tree::through_takes(self : Tree, th : Through, x : Double, y : Double) -> Boo
     return false
   }
   let n = self.nodes[u.at]
-  let at = self.logic_at()
+  let at = self.logic_said()
   guard @signals.untracked(fn() { self.takes_here(n, x - d.x, y - d.y, d.w, d.h, at) }) else { return false }
   match th.under {
     Dragged(_) => n.on_drag is Some(_) && n.drag_said == th.said
@@ -146,7 +148,7 @@ fn Tree::hand_through(self : Tree, id : NodeId, x : Double, y : Double, moved? :
   }
   // (the cover's hold ended first, as any is called off: Off, what it held let go of; committed whole before the rest)
   self.hold_lost_in(id.at)
-  let now = self.logic_at()
+  let now = self.logic_said()
   match why {
     // (held: at its moment, on the timeline)
     Held => self.handle(0).at_moment(now, fn() { self.hand_on(th, why, x, y, now) }) |> ignore
@@ -171,10 +173,19 @@ fn Tree::handed_takes(self : Tree, th : Through, why : Handed, x : Double, y : D
 /// A finger going through handed on, at `now`, its cover's hold ended and what that did committed: looked at again (the
 /// one found gone, said to take no press, the tree made anew; another holding), the finger then that one's. Held long:
 /// told it went down where it is, as long held as since it went down. Moved: told it went down where it did, then moved
-/// to where it is, as one change of `now` (the move that handed it on its own).
-fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double, now : Double) -> Unit {
+/// to where it is, as one change of `now` (the move that handed it on its own). `found`: what it goes to found taking it
+/// where it is already (a hold handed in, Tree::hold_found: on it or in its room round it), not asked again here.
+fn Tree::hand_on(
+  self : Tree,
+  th : Through,
+  why : Handed,
+  x : Double,
+  y : Double,
+  now : Double,
+  found? : Bool = false,
+) -> Unit {
   self.laid_now()
-  guard self.held is None && self.handed_takes(th, why, x, y) else { return }
+  guard self.held is None && (found || self.handed_takes(th, why, x, y)) else { return }
   match th.under {
     Dragged(u) => {
       let n = self.nodes[u.at]

@@ -6,10 +6,16 @@
 // (win_passwords.c); none elsewhere (`passwords` is false there).
 
 ///|
-/// A run of `op` under way (`op_run`).
+/// A run of `op` under way (`op_run`): how it ended, once the host's word says it has (`done`).
 pub struct OpRun {
   priv id : Int
+  priv said : @signals.Signal[OpDone?]
 }
+
+///|
+/// The kind the host's word that a run of `op` ended is told by (set_outside; ui's hostcall.mbt `outside_op`, the hosts'
+/// MB_OUTSIDE_OP).
+let op_told : Int = 15
 
 ///|
 /// How a run of `op` ended: its exit code (-1: it could not be started, or there is no `op` here), its standard output
@@ -35,27 +41,37 @@ pub fn op_run(args : Array[String]) -> OpRun? {
   if id <= 0 {
     None
   } else {
-    Some({ id, })
+    let r : OpRun = { id, said: @signals.signal(None) }
+    (outside_waits.val)(op_told, id, fn() { r.take() })
+    Some(r)
   }
 }
 
 ///|
-/// How it ended, once it has; None until then. A frame is asked for as it ends, so a view can look each frame.
-pub fn OpRun::done(self : OpRun) -> OpDone? {
-  // (the host's own state, come with no event: what reads it as it is built, built each frame while it does)
-  (polled.val)()
+/// What the host says of how it ended taken, as its word comes (outside_waits): whether it was there to take.
+fn OpRun::take(self : OpRun) -> Bool {
+  guard self.said.untracked() is None else { return false }
   let s = pw_out(self.id)
   if s == "" {
-    return None
+    return false
   }
   // (from the host: its exit code, its output and its error output, each ended by a unit separator)
   let parts = s.split("\u{1f}").map(fn(p) { p.to_owned() }).to_array()
   let code = @string.parse_int(parts.get(0).unwrap_or("-1")[:]) catch { _ => -1 }
-  Some({ code, out: parts.get(1).unwrap_or(""), err: parts.get(2).unwrap_or("") })
+  self.said.set(Some({ code, out: parts.get(1).unwrap_or(""), err: parts.get(2).unwrap_or("") }))
+  true
+}
+
+///|
+/// How it ended, once the host's word says it has; None until then. A signal's read: what reads it (a node's binding
+/// or `reacts`, an old view's build) is told as it ends, and reads the same however often.
+pub fn OpRun::done(self : OpRun) -> OpDone? {
+  self.said.get()
 }
 
 ///|
 /// Why a run did not give what it was asked, as the person can act on it.
+#derive(Eq, Debug)
 pub(all) enum OpTrouble {
   /// No `op` here, or not signed in through the desktop app (1Password's CLI integration off).
   NoTool
@@ -63,7 +79,7 @@ pub(all) enum OpTrouble {
   Unreached
   /// Anything else, in its own words.
   Other(String)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Why it ended badly; None where it gave what it was asked.
@@ -85,16 +101,18 @@ pub fn OpDone::trouble(self : OpDone) -> OpTrouble? {
 ///|
 /// Forgets it (its output, and the process if it still runs).
 pub fn OpRun::end(self : OpRun) -> Unit {
+  (outside_lets_go.val)(op_told, self.id)
   pw_end(self.id)
 }
 
 ///|
 /// A login of the password manager: its id there, its title, its account (not secret: the person picks by it).
+#derive(Eq, Debug)
 pub(all) struct PasswordLogin {
   id : String
   title : String
   username : String
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Whether `href` (a login's website, as the password manager keeps it: an address, or a bare host) is `host` or a
@@ -103,7 +121,7 @@ pub fn login_for_host(href : String, host : String) -> Bool {
   let h = host.to_lower()
   let mut rest = href.to_lower()
   match rest.find("://") {
-    Some(i) => rest = rest.view(start_offset=i + 3).to_owned()
+    Some(i) => rest = rest.exact_view(start=i + 3).to_owned()
     None => ()
   }
   let mut end = rest.length()
@@ -113,7 +131,7 @@ pub fn login_for_host(href : String, host : String) -> Bool {
       None => ()
     }
   }
-  let site = rest.view(end_offset=end).to_owned()
+  let site = rest.exact_view(end=end).to_owned()
   site != "" && (site == h || h.has_suffix("." + site) || site.has_suffix("." + h))
 }
 

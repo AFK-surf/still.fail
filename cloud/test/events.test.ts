@@ -27,16 +27,12 @@ async function listen(h: Harness, token: string) {
   const ws = response.webSocket!;
   ws.accept();
   const got: AccountEvent[] = [];
-  let pong: (() => void) | null = null;
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : got.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => void (event.data === "pong" || got.push(JSON.parse(event.data as string))));
   return {
     ws,
-    // A pong comes after everything sent before it, so this sees every event of the call before.
+    // Every event of the calls before (h.heard).
     async take(): Promise<string[]> {
-      await new Promise<void>((resolve) => {
-        pong = resolve;
-        ws.send("ping");
-      });
+      await h.heard(ws);
       return got.splice(0).map((e) => JSON.stringify(e)).sort();
     },
   };
@@ -44,10 +40,9 @@ async function listen(h: Harness, token: string) {
 
 type Listener = Awaited<ReturnType<typeof listen>>;
 
-/** The Directory object (test/worker.ts): its presence sweep, and when a station's socket closing has been handled. */
-async function directory(h: Harness): Promise<{ sweepAt(ms: number): Promise<boolean>; left(station: string): Promise<void> }> {
-  const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
-  return directories.get(directories.idFromName("primary"));
+/** A station's object (test/worker.ts): its presence sweep, and when its socket closing has been handled. */
+async function stationObject(h: Harness, station: string): Promise<{ sweepAt(ms: number): Promise<boolean>; left(): Promise<void> }> {
+  return h.object("STATIONS", station);
 }
 
 /** Each listener got exactly these events (in any order); the rest got none. */
@@ -67,10 +62,9 @@ async function connectStation(h: Harness, station: Awaited<ReturnType<typeof key
   const ws = response.webSocket!;
   const frames: any[] = [];
   const closed = new Promise<number>((resolve) => ws.addEventListener("close", (event) => resolve(event.code), { once: true }));
-  let pong: (() => void) | null = null;
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : frames.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => void (event.data === "pong" || frames.push(JSON.parse(event.data as string))));
   ws.accept();
-  const ping = () => new Promise<void>((resolve) => { pong = resolve; ws.send("ping"); });
+  const ping = () => h.heard(ws);
   return { status: 101, ws, frames, closed, ping };
 }
 
@@ -150,7 +144,7 @@ test("every change reaches exactly the accounts it affects", async () => {
     assert.equal(first.status, 101);
     await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "willow", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "willow", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, workspaces: [] });
+    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "willow", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "willow", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, ways: { relays: [], off: [] }, workspaces: [] });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
@@ -211,7 +205,7 @@ test("every change reaches exactly the accounts it affects", async () => {
     assert.deepEqual([seen.icon, seen.emoji], [null, null]);
 
     first.ws!.close(1000);
-    await (await directory(h)).left(station.id);
+    await (await stationObject(h, station.id)).left();
     await expect(on, {}, "nor does leaving");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.last_seen, h.now(), "last here at");
@@ -267,8 +261,8 @@ test("a reconnect replaces the old station socket; a silent one is dropped", asy
     const first = await connectStation(h, station);
     const second = await connectStation(h, station);
     assert.equal(await first.closed, 4000);
-    const objects = await directory(h);
-    await objects.left(station.id);
+    const objects = await stationObject(h, station.id);
+    await objects.left();
     assert.deepEqual(await events.take(), [], "a station's socket tells no one");
 
     // The runtime answers a ping itself and notes when, on the machine's clock (as the sockets' times are): after
@@ -362,6 +356,7 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     await socket.ping!();
     assert.deepEqual(socket.frames!.at(-1).relay_urls, [...ours, "https://relay.home.test", "https://cn.home.test/relay"], "the station hears them after still.fail's");
     assert.equal(socket.frames!.at(-1).relay_url, ours[0]);
+    assert.deepEqual(socket.frames!.at(-1).ways, { relays: ["https://relay.home.test", "https://cn.home.test/relay"], off: [] }, "and as the workspace's own, for it to take as its first (station/src/mesh/ways.ts)");
     const me = (await (await bob("GET", "/v1/me")).json()) as any;
     assert.deepEqual(me.relay_urls, ours, "still.fail's alone for the account");
     assert.deepEqual(me.workspaces.find((x: any) => x.id === w).relays, ["https://relay.home.test", "https://cn.home.test/relay"]);

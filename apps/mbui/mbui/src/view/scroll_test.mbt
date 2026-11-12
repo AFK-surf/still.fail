@@ -33,7 +33,6 @@ priv struct ScrollCase {
   tree : @view.Tree
   scroll : @view.Scroll
   now : Ref[Double]
-  pressed : Ref[Int]
   outer : Ref[Double]
   rows : @signals.Signal[Int]
   focus : Ref[@view.NodeId?]
@@ -84,7 +83,7 @@ fn scroll_case() -> ScrollCase {
     time=fn() { now.val },
   )
   tree.frame(390.0, 844.0) |> ignore
-  { tree, scroll, now, pressed, outer, rows, focus }
+  { tree, scroll, now, outer, rows, focus }
 }
 
 ///|
@@ -127,7 +126,7 @@ test "scrolls: a hold on what it holds moved up past the slop its own (across, o
   let short = k.tree.claimer_of(k.tree.claimers_at(150.0, 120.0), 0.0, -5.0)
   let id = match k.tree.claimer_of(k.tree.claimers_at(150.0, 120.0), 0.0, -20.0) {
     Some(id) => id
-    None => abort("not taken over")
+    None => @halt.saying("not taken over")
   }
   // (taken over as it went up 20 from 160: past the slop of 8 by 12 then; on by 20 more)
   k.tree.drag_at(id, Down, 150.0, 160.0, 100.0) |> ignore
@@ -559,7 +558,7 @@ test "a column's bar: none where it is first put; scrolled, it comes in (the tim
   assert_eq(
     (first, coming.map(fn(c) { c.4 }), out, going.map(fn(c) { c.4 }), gone, (coming_clock, out_clock, going_clock)),
     (None, Some(0.5), Some((295.0, y, 3.0, long, 1.0)), Some(0.5), (None, false), (true, false, true)),
-    msg="\{coming} \{out} \{going}",
+    msg="\{Repr(coming)} \{Repr(out)} \{Repr(going)}",
   )
 }
 
@@ -573,7 +572,7 @@ test "a column's bar: its thumb held and moved: the column moved as far as the t
   let (x, y, w, h, _) = thumb_drawn(tree).unwrap()
   let id = match tree.target_at(x + w / 2.0, y + h / 2.0) {
     Dragged(id) => id
-    _ => abort("the thumb takes no hold")
+    _ => @halt.saying("the thumb takes no hold")
   }
   let at = scroll.at(tree)
   tree.drag_at(id, Down, x + w / 2.0, y + h / 2.0, 310.0) |> ignore
@@ -707,7 +706,7 @@ test "a column's bar out, its logic short of where it starts to go, a frame draw
   assert_eq(
     (at_900, at_950.map(fn(a) { (a - 0.8).abs() < 1.0e-9 }), tree.logic_at() < 910.0),
     (Some(1.0), Some(true), true),
-    msg="\{at_950}",
+    msg="\{Repr(at_950)}",
   )
 }
 
@@ -840,7 +839,7 @@ test "drawn past a moment: watched with the moment drawn, both told as one; the 
   assert_eq(
     (torn, seen.iter().any(fn(e) { e == (150.0, true, false) }), seen.last()),
     (false, true, Some((250.0, true, true))),
-    msg="\{seen}",
+    msg="\{Repr(seen)}",
   )
 }
 
@@ -859,7 +858,7 @@ test "drawn past a moment: the moment waited for said anew, the one before passe
   let after_old = seen.length() - n
   tree.at(350.0)
   tree.frame(390.0, 844.0, now=85.0) |> ignore
-  assert_eq((after_old, seen.length() - n, seen.last().map(fn(e) { (e.1, e.2) })), (0, 1, Some((true, false))), msg="\{seen}")
+  assert_eq((after_old, seen.length() - n, seen.last().map(fn(e) { (e.1, e.2) })), (0, 1, Some((true, false))), msg="\{Repr(seen)}")
 }
 
 ///|

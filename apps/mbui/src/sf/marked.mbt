@@ -22,11 +22,11 @@ pub fn found_line(
     if from < at || to > text.length() || from > to {
       continue
     }
-    runs.push(@ui.span(text.view(start_offset=at, end_offset=from).to_string()))
-    runs.push(@ui.span(text.view(start_offset=from, end_offset=to).to_string(), weight=600, color=ink))
+    runs.push(@ui.span(text.clamped_view(start=at, end=from).to_owned()))
+    runs.push(@ui.span(text.clamped_view(start=from, end=to).to_owned(), weight=600, color=ink))
     at = to
   }
-  runs.push(@ui.span(text.view(start_offset=at).to_string()))
+  runs.push(@ui.span(text.clamped_view(start=at).to_owned()))
   let wkey = "search/found/" + key
   // its strokes drawn in as the line comes: 520 ms each, one 180 ms after the other
   let total = strokes_ms(marks.length())

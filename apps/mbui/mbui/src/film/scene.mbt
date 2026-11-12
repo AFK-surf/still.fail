@@ -51,6 +51,11 @@ fn scene_tester(
     window_corner~,
     nav_able=arg("MBUI_FILM_NAV_ABLE") == "1",
   )
+  // (as a host builds and lays out: no frame built again keeping no rows to be compared, a list's rows on the
+  // device's pixels; film.mbt's head)
+  t.check_looks(false)
+  t.corners_look(false)
+  t.set_rows_on_pixels(true)
   if inset {
     t.set_window_inset(true)
   }

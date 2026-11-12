@@ -170,7 +170,8 @@ fn drawn_names() -> Array[String] {
 }
 
 ///|
-/// Three places with the same account status: the current station, a link, and one still waiting for a profile.
+/// Three places with the same account status: the current station, a link, and one still waiting for a profile (the
+/// account's own topic, `profile`, which its page reads them of).
 fn alignment_places(s : Source) -> Source {
   fn shaped(v : Json) -> Json {
     match v {
@@ -201,7 +202,7 @@ fn alignment_places(s : Source) -> Source {
     ..s,
     topic_read: fn(name, params) {
       let v = s.topic(name, params).get().snapshot()
-      if name == "profiles" {
+      if name == "profile" {
         match v.value {
           Some(x) => { ..v, value: Some(shaped(x)) }
           None => v
@@ -395,10 +396,10 @@ test "a revoked Codex sign-in offers sign-in from the account check" {
 }
 
 ///|
-test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, then uses one of the resets left" {
+test "a profile's quota, a narrow page with a mouse: its resets left at the row's end; pressed, asks first, then uses one" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
-  scrolled_to(t, 390.0, "还可重置 2 次")
-  t.tap_text("重置额度")
+  scrolled_to(t, 390.0, "剩 2 次")
+  t.click(Link, label="额度重置")
   t.frame()
   assert_true(@sf.presenting(), msg="asked first")
   assert_true(t.find("重置额度？") is Some(_))
@@ -408,18 +409,43 @@ test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, th
   t.tap_text("使用一次重置")
   t.frame()
   t.frame()
-  assert_true(t.find("还可重置 1 次") is Some(_))
+  assert_true(t.find("剩 1 次") is Some(_))
 }
 
 ///|
 test "reset credits show their separate expiry times at every page width" {
   for (w, platform) in page_cases {
     let t = setting_tester(Profile("ws1/st1", "cx"), w, platform~, mode="settings-profile-quota-expiry")
-    let note = "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期"
+    let note = "6 小时 35 分钟后、3 天 19 小时后到期"
     scrolled_to(t, w, note)
     assert_true(t.find(note) is Some(_), msg="reset expiries at width \{w}")
-    assert_true(t.find("重置额度") is Some(_), msg="reset action at width \{w}")
+    assert_true(t.find("剩 2 次") is Some(_), msg="how many left, on their own, at width \{w}")
   }
+}
+
+///|
+test "a subscription's resets of two kinds, a row each: what each gives back said, one usable only at a limit not offered, the other used by its kind" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, mode="settings-profile-quota-kinds")
+    scrolled_to(t, w, "Fable 重置")
+    assert_true(t.find("5 小时重置") is Some(_), msg="the 5-hour kind at width \{w}")
+    assert_true(t.find("立即恢复 5 小时额度 · 到达它能恢复的上限后才能用") is Some(_), msg="what it gives back, and why not now, at width \{w}")
+    assert_true(t.find("把本周 Fable 用掉的额度还回每周额度 · 118 天后到期") is Some(_), msg="what the Fable one gives back at width \{w}")
+    assert_true(t.find("剩 1 次") is Some(_), msg="how many left, on their own, at width \{w}")
+  }
+  let t = setting_tester(Profile("ws1/st1", "cc"), 390.0, mode="settings-profile-quota-kinds")
+  scrolled_to(t, 390.0, "Fable 重置")
+  assert_true(t.query(Link, label="5 小时重置") is None, msg="usable only at a limit: not offered")
+  t.click(Link, label="Fable 重置")
+  t.frame()
+  assert_true(@sf.presenting(), msg="asked first")
+  assert_true(t.find("将使用「Claude 主账号」的 1 次 Fable 重置：把本周 Fable 用掉的额度还回每周额度") is Some(_))
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="使用一次重置")
+  // (its row closing its room on its way)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Link, label="Fable 重置") is None, msg="the Fable reset used, by its kind")
+  assert_true(t.find("5 小时重置") is Some(_), msg="the other kind left")
 }
 
 ///|
@@ -458,7 +484,7 @@ test "a profile model's id appears beside the option the pointer is over" {
   t.run_for(@kit.presence_in_ms)
   for (name, id) in [("Opus 5.5", "claude-opus-5-5"), ("Sonnet 5", "claude-sonnet-5")] {
     let (x, y, w, h) = t.rect_of(name).unwrap()
-    t.move(x + w / 2.0, y + h / 2.0)
+    t.move_to(x + w / 2.0, y + h / 2.0)
     t.run_for(@sf.tip_delay_ms + @kit.presence_in_ms)
     let tip = t.get(Tooltip, label=id).rect
     let gap = tip.0 - (x + w)
@@ -494,7 +520,7 @@ fn long_profile(s : Source) -> Source {
           // (in place of the fixture's own accounts)
           let lists = match o.get("lists") { Some(Array(a)) => a.filter(fn(l) {
                 match l {
-                  Object(m) => !(m.get("key") is Some(String("profiles", ..)))
+                  Object(m) => !(m.get("key") is Some(String("profiles")))
                   _ => true
                 }
               }); _ => [] }

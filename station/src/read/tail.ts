@@ -2,12 +2,16 @@
 // (sessions/live.ts), and by the readers for the pages of a history (read/transcripts.ts). Each read goes on from where
 // the last left off.
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
-import { zstdDecompressSync } from "node:zlib";
+import { access, open, readFile, stat } from "node:fs/promises";
+import { promisify } from "node:util";
+import { zstdDecompress, zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
-import { readSegments, writtenSize } from "./packed.ts";
+import { readSegments, segmentsFrom, writtenLength, writtenSize } from "./packed.ts";
 import { type ReadState, type TimelineEntry, timelineOf, utf8 } from "./transcript.ts";
 
 type Json = any;
+
+const unzstd = promisify(zstdDecompress);
 
 /// How much of a transcript is read at a time.
 export const PIECE = 4 << 20;
@@ -68,6 +72,11 @@ export class TranscriptTail {
     return this.keeps ? this.entries.length : this.count;
   }
 
+  /// How many bytes of complete lines it has read.
+  get readBytes(): number {
+    return this.offset - this.partial.length;
+  }
+
   /// Where its reading stands, to go on from in another thread.
   snapshot(): TailState {
     return { path: this.path, runtime: this.runtime, offset: this.offset, partial: this.partial.toString("base64"), count: this.length, inner: [...this.state.inner], packedStamp: this.packedStamp };
@@ -86,19 +95,19 @@ export class TranscriptTail {
     return tail;
   }
 
-  /// New entries since the last read, with the index of the first (marking: none, only counted).
+  /// New entries since the last read, with the index of the first (marking: none, only counted). On this thread: a
+  /// reader's (read/transcripts.ts); the main thread reads with `readSoon`.
   read(): [number, TimelineEntry[]] {
-    let start = this.length;
     const compressed = !existsSync(this.path);
     const disk = compressed ? `${this.path}.zst` : this.path;
     let meta;
     try {
       meta = statSync(disk);
     } catch {
-      return [start, []];
+      return [this.length, []];
     }
     const stamp = `${meta.size}:${meta.mtimeMs}`;
-    if (compressed && this.packedStamp === stamp) return [start, []];
+    if (compressed && this.packedStamp === stamp) return [this.length, []];
     // Put away: its length from its table (read/packed.ts), its segments decompressed as they are read; one put away
     // before there were segments decompressed whole.
     let unpacked: Buffer | null = null;
@@ -109,10 +118,122 @@ export class TranscriptTail {
         if (written !== null) size = written;
         else size = (unpacked = zstdDecompressSync(readFileSync(disk))).length;
       } catch {
-        return [start, []];
+        return [this.length, []];
       }
     }
-    this.packedStamp = compressed ? stamp : null;
+    const run = this.#begin(compressed ? stamp : null, size);
+    if (run === null) return [this.length, []];
+    if (unpacked) {
+      for (let at = this.offset; at < size; at += PIECE) {
+        const piece = unpacked.subarray(at, Math.min(size, at + PIECE));
+        this.offset = at + piece.length;
+        run.take(piece);
+      }
+      this.offset = size;
+    } else if (compressed) {
+      try {
+        readSegments(disk, this.offset, size, (piece) => {
+          this.offset += piece.length;
+          run.take(piece);
+          return true;
+        });
+      } catch {
+        // What could be read is kept; the rest is read next time.
+      }
+    } else {
+      try {
+        const file = openSync(this.path, "r"); // sync: `read` is the readers' threads' (read/transcripts.ts); the main thread's is readSoon
+        try {
+          const piece = Buffer.alloc(Math.min(PIECE, size - this.offset));
+          while (this.offset < size) {
+            const n = readSync(file, piece, 0, Math.min(piece.length, size - this.offset), this.offset); // sync: as above
+            if (n === 0) break;
+            this.offset += n;
+            run.take(piece.subarray(0, n));
+          }
+        } finally {
+          closeSync(file); // sync: as above
+        }
+      } catch {
+        // What could be read is kept; the rest is read next time.
+      }
+    }
+    return run.end();
+  }
+
+  /// `read`, off the thread that asks (the main thread's: sessions/live.ts). Not to be asked again before it is done.
+  async readSoon(): Promise<[number, TimelineEntry[]]> {
+    const there = await access(this.path).then(() => true, () => false);
+    const compressed = !there;
+    const disk = compressed ? `${this.path}.zst` : this.path;
+    let meta;
+    try {
+      meta = await stat(disk);
+    } catch {
+      return [this.length, []];
+    }
+    const stamp = `${meta.size}:${meta.mtimeMs}`;
+    if (compressed && this.packedStamp === stamp) return [this.length, []];
+    let unpacked: Buffer | null = null;
+    let size = meta.size;
+    if (compressed) {
+      try {
+        const written = await writtenLength(disk);
+        if (written !== null) size = written;
+        else size = (unpacked = await unzstd(await readFile(disk))).length;
+      } catch {
+        return [this.length, []];
+      }
+    }
+    const run = this.#begin(compressed ? stamp : null, size);
+    if (run === null) return [this.length, []];
+    if (unpacked) {
+      for (let at = this.offset; at < size; at += PIECE) {
+        const piece = unpacked.subarray(at, Math.min(size, at + PIECE));
+        this.offset = at + piece.length;
+        run.take(piece);
+      }
+      this.offset = size;
+    } else if (compressed) {
+      try {
+        const pieces = await segmentsFrom(disk, this.offset);
+        if (pieces !== null) {
+          for await (const all of pieces) {
+            const piece = all.subarray(0, Math.max(0, size - this.offset));
+            if (piece.length === 0) break;
+            this.offset += piece.length;
+            run.take(piece);
+            if (this.offset >= size) break;
+          }
+        }
+      } catch {
+        // What could be read is kept; the rest is read next time.
+      }
+    } else {
+      try {
+        const file = await open(this.path, "r");
+        try {
+          const piece = Buffer.alloc(Math.min(PIECE, size - this.offset));
+          while (this.offset < size) {
+            const { bytesRead: n } = await file.read(piece, 0, Math.min(piece.length, size - this.offset), this.offset);
+            if (n === 0) break;
+            this.offset += n;
+            run.take(piece.subarray(0, n));
+          }
+        } finally {
+          await file.close();
+        }
+      } catch {
+        // What could be read is kept; the rest is read next time.
+      }
+    }
+    return run.end();
+  }
+
+  /// A read of what came up to `size` (its file's, as written), once it is known that there is some: null when there is
+  /// none. `take` each piece as it comes (it ends at `offset`), then `end`.
+  #begin(packedStamp: string | null, size: number): { take: (piece: Buffer) => void; end: () => [number, TimelineEntry[]] } | null {
+    this.packedStamp = packedStamp;
     if (size < this.offset) {
       // Rewritten: start over.
       this.anew = true;
@@ -122,13 +243,13 @@ export class TranscriptTail {
       this.count = 0;
       this.marks = [];
     }
-    start = this.length;
-    if (size === this.offset) return [start, []];
+    const start = this.length;
+    if (size === this.offset) return null;
     const out: TimelineEntry[] = [];
     const had = this.length;
     let read = 0;
-    // A piece of what came (it ends at `offset`): its whole lines read, a line still being written waiting for the next
-    // read. Marking, each line is read on its own, so a mark falls at the end of one.
+    // A piece of what came: its whole lines read, a line still being written waiting for the next read. Marking, each
+    // line is read on its own, so a mark falls at the end of one.
     const take = (piece: Buffer) => {
       const bytes = this.partial.length > 0 ? Buffer.concat([this.partial, piece]) : piece;
       const cut = bytes.lastIndexOf(0x0a) + 1;
@@ -156,44 +277,12 @@ export class TranscriptTail {
         if (index - last.index >= MARK_EVERY || (index > last.index && base + end - last.offset >= MARK_BYTES)) this.marks.push({ offset: base + end, index, inner: [...this.state.inner] });
       }
     };
-    if (unpacked) {
-      for (let at = this.offset; at < size; at += PIECE) {
-        const piece = unpacked.subarray(at, Math.min(size, at + PIECE));
-        this.offset = at + piece.length;
-        take(piece);
-      }
-      this.offset = size;
-    } else if (compressed) {
-      try {
-        readSegments(disk, this.offset, size, (piece) => {
-          this.offset += piece.length;
-          take(piece);
-          return true;
-        });
-      } catch {
-        // What could be read is kept; the rest is read next time.
-      }
-    } else {
-      try {
-        const file = openSync(this.path, "r");
-        try {
-          const piece = Buffer.alloc(Math.min(PIECE, size - this.offset));
-          while (this.offset < size) {
-            const n = readSync(file, piece, 0, Math.min(piece.length, size - this.offset), this.offset);
-            if (n === 0) break;
-            this.offset += n;
-            take(piece.subarray(0, n));
-          }
-        } finally {
-          closeSync(file);
-        }
-      } catch {
-        // What could be read is kept; the rest is read next time.
-      }
-    }
-    if (this.keeps) for (const e of out) this.entries.push(e);
-    else this.count += read;
-    return [start, out];
+    const end = (): [number, TimelineEntry[]] => {
+      if (this.keeps) for (const e of out) this.entries.push(e);
+      else this.count += read;
+      return [start, out];
+    };
+    return { take, end };
   }
 }
 
@@ -237,6 +326,13 @@ export class ChainTail {
     return n;
   }
 
+  /// How many bytes of complete lines it has read across its transcripts.
+  get readBytes(): number {
+    let n = 0;
+    for (const t of this.tails) n += t.readBytes;
+    return n;
+  }
+
   /// The transcript written to now.
   get path(): string {
     return this.tails.at(-1)!.path;
@@ -257,6 +353,24 @@ export class ChainTail {
     if (refs.length === this.tails.length) return false;
     for (const r of refs.slice(this.tails.length)) this.tails.push(new TranscriptTail(r.runtime, r.path, this.shape, this.keeps));
     return true;
+  }
+
+  /// `read`, off the thread that asks (the main thread's). Not to be asked again before it is done.
+  async readSoon(): Promise<[number, TimelineEntry[]]> {
+    let offset = 0;
+    let from: number | null = null;
+    const told: TimelineEntry[] = [];
+    for (let i = 0; i < this.tails.length; i++) {
+      if (from !== null && !this.keeps && this.tails[i]!.length > 0) this.tails[i] = new TranscriptTail(this.tails[i]!.runtime, this.tails[i]!.path, this.shape, false);
+      const tail = this.tails[i]!;
+      const had = tail.length;
+      const [start, entries] = await tail.readSoon();
+      if (from === null && (entries.length > 0 || start < had)) from = offset + start;
+      if (from !== null) for (const e of entries) told.push(e);
+      offset += tail.length;
+    }
+    if (from === null) return [offset, []];
+    return [from, this.keeps ? this.entries.slice(from) : told];
   }
 
   /// New entries since the last read, with the index of the first (all from the first that changed when an earlier

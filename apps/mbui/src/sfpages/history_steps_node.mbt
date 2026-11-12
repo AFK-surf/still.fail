@@ -8,10 +8,10 @@
 // core calls `work`.
 //
 // They are nodes of the window's tree, laid out from the styles below (style_node), in a page's list that holds each
-// row only while it shows (View::scrolls_window). It follows its newest end; the page before comes in above what is
-// read, which stays where it is (the list's top, where the history begins, holding nothing: what comes in comes under
-// it); the page before that is asked for as the reader nears its top again; an entry gone to is brought to the middle
-// and marked a moment.
+// row only while it shows (View::scrolls_window). It follows its newest end; the page before is asked for as the reader
+// comes within a height of its top, and comes in above what is read, which stays where it is (the list's top, where
+// the history begins, holding nothing: what comes in comes under it); an entry gone to is brought to the middle and
+// marked a moment.
 
 ///|
 /// A row of the list as it was picked: the same as another where it is (steps_row_same), so its nodes are made again
@@ -94,7 +94,7 @@ fn steps_list_node(
   let rows = @signals.computed(fn(_) {
     let (_, all) = steps_rows_of_topic(src, params, lkey)
     let keys : Array[String] = []
-    let by : Map[String, StepsRow] = {}
+    let by : Map[String, StepsRow] = Map([])
     let mut live = 0
     for r in all {
       let k = match r {
@@ -145,33 +145,49 @@ fn steps_list_node(
         }
     }
   })
-  // the first row that shows, as the list is moved for what came over it, and the first item it was told with: near
-  // its top while it is one of its first three rows (its top's and two items) and the items begin as they did then
-  let first_shown : @signals.Signal[(String, String)] = @signals.signal(("", ""), same=fn(a, b) { a == b })
-  // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once for each first
-  // item they come above
-  v.reacts(
-    fn() {
-      let h = steps_head_of(src, params, lkey)
-      let (shown, told_first) = first_shown.get()
-      let near = told_first == h.first &&
-        (match rows.get().0.search(shown) {
-          Some(i) => i <= 2
-          None => false
-        })
-      // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
-      (h.more && h.older == "" && (near || steps_own.focus.contains(fk)), h.first)
-    },
-    fn(now) {
-      guard now.0 else { return }
-      (src.call)("history.older", Json::object(params), fn(res) {
-        // (an entry asked for before what could be had: where it opens)
-        if res is Err(_) {
-          steps_own.focus.remove(fk)
-        }
-      })
-    },
-  )
+  // The page before, asked of the core while there is one and the core neither reads it nor waits after a read that
+  // failed (it says when to ask again): as the list comes within a height of its top (the list's own to say, by where
+  // it is held: View::scrolls_window's near_top; kept here as the first row shown and the first item it was told
+  // with, a page come in that left that row first was never asked past, its top waiting for ever), and for an entry
+  // before what is loaded, once for each first item the pages come above, till the entry is among what is loaded (by
+  // the entries themselves: the entry asked for is taken off only as the rows are worked out, after the first item
+  // is told, and a page more was asked for with the entry's own page just come).
+  let wants_older = fn() {
+    let h = steps_head_of(src, params, lkey)
+    h.more && h.older == ""
+  }
+  // (asked once for each first item, whichever asks: near its top and an entry before what is loaded both ask as a
+  // page comes, before the core says it reads; again once the core has said it reads or that a read failed)
+  let asked_over : Ref[String?] = Ref(None)
+  v.reacts(fn() { steps_head_of(src, params, lkey).older }, fn(older) {
+    if older != "" {
+      asked_over.val = None
+    }
+  })
+  let ask_older = fn() {
+    let first = @signals.untracked(fn() { steps_head_of(src, params, lkey).first })
+    guard asked_over.val != Some(first) else { return }
+    asked_over.val = Some(first)
+    (src.call)("history.older", Json::object(params), fn(res) {
+      // (an entry asked for before what could be had: where it opens; not asked: asked again as it nears its top)
+      if res is Err(_) {
+        steps_own.focus.remove(fk)
+        asked_over.val = None
+      }
+    })
+  }
+  let entry_before = fn() {
+    guard steps_own.focus.get(fk) is Some(e) else { return false }
+    match items(src.topic("history", params).get().value, "items").get(0) {
+      Some(i) => e < entries_of(Some(i)).map(fn(x) { x.0 }).unwrap_or(0)
+      None => true
+    }
+  }
+  v.reacts(fn() { (wants_older() && entry_before(), steps_head_of(src, params, lkey).first) }, fn(now) {
+    if now.0 {
+      ask_older()
+    }
+  })
   steps_box_node(v, steps_box, fn(b) {
     steps_fills(b)
     b.box(fn(l) {
@@ -181,15 +197,16 @@ fn steps_list_node(
         fn() { rows.get().0 },
         est=steps_est,
         bar=@ui.tree_scroll_bar(),
-        foot_room=fn() { steps_foot_room },
+        // (the room under its last entry: its foot, drawing nothing)
+        foot=fn(f) { f.height(Is(Some(steps_foot_room))) |> ignore },
         // (its top, where it begins or the pages before come, stands over what comes in under it)
         holds=fn(k) { k != "edge" },
         // (followed at its newest; not once gone to an entry)
         follows=fn() { !steps_own.went.contains(lkey) },
         place~,
-        first_told=fn(k) {
-          first_shown.set((k, @signals.untracked(fn() { steps_head_of(src, params, lkey).first })))
-        },
+        // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
+        at_once=true,
+        near_top=(1.0, wants_older, ask_older),
         fn(slot, k) {
           slot.pick(fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {
             guard picked.row is Some(row) else { return }
@@ -300,7 +317,8 @@ fn steps_pressed(
 }
 
 ///|
-/// One of what the reader opens (a fold, a line, a group, a call), by its key, opened or shut.
+/// One of what the reader opens (a fold, a line, a group, a call), by its key, opened or shut (what was pressed
+/// staying where it was: mbui's press_stays.mbt).
 fn steps_flip(key : String) -> Unit {
   if steps_own.opened.contains(key) {
     steps_own.opened.remove(key)
@@ -313,7 +331,7 @@ fn steps_flip(key : String) -> Unit {
 /// A clock running in `v` from `since` (the core's time: `src.now`), read again each whole second from then as it is
 /// shown, no longer than `till` (ms after it, none: on), the test's idle not waiting on it (Ctx::every's): what reads
 /// the time of it reads what this returns.
-fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -> () -> Int {
+pub fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -> () -> Int {
   let tick : @signals.Signal[Int] = @signals.signal(0)
   fn plan() -> Unit {
     let gone = (src.now)() - since
@@ -334,7 +352,7 @@ fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -
 
 ///|
 /// The history's rows to come while it is read the first time in `v`, as its list draws them.
-fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.TipLayer) -> Unit {
+pub fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.TipLayer) -> Unit {
   let lines = [("group", 16), ("text", 24), ("group", 12), ("group", 20), ("text", 9), ("group", 18)]
   for i, line in lines {
     let (kind, n) = line
@@ -606,6 +624,11 @@ fn one_line_node(
   v.box(fn(r) {
     @sf.style_node(r, fn() { h_one.then(@sf.row_least_h()) })
     @sf.presses_node(r, fn() { steps_flip(key) })
+    r
+    .says(By(fn() {
+      Some(@view.said(Button, label=if open() { @sf.t("web-main.fold") } else { line }, expanded=open()))
+    }))
+    |> ignore
     lead(r)
     r.show(fn() { !open() && line != "" }, fn(l) {
       l.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
@@ -629,7 +652,7 @@ fn one_line_node(
   })
   |> ignore
   // (opening and closing with its room, sizes_steady.mbt)
-  @motion.reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) }, lazy=true) |> ignore
+  @motion.reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) }, deferred=true) |> ignore
 }
 
 ///|
@@ -656,11 +679,31 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           inner.val = Some(i)
           body(i)
         })
+        // (opening and closing its way, from the moment it is pressed, a Move as long as what is past the cut is
+        // tall: all of it at once was a step of that many lines in one frame, what is under it with it)
+        let way = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
+        room.reacts(open, fn(o) {
+          let past = dmax(0.0, @signals.untracked(tall) - most)
+          way.go(if o { 1.0 } else { 0.0 }, @motion.moved().per_unit(past), at=room.cause_at())
+        })
+        let shown = fn() {
+          way.said()
+          way.value_at(room.drawn_while(fn(t) { way.goes_at(t) }))
+        }
         // (cut from the first: measured whole however short it is cut, View::holds_whole; said once what it measures
         // is made)
         room
         .holds_whole()
-        .max_height(By(fn() { if open() { None } else if long() { Some(most) } else { Some(most + 4.0) } }))
+        .max_height(By(fn() {
+          let k = shown()
+          if k >= 1.0 {
+            None
+          } else if long() {
+            Some(most + (tall() - most) * dmax(0.0, k))
+          } else {
+            Some(most + 4.0)
+          }
+        }))
         |> ignore
       })
       f.show(long, fn(t) {
@@ -673,7 +716,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           }
         }
         steps_box_node(t, h_fold_toggle, fn(b) {
-          steps_pressed(b, fn() { steps_flip(key) }, label=words)
+          steps_pressed(b, fn() { steps_flip(key) }, label=words, folds=true, open~)
           @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
         })
       })
@@ -747,37 +790,31 @@ fn received_node(
 }
 
 ///|
-/// A place as its platform's mark and its name in `v`: a Slack thread opens in Slack, a still.fail
-/// chat its page.
+/// A place as its platform's mark and its name in `v` (the library's place_node): a Slack thread opens in Slack, a
+/// still.fail chat its page.
 fn place_node(v : @view.View, station : String, place : Json?) -> Unit {
   let url = text(place, "url")
   let session = text(place, "session")
-  let goes = url != "" || session != ""
-  v.box(fn(p) {
-    @sf.style_node(p, fn() { h_place })
-    p.ground(By(fn() { if goes && @sf.lit_node(p) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-    // (giving way in its line: its name wrapped where it is long)
-    p.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-    if goes {
-      @sf.presses_node(p, fn() {
-        if url != "" {
-          @sfbase.open_slack(text(place, "app"), url) |> ignore
-        } else {
-          @sfbase.history_push()
-          app.nav.push(Chat({ station, session, title: text(place, "name"), station_name: "" }))
-        }
-      })
-    }
-    match text(place, "surface") {
-      "chat" | "ember" | "stillfail" =>
-        p.pick(fn() { @sf.theme().dark }, fn(d, dark) {
-          @sf.drawable_node(d, if dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
-        })
-      "feishu" => @sf.drawable_node(p, "feishu", 12.0) |> ignore
-      _ => @sf.drawable_node(p, "slack", 12.0) |> ignore
-    }
-    steps_words(p, fn() { text(place, "name") }, h_place_words)
-  })
+  let press = if url != "" || session != "" {
+    Some(fn() {
+      if url != "" {
+        @sfbase.open_slack(text(place, "app"), url) |> ignore
+      } else {
+        @sfbase.history_push()
+        app.nav.push(Chat({ station, session, title: text(place, "name"), station_name: "" }))
+      }
+    })
+  } else {
+    None
+  }
+  @sf.place_node(
+    v,
+    fn() { text(place, "surface") },
+    fn() { text(place, "name") },
+    fn(hot) { if hot { h_place_hot } else { h_place } },
+    h_place_words,
+    press~,
+  )
   |> ignore
 }
 
@@ -999,7 +1036,7 @@ fn group_node(
       }
     })
     |> ignore
-    @motion.reveal_node(gv, open, lazy=true, fn(s) {
+    @motion.reveal_node(gv, open, deferred=true, fn(s) {
       steps_box_node(s, h_steps, fn(list) {
         for i, row in rows {
           let rv = Some(row)
@@ -1064,7 +1101,7 @@ fn opened_node(
       summary(line)
     })
     |> ignore
-    @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, lazy=true) |> ignore
+    @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, deferred=true) |> ignore
   })
 }
 
@@ -1177,42 +1214,62 @@ fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Un
 }
 
 ///|
-/// A list of things to do in `v`: done ✓ struck and muted, under way › in 600, the rest ·.
-fn plan_node(v : @view.View, list : Array[Json]) -> Unit {
+/// A list of things to do in `v`, each `{text, status}`, as `list` says it now: done ✓ struck and muted, under way › in
+/// 600, the rest ·. A plan call's in the history, and an agent's checklist in the panel of its work (agent_work_node):
+/// a row each by its place in the list, its mark and words as its item says them now, one more or less coming and
+/// going as the list changes (View::each).
+fn plan_node(v : @view.View, list : () -> Array[Json]) -> Unit {
   steps_box_node(v, tool_plan, fn(p) {
-    for it in list {
-      let iv = Some(it)
-      let status = text(iv, "status")
-      let (mark, words) = match status {
-        "completed" => ("✓", tool_plan_done)
-        "in_progress" => ("›", tool_plan_now)
-        _ => ("·", tool_plan_words)
+    p.each(fn() { list().mapi(fn(i, it) { (i, it) }) }, fn(x) { x.0 }, fn(row, item) {
+      let status = fn() { text(Some(item.get().1), "status") }
+      let words = fn() {
+        match status() {
+          "completed" => tool_plan_done
+          "in_progress" => tool_plan_now
+          _ => tool_plan_words
+        }
       }
       let mark_ink = fn() {
-        match status {
+        match status() {
           "completed" => @sf.theme().p.green
           "in_progress" => @sf.theme().p.accent
           _ => @sf.theme().p.subtle
         }
       }
-      steps_box_node(p, tool_plan_row, fn(r) {
+      steps_box_node(row, tool_plan_row, fn(r) {
         steps_box_node(r, tool_plan_mark, fn(m) {
           m.box(fn(w) {
             w
-            .words(Is(mark))
+            .words(By(fn() {
+              match status() {
+                "completed" => "✓"
+                "in_progress" => "›"
+                _ => "·"
+              }
+            }))
             .words_look(By(fn() { @ui.style_words(tool_plan_words) }))
             .ink(By(mark_ink))
             |> ignore
           })
           |> ignore
         })
+        // (the room its mark leaves, from none: its words wrapped at that width, not at the row's)
         r.box(fn(w) {
-          w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-          steps_run(w, fn() { text(iv, "text") }, words, strike=status == "completed")
+          w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+          w.box(fn(x) {
+            x
+            .words_runs(By(fn() { [@ui.span(text(Some(item.get().1), "text"), strike=status() == "completed")] }))
+            .words_look(By(fn() { @ui.style_words(words()) }))
+            .ink(By(fn() { @ui.style_ink(words()) }))
+            .shrink(Is(1.0))
+            .min_width(Is(Some(0.0)))
+            |> ignore
+          })
+          |> ignore
         })
         |> ignore
       })
-    }
+    })
   })
 }
 
@@ -1303,7 +1360,7 @@ fn tool_part_node(v : @view.View, part : Json?) -> Unit {
         }
       })
     "markdown" => steps_box_node(v, tool_box, fn(b) { md_node(b, text(part, "text"), field(part, "md"), small=true) })
-    "plan" => plan_node(v, items(part, "items"))
+    "plan" => plan_node(v, fn() { items(part, "items") })
     "fields" =>
       steps_box_node(v, tool_fields, fn(fs) {
         for r in items(part, "rows") {
@@ -1444,6 +1501,7 @@ priv enum StepsRow {
 /// How an agent's history's steps stand (what builds them reads of it): read yet, why its read failed (read again),
 /// none, what its top says, whether there are pages before and how the page before stands (reading, failed, or ""),
 /// how many rows and its first item's key.
+#derive(Eq)
 priv struct StepsHead {
   waiting : Bool
   failed : String
@@ -1453,7 +1511,7 @@ priv struct StepsHead {
   older : String
   rows : Int
   first : String
-} derive(Eq)
+}
 
 ///|
 /// Each history's StepsHead, by its list's key: told only as it comes out otherwise.
@@ -1704,6 +1762,10 @@ let h_person : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 /// A place (hPlace): its mark and name 4 apart; where it goes, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let h_place : @ui.Style = @ui.css("row gap=S1 align=ACenter radius=Base clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_place_hot : @ui.Style = h_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2101,3 +2163,42 @@ let steps_usage_line : @sfbase.Kept[String] = @sfbase.Kept::new()
 ///|
 // kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
 let steps_usage : @sfbase.Kept[Json?] = @sfbase.Kept::new()
+
+///|
+/// What needs seeing to in an agent's history now (HistorySummary), as `a` (the chat's agent) says it, in `parent`'s
+/// row: a quota running out (its chip, what it says and more over it while it is pointed at, in `tips`), the disk
+/// filling up (in `amber`), an account that cannot run (in `red`).
+pub fn history_attention_node(
+  parent : @view.View,
+  a : () -> Json?,
+  tips : @sf.TipLayer,
+  amber : @ui.TextStyle,
+  red : @ui.TextStyle,
+) -> Unit {
+  let notes = fn() { items(a(), "attention") }
+  parent.each(fn() { Array::makei(notes().length(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
+    let k = i.untracked()
+    let n = fn() { notes().get(k) }
+    let q = fn() { field(n(), "quota") }
+    c.pick(fn() { q() is Some(Object(_)) }, fn(x, quota) {
+      if quota {
+        @sf.fill_chip_node(
+          x,
+          fn() { number(q(), "left").to_int() },
+          fn() { text(q(), "level") },
+          fn() { text(q(), "mark") },
+          fn() { number(q(), "left").to_int().to_string() + "%" },
+          small=true,
+          said=fn() {
+            let more = text(n(), "more")
+            text(n(), "text") + (if more != "" { "\n" + more } else { "" })
+          },
+          tips~,
+        )
+        |> ignore
+      } else {
+        @sf.words_node(x, fn() { text(n(), "text") }, fn() { if text(n(), "kind") == "disk" { amber } else { red } }) |> ignore
+      }
+    })
+  })
+}

@@ -14,7 +14,10 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   match view {
     Some(v) => {
       latest_key(c, src, r, v)
-      chat_list(c, src, r, v, read, room, settings_core(src, w), top=chat_bar_room() + list_head_gap, bar=chat_bar_room())
+      // (a picture flying from it drawn under the bar in the page's slot while it is under it (sfbase's
+      // viewer_flight_slot, chat_page_made's): the bar is the page's nodes (chat_bar_wide_node), which the viewer's
+      // layer is over, so the old view's lifting it over the flight (over_flight) lifts none of it)
+      chat_list(c, src, r, v, read, room, settings_core(src, w), top=chat_bar_room() + list_head_gap, bar=chat_bar_room(), slotted=true)
     }
     None => {
       // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
@@ -36,7 +39,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   // the composer, over the cover a row carried over the pane puts up (@ui.Stratum's OverCover: what it is let go into)
   let composer = c.layer(fn() {
     c.spacer()
-    @sfpages.chat_composer(c, src, w, r, view, apart=wide.tape)
+    @sfpages.chat_composer(c, src, w, r, view, apart=wide.tape.get())
   })
   c.stratum(composer, OverCover)
   // (over the viewer's picture as it flies from the list or back into it)
@@ -52,7 +55,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   }
   // over it, what is picked in the messages; a row let go over the pane, into the draft
   if view is Some(_) {
-    chat_layers(c, src, r, draft, pane, room)
+    chat_layers(c, src, r, draft, room)
   }
   chat_drop(c, src, r.station, draft, pane)
   // words dragged in from another app and let go anywhere on the pane but a field (a field takes them where they
@@ -85,7 +88,7 @@ fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     } else {
       match v.thread {
         Some(th) =>
-          (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, fn(_) {  })
+          (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, @sfbase.answer_unread)
         None => ()
       }
     }
@@ -95,10 +98,44 @@ fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
 
 ///|
 /// How tall the chat's bar over the list is (pageBar: 45; in a panel of its own as much taller as puts its buttons in
-/// the panel's corner concentric with it: chat_bar_box_tape), and the list's room under it over its first row (24).
-fn chat_bar_room() -> Double {
-  @sf.wide_bar_h + (if @sf.in_pane() { @sf.tape_bar_over() } else { 0.0 })
+/// the panel's corner concentric with it: chat_bar_box_tape; `in_pane` as the page built now is), and the list's room
+/// under it over its first row (24).
+fn chat_bar_room(in_pane? : Bool = @sf.in_pane()) -> Double {
+  @sf.wide_bar_h + (if in_pane { @sf.tape_bar_over() } else { 0.0 })
 }
 
 ///|
 let list_head_gap : Double = 24.0
+
+///|
+/// Chat `r`'s messages where its page is made with its inside nodes (sfbase's chat_page_nodes: chat_page_made's
+/// `body`), in `v`, as wide as it is given: under the bar's room, `in_pane` the page a panel of its own (chat_bar_room).
+/// What the page's old view hands the system's bars said here as nodes (chat_bar_handed_node).
+fn chat_body_nodes(
+  v : @view.View,
+  src : Source,
+  r : ChatRef,
+  tips : @sf.TipLayer,
+  stint : () -> Int,
+  in_pane? : Bool = false,
+) -> Unit {
+  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, top=fn() { chat_bar_room(in_pane~) + list_head_gap })
+  chat_bar_handed_node(v, src, r)
+}
+
+///|
+/// Chat `r`'s composer under its messages where its page is made with its inside nodes (sfbase's chat_page_nodes:
+/// chat_page_made's `foot`), at its own height, `apart` as chat_composer's; nothing over it or let go into it yet
+/// (chat_talk's layers).
+fn chat_composer_nodes(c : @ui.Ctx, src : Source, r : ChatRef, apart : Bool) -> Unit {
+  guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
+  let foot = c.box(style=chat_composer_under, fn() {
+    @sfpages.chat_composer(c, src, w, r, view_of_chat(src, r).0, apart~)
+  })
+  @motion.scope(c, foot, bottom=true)
+}
+
+///|
+/// The composer's box under a chat's messages made as nodes (chat_composer_nodes): as wide as the pane.
+// kept across runs: a value (no field of it changes)
+let chat_composer_under : @ui.Style = @ui.css("w=Full")

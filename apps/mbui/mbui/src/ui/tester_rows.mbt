@@ -162,28 +162,28 @@ fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
     let nd = self.nodes[i]
     let drawn = match self.drawn_entry(i) {
       Some(e) =>
-        " look \{e.look} z \{e.z} only \{e.only} cut \{e.top},\{e.bottom} ground \{e.ground} by \{e.look_by is Some(_)} cycle \{e.cycle is Some(_)}"
+        " look \{e.look} z \{e.z} only \{e.only} cut \{e.top},\{e.bottom} ground \{some_text(e.ground.map(fn(g) { "(\{g.0}, \{g.1}, \{g.2}, \{g.3}, \{rect_text(g.4)})" }))} by \{e.look_by is Some(_)} cycle \{e.cycle is Some(_)}"
       None => ""
     }
     // (its words and their face where it has words: a box keeps what an earlier node of the slot held, unread)
     let words = if nd.kind == kind_image {
       " \"\{nd.text}\" still \{nd.still} fade \{nd.fade}"
     } else if nd.kind == kind_rich {
-      " \"\{nd.text}\" \{nd.rl.map(fn(r) { (r.text, r.line_w, r.line_y) })}"
+      " \"\{nd.text}\" \{some_text(nd.rl.map(fn(r) { "(\{r.text}, \{list_text(r.line_w)}, \{list_text(r.line_y)})" }))}"
     } else if nd.kind != kind_text && nd.kind != kind_editor {
       ""
     } else {
       " \"\{nd.text}\" color \{nd.color} font \{nd.font_size} \{nd.weight} wrap \{nd.wrap} lines \{nd.max_lines}" +
       (if nd.kind == kind_text {
-        " \{nd.tl.map(fn(t) { (t.text, t.w, t.h) })}"
+        " \{some_text(nd.tl.map(fn(t) { "(\{t.text}, \{t.w}, \{t.h})" }))}"
       } else if nd.kind == kind_rich {
-        " \{nd.rl.map(fn(r) { (r.text, r.line_w, r.line_y) })}"
+        " \{some_text(nd.rl.map(fn(r) { "(\{r.text}, \{list_text(r.line_w)}, \{list_text(r.line_y)})" }))}"
       } else {
         ""
       })
     }
     out.push(
-      "\{pos(i)} kind \{nd.kind} id \{nd.id} parent \{pos(nd.parent)} first \{pos(nd.first)} next \{pos(nd.next)} item \{nd.item} at \{said_at(nd.x)},\{said_at(nd.y)} \{said_at(nd.fw)}×\{said_at(nd.fh)} tx \{nd.tx},\{nd.ty} moved \{nd.moved_x},\{nd.moved_y} bg \{nd.bg} alpha \{nd.opacity} radius \{said_at(nd.radius)} \{nd.radii.map(fn(r) { r.map(said_at) })} border \{nd.border_w} \{nd.border_c} shadow \{nd.shadow} \{nd.shadow_c} clip \{nd.clip} hit \{nd.hit} points \{nd.points} layer \{nd.layer} \{nd.portal} \{nd.portal_id} size \{size_said(nd.w)} \{size_said(nd.h)} placed \{nd.at_l},\{nd.at_t},\{nd.at_r},\{nd.at_b}" +
+      "\{pos(i)} kind \{nd.kind} id \{nd.id} parent \{pos(nd.parent)} first \{pos(nd.first)} next \{pos(nd.next)} item \{nd.item} at \{said_at(nd.x)},\{said_at(nd.y)} \{said_at(nd.fw)}×\{said_at(nd.fh)} tx \{nd.tx},\{nd.ty} moved \{nd.moved_x},\{nd.moved_y} bg \{nd.bg} alpha \{nd.opacity} radius \{said_at(nd.radius)} \{some_text(nd.radii.map(fn(r) { "[" + r.map(fn(x) { said_at(x).to_string() }).join(", ") + "]" }))} border \{nd.border_w} \{nd.border_c} shadow \{nd.shadow} \{nd.shadow_c} clip \{nd.clip} hit \{nd.hit} points \{nd.points} layer \{nd.layer} \{nd.portal} \{nd.portal_id} size \{size_said(nd.w)} \{size_said(nd.h)} placed \{nd.at_l},\{nd.at_t},\{nd.at_r},\{nd.at_b}" +
       words +
       drawn,
     )
@@ -193,7 +193,7 @@ fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
     l.said_take(self, 0).said_show(sb)
   }
   for l in sb.to_string().split("\n") {
-    out.push(l.to_string())
+    out.push(l.to_owned())
   }
   let sems = self.sems.map(fn(s) { (pos(s.node), "\{s.id} \{s.label} \{s.value} \{s.hidden}") })
   sems.sort_by(fn(a, b) { a.0.compare(b.0) })
@@ -203,16 +203,16 @@ fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
     t.sort()
     t
   }
-  out.push("inners \{corners(self.inners)} \{corners(self.inners_or)} \{corners(self.arounds)}")
+  out.push("inners \{list_text(corners(self.inners))} \{list_text(corners(self.inners_or))} \{list_text(corners(self.arounds))}")
   let words = []
-  words_kept.each(fn(k, w) { words.push("\{k}: \{w.text} \{w.pieces.map(fn(p) { (p.x, p.y, p.w, p.h) })}") })
+  words_kept.each(fn(k, w) { words.push("\{k}: \{w.text} \{list_text(w.pieces.map(fn(p) { rect_text((p.x, p.y, p.w, p.h)) }))}") })
   words.sort()
   out.push("words " + words.join("; "))
   let lit = self.lit_asked.iter().collect()
   lit.sort()
   let chooses = self.hand_chooses.iter().collect()
   chooses.sort()
-  out.push("lit \{lit} \{chooses}")
+  out.push("lit \{list_text(lit)} \{list_text(chooses)}")
   // (the ids said numbered as Tester::said numbers them: that numbering let go, it numbers its own)
   if !said_log.on {
     said_log.ids.clear()

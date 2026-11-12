@@ -116,12 +116,6 @@ fn pol_words_drawn(t : @ui.Tester) -> Array[(String, Double, Double, Double, Dou
 }
 
 ///|
-/// The boxes drawn now of `ink`.
-fn pol_boxes(t : @ui.Tester, ink : Int64) -> Array[(Double, Double, Double, Double)] {
-  t.drawn_rects().filter(fn(r) { r.4 == ink }).map(fn(r) { (r.0, r.1, r.2, r.3) })
-}
-
-///|
 /// How long a dialog takes to come in and go at most here (a sheet's way as far as the window, its scrim's fade).
 fn pol_way_ms() -> Double {
   @ui.move_most_ms * 2.0
@@ -162,7 +156,7 @@ test "归档策略's option's dialog, its body nodes, on a phone and on a wide w
     t.run_for(pol_way_ms())
     assert_true(
       calls.iter().any(fn(c) { c.0 == "automaticDecisions.policy.edit" && c.1.contains("\"archive\":false") }),
-      msg="\{at}: told \{calls}",
+      msg="\{at}: told \{Repr(calls)}",
     )
     let moved = (track_was.0 + track_was.2 - (thumb_was.0 - track_was.0) - thumb_was.2, thumb_was.1, thumb_was.2, thumb_was.3)
     let boxes = t.drawn_rects().map(fn(r) { (r.0, r.1, r.2, r.3) })
@@ -171,7 +165,7 @@ test "归档策略's option's dialog, its body nodes, on a phone and on a wide w
     t.run_for(pol_way_ms())
     assert_false(@sf.presenting(), msg="\{at}: closed")
     let over = pol_words_over(seen, pol_words_drawn(t))
-    assert_true(pol_words_near(over, words_was), msg="\{at}: \{over}")
+    assert_true(pol_words_near(over, words_was), msg="\{at}: \{Repr(over)}")
   }
 }
 
@@ -185,6 +179,6 @@ test "归档策略's words' dialog, its body nodes, on a phone and on a wide win
     t.key(@ui.key_escape)
     t.run_for(pol_way_ms())
     let over = pol_words_over(seen, pol_words_drawn(t))
-    assert_true(pol_words_near(over, pol_text_was(w)), msg="\{w}: \{over}")
+    assert_true(pol_words_near(over, pol_text_was(w)), msg="\{w}: \{Repr(over)}")
   }
 }

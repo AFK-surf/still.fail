@@ -42,13 +42,13 @@ fn ask_field_drawn(
       n += 1
       shown = shown && x >= clip.0 - 0.5 && y >= clip.1 - 0.5 && x + w <= clip.2 + 0.5 && y + h <= clip.3 + 0.5
       if n == 1 {
-        said = said + " glyph \{(x, y, w, h)} clip \{clip}"
+        said = said + " glyph \{Repr((x, y, w, h))} clip \{Repr(clip)}"
       }
     }
   }
   let held = match bx {
     Some(((x, y, w, h), c)) => {
-      said = said + " box clip \{c}"
+      said = said + " box clip \{Repr(c)}"
       c.0 <= x + 0.5 && c.1 <= y + 0.5 && c.2 >= x + w - 0.5 && c.3 >= y + h - 0.5
     }
     None => false
@@ -68,7 +68,7 @@ test "中屏 and 大屏, touch and keyboard and mouse: a question, its line give
     assert_eq(
       (tall, held0, n0 >= 4, shown0, held1, n1 > n0, shown1),
       (true, true, true, true, true, true, true),
-      msg="\{c} line \{line} box \{bx} (one-line \{@sf.theme().control_h}) held \{held0} glyphs \{n0} shown \{shown0} → typed held \{held1} glyphs \{n1} shown \{shown1};\{said0}",
+      msg="\{Repr(c)} line \{Repr(line)} box \{Repr(bx)} (one-line \{@sf.theme().control_h}) held \{held0} glyphs \{n0} shown \{shown0} → typed held \{held1} glyphs \{n1} shown \{shown1};\{said0}",
     )
   }
 }

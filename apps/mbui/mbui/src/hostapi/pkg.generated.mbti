@@ -29,6 +29,8 @@ pub fn autofill_ask(String) -> Bool
 
 pub fn autofill_end() -> Unit
 
+pub fn autofill_forget() -> Unit
+
 pub fn autofill_take() -> (String, String, String)?
 
 pub fn b64url_of_hex(String) -> String
@@ -325,6 +327,10 @@ pub fn platform() -> Int32
 
 pub fn pointing() -> Int32
 
+pub let outside_lets_go : @ref.Ref[(Int32, Int32) -> Unit]
+
+pub let outside_waits : @ref.Ref[(Int32, Int32, () -> Bool) -> Unit]
+
 pub let polled : @ref.Ref[() -> Unit]
 
 pub fn post_next() -> (String, String, Bytes)?
@@ -477,7 +483,7 @@ pub fn turned_sideways() -> Bool
 
 pub fn update_apply(String) -> Unit
 
-pub fn update_fetch(String, String, Double, String, Bool) -> Unit
+pub fn update_fetch(String, String, Double, String, Bool, String) -> Unit
 
 pub fn update_state() -> String
 
@@ -882,7 +888,7 @@ pub(open) trait Host {
   fn shared_in(Self) -> String = _
   fn shared_in_file(Self, Int32) -> Bytes = _
   fn app_version(Self) -> Int32 = _
-  fn update_fetch(Self, String, String, Double, String, Bool) -> Unit = _
+  fn update_fetch(Self, String, String, Double, String, Bool, String) -> Unit = _
   fn update_apply(Self, String) -> Unit = _
   fn update_state(Self) -> String = _
   fn install_package(Self, String, Bytes) -> Unit = _

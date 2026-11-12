@@ -74,6 +74,17 @@ priv struct RideKept {
   /// a list drawn whole as one (ListRiding) with what is drawn anew each time it is drawn in it (a picture, one not seen
   /// asked for): drawn again only by going through it
   anew : Bool
+  /// how many scrims the old frame had as it was drawn (ride_scrims): what of it is said to be drawn over a scrim
+  /// (View::over_scrim) is moved after one as it is gone through (raising), never as it is drawn again, so it is drawn
+  /// again only under as many (a scrim come or gone: gone through once, kept again after)
+  scrims : Int
+}
+
+///|
+/// How many scrims the old frame has as the window's tree is painted (dr.scrims: its layers' with a scrim, built before
+/// the tree's paint): what is kept is kept under them (RideKept's `scrims`).
+fn ride_scrims() -> Int {
+  dr.scrims.length()
 }
 
 ///|
@@ -137,6 +148,20 @@ let list_heads : Array[ListHead] = []
 /// instances worked on as the frame ends, an old view, bones), by their nodes: moved, painted anew (view_offset_moved).
 // kept across runs: emptied as each frame is painted
 let offsets_flat : Array[Int] = []
+
+///|
+/// What each node drawing what it holds stretched (View::stretches) was last painted stretched by: one stretched
+/// otherwise in a paint is told drawn anew where it shows (damage_known), one stretched as it was is not. Written only
+/// as one is painted stretched, so a paint with none stretched does nothing more for it; let go whole as it comes to
+/// stretch_painted_most (a node gone, or no longer stretched, kept till then: one stretched again as it was is compared,
+/// as anything is), and as a run begins (view_forget), so a run's first stretch is told whatever ran before it.
+// kept across runs: emptied as each begins (view_forget), written by a paint as it draws one stretched otherwise,
+// emptied as it holds stretch_painted_most
+let stretch_painted : Map[@view.NodeId, Double] = Map([])
+
+///|
+/// How many stretch_painted holds at most.
+let stretch_painted_most = 16
 
 ///|
 /// What a column scrolls by its offset alone being drawn now, as the tree is painted (none between paints): the outer
@@ -228,7 +253,7 @@ let ride_unkept : ByNode[Bool] = ByNode::new()
 /// stands for (Ctx::flat_from), drawn by the host itself where it keeps them.
 // kept across runs: let go with what kept them (ride_let_go), told to the host as the frame they were last in is
 // presented (ride_groups_told)
-let ride_groups : Map[Int, RideKept] = {}
+let ride_groups : Map[Int, RideKept] = Map([])
 
 ///|
 /// The groups made so far: a group's number is never another's, so the same header is never another's instances
@@ -343,7 +368,7 @@ fn Ctx::flat_from(self : Ctx, i0 : Int) -> Unit {
 fn ride_draw_out(s : FixedArray[Double], at : Int) -> Unit {
   let b = at * inst_size
   let id = s[b + 12].to_int()
-  guard ride_groups.get(id) is Some(k) else { abort("flat_from: group \{id} let go") }
+  guard ride_groups.get(id) is Some(k) else { @halt.saying("flat_from: group \{id} let go") }
   if k.heads {
     ride_put_out(k, s, at, s[b], s[b + 1], s[b + 15], s[b + 16], s[b + 17], s[b + 18], s[b + 19]) |> ignore
   } else {
@@ -386,7 +411,7 @@ fn ride_put_out(
       i = j
       continue
     }
-    guard ride_groups.get(a[b + 12].to_int()) is Some(r) else { abort("ride_put_out: group let go") }
+    guard ride_groups.get(a[b + 12].to_int()) is Some(r) else { @halt.saying("ride_put_out: group let go") }
     // (its clip this one's where it says none, else as much of both)
     let none = a[b + 16] == 0.0 && a[b + 17] == 0.0 && a[b + 18] == 0.0 && a[b + 19] == 0.0
     let cut = !(h0 == 0.0 && h1 == 0.0 && h2 == 0.0 && h3 == 0.0)
@@ -707,6 +732,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     heads: false,
     out: n,
     anew: false,
+    scrims: ride_scrims(),
   }
   ride_keep(r.id, kept)
   if group >= 0 {
@@ -825,6 +851,7 @@ fn Ctx::ride_kept_for(
     ride_glyphs_gone.val == k.glyphs &&
     inst_owners_kept() == k.owned &&
     tree.drawn_rev(c.id) <= k.rev &&
+    ride_scrims() == k.scrims &&
     ride_whole(dx, self.scale) &&
     ride_whole(dy, self.scale)
   guard fits else { return None }
@@ -924,7 +951,7 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
 /// The captures the glass of the row drawn again (Ctx::ride_again) took as it was painted, each the one it takes in
 /// this frame.
 // kept across runs: emptied as each row is drawn again
-let ride_caps : Map[Int, Int] = {}
+let ride_caps : Map[Int, Int] = Map([])
 
 ///|
 /// Row kept `k`'s instances `i0` until `i1` put after the frame's, moved by (dx, dy), their shapes' pieces where they
@@ -1493,6 +1520,7 @@ fn Ctx::list_ride_end(self : Ctx) -> Unit {
     heads,
     out: n,
     anew: l.anew,
+    scrims: ride_scrims(),
   }
   if was is Some(_) {
     ride_kept[l.id] = kept
@@ -1629,6 +1657,7 @@ fn Ctx::list_kept_for(
     ride_glyphs_gone.val == k.glyphs &&
     inst_owners_kept() == k.owned &&
     tree.drawn_rev(c.id) <= k.rev &&
+    ride_scrims() == k.scrims &&
     ride_whole(x - k.x, self.scale) &&
     ride_whole(y - k.y, self.scale)
   if fits {

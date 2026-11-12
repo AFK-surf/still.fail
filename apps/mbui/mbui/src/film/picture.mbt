@@ -130,7 +130,7 @@ pub fn picture(
   if !scene_drawable(t, "picture", false) {
     return false
   }
-  let buf = Ref::new(FixedArray::make(0, 0.0))
+  let buf = Ref(FixedArray::make(0, 0.0))
   let (n, (r, g, b)) = host_frame(t, buf)
   let times = FixedArray::make(2, 0.0)
   draw_timed(buf.val, n, r, g, b, [(0.0, 0.0, -1.0, -1.0)], times)
@@ -151,7 +151,7 @@ fn run_picture(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
   let drive_path = arg("MBUI_FILM_DRIVE")
   let prepare = if prepare_path == "" { "" } else { read_text(prepare_path) }
   let script = if drive_path == "" { "" } else { read_text(drive_path) }
-  if prepare_path != "" && prepare == "" || drive_path != "" && script == "" {
+  if (prepare_path != "" && prepare == "") || (drive_path != "" && script == "") {
     say("picture: a scene script could not be read")
     exit(2)
     return

@@ -59,7 +59,7 @@ fn scaled_tester(s : @signals.Signal[Double], pressed : Map[String, Int]) -> Tes
 ///|
 test "scale: a node drawn half as big, what it holds pressed, taken and read out where it is drawn, as big; nothing where it is laid out but not drawn" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = scaled_tester(s, pressed)
   // (the button laid out at (120, 20) 100 by 50, drawn at (70, 20) 50 by 25)
   assert_eq(t.get(Button, label="node button").rect, (70.0, 20.0, 50.0, 25.0), msg="read out where it is drawn")

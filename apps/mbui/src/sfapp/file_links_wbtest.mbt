@@ -5,10 +5,10 @@
 ///|
 test "file links: the tree's words are the message's" {
   let t = file_links_answer
-  assert_eq(t.view(start_offset=4, end_offset=8).to_string(), "发布节奏")
-  assert_eq(t.view(start_offset=25, end_offset=29).to_string(), "，草图在")
-  assert_eq(t.view(start_offset=30, end_offset=34).to_string(), "界面草图")
-  assert_eq(t.view(start_offset=77).to_string(), "。")
+  assert_eq(t.exact_view(start=4, end=8).to_owned(), "发布节奏")
+  assert_eq(t.exact_view(start=25, end=29).to_owned(), "，草图在")
+  assert_eq(t.exact_view(start=30, end=34).to_owned(), "界面草图")
+  assert_eq(t.exact_view(start=77).to_owned(), "。")
 }
 
 ///|
@@ -38,7 +38,7 @@ test "file links: an escaped link to a picture opens it in the preview" {
 test "a table's cells of the message's pictures (MBUI_FIXTURE=chat-table-images): the pictures, not their names" {
   let t = chat_tester("chat-table-images")
   t.frame()
-  assert_eq(table_images_answer.view(start_offset=7, end_offset=11).to_string(), "手机网页")
+  assert_eq(table_images_answer.exact_view(start=7, end=11).to_owned(), "手机网页")
   assert_true(t.find("手机网页") is Some(_))
   assert_true(t.find("phone.png") is None)
   // the picture itself, opening in the preview

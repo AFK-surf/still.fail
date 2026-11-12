@@ -22,17 +22,6 @@ let chat_bar_h : Double = bar_h
 let chat_title_line : Double = 16.0 * 1.4
 
 ///|
-let composer_room : Double = 110.0
-
-///|
-/// The list's gap between messages (web mobile --list-gap), and under the viewer's message sent soon after the one
-/// before it (`joined`).
-let gap : Double = 20.0
-
-///|
-let joined_gap : Double = 4.0
-
-///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
 /// row: 14 under the bar.
 fn bar_foot() -> Double {
@@ -165,17 +154,12 @@ fn list_key(r : ChatRef) -> String {
 }
 
 ///|
-/// How far a row new to the list comes up as it fades in (Chat.kt rise: 14, over its turn's 320 ms, the standard
-/// curve).
-let rise_dy : Double = 14.0
-
-///|
 /// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at
 /// its peak (screenshots of it).
 pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
   @sfbase.history_push()
   flash_held.val = held
-  go_to(r, seq)
+  go_to(r, seq, keep_place=false)
   app.nav.push(Chat(r))
 }
 
@@ -187,7 +171,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   let kept = match saved { Some(view) => Some(view); None => @sfbase.chat_kept_from(src, r) }
   match (kept, readings.get(k)) {
     (Some(v), Some(rd)) if !src.read_only => {
-      (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
+      (src.call)("client.focus", { "left": focus_chat(r, v, None) }, @sfbase.answer_unread)
       match v.thread {
         Some(_) if rd.placed => tell_place(src, r, v, rd, exact=true)
         _ => ()
@@ -204,6 +188,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   (src.leave)("chat", chat_params(r), @sfbase.TopicLeave::Legacy)
   (src.leave)("chatJobs", chat_params(r), @sfbase.TopicLeave::Legacy)
   (src.leave)("chatJobs", chat_jobs_summary_params(r), @sfbase.TopicLeave::Legacy)
+  (src.leave)("chatFeedback", chat_params(r), @sfbase.TopicLeave::Legacy)
   // what its agents' lines and its jobs' sheets read: their work as it goes, their logs as they grow
   @sfbase.let_go(src, @sfbase.chat_scope(r.station, r.session))
   @sfbase.let_go(src, @sfbase.jobs_scope(r.station))
@@ -220,11 +205,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
 
 ///|
 /// Which of the chat's asks the bell went to last, by chat (it goes to the next one each time, round again).
-let ask_turns : Map[String, Int] = {}
-
-///|
-/// How long the bell rises over the way to the end as that comes, and goes back down.
-let ask_lift_ms : Double = 200.0
+let ask_turns : Map[String, Int] = Map([])
 
 ///|
 let bar_drop_people : Int = 1
@@ -296,6 +277,8 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
+  // (its "…" is its chat's whole row's: held while its page is open, asked as it opens, @sfpages.chat_menu_of)
+  @sfbase.chat_whole_held(src, r) |> ignore
   let stations = station_marks(src, w.id)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().snapshot()
@@ -313,7 +296,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   let archive_w = @motion.anim(c, archive_key + "/w", if archive { 1.0 } else { 0.0 }, global=true)
   archive_w.follow(c, if archive { 1.0 } else { 0.0 }, archive_tween)
   let archive_share = if archive_look is None { 0.0 } else { archive_w.get(c) }
-  let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
+  let people = if v.people.length() > 5 { v.people[:5].to_owned() } else { v.people }
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
@@ -504,13 +487,6 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 }
 
 ///|
-/// At work, as a row says it: yellow spokes 10 across stepping round in 12, no disc round them (it showed as
-/// a dark rim).
-fn at_work_mark(c : @ui.Ctx) -> Unit {
-  @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
-}
-
-///|
 /// An agent's mark (small, as a list's): its maker's mark on a soft tile, its state on the corner.
 fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
   let t = @sf.theme()
@@ -606,7 +582,7 @@ fn mark_ground() -> (Int64, Double) {
 
 ///|
 /// Its corner: 6.
-fn mark_corner(side : Double) -> Double {
+fn mark_corner(_side : Double) -> Double {
   6.0
 }
 

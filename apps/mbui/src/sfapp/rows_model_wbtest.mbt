@@ -36,7 +36,7 @@ test "a row's agents by their mark: one maker's models once, a runtime with no m
 ///|
 test "the list's filter as the prefs keep it where none is chosen here: listFilter by workspace, else onlyWatching, else onlyMine, else all; one unknown is all" {
   let with_prefs = fn(prefs : Json) -> Source {
-    new_run()
+    fresh_app()
     let base = fixture("home")
     {
       ..base,
@@ -64,20 +64,4 @@ test "what a file added to a draft is, by its name's ending, case aside, for the
   for c in cases {
     assert_eq(@sfbase.file_type(c.0), c.1, msg=c.0)
   }
-}
-
-///|
-test "a chat list's turns asked in the same moment go in the order asked, those going after the others (an agent's line) last; one asked sooner first" {
-  let tu = @sfbase.turns_of("test/turn-order")
-  tu.asks.clear()
-  tu.asks.push({ what: @sfbase.TurnFor::Admit("line"), ms: 300.0, after: true, at: 100.0, n: 1 })
-  tu.asks.push({ what: @sfbase.TurnFor::Admit("b"), ms: 300.0, after: false, at: 100.0, n: 3 })
-  tu.asks.push({ what: @sfbase.TurnFor::Admit("a"), ms: 300.0, after: false, at: 100.0, n: 2 })
-  tu.asks.push({ what: @sfbase.TurnFor::Admit("early"), ms: 300.0, after: true, at: 50.0, n: 4 })
-  let order : Array[@sfbase.TurnFor] = []
-  while tu.next_ask() is Some(i) {
-    order.push(tu.asks[i].what)
-    tu.asks.remove(i) |> ignore
-  }
-  assert_true(order == [@sfbase.TurnFor::Admit("early"), @sfbase.TurnFor::Admit("a"), @sfbase.TurnFor::Admit("b"), @sfbase.TurnFor::Admit("line")], msg="\{order}")
 }

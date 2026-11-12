@@ -7,35 +7,35 @@
 
 ///|
 test "94-station-file-sent" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("station-file-sent"), seed~)
     f.tap("端到端测试")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("=willow")
     f.see("发消息")
     f.tap("icon:plus")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("Station 文件")
     // the ＋ sheet gone, the picker's up (the library's panel: sfdesk's station_pick.mbt)
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("=e2e-082940")
     f.see("小说-e2e.txt")
     f.tap("小说-e2e.txt")
     f.see("添加 1 个")
     f.tap("添加 1 个")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.gone("所有位置")
     f.see("willow · 路径")
-    // its card pressed: how it goes, the presenters' sheet (the composer's composer_ref.mbt)
+    // its card pressed: how it goes, the presenters' sheet of nodes (the composer's composer_ref.mbt), risen
     f.tap("=小说-e2e")
     f.t.draw()
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("发送方式")
     f.tap("=文件")
     f.see("此对话默认发送文件")
     // back closes it
     f.back()
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.gone("发送方式")
     f.see("KB")
     f.tap("发消息")

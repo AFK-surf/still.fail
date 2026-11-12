@@ -100,7 +100,7 @@ test "old natural: as tall as what it holds the first frame, and as it grows, na
   let at = @signals.signal((0.0, 0.0))
   let alpha = @signals.signal(1.0)
   let built = Ref(0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = natural_tester(400.0, 800.0, rows, words, width, at, alpha, built, ids)
   let first = natural_said(t, ids)
   rows.set(5)
@@ -117,7 +117,7 @@ test "old natural: as tall as what it holds the first frame, and as it grows, na
   assert_eq(
     (ok(first), ok(grown), grown.0 > first.0, ok(narrowed), narrowed.0 > grown.0, ok(shrunk), shrunk.0 < narrowed.0),
     (true, true, true, true, true, true, true),
-    msg="first \{first} grown \{grown} narrowed \{narrowed} shrunk \{shrunk}",
+    msg="first \{Repr(first)} grown \{Repr(grown)} narrowed \{Repr(narrowed)} shrunk \{Repr(shrunk)}",
   )
 }
 
@@ -126,7 +126,7 @@ test "old natural: held by a short window and grown, the same as opened in the t
   let mk = fn(h : Double) {
     let rows = @signals.signal(12)
     let built = Ref(0)
-    let ids : Map[String, @view.View] = {}
+    let ids : Map[String, @view.View] = Map([])
     let t = natural_tester(400.0, h, rows, @signals.signal("词"), @signals.signal(240.0), @signals.signal((0.0, 0.0)), @signals.signal(1.0), built, ids)
     (t, ids)
   }
@@ -138,7 +138,7 @@ test "old natural: held by a short window and grown, the same as opened in the t
   let (_, tids) = mk(800.0)
   let tall = (laid_of(tids["old"]), laid_of(tids["marker"]))
   // (its node cut to the window less 100 while short; tall, as tall as what it holds: 12 rows of 30 and a line of words)
-  assert_eq((held.3 == 200.0, grown, tall.0.3 == natural_content_h(), tall.0.3 > 360.0), (true, tall, true, true), msg="held \{held} tall \{tall}")
+  assert_eq((held.3 == 200.0, grown, tall.0.3 == natural_content_h(), tall.0.3 > 360.0), (true, tall, true, true), msg="held \{Repr(held)} tall \{Repr(tall)}")
 }
 
 ///|
@@ -147,7 +147,7 @@ test "old natural: moved, faded: painted alone, nothing built nor laid out, its 
   let at = @signals.signal((0.0, 0.0))
   let alpha = @signals.signal(1.0)
   let built = Ref(0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = natural_tester(400.0, 800.0, rows, @signals.signal("词"), @signals.signal(240.0), at, alpha, built, ids)
   let h = laid_of(ids["old"]).3
   // (laid out the same twice: what comes after it may be painted alone, as island_moved_wbtest has it)
@@ -191,7 +191,7 @@ test "old natural: the one old view, as tall as the window, then shorter: smalle
 ///|
 test "old natural: scaled: laid out as tall as it was, what comes after where it was, drawn at that scale, painted alone" {
   let s = @signals.signal(1.0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = Tester::new(fn(_c) {  }, w=400.0, h=800.0)
   set_view_app(fn(root) {
     root.box(fn(col) {
@@ -232,7 +232,7 @@ test "old natural: scaled: laid out as tall as it was, what comes after where it
   assert_eq(
     (before.3, laid_of(ids["old"]), laid_of(ids["marker"]), whole.length(), block(), alone),
     (120.0, before, marker, 1, half, true),
-    msg="whole \{whole}",
+    msg="whole \{Repr(whole)}",
   )
 }
 
@@ -244,7 +244,7 @@ let natural_mark : Int64 = 0x33AA55FFL
 test "old natural: holding a row that grows in its column, a box in it scrolling past 100 (Ctx::capped past_most, a panel's column of its own): as tall as that box shows, 100, whatever the window, from the first frame" {
   let out = []
   for h in [800.0, 300.0] {
-    let ids : Map[String, @view.View] = {}
+    let ids : Map[String, @view.View] = Map([])
     let t = Tester::new(fn(_c) {  }, w=400.0, h~)
     set_view_app(fn(root) {
       root.box(fn(col) {
@@ -396,7 +396,7 @@ test "old fits: as wide as what it holds and as tall from the first frame; wider
   let words = @signals.signal("词词词")
   let at = @signals.signal((0.0, 0.0))
   let built = Ref(0)
-  let ids : Map[String, @view.View] = {}
+  let ids : Map[String, @view.View] = Map([])
   let t = fits_tester(200.0, words, at, built, ids)
   let first = fits_said(ids)
   words.set("词词词词词词")
@@ -431,6 +431,6 @@ test "old fits: as wide as what it holds and as tall from the first frame; wider
       moved,
     ),
     (true, true, true, true, true, true, true, true, (1, 200.0)),
-    msg="built \{built.val} first \{first} grown \{grown} shrunk \{shrunk} past \{past}",
+    msg="built \{built.val} first \{Repr(first)} grown \{Repr(grown)} shrunk \{Repr(shrunk)} past \{Repr(past)}",
   )
 }

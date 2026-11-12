@@ -24,7 +24,8 @@
 //        Windows' and Linux', which the mbui app's jobs only fetch) in neither the store nor the release, one a line
 //   node scripts/native.ts ensure [--windows] [--publish] [--outbox DIR] [part[:target]…]
 //        CI: each (default: all) in the cache, built when not prebuilt; --publish uploads what the release lacks
-//        (gh, main only); --outbox copies the artifacts the release lacks there (a branch's run artifact)
+//        (gh, main only), then prunes those parts and targets to the newest 20; --outbox copies the artifacts the
+//        release lacks there (a branch's run artifact)
 //        The default leaves out what only Windows builds (MSVC's: the mbui app's shell and engine); --windows is those.
 //        Never what only Linux builds (the mbui app's Linux shell and engine: the prebuild workflow's alone).
 //   node scripts/native.ts prune [N]                   the release keeps the newest N (20) of each part and target
@@ -43,7 +44,7 @@
 // STILLFAIL_NATIVE=build never downloads (builds what the cache lacks); STILLFAIL_NATIVE=offline neither downloads nor
 // builds. Builds go to $CARGO_TARGET_DIR/native/<part> when it is set, else the crate's own target/ (a worktree's own:
 // a vendored crate built from two checkouts in one target confuses rustc, docs/operations.md).
-import { execFileSync, spawnSync, type SpawnSyncOptions } from "node:child_process";
+import { execFileSync, spawn, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { Resolver } from "node:dns/promises";
 import {
@@ -348,7 +349,7 @@ const PARTS: Record<string, Part> = {
     env: "STILLFAIL_MB_READER",
     rust: false,
     inputs: ["station/mb/src", "station/mb/moon.mod", "station/mb/moon.work", "station/mb/build.sh",
-      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/moon.mod",
+      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/src/halt", "apps/mbui/mbui/moon.mod",
       ":(exclude,glob)**/*_test.mbt", ":(exclude,glob)**/*_wbtest.mbt", ":(exclude,glob)**/pkg.generated.mbti"],
     recipe: (t) => ({ moon: "native release", shell: t === "darwin-arm64" ? key("shell-apple", t) : key("shell-station", t), mac: key("shell-apple", "darwin-arm64") }),
     build(t, out) {
@@ -1215,6 +1216,35 @@ function upload(file: string): void {
     }
   }
 }
+// The release keeps the newest KEEP of each part and target (`only`: of those groups, `part-target`). GitHub takes at
+// most 1000 assets on a release; every publisher prunes what it published, so none grows past KEEP: mbui-figure's film
+// and figure, published on every change to mbui, reached 150 each while only pipeline's natives job pruned, and the
+// release's 1000 failed main's mbui-media-runtime (42734298404, 2026-11-10).
+const KEEP = 20;
+function prune(keep: number, only?: Set<string>): void {
+  // (a list GitHub's answer did not get through for prunes nothing, left for the next prune as one DELETE dropped is
+  // below: an EOF on it failed main's mbui-media-runtime film with both its programs already published, 89ddb06c
+  // 42961511598, 2026-11-11)
+  const listed = gh(["api", "--paginate", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", "[.assets[] | {id, name, created_at}]"], { allowFail: true });
+  if (!listed) {
+    console.log(`the release's assets not listed: the next prune prunes them`);
+    return;
+  }
+  const assets = JSON.parse(listed) as { id: number; name: string; created_at: string }[];
+  const groups = new Map<string, typeof assets>();
+  for (const a of assets) {
+    const g = a.name.replace(/-[0-9a-f]{24}\.tar\.gz$/, "");
+    if (!only || only.has(g)) groups.set(g, [...(groups.get(g) ?? []), a]);
+  }
+  for (const [, list] of groups) {
+    list.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    // (one GitHub dropped is left for the next prune: an EOF on one DELETE failed main's natives job, 6484574c, 2026-11-04)
+    for (const a of list.slice(keep)) {
+      const done = spawnSync("gh", ["api", "-X", "DELETE", `repos/${REPO}/releases/assets/${a.id}`], { encoding: "utf8" });
+      console.log(done.status === 0 ? `deleted ${a.name}` : `${a.name} not deleted (${done.stderr.trim()}): the next prune deletes it`);
+    }
+  }
+}
 async function published(): Promise<Set<string> | null> {
   // (one request, by fetch with the job's token where there is one: the release's own answer lists every asset, 180 of
   // them as they are kept. Through gh it was 21-35 s of Windows mbui runs with nothing missing, its first call in the job
@@ -1371,10 +1401,32 @@ async function main(argv: string[]) {
           throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once`);
         }
       }
+      if (outbox) mkdirSync(outbox, { recursive: true });
+      // Those not here yet, each in a process of its own, three side by side: one after another a branch that changed
+      // the shell built shell-station and the reader for each target in turn, its natives job stopped at its 5 minutes
+      // (opus-screen-audio 43149224744; the reader's three alone 217 s, mbui-halt-flush-prototype 43154389365,
+      // 2026-11-12). What two of them share (shell-apple, a reader's moon build) one takes and the other waits for
+      // (`get`'s lock, moon's).
+      const todo = wanted.filter(([p, t]) => !complete(cached(p, t, key(p, t)), p, t));
+      if (todo.length > 1 && !process.env.STILLFAIL_NATIVE_ONE) {
+        const flags = [...(publish ? ["--publish"] : []), ...(outbox ? ["--outbox", outbox] : []), ...(windows ? ["--windows"] : [])];
+        const one = (p: string, t: Target) => new Promise<number>((done) => {
+          const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "ensure", ...flags, `${p}:${t}`],
+            { stdio: ["ignore", "inherit", "inherit"], env: { ...process.env, STILLFAIL_NATIVE_ONE: "1" } });
+          child.on("exit", (code) => done(code ?? 1));
+        });
+        const queue = [...wanted];
+        const failed: string[] = [];
+        await Promise.all([0, 1, 2].map(async () => {
+          for (let next = queue.shift(); next; next = queue.shift()) if (await one(...next)) failed.push(next.join(":"));
+        }));
+        if (failed.length) throw new Error(`not got: ${failed.join(" ")}`);
+        return;
+      }
       const work = join(tmpdir(), `stillfail-native-${process.pid}`);
       mkdirSync(work, { recursive: true });
-      if (outbox) mkdirSync(outbox, { recursive: true });
       const summary: string[] = [];
+      const publishedNow = new Set<string>();
       for (const [p, t] of wanted) {
         const k = key(p, t);
         const name = asset(p, t, k);
@@ -1388,6 +1440,7 @@ async function main(argv: string[]) {
         if (!there && publish) {
           const file = pack(dir, name, work);
           upload(file);
+          publishedNow.add(`${p}-${t}`);
           note = " → published";
         } else if (!there && outbox) {
           pack(dir, name, outbox);
@@ -1397,6 +1450,7 @@ async function main(argv: string[]) {
       }
       rmSync(work, { recursive: true, force: true });
       for (const line of summary) console.log(line);
+      if (publishedNow.size) prune(KEEP, publishedNow);
       return;
     }
     case "prebuild": {
@@ -1419,7 +1473,10 @@ async function main(argv: string[]) {
         any = true;
       }
       try {
-        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) upload(join(work, "natives", f));
+        if (any && toRelease) {
+          for (const f of readdirSync(join(work, "natives"))) upload(join(work, "natives", f));
+          prune(KEEP, new Set(wanted.map(([p, t]) => `${p}-${t}`)));
+        }
         else if (any) run("sh", [join(ROOT, "scripts/release-put.sh"), "--files", work], { stdio: "inherit" });
       } finally { rmSync(work, { recursive: true, force: true }); }
       return;
@@ -1445,21 +1502,7 @@ async function main(argv: string[]) {
       return;
     }
     case "prune": {
-      const keep = Number(args[0] ?? 20);
-      const assets = JSON.parse(gh(["api", "--paginate", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", "[.assets[] | {id, name, created_at}]"]) || "[]") as { id: number; name: string; created_at: string }[];
-      const groups = new Map<string, typeof assets>();
-      for (const a of assets) {
-        const g = a.name.replace(/-[0-9a-f]{24}\.tar\.gz$/, "");
-        groups.set(g, [...(groups.get(g) ?? []), a]);
-      }
-      for (const [, list] of groups) {
-        list.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-        // (one GitHub dropped is left for the next prune: an EOF on one DELETE failed main's natives job, 6484574c, 2026-11-04)
-        for (const a of list.slice(keep)) {
-          const done = spawnSync("gh", ["api", "-X", "DELETE", `repos/${REPO}/releases/assets/${a.id}`], { encoding: "utf8" });
-          console.log(done.status === 0 ? `deleted ${a.name}` : `${a.name} not deleted (${done.stderr.trim()}): the next prune deletes it`);
-        }
-      }
+      prune(Number(args[0] ?? KEEP));
       return;
     }
     default:

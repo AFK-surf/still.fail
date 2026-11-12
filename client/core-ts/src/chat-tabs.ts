@@ -44,6 +44,23 @@ function isScreen(key: string): boolean {
   }
 }
 
+/// A file opened beside the chat in the app's viewer (`view:["<of>","<station>","<in>","<path>","<name>",<size>]`, a
+/// drive's file `<mtime>` after it): which file it is (`chat` one sent with a message, `named` one a message names by
+/// its path, `drive` a drive's), its station, the session that keeps it (a drive's: its root), its path, its name, and
+/// its size as it was opened: all the app needs to show it again. The same file is the same key.
+function isView(key: string): boolean {
+  if (!key.startsWith("view:")) return false;
+  try {
+    const v: unknown = JSON.parse(key.slice("view:".length));
+    if (!Array.isArray(v) || v.length !== (v[0] === "drive" ? 7 : 6)) return false;
+    const [of, station, at, path, name, ...numbers] = v as unknown[];
+    return (of === "chat" || of === "named" || of === "drive") && typeof station === "string" && station !== "" && typeof at === "string" &&
+      typeof path === "string" && path !== "" && typeof name === "string" && numbers.every((n) => typeof n === "number");
+  } catch {
+    return false;
+  }
+}
+
 /** Station pages opened beside a chat, keyed by the station rather than its current folder: its files, its page, this
  *  device's adb lent to its agents (`adb:`, the app's). */
 function isStationPage(key: string): boolean {
@@ -74,7 +91,7 @@ function chatHas(agents: readonly unknown[]): { histories: Set<string>; jobs: Se
 }
 
 /// The tabs a chat shows: those kept (`kept`, prefs `chatTabs`) that it has — an agent's history, a service of one of
-/// its agents' (`service:<job>`), 任务, 文件, 往来, a visualization, a station's screen — all of them while its agents are not known yet (the
+/// its agents' (`service:<job>`), 任务, 文件, 往来, a visualization, a file in the viewer, a station's screen — all of them while its agents are not known yet (the
 /// panel holds its place); the one in front: the one kept so, else the first. None kept: none, but where its agent has
 /// no chat yet (`noChat`, by its `session`) its history, opened by itself (`auto`: a client where the panel would lie
 /// over the chat shows none).
@@ -83,7 +100,7 @@ export function tabsOf(kept: unknown, agents: readonly unknown[], noChat: boolea
   const auto = chosen === null && noChat && session !== null;
   const tabs = chosen ?? (auto && session !== null ? [session] : []);
   const has = chatHas(agents);
-  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || key === THINGS || isFile(key) || isScreen(key) || isStationPage(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
+  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || key === THINGS || isFile(key) || isView(key) || isScreen(key) || isStationPage(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
   const open = agents.length ? tabs.filter(known) : tabs;
   const active = isObject(kept) && typeof kept.active === "string" ? kept.active : null;
   const shown = active !== null && open.includes(active) ? active : open[0];

@@ -29,7 +29,7 @@ priv struct ProfileOpen {
 ///|
 /// The fields of a profile's models' panel, by their key (made as first drawn).
 // kept across runs: made as a panel first shows one; profile_page_reset empties it
-let profile_fields : Map[String, @ui.Field] = {}
+let profile_fields : Map[String, @ui.Field] = Map([])
 
 ///|
 fn profile_page_reset() -> Unit {
@@ -69,9 +69,17 @@ pub fn profile_node(
 ) -> Unit {
   let s = fn() { @settings.station_of(core, here(), address) }
   let o = fn() { field(s(), "overview") }
-  // (0 read the first time, 1 its profile there, 2 none of that id)
+  // (shown in a pane by a press that asked what it reads (sfbase's show_answered): what it asked let go once this first
+  // build has read it)
+  @sfbase.shown_read(@sfbase.profile_shown_at(address, id))
+  // (0 read the first time, 1 its profile there, 2 none of that id; the account it is, its own ask, answered too: the
+  // page opens whole, its stations' block with it. Opened from a list, it opens once both are answered and never shows
+  // this: a link straight to it may)
   let found = fn() {
-    if !(o() is Some(Object(_))) {
+    // (both read every time, so both are asked at once whichever comes first; its press waits for both before it
+    // opens it: sfbase's account_open.mbt)
+    let account = @settings.profile_read(core, here(), address, id).value
+    if !(o() is Some(Object(_))) || account is None {
       0
     } else if items(o(), "profiles").iter().any(fn(p) { text(Some(p), "id") == id }) {
       1
@@ -148,17 +156,8 @@ fn profile_found_node(
       None => None
     }
   }
-  // its row of the workspace's list: the account it is, on whichever stations have it
-  let entry = fn() -> Json? {
-    let list = items((core.topic)("profiles", { "scope": str(here().workspace) }).get().value, "items")
-    match
-      list.search_by(fn(e) {
-        items(Some(e), "members").iter().any(fn(m) { text(Some(m), "station") == address && text(Some(m), "profileId") == id })
-      }) {
-      Some(i) => Some(list[i])
-      None => None
-    }
-  }
+  // the account it is, on whichever stations have it: its own topic (`profile`), never the workspace's list
+  let entry = fn() -> Json? { @settings.profile_of(core, here(), address, id) }
   let open = profile_open()
   @sf.page_node(
     v,
@@ -176,7 +175,7 @@ fn profile_found_node(
       ["sign-in", "trouble", "quota", "usage", "used-by", "stations", "models", "run", "share", "workspaces", "account", "env"]
     },
     fn(b, key) {
-      @motion.reveal_node(b, fn() { profile_keys(core, here, o, p, entry).contains(key) }, lazy=true, fn(r) {
+      @motion.reveal_node(b, fn() { profile_keys(core, here, o, p, entry).contains(key) }, deferred=true, fn(r) {
         profile_block_node(r, core, here, address, id, s, o, p, entry, open, stint, tips, key)
       })
       |> ignore
@@ -189,6 +188,13 @@ fn profile_found_node(
 /// Whether the profile `p` is another station's copy of it (shared to this one).
 fn profile_copy(p : Json?) -> Bool {
   text(field(p, "share"), "role") == "user"
+}
+
+///|
+/// Whether a copy of another station's profile is one its station pauses (`share.pausable`, said since 2026-11-11; a
+/// station from before refuses `enabled` on a copy).
+fn profile_pausable(p : Json?) -> Bool {
+  profile_copy(p) && flag(field(p, "share"), "pausable") && has(p, "enabled")
 }
 
 ///|
@@ -439,8 +445,7 @@ fn runtime_tags_node(t : @view.View, p : () -> Json?) -> Unit {
   t.box(fn(r) {
     @sf.style_node(r, fn() { pf_tags })
     r.each(tags, fn(x) { x.0 }, fn(tag, x) {
-      @sf.style_node(tag, fn() { pf_tag })
-      @sf.words_node(tag, fn() { x.get().1 }, fn() { pf_tag_words }) |> ignore
+      @sf.tag_node(tag, fn() { x.get().1 })
     })
   })
   |> ignore
@@ -463,10 +468,10 @@ fn runtime_tag(r : String) -> String {
 }
 
 ///|
-/// Its ⋯ in node `a` (but for a copy of another station's): pressed, its menu beside it (profile_menu), lined up at its
-/// end.
+/// Its ⋯ in node `a` (a copy of another station's: only where its station says it pauses it, `share.pausable`; one from
+/// before refuses that): pressed, its menu beside it (profile_menu), lined up at its end.
 fn profile_more_node(a : @view.View, core : Core, here : () -> Here, address : String, p : () -> Json?) -> Unit {
-  a.show(fn() { !profile_copy(p()) }, fn(m) {
+  a.show(fn() { !profile_copy(p()) || profile_pausable(p()) }, fn(m) {
     // (beside itself, as it is pressed)
     @sf.icon_action_opens_node(m, "more", fn() { @sf.t("common.more") }, fn(at) {
       let (x, y, w, h) = at.placed_window_now()
@@ -478,13 +483,16 @@ fn profile_more_node(a : @view.View, core : Core, here : () -> Here, address : S
 
 ///|
 /// Its menu, beside what opened it (`from`): renaming it (but the machine's own), turning a key's off or on, deleting
-/// it (the machine's own login: stopping it, the login stays the machine's), asked first.
+/// it (the machine's own login: stopping it, the login stays the machine's), asked first. A copy of another station's
+/// is edited there: here only whether this station uses it (停用, 启用: `profile.put` `enabled`, kept by its station as
+/// the copy is refreshed).
 fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @sf.Beside) -> Unit {
   let id = text(p, "id")
   let machine = flag(p, "machine")
+  let copy = profile_copy(p)
   let access = field(p, "access")
   let keyed = ["api-provider", "anthropic-api", "opencode-go"].contains(text(access, "kind")) && !flag(access, "login")
-  let can_disable = keyed && has(p, "enabled")
+  let can_disable = (keyed && has(p, "enabled")) || profile_pausable(p)
   let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
   let remove = fn() {
     let (title, words) = if machine {
@@ -509,7 +517,7 @@ fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @s
     })
   }
   let items : Array[@sf.MenuItem?] = []
-  if !machine {
+  if !machine && !copy {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
   }
   if can_disable {
@@ -526,13 +534,16 @@ fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @s
     }
     items.push(Some(@sf.menu_item_of(label, icon="power", disabled=is_doing(core, ["profile.put"], [("station", address), ("id", id)]), fn() {
       if enabled {
-        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), @sf.t("web-pages.profiles.disableKeyBody"), label, danger=true, change)
+        let words = @sf.t(if copy { "web-pages.profiles.disableCopyBody" } else { "web-pages.profiles.disableKeyBody" })
+        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), words, label, danger=true, change)
       } else {
         change()
       }
     })))
   }
-  items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
+  if !copy {
+    items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
+  }
   @sf.menu(items, from~, along=End)
 }
 
@@ -962,7 +973,7 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
         })
         g.show(fn() { what() == 2 }, fn(x) {
           @sf.block_node(x, fn(bl) {
-            @sf.dials_node(bl, fn() { quota_dials_of(windows()) })
+            @sf.dials_node(bl, fn() { quota_dials_of(windows()) }, lines=2)
             bl.show(fn() { text(field(field(quota(), "time"), "checkedAt"), "ago") != "" }, fn(w) {
               @sf.words_node(w, fn() {
                 @sf.t("android-settings.quota.checkedAt", args=[("ago", text(field(field(quota(), "time"), "checkedAt"), "ago"))])
@@ -974,26 +985,41 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
         g.show(fn() { credits() != "" }, fn(x) {
           @sf.link_row_node(x, fn() { @sf.t("android-settings.quota.credits") }, fn() {  }, value=credits, goes=false)
         })
-        g.show(fn() { has(quota(), "resetCount") }, fn(x) {
+        // Each kind of reset it holds, a row each: how many are left at its end, where they are seen at once (the user,
+        // 2026-11-10), what one gives back and till when under its name; the row pressed asks first, then uses one.
+        g.each(fn() { items(quota(), "resets") }, fn(r) { text(Some(r), "kind") }, fn(x, rs) {
+          let rv = fn() { Some(rs.get()) }
           let busy = fn() { is_doing(core, ["profile.resetQuota"], on) }
-          let left = fn() { count(quota(), "resetCount") }
-          x.pick(fn() { (left() > 0, left() > 0 && !busy()) }, fn(r, k) {
+          let usable = fn() { count(rv(), "left") > 0 && flag(rv(), "usable") }
+          // (lit only when one can be used now: one usable only at a limit says why under it, unpressed)
+          x.pick(fn() { (usable(), usable() && !busy()) }, fn(r, k) {
             let (lit, goes) = k
             @sf.link_row_node(
               r,
-              fn() { @sf.t("android-settings.quota.resets") },
+              fn() { text(rv(), "title") },
               fn() {
+                let one = @signals.untracked(rv)
+                let name = text(@signals.untracked(p), "name")
+                let body = match opt_text(one, "refills") {
+                  Some(refills) =>
+                    @sf.t("web-pages.profiles.resetKindBody", args=[("name", name), ("kind", text(one, "title")), ("refills", refills)])
+                  None => @sf.t("web-pages.profiles.resetBody", args=[("name", name), ("n", count(one, "left").to_string())])
+                }
+                let asked = match opt_text(one, "id") {
+                  Some(kind) => obj([("station", str(address)), ("id", str(id)), ("reset", str(kind))])
+                  None => params()
+                }
                 confirm(
                   @sf.t("web-pages.profiles.resetConfirm"),
-                  @sf.t("web-pages.profiles.resetBody", args=[("name", text(@signals.untracked(p), "name")), ("n", @signals.untracked(left).to_string())]),
+                  body,
                   @sf.t("web-pages.profiles.resetAction"),
                   fn() {
-                    @settings.act(core, @sf.t("web-pages.profiles.resetAction"), "profile.resetQuota", params(), done=@sf.t("web-pages.profiles.quotaReset"))
+                    @settings.act(core, @sf.t("web-pages.profiles.resetAction"), "profile.resetQuota", asked, done=@sf.t("web-pages.profiles.quotaReset"))
                   },
                 )
               },
-              note=fn() { text(quota(), "resetText") },
-              value=fn() { @sf.t("web-pages.profiles.reset") },
+              note=fn() { reset_note(rv()) },
+              value=fn() { text(rv(), "leftText") },
               value_lit=lit,
               chevron=false,
               goes~,
@@ -1004,6 +1030,12 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
       })
     },
   )
+}
+
+///|
+/// Under a kind of reset's name: what one gives back, and when they end or why none can be used now.
+fn reset_note(r : Json?) -> String {
+  [opt_text(r, "refills").unwrap_or(""), text(r, "text")].filter(fn(w) { w != "" }).join(" · ")
 }
 
 ///|
@@ -1035,7 +1067,7 @@ fn profile_usage_node(
     }
   }
   // (read after the page is made: its section opens on its way, pushing what is under it down as it goes, not at once)
-  @motion.reveal_node(b, fn() { usage() is Some(_) }, lazy=true, fn(u) {
+  @motion.reveal_node(b, fn() { usage() is Some(_) }, deferred=true, fn(u) {
     @sf.section_node(
       u,
       fn() {
@@ -1286,7 +1318,7 @@ fn profile_share_node(
     let all = stations()
     match all.search_by(fn(x) { text(Some(x), "id") == sid }) {
       Some(i) => text(Some(all[i]), "name")
-      None => sid.view(end_offset=@cmp.minimum(8, sid.length())).to_string()
+      None => sid.clamped_view(end=@cmp.minimum(8, sid.length())).to_owned()
     }
   }
   let subscription = fn() { text(field(p(), "access"), "kind") == "subscription" }
@@ -1475,7 +1507,7 @@ fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit
 /// Which stations may use a share (PickStations), ticked in a panel: every one (those to come too), or those ticked;
 /// the one that has it always.
 fn pick_stations(core : Core, address : String, id : String, stations : Array[Json], own : String, allowed : Array[String]?) -> Unit {
-  let ticked : Map[String, Bool] = {}
+  let ticked : Map[String, Bool] = Map([])
   for x in stations {
     let xid = text(Some(x), "id")
     ticked[xid] = match allowed {
@@ -1821,7 +1853,7 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
     @sf.button_node(f, fn() { @sf.t("common.save") }, fn() {
       // what changed: a name gone or renamed null, a secret left blank kept as it is
       let now = rows.untracked()
-      let patch : Map[String, Json] = {}
+      let patch : Map[String, Json] = Map([])
       let kept = now.map(fn(r) { r.key.text().trim(chars=" \t\n").to_owned() })
       for e in env {
         if !kept.contains(text(Some(e), "key")) {
@@ -1994,17 +2026,9 @@ let pf_check_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color
 let pf_state : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
-/// The runtimes' tags (runtimeTags: 4 apart, 8 after the name; a tag 18 high, 5 in, round 5, the hover's ground).
+/// The runtimes' tags (runtimeTags: 4 apart, 8 after the name; each the library's tag_node).
 // kept across runs: a value (no field of it changes)
 let pf_tags : @ui.Style = @ui.css("row gap=S1 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter radius=Base bg=Hover")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

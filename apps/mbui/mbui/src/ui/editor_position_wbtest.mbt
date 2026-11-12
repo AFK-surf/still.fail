@@ -55,7 +55,7 @@ test "a field in a list row keeps its text origin when the pointer rebuilds the 
   }, w=600.0, h=400.0, platform=3)
   t.set_rows_on_pixels(true)
   for (x, y) in [(300.0, 250.0), (590.0, 250.0), (300.0, 260.0), (590.0, 260.0)] {
-    t.move(x, y)
+    t.move_to(x, y)
     let c = g()
     let mut found = false
     for i in 0..<c.count {

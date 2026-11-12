@@ -3,6 +3,7 @@
 ///|
 /// How many of the last frame's list rows were kept as their nodes (kept_nodes.mbt), not built.
 pub fn Tester::rows_kept(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   nodes_run.kept_at.iter().filter(fn(k) { k.1 >= 0 }).count()
 }
@@ -91,7 +92,8 @@ fn clip_into(k : Int, c : FixedArray[Double]) -> Unit {
   }
   let mut most = dmax(own, clip_cut_least)
   let mut from = if own > clip_cut_least { -2 } else { -1 }
-  for o in if beyond && !apart { [k, k + 12] } else { [k] } {
+  let rows_at = if beyond && !apart { [k, k + 12] } else { [k] }
+  for o in rows_at {
     let d = clip_cut_depth(s, o, x0, y0, x1, y1, r, sm)
     if d > most {
       most = d

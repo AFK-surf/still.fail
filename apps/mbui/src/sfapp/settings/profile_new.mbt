@@ -60,7 +60,7 @@ fn new_profile_left(core : Core, station : String) -> Unit {
     Some(n) if !n.dropped => {
       n.dropped = true
       drop_login(core, station, n)
-      (core.call)("profile.flow.drop", obj([("station", str(station)), ("form", str(n.form))]), fn(_) {  })
+      (core.call)("profile.flow.drop", obj([("station", str(station)), ("form", str(n.form))]), answer_unread)
     }
     _ => ()
   }
@@ -75,7 +75,7 @@ pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
       None => false
     }
     if !made {
-      (core.call)("login.drop", obj([("station", str(station)), ("id", str(n.login.get()))]), fn(_) {  })
+      (core.call)("login.drop", obj([("station", str(station)), ("id", str(n.login.get()))]), answer_unread)
     }
     n.login.set("")
   }
@@ -83,15 +83,10 @@ pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
 }
 
 ///|
-/// A sign-in under way on a station, by its id (its overview's `logins`).
+/// A sign-in under way on a station, by its id (its overview's `logins`, that part alone).
 pub fn pending_login(core : Core, station : String, id : String) -> Json? {
-  let all = (core.topic)("stations", { "scope": str(workspace_of(station)) }).get().value
-  match all {
-    Some(Array(a)) =>
-      match a.iter().find_first(fn(s) { text(Some(s), "station") == station }) {
-        Some(s) => items(field(Some(s), "overview"), "logins").iter().find_first(fn(l) { text(Some(l), "id") == id })
-        None => None
-      }
+  match station_part_in(core, workspace_of(station), station, "logins") {
+    Some(Array(a)) => a.iter().find_first(fn(l) { text(Some(l), "id") == id })
     _ => None
   }
 }
@@ -122,8 +117,12 @@ pub fn start_login(core : Core, station : String, n : NewProfile, runtime : Stri
 /// leading to its page there.
 fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> Unit {
   let t = @sf.theme()
-  let topic = (core.topic)("profiles", { "scope": str(here.workspace) }).get()
-  let e = items(topic.value, "items").iter().find_first(fn(x) { text(Some(x), "key") == key })
+  // (that account alone, whole: its own topic, by its key; null where the workspace has it no more)
+  let topic = profile_by_key_read(core, here, key)
+  let e = match topic.value {
+    Some(Object(_)) as x => x
+    _ => None
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     match e {
       None => {
@@ -146,8 +145,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
           )
         }
       }
-      Some(ev) => {
-        let ev = Some(ev)
+      Some(_) as ev => {
         let p = field(ev, "profile")
         nav_bar(c, core, "Profile", text(p, "name"), sub=fn() {
           c.text(
@@ -260,7 +258,7 @@ fn account_blocks(c : @ui.Ctx, core : Core, ev : Json?) -> Array[() -> Unit] {
 ///|
 /// An account made up, for what its page shows while it is read (account_blocks in its bones): on two stations.
 fn account_sample() -> Json {
-  let member = fn(i : Int) -> Json {
+  let profile_host = fn(i : Int) -> Json {
     {
       "station": Json::string("sample/" + i.to_string()),
       "stationName": Json::string(@sf.sample_words(4 + i)),
@@ -273,6 +271,6 @@ fn account_sample() -> Json {
   {
     "station": "sample/0",
     "profile": { "checkText": Json::string(@sf.sample_words(4)), "check": { "detail": Json::string(@sf.sample_words(14)) } },
-    "members": [member(0), member(1)],
+    "members": [profile_host(0), profile_host(1)],
   }
 }

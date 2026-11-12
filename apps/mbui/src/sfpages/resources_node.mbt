@@ -152,11 +152,12 @@ fn rs_tile_node(t : @view.View, tv : () -> Json?) -> Unit {
 ///|
 /// A row of the table (rs_grouped's, rs_flat's), by what it is: a group (its key), a process under its group (the
 /// group's key and its), a process flat (its group's key and its).
+#derive(Eq, Hash)
 priv enum RsRow {
   RsGroup(String)
   RsUnder(String, String)
   RsFlat(String, String)
-} derive(Eq, Hash)
+}
 
 ///|
 /// The table (rs_grouped's, `flat` rs_flat's): its heads, then its rows, the most of the column sorted by first; laid
@@ -318,7 +319,6 @@ fn rs_table_node(
               |> ignore
               n.box(fn(cell) {
                 @sf.style_node(cell, fn() { rs_whose_cell }, in_row=true)
-                cell.cuts(Is(true)) |> ignore
                 rs_title_node(cell, core, g, rs_whose)
               })
               |> ignore
@@ -410,9 +410,6 @@ fn rs_heads_node(
       for i, key in heads {
         first.box(fn(cell) {
           @sf.style_node(cell, fn() { if i == 0 { rs_name_cell } else { rs_whose_cell } }, in_row=true)
-          if i > 0 {
-            cell.cuts(Is(true)) |> ignore
-          }
           @sf.words_node(cell, fn() { @sf.t(key) }, fn() { rs_head }) |> ignore
         })
         |> ignore
@@ -486,12 +483,7 @@ fn rs_figures_node_of(
 /// its row has less room; else its title.
 fn rs_title_node(p : @view.View, core : Core, g : () -> Json?, style : @ui.TextStyle) -> Unit {
   let chat = fn() { field(g(), "chat") }
-  let session = fn() {
-    match field(chat(), "thread") {
-      Some(Number(n, ..)) => n.to_int64().to_string()
-      _ => text(chat(), "session")
-    }
-  }
+  let session = fn() { text(chat(), "session") }
   p.pick(fn() { chat() is Some(Object(_)) && session() != "" }, fn(x, link) {
     x.cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
     if link {

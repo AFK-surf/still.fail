@@ -202,10 +202,10 @@ test "a list's rows on the device's pixels however it stands: at its end as what
   assert_eq(rows_off_pixels(), [])
   // dragged by part of a pixel, then past a row's height: said from the row now first in view
   t.press_at(200.0, 300.0)
-  t.move(200.0, 310.0)
-  t.move(200.0, 320.73)
+  t.move_to(200.0, 310.0)
+  t.move_to(200.0, 320.73)
   assert_eq(rows_off_pixels(), [])
-  t.move(200.0, 390.31)
+  t.move_to(200.0, 390.31)
   assert_eq(rows_off_pixels(), [])
   t.release(200.0, 390.31)
   t.run_for(rows_fling_ms)
@@ -261,29 +261,16 @@ test "on a host that sets things on whole pixels, what a list's rows hold is on 
   assert_eq(row_parts_off_pixels(), [])
   // dragged by parts of a pixel, then flung
   t.press_at(200.0, 300.0)
-  t.move(200.0, 310.0)
-  t.move(200.0, 320.73)
+  t.move_to(200.0, 310.0)
+  t.move_to(200.0, 320.73)
   assert_eq(row_parts_off_pixels(), [])
-  t.move(200.0, 390.31)
+  t.move_to(200.0, 390.31)
   assert_eq(row_parts_off_pixels(), [])
   t.release(200.0, 390.31)
   t.run_for(rows_fling_ms / 2.0)
   assert_eq(row_parts_off_pixels(), [])
   t.run_for(rows_fling_ms / 2.0)
   assert_eq(row_parts_off_pixels(), [])
-}
-
-///|
-/// The pointer over the rows, the wheel turned notch by notch: the row under it lit as they pass.
-fn rows_wheel(t : Tester, k : TestRows) -> Unit {
-  ignore(k)
-  t.move(160.0, 200.0)
-  for _ in 0..<20 {
-    t.wheel(160.0, 200.0, 40.0)
-    t.run_for(rows_notch_ms)
-  }
-  t.move(160.0, 300.0)
-  t.run_for(rows_notch_ms)
 }
 
 ///|
@@ -560,28 +547,6 @@ test "a list's rows read out as they are dragged and flung: kept, read out as bu
 }
 
 ///|
-/// 30 rows, each saying once a frame's builds are over that it showed (Ctx::after_build), its button telling once of a
-/// tap on it (Ctx::tell): how many times each said it showed, how many taps were told.
-fn telling_rows(seen : Array[Int], taps : Ref[Int]) -> (Ctx) -> Unit {
-  fn(c) {
-    c.list("telling", 30, 50.0, fn(i) {
-      let go = c.id("go")
-      c.on_press(go, fn() {
-        c.tell("tapped", fn() { taps.val = taps.val + 1 })
-      })
-      c.after_build("shown", fn() { seen[i] = seen[i] + 1 })
-      c.box(h=Px(50.0), dir=Row, padx=10.0, align=ACenter, fn() {
-        c.box(w=Fill(1.0), fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
-        c.box(id=go, w=Px(60.0), h=Px(30.0), bg=0x3366CCFFL, fn() { c.text("go \{i}", size=10.0) |> ignore })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  }
-}
-
-///|
 test "a list's rows kept as their nodes on the device's pixels as a host lays them: at its end as what is under them grows, dragged, flung" {
   let foot = @signals.signal(20.0)
   let t = Tester::new(pixel_rows(foot), w=390.0, h=700.0, platform=2, scale=2.625)
@@ -594,12 +559,12 @@ test "a list's rows kept as their nodes on the device's pixels as a host lays th
   t.draw()
   assert_eq(rows_off_pixels(), [])
   t.press_at(200.0, 300.0)
-  t.move(200.0, 310.0)
-  t.move(200.0, 320.73)
+  t.move_to(200.0, 310.0)
+  t.move_to(200.0, 320.73)
   assert_eq(rows_off_pixels(), [])
   // (the rows that stayed in view kept, put back where the list lays them, on the pixels with the rest)
   assert_true(t.rows_as_nodes().0 > 0)
-  t.move(200.0, 390.31)
+  t.move_to(200.0, 390.31)
   assert_eq(rows_off_pixels(), [])
   t.release(200.0, 390.31)
   t.run_for(rows_fling_ms)
@@ -778,4 +743,14 @@ test "a list's rows under a ground made once: kept as they are under one built e
   let built = run(false)
   assert_true(kept.kept > 200, msg="rows drawn again: \{kept.kept}")
   rows_same(kept, built)
+}
+
+///|
+/// The list node `i` is in (its nearest), or -1.
+fn Ctx::list_of(self : Ctx, i : Int) -> Int {
+  let mut p = self.nodes[i].parent
+  while p >= 0 && self.nodes[p].kind != kind_list {
+    p = self.nodes[p].parent
+  }
+  p
 }

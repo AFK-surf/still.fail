@@ -8,9 +8,13 @@
 //   press on it is the row's, where in the row the pointer let go: Ctx::pointer, as its handler runs), no target of its own. Drawn smaller, a press
 //   reaches it from round it, by a finger or a pointer alike (Ctx's press_reach): its room is it grown so round its
 //   middle, moved in from the window's edge rather than cut short there, within what holds it that takes presses (a
-//   row's button: in the row's room, not its neighbour's) (press_room); where two rooms meet, each has the part
+//   row's button: in the row's room, not its neighbour's) (@view.press_room); where two rooms meet, each has the part
 //   nearer it, as the hit test gives it. A ground is no control (Ctx::cursor's Arrow: a stage a click shows the bars
-//   on, the room round a list's rows, a message's words a hold picks in): no room of its own, none it cuts.
+//   on, the room round a list's rows, a message's words a hold picks in): no room of its own, none it cuts. A node's
+//   words with links in them (runs_links) are as an old view's paragraph's: pressed on the words, a ground, no room of
+//   their own (Tree::press_boxes: a node of the window's tree said a ground, View::as_ground; its pointer's shape
+//   says only how it looks). The window's tree's rooms are not worked out so but asked of its hit test
+//   (Tester::tree_room_faults).
 // apart: two such in one layer, neither holding the other, are never drawn over each other: a press there would be
 //   either's.
 // hover: what is shown only under the hand (Ctx::hand_shown: a row's ⋯ under a resting pointer) and takes presses is a
@@ -34,6 +38,7 @@ pub fn room_least() -> Double {
 /// Where the last frame breaks the rules of a press's room (see the file's head): one line for each fault, `room:` or
 /// `apart:` first.
 pub fn Tester::room_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   // (what the old views hold where it is drawn, as big: Ctx::with_old_drawn)
   let c = g()
@@ -44,8 +49,9 @@ pub fn Tester::room_faults(self : Tester) -> Array[String] {
 /// Where what is shown only under the hand (a frame built with all of it shown, Ctx::lit_all) takes presses no touch
 /// way reaches as easily (see the file's head): one `hover:` line each; the frames after it as before.
 pub fn Tester::hover_only_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   let c = g()
-  let rest : Set[Int] = Set::new()
+  let rest : Set[Int] = Set([])
   for i in c.press_targets() {
     rest.add(c.nodes[i].id)
   }
@@ -125,8 +131,8 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
       }
     }
   }
-  // each one's room as the hit test reaches it (press_room): grown round its middle, moved in from the window's edge
-  // rather than cut short there, cut to what holds it that takes presses
+  // each one's room as the hit test reaches it (@view.press_room): grown round its middle, moved in from the window's
+  // edge rather than cut short there, cut to what holds it that takes presses
   let window = (0.0, 0.0, self.width, self.height)
   let boxes = targets.map(fn(i) {
     let b = self.nodes[i]
@@ -177,13 +183,14 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
 }
 
 ///|
-/// The rooms of the targets drawn as `boxes` (x0, y0, x1, y1), each as the hit test reaches it (press_room, within its
-/// `cuts` and the window), parted where two meet that `meet` says may (in one layer, neither holding the other): each
+/// The rooms of the targets drawn as `boxes` (x0, y0, x1, y1), each as the hit test reaches it (@view.press_room,
+/// within its `cuts` and the window), parted where two meet that `meet` says may (in one layer, neither holding the other): each
 /// has the part nearer what it is drawn as (press_reach: the nearest), the two cut where the gap between them is
 /// halved, across the way they stand apart most. Drawn over each other, a press there would be either's: told to
 /// `over` (by how far across and down), their rooms left. Which side each is on by their middles: two that meet, the
 /// layout's rounding running one a hair past where the next starts (thirds of a row), each keeps its own side of the
-/// line between them. The old view's (Ctx::room_faults) and the window's tree's (tree_room_faults) alike.
+/// line between them. The old view's (Ctx::room_faults); the window's tree's rooms are what its hit test gives
+/// (tree_room_faults).
 fn rooms_parted(
   boxes : Array[(Double, Double, Double, Double)],
   cuts : Array[(Double, Double, Double, Double)],
@@ -191,7 +198,8 @@ fn rooms_parted(
   meet : (Int, Int) -> Bool,
   over : (Int, Int, Double, Double) -> Unit,
 ) -> Array[(Double, Double, Double, Double)] {
-  let rooms = boxes.mapi(fn(j, b) { press_room(b.0, b.1, b.2, b.3, cuts[j], window) })
+  let least = room_least()
+  let rooms = boxes.mapi(fn(j, b) { @view.press_room(b.0, b.1, b.2, b.3, cuts[j], window, least) })
   for j in 0..<boxes.length() {
     for k in (j + 1)..<boxes.length() {
       if !meet(j, k) {
@@ -239,7 +247,19 @@ fn rooms_parted(
 /// head; what takes presses there: Tree::press_boxes), one line for each fault, `room:` or `apart:` first, each naming
 /// the node by the words drawn in it and where it was made (tester_sources.mbt). Apart from Tester::room_faults, whose
 /// counts the app's tests keep to their bars.
+/// Each one's room is what the tree's hit test gives (Tree::press_room_found: Tree::target_at asked across its middle
+/// and down it), not worked out again beside it: what is checked is what a press on a device does. So one drawn over
+/// another and within it (a code block's 复制 on what scrolls its code) is pressed there first and as far round it as
+/// its room reaches, no neighbour the two parting the room between them, nor drawn over each other; where two rooms
+/// meet the nearer has it; what a press lands in cuts what reaches past it, whatever holds what in the tree (the
+/// coordinator of the migration, 2026-11-11: a check measures what a device does). A column's edge has no room to
+/// measure, pressed only where it is drawn (Tree::pressed_as_drawn), as the old view's (as_drawn). One that answers a
+/// hold alone is measured by what a finger held there holds (Tree::hold_at). What a layer presented over all else
+/// covers (a hover card open under its trigger, a tip: View::over_all) is that layer's, no room what is under it lacks,
+/// as what a modal layer covers is not checked; what is in that layer is held to it as anything (the coordinator of the
+/// migration, 2026-11-12).
 pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return [] }
   let targets = tree.press_boxes()
@@ -259,8 +279,6 @@ pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
     tree_source_said(id) +
     ")"
   }
-  let (ww, wh) = tree.root().window()
-  let window = (0.0, 0.0, ww, wh)
   let holds = fn(a : Int, b : Int) {
     let mut k = targets[b].2
     while k >= 0 {
@@ -272,17 +290,33 @@ pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
     false
   }
   let out : Array[String] = []
-  let rooms = rooms_parted(
-    targets.map(fn(t) { t.1 }),
-    targets.map(fn(t) { if t.2 >= 0 { targets[t.2].1 } else { window } }),
-    window,
-    fn(j, k) { targets[j].3 == targets[k].3 && !holds(j, k) && !holds(k, j) },
-    fn(j, k, gx, gy) {
-      out.push("apart: \{named(j)} and \{named(k)} are drawn over each other by \{gx.round()}×\{gy.round()}")
-    },
-  )
+  // (drawn over each other in one layer, neither holding the other: but one drawn after the other and within it, a key
+  // on what scrolls a code block, which the press there is first, as one in what holds it is: Tree::target_at)
+  for j in 0..<targets.length() {
+    for k in (j + 1)..<targets.length() {
+      if targets[j].3 != targets[k].3 || holds(j, k) || holds(k, j) {
+        continue
+      }
+      let (ax0, ay0, ax1, ay1) = targets[j].1
+      let (bx0, by0, bx1, by1) = targets[k].1
+      let gx = dmax(bx0 - ax1, ax0 - bx1)
+      let gy = dmax(by0 - ay1, ay0 - by1)
+      let within = bx0 >= ax0 - gap_slack &&
+        by0 >= ay0 - gap_slack &&
+        bx1 <= ax1 + gap_slack &&
+        by1 <= ay1 + gap_slack
+      if gx < -gap_slack && gy < -gap_slack && !within {
+        out.push("apart: \{named(j)} and \{named(k)} are drawn over each other by \{(-gx).round()}×\{(-gy).round()}")
+      }
+    }
+  }
   let least = room_least()
-  for j, r in rooms {
+  for j, t in targets {
+    // (a column's edge: pressed only where it is drawn, the user, 2026-10-28: 左右各 6px, 同 web)
+    if tree.pressed_as_drawn(t.0) {
+      continue
+    }
+    let r = tree.press_room_found(t.0, t.1)
     let (w, h) = (r.2 - r.0, r.3 - r.1)
     if w < least - gap_slack || h < least - gap_slack {
       out.push("room: \{named(j)} has \{w.round()}×\{h.round()} to be pressed in, under \{least}")

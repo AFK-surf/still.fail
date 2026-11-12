@@ -776,7 +776,7 @@ pub fn PngRows::end(self : PngRows) -> Bytes {
   }
   o.chunk("IHDR", ihdr.buf)
   // zlib's head (deflate, a 32 KB window), the deflated bytes, the Adler-32 of what was deflated
-  let idat : Array[Byte] = Array::new(capacity=z.nout + 6)
+  let idat : Array[Byte] = Array(capacity=z.nout + 6)
   idat.push(b'\x78')
   idat.push(b'\x01')
   for i in 0..<z.nout {

@@ -27,6 +27,8 @@ pub struct Anim {
   /// the moment it was last stepped to (where it is then is a function of its way and that moment, however many frames
   /// there are at it: stepped again there, it is where it was; -inf: not since it was told)
   priv mut stepped_at : Double
+  /// the moment it was put somewhere at once on its way (snap), its way cut short there; -1: not since it was told
+  priv mut cut_at : Double
   /// kept by its key (anim): whether what asks it is built (until it is not: anim_unbuilt)
   priv mut built : Bool
   /// what it is said to move by (Ctx::moving), and what it is said to be: its key, who told it to go
@@ -37,6 +39,7 @@ pub struct Anim {
 
 ///|
 /// Where an Anim goes, all of it: what is built from where it is is built again only as this changes.
+#derive(Eq)
 priv struct AnimWay {
   running : Bool
   value : Double
@@ -48,14 +51,14 @@ priv struct AnimWay {
   v0 : Double
   start : Double
   dur : Double
-} derive(Eq)
+}
 
 ///|
 fn Anim::way(self : Anim, c : @ui.Ctx) -> AnimWay {
   // (going by its way at this moment: where it is, stepped by the clock, and its getting to its end as the frame goes
   // are no change of it; still, or at its end by now: where it is)
   let now = c.moment()
-  let going = self.running && !(self.start >= 0.0 && @ui.whole_ms(now - self.start) >= self.dur)
+  let going = self.running && !(self.start >= 0.0 && @ui.gone_ms(now - self.start) >= @ui.gone_ms(self.dur))
   {
     running: going,
     value: if going {
@@ -129,6 +132,7 @@ pub fn Anim::new(v : Double) -> Anim {
     dur: 0.0,
     running: false,
     stepped_at: @double.neg_infinity,
+    cut_at: -1.0,
     built: false,
     id: @ui.Mover::new(),
     name: "",
@@ -157,14 +161,14 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   match (self.gen, self.spec) {
     (Some(g), Motion(tr)) => {
       // as Motion plays it: its generator at the time since it started (whole ms), done when it says so
-      let t = @ui.whole_ms(ms) - tr.delay
+      let t = @ui.gone_ms(ms) - tr.delay
       if t < 0.0 {
         return
       }
       let st = g.next(t)
       self.value = st.value
       self.velocity = g.velocity(t, initial=self.v0)
-      if st.done || @ui.whole_ms(ms) >= self.dur {
+      if st.done || @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) {
         self.finish()
       }
       return
@@ -174,7 +178,7 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   let (x, v) = self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
   self.value = x
   self.velocity = v
-  if @ui.whole_ms(ms) >= self.dur {
+  if @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) {
     self.finish()
   }
 }
@@ -210,6 +214,27 @@ pub fn Anim::ends_at(self : Anim) -> Double {
     self.start + self.dur.ceil()
   } else {
     @double.infinity
+  }
+}
+
+///|
+/// When it is there, or was (whole ms, the frames' clock): ends_at while it goes; once at rest, the end its own start
+/// and length said (not "none moves"), whichever frames were drawn on its way, or the moment it was put somewhere at
+/// once before that (snap: its way cut short); -1 where it was never told to go.
+/// What a test asks of when a part stops (a viewer's fade, a flash, a room opening: their `*_rest`), so a test whose
+/// frames passed the end runs to now, not to "no motion".
+pub fn Anim::ended_at(self : Anim) -> Double {
+  if self.running {
+    self.ends_at()
+  } else if self.start >= 0.0 {
+    let end = self.start + self.dur.ceil()
+    if self.cut_at >= 0.0 && self.cut_at < end {
+      self.cut_at
+    } else {
+      end
+    }
+  } else {
+    -1.0
   }
 }
 
@@ -298,12 +323,11 @@ pub fn Anim::animate(
   // (this frame shows it at its start: where it is now)
   self.start = match start_at {
     Some(at) => {
-      // (the motion before done at its end as whole_ms has it, its end summed another way than now: the same moment,
+      // (the motion before done at its end as gone_ms has it, its end summed another way than now: the same moment,
       // 4066.666666666667 for 4066.6666666666665, from now)
       if at > c.moment() + @ui.same_moment_ms {
         let s = "Anim::animate: start_at \{at} is later than now (\{c.moment()}), told at \{loc}"
-        println(s)
-        abort(s)
+        @halt.saying(s)
       }
       if at > c.moment() {
         c.moment()
@@ -315,6 +339,7 @@ pub fn Anim::animate(
   }
   // (started earlier: stepped to where it is by now as get() asks; else at its start now, where it is)
   self.stepped_at = if start_at is Some(_) { @double.neg_infinity } else { c.moment() }
+  self.cut_at = -1.0
   // motion reduced: its length none, there at once, its end the moment it was told, so a chain goes on
   // from it in the same build, all of it there at once
   if c.still() {
@@ -347,6 +372,89 @@ pub fn Anim::animate(
 }
 
 ///|
+/// Where it is and how fast it goes (per second) at moment `at` on the way it was told, as that way has it (not where a
+/// frame drew it): its start if `at` is before it.
+fn Anim::state_at(self : Anim, at : Double) -> (Double, Double) {
+  if !self.running || self.start < 0.0 {
+    return (self.value, 0.0)
+  }
+  let ms = at - self.start
+  if ms <= 0.0 {
+    return (self.from, self.v0)
+  }
+  if ms >= self.dur {
+    return (self.end, 0.0)
+  }
+  match (self.gen, self.spec) {
+    (Some(g), Motion(tr)) => {
+      let t = ms - tr.delay
+      if t < 0.0 {
+        (self.from, self.v0)
+      } else {
+        (g.next(t).value, g.velocity(t, initial=self.v0))
+      }
+    }
+    _ => self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
+  }
+}
+
+///|
+/// Where a frame drawn at moment `at` (now or later) has it on the way it was told, as Anim::get would then (to its end
+/// once its time has gone, as its time goes, whole ms), read by nothing: what is built from when it gets somewhere (a
+/// share of its way) asks when that is of it once, and is built again then (Ctx::shows_from), not each frame it goes.
+pub fn Anim::value_at(self : Anim, at : Double) -> Double {
+  if !self.running || self.start < 0.0 {
+    return self.value
+  }
+  let ms = at - self.start
+  match (self.gen, self.spec) {
+    (Some(g), Motion(tr)) => {
+      let t = @ui.gone_ms(ms) - tr.delay
+      if @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) || (t >= 0.0 && g.next(t).done) {
+        self.end
+      } else if t < 0.0 {
+        self.from
+      } else {
+        g.next(t).value
+      }
+    }
+    _ =>
+      if @ui.gone_ms(ms) >= @ui.gone_ms(self.dur) {
+        self.end
+      } else {
+        self.spec.value_at(ms, self.dur, self.from, self.target, self.v0).0
+      }
+  }
+}
+
+///|
+/// Told at moment `at` (now, or a moment before it in this frame) to stop where it goes, one of it `points` points: on
+/// from where its way had it then and as fast, slowing to rest on a Move's way as far as that speed carries it
+/// (@ui.move_stop_points), never past its end nor back: its speed the same either side of `at`, no stop dead, wherever
+/// the frames fall. At rest, or past its end by then, it stays.
+#callsite(autofill(loc))
+pub fn Anim::stop_at(self : Anim, c : @ui.Ctx, at : Double, points~ : Double, loc~ : SourceLoc) -> Unit {
+  self.step(c)
+  if !self.running || points <= 0.0 {
+    return
+  }
+  // (a moment said after this frame's, as a press's is where the frame it is built in is drawn for an earlier vsync (a
+  // device behind its input: Android's, 2026-11-10, words sent again 118 ms after the frame's moment, abort in animate):
+  // now)
+  let at = if at > c.moment() { c.moment() } else { at }
+  let (x, v) = self.state_at(at)
+  let ahead = @ui.move_stop_points(v * points / 1000.0) / points
+  let to = if v >= 0.0 {
+    dmin(x + ahead, dmax(self.target, x))
+  } else {
+    dmax(x - ahead, dmin(self.target, x))
+  }
+  self.value = x
+  self.velocity = v
+  self.animate(c, to, Moved(points, -1.0, 0.0), velocity=v, start_at=at, loc~)
+}
+
+///|
 /// Off to `target`, unless it goes there already or is there (animate*AsState): told again
 /// mid-way it goes on from where it is, as fast as it goes.
 #callsite(autofill(loc))
@@ -364,6 +472,9 @@ pub fn Anim::snap(self : Anim, c : @ui.Ctx, v : Double) -> Unit {
   if (self.value != v || self.target != v || self.running) && self.tells_now(c) {
     self.id.changed()
   }
+  if self.running {
+    self.cut_at = c.moment()
+  }
   self.value = v
   self.target = v
   self.end = v
@@ -376,7 +487,7 @@ pub fn Anim::snap(self : Anim, c : @ui.Ctx, v : Double) -> Unit {
 ///|
 /// What animates, kept from frame to frame by its key (in the scope it was asked in), forgotten once neither used nor
 /// moving for a while.
-let anims : Map[Int, Anim] = {}
+let anims : Map[Int, Anim] = Map([])
 
 ///|
 /// The keys of the Anims whose asker was no longer built while they moved: let go once they are still (anims_let_go).

@@ -5,25 +5,26 @@
 ///|
 fn init {
   @ui.sizes_steady_known([
-    ("src/sfapp/agent_tile_wbtest.mbt", 23),
-    ("src/sfapp/desk_composer_wbtest.mbt", 1),
-    ("src/sfapp/desk_service_wbtest.mbt", 24),
-    ("src/sfapp/emit_kept_wbtest.mbt", 1),
-    ("src/sfapp/home_wbtest.mbt", 19),
-    ("src/sfapp/kept_rows_kinds_wbtest.mbt", 8),
-    ("src/sfapp/menu_node_wbtest.mbt", 23),
-    ("src/sfapp/newchat_send_wbtest.mbt", 1),
-    ("src/sfapp/relay_told_wbtest.mbt", 16),
-    ("src/sfapp/settings_made_wbtest.mbt", 14),
-    ("src/sfapp/settings_wbtest.mbt", 8),
+    // (小屏, a new chat's first words, the core answering a frame or more after: 预设's column comes 52 in a frame, at 60
+    // and 120)
+    ("src/sfapp/core_pace_presets_wbtest.mbt", 1),
+    // (小屏, a new chat's long first words sent, at both sizes of words: the composer's field steps 31 points in a frame
+    // at 2157 ms, between -13 and 26 round it; at 60 and 120 a frame it stops dead from 40 a frame as well, and 预设's
+    // column comes 52 in a frame at 1583)
+    ("src/sfapp/daily_paths_wbtest.mbt", 2),
+    ("src/sfapp/desk_service_wbtest.mbt", 1),
+    ("src/sfapp/home_wbtest.mbt", 1),
+    ("src/sfapp/menu_node_wbtest.mbt", 12),
+    // (the old composer's caption line 添加说明（可选）, an old fault: its place steps as the quoted picture's room comes
+    // in, main -4.82, -12.41, -9.65 a frame round 1566.67, under what is judged; with every way at its exact moment
+    // -4.74, -12.83, -9.41, over it. Taken away as the node composer takes its place)
+    ("src/sfapp/quote_image_wbtest.mbt", 1),
+    ("src/sfapp/settings_wbtest.mbt", 4),
     ("src/sfapp/squeeze_wbtest.mbt", 281),
-    ("src/sfapp/stack_over_wbtest.mbt", 8),
+    ("src/sfapp/stack_over_wbtest.mbt", 1),
     ("src/sfapp/tape.mbt", 1),
     ("src/sfapp/viewer_media_over_wbtest.mbt", 1),
-    ("src/sfapp/wide_panel_gap_wbtest.mbt", 88),
-    ("src/sfapp/wide_panel_wbtest.mbt", 22),
     ("src/sfapp/wide_rail_wbtest.mbt", 4),
-    ("src/sfapp/wide_relay_wbtest.mbt", 5),
-    ("src/sfapp/wide_wbtest.mbt", 53),
+    ("src/sfapp/wide_wbtest.mbt", 5),
   ])
 }

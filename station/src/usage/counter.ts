@@ -19,7 +19,7 @@ import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
 import { segmentsFrom, writtenLength } from "../read/packed.ts";
 import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
-import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
+import type { SessionRow, Store, UsageCall, UsageFile, UsageFor, UsageTurn, UsageWrite } from "../store/store.ts";
 import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
@@ -52,6 +52,8 @@ export type UsageCounterOptions = {
   safetyMs?: number;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
+  /// The turns a part's calls were made in (store/usage.ts `usageTurns`), asked of a reader (none: of the store, here).
+  turns?: (session: string, from: number, until: number) => Promise<UsageTurn[]>;
 };
 
 // ── reading transcripts ──
@@ -105,8 +107,8 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       });
     } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
-      // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
-      // calls it made, the context it ended with and the model's window where Devin said them.
+      // from the cache's, the whole run's (no context); of each Devin call (or an earlier turn told at once,
+      // agents/devin.ts), with how many calls it counts, the context it left and the model's window where Devin said them.
       const usage = get(r, "usage");
       const id = str(get(r, "run"));
       if (str(get(r, "type")) !== "usage" || usage === undefined || usage === null || id === null) continue;
@@ -566,6 +568,11 @@ export class UsageCounter {
   #files: Map<string, CountedFile> | null = null;
   /// Codex's path for a runtime session, remembered by session rather than searched through all known files.
   #codexPaths = new Map<string, Map<string, string>>();
+  /// What the read under way found and has not written yet: written together, in one transaction, once WRITE_BATCH calls
+  /// gathered and as the read ends (`#flush`). Each part's transcript position is written with its calls, so a crash
+  /// before then loses nothing: the next read reads that part again from the position the store has.
+  #pending: { write: UsageWrite; session: string; position: CountedFile; changed: { from: number } }[] = [];
+  #pendingCalls = 0;
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
@@ -573,7 +580,9 @@ export class UsageCounter {
     this.#settleMs = options.settleMs ?? SETTLE_MS;
     this.#safetyMs = options.safetyMs ?? SAFETY_MS;
     this.#clock = options.clock ?? liveClock;
+    this.#turns = options.turns ?? null;
   }
+  readonly #turns: ((session: string, from: number, until: number) => Promise<UsageTurn[]>) | null;
 
   /// Reads sessions that ran since the previous sweep, then those whose turn ended (shortly after), and all that ran
   /// every SAFETY_MS. Stopped by `stop`.
@@ -675,13 +684,16 @@ export class UsageCounter {
     const store = this.#store;
     const cursor = store.usageCounter();
     const wanted = only !== null ? new Set(only) : new Set(store.usageActiveSessions(Math.max(cursor.since, (last || cursor.through) - MARGIN_MS)));
-    const sessions: SessionRow[] = [...wanted].flatMap((key) => store.getSession(key) ?? []);
+    const sessions: SessionRow[] = store.sessionsOf([...wanted]);
     const known = (this.#files ??= new Map<string, CountedFile>());
     const config = this.#config();
     const homes = config.profiles.map((p) => p.home);
     let added = 0;
     this.#counted.clear();
     this.#from = Infinity;
+    // What a read before left unwritten (it failed or was stopped) is read again from the store's positions.
+    this.#pending = [];
+    this.#pendingCalls = 0;
     // Claude Code: each session's project directory (named after where it runs), in the shared transcripts and in any
     // profile's own.
     const distinct = async (roots: string[]) => {
@@ -728,7 +740,7 @@ export class UsageCounter {
     // runtime that wrote it, even when the session now runs on another one.
     for (const s of sessions) {
       if (wanted !== null && !wanted.has(s.key)) continue;
-      for (const source of store.runtimeSessionSources(s.key)) {
+      for (const source of store.runtimeSessionSources(s.key, s)) {
         const runtime = runtimeKind(source.runtime);
         if (!runtime || runtime === s.runtime) continue;
         const transcript = transcriptPaths(runtime, config.dataDir, homes, [source.id]).paths[0];
@@ -762,7 +774,7 @@ export class UsageCounter {
     // runtime sessions, as read before or found by their ids.
     const codex = sessions.filter((s) => s.runtime === "codex");
     const found = new Map<string, SessionRow>();
-    for (const s of codex) for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === "codex")) {
+    for (const s of codex) for (const { id } of store.runtimeSessionSources(s.key, s).filter((source) => source.runtime === "codex")) {
       const paths = this.#codexPaths.get(s.key) ?? new Map<string, string>();
       this.#codexPaths.set(s.key, paths);
       let had = paths.get(id);
@@ -782,7 +794,7 @@ export class UsageCounter {
     for (const s of sessions) {
       if (s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes" && s.runtime !== "agy") continue;
       const runtime = s.runtime;
-      for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === runtime)) {
+      for (const { id } of store.runtimeSessionSources(s.key, s).filter((source) => source.runtime === runtime)) {
         const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];
         const path = transcript !== undefined && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
         if (path === undefined || (runtime === "grok" && !existsSync(path))) continue;
@@ -792,6 +804,7 @@ export class UsageCounter {
         added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime), cursor.since);
       }
     }
+    added += this.#flush();
     if (only === null) {
       if (wanted.size > 0) store.advanceUsageCounter(started);
       this.#last = started;
@@ -801,6 +814,31 @@ export class UsageCounter {
       if (last === 0 && only === null) log.info("usage", "usage read from recent transcripts", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
       store.usageChanged([...this.#counted], Number.isFinite(this.#from) ? this.#from : undefined);
     }
+    return added;
+  }
+
+  /// Writes what the read gathered (`#pending`), in one transaction; how many calls were new. Not written (a failure):
+  /// the positions kept here are let go, so that the next read goes on from the store's.
+  #flush(): number {
+    const pending = this.#pending;
+    this.#pending = [];
+    this.#pendingCalls = 0;
+    let recorded: number[];
+    try {
+      recorded = this.#store.recordUsageAll(pending.map((p) => p.write));
+    } catch (error) {
+      this.#files = null;
+      throw error;
+    }
+    let added = 0;
+    pending.forEach((p, i) => {
+      this.#files?.set(p.write.path, p.position);
+      if (Number.isFinite(p.changed.from)) {
+        this.#counted.add(p.session);
+        this.#from = Math.min(this.#from, p.changed.from);
+      }
+      added += recorded[i]!;
+    });
     return added;
   }
 
@@ -854,7 +892,9 @@ export class UsageCounter {
         const fromKnownSuffix = was !== undefined && !replaced && section.from >= before.offset;
         const calls = callsOf(runtime, section.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS && (section.followed || c.at >= firstNewAt || fromKnownSuffix));
         // The turns they were made in, those alone (store/usage.ts usageTurns).
-        const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
+        const from = calls.reduce((m, c) => Math.min(m, c.at), Infinity);
+        const until = calls.reduce((m, c) => Math.max(m, c.at), -Infinity);
+        const of = calls.length === 0 ? [] : this.#turns !== null ? await this.#turns(session.key, from, until) : this.#store.usageTurns(session.key, from, until);
         const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
           // The turn it was made in: the last to start before it (the first, for one before them all).
           let lo = 0;
@@ -876,14 +916,15 @@ export class UsageCounter {
           const batch = withFor.slice(i, i + WRITE_BATCH);
           const changed = { from: Infinity };
           const savedAnchor = complete ? nextAnchor : anchor;
-          const recorded = this.#store.recordUsage(path, file, runtime, batch, { changed, counter: { cutoff, anchor: savedAnchor }, ...(section.followed ? {} : { minNewAt: firstNewAt }) });
-          this.#files?.set(path, { ...file, cutoff, anchor: savedAnchor, path });
-          if (Number.isFinite(changed.from)) {
-            this.#counted.add(session.key);
-            this.#from = Math.min(this.#from, changed.from);
+          this.#pending.push({
+            write: { path, file, runtime, calls: batch, options: { changed, counter: { cutoff, anchor: savedAnchor }, ...(section.followed ? {} : { minNewAt: firstNewAt }) } },
+            session: session.key, position: { ...file, cutoff, anchor: savedAnchor, path }, changed,
+          });
+          this.#pendingCalls += batch.length;
+          if (this.#pendingCalls >= WRITE_BATCH) {
+            added += this.#flush();
+            await breathe();
           }
-          added += recorded;
-          await breathe();
         }
         anchor = nextAnchor;
       }

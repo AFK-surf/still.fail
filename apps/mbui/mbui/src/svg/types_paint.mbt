@@ -21,7 +21,7 @@ priv enum SPaint {
 
 ///|
 fn parse_paint(text : String) -> SPaint? {
-  let text = text.trim(chars=" \t\n\r").to_string()
+  let text = text.trim(chars=" \t\n\r").to_owned()
   match text {
     "none" => Some(PaintNone)
     "inherit" => Some(PaintInherit)
@@ -61,11 +61,12 @@ fn parse_paint(text : String) -> SPaint? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum PaintOrderKind {
   OFill
   OStroke
   OMarkers
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn default_paint_order() -> Array[PaintOrderKind] {
@@ -115,13 +116,14 @@ fn parse_paint_order(text : String) -> Array[PaintOrderKind] {
 }
 
 ///|
+#derive(Eq)
 priv enum DirPos {
   DTop
   DCenter
   DBottom
   DRight
   DLeft
-} derive(Eq)
+}
 
 ///|
 fn Stream::parse_directional_position(self : Stream) -> DirPos? {
@@ -260,44 +262,5 @@ fn parse_transform_origin(text : String) -> (Length, Length)? {
         None
       }
     }
-  }
-}
-
-///|
-priv enum EnableBackground {
-  Accumulate
-  EbNew
-  EbNewWithRegion(Double, Double, Double, Double)
-}
-
-///|
-fn parse_enable_background(text : String) -> EnableBackground? {
-  let s = Stream::new(text)
-  s.skip_spaces()
-  if s.starts_with("accumulate") {
-    s.pos += 10
-    s.skip_spaces()
-    if !s.at_end() {
-      return None
-    }
-    Some(Accumulate)
-  } else if s.starts_with("new") {
-    s.pos += 3
-    s.skip_spaces()
-    if s.at_end() {
-      return Some(EbNew)
-    }
-    match (s.parse_list_number(), s.parse_list_number(), s.parse_list_number(), s.parse_list_number()) {
-      (Some(x), Some(y), Some(w), Some(h)) => {
-        s.skip_spaces()
-        if !s.at_end() || !(w > 0.0 && h > 0.0) {
-          return None
-        }
-        Some(EbNewWithRegion(x, y, w, h))
-      }
-      _ => None
-    }
-  } else {
-    None
   }
 }

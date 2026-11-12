@@ -96,7 +96,7 @@ fn split_stable(
       own.push(n)
     }
   }
-  let data_text : Map[Bytes, Bytes] = Map::new()
+  let data_text : Map[Bytes, Bytes] = Map([])
   for k, n in data_names {
     data_text[n] = data[k]
   }
@@ -134,7 +134,7 @@ fn split_stable(
       add(n)
     }
   }
-  let fn_defs : Map[Bytes, Bytes] = Map::new()
+  let fn_defs : Map[Bytes, Bytes] = Map([])
   for d in decls {
     match fn_type_def(blank(d)) {
       Some(n) => fn_defs[n] = d
@@ -204,7 +204,7 @@ fn split_stable(
   }
   // by_name: what the declarations, the externs and the directives' groups declare or define: (0 a declaration,
   // 1 an extern, its index)
-  let by_name : Map[Bytes, Array[(Int, Int)]] = Map::new()
+  let by_name : Map[Bytes, Array[(Int, Int)]] = Map([])
   let put = fn(n : Bytes, x : (Int, Int)) {
     match by_name.get(n) {
       Some(a) => a.push(x)
@@ -218,7 +218,7 @@ fn split_stable(
   }
   // moonc's directives in groups (an #ifndef X … #define X Y … #endif, or a #define alone), a unit taking a group
   // when it uses a name the group defines; a group defining nothing, in every unit
-  let always_pp : Map[Int, Unit] = Map::new()
+  let always_pp : Map[Int, Unit] = Map([])
   let mut group : Array[Int] = []
   let mut depth = 0
   for k, dk in decl_kinds {
@@ -317,7 +317,7 @@ fn split_stable(
           if ok {
             let end = off + 2 + parse_int(w[0:d])
             if end <= tb.length() {
-              let buf = @buffer.new()
+              let buf = Buffer()
               for i in off..<end {
                 if i > off {
                   buf.write_byte(b'\x00')
@@ -332,7 +332,7 @@ fn split_stable(
     }
     None
   }
-  let offset_set : Map[Int, Unit] = Map::new()
+  let offset_set : Map[Int, Unit] = Map([])
   for f in rest {
     for m in layout_matches(f.text) {
       offset_set[parse_int(f.text[m.0:m.1])] = ()
@@ -341,8 +341,8 @@ fn split_stable(
   for m in layout_matches(init.text) {
     offset_set[parse_int(init.text[m.0:m.1])] = ()
   }
-  let first : Map[Bytes, Int] = Map::new() // a layout's words: its first offset
-  let key_of : Map[Int, Bytes] = Map::new()
+  let first : Map[Bytes, Int] = Map([]) // a layout's words: its first offset
+  let key_of : Map[Int, Bytes] = Map([])
   for off in ints(offset_set) {
     let k = match layout_words(off) {
       Some(w) => w
@@ -358,13 +358,13 @@ fn split_stable(
     first_keys.push(k)
   }
   let layout_named = by_content(first_keys, b"csplit_layout_")
-  let layouts : Map[Bytes, Int] = Map::new() // name: offset
+  let layouts : Map[Bytes, Int] = Map([]) // name: offset
   for k, off in first {
     layouts[layout_named[k]] = off
   }
   let name_layouts = fn(text : Bytes) -> (Bytes, BSet) {
     let used = BSet::new()
-    let buf = @buffer.new(size_hint=text.length())
+    let buf = Buffer(size_hint=text.length())
     let mut last = 0
     for m in layout_matches(text) {
       let n = layout_named[key_of[parse_int(text[m.0:m.1])]]
@@ -395,7 +395,7 @@ fn split_stable(
 
   // the functions renamed (their locals by their own order), each in its package's unit
   let pk = rest.map(fn(f) { package_of(f.name) })
-  let sizes : Map[Bytes, Int] = Map::new()
+  let sizes : Map[Bytes, Int] = Map([])
   for k, f in rest {
     sizes[pk[k]] = sizes.get_or_default(pk[k], 0) + clen(f.text)
   }
@@ -419,7 +419,7 @@ fn split_stable(
   // a big package in pieces by source file (its #line's), as C is compiled: an edit moves the lines of the functions
   // after it in its file, and only that file's piece changes. A file bigger than a unit (a generic one's instances:
   // core's Map for each of the program's types) in pieces of its own by its functions' names
-  let file_key = rest.mapi(fn(k, f) {
+  let file_key = rest.map(fn(f) {
     match line_file(f.text) {
       Some(path) => {
         let mut s = path.length()
@@ -431,13 +431,13 @@ fn split_stable(
       None => names.get_or_default(f.name, f.name)
     }
   })
-  let file_sizes : Map[Bytes, Int] = Map::new()
+  let file_sizes : Map[Bytes, Int] = Map([])
   for k, f in rest {
     let fk = cat([pk[k], b"\x1f", file_key[k]])
     file_sizes[fk] = file_sizes.get_or_default(fk, 0) + clen(f.text)
   }
   // each function's unit: unit: [(its name as renamed, its index in rest)] (renamed in its unit's job, below)
-  let units : Map[Bytes, Array[(Bytes, Int)]] = Map::new()
+  let units : Map[Bytes, Array[(Bytes, Int)]] = Map([])
   for k, f in rest {
     let p = pk[k]
     let new = names.get_or_default(f.name, f.name)
@@ -492,12 +492,12 @@ fn split_stable(
     None
   }
   // (init unit: [(its function's name, the piece's index)])
-  let init_units : Map[Bytes, Array[(Bytes, Int)]] = Map::new()
+  let init_units : Map[Bytes, Array[(Bytes, Int)]] = Map([])
   let init_calls : Array[Bytes] = []
   let mut whole_init = false
   match pieces {
     Some(ps) => {
-      let psize : Map[Bytes, Int] = Map::new()
+      let psize : Map[Bytes, Int] = Map([])
       for x in ps {
         psize[x.0] = psize.get_or_default(x.0, 0) + clen(x.1) + clen(x.2)
       }
@@ -513,7 +513,7 @@ fn split_stable(
       while nsmall_i * init_small.val * 4 < small_total {
         nsmall_i *= 2
       }
-      let counts : Map[Bytes, Int] = Map::new()
+      let counts : Map[Bytes, Int] = Map([])
       for pi, x in ps {
         let p = x.0
         let label = unit_label(p)
@@ -568,7 +568,7 @@ fn split_stable(
       },
     )
   }
-  let type_of : Map[Bytes, Array[Int]] = Map::new()
+  let type_of : Map[Bytes, Array[Int]] = Map([])
   for k, kind in kinds {
     if kind == 3 {
       for n in ditems[k].declares.items() {
@@ -579,7 +579,7 @@ fn split_stable(
       }
     }
   }
-  let needs : Map[Int, Array[Int]] = Map::new()
+  let needs : Map[Int, Array[Int]] = Map([])
   for k, kind in kinds {
     if kind != 3 {
       continue
@@ -595,7 +595,7 @@ fn split_stable(
         held.add(n)
       }
     }
-    let js : Map[Int, Unit] = Map::new()
+    let js : Map[Int, Unit] = Map([])
     for n in held.items() {
       match type_of.get(n) {
         Some(a) =>
@@ -610,7 +610,7 @@ fn split_stable(
     needs[k] = ints(js)
   }
   // (struct and union definitions, which a unit may have as a declaration alone; what a typedef names)
-  let struct_defs : Map[Int, Unit] = Map::new()
+  let struct_defs : Map[Int, Unit] = Map([])
   for k, kind in kinds {
     if kind == 3 && has_byte(ditems[k].t, b'{') {
       let b = blank(ditems[k].t)
@@ -624,7 +624,7 @@ fn split_stable(
   for k in ints(struct_defs) {
     struct_tags.add_all(ditems[k].declares)
   }
-  let typedef_of : Map[Bytes, BSet] = Map::new()
+  let typedef_of : Map[Bytes, BSet] = Map([])
   for k, kind in kinds {
     if kind == 3 && starts(lstrip(blank(ditems[k].t)), b"typedef") {
       for n in ditems[k].declares.items() {
@@ -632,11 +632,11 @@ fn split_stable(
       }
     }
   }
-  let fields : Map[Bytes, Map[Bytes, (Bytes, Int)]] = Map::new()
+  let fields : Map[Bytes, Map[Bytes, (Bytes, Int)]] = Map([])
   for k in ints(struct_defs) {
     let b = blank(ditems[k].t)
     let inner = pyslice(b, find_byte(b, b'{', 0) + 1, rfind_byte(b, b'}'))
-    let f : Map[Bytes, (Bytes, Int)] = Map::new()
+    let f : Map[Bytes, (Bytes, Int)] = Map([])
     for v in decl_vars(inner) {
       f[v.0] = (v.1, v.2)
     }
@@ -653,14 +653,14 @@ fn split_stable(
     }
     s
   })
-  let globals : Map[Bytes, (Bytes, Int)] = Map::new()
+  let globals : Map[Bytes, (Bytes, Int)] = Map([])
   for e in eitems {
     for v in decl_vars(blank(e.t)) {
       globals[v.0] = (v.1, v.2)
     }
   }
   // (a prototype's types held by value, of the structs: the closure's)
-  let proto_by_value : Map[Int, Array[Bytes]] = Map::new()
+  let proto_by_value : Map[Int, Array[Bytes]] = Map([])
   let proto_held = fn(k : Int) -> Array[Bytes] {
     match proto_by_value.get(k) {
       Some(a) => a
@@ -721,8 +721,8 @@ fn split_stable(
       None => None
     }
     while true {
-      let want_d : Map[Int, Unit] = Map::new()
-      let want_e : Map[Int, Unit] = Map::new()
+      let want_d : Map[Int, Unit] = Map([])
+      let want_e : Map[Int, Unit] = Map([])
       let declared = BSet::new()
       let todo = used.items()
       for n in pp_uses.items() {
@@ -839,12 +839,12 @@ fn split_stable(
     let fwd = stable_sort(all.filter(fn(k) { kinds[k] == 2 }), key_cmp)
     let protos = stable_sort(all.filter(fn(k) { kinds[k] == 1 }), key_cmp)
     let types = all.filter(fn(k) { kinds[k] == 3 })
-    let tset : Map[Int, Unit] = Map::new()
+    let tset : Map[Int, Unit] = Map([])
     for k in types {
       tset[k] = ()
     }
-    let users : Map[Int, Array[Int]] = Map::new()
-    let left : Map[Int, Int] = Map::new()
+    let users : Map[Int, Array[Int]] = Map([])
+    let left : Map[Int, Int] = Map([])
     let heap = Heap::new(key_cmp)
     for k in types {
       let mut nd = 0
@@ -863,7 +863,7 @@ fn split_stable(
       }
     }
     let out = []
-    let done : Map[Int, Unit] = Map::new()
+    let done : Map[Int, Unit] = Map([])
     while heap.size() > 0 {
       let k = heap.pop()
       out.push(k)
@@ -907,7 +907,7 @@ fn split_stable(
     layout_names.add(n)
   }
   let layout_defs = {
-    let buf = @buffer.new()
+    let buf = Buffer()
     let lns = layout_names.sorted()
     for n in lns {
       buf.write_bytes(b"CSPLIT_INTERNAL const uint32_t ")
@@ -920,7 +920,7 @@ fn split_stable(
   }
   stats.push(("layouts_named", layouts.length()))
   let lines_of = fn(ts : Array[Bytes]) {
-    let buf = @buffer.new()
+    let buf = Buffer()
     for t in ts {
       buf.write_bytes(t)
       if !ends(t, b"\n") {
@@ -931,7 +931,7 @@ fn split_stable(
   }
   let decls_all = lines_of(ditems.map(fn(d) { d.t }))
   let join = fn(ts : Array[Bytes], sep : Bytes) {
-    let buf = @buffer.new()
+    let buf = Buffer()
     for i, t in ts {
       if i > 0 {
         buf.write_bytes(sep)
@@ -956,7 +956,7 @@ fn split_stable(
       _ => None
     }
     let (want_d, want_e, fwd_made) = closure(used, need)
-    let buf = @buffer.new()
+    let buf = Buffer()
     buf.write_bytes(unit_head)
     buf.write_bytes(internal)
     buf.write_bytes(prelude)
@@ -1026,7 +1026,7 @@ fn split_stable(
     let (t, used) = init_part(init.text)
     put(b"init.c", unit_text(used, t, None, BSet::new()))
   } else {
-    let buf = @buffer.new()
+    let buf = Buffer()
     for f in init_calls {
       buf.write_bytes(b"CSPLIT_INTERNAL void ")
       buf.write_bytes(f)
@@ -1047,7 +1047,6 @@ fn split_stable(
       jobs.push((cat([u, b".c"]), 1, init_units[u]))
     }
   }
-  let ninit = jobs.length()
   // the globals in units of their own, each of a package's (its globals, and the string literals it alone uses),
   // a big package's in pieces by its globals' names without their numbers (moonc's numbers move as a program
   // has more or fewer of them); the literals more than one package uses in pieces of their own by their names
@@ -1057,8 +1056,8 @@ fn split_stable(
   let lit = b"moonbit_string_literal_"
   // (which packages use each literal: its functions, its globals; and the first by name of the source files whose
   // functions use it)
-  let lit_users : Map[Bytes, BSet] = Map::new()
-  let lit_file : Map[Bytes, Bytes] = Map::new()
+  let lit_users : Map[Bytes, BSet] = Map([])
+  let lit_file : Map[Bytes, Bytes] = Map([])
   let note_users = fn(text : Bytes, pkg : Bytes, file : Bytes?) {
     let mut p = 0
     while true {
@@ -1120,11 +1119,11 @@ fn split_stable(
     }
   }
   let groups = data_names.mapi(fn(k, _) { group_of(k) })
-  let group_size : Map[Bytes, Int] = Map::new()
+  let group_size : Map[Bytes, Int] = Map([])
   for k, g in groups {
     group_size[g.0] = group_size.get_or_default(g.0, 0) + clen(data_r[k])
   }
-  let data_units : Map[Bytes, Array[(Bytes, Int)]] = Map::new()
+  let data_units : Map[Bytes, Array[(Bytes, Int)]] = Map([])
   for k, n in data_names {
     let (g, key) = groups[k]
     let label = if g == b" layout" {
@@ -1198,7 +1197,7 @@ fn split_stable(
       // sfapp's test's units after a change to one file, 2026-10-23)
       let used = BSet::new()
       let defines = BSet::new()
-      let at : Map[Bytes, Int] = Map::new()
+      let at : Map[Bytes, Int] = Map([])
       for i, e in entries {
         at[e.0] = i
       }

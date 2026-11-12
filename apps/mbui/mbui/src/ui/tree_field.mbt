@@ -70,7 +70,7 @@ let tree_fields_rev : Ref[Int] = Ref(0)
 fn view_words_found(d : @view.Drawn) -> String {
   match tree_fields.get(d.id) {
     Some(tf) => (tf.hint)()
-    None => view_words_set(d.words, d.words_look)
+    None => view_words_set(d.words, d.words_look, d.words_breaks)
   }
 }
 
@@ -131,6 +131,9 @@ pub fn field(
   parent.box(fn(f) {
     let id = f.id()
     let st = field.st
+    // (its words the editor's, at the system's size of words whatever its node says (Ctx::editor_sizing): made where
+    // words are as said, a check's tree says so, View::words_follow_system)
+    f.words_follow_system("a field")
     // (one Field, one editor: held by another node still, it is told; an old view's editor given it then, Ctx::editor.
     // Given so, a fault (the boundary round it shows it), this field taking it over meanwhile)
     match st.tree_node {
@@ -306,8 +309,14 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
       if n.kind == kind_editor && n.id == st.built_id && self.editors.get(n.id).map_or(false, fn(e) { physical_equal(e, st) }) {
         // (under a modal layer of the tree's over the old view built now, kept for the layer to give back, as
         // Ctx::focus_editor's)
-        if !view_focus_kept_for(self, st.built_id) && island_allows(self.island_of_id(st.built_id)) {
-          self.focus_moved(st.built_id)
+        if !view_focus_kept_for(self, st.built_id) {
+          let island = self.island_of_id(st.built_id)
+          if island_keys(island) {
+            self.focus_moved(st.built_id)
+          } else if island_kept_asked(island) {
+            // (in a part not in use: asked still, given as its editor is built in use again)
+            st.focus_asked = true
+          }
         }
         return
       }
@@ -323,6 +332,17 @@ fn tree_field_focus(id : @view.NodeId) -> Unit {
   guard view_app.val is Some(tree) && tree.can_focus(id) else { return }
   g().focus_moved(tree_said_id(id))
   tree_field_redraw()
+}
+
+///|
+/// The focus come to what `c` says has it (Ctx::focus_moved, whoever moved it: the app's Field::focus, a layer opening
+/// with it, Tab, a press, a screen reader): where that is a field of the window's tree, its caret blinking from the
+/// moment of what moved it (the event's, as a press puts the caret: place_caret; in a frame, the frame's), shown at
+/// once as an old view's field's is, built as it is first shown (Ctx::editor's blink_again, which a field of the tree's
+/// never reads).
+fn tree_field_focus_came(c : Ctx) -> Unit {
+  guard tree_said_ids.get(c.focus) is Some(id) && tree_fields.get(id) is Some(tf) else { return }
+  tf.st.blink0 = if c.in_frame() { c.clock } else { view_moment() }
 }
 
 ///|
@@ -373,7 +393,7 @@ fn tree_field_down(id : @view.NodeId, x : Double, y : Double, at : Double) -> Bo
   tf.track.reset()
   tf.track.add(at, y)
   // (its words flung on: stopped where they are, as an old view's field's are as a finger goes down, sideways_down)
-  sideways_down(g(), tree_said_id(id), x, y)
+  sideways_down(tree_said_id(id))
   let st = tf.st
   if h_feel() == 2 {
     // (held still long_press_ms where it went down: at that moment, on the tree's timeline, whatever frames come)
@@ -382,7 +402,7 @@ fn tree_field_down(id : @view.NodeId, x : Double, y : Double, at : Double) -> Bo
   }
   // (how many presses in a row: one soon after the last and near it counts on from it, as the old frame counts)
   let (n, was, ax, ay) = tf.run
-  tf.clicks = if at - was <= double_click_ms && (x - ax).abs() <= double_click_slop && (y - ay).abs() <= double_click_slop {
+  tf.clicks = if at <= was + double_click_ms && (x - ax).abs() <= double_click_slop && (y - ay).abs() <= double_click_slop {
     n + 1
   } else {
     1
@@ -420,7 +440,7 @@ fn tree_field_held(id : @view.NodeId) -> Unit {
   c.focus_moved(tree_said_id(id))
   let st = tf.st
   tf.editing = true
-  match st.local(x, y) {
+  match st.local_point(x, y) {
     Some((lx, ly)) => if st.pick_word(lx, ly, view_moment()) { tf.word_drag = true }
     None => ()
   }
@@ -439,7 +459,7 @@ fn tree_field_handle_down(x : Double, y : Double, at : Double) -> Bool {
   guard tree_said_ids.get(c.focus_allowed()) is Some(id) else { return false }
   guard tree_fields.get(id) is Some(tf) else { return false }
   let st = tf.st
-  guard st.local(x, y) is Some((lx, ly)) else { return false }
+  guard st.local_point(x, y) is Some((lx, ly)) else { return false }
   let which = st.on_sel_handle(lx, ly)
   let (which, dy) = if which != 0 {
     (which, ly - (if which == 2 { st.sel_ay } else { st.sel_by }))
@@ -504,13 +524,13 @@ fn tree_field_moved(id : @view.NodeId, x : Double, y : Double, at : Double) -> B
   } else if tf.handle != 0 {
     handle_move(g(), x, y, at)
   } else if tf.word_drag {
-    match st.local(x, y) {
+    match st.local_point(x, y) {
       Some((lx, ly)) => st.widen_to(lx, ly)
       None => ()
     }
     st.menu = false
   } else {
-    match (st.tl, st.local(x, y)) {
+    match (st.tl, st.local_point(x, y)) {
       (Some(_), Some((lx, ly))) if tf.clicks > 1 && !tf.shifted =>
         st.widen_to(lx, ly, by=if tf.clicks == 2 { Words } else { Paragraphs })
       (Some(tl), Some((lx, ly))) => st.caret_to_point(tl, lx, ly)
@@ -539,8 +559,8 @@ fn tree_field_tapped(id : @view.NodeId) -> Unit {
   let st = tf.st
   let t = view_moment()
   let (was, lx, ly) = tf.last_tap
-  if t - was <= double_tap_ms && (x - lx).abs() <= 2.0 * touch_slop() && (y - ly).abs() <= 2.0 * touch_slop() {
-    match st.local(x, y) {
+  if t <= was + double_tap_ms && (x - lx).abs() <= 2.0 * touch_slop() && (y - ly).abs() <= 2.0 * touch_slop() {
+    match st.local_point(x, y) {
       Some((px, py)) => st.pick_word(px, py, t) |> ignore
       None => ()
     }
@@ -894,6 +914,39 @@ fn tree_field_told(tf : TreeField) -> Unit {
 }
 
 ///|
+/// Field node `id` (`tf`) as it is placed at (`x`, `y`), laid out `w` by `h`: what it is laid out and drawn by, as an
+/// old view's field is by its node (Node::field_box), and what the squeeze holds its placeholder to (FieldBox::hint_kept).
+fn Ctx::tree_field_box(
+  self : Ctx,
+  id : @view.NodeId,
+  tf : TreeField,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+) -> FieldBox {
+  let z = self.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line)
+  {
+    id: tree_said_id(id),
+    x,
+    y,
+    w,
+    h,
+    pad_l: z.pad_x,
+    pad_t: z.pad_y,
+    pad_r: z.pad_x,
+    pad_b: z.pad_y,
+    font_size: z.font_size,
+    weight: Node::new().weight,
+    line_h: z.line,
+    wrap: z.wrap,
+    trim: tf.trim,
+    hint: (tf.hint)(),
+    shorter: tf.shorter,
+  }
+}
+
+///|
 /// Field node `id` drawn this frame at (`x`, `y`), laid out `w` by `h` (in its own terms), `s` as big, `alpha` opaque:
 /// placed there, laid out and drawn as an old view's field is (Ctx::lay_out_field, Ctx::paint_field), then drawn as big
 /// as it is about that place, as what its block draws is.
@@ -913,25 +966,7 @@ fn Ctx::paint_tree_field(
   // it is drawn and made as big there: as the tree's own words are, view_blit; not placed on the pixels as a whole, as
   // an old view's field is with its old view, old_place)
   let (ux, uy) = laid
-  let z = self.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line)
-  let fb : FieldBox = {
-    id: tree_said_id(id),
-    x: ux,
-    y: uy,
-    w,
-    h,
-    pad_l: z.pad_x,
-    pad_t: z.pad_y,
-    pad_r: z.pad_x,
-    pad_b: z.pad_y,
-    font_size: z.font_size,
-    weight: Node::new().weight,
-    line_h: z.line,
-    wrap: z.wrap,
-    trim: tf.trim,
-    hint: (tf.hint)(),
-    shorter: tf.shorter,
-  }
+  let fb = self.tree_field_box(id, tf, ux, uy, w, h)
   let st = tf.st
   // (painted again as what is its own changes it (tree_field_redraw), and with the clock while its words are flung on)
   tree_fields_drawn.get() |> ignore
@@ -1001,6 +1036,7 @@ fn Ctx::paint_tree_field(
 /// of words applied; another's its words' look's): what holds each as drawn (its index, -1 none) and whether it takes a
 /// press, as there. Drawn.words keeps what is drawn as words; nothing of a field made to look drawn.
 pub fn Tester::drawn_words_found(self : Tester) -> Array[(@view.Drawn, Int, Bool, String, Double)] {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return [] }
   let c = g()

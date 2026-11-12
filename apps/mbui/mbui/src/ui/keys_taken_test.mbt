@@ -4,7 +4,7 @@
 ///|
 test "a key catcher with the focus: a part that says it takes the catcher's keys takes none, the catcher has them" {
   let got : Array[@ui.KeyIn] = []
-  let taken = Ref::new(0)
+  let taken = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     c.catch_keys("keys", true)
     let k = c.key_catcher("keys")

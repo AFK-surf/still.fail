@@ -114,12 +114,49 @@ test "the picture held by a finger, Small or Medium: its one menu, 保存到相�
     t.run_for(@ui.long_press_ms + 20.0)
     t.release(w / 2.0, 422.0)
     t.draw()
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@sf.presented_rest() - t.time())
     // (its sheet measures what it holds as it first comes, the frame built again then: that build sees no hold)
     assert_eq(@sf.last_presented() - before, 1, msg="\{w} wide")
     assert_true(t.reachable("保存到相册").length() > 0, msg="\{w} wide")
     assert_true(t.reachable("复制图片").length() == 0, msg="\{w} wide")
   }
+}
+
+///|
+test "分享 on a phone: in the bar beside download and beside 保存到相册 in the picture's held menu, the picture handed whole to the system's share sheet; none on the Mac" {
+  for platform in [1, 2] {
+    let t = preview_tester("image", platform~)
+    assert_true(t.query(Button, label=@sf.t("web-main.preview.download")) is Some(_), msg="platform \{platform}")
+    t.click(Button, label="分享")
+    let shared = t.shared_out()
+    assert_eq(shared.length(), 1, msg="platform \{platform}")
+    assert_eq(shared[0].1, "界面草图.png")
+    assert_true(shared[0].3.length() > 0)
+    // held by a finger: its menu has it beside 保存到相册
+    t.press_at(195.0, 422.0)
+    t.run_for(@ui.long_press_ms + 20.0)
+    t.release(195.0, 422.0)
+    t.draw()
+    t.run_for(@sf.presented_rest() - t.time())
+    assert_true(t.reachable("保存到相册").length() > 0)
+    t.tap_text("分享")
+    t.frame()
+    assert_eq(t.shared_out().length(), 2, msg="platform \{platform}")
+  }
+  // the Mac downloads and copies; its share sheet is not offered here
+  let t = preview_tester("image")
+  assert_true(t.query(Button, label="分享") is None)
+}
+
+///|
+test "分享 on a phone of a file told of: read whole through the core first, then handed to the share sheet" {
+  let t = preview_tester("none", platform=2)
+  assert_true(t.find("下载") is Some(_))
+  t.tap_text("分享")
+  t.frame()
+  let shared = t.shared_out()
+  assert_eq(shared.length(), 1)
+  assert_true(shared[0].3.length() > 0)
 }
 
 ///|
@@ -154,7 +191,7 @@ test "a video plays in the one player (@sf.player_view), its bytes read through 
   assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
   t.draw()
   assert_true(t.find(" / 3 帧") is Some(_))
-  let v = viewer.get().unwrap()
+  viewer.get().unwrap() |> ignore
   t.back()
   assert_true(viewer.get() is None)
   // faded out (pv_fade_ms from when it set out), its view closed
@@ -281,8 +318,8 @@ test "a video in the chat says how long it is in its foot's start corner, as its
   let (bw, bh, _) = @sfpages.image_box(a, @sfpages.video_least)
   let h = bh * 300.0 / bw
   let pic = t.drawn_images().iter().find_first(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }).unwrap()
-  assert_true(lx > pic[0] && lx < pic[0] + 300.0 / 3.0, msg="\{lx} \{pic}")
-  assert_true(ly > pic[1] + h * 2.0 / 3.0 && ly < pic[1] + h, msg="\{ly} \{pic}")
+  assert_true(lx > pic[0] && lx < pic[0] + 300.0 / 3.0, msg="\{lx} \{Repr(pic)}")
+  assert_true(ly > pic[1] + h * 2.0 / 3.0 && ly < pic[1] + h, msg="\{ly} \{Repr(pic)}")
   assert_true(t.find("一段很长") is None)
   assert_eq(t.squeeze_faults(), [])
 }
@@ -332,12 +369,12 @@ test "a video's timeline dragged: paused, the player told a finger is on it, a s
   assert_true(t.views().contains("control 1 9 1"))
   assert_eq(seeks(), ["control 1 3 200"])
   // on within that frame: nothing more asked
-  t.move(x0 + span * 0.27, mid)
+  t.move_to(x0 + span * 0.27, mid)
   assert_eq(seeks().length(), 1)
   // to three quarters: the frame there (700 ms), the head and the frame's count there before the player says it is
   // (it says the seek it is taking up: the first, still)
   t.set_player(1, position=200.0)
-  t.move(x0 + span * 0.75, mid)
+  t.move_to(x0 + span * 0.75, mid)
   assert_eq(seeks(), ["control 1 3 200", "control 1 3 700"])
   assert_true(t.find("8 / 10 帧") is Some(_))
   assert_true(
@@ -395,9 +432,10 @@ test "a video's ‹ and › go to a frame's very start, a frame on from the one 
 ///|
 /// A chat's video (16:9, its still the station's poster) alone on a page, the viewer over it once it is tapped open;
 /// how long it is as its message says, `duration` (none: not said).
-fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
+fn video_in_chat(duration? : Double = 0.0, still? : Bool = true) -> @ui.Tester {
   new_run()
-  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
+  // (no still: the station's not come yet, its thumbnail black with its play mark alone)
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { if still { fixture_file(name) } else { "" } } }
   let a : Attachment = {
     name: "演示录屏.mp4",
     path: "uploads/fx/演示录屏.mp4",
@@ -433,7 +471,7 @@ fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
 /// The bytes in hex (a host's grabbed frame as a run's line says it: Tester::view_said).
 fn hex_bytes(b : Bytes) -> String {
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for x in b {
     out.write_char(digits.get_char(x.to_int() >> 4).unwrap())
     out.write_char(digits.get_char(x.to_int() & 15).unwrap())
@@ -701,14 +739,14 @@ test "a text shown as it comes: its lines whole however its parts cut them, a ch
   while at < log.length() {
     let to = if at + 1000 < log.length() { at + 1000 } else { log.length() }
     f.got = to.to_double()
-    f.take(log[at:to].to_bytes())
+    f.take(log[at:to].to_owned())
     at = to
   }
   assert_eq(f.lines.length(), 12000)
   assert_eq(f.lines[0], "[build] 第 1 行：编译 src/module_1.mbt 完成，用时 1 ms")
   assert_eq(f.lines[11999], "[build] 第 12000 行：编译 src/module_69.mbt 完成，用时 1 ms")
   assert_eq(f.tail, "")
-  assert_eq(@sfbase.utf8_whole(@utf8.encode("行")[0:2].to_bytes()), 0)
+  assert_eq(@sfbase.utf8_whole(@utf8.encode("行")[0:2].to_owned()), 0)
   assert_eq(@sfbase.utf8_whole(@utf8.encode("a行")), 4)
 }
 
@@ -1173,7 +1211,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   t.run_for(note_pop_ms)
   t.type_text("这里对齐")
   let tick = t.reachable("icon:check")
-  assert_eq(tick.length(), 1, msg="完成 where a finger reaches it: \{tick}")
+  assert_eq(tick.length(), 1, msg="完成 where a finger reaches it: \{Repr(tick)}")
   t.tap(tick[0].0, tick[0].1)
   t.draw()
   let (px, py, pw, ph) = t.get(Button, label=pv("android-chat.preview.put")).rect
@@ -1249,10 +1287,10 @@ test "a picture said not to decode: why, its glyphs drawn in the theme's muted i
   }
   let said = pv("android-chat.file.image.failed")
   let at = t.words().filter(fn(w) { w.0 == said })
-  assert_eq(at.length(), 1, msg="said once: \{at}")
+  assert_eq(at.length(), 1, msg="said once: \{Repr(at)}")
   let (_, x, y, w, h, _) = at[0]
   let inks = t.drawn_glyphs().filter(fn(g) { g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 <= y + h + 1.0 }).map(fn(g) { g.2 })
   assert_true(inks.length() > 0, msg="its glyphs drawn where it is: \{x} \{y} \{w} \{h}")
   let muted = @sf.theme().p.muted
-  assert_true(inks.iter().all(fn(i) { i == muted }), msg="each in the theme's muted ink \{muted}: \{inks}")
+  assert_true(inks.iter().all(fn(i) { i == muted }), msg="each in the theme's muted ink \{muted}: \{Repr(inks)}")
 }

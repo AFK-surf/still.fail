@@ -17,7 +17,6 @@ export type Effect =
   | { kind: "thread"; archived: boolean }
   | { kind: "connect"; id: string | null }
   | { kind: "overview" }
-  | { kind: "footprint" }
   | { kind: "slack" }
   | { kind: "job" }
   /// The agents' memory (the `memory` topic): read again.
@@ -65,11 +64,13 @@ const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "account", "a
 export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
   "session.cancelRetry": "key:string thread:number seq:number",
+  "session.retry": "key:string thread:number seq:number",
   "tools.access": "",
   "tools.setAccess": "access:string",
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
+  "copies.restore": "origin:string gen:string fromStation:string",
   "station.restart": "",
   "context.setAfresh": "afreshWhenCold?:boolean afreshAbove?:number",
   "diagnostics.setLogs": "logs:boolean",
@@ -97,6 +98,8 @@ export const PARAMS: Record<string, string> = {
   "preset.add": "name:string dirs:json instructions?:string",
   "preset.put": "id:string name:string dirs:json instructions?:string",
   "preset.delete": "id:string",
+  "preset.clone": "url:string",
+  "preset.cloneDrop": "id:string",
   "chats.archived": "",
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
@@ -142,7 +145,7 @@ export const PARAMS: Record<string, string> = {
   "profile.share": "id:string on?:boolean allow?:strings",
   "profile.move": "id:string to:string",
   "skill.share": "name:string on?:boolean allow?:strings",
-  "profile.resetQuota": "id:string",
+  "profile.resetQuota": "id:string reset?:string",
   "profile.quota": "id:string",
   "profile.check": "id:string",
   "profile.login": "id:string",
@@ -181,10 +184,6 @@ export const PARAMS: Record<string, string> = {
   "signin.deny": "id:string",
   "memory.get": "",
   "process.end": "pid:number session:string",
-  "footprint.scan": "",
-  "footprint.rebuild": "keys?:strings",
-  "footprint.delete": "keys?:strings",
-  "footprint.evict": "keys?:strings",
   "software.update": "id?:string repair?:boolean",
   "software.updateAll": "",
   "software.check": "",
@@ -215,6 +214,7 @@ export const PARAMS: Record<string, string> = {
   "workspace.enroll": "workspace:string name?:string",
   "workspace.renameStation": "workspace:string station:string name?:string emoji?:string icon?:string",
   "workspace.removeStation": "workspace:string station:string",
+  "workspace.feedbackReply": "workspace:string id:string text:string",
   "invitation.preview": "token?:string",
   "invitation.accept": "id?:string token?:string",
   "invitation.decline": "id:string",
@@ -296,7 +296,6 @@ class P {
 const NONE: Effect = { kind: "none" };
 const OVERVIEW: Effect = { kind: "overview" };
 const SLACK: Effect = { kind: "slack" };
-const FOOTPRINT: Effect = { kind: "footprint" };
 /// The folders `paths` (under `root`) are in.
 const drive = (root: string, paths: string[]): Effect => ({ kind: "drive", root, paths: paths.map(folderOf) });
 
@@ -334,6 +333,10 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
     case "network.setCongestion":
       return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
+    // A lost station's chats restored into a new one (the overview's `copies.offers`), from a station that keeps them
+    // (its station's replica/copies.ts), by the workspace's owners and admins.
+    case "copies.restore":
+      return op("POST", () => "/copies/restore", { station: p.str("origin"), gen: p.str("gen"), from: { station: p.str("fromStation") } }, OVERVIEW);
     // The station started again by its launcher (its routes/network.ts), managers only.
     case "station.restart":
       return op("POST", () => "/station/restart", null, OVERVIEW);
@@ -353,6 +356,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.cancelRetry":
       return op("POST", () => `/sessions/${p.at("key")}/cancel-retry`, p.pick(["thread", "seq"]), process("key"));
+    case "session.retry":
+      return op("POST", () => `/sessions/${p.at("key")}/retry`, p.pick(["thread", "seq"]), process("key"));
     case "session.warm":
       // As a person types in its chat (once a minute), nobody waiting on it: its station tells its session's new state.
       // It read the detail each time, a third of a phone's reads of details.
@@ -445,6 +450,14 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => `/presets/${p.at("id")}`, { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
     case "preset.delete":
       return op("DELETE", () => `/presets/${p.at("id")}`, null, { kind: "presets" });
+    // A repository cloned from git into the station's repository cache, to be picked once there: answers at once
+    // (`{id, url, repo, name, state: "cloning"}`, or `{state: "there", path, repo, name}` when the station has it
+    // already); how it goes comes as the `presets` topic's `clones`.
+    case "preset.clone":
+      return op("POST", () => "/presets/clone", { url: p.str("url") }, { kind: "presets" });
+    // A clone that failed forgotten, or one under way stopped.
+    case "preset.cloneDrop":
+      return op("DELETE", () => `/presets/clones/${p.at("id")}`, null, { kind: "presets" });
     case "chats.archived":
       return op("GET", () => "/chats?archived=1", null, NONE);
     case "chat.forSession":
@@ -554,7 +567,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "skill.share":
       return op("POST", () => `/skills/${p.at("name")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null }, { kind: "memory" });
     case "profile.resetQuota":
-      return op("POST", () => `/profiles/${p.at("id")}/reset-quota`, null, OVERVIEW);
+      return op("POST", () => `/profiles/${p.at("id")}/reset-quota`, p.has("reset") ? p.pick(["reset"]) : null, OVERVIEW);
     case "profile.quota":
       return op("POST", () => `/profiles/${p.at("id")}/quota`, null, OVERVIEW);
     case "profile.check":
@@ -659,14 +672,6 @@ function stationOp(name: string, params: unknown): Request | null {
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
-    case "footprint.scan":
-      return op("POST", () => "/footprint/scan", null, FOOTPRINT);
-    case "footprint.rebuild":
-      return op("POST", () => "/footprint/rebuild", p.pick(["keys"]), FOOTPRINT);
-    case "footprint.delete":
-      return op("POST", () => "/footprint/delete", p.pick(["keys"]), FOOTPRINT);
-    case "footprint.evict":
-      return op("POST", () => "/footprint/evict", p.pick(["keys"]), FOOTPRINT);
     case "software.update":
       return op("POST", () => "/updates", p.pick(["id", "repair"]), OVERVIEW);
     case "software.updateAll":
@@ -752,6 +757,10 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("PATCH", () => `${ws()}/stations/${p.at("station")}`, p.pick(["name", "emoji", "icon"]));
     case "workspace.removeStation":
       return op("DELETE", () => `${ws()}/stations/${p.at("station")}`, null);
+    // A person's answer, as themselves, on a bug report the still.fail team replied on, from a chat of the workspace
+    // (feedback-replies.ts): kept with the team's replies.
+    case "workspace.feedbackReply":
+      return op("POST", () => `${ws()}/feedback/${p.at("id")}/reply`, p.pick(["text"]));
     case "invitation.preview":
       return op("POST", () => "/v1/invitations/preview", p.pick(["token"]));
     case "invitation.accept":

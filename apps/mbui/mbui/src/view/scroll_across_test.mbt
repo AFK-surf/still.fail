@@ -118,7 +118,7 @@ test "scrolls across: a hold on it moved across past the slop its own (up or dow
   let back = k.tree.claimer_of(at, 20.0, 0.0)
   let id = match k.tree.claimer_of(at, -20.0, 0.0) {
     Some(id) => id
-    None => abort("not taken over")
+    None => @halt.saying("not taken over")
   }
   k.tree.drag_at(id, Down, 160.0, 70.0, 100.0) |> ignore
   k.tree.drag_at(id, Moved, 140.0, 70.0, 110.0) |> ignore
@@ -221,13 +221,13 @@ test "scrolls across, its bar 10 in from either end: its thumb as an old view's 
   k.tree.frame(390.0, 844.0, now=300.0) |> ignore
   let (x, y, w, h) = match k.tree.drawn().iter().find_first(fn(d) { d.h == 3.0 && d.alpha > 0.0 }) {
     Some(d) => (d.x, d.y, d.w, d.h)
-    None => abort("no thumb")
+    None => @halt.saying("no thumb")
   }
   // (300 less 10 either end: 280 of 580; at least 28; 2 in from either end of it; 30 of the 300 it goes)
   let (tx, tw, ratio) = @view.bar_track_of(10.0, 280.0, 280.0, 580.0, 30.0, 0.0, 0.0, 28.0, 2.0)
   let id = match k.tree.target_at(x + w / 2.0, y + h / 2.0) {
     Dragged(id) => id
-    _ => abort("the thumb takes no hold")
+    _ => @halt.saying("the thumb takes no hold")
   }
   let at = k.across.at(k.tree)
   k.tree.drag_at(id, Down, x + w / 2.0, y + h / 2.0, 310.0) |> ignore

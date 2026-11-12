@@ -73,7 +73,7 @@ fn yield_run(
   match thumb {
     Some((tx, ty, tw, th, _)) => {
       let p = (tx + tw / 2.0 + 2.0, ty + th / 2.0)
-      t.move(p.0, p.1)
+      t.move_to(p.0, p.1)
       t.run_for(scrollbar_fade_ms)
       let before = t.list_offset()
       steps(t, p, there)
@@ -85,10 +85,10 @@ fn yield_run(
 
 ///|
 /// Pressed at the thumb and dragged down 40, 10 each drag_step_ms, let go.
-fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) -> Unit raise {
+fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) -> Unit {
   t.press_at(p.0, p.1)
   for i in 1..=4 {
-    t.move(p.0, p.1 + 10.0 * i.to_double())
+    t.move_to(p.0, p.1 + 10.0 * i.to_double())
     t.run_for(drag_step_ms)
   }
   t.release(p.0, p.1 + 40.0)
@@ -97,26 +97,26 @@ fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) 
 
 ///|
 test "yield_thumbs: a mouse's press at the list's thumb under the edge's strip, dragged: the list scrolled, the edge told nothing" {
-  let (said, moved) = yield_run(yield_drag)
-  assert_true(moved > 0.0 && said.length() == 0, msg="\{said} \{moved}")
+  let (said, moved) = yield_run(fn(t, p, there) { yield_drag(t, p, there) })
+  assert_true(moved > 0.0 && said.length() == 0, msg="\{Repr(said)} \{moved}")
 }
 
 ///|
 test "yield_thumbs: a button of the tree's over the edge where the thumb is: its, the list not scrolled, the edge told nothing" {
-  let (said, moved) = yield_run(yield_drag, cover=true)
-  assert_true(moved == 0.0 && said.length() > 0 && said.iter().all(fn(s) { s.has_prefix("button") }), msg="\{said} \{moved}")
+  let (said, moved) = yield_run(fn(t, p, there) { yield_drag(t, p, there) }, cover=true)
+  assert_true(moved == 0.0 && said.length() > 0 && said.iter().all(fn(s) { s.has_prefix("button") }), msg="\{Repr(said)} \{moved}")
 }
 
 ///|
 test "yield_thumbs: a finger at the thumb a mouse brought out: the edge's" {
-  let (said, moved) = yield_run(fn(t, p, _) raise {
+  let (said, moved) = yield_run(fn(t, p, _) {
     let at = t.time() + 10.0
     t.advance(at - t.time())
     t.touch_raw(0, 1, p.0, p.1, at)
     t.touch_raw(1, 1, p.0, p.1 + 20.0, at + 20.0)
     t.touch_raw(2, 1, p.0, p.1 + 20.0, at + 40.0)
   })
-  assert_true(moved == 0.0 && said.contains("edge press"), msg="\{said} \{moved}")
+  assert_true(moved == 0.0 && said.contains("edge press"), msg="\{Repr(said)} \{moved}")
 }
 
 ///|
@@ -125,7 +125,7 @@ test "yield_thumbs: the old view let go while its thumb is held: what follows, n
     t.press_at(p.0, p.1)
     // (held by the old view: its thumb's press)
     assert_true(view_held.val is Some(Old(_, _)), msg="held by the old view")
-    t.move(p.0, p.1 + 10.0)
+    t.move_to(p.0, p.1 + 10.0)
     t.frame()
     let held_at = t.list_offset()
     // (let go of at this event, nothing drawn after it till the hand is done)
@@ -141,13 +141,13 @@ test "yield_thumbs: the old view let go while its thumb is held: what follows, n
     t.frame()
     assert_eq(t.list_offset(), held_at, msg="the list as its thumb was left")
   })
-  assert_true(said.iter().all(fn(s) { !s.has_prefix("edge") }), msg="\{said}")
+  assert_true(said.iter().all(fn(s) { !s.has_prefix("edge") }), msg="\{Repr(said)}")
 }
 
 ///|
 test "yield_thumbs: the pointer still at the thumb under the edge's strip, the thumb wheeled away from it and back: the edge pointed at as the thumb leaves, not as it is there" {
   let seen : Array[Bool] = []
-  let (said, _) = yield_run(fn(t, p, _) raise {
+  let (said, _) = yield_run(fn(t, p, _) {
     let tree = view_tree().unwrap()
     seen.push(tree.pointed_now() == yield_edge.val)
     // (the list wheeled far on: the thumb gone down from under the pointer, which stays; as the frame that publishes it
@@ -167,7 +167,7 @@ test "yield_thumbs: the pointer and the thumb still, the old view's box rounded 
   let round = @signals.signal(0.0, same=fn(a, b) { a == b })
   let seen : Array[Bool] = []
   let rects : Array[Array[(Double, Double, Double, Double)]] = []
-  let (said, _) = yield_run(round~, fn(t, p, _) raise {
+  let (said, _) = yield_run(round~, fn(t, _, _) {
     let tree = view_tree().unwrap()
     let thumb = fn() {
       t.drawn_rects().filter(fn(r) { r.2 == scroll_bar_size && r.0 > 280.0 }).map(fn(r) { (r.0, r.1, r.2, r.3) })
@@ -186,7 +186,7 @@ test "yield_thumbs: the pointer and the thumb still, the old view's box rounded 
   })
   ignore(said)
   // (the thumb where it was, drawn as it was, all along: only its corner's cut changed)
-  assert_true(rects.length() == 3 && rects[0].length() == 1 && rects.iter().all(fn(r) { r == rects[0] }), msg="the thumb: \{rects}")
+  assert_true(rects.length() == 3 && rects[0].length() == 1 && rects.iter().all(fn(r) { r == rects[0] }), msg="the thumb: \{Repr(rects)}")
   assert_eq(seen, [false, true, false], msg="pointed at the edge: at the thumb, cut, square again")
 }
 

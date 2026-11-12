@@ -48,11 +48,9 @@ fn same_ride(a : (Shape, Int)?, b : (Shape, Int)?) -> Bool {
 }
 
 ///|
-/// What moves in the window's tree for one cause (moves_for): its owner, the spec of its ways, its shapes and its
-/// parts.
+/// What moves in the window's tree for one cause (moves_for): its owner, its shapes and its parts.
 pub struct Moves {
   priv owner : @view.View
-  priv spec : Spec
   priv shapes : Array[Shape]
   priv parts : Array[Part]
 }
@@ -67,11 +65,11 @@ pub struct Moves {
 pub fn[T : Eq] moves_for(
   owner : @view.View,
   by : () -> T,
-  spec? : Spec = move(),
+  spec? : Spec = moved(),
   spec_of? : (T, T) -> Spec,
   carry_of? : (T, T) -> Bool,
 ) -> Moves {
-  let m = { owner, spec, shapes: [], parts: [] }
+  let m = { owner, shapes: [], parts: [] }
   // (where each stands as a change comes laid out and placed then, whatever changed it before, frame or none)
   owner.laid_before_causes()
   // (done first with what `by` is as it is made, none of it said yet, nothing drawn: nothing goes; each change after it

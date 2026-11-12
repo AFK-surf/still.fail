@@ -36,12 +36,12 @@ priv struct WordsMark {
 
 ///|
 /// What each key's box held when last laid out.
-let words_kept : Map[String, Words] = {}
+let words_kept : Map[String, Words] = Map([])
 
 ///|
 /// This frame's selections, by rich node: the range in its own text, the colour drawn behind it, how round its ends
 /// are, and whether the passage starts and ends in it (its ends rounded there, not where it runs on to another line).
-let words_sel : Map[Int, (Int, Int, Int64, Double, Bool, Bool)] = {}
+let words_sel : Map[Int, (Int, Int, Int64, Double, Bool, Bool)] = Map([])
 
 ///|
 /// Box `i` (built this frame) holds words that may be selected, kept as `key` once laid out (words_of); `a` until
@@ -93,7 +93,7 @@ pub fn Ctx::words_shape_of(self : Ctx, key : String) -> Words? {
 /// were the pass before, and is placed again as the frame is built again. Words nothing read move with their box.
 fn Ctx::words_after_layout(self : Ctx) -> Unit {
   words_sel.clear()
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   // (the boxes marked, from the nodes: Node's `words`)
   let words_marks : Array[WordsMark] = []
   for i in 0..<self.count {
@@ -245,7 +245,7 @@ pub fn Words::slice(self : Words, a : Int, b : Int) -> String {
   let n = self.text.length()
   let a = imax(0, imin(a, n))
   let b = imax(a, imin(b, n))
-  self.text.view(start_offset=a, end_offset=b).to_string()
+  self.text.clamped_view(start=a, end=b).to_owned()
 }
 
 ///|
@@ -320,7 +320,7 @@ pub fn word_at(text : String, off : Int) -> (Int, Int) {
   let i = imax(0, imin(off, n - 1))
   let (s, e) = h_word_at(text, i)
   if s >= 0 && e > s && s <= i && i < e {
-    let w = text.view(start_offset=s, end_offset=e).to_string()
+    let w = text.clamped_view(start=s, end=e).to_owned()
     if w.trim(chars=" \t\n").length() > 0 {
       return (s, e)
     }

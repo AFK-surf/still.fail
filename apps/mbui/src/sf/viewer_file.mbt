@@ -95,7 +95,7 @@ pub fn blob_file(
     key: "",
     bytes: Some(bytes),
     read: fn(max, _, done) {
-      done(Ok(if max >= 0 && max < bytes.length() { bytes[:max].to_bytes() } else { bytes }))
+      done(Ok(if max >= 0 && max < bytes.length() { bytes[:max].to_owned() } else { bytes }))
     },
     stream: None,
     direct: "",

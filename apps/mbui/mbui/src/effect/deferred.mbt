@@ -59,6 +59,6 @@ pub async fn[X] Deferred::wait(self : Deferred[X]) -> X {
   match self.slot {
     Value(x) => x
     Broken(e) => raise e
-    Empty => abort("unreachable")
+    Empty => @halt.saying("unreachable")
   }
 }

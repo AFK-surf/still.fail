@@ -77,7 +77,7 @@ fn screen(mode : String, opening : Double) -> @ui.Tester raise {
   if missing.length() > 0 {
     fail(
       "\{mode}: the Mac's text lacks \{missing.length()} (on a Mac: bash apps/mbui/scripts/screens.sh rec \{mode}): " +
-      missing[:5].to_array().join(", "),
+      missing[:5].to_owned().join(", "),
     )
   }
   t
@@ -93,7 +93,7 @@ fn screen_played(mode : String, opening : Double) -> @ui.Tester raise {
   }
   // (the app made as sffix makes it at its first frame, the Tester's fake host in place: what it hands over then, a
   // made-up file's picture, is the Tester's to keep, not dropped as the Tester begins)
-  let src : Ref[Source?] = Ref::new(None)
+  let src : Ref[Source?] = Ref(None)
   // (made as the window's tree is first made, its fake host in place: what the app's state and shell are made of)
   let made = fn() {
     match src.val {
@@ -131,7 +131,7 @@ fn screen_played(mode : String, opening : Double) -> @ui.Tester raise {
   for v in text.split("\n") {
     if v.has_prefix("VIEWSAID ") {
       if framed {
-        ignore(t.view_said(v.view(start_offset=9).to_owned()))
+        ignore(t.view_said(v.exact_view(start=9).to_owned()))
       }
       continue
     }
@@ -401,6 +401,11 @@ test "chat-flash" {
 ///|
 test "chat-flash-mine" {
   check("chat-flash-mine", @ui.move_most_ms)
+}
+
+///|
+test "chat-flash-notice" {
+  check("chat-flash-notice", @ui.move_most_ms)
 }
 
 // The drive's pages pushed over Home (shots.sh DRIVE_MODES)

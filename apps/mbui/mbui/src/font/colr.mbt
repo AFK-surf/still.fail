@@ -4,6 +4,7 @@
 
 ///|
 /// skrifa's Transform (Matrix): x' = xx·x + xy·y + dx, y' = yx·x + yy·y + dy.
+#derive(Eq, Debug)
 pub(all) struct Matrix {
   xx : Float
   yx : Float
@@ -11,7 +12,7 @@ pub(all) struct Matrix {
   yy : Float
   dx : Float
   dy : Float
-} derive(Eq, Show)
+}
 
 ///|
 pub fn Matrix::identity() -> Matrix {
@@ -31,22 +32,25 @@ pub fn Matrix::mul(self : Matrix, rhs : Matrix) -> Matrix {
 }
 
 ///|
+#derive(Debug)
 pub(all) struct ColorStop {
   offset : Float
   palette_index : Int
   alpha : Float
-} derive(Show)
+}
 
 ///|
 /// How a gradient goes on past its ends: 0 pad, 1 repeat, 2 reflect, 3 unknown.
+#derive(Debug)
 pub(all) enum Brush {
   Solid(Int, Float)
   LinearGradient(Float, Float, Float, Float, Array[ColorStop], Int)
   RadialGradient(Float, Float, Float, Float, Float, Float, Array[ColorStop], Int)
   SweepGradient(Float, Float, Float, Float, Array[ColorStop], Int)
-} derive(Show)
+}
 
 ///|
+#derive(Debug)
 pub(all) enum ColorOp {
   PushTransform(Matrix)
   PopTransform
@@ -58,7 +62,7 @@ pub(all) enum ColorOp {
   /// a composite mode as COLR numbers it (3 is source over)
   PushLayer(Int)
   PopLayer
-} derive(Show)
+}
 
 ///|
 /// Rust's f32 PI / 180.0, as f32::to_radians multiplies by it.

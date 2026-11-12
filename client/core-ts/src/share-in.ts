@@ -11,7 +11,7 @@ import { handlers } from "./core/execute.ts";
 import type { Owner } from "./core/routing.ts";
 import { asCoreError, CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
-import { parseTopic, type Topic } from "./protocol.ts";
+import type { Topic } from "./protocol.ts";
 import * as refs from "./refs.ts";
 import type { Value } from "./store.ts";
 import { arr as arrU, get as getU, isObject } from "./util.ts";
@@ -138,7 +138,8 @@ export class ShareIn implements Owner {
   }
 
   #rows(scope: string): J[] | null {
-    const chats = this.#inner.store.value(parseTopic({ topic: "chats", scope })!);
+    // (the list whole, not a page's window of it)
+    const chats = this.#inner.views?.chatsWhole(scope);
     if (chats === undefined || !("ok" in chats)) return null;
     return open(arr(refs.search(chats.ok, "", null, null, undefined).items));
   }
@@ -166,7 +167,8 @@ export class ShareIn implements Owner {
     const k = keptRow(all, kept(this.#inner, scope, site));
     const found = query.trim() === "" ? all : open(arr(refs.search({ days: [{ items: all }] }, query, null, null, undefined).items));
     const rest = found.filter((r) => r !== k);
-    view.items = (k !== undefined && found.includes(k) ? [k, ...rest] : rest).slice(0, LISTED);
+    // (each whole, as the list's rows were before they were what a row draws: views.ts wholeFor)
+    view.items = (k !== undefined && found.includes(k) ? [k, ...rest] : rest).slice(0, LISTED).map((r) => this.#inner.views?.wholeFor(r) ?? r);
     if (k !== undefined) view.kept = { station: k.station, id: k.id, text: site !== null ? t("core-logic.shareIn.kept", { site }) : t("core-logic.shareIn.kept_text") };
     if (stations.length === 0 && all.length === 0) view.note = t("core-logic.shareIn.none");
     return { ok: view };

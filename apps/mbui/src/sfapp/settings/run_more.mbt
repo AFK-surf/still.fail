@@ -404,7 +404,8 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
     from=Unanchored,
     wide=true,
     tall=0.75,
-    fn(c, close) {
+    steps=true,
+    fn(c, _) {
       let all = machine_sessions.get(station).unwrap_or([])
       // whether one is in the folder chosen
       let in_folder = fn(sv : Json?) {
@@ -542,11 +543,8 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
               trail=fn() {
                 c.text(text(sv, "when"), style=machine_when) |> ignore
               },
-              // (the look in its place)
-              on_press=fn() {
-                close()
-                look_at_machine_session(core, station, name, s)
-              },
+              // (the look a step further in, in the same dialog)
+              on_press=fn() { look_at_machine_session(core, station, s) },
             )
             // its first words whole while it is pointed at
             @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"), repeats=text(sv, "title") == "")
@@ -612,7 +610,7 @@ let machine_own : String = "\u{0}own"
 ///|
 /// One of them looked at before going on with it (lookAtMachineSession): what was said in it, the latest at the bottom
 /// (`machineSessions.read`); 继续 makes the chat that goes on with it (`machineSessions.continue`) and opens it.
-fn look_at_machine_session(core : Core, station : String, name : String, s : Json) -> Unit {
+fn look_at_machine_session(core : Core, station : String, s : Json) -> Unit {
   let sv = Some(s)
   let said : @signals.Signal[(Array[Json], Int)?] = @signals.signal(None)
   let error : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
@@ -625,8 +623,9 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
       Err(e) => error.set(error_text(e))
     }
   })
-  // (as wide as the list it was opened from, in its place; where it ran and how long ago under its title)
-  @sf.panel(first_text(sv, ["title", "first"], ""), description=text(sv, "meta"), from=Unanchored, wide=true, tall=0.85, fn(c, close) {
+  // (a step of the list's dialog (open_machine_sessions): where it ran and how long ago under its title, back to the
+  // list its head's back key)
+  @sf.panel_go(first_text(sv, ["title", "first"], ""), description=text(sv, "meta"), fn(c, close) {
     let t = @sf.theme()
     c.box(style=@sf.panel_words_in(), w=Fill(1.0), h=Fill(1.0), fn() {
       match said.get() {
@@ -689,11 +688,6 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     }
     let busy = is_doing(core, ["machineSessions.continue"], [("station", station), ("id", text(sv, "id"))])
     c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      @sf.button(c, tr("common.back"), key="machine-back", on_press=fn() {
-        // (the list in its place)
-        close()
-        open_machine_sessions(core, station, name)
-      })
       @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy, on_press=fn() {
         error.set("")
         (core.call)("machineSessions.continue", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id")))]), fn(r) {
@@ -759,13 +753,6 @@ fn role_hint(role : String) -> String {
 pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Anchor = Unanchored) -> Unit {
   vault_serial.val += 1
   let key = "add-people/" + vault_serial.val.to_string()
-  let role : Ref[String] = Ref("member")
-  let error : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
-  let done : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
-  let people : @signals.Signal[Array[Json]?] = @signals.signal(None)
-  let problems : Array[String] = []
-  let reading : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
-  let picked : Array[String] = []
   let inside : Array[String] = []
   for m in items(view, "members") {
     inside.push(text(Some(m), "email").to_lower())
@@ -773,214 +760,382 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
   for a in items(view, "added") {
     inside.push(text(Some(a), "email").to_lower())
   }
-  let roles = if text(view, "role") == "owner" { ["member", "admin", "owner"] } else { ["member", "admin"] }
-  // the library's panel opened `from` what was pressed, most of the window tall, what it holds at its own sides
-  @sf.panel(tr("android-settings.add.title"), from~, tall=0.8, form=true, fn(c, close) {
-    let t = @sf.theme()
-    let online = online_stations(core, here)
-    if done.get() != "" {
-      c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
-        c.text(done.get(), size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
+  let st : AddPeople = {
+    key,
+    view,
+    inside,
+    roles: if text(view, "role") == "owner" { ["member", "admin", "owner"] } else { ["member", "admin"] },
+    typed: @signals.signal(field_of(key).text(), same=fn(a, b) { a == b }),
+    role: @signals.signal("member", same=fn(a, b) { a == b }),
+    error: @signals.signal("", same=fn(a, b) { a == b }),
+    done: @signals.signal("", same=fn(a, b) { a == b }),
+    people: @signals.signal(None),
+    problems: @signals.signal([]),
+    reading: @signals.signal(0, same=fn(a, b) { a == b }),
+    picked: @signals.signal([]),
+  }
+  // the library's panel opened `from` what was pressed, most of the window tall, made once as nodes of the window's
+  // tree (@sf.panel_nodes): the form, then what came of it in its place
+  @sf.panel_nodes(
+    tr("android-settings.add.title"),
+    fn(v, _) { add_people_body(v, core, here, st) },
+    from~,
+    tall=0.8,
+    form=true,
+    foot=fn(v, close) { add_people_foot(v, core, here, st, close) },
+  )
+}
+
+///|
+/// What adding people holds while it is open: its field's key, the workspace's view as it opened and who is in it
+/// already (members and those added who have not signed in yet, by email), the roles to give, what is typed, the role
+/// chosen, why adding failed, what came of it ("" before), the Slack people read (None before), what reading them
+/// said went wrong, how many stations are still being read, and those picked of them.
+priv struct AddPeople {
+  key : String
+  view : Json?
+  inside : Array[String]
+  roles : Array[String]
+  typed : @signals.Signal[String]
+  role : @signals.Signal[String]
+  error : @signals.Signal[String]
+  done : @signals.Signal[String]
+  people : @signals.Signal[Array[Json]?]
+  problems : @signals.Signal[Array[String]]
+  reading : @signals.Signal[Int]
+  picked : @signals.Signal[Array[String]]
+}
+
+///|
+/// The emails to add now: those typed, then those picked, each once, none already in.
+fn add_people_emails(st : AddPeople) -> Array[String] {
+  let emails : Array[String] = []
+  for e in parse_emails(st.typed.get()) + st.picked.get() {
+    if !st.inside.contains(e) && !emails.contains(e) {
+      emails.push(e)
+    }
+  }
+  emails
+}
+
+///|
+/// Adding people's body in node `v`: the form (what it does, the emails, the Slack people of the online stations, the
+/// role, why it failed) or, once added, what came of it.
+fn add_people_body(v : @view.View, core : Core, here : Here, st : AddPeople) -> Unit {
+  v.pick(fn() { st.done.get() != "" }, fn(b, done) {
+    if done {
+      b.box(fn(n) {
+        @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(full_room) })
+        @sf.words_node(n, fn() { st.done.get() }, fn() { add_people_said }) |> ignore
       })
       |> ignore
       return
     }
-    let blocks : Array[() -> Unit] = [
-      fn() {
-        c.text(fill("android-settings.add.note", [("name", text(view, "name")), ("app", "still.fail")]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
-        |> ignore
-      },
-      fn() {
-        c.text(tr("android-settings.add.emails"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
-        // (the library's lines to type in: one frame for every field)
-        c.box(w=Fill(1.0), pt=6.0, fn() {
-          @sf.textarea(c, key, rows=1, most=3, placeholder=tr("android-settings.add.emailsPlaceholder"), field=field_of(key))
-          |> ignore
-        })
-        |> ignore
-      },
-    ]
-    if online.length() > 0 {
-      match people.get() {
-        None =>
-          blocks.push(fn() {
-            c.box(dir=Row, fn() {
-              @sf.button(c, tr("android-settings.add.fromSlack"), key="add-from-slack", busy=reading.get() > 0, on_press=fn() {
-                reading.set(online.length())
-                let seen : Map[String, Json] = Map([])
-                for s in online {
-                  (core.call)("slack.people", obj([("station", str(text(Some(s), "station")))]), fn(r) {
-                    match r {
-                      Ok(v) => {
-                        for p in items(Some(v), "people") {
-                          let e = text(Some(p), "email")
-                          if !seen.contains(e) {
-                            seen[e] = p
-                          }
-                        }
-                        for e in strings(Some(v), "errors") {
-                          problems.push(e)
-                        }
-                      }
-                      Err(e) => problems.push(error_text(e))
-                    }
-                    reading.set(reading.get() - 1)
-                    if reading.get() == 0 {
-                      let all = seen.values().collect()
-                      all.sort_by(fn(a, b) {
-                        let ga = flag(Some(a), "guest")
-                        let gb = flag(Some(b), "guest")
-                        if ga != gb {
-                          if ga { 1 } else { -1 }
-                        } else {
-                          text(Some(a), "name").compare(text(Some(b), "name"))
-                        }
-                      })
-                      people.set(Some(all))
-                      // once read, the workspace's own Slack people are picked; guests are left to choose
-                      for p in all {
-                        let e = text(Some(p), "email")
-                        if !flag(Some(p), "guest") && !inside.contains(e) && !picked.contains(e) {
-                          picked.push(e)
-                        }
-                      }
-                    }
-                  })
-                }
-              })
-            })
-            |> ignore
-          })
-        Some(list) => {
-          blocks.push(fn() {
-            c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
-              c.text(
-                fill("android-settings.add.picked", [
-                  ("n", list.length().to_string()),
-                  ("picked", picked.filter(fn(e) { !inside.contains(e) }).length().to_string()),
-                ]),
-                size=t.t.meta,
-                color=t.p.muted,
-                w=Fill(1.0),
-                line=18.0,
-              )
-              |> ignore
-              tap_text(c, "add-all", tr("android-settings.all"), size=14.0, on_press=fn() {
-                picked.clear()
-                for p in list {
-                  let e = text(Some(p), "email")
-                  if !inside.contains(e) {
-                    picked.push(e)
-                  }
-                }
-              })
-              tap_text(c, "add-none", tr("android-settings.none"), size=14.0, on_press=fn() {
-                picked.clear()
-              })
-            })
-            |> ignore
-          })
-          blocks.push(fn() {
-            for p in list {
-              let pv = Some(p)
-              let e = text(pv, "email")
-              let there = inside.contains(e)
-              let name = match text(pv, "name") {
-                "" => e
-                n => n
-              }
-              @sf.choice_row(c, "add-person/" + e, there || picked.contains(e), name, note=join([e, if there { tr("android-settings.add.in") } else if flag(pv, "guest") { tr("android-settings.add.guest") } else { "" }], " · "), disabled=!(!there), lead=fn() { avatar(c, core, e, name, 28.0, picture=text(pv, "image")) }, on_press=fn() {
-                match picked.search(e) {
-                  Some(i) => picked.remove(i) |> ignore
-                  None => picked.push(e)
-                }
-              })
-            }
-            if problems.length() > 0 {
-              c.text(join(problems, tr("android-settings.add.problemSep")), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
-            }
-          })
-        }
-      }
-    }
-    blocks.push(fn() {
-      c.text(tr("android-settings.add.role"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
-      for r in roles {
-        @sf.choice_row(c, "add-role/" + r, role.val == r, role_label(r), note=role_hint(r), on_press=fn() {
-          role.val = r
-        })
-      }
-    })
-    if error.get() != "" {
-      blocks.push(fn() { c.text(error.get(), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore })
-    }
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      scroll_page(c, key, blocks.mapi(fn(i, b) {
-        fn() { @sf.sheet_column(c, fn() { c.box(style=if i == 0 { @sf.full_width } else { sheet_block }, b) |> ignore }) }
-      }))
+    b.box(fn(n) {
+      @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(full_room) })
+      @sf.words_node(
+        n,
+        fn() { fill("android-settings.add.note", [("name", text(st.view, "name")), ("app", "still.fail")]) },
+        fn() { add_note_words },
+      )
+      |> ignore
     })
     |> ignore
-  }, foot=fn(c, close) {
-    // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), from what is typed
-    // and picked now
-    if done.get() != "" {
-      @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary, on_press=fn() {
-        close()
-      })
-      return
-    }
-    let busy = is_doing(core, ["workspace.addMembers"], [("account", here.sub), ("workspace", here.workspace)])
-    let emails : Array[String] = []
-    for e in parse_emails(field_of(key).text()) + picked {
-      if !inside.contains(e) && !emails.contains(e) {
-        emails.push(e)
-      }
-    }
-    @sf.button(c, tr("common.cancel"), key="add-cancel", on_press=fn() {
-      c.blur()
-      close()
-    })
-    let go = if emails.length() > 1 {
-      fill("android-settings.add.many", [("n", emails.length().to_string())])
-    } else {
-      tr("android-settings.add.one")
-    }
-    @sf.button(c, go, key="add-go", tone=Primary, busy=busy, disabled=emails.length() == 0, on_press=fn() {
-      c.blur()
-      error.set("")
-      (core.call)(
-        "workspace.addMembers",
-        obj([
-          ("workspace", str(here.workspace)),
-          ("role", str(role.val)),
-          ("emails", Json::array(emails.map(str))),
-          ("account", str(here.sub)),
-        ]),
-        fn(r) {
-          match r {
-            Ok(v) => {
-              let n = fn(k : String) { items(Some(v), k).length() }
-              done.set(fill("android-settings.add.done", [
-                (
-                  "list",
-                  join(
-                    [
-                      if n("joined") > 0 { fill("android-settings.add.joined", [("n", n("joined").to_string())]) } else { "" },
-                      if n("added") > 0 { fill("android-settings.add.added", [("n", n("added").to_string()), ("app", "still.fail")]) } else { "" },
-                      if n("already") > 0 { fill("android-settings.add.already", [("n", n("already").to_string())]) } else { "" },
-                    ],
-                    tr("android-settings.add.sep"),
-                  ),
-                ),
-              ]))
-            }
-            Err(e) => error.set(error_text(e))
-          }
-        },
+    b.box(fn(n) {
+      @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(add_people_block) })
+      @sf.words_node(n, fn() { tr("android-settings.add.emails") }, fn() { add_people_label }) |> ignore
+      @sf.textarea_node(
+        n,
+        field_of(st.key),
+        rows=1,
+        most=3,
+        placeholder=tr("android-settings.add.emailsPlaceholder"),
+        edited=fn(t) { st.typed.set(t) },
       )
+      |> ignore
+    })
+    |> ignore
+    b.show(fn() { online_stations(core, here).length() > 0 }, fn(s) {
+      s.pick(fn() { st.people.get() is Some(_) }, fn(p, read) {
+        if read {
+          add_people_slack_node(p, core, st)
+        } else {
+          p.box(fn(n) {
+            @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(add_people_button_line) })
+            @sf.button_node(
+              n,
+              fn() { tr("android-settings.add.fromSlack") },
+              fn() { add_people_read_slack(core, here, st) },
+              busy=fn() { st.reading.get() > 0 },
+            )
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+    })
+    b.box(fn(n) {
+      @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(add_people_block) })
+      @sf.words_node(n, fn() { tr("android-settings.add.role") }, fn() { add_people_label }) |> ignore
+    })
+    |> ignore
+    @sf.sheet_column_node(b, fn(col) {
+      for r in st.roles {
+        @sf.choice_row_node(
+          col,
+          fn() { role_label(r) },
+          fn() { st.role.get() == r },
+          press=fn() { st.role.set(r) },
+          note=fn() { role_hint(r) },
+        )
+      }
+    })
+    b.show(fn() { st.error.get() != "" }, fn(e) {
+      e.box(fn(n) {
+        @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(add_people_block) })
+        @sf.words_node(n, fn() { st.error.get() }, fn() { add_error_words }) |> ignore
+      })
+      |> ignore
     })
   })
 }
+
+///|
+/// The Slack people read, in node `p`: how many and how many picked, 全部 and 不选; a row each (in already, a guest),
+/// picked or not as it is pressed; what went wrong reading them under.
+fn add_people_slack_node(p : @view.View, core : Core, st : AddPeople) -> Unit {
+  let list = fn() { st.people.get().unwrap_or([]) }
+  p.box(fn(n) {
+    @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(add_people_picked_line) }, in_row=true)
+    n.box(fn(w) {
+      @sf.style_node(w, fn() { add_people_grow }, in_row=true)
+      @sf.words_node(
+        w,
+        fn() {
+          fill("android-settings.add.picked", [
+            ("n", list().length().to_string()),
+            ("picked", st.picked.get().filter(fn(e) { !st.inside.contains(e) }).length().to_string()),
+          ])
+        },
+        fn() { add_note_words },
+      )
+      |> ignore
+    })
+    |> ignore
+    @sf.button_node(
+      n,
+      fn() { tr("android-settings.all") },
+      fn() {
+        st.picked.set(
+          @signals.untracked(list).map(fn(x) { text(Some(x), "email") }).filter(fn(e) { !st.inside.contains(e) }),
+        )
+      },
+      tone=Ghost,
+    )
+    |> ignore
+    @sf.button_node(n, fn() { tr("android-settings.none") }, fn() { st.picked.set([]) }, tone=Ghost) |> ignore
+  })
+  |> ignore
+  @sf.sheet_column_node(p, fn(col) {
+    col.each(list, fn(x) { text(Some(x), "email") }, fn(r, x) {
+      r.box(fn(row) {
+        let pv = Some(x.untracked())
+        let e = text(pv, "email")
+        let there = st.inside.contains(e)
+        let name = match text(pv, "name") {
+          "" => e
+          n => n
+        }
+        let image = text(pv, "image")
+        @sf.choice_row_node(
+          row,
+          fn() { name },
+          fn() { there || st.picked.get().contains(e) },
+          press=fn() {
+            let now = st.picked.untracked()
+            st.picked.set(if now.contains(e) { now.filter(fn(y) { y != e }) } else { [..now, e] })
+          },
+          note=fn() {
+            join([e, if there { tr("android-settings.add.in") } else if flag(pv, "guest") { tr("android-settings.add.guest") } else { "" }], " · ")
+          },
+          lead=fn(l) {
+            @sf.avatar_node(l, fn() { e }, fn() { name }, fn() { if image == "" { "" } else { (core.picture)(image, 0) } }, 28.0)
+          },
+          disabled=fn() { there },
+        )
+      })
+      |> ignore
+    })
+  })
+  p.show(fn() { st.problems.get().length() > 0 }, fn(s) {
+    s.box(fn(n) {
+      @sf.style_node(n, fn() { @sf.panel_words_in_node(n).then(add_people_block) })
+      @sf.words_node(n, fn() { join(st.problems.get(), tr("android-settings.add.problemSep")) }, fn() { add_error_words }) |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
+/// The people of the Slack workspaces the online stations are in (`slack.people`), each once, the workspace's own first
+/// then its guests, each by name; once all are read, the workspace's own are picked, guests left to choose.
+fn add_people_read_slack(core : Core, here : Here, st : AddPeople) -> Unit {
+  let online = online_stations(core, here)
+  guard online.length() > 0 else { return }
+  st.reading.set(online.length())
+  let seen : Map[String, Json] = Map([])
+  let problems : Array[String] = []
+  for s in online {
+    (core.call)("slack.people", obj([("station", str(text(Some(s), "station")))]), fn(r) {
+      match r {
+        Ok(v) => {
+          for p in items(Some(v), "people") {
+            let e = text(Some(p), "email")
+            if !seen.contains(e) {
+              seen[e] = p
+            }
+          }
+          for e in strings(Some(v), "errors") {
+            problems.push(e)
+          }
+        }
+        Err(e) => problems.push(error_text(e))
+      }
+      st.reading.set(st.reading.untracked() - 1)
+      if st.reading.untracked() == 0 {
+        let all = seen.values().collect()
+        all.sort_by(fn(a, b) {
+          let ga = flag(Some(a), "guest")
+          let gb = flag(Some(b), "guest")
+          if ga != gb {
+            if ga { 1 } else { -1 }
+          } else {
+            text(Some(a), "name").compare(text(Some(b), "name"))
+          }
+        })
+        let picked = st.picked.untracked().copy()
+        for p in all {
+          let e = text(Some(p), "email")
+          if !flag(Some(p), "guest") && !st.inside.contains(e) && !picked.contains(e) {
+            picked.push(e)
+          }
+        }
+        @signals.start_batch()
+        st.problems.set(problems.copy())
+        st.picked.set(picked)
+        st.people.set(Some(all))
+        @signals.end_batch()
+      }
+    })
+  }
+}
+
+///|
+/// Adding people's foot in node `v`: 取消 and 添加 (添加 N 人 for several, lit once there is one to add, turning while it
+/// goes) while the form shows; 完成 once it is added, which closes it (`close`).
+fn add_people_foot(v : @view.View, core : Core, here : Here, st : AddPeople, close : () -> Unit) -> Unit {
+  let form = fn() { st.done.get() == "" }
+  @sf.foot_place_node(v, form, fn(p) {
+    @sf.button_node(p, fn() { tr("common.cancel") }, fn() {
+      p.focus_let_go()
+      close()
+    })
+    |> ignore
+  })
+  @sf.foot_place_node(v, form, fn(p) {
+    @sf.button_node(
+      p,
+      fn() {
+        let n = add_people_emails(st).length()
+        if n > 1 {
+          fill("android-settings.add.many", [("n", n.to_string())])
+        } else {
+          tr("android-settings.add.one")
+        }
+      },
+      fn() {
+        p.focus_let_go()
+        add_people_go(core, here, st)
+      },
+      tone=Primary,
+      busy=fn() { is_doing(core, ["workspace.addMembers"], [("account", here.sub), ("workspace", here.workspace)]) },
+      disabled=fn() { add_people_emails(st).length() == 0 },
+    )
+    |> ignore
+  })
+  @sf.foot_place_node(v, fn() { !form() }, fn(p) {
+    @sf.button_node(p, fn() { tr("common.done") }, fn() { close() }, tone=Primary) |> ignore
+  })
+}
+
+///|
+/// Those to add added (`workspace.addMembers`) with the role chosen: what came of it said in the form's place (joined,
+/// added to join at their first sign-in, in already), or why not under it.
+fn add_people_go(core : Core, here : Here, st : AddPeople) -> Unit {
+  let emails = @signals.untracked(fn() { add_people_emails(st) })
+  guard emails.length() > 0 else { return }
+  st.error.set("")
+  (core.call)(
+    "workspace.addMembers",
+    obj([
+      ("workspace", str(here.workspace)),
+      ("role", str(st.role.untracked())),
+      ("emails", Json::array(emails.map(str))),
+      ("account", str(here.sub)),
+    ]),
+    fn(r) {
+      match r {
+        Ok(v) => {
+          let n = fn(k : String) { items(Some(v), k).length() }
+          st.done.set(fill("android-settings.add.done", [
+            (
+              "list",
+              join(
+                [
+                  if n("joined") > 0 { fill("android-settings.add.joined", [("n", n("joined").to_string())]) } else { "" },
+                  if n("added") > 0 { fill("android-settings.add.added", [("n", n("added").to_string()), ("app", "still.fail")]) } else { "" },
+                  if n("already") > 0 { fill("android-settings.add.already", [("n", n("already").to_string())]) } else { "" },
+                ],
+                tr("android-settings.add.sep"),
+              ),
+            ),
+          ]))
+        }
+        Err(e) => st.error.set(error_text(e))
+      }
+    },
+  )
+}
+
+///|
+/// A part of adding people's form under the one before: across the panel's words, 10 over it.
+// kept across runs: a value (no field of it changes)
+let add_people_block : @ui.Style = @ui.css("w=Full pt=S2_5 gap=S1_5")
+
+///|
+/// 从 Slack 选择成员 under the field, as wide as its words: a row across the panel's words, 10 over it.
+// kept across runs: a value (no field of it changes)
+let add_people_button_line : @ui.Style = @ui.css("row w=Full pt=S2_5")
+
+///|
+/// How many Slack people and how many picked, 全部 and 不选 at its end: a row across the panel's words, 10 over it.
+// kept across runs: a value (no field of it changes)
+let add_people_picked_line : @ui.Style = @ui.css("row w=Full pt=S2_5 gap=S3 align=ACenter")
+
+///|
+/// What takes the rest of a row.
+// kept across runs: a value (no field of it changes)
+let add_people_grow : @ui.Style = @ui.css("w=Grow(1.0)")
+
+///|
+/// A heading of adding people's form (邮箱, 角色): the meta's size, semibold, 18 a line.
+// kept across runs: a value (no field of it changes)
+let add_people_label : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, w=Full, leading=L5)
+
+///|
+/// What came of adding: the UI's size, 20 a line.
+// kept across runs: a value (no field of it changes)
+let add_people_said : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, leading=L6)
 
 ///|
 /// The run's chips in lines, and a chip.

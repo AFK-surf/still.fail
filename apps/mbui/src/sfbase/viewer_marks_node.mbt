@@ -391,7 +391,7 @@ fn note_box_node(w : @view.View) -> Unit {
         }))
         .words_look(By(fn() {
           let (size, _) = @ui.tree_theme().text_size(Meta)
-          { size, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }
+          { size, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
         }))
         .ink(Is(note_muted))
         |> ignore
@@ -476,13 +476,8 @@ fn NotePop::again(self : NotePop, n : @view.View) -> Unit {
 ///|
 /// How far it has come in as `n` is drawn: at the moment it is drawn at while it comes, all of it once it is there.
 fn NotePop::shown(self : NotePop, n : @view.View) -> Double {
-  self.way.said()
   self.ended.get() |> ignore
-  if self.way.goes_at(n.logic_at()) {
-    self.way.value_at(n.drawn_at())
-  } else {
-    self.way.target()
-  }
+  self.way.shown_on(n)
 }
 
 ///|
@@ -532,7 +527,7 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
           marks_said()
           "\{pin().0}"
         }))
-        .words_look(By(fn() { { size: 10.0, weight: 650, line: @ui.tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own, balance: false } }))
+        .words_look(By(fn() { { size: 10.0, weight: 650, line: @ui.tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 } }))
         .ink(Is(0xFFFFFFFFL))
         |> ignore
       })
@@ -553,7 +548,7 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
 fn note_cards_node(r : @view.View) -> Unit {
   r.padding(Is((0.0, 0.0, 0.0, marks_notes_over_tools))) |> ignore
   // (each card's node by its mark: what +N reads of which are left out)
-  let cards : Map[Int, @view.View] = {}
+  let cards : Map[Int, @view.View] = Map([])
   r.box(fn(row) {
     // (each card as tall as what it holds, +N's its one line, its items at its top)
     row
@@ -596,7 +591,7 @@ fn note_cards_node(r : @view.View) -> Unit {
               note_said(mid)
             }, fn() {
               marks_said()
-              marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string() == ""
+              marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_owned() == ""
             })
           },
           fn(b) {
@@ -605,7 +600,7 @@ fn note_cards_node(r : @view.View) -> Unit {
               .words(By(fn() { note.get().2 }))
               .words_look(By(fn() {
                 let (size, _) = @ui.tree_theme().text_size(Caption)
-                { size, weight: 400, line: 17.0, wrap: false, tracking: @view.letters_own, balance: false }
+                { size, weight: 400, line: 17.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
               }))
               .ink(Is(note_muted))
               |> ignore
@@ -700,7 +695,7 @@ fn note_first_node(head : @view.View, words : () -> String, quiet : () -> Bool) 
       .words(By(words))
       .words_look(By(fn() {
         let (size, _) = @ui.tree_theme().text_size(Meta)
-        { size, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { if quiet() { note_muted } else { note_ink } }))
       |> ignore
@@ -804,7 +799,7 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
         m.box(fn(t) {
           t
           .words(By(fn() { "\{pin.get().1}" }))
-          .words_look(By(fn() { { size: 11.0, weight: 700, line: @ui.tree_theme().text_line * 11.0, wrap: false, tracking: @view.letters_own, balance: false } }))
+          .words_look(By(fn() { { size: 11.0, weight: 700, line: @ui.tree_theme().text_line * 11.0, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 } }))
           .ink(By(halo))
           |> ignore
         })
@@ -822,8 +817,7 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
 fn Viewer::marks_rect_on(self : Viewer, n : @view.View) -> (Double, Double, Double, Double)? {
   self.zoom.told()
   self.lift.said()
-  let now = n.logic_at()
-  let t = if self.zoom.goes_at(now) || self.lift.goes_at(now) { n.drawn_at() } else { @double.infinity }
+  let t = n.drawn_while(fn(at) { self.zoom.goes_at(at) || self.lift.goes_at(at) })
   self.marks_rect(t)
 }
 
@@ -871,7 +865,7 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
               Some((_, _, rw, _)) => words.get().3 * rw / dmax(1.0, vw.zoom.nw)
               None => 0.0
             }
-            { size, weight: 600, line: size * 1.3, wrap: false, tracking: @view.letters_own, balance: false }
+            { size, weight: 600, line: size * 1.3, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { if edge { halo_of(words.get().2) } else { words.get().2 } }))
           .offset(By(fn() {

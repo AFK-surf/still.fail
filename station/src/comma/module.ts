@@ -43,12 +43,15 @@ export const CommaLive = Layer.effectDiscard(
       })),
       (stop) => Effect.sync(stop),
     );
+    // A chat's link in the app is made by the reader, of where this station's pages are (sessions/page.ts): the
+    // station's own, never what the asker says.
+    const linked = (op: string, args: Json) => (op === "outflowChats" ? { ...args, pages: agents.pages() } : args);
     // Another station of the workspace reading this one's statistics, for the Comma connect there.
-    bus.on(READ, peerRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home(), stationLang,
+    bus.on(READ, peerRead((op, args, lang) => readers.read(op, linked(op, args), lang), () => cloud.home(), stationLang,
       () => scopeVersion, (peer, workspace) => { member(cloud, peer, workspace); }));
     const readsFor = (workspace: string): WorkspaceReads => ({
       of: () => ({ workspace, home: workspace === cloud.home() }),
-      here: (op, args) => readers.read(op, { ...args, lang: stationLang() }, stationLang(), { background: true }),
+      here: (op, args) => readers.read(op, linked(op, { ...args, lang: stationLang() }), stationLang(), { background: true }),
       others: async () => {
         const roster = await bus.ask("", { method: "peers", workspace });
         if (roster?.current !== true) throw new Error("the roster is not current");
@@ -57,8 +60,10 @@ export const CommaLive = Layer.effectDiscard(
       },
       there: async (station, op, args) => answerText(await bus.ask(station, { method: READ, workspace, op, args, whole: true })),
     });
-    // What moves the statistics or the Task index: the agents' spending, a chat's messages and its turns.
-    const usage = (changed: () => void) => store.subscribe((change) => void (["usage", "session", "thread"].includes(change.type) && changed()));
+    // What moves the statistics or the Task index: the agents' spending, a chat's messages (the Router's too: its
+    // first in a chat makes the row `router`) and its turns, and where
+    // someone read a chat to (a done chat its creator has not read is one the Task index says waits for them).
+    const usage = (changed: () => void) => store.subscribe((change) => void (["usage", "session", "thread", "read"].includes(change.type) && changed()));
     // Keep the old database for Router deduplication across a downgrade. Its unscoped indexes are not sent.
     const legacy = yield* Effect.acquireRelease(
       Effect.sync(() => CommaStats.at(data, async () => ({ stations: [], unread: [] }), usage)),

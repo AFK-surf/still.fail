@@ -19,7 +19,7 @@ test "every key the app says has its words in Chinese and in English (scripts/st
   for k, _ in en {
     // (a count's words for one: written where the catalog says them apart (its one and other: English's), its key
     // itself in both; Chinese says one as it says more)
-    let base = if k.has_suffix(".one") { Some(k.view(end_offset=k.length() - 4).to_string()) } else { None }
+    let base = if k.has_suffix(".one") { Some(k.exact_view(end=k.length() - 4).to_owned()) } else { None }
     let one_of_key = match base {
       Some(b) => en.contains(b) && zh.contains(b)
       None => false

@@ -26,6 +26,8 @@ on:
       - "scripts/native.ts"
       - "scripts/release-put.sh"
       - "scripts/release-sign.ts"
+      - "scripts/release-deltas.ts"
+      - "scripts/delta.ts"
       - "scripts/win-feeds.sh"
       - "scripts/release.sh"
       - "station/src/updates/**"
@@ -303,7 +305,10 @@ jobs:
           APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui SF_SRC=$PWD bash apps/mbui/scripts/ios.sh build
           cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
           zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
+      # (for people: no later job downloads it, so a reset of the artifact service fails nothing that passed, main
+      # 391fece4's ios, its CreateArtifact timed out five times, 2026-11-11)
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: mbui-ios-unsigned-${{ github.sha }}
           path: apps/mbui/out/ios-device/stillfail-mbui.ipa
@@ -596,6 +601,8 @@ jobs:
           # its .sig, which the feed carries (the app takes a build only as it says it: scripts/release-sign.ts)
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           MBUI_CACHE: ${{ runner.temp }}/mbui-release
+          # (its deltas within the 150 s the step after waits for the whole of it: what is not made by then is left out)
+          STILLFAIL_DELTAS_SECONDS: 45
         run: |
           # (beta.sh's python3: Windows' is `python`, UTF-8 for the feed's news; its shasum -a 256: Git Bash's sha256sum,
           # without the backslash it puts before a line whose name has one, as MBUI_CACHE's D:\a\_temp: the sum taken

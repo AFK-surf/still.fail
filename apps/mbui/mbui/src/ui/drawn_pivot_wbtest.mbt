@@ -170,7 +170,7 @@ fn clear_ground_drawn(node : Bool, ground : Int64) -> Array[Double] raise {
     })
   }
   t.draw()
-  rect_of_color(red)[0:4].to_array()
+  rect_of_color(red)[0:4].to_owned()
 }
 
 ///|
@@ -178,5 +178,5 @@ test "a box grown about the middle of what it draws, its ground of no opacity or
   let seen = [0x3366CC00L, 0x3366CCFFL].map(fn(g) {
     (clear_ground_drawn(false, g) catch { _ => [] }, clear_ground_drawn(true, g) catch { _ => [] })
   })
-  assert_eq(seen.map(fn(p) { p.0 == p.1 && p.0.length() == 4 }), [true, true], msg="\{seen}")
+  assert_eq(seen.map(fn(p) { p.0 == p.1 && p.0.length() == 4 }), [true, true], msg="\{Repr(seen)}")
 }

@@ -60,7 +60,7 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
 
 ///|
 test "an accent the build does not know (kept by a newer one): still.fail's orange" {
-  new_run()
+  fresh_app()
   @sf.set_accent("indigo")
   assert_eq(@sf.accent_key(), "")
   @sf.set_accent("teal")
@@ -106,7 +106,8 @@ test "主题色 自定义: a hue of one's own, its slider under the dots; a step
     t.frame()
     t.frame()
     assert_eq(@sf.accent_key(), "purple")
-    t.draw()
+    // (the slider closes its way under the dots: gone once it has)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.semantics().filter(fn(s) { s.role == Slider }).is_empty(), msg="\{w}")
     t.click(Radio, label="自定义")
     t.frame()

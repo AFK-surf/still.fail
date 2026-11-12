@@ -57,26 +57,26 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|waiting wide 58561:95cb81f6
     #|waiting-dark narrow 28193:277c0cc7
     #|waiting-dark wide 58388:a2810814
-    #|finding narrow 34348:3995ba5f
-    #|finding wide 65295:e7bc693c
-    #|finding-dark narrow 34445:bae1daea
-    #|finding-dark wide 65301:832f7fed
-    #|code narrow 27031:30c1da85
-    #|code wide 57446:5c092151
-    #|code-dark narrow 26923:d9ac61aa
-    #|code-dark wide 57247:303946da
+    #|finding narrow 44483:19a881e2
+    #|finding wide 75292:ef31b5ff
+    #|finding-dark narrow 44536:d1f32a7a
+    #|finding-dark wide 75254:5f39daef
+    #|code narrow 31619:9deffdf
+    #|code wide 61977:d3d20b74
+    #|code-dark narrow 31494:1c8c4705
+    #|code-dark wide 61761:b97b01c
     #|wrong narrow 28240:97d2f231
     #|wrong wide 58675:b9440a2a
     #|wrong-dark narrow 28342:6b141516
     #|wrong-dark wide 58686:1155f0c7
-    #|checking narrow 35321:c76ea221
-    #|checking wide 66422:4a6b188c
-    #|checking-dark narrow 35413:be05c142
-    #|checking-dark wide 66423:3eb6872b
-    #|none narrow 27743:966399a0
-    #|none wide 58037:1ff41a7c
-    #|none-dark narrow 27665:2f9fa108
-    #|none-dark wide 57868:c472bf60
+    #|checking narrow 35321:285a7a7f
+    #|checking wide 66422:9d8764b2
+    #|checking-dark narrow 35413:543f0fd4
+    #|checking-dark wide 66423:5c9c74d5
+    #|none narrow 37542:1dbb1867
+    #|none wide 67714:168f01d1
+    #|none-dark narrow 37420:fd5a9a96
+    #|none-dark wide 67501:fd9fa742
     #|failed narrow 23502:ede593dd
     #|failed wide 53789:444ff120
     #|failed-dark narrow 23504:9d059bad
@@ -86,6 +86,7 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|nocode-dark narrow 28193:277c0cc7
     #|nocode-dark wide 58388:a2810814
     #|
+
 
 
 
@@ -147,19 +148,22 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
       out.write_string("me-reading" + dark + " " + name + " " + fnv(reading) + "\n")
     }
   }
+  // (the wide ones, 2026-11-10: 共享调试 a row of the settings' sidebar on a computer too, 关于 under the window's
+  // foot for it; the narrow ones, a phone's, had the row)
+  // (the wide ones again, 2026-11-10: a sidebar's marks, words and headings 2 in, where its rows' foot capsules start)
   inspect(out.to_string(), content=(
     #|settings narrow 77022:ba68b727
     #|station narrow 95281:75936fb1
-    #|me-reading narrow 23860:9496c484
-    #|settings wide 172993:24ac3018
-    #|station wide 240131:fb326c7c
-    #|me-reading wide 167639:a390393c
+    #|me-reading narrow 23870:8074bf2b
+    #|settings wide 169493:802f151e
+    #|station wide 236631:e25020d5
+    #|me-reading wide 164149:d62b64d1
     #|settings-dark narrow 77290:42efbe58
     #|station-dark narrow 95149:7bceef30
-    #|me-reading-dark narrow 23998:61f49844
-    #|settings-dark wide 172913:55a02a3d
-    #|station-dark wide 239797:5a9c18f0
-    #|me-reading-dark wide 167635:20849138
+    #|me-reading-dark narrow 23998:5789351d
+    #|settings-dark wide 169413:9d946751
+    #|station-dark wide 236297:f022531f
+    #|me-reading-dark wide 164135:8c5f9435
     #|
 
 

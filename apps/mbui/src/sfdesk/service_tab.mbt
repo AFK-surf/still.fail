@@ -9,7 +9,7 @@
 /// A tab's service, `service:<job>` (None: none).
 pub fn tab_service(tab : String) -> String? {
   if tab.has_prefix("service:") {
-    Some(tab.view(start_offset="service:".length()).to_string())
+    Some(tab.exact_view(start="service:".length()).to_owned())
   } else {
     None
   }
@@ -22,7 +22,7 @@ pub fn tab_file(tab : String) -> (String, String, String)? {
   if !tab.has_prefix("file:") {
     return None
   }
-  match (try Some(@json.parse(tab.view(start_offset="file:".length()).to_string())) catch { _ => None }) {
+  match (try Some(@json.parse(tab.exact_view(start="file:".length()).to_owned())) catch { _ => None }) {
     Some(Array([String(session), String(path), String(name)])) => Some((session, path, name))
     _ => None
   }
@@ -49,6 +49,8 @@ fn tab_job(tab : String) -> String? {
 /// drawn (the panel shows what it showed as it slides out: sv_sweep); opened again before, kept.
 fn tab_let_go(r : ChatRef, tab : String) -> Unit {
   panel_screen_pages.remove(tabs_key(r) + "/" + tab)
+  // (a file in the viewer: what it read)
+  @sfbase.tab_viewer_let_go(tabs_key(r), tab)
   match tab_job(tab) {
     Some(job) => sv_closing[service_key(r.station, job)] = (r.station, job)
     None => ()
@@ -57,6 +59,7 @@ fn tab_let_go(r : ChatRef, tab : String) -> Unit {
 
 ///|
 fn tab_kept(r : ChatRef, tab : String) -> Unit {
+  @sfbase.tab_viewer_kept(tabs_key(r), tab)
   match tab_job(tab) {
     Some(job) => sv_closing.remove(service_key(r.station, job))
     None => ()
@@ -83,12 +86,12 @@ pub fn sv_sweep(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// The pages of tabs closed (by their service_key: station, job), not yet let go.
 // kept across runs: put back by sv_reset (reset)
-let sv_closing : Map[String, (String, String)] = {}
+let sv_closing : Map[String, (String, String)] = Map([])
 
 ///|
 /// The pages drawn in this build (by their service_key).
 // kept across runs: put back by sv_reset (reset)
-let sv_drawn : Map[String, Bool] = {}
+let sv_drawn : Map[String, Bool] = Map([])
 
 ///|
 fn sv_reset() -> Unit {

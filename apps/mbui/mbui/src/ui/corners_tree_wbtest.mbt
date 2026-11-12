@@ -99,16 +99,21 @@ test "corners of the window's tree: an old view's box 20 round in a node's 20's 
 }
 
 ///|
-test "corners of the window's tree: a node's ground shown only while pointed at, 20 round in a node's 20, said as all is lit, not at rest; the hand as it was after" {
+test "corners of the window's tree: a node's ground shown only while pointed at, 20 round in a node's 20, said at rest as all is lit (its ground read the hand: Node's ground_by_hand); the hand as it was after" {
   let follow = concentric(20.0, 6.0)
-  let t = tree_card(fn(v) {
-    v.radius(Is(20.0)).ground(By(fn() { if v.pointed() { 0xEEEEEEFFL } else { 0L } })) |> ignore
-  })
+  let t = tree_card(
+    fn(v) { v.radius(Is(20.0)).ground(By(fn() { if v.pointed() { 0xEEEEEEFFL } else { 0L } })) |> ignore },
+    corners_held=false,
+  )
   let rest = t.corner_faults()
   let lit = t.lit_all_faults()
   let tree = view_tree().unwrap()
   let after = t.corner_faults()
-  assert_eq((rest, wants(lit, follow), tree.pointed, tree.pressing, after), ([], true, None, None, []), msg=lit.join("\n"))
+  assert_eq(
+    (wants(rest, follow), wants(lit, follow), tree.pointed, tree.pressing, wants(after, follow)),
+    (true, true, None, None, true),
+    msg="\{Repr(rest)}\n\{Repr(lit)}",
+  )
 }
 
 ///|
@@ -441,7 +446,7 @@ test "corners of the window's tree: an old view's box said concentric (radius=In
   let halved = own.0.map(fn(r) { (r.0 / 2.0, r.1 / 2.0, r.2 / 2.0, r.3 / 2.0) })
   // (as an old view's own: not all alike)
   let unlike = own.0.length() == 1 && own.0[0].0 != own.0[0].1
-  assert_eq((unlike, hosted, half), (true, own, (halved, [])), msg="\{own}")
+  assert_eq((unlike, hosted, half), (true, own, (halved, [])), msg="\{Repr(own)}")
 }
 
 ///|
@@ -642,14 +647,209 @@ fn scrolled_faults(view : (Ctx) -> Unit) -> (Int, Int, Int) {
 test "corners: cards in a list in a panel, scrolled to its top, its middle and its end: near a corner only at its ends, concentric there (16 in a 42, 26); 12 in with a 24 said at its ends; 40 in, none; in the middle, none" {
   assert_eq(scrolled_faults(scrolled_cards(16.0, 26.0, 16.0)), (0, 0, 0))
   let (top, middle, end) = scrolled_faults(scrolled_cards(12.0, 24.0, 12.0))
-  assert_true(top > 0 && end > 0, msg="\{(top, middle, end)}")
+  assert_true(top > 0 && end > 0, msg="\{Repr((top, middle, end))}")
   assert_eq(middle, 0)
   assert_eq(scrolled_faults(scrolled_cards(40.0, 24.0, 16.0)), (0, 0, 0))
   // (as far in from its sides as a 26 follows a 42 from, but 10 from its top and foot: said at its ends)
   let (top, middle, end) = scrolled_faults(scrolled_cards(16.0, 26.0, 10.0))
-  assert_true(top > 0 && end > 0, msg="\{(top, middle, end)}")
+  assert_true(top > 0 && end > 0, msg="\{Repr((top, middle, end))}")
   assert_eq(middle, 0)
   // (corners unlike: its foot's right one 10, too square for a card 16 in to follow: that corner alone, the others
   // judged each by their own)
   assert_eq(scrolled_faults(scrolled_cards(16.0, 26.0, 16.0, foot_right=10.0)), (0, 0, 0))
+}
+
+///|
+test "corners of the window's tree: a round key 12 in a node's 20, 6 and 10 in, with no ground of its own: said while it takes presses, as its ground shows under the hand; said to take none (View::presses), nothing, it never lights; taking them again, said again" {
+  let on = @signals.signal(false)
+  let t = tree_card(corners_held=false, fn(v) {
+    v.box(fn(k) {
+      k
+      .width(Is(Some(24.0)))
+      .height(Is(Some(24.0)))
+      .radius(Is(12.0))
+      .margin(Is((0.0, 4.0, 0.0, 0.0)))
+      .presses(By(fn() { on.get() }))
+      .on_press(fn() {  })
+      .says(Is(Some(@view.said(Button, label="turn"))))
+      |> ignore
+    })
+    |> ignore
+  })
+  let off = t.corner_faults()
+  on.set(true)
+  t.draw()
+  let taking = t.corner_faults()
+  on.set(false)
+  t.draw()
+  let off_again = t.corner_faults()
+  on.set(true)
+  t.draw()
+  let taking_again = t.corner_faults()
+  assert_eq(
+    (off, taking.length() > 0, off_again, taking_again.length() > 0),
+    ([], true, [], true),
+    msg="\{Repr(off)} | \{Repr(taking)} | \{Repr(off_again)} | \{Repr(taking_again)}",
+  )
+}
+
+///|
+/// What the rule says of a box said concentric (radius=Inner) at the top of a card 20 round, 6 in, `tall` tall: its
+/// foot as far from the card's as 108 - tall + 6 (the old view's way, Ctx's inner_faults).
+fn inner_foot_faults(tall : Double) -> Array[String] {
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Px(200.0), h=Px(120.0), pad=6.0, radius=20.0, bg=0x333333FFL, fn() {
+        c.box(w=Px(188.0), h=Px(108.0), fn() {
+          c.box(style=style(w=Full, h=Fixed(tall), radius=Inner, bg=Faint), fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  t.draw()
+  g().inner_faults.copy()
+}
+
+///|
+test "the corner rule, a box said concentric whose foot is at the card's corner's radius: at it, or a float's breadth short of it (a size laid by a sum), it is not near that edge; a hundredth of a point inside, it is, as before" {
+  // (its foot 20 from the card's, the card 20 round: 108 - 94 + 6)
+  let at_radius = inner_foot_faults(94.0)
+  // (as a laid size summed one way comes to it: 19.999999999999886, a float's breadth inside)
+  let a_hair_in = inner_foot_faults(94.0 + 1.1e-13)
+  // (a hundredth inside: near it, its edges at 6 and 19.99, said)
+  let inside = inner_foot_faults(94.01)
+  assert_eq((at_radius, a_hair_in), ([], []))
+  assert_true(inside.length() == 1, msg="\{Repr(inside)}")
+}
+
+///|
+/// The window's old frame beside the window's tree, whose nodes' grounds read the hand: drawn first with nothing in the
+/// old frame, then (`full` set) with a card 200×120, 20 round, holding 40 boxes one in another, 10×10, 6 in from its
+/// top left, with no ground of their own: the corner rule's faults of that frame.
+fn old_beside_lit_faults() -> Array[String] {
+  let full = @signals.signal(false)
+  let t = Tester::new(
+    fn(c) {
+      if full.get() {
+        c.box(w=Px(200.0), h=Px(120.0), pad=6.0, radius=20.0, bg=0x333333FFL, fn() {
+          fn nest(n : Int) -> Unit {
+            if n > 0 {
+              c.box(w=Px(10.0), h=Px(10.0), fn() { nest(n - 1) }) |> ignore
+            }
+          }
+
+          nest(40)
+        })
+        |> ignore
+      }
+    },
+    tree=fn(root) {
+      root.box(fn(col) {
+        col.pad(Is(40.0)) |> ignore
+        for _ in 0..<40 {
+          col.box(fn(v) {
+            v
+            .width(Is(Some(100.0)))
+            .height(Is(Some(4.0)))
+            .ground(By(fn() { if v.pointed() { 0xEEEEEEFFL } else { 0L } }))
+            .presses(Is(true))
+            .on_press(fn() {  })
+            .says(Is(Some(@view.said(Button, label="lit"))))
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  t.draw()
+  t.corner_faults() |> ignore
+  full.set(true)
+  t.draw()
+  t.corner_faults()
+}
+
+///|
+test "corners: an old view's boxes made where the window's tree's nodes were held to the corner rule the frame before, one of them a ground read under the hand, are none of theirs; with no ground of their own, nothing said" {
+  // (Ctx::box sets all of a box's look but that mark, which Ctx::with_tree_nodes clears in what it leaves the frame:
+  // one of its nodes made in what had been one of the tree's said a ground by the hand of a box with none, in the
+  // print-only run of 2026-11-12: a confirm's button's words, 0 round in its 18)
+  let faults = old_beside_lit_faults()
+  assert_eq(faults, [])
+}
+
+///|
+/// A row 18 round in the window's tree holding a dot 8×8 near its top left (10 and 12 in), with a halo 16×16 laid over
+/// the dot (`halo`: View::over and offset (-4, -4), else laid in the row itself at (6, 8)): the corner rule's faults.
+fn tree_dot_halo_faults(hung : Bool) -> Array[String] {
+  let t = Tester::new(
+    fn(_) {  },
+    tree=fn(root) {
+      root.box(fn(page) {
+        page.pad(Is(40.0)) |> ignore
+        page.box(fn(row) {
+          row
+          .width(Is(Some(240.0)))
+          .height(Is(Some(48.0)))
+          .padding(Is((10.0, 12.0, 10.0, 12.0)))
+          .radius(Is(18.0))
+          .ground(Is(0x222222FFL))
+          |> ignore
+          if hung {
+            row.box(fn(dot) {
+              dot.width(Is(Some(8.0))).height(Is(Some(8.0))).radius(Is(4.0)).ground(Is(0x4ADE80FFL)) |> ignore
+              dot.box(fn(halo) {
+                halo
+                .over(Is(true))
+                .offset(Is((-4.0, -4.0)))
+                .width(Is(Some(16.0)))
+                .height(Is(Some(16.0)))
+                .radius(Is(8.0))
+                .ground(Is(0x4ADE8033L))
+                |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+          } else {
+            row.box(fn(halo) {
+              halo
+              .margin(Is((-4.0, -4.0, 0.0, 0.0)))
+              .width(Is(Some(16.0)))
+              .height(Is(Some(16.0)))
+              .radius(Is(8.0))
+              .ground(Is(0x4ADE8033L))
+              |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  t.draw()
+  t.corner_faults()
+}
+
+///|
+test "corners: a mark hung over a small dot in a tree row's corner (over + offset) is exempt as an old view's is; the same circle laid in the row's flow is checked" {
+  assert_eq(tree_dot_halo_faults(true), [])
+  assert_eq(tree_dot_halo_faults(false).length(), 1)
 }

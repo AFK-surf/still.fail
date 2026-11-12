@@ -111,9 +111,9 @@ cp -R "$APPDIR" "$T/Payload/"
 (cd "$T" && zip -qry app.ipa Payload)
 # Check again after build/sign, and after environment approval; no automatic retry of upload.
 bash "$D/testflight-guard.sh" checkout
-# Built and signed beside the tests: uploaded only once they all passed, unless the dispatch said not to wait for them.
+# The workflow waits for the tests before building. Check them again before upload, unless the dispatch allows failures.
 if [ "${RELEASE_SKIP_TESTS:-}" = true ]; then
-  echo '::warning::skip_tests: uploading without waiting for the tests'
+  echo '::warning::skip_tests: uploading even if tests failed'
 else
   bash "$D/../../../scripts/testflight-tests.sh"
 fi

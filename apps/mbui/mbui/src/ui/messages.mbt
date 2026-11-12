@@ -13,7 +13,7 @@
 ///|
 // kept across runs: the app's handlers are its code, given once as it starts (by a test's app before its Tester), the
 // same for every run; one a channel, a later one in its place
-let message_handlers : Map[String, (String, Bytes?) -> Unit] = Map::new()
+let message_handlers : Map[String, (String, Bytes?) -> Unit] = Map([])
 
 ///|
 /// `handler` is given each message posted on `channel`: its JSON and the bytes beside it (None: none), as the frame
@@ -24,7 +24,7 @@ pub fn on_message(channel : String, handler : (String, Bytes?) -> Unit) -> Unit 
 
 ///|
 // kept across runs: as message_handlers, the app's code
-let message_said : Map[String, (String, Bytes?) -> Bool] = Map::new()
+let message_said : Map[String, (String, Bytes?) -> Bool] = Map([])
 
 ///|
 /// What of a message on `channel` changes only signals, taken by `said` as it comes, as the frame begins, before it is
@@ -37,29 +37,36 @@ pub fn on_message_said(channel : String, said : (String, Bytes?) -> Bool) -> Uni
 }
 
 ///|
+/// Whether what comes on `channel` is offered to a `said` as it comes (on_message_said): for a test holding that a
+/// replay takes the core's messages as a device does (still.fail's sfreplay).
+pub fn message_said_on(channel : String) -> Bool {
+  message_said.contains(channel)
+}
+
+///|
 /// A Tester's messages posted and not taken by a frame yet (the fake host's queue), oldest first.
 let fake_posted : Array[(String, String, Bytes?)] = []
 
 ///|
 /// How often a Tester's posts asked for a frame (the first posted since a frame took the last does).
-let post_wakes : Ref[Int] = Ref::new(0)
+let post_wakes : Ref[Int] = Ref(0)
 
 ///|
 /// How many messages the last frame took and handed to their handlers.
-let messages_handed : Ref[Int] = Ref::new(0)
+let messages_handed : Ref[Int] = Ref(0)
 
 ///|
 /// What a Tester keeps of its run, as a host's log keeps it with MBUI_DRAW_LOG=1 (Tester::start_tape): DRAWHASH,
 /// INPUT and MSG lines. None: nothing kept.
-let tape : Ref[Array[String]?] = Ref::new(None)
+let tape : Ref[Array[String]?] = Ref(None)
 
 ///|
 /// What stands for the outside in a Tester (Tester::between_frames), told as each frame ends.
-let between_frames : Ref[(() -> Unit)?] = Ref::new(None)
+let between_frames : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 /// When that outside has its next to say (Tester::between_frames' `due`): +inf, nothing it knows of.
-let outside_due : Ref[(() -> Double)?] = Ref::new(None)
+let outside_due : Ref[(() -> Double)?] = Ref(None)
 
 ///|
 fn messages_reset() -> Unit {
@@ -206,15 +213,26 @@ let said_left : Ref[Int] = Ref(0)
 ///|
 /// As a frame is built: all that was posted since the last (messages_arrive), handed to their handlers in the order
 /// posted (app.mbt frame_body). What is posted meanwhile (a handler's own post, the other thread's) is the next frame's.
+/// They are handed on outside the frame's reading, as a handler of the hand's runs and as the runtime's timers do
+/// (fx_frame_start; frame_body runs under the frame's watch): what a handler reads is not the frame's to follow, so its
+/// changing later builds no frame whole (it did, once, till the next frame built whole read the watch anew), and what
+/// it changes is drawn by this frame all the same, read by the view after it. An effect one makes is owned by nothing
+/// (no owner set, whatever was set around the frame), let go only by the function `@signals.effect` gave back: never
+/// the frame's watch's, which let it go as it read the next frame (#5594's fault: files let go on 文件's folder,
+/// taken here, sent up by an effect that waits for their reading).
 fn take_messages() -> Unit {
   if messages_in.length() == 0 {
     return
   }
   let taken = messages_in.copy()
   messages_in.clear()
+  let was = @signals.set_active_sub(None)
+  let owner = @signals.set_owner(None)
   for m in taken {
     hand_on(m.0, m.1, m.2)
   }
+  @signals.set_active_sub(was) |> ignore
+  @signals.set_owner(owner) |> ignore
 }
 
 ///|
@@ -237,7 +255,11 @@ fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
   match message_handlers.get(channel) {
     Some(f) => {
       messages_handed.val += 1
+      // (each message one change: what its handler writes (a value, a call's answer and what that does) told once all
+      // of it is written, never what reads it run between two of its writes)
+      @signals.start_batch()
       f(json, bytes)
+      @signals.end_batch()
     }
     None => h_log("MSG on \{channel}: no handler for it (@ui.on_message): left")
   }
@@ -263,7 +285,7 @@ fn is_message_line(line : String) -> Bool {
 /// One MSG line posted again (Tester::replay_frames): the frame the tape has after it takes it, as the run's did.
 fn replay_message(f : FakeHost, line : String) -> Unit {
   guard line.find("MSG {") is Some(i) else { return }
-  let j = @json.parse(line.view(start_offset=i + 4).to_owned()) catch { _ => return }
+  let j = @json.parse(line.exact_view(start=i + 4).to_owned()) catch { _ => return }
   guard j is Object(m) else { return }
   guard (m.get("c"), m.get("j")) is (Some(String(channel)), Some(String(json))) else { return }
   let bytes = match m.get("b") {
@@ -299,6 +321,7 @@ pub fn Tester::post(self : Tester, channel : String, json : String, bytes? : Byt
 /// it has its next to say (a kept message's moment; +inf: nothing it knows of), a moment run_for draws a frame at, as
 /// a host's message that comes then: what comes at a time comes at it, however the clock was run on.
 pub fn Tester::between_frames(self : Tester, f : () -> Unit, due? : () -> Double) -> Unit {
+  self.reads_own()
   ignore(self)
   between_frames.val = Some(f)
   outside_due.val = due
@@ -307,6 +330,7 @@ pub fn Tester::between_frames(self : Tester, f : () -> Unit, due? : () -> Double
 ///|
 /// How many messages are posted and not taken by a frame yet.
 pub fn Tester::posted(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   fake_posted.length()
 }
@@ -314,6 +338,7 @@ pub fn Tester::posted(self : Tester) -> Int {
 ///|
 /// How many messages the last frame took and handed to their handlers.
 pub fn Tester::messages_taken(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   messages_handed.val
 }
@@ -321,6 +346,7 @@ pub fn Tester::messages_taken(self : Tester) -> Int {
 ///|
 /// How many frames the Tester's posts asked for since it began (one for each lot posted between two frames).
 pub fn Tester::post_wakes(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   post_wakes.val
 }
@@ -346,6 +372,7 @@ pub fn Tester::start_tape(self : Tester) -> Unit {
 ///|
 /// The run kept since `start_tape`, a line each ("" when none is kept).
 pub fn Tester::tape(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   match tape.val {
     Some(lines) => lines.join("\n")

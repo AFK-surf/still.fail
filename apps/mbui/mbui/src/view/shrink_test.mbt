@@ -41,10 +41,10 @@ fn shrunk_widths(least : Double?, least_first : Bool) -> Array[Double] {
 ///|
 test "shrink and min_width: a node at least 60 wide gives way to 60, its share changed or not, said before or after its share; at least nothing, to nothing (by half where it gives half); giving no way, as wide as it is" {
   let got = shrunk_widths(Some(60.0), false)
-  assert_eq(got, [60.0, 60.0, 80.0], msg="least said after its share: \{got}")
+  assert_eq(got, [60.0, 60.0, 80.0], msg="least said after its share: \{Repr(got)}")
   let got = shrunk_widths(Some(60.0), true)
-  assert_eq(got, [60.0, 60.0, 80.0], msg="least said before its share: \{got}")
+  assert_eq(got, [60.0, 60.0, 80.0], msg="least said before its share: \{Repr(got)}")
   let got = shrunk_widths(Some(0.0), false)
   // (its share half: half of what the row is short of given way, as flexbox gives where the shares come to less than 1)
-  assert_eq(got, [20.0, 50.0, 80.0], msg="at least nothing: \{got}")
+  assert_eq(got, [20.0, 50.0, 80.0], msg="at least nothing: \{Repr(got)}")
 }

@@ -20,14 +20,14 @@ fn kept(call : String) -> Map[String, Json] {
     Some(t) => t
     None => {
       // an answer a line: [call, key, answer]
-      let t : Map[String, Json] = {}
+      let t : Map[String, Json] = Map([])
       for line in kept_answers.split("\n") {
-        match (@json.parse(line.to_string()) catch { _ => Json::null() }) {
+        match (@json.parse(line.to_owned()) catch { _ => Json::null() }) {
           Array([String(call), String(key), answer]) =>
             match t.get(call) {
               Some(Object(m)) => m[key] = answer
               _ => {
-                let m : Map[String, Json] = {}
+                let m : Map[String, Json] = Map([])
                 m[key] = answer
                 t[call] = Json::object(m)
               }
@@ -67,15 +67,21 @@ fn flag(params : Json, key : String) -> Bool {
 }
 
 ///|
+/// Whether an answer not kept is said for scripts/kept to keep (`kept-answers-ask`): not in a replay's pace pass, whose
+/// asks are the strict pass's or a finding of its own (said `PACE-UNKEPT`), never the run's to keep.
+// kept across runs: set as each replay's pass begins (sfreplay's Flow::start)
+pub let asks_kept : Ref[Bool] = Ref(true)
+
+///|
 /// An answer not kept: said on the output for scripts/kept, an error for the asker.
 fn not_kept(ask : Map[String, Json]) -> Result[(Json, Bytes?), Json]? {
-  println("kept-answers-ask " + Json::object(ask).stringify())
-  Some(Err({ "code": "not_kept", "message": "the core's answer to \{ask.get("call").unwrap()} is not kept: apps/mbui/scripts/kept" }))
+  println((if asks_kept.val { "kept-answers-ask " } else { "PACE-UNKEPT " }) + Json::object(ask).stringify())
+  Some(Err({ "code": "not_kept", "message": "the core's answer to \{match ask.get("call").unwrap() { String(s) => "String(\{s})"; call => Repr(call).to_string() }} is not kept: apps/mbui/scripts/kept" }))
 }
 
 ///|
 /// The books asked of in this run, by the id each was answered with: its key in `reader.book`.
-let books : Map[Int, String] = {}
+let books : Map[Int, String] = Map([])
 
 ///|
 let next_book : Ref[Int] = Ref(1)
@@ -150,7 +156,7 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
           let id = next_book.val
           next_book.val += 1
           books[id] = key
-          let out : Map[String, Json] = {}
+          let out : Map[String, Json] = Map([])
           match entry.get("answer") {
             Some(Object(a)) =>
               for k, v in a {
@@ -247,7 +253,7 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
                 Some(Object(s)) if s.get(query) is Some(at) => Some(Ok(({ "at": at }, None)))
                 _ => {
                   let (markdown, text) = match key.split("\u{1}").next() {
-                    Some(m) => (m == "md", key.view(start_offset=m.length() + 1).to_string())
+                    Some(m) => (m == "md", key.exact_view(start=m.length() + 1).to_owned())
                     None => (false, key)
                   }
                   not_kept({
@@ -282,7 +288,7 @@ fn book_text(key : String) -> String {
     Some(Object(entry)) if entry.get("text") is Some(String(t)) => t
     _ =>
       match key.split("\u{1}").next() {
-        Some(m) => key.view(start_offset=m.length() + 1).to_string()
+        Some(m) => key.exact_view(start=m.length() + 1).to_owned()
         None => key
       }
   }

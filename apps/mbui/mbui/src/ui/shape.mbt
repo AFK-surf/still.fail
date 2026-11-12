@@ -384,7 +384,7 @@ fn Ctx::segs_from(self : Ctx, at : Int) -> Array[Double] {
   if at * 4 >= self.segs.length() {
     []
   } else {
-    self.segs[at * 4:].to_array()
+    self.segs[at * 4:].to_owned()
   }
 }
 
@@ -552,6 +552,7 @@ fn band_cover(a : FixedArray[Double], count : Int, k : Int, px : Double, py : Do
 /// The shapes drawn in the last frame (Ctx::shapes), a band each: (x, y, w, h, half its stroke's width (0 a fill), its
 /// colour RRGGBBAA with its opacity applied), in the window.
 pub fn Tester::drawn_shapes(self : Tester) -> Array[(Double, Double, Double, Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -580,6 +581,7 @@ pub fn Tester::drawn_shapes(self : Tester) -> Array[(Double, Double, Double, Dou
 /// window's scale: the cover of the band that has the pixel (a point lies in at most one band of a shape; of several
 /// shapes', the most).
 pub fn Tester::shape_cover(self : Tester, x : Double, y : Double) -> Double {
+  self.reads_own()
   ignore(self)
   let c = g()
   let mut most = 0.0
@@ -597,6 +599,7 @@ pub fn Tester::shape_cover(self : Tester, x : Double, y : Double) -> Double {
 /// The boxes that drew shapes in the last frame (Ctx::shapes), by their names: (name, x, y, w, h) as laid out; then the
 /// window's tree's nodes drawing shapes or a picture of them, by their words, where they are drawn.
 pub fn Tester::shape_boxes(self : Tester) -> Array[(String, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []

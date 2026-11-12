@@ -35,7 +35,8 @@ pub fn[K : Hash + Eq, V] LiveMap::get(self : LiveMap[K, V], key : K) -> V? {
 }
 
 ///|
-pub fn[K : Hash + Eq, V] LiveMap::op_get(self : LiveMap[K, V], key : K) -> V {
+#alias("_[_]")
+pub fn[K : Hash + Eq, V] LiveMap::at(self : LiveMap[K, V], key : K) -> V {
   self.read()[key]
 }
 
@@ -81,7 +82,8 @@ pub fn[K, V] LiveMap::copy(self : LiveMap[K, V]) -> Map[K, V] {
 }
 
 ///|
-pub fn[K : Hash + Eq, V] LiveMap::op_set(self : LiveMap[K, V], key : K, value : V) -> Unit {
+#alias("_[_]=_")
+pub fn[K : Hash + Eq, V] LiveMap::put(self : LiveMap[K, V], key : K, value : V) -> Unit {
   self.data[key] = value
   live_changed(self.changes)
 }
@@ -148,7 +150,8 @@ fn[T] LiveArray::read(self : LiveArray[T]) -> Array[T] {
 }
 
 ///|
-pub fn[T] LiveArray::op_get(self : LiveArray[T], i : Int) -> T {
+#alias("_[_]")
+pub fn[T] LiveArray::at(self : LiveArray[T], i : Int) -> T {
   self.read()[i]
 }
 
@@ -194,7 +197,8 @@ pub fn[T : Eq] LiveArray::contains(self : LiveArray[T], x : T) -> Bool {
 }
 
 ///|
-pub fn[T] LiveArray::op_set(self : LiveArray[T], i : Int, x : T) -> Unit {
+#alias("_[_]=_")
+pub fn[T] LiveArray::put(self : LiveArray[T], i : Int, x : T) -> Unit {
   self.data[i] = x
   live_changed(self.changes)
 }

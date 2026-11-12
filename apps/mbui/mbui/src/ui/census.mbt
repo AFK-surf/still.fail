@@ -44,13 +44,14 @@ fn census_sorted(m : Map[String, Bool]) -> Array[String] {
 ///|
 /// What values the last frame's nodes took (Census), the window's tree's nodes' as they are set too.
 pub fn Tester::census(self : Tester) -> Census {
+  self.reads_own()
   ignore(self)
   let c = g()
-  let text : Map[String, Bool] = {}
-  let weight : Map[String, Bool] = {}
-  let space : Map[String, Bool] = {}
-  let radius : Map[String, Bool] = {}
-  let color : Map[String, Bool] = {}
+  let text : Map[String, Bool] = Map([])
+  let weight : Map[String, Bool] = Map([])
+  let space : Map[String, Bool] = Map([])
+  let radius : Map[String, Bool] = Map([])
+  let color : Map[String, Bool] = Map([])
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.kind == kind_text || n.kind == kind_rich {
@@ -88,12 +89,12 @@ pub fn Tester::census(self : Tester) -> Census {
       for n in tree.styled() {
         if n.words {
           // (its size, line and letters' spacing as it is drawn, as an old view's text says them: view_line's and
-          // view_spacing's, at the system's size of words)
-          let look : @view.WordsLook = { size: n.size, weight: 400, line: n.line, wrap: true, tracking: n.tracking, balance: false }
-          let spacing = view_spacing(c, look)
-          text[census_num(c.sp(n.size)) +
+          // view_spacing's, at its size of words)
+          let look : @view.WordsLook = { size: n.size, weight: 400, line: n.line, wrap: true, tracking: n.tracking, balance: false, max_lines: 0 }
+          let spacing = view_spacing(n.words_scale, look)
+          text[census_num(view_sp(n.words_scale, n.size)) +
             "/" +
-            census_num(view_line(c, look)) +
+            census_num(view_line(n.words_scale, look)) +
             (if spacing != 0.0 { " " + census_num(spacing) } else { "" })] = true
           for w in n.weights {
             weight[w.to_string()] = true

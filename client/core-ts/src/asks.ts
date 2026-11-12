@@ -3,7 +3,7 @@
 import { Deferred, Effect, Semaphore } from "effect";
 import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };
 import { RELEASE_KEYS } from "../../../station/src/updates/keys.ts";
-import { winReleaseUnverified } from "./app-release.ts";
+import { type Deltas, deltaFrom, feedDeltas, winReleaseWords } from "./app-release.ts";
 import { encodeComponent } from "./accounts.ts";
 import type { AccountSessions } from "./account-provider.ts";
 import type { Ask } from "./asks-parse.ts";
@@ -44,7 +44,8 @@ export type Brings = (from: number, to: number) => Effect.Effect<string[]>;
 export class Asks {
   readonly #host: Host;
   readonly #brings: Brings;
-  readonly #releases = new Map<string, [number, J]>();
+  /// The newest release of each feed as read (when, the release, its deltas), shared by every build asking.
+  readonly #releases = new Map<string, [number, J, Deltas | null]>();
   readonly #pictures = new Map<string, Picture>();
   /// Pictures that could not be fetched: when, and why.
   readonly #pictureFailed = new Map<string, [number, CoreError]>();
@@ -55,15 +56,19 @@ export class Asks {
   readonly #changed: [string, string][] = [];
   readonly #taking = Semaphore.makeUnsafe(1);
 
-  constructor(host: Host, brings: Brings) {
+  /// The station a link names now (views.ts `stationNow`: one that took a lost one's place).
+  readonly #now: (address: string) => string;
+
+  constructor(host: Host, brings: Brings, now: (address: string) => string = (a) => a) {
     this.#host = host;
     this.#brings = brings;
+    this.#now = now;
   }
 
   run(ask: Ask, accounts: AccountSessions): Effect.Effect<unknown, CoreError> {
     switch (ask.kind) {
       case "linkParse":
-        return Effect.succeed(linkTarget(ask.url, this.#host.cloudOrigin()));
+        return Effect.succeed(linkNow(linkTarget(ask.url, this.#host.cloudOrigin()), this.#now));
       case "appUpdate":
         // (youdid.wtf's builds are its platform's beta feed; an app of its own on the test channel names its feed whole)
         return this.update(ask.platform, ask.version, ask.now, brand.testApp(), ask.keys);
@@ -87,10 +92,11 @@ export class Asks {
 
   /// The newest build of `platform`'s feed (its beta feed, `<platform>/beta`, where `beta`) when newer than `version`,
   /// with what it brings this app (`news`: the changelog's lines for it after `version`; the app's home offers a build
-  /// only with some). A Windows build signed by one of `keys` is taken too (app-release.ts).
+  /// only with some), and the delta from `version` where the feed offers one (`delta`, app-release.ts). A Windows build
+  /// signed by one of `keys` is taken too (app-release.ts).
   update(platform: string, version: number, now: boolean, beta: boolean, keys: readonly string[] = []): Effect.Effect<J, CoreError> {
-    return Effect.flatMap(this.#newest(platform, version, now, beta, keys), (release) =>
-      release === null ? Effect.succeed(null) : Effect.map(this.#brings(version, release.versionCode), (news) => ({ ...release, news })),
+    return Effect.flatMap(this.#newest(platform, version, now, beta, keys), (kept) =>
+      kept === null ? Effect.succeed(null) : Effect.map(this.#brings(version, kept[0].versionCode), (news) => ({ ...kept[0], news, delta: deltaFrom(kept[1], version) })),
     );
   }
 
@@ -99,15 +105,18 @@ export class Asks {
     this.#releases.clear();
   }
 
-  #newest(platform: string, version: number, now: boolean, beta: boolean, keys: readonly string[]): Effect.Effect<J, CoreError> {
+  #newest(platform: string, version: number, now: boolean, beta: boolean, keys: readonly string[]): Effect.Effect<[J, Deltas | null] | null, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const feed = beta ? `${platform}/beta` : platform;
-      const newer = (release: J) => (release !== null && release !== undefined && typeof release.versionCode === "number" && release.versionCode > version ? release : null);
+      const newer = (kept: [number, J, Deltas | null] | undefined): [J, Deltas | null] | null => {
+        const release = kept?.[1];
+        return release !== null && release !== undefined && typeof release.versionCode === "number" && release.versionCode > version ? [release, kept![2]] : null;
+      };
       const time = this.#host.nowMs();
       const kept = this.#releases.get(feed);
       // What was read is kept until still.fail cloud says a release is out (`released`); the person's own check asks.
-      if (kept && !now) return newer(kept[1]);
-      this.#releases.set(feed, [time, kept?.[1] ?? null]);
+      if (kept && !now) return newer(kept);
+      this.#releases.set(feed, [time, kept?.[1] ?? null, kept?.[2] ?? null]);
       const url = `${this.#host.cloudOrigin()}/releases/${feed}/latest.json`;
       const response = yield* Effect.result(this.#host.fetch({ method: "GET", url, headers: [["cache-control", "no-cache"]], body: null }));
       if (response._tag === "Failure") {
@@ -115,21 +124,23 @@ export class Asks {
         if (kept) this.#releases.set(feed, kept);
         else this.#releases.delete(feed);
         if (now) return yield* Effect.fail(CoreError.plainly("app_update", response.failure, t("core-misc.ask.update_failed", { error: CoreError.host(response.failure).message })));
-        return newer(kept?.[1] ?? null);
+        return newer(kept);
       }
       const raw = response.success.status === 200 ? parseJson(response.success.body) : undefined;
-      const shaped = raw !== undefined ? conform("AppRelease", raw) : null;
+      // (`delta` is the answer's, picked for the build asking: never the feed's own)
+      const shaped = raw !== undefined ? conform("AppRelease", isObject(raw) ? { ...raw, delta: null } : raw) : null;
       let release = shaped !== null && "ok" in shaped ? shaped.ok : null;
       // the Windows app's installer taken only as its signed words say it (app-release.ts): else none is offered
-      const unverified = release !== null && platform.split("/")[0] === "win" ? winReleaseUnverified(raw, [...RELEASE_KEYS, ...keys]) : "";
-      if (unverified !== "") {
-        console.warn(`app.update: ${feed}: ${unverified}`);
+      const win = release !== null && platform.split("/")[0] === "win" ? winReleaseWords(raw, [...RELEASE_KEYS, ...keys]) : null;
+      if (win !== null && "why" in win) {
+        console.warn(`app.update: ${feed}: ${win.why}`);
         if (now) return yield* Effect.fail(new CoreError("app_update", t("core-misc.ask.update_unsigned")));
         release = null;
       }
       if (now && release === null) return yield* Effect.fail(new CoreError("app_update", t("core-misc.ask.update_retry")));
-      if (release !== null) this.#releases.set(feed, [time, release]);
-      return newer(this.#releases.get(feed)![1]);
+      // (what a delta makes on Windows only as its signed words say: none there without their `raw`)
+      if (release !== null) this.#releases.set(feed, [time, release, feedDeltas(raw, release, win !== null && "words" in win ? (win.words.raw ?? null) : undefined)]);
+      return newer(this.#releases.get(feed));
     });
   }
 
@@ -377,6 +388,14 @@ function historyOf(query: string): { history?: string; entry?: number } {
 function messageOf(query: string): { message?: number } {
   const value = param(query, "message");
   return value !== null && /^[1-9]\d{0,14}$/.test(value) ? { message: Number(value) } : {};
+}
+
+/// A link's target with its station as it is now (a lost one's link opens the station that took its place).
+export function linkNow(target: J, now: (address: string) => string): J {
+  if (target === null || typeof target !== "object" || typeof target.workspace !== "string" || typeof target.station !== "string") return target;
+  const address = now(`${target.workspace}/${target.station}`);
+  const station = address.slice(address.lastIndexOf("/") + 1);
+  return station === target.station ? target : { ...target, station };
 }
 
 /// What one of still.fail's own links opens in the app; null for any other link. A chat's page or an item, with

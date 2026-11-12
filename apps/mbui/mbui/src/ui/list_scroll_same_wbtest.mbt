@@ -69,7 +69,7 @@ fn same_tree(
             |> ignore
             row.box(fn(w) {
               w
-              .words(Is(same_words(i)), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false })
+              .words(Is(same_words(i)), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
               .ink(By(fn() { tree_theme().color(Fg) }))
               |> ignore
             })
@@ -242,9 +242,20 @@ test "a page's list on the window's tree moves as an old view's list, frame by f
       let tree = view_tree().unwrap()
       let (now, now_rows) = same_frames(t, fn() { (s.at(tree), s.past(tree)) })
       let past_same = fn(a : Double, b : Double) { (a - b).abs() <= 1.0e-6 }
+      // (where it is as it is drawn: the tree's list moved by whole pixels of the Tester's (2 to a point:
+      // Scroll::held_dy), an old view's list's boxes where it is, not set on them (rows_on_pixels, said by no fake
+      // host), so within half a device pixel of each other each frame; and the same at last. A wheel's notch on the
+      // tree's ends at the moment it is drawn where it comes to (Scroll::ease_drawn_end), the old view's eases on
+      // under that half a pixel: the same as drawn, not as numbers)
+      let drawn = fn(x : Double) { (x * 2.0).round() / 2.0 }
       let k = (0).until(imin(was.length(), now.length())).find_first(fn(k) {
         let (a, b) = (was[k], now[k])
-        a.0 != b.0 || (a.1 - b.1).abs() > 1.0e-6 || !past_same(a.2, b.2)
+        let at_same = if k == was.length() - 1 {
+          (a.1 - b.1).abs() <= 1.0e-6
+        } else {
+          (a.1 - drawn(b.1)).abs() <= 0.25
+        }
+        a.0 != b.0 || !at_same || !past_same(a.2, b.2)
       })
       // (past an end it went, where its platform's does: else this tells nothing of it)
       let most = was.fold(init=0.0, fn(m, f) { dmax(m, f.2.abs()) })
@@ -256,7 +267,7 @@ test "a page's list on the window's tree moves as an old view's list, frame by f
         differ.push("\{platform} \{name}: the old view's list shows nothing past its end")
       }
       match k {
-        Some(k) => differ.push("\{platform} \{name}: at \{k} old \{was[k]} tree \{now[k]}; last old \{was.last()} tree \{now.last()}")
+        Some(k) => differ.push("\{platform} \{name}: at \{k} old \{Repr(was[k])} tree \{Repr(now[k])}; last old \{Repr(was.last())} tree \{Repr(now.last())}")
         None => if was.length() != now.length() { differ.push("\{platform} \{name}: \{was.length()} frames, \{now.length()}") }
       }
       // (its rows as drawn, the first frame they differ at)
@@ -281,7 +292,7 @@ test "a page's list on the window's tree moves as an old view's list, frame by f
       if r is Some(r) {
         let (a, b) = (was_rows[r], now_rows[r])
         differ.push(
-          "\{platform} \{name}: drawn at \{r} (\{was[r].0}): old \{a.length()}, tree \{b.length()}; the old's not in the tree's \{lost(a, b)}, the tree's not in the old's \{lost(b, a)}",
+          "\{platform} \{name}: drawn at \{r} (\{was[r].0}): old \{a.length()}, tree \{b.length()}; the old's not in the tree's \{Repr(lost(a, b))}, the tree's not in the old's \{Repr(lost(b, a))}",
         )
       }
     }

@@ -28,9 +28,13 @@ on:
       - "apps/mbui/mbui/src/ui/a11y.mbt"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
+      - "apps/mbui/mbui/src/host/station_install.h"
+      - "apps/mbui/mbui/scripts/station_install_test.c"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/noticecheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/updatecheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/postcheck.mbt"
+      - "apps/mbui/mbui/src/ui/messages.mbt"
       - "apps/mbui/mbui/src/host/gles_render.h"
       - "apps/mbui/mbui/src/host/corner_sl.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
@@ -73,6 +77,11 @@ jobs:
             libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
             fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - name: "What the host hands the station's installer: the token, the workspace lock's hash, nothing refused dropped (src/host/station_install.h)"
+        run: |
+          mkdir -p out
+          cc -Wall -Werror -Isrc/host scripts/station_install_test.c -o out/station_install_test
+          out/station_install_test
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build
@@ -90,6 +99,10 @@ jobs:
       - name: "The notifications' contract: one shown, kept, and clicked"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux notices
+      # (the update's contract makes its delta with still.fail's scripts/delta.ts, which needs the repository's Node)
+      - uses: actions/setup-node@v5
+        if: success() || failure()
+        with: { node-version-file: .node-version, package-manager-cache: false }
       - name: "The update's contract: another machine's build refused, this machine's put in place and opened"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux update
@@ -105,6 +118,12 @@ jobs:
       - name: "The PDFs' contract: a PDF's two pages read and drawn, the second turned as its /Rotate says"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux pdf
+      - name: "What is posted's contract: a message posted from outside the frames told between frames, not taken as one begins"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux posted
+      - name: "What is picked's contract: the system's picker's answer told between frames, not taken as one begins"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux picked
       - name: "The pictures' contract over a new context: a picture told ready again and drawn again there"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux images
@@ -137,6 +156,7 @@ jobs:
           grep -q 'STREAM start h264' out/host/stream-h264.log && grep -q 'STREAM done' out/host/stream-h264.log
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: host-linux
           path: apps/mbui/mbui/out/host/

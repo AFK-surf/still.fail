@@ -42,7 +42,7 @@ fn literal(text : String, name : String) -> Bytes? {
     Some(i) => i + head.length()
     None => return None
   }
-  let out = @buffer.new()
+  let out = Buffer()
   let mut i = at
   let n = text.length()
   while i < n {
@@ -78,11 +78,11 @@ fn main {
     fail("scripts/assets <app module> <out dir>")
     return
   }
-  let (module, dir) = (args[1], args[2])
+  let (app_dir, dir) = (args[1], args[2])
   @sys.makedirs(dir)
   for c in carried {
     let (file, name, out) = c
-    let text = match @sys.read_text(@sys.join(module, file)) {
+    let text = match @sys.read_text(@sys.join(app_dir, file)) {
       Some(t) => t
       None => {
         fail("no " + file)

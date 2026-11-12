@@ -130,7 +130,7 @@ export class Admin {
   constructor(readers: Readers, deps: AdminDeps = {}) {
     this.deps = deps;
     this.readers = readers;
-    this.host = deps.host ?? new Host(readers);
+    this.host = deps.host ?? new Host(readers.data);
     const agentsNow = () => (typeof deps.agents === "function" ? deps.agents() : deps.agents);
     const given = typeof deps.agents === "function" ? undefined : deps.agents;
     const config = deps.config ?? given?.config;
@@ -370,7 +370,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
       : []),
     ...(agents.updates ? updates({ updates: agents.updates }) : []),
     ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
-    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, changed: () => deps.events?.presetsChanged() }) : []),
+    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, clones: agents.hub.clones, changed: () => deps.events?.presetsChanged() }) : []),
     ...(agents.config ? contextSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.config ? diagnosticsSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),

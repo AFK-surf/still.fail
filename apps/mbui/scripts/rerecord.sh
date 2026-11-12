@@ -13,6 +13,10 @@
 # e2e (scripts/e2e-local.sh). E2E_PORT, E2E_RELAY as e2e-local.sh's; E2E_KEEP=1 leaves the local still.fail up;
 # MAX_BYTES as scripts/trace make's (a long text's bytes kept).
 # KEEP_NEW=1: a test that fails over its new trace keeps it all the same.
+# A take whose test fails over it is never thrown away: it is kept beside the run's logs (out/rerecord.*/NAME.failed.trace,
+# its path and the replay's own words said), the old trace put back in its place as before. A trace's replay is the same
+# every run, so that take is its fault's exact repro at that take's timing, which the next take may not meet: of five
+# flows recorded twice from one checkout, two failed over their own traces each time, and not the same two (2026-11-11).
 set -u
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -162,6 +166,11 @@ NODE
   fi
   if [ $ok = 0 ]; then echo "  $test: passes"; else
     echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1
+    # (the take that fails is kept, whatever becomes of the test's own trace below: the fault's repro at this timing)
+    failed="$TMP/$(basename "$trace" .trace).failed.trace"
+    cp "$trace" "$failed"
+    echo "  $test: the take that fails is kept: $failed"
+    grep -a 'not steady\|FAILED\|\] test .* failed' "$TMP/$name.after.log" | head -5 | cut -c1-600
     # (the new trace is the run's; the test does not hold over it: the old one back, said; KEEP_NEW=1 keeps the new
     # one, as when what fails is a core answer not yet kept: scripts/kept, then the test again)
     [ -n "${KEEP_NEW:-}" ] || cp "$TMP/$(basename "$trace").old" "$trace"

@@ -162,13 +162,14 @@ fn chats_pane_node(
         seen.val = days
         stamp.val += 1
       }
-      (stamp.val, held())
+      // (and its page's stay on top: what changed while it was off the top said as it is put back there, RowsMotion::said)
+      (stamp.val, held(), stint())
     },
     fn(at) {
       let days = seen.val
       let hold = at.1 && !@sfbase.viewer_moved(key, days)
       let shown = @sfbase.held_order(key, days, hold)
-      let by_name : Map[String, ChatItem] = {}
+      let by_name : Map[String, ChatItem] = Map([])
       for d in shown {
         for item in d.items {
           by_name[@sfbase.row_name(item)] = item
@@ -178,7 +179,7 @@ fn chats_pane_node(
         recorded_rows.val = by_name.length()
         @hostapi.perf_line("chat-list: filter=\{filter} rows=\{recorded_rows.val}")
       }
-      motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched))
+      motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched), at.2)
       ordered.set(shown)
       rows.set(by_name)
       revision.set(revision.untracked() + 1)
@@ -235,12 +236,18 @@ fn chats_pane_node(
   }
   // (how many more the core has, read anew only as its list changes, not each time the column is scrolled)
   let more = @signals.computed(fn(_) { @sfbase.chats_more(src, id, filter) })
+  // (a window made taller: the list told the first window of it, where it holds fewer and the core has more; it never
+  // shrinks)
+  let held_rows = @signals.computed(fn(_) { @sfbase.chats_held(read().0) })
+  v.reacts(fn() { (v.window().1, more.get(), held_rows.get()) }, fn(at) {
+    @sfbase.chats_window_for(src, id, filter, at.0, at.2, at.1)
+  })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   // (a chat's row in line `line`, its key as it is now (`key`: "r/" and its name, another's as the row is taken for
   // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list)
   let row_line = fn(line : @view.View, key : () -> String) {
     motion.line_node(line, key)
-    let name = fn() { key().view(start_offset=2).to_owned() }
+    let name = fn() { key().exact_view(start=2).to_owned() }
     guard @signals.untracked(fn() { item_of(name()) }) is Some(first) else { return }
     // (looked up once as its key or the days change, not by each of what of the row reads it: the last it was where it
     // is gone)
@@ -270,9 +277,14 @@ fn chats_pane_node(
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },
-    // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
-    near_foot=(1.5, fn() { more.get() > 0 }, fn() {
-      @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
+    // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
+    at_once=true,
+    // scrolled to within a screen of its foot while the core has more of its rows: its window a step more, the rows
+    // added coming into the list it holds. A screen, not a screen and a half: its first window is what its room shows
+    // and a screen more (sfbase's first_window), its foot a screen and a little below at rest, which a screen and a
+    // half would have grown the moment it opened
+    near_foot=(1.0, fn() { more.get() > 0 }, fn() {
+      @sfbase.chats_grow(src, id, filter, @signals.untracked(fn() { held_rows.get() }), @signals.untracked(fn() { more.get() }))
     }),
     fn(b, k) {
     b.box(fn(line) {
@@ -300,7 +312,7 @@ fn chats_pane_node(
         "wait" => list_waiting_node(line, src, read, frame.at, tips, stint)
         "empty" => list_empty_node(line, read, filter, frame.at)
         _ if k.has_prefix("part/") => {
-          let part = k.view(start_offset=5).to_owned()
+          let part = k.exact_view(start=5).to_owned()
           let (view, _) = @signals.untracked(read)
           let parts = (frame.before)(filter, view) + (frame.after)(filter, view)
           match parts.iter().find_first(fn(p) { p.key == part }) {
@@ -310,7 +322,7 @@ fn chats_pane_node(
         }
         _ if k.has_prefix("h/") => {
           motion.line_node(line, fn() { k })
-          @sf.list_heading_node(line, fn() { k.view(start_offset=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
+          @sf.list_heading_node(line, fn() { k.exact_view(start=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
         }
         _ => {
           // (a row gone, or the copy of one gone ahead of others where it was: as it was, drawn only)
@@ -356,7 +368,7 @@ fn chats_pane_node(
         @sf.style_node(line, fn() { @sf.list_line(frame.at) })
         if @signals.untracked(key).has_prefix("h/") {
           motion.line_node(line, key)
-          @sf.list_heading_node(line, fn() { key().view(start_offset=2).to_owned() }, frame.at)
+          @sf.list_heading_node(line, fn() { key().exact_view(start=2).to_owned() }, frame.at)
         } else {
           row_line(line, key)
         }
@@ -492,7 +504,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
 /// Where each list made once is scrolled to, by its key (its workspace's and filter's): kept while the app runs, the
 /// same as it is left and come back to.
 // kept across runs: put back as a run begins (sidebar_reset)
-let list_scrolls : Map[String, @view.Scroll] = {}
+let list_scrolls : Map[String, @view.Scroll] = Map([])
 
 ///|
 /// Each of the lists made once at its top (what is tucked over its rows in view): as a recording's list at its top
@@ -542,6 +554,8 @@ priv struct RowsMotion {
   mut last : Array[String]
   mut last_items : Map[String, ChatItem]
   mut had : Bool
+  // (the page's stay on top it was last said in: Nav's stint)
+  mut stint : Int
   going : Map[String, (ChatItem?, String)]
   moving : Map[String, (Bool, Double)]
   told : @signals.Signal[Int]
@@ -549,7 +563,7 @@ priv struct RowsMotion {
 
 ///|
 fn RowsMotion::new() -> RowsMotion {
-  { last: [], last_items: {}, had: false, going: {}, moving: {}, told: @signals.signal(0) }
+  { last: [], last_items: {}, had: false, stint: 0, going: {}, moving: {}, told: @signals.signal(0) }
 }
 
 ///|
@@ -567,24 +581,28 @@ fn day_keys(days : Array[ChatDay]) -> Array[String] {
 
 ///|
 /// The list's days now said (`shown`, its rows `by_name`) in node `v`'s timeline, `watched` whether it is the list
-/// shown: what came, went and went ahead set off from the cause's moment.
+/// shown, in its page's stay on top `stint`: what came, went and went ahead set off from the cause's moment. What
+/// changed while its page was off the top (on 小屏 kept on the stack's shelf at rest, its list said again only as it is
+/// taken back: a new stint) is there at once, as on a page made anew.
 fn RowsMotion::said(
   self : RowsMotion,
   v : @view.View,
   shown : Array[ChatDay],
   by_name : Map[String, ChatItem],
   watched : Bool,
+  stint : Int,
 ) -> Unit {
   let lines = day_keys(shown)
   let was = self.last
-  let watched = watched && self.had && !lines.is_empty()
+  let watched = watched && self.had && !lines.is_empty() && stint == self.stint
+  self.stint = stint
   if watched && !(was == lines) {
     let now = v.cause_at()
-    let here : Set[String] = Set::new()
+    let here : Set[String] = Set([])
     for k in lines {
       here.add(k)
     }
-    let before : Map[String, Int] = {}
+    let before : Map[String, Int] = Map([])
     for j, k in was {
       before[k] = j
     }
@@ -608,7 +626,7 @@ fn RowsMotion::said(
       }
     }
     let kept = kept_in_order(was_at)
-    let ahead : Set[String] = Set::new()
+    let ahead : Set[String] = Set([])
     for n, k in at {
       if !kept[n] {
         ahead.add(k)
@@ -620,13 +638,13 @@ fn RowsMotion::said(
     for k in was {
       if ahead.contains(k) {
         let copy = k + moved_mark
-        self.going[copy] = (self.last_items.get(k.view(start_offset=2).to_owned()), prev)
+        self.going[copy] = (self.last_items.get(k.exact_view(start=2).to_owned()), prev)
         self.moving[copy] = (false, now)
         prev = copy
         continue
       }
       if !here.contains(k) && !self.going.contains(k) {
-        let name = k.view(start_offset=2).to_owned()
+        let name = k.exact_view(start=2).to_owned()
         self.going[k] = (if k.has_prefix("r/") { self.last_items.get(name) } else { None }, prev)
         self.moving[k] = (false, now)
       }

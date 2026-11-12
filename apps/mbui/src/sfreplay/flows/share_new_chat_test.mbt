@@ -9,11 +9,11 @@ test "94-share-new-chat" {
     f.share_files(["e2e-photo.jpg", "e2e-doc.pdf"])
     // the sheet raised over the app as it starts
     f.see("发到")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("e2e-photo.jpg")
     f.tap("新建对话")
     // the sheet going down as the new chat comes up, the files in its composer, waiting
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("想让 agent 做什么？")
     f.see("e2e-doc")
     f.gone("正在上传")

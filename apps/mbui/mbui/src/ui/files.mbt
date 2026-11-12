@@ -8,8 +8,10 @@
 /// together: pick_photos) one for each, answered as one once all of them are, in their order.
 pub struct Pick {
   priv hosts : Array[@hostapi.Pick]
-  /// what each of `hosts` answered (taken from the host as it does)
+  /// what each of `hosts` answered (taken from the host as its event says it did: Pick::take)
   priv got : Array[Array[@hostapi.Picked]?]
+  /// all of it, once all of `hosts` answered: what reads it is told then (Pick::files)
+  priv said : @signals.Signal[Array[@hostapi.Picked]?]
 }
 
 ///|
@@ -17,22 +19,21 @@ pub struct Pick {
 /// None when this host cannot.
 pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
   match @hostapi.pick(kind, hold~) {
-    Some(h) => {
-      let p : Pick = { hosts: [h], got: [None] }
-      p.wait("a pick")
-      Some(p)
-    }
+    Some(h) => Some(Pick::waits([h], "a pick"))
     None => None
   }
 }
 
 ///|
-/// Waited on until the system answers and the answer is taken (hostcall.mbt's outside): each ask of the host's by its
-/// id as the host's event names it (outside_pick).
-fn Pick::wait(self : Pick, what : String) -> Unit {
-  for h in self.hosts {
+/// An ask of `hosts`, waited on until the system answers each (hostcall.mbt's outside, by its id as the host's event
+/// names it: outside_pick), each taken as its event comes (outside_takes).
+fn Pick::waits(hosts : Array[@hostapi.Pick], what : String) -> Pick {
+  let p : Pick = { hosts, got: hosts.map(fn(_) { None }), said: @signals.signal(None) }
+  for i, h in hosts {
     outside_start(outside_pick, h.id(), what + " \{h.id()}")
+    outside_takes(outside_pick, h.id(), fn() { p.take(i) })
   }
+  p
 }
 
 ///|
@@ -49,49 +50,62 @@ pub fn pick_photos(srcs : Array[String]) -> Pick? {
   if hosts.is_empty() {
     None
   } else {
-    let p : Pick = { hosts, got: hosts.map(fn(_) { None }) }
-    p.wait("a gallery photo read")
-    Some(p)
+    Some(Pick::waits(hosts, "a gallery photo read"))
   }
 }
 
 ///|
-/// What was picked, once the system has answered (empty: called off); None while it asks. Taken once.
-pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
-  for i, h in self.hosts {
-    if self.got[i] is None && answer_here(outside_pick, h.id()) {
-      match h.files() {
-        Some(files) => {
-          self.got[i] = Some(files)
-          answer_taken(outside_pick, h.id())
-          outside_end(outside_pick, h.id())
-        }
-        None => ()
-      }
-    }
-  }
+/// The host's answer for `hosts[i]` taken, as its event says it came (or, a host answering by the frame, as a frame
+/// begins): what it gave kept, the ask's wait over; all of them answered, what was picked said (Pick::files). Whether
+/// it was there to take.
+fn Pick::take(self : Pick, i : Int) -> Bool {
+  let h = self.hosts[i]
+  guard self.got[i] is None && h.files() is Some(files) else { return false }
+  self.got[i] = Some(files)
+  outside_end(outside_pick, h.id(), wake=false)
   let out = []
   for got in self.got {
     match got {
       Some(files) => out.push_iter(files.iter())
-      None => return None
+      None => return true
     }
   }
-  // (taken: asked again, nothing)
-  for i in 0..<self.got.length() {
-    self.got[i] = Some([])
-  }
-  Some(out)
+  self.said.set(Some(out))
+  true
 }
 
 ///|
-/// What the system's pickers give from now on, whatever is asked (as MBUI_PICK_FILES does a host's): `files` (their
-/// names and bytes); none: the person calls the picker off.
+/// What was picked, once the system has answered (empty: called off); None while it asks. A signal's read: what reads
+/// it (a binding, a `reacts`, an old view's build) is told as the answer comes, and reads the same however often.
+pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
+  self.said.get()
+}
+
+///|
+/// What the system's pickers give from now on, whatever is asked (as MBUI_PICK_FILES does a host's), each ask answered
+/// at its moment, told as a host's event (after the event that asked, before the clock moves on): `files` (their names
+/// and bytes); none: the person calls the picker off.
 pub fn Tester::picks(self : Tester, files : Array[(String, Bytes)]) -> Unit {
   self.fake.picks.clear()
   for f in files {
     self.fake.picks.push({ name: f.0, bytes: f.1, held: 0, size: f.1.length().to_double(), src: "" })
   }
+}
+
+///|
+/// The system's pickers from now on answered as the test says (Tester::pick_answer), as a person takes their while,
+/// not at each ask.
+pub fn Tester::picks_by_hand(self : Tester) -> Unit {
+  self.fake.picks_by_hand = true
+}
+
+///|
+/// The person answers ask `n` (from 1, in the order asked: Tester::pick_asks) now, with what the pickers give
+/// (Tester::picks): told at this moment, as a host's event (after what is going on, before the clock moves on or an
+/// input comes).
+pub fn Tester::pick_answer(self : Tester, n : Int) -> Unit {
+  let f = self.fake
+  f.due(f.time, "a pick answered", fn() { fake_pick_said(f, n) })
 }
 
 ///|
@@ -207,7 +221,7 @@ fn FakeHost::gallery_read(self : FakeHost) -> Int {
   match self.gallery {
     Some(photos) => {
       // (rows as a host writes them: id, src, added, modified, taken, video, a tab between)
-      let rows = StringBuilder::new()
+      let rows = StringBuilder()
       for p in photos {
         rows.write_string(
           "\{p.id}\t\{p.src}\t\{p.added}\t\{p.modified}\t\{p.taken}\t\{if p.video { 1 } else { 0 }}\n",
@@ -266,8 +280,16 @@ pub fn GalleryRead::photos(self : GalleryRead) -> Array[@hostapi.GalleryPhoto]? 
 /// once, not on its event a frame or more later: until then it said nothing was under way, and what shows how it goes
 /// went from nothing to 下载中 a frame late (the update dialog's bar gone and back, its sheet shorter and taller
 /// again, 2026-10-28).
-pub fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
-  @hostapi.update_fetch(url, sha256, size, name, now)
+/// `delta`: "" or a delta to make the build of (@hostapi.update_fetch's).
+pub fn update_fetch(
+  url : String,
+  sha256 : String,
+  size : Double,
+  name : String,
+  now : Bool,
+  delta : String,
+) -> Unit {
+  @hostapi.update_fetch(url, sha256, size, name, now, delta)
   update_told.set(@hostapi.update_state())
 }
 
@@ -279,8 +301,10 @@ pub fn update_apply(said : String) -> Unit {
 }
 
 ///|
-/// What the app asked of the host's updates under a Tester ("fetch <name> <now>", "apply"), in order.
+/// What the app asked of the host's updates under a Tester ("fetch <name> <now>", with " delta <json>" where it gave
+/// one; "apply"), in order.
 pub fn Tester::update_asked(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   update_asked.copy()
 }

@@ -1,6 +1,6 @@
-// 控制中心 and how the view goes (screen_panel.mbt) on the screen rig's fake core (screen_wbtest.mbt): 画质 kept on the
-// device and the view asked again at its size, 缩放 and 组合键 sent while driving, the bar's time seen and its figures,
-// 复制诊断, 断开.
+// 控制中心, 按键 and how the view goes (screen_panel.mbt) on the screen rig's fake core (screen_wbtest.mbt): 画质 kept on
+// the device and the view asked again at its size, 缩放 sent while driving, 组合键 and the keys by the keyboard, the bar's
+// time seen and its figures, 复制诊断, 断开.
 
 ///|
 /// 控制中心 opened from the bar, its sheet in (a popover's beside it with keyboard and mouse).
@@ -11,9 +11,34 @@ fn open_center(r : ScreenRig) -> Unit {
 }
 
 ///|
+/// 按键 opened from the foot by the keyboard (组合键 from the viewer's bar with keyboard and mouse), its sheet in.
+fn open_keys(r : ScreenRig, combos? : Bool = false) -> Unit {
+  r.tap_label(tr(if combos { "web-pages.screen.combos" } else { "web-pages.screen.keysPanel" }))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+}
+
+///|
+/// 控制中心's 画面 row `name` (saying `now` at its end) pressed: its choices beside it, at rest.
+fn open_choices(r : ScreenRig, name : String, now : String) -> Unit {
+  r.tap_label(tr(name) + " " + now)
+  r.t.run_for(@ui.move_most_ms)
+  to_sheet_rest(r.t)
+}
+
+///|
+/// A choice of the choices open (the last drawn of those words: not 控制中心's rows under it) chosen, at rest.
+fn choose_last(r : ScreenRig, words : String) -> Unit {
+  let (x, y) = r.t.find_last(words).unwrap()
+  r.t.tap(x, y)
+  r.t.run_for(@ui.move_most_ms)
+  to_sheet_rest(r.t)
+}
+
+///|
 /// The presenters' sheet, where one is moving (a phone's 控制中心 opened or closed), at its rest.
 fn to_sheet_rest(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
@@ -38,9 +63,9 @@ test "画质 chosen in 控制中心 is kept on the device and asked of the open 
   r.live()
   open_center(r)
   assert_true(r.t.find(tr("web-pages.screen.quality")) is Some(_))
+  open_choices(r, "web-pages.screen.quality", tr("web-pages.screen.quality.auto"))
   assert_true(r.t.find(tr("web-pages.screen.qualityHint.auto")) is Some(_))
-  r.t.tap_text(tr("web-pages.screen.quality.smooth"))
-  r.t.draw()
+  choose_last(r, tr("web-pages.screen.quality.smooth"))
   let set = r.told("prefs.set").filter(fn(p) { field(Some(p), "screenQuality") is Some(_) })
   assert_eq(set.length(), 1)
   assert_eq(text(Some(set[0]), "screenQuality"), "smooth")
@@ -53,10 +78,11 @@ test "画质 chosen in 控制中心 is kept on the device and asked of the open 
   assert_eq(text(Some(asked[0]), "view"), text(Some(r.told("screen.view")[0]), "view"))
   assert_eq(number(Some(asked[0]), "maxWidth"), 1280.0)
   assert_eq(number(Some(asked[0]), "maxHeight"), 720.0)
-  assert_true(r.t.find("720p") is Some(_))
+  assert_true(r.labelled(tr("web-pages.screen.quality") + " " + tr("web-pages.screen.quality.smooth")) is Some(_))
   // back to 自动: as large as the stage is in the device's pixels again
-  r.t.tap_text(tr("web-pages.screen.quality.auto"))
-  r.t.draw()
+  open_choices(r, "web-pages.screen.quality", tr("web-pages.screen.quality.smooth"))
+  // (by what it means: 自动 is 帧率's row's word too)
+  choose_last(r, tr("web-pages.screen.qualityHint.auto"))
   let again = r.told("screen.bounds")
   assert_eq(again.length(), 2)
   assert_eq(number(Some(again[1]), "maxWidth"), r.sess().stage_px.0.to_double())
@@ -72,9 +98,11 @@ test "帧率 chosen in 控制中心 beside 画质 is kept on the device and aske
   r.live()
   open_center(r)
   assert_true(r.t.find(tr("web-pages.screen.fps")) is Some(_))
+  open_choices(r, "web-pages.screen.fps", tr("web-pages.screen.fps.auto"))
   assert_true(r.t.find(tr("web-pages.screen.fpsHint.auto")) is Some(_))
-  r.t.tap_text("30")
-  r.t.draw()
+  // each said with what it means: 30's, at most 30 a second
+  assert_true(r.t.find(@sfbase.fill("web-pages.screen.fpsHint.cap", [("fps", "30")])) is Some(_))
+  choose_last(r, "30")
   let set = r.told("prefs.set").filter(fn(p) { field(Some(p), "screenFps") is Some(_) })
   assert_eq(set.length(), 1)
   assert_eq(number(Some(set[0]), "screenFps"), 30.0)
@@ -87,15 +115,15 @@ test "帧率 chosen in 控制中心 beside 画质 is kept on the device and aske
   assert_eq(number(Some(asked[0]), "fps"), 30.0)
   assert_eq(number(Some(asked[0]), "maxWidth"), r.sess().stage_px.0.to_double())
   assert_true(field(Some(asked[0]), "quality") is None)
-  assert_true(r.t.find(@sfbase.fill("web-pages.screen.fpsHint.cap", [("fps", "30")])) is Some(_))
   // 120: said so, its note saying the display must draw that many
-  r.t.tap_text("120")
-  r.t.draw()
+  open_choices(r, "web-pages.screen.fps", "30")
+  assert_true(r.t.find(@sfbase.fill("web-pages.screen.fpsHint.high", [("fps", "120")])) is Some(_))
+  choose_last(r, "120")
   assert_eq(number(Some(r.told("screen.bounds")[1]), "fps"), 120.0)
-  // back to 自动 (帧率's, below 画质's): no 帧率 said
-  let (ax, ay) = r.t.find_last(tr("web-pages.screen.fps.auto")).unwrap()
-  r.t.tap(ax, ay)
-  r.t.draw()
+  // back to 自动: no 帧率 said
+  open_choices(r, "web-pages.screen.fps", "120")
+  // (by what it means: 自动 is 画质's row's word too)
+  choose_last(r, tr("web-pages.screen.fpsHint.auto"))
   let again = r.told("screen.bounds")
   assert_eq(again.length(), 3)
   assert_true(field(Some(again[2]), "fps") is None)
@@ -151,8 +179,8 @@ test "a host that decodes H.265 asks for it first; 自动 says no 画质" {
   r.say({ "config": { "codec": "h265", "width": 1920, "height": 1080 } }, bytes=b"\x01\x01")
   r.say({ "frame": { "key": true, "ts": 2000 } }, bytes=b"\x00\x00\x00\x01\x26")
   let fed = r.t.stream_fed(s.stream.unwrap().id())
-  assert_true(fed.contains("hevc 1920x1080 hvcc=2"), msg=fed.to_string())
-  assert_true(fed.contains("frame key=true ts=2000 bytes=5"), msg=fed.to_string())
+  assert_true(fed.contains("hevc 1920x1080 hvcc=2"), msg=Repr(fed).to_string())
+  assert_true(fed.contains("frame key=true ts=2000 bytes=5"), msg=Repr(fed).to_string())
   r.t.stream_shows(s.stream.unwrap().id(), 2000.0, 1920, 1080)
   r.t.draw()
   s.pause(s.src)
@@ -160,10 +188,14 @@ test "a host that decodes H.265 asks for it first; 自动 says no 画质" {
 }
 
 ///|
-test "组合键 while driving: a Windows station's, tiles at 控制中心's top, each sent down and up with its modifiers; none while only looking" {
+test "组合键 while driving: a Windows station's, tiles at 按键's top, each sent down and up with its modifiers; 按键 stays open; none while only looking" {
   let r = screen_rig()
   r.live()
+  // not 控制中心's: 按键's, by the keyboard
   open_center(r)
+  assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
+  shut(r)
+  open_keys(r)
   // tiles at its top, by their names alone: no keys to read
   assert_true(r.t.find("Ctrl Shift Esc") is None)
   r.t.tap_text(tr("web-pages.screen.combo.taskManager"))
@@ -174,23 +206,51 @@ test "组合键 while driving: a Windows station's, tiles at 控制中心's top,
   assert_eq(text(Some(ins[0]), "key"), "Escape")
   assert_eq(number(Some(ins[0]), "mods"), (mod_ctrl | mod_shift).to_double())
   assert_eq(kind_of_input(ins[1]), "up")
-  // chosen, 控制中心 closes
+  // open still: another after it
   r.t.run_for(@sf.later_ms)
-  to_sheet_rest(r.t)
-  assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
-  // only looking: no keys to send (nor the keys row)
+  assert_true(@sf.presenting())
+  r.t.tap_text(tr("web-pages.screen.combo.desktop"))
+  r.t.draw()
+  assert_eq(r.inputs().length(), 4)
+  assert_true(r.t.find(tr("web-pages.screen.combos")) is Some(_))
+  shut(r)
+  // only looking: no keys to send (nor the keys row, nor 按键)
   r.state("live", control=false)
-  open_center(r)
-  assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
+  assert_true(r.labelled(tr("web-pages.screen.keysPanel")) is None)
+  screen_done(r.t)
+}
+
+///|
+test "组合键 with a modifier held on the keys row: it goes with the combo's own, and is let go" {
+  let r = screen_rig()
+  r.live()
+  r.press_key(tr("android-misc.screen.key.option"))
+  assert_eq(r.ui().held.mods, mod_alt)
+  open_keys(r)
+  r.t.tap_text(tr("web-pages.screen.combo.taskManager"))
+  r.t.draw()
+  let ins = r.inputs()
+  assert_eq(ins.length(), 2)
+  assert_eq(number(Some(ins[0]), "mods"), (mod_ctrl | mod_shift | mod_alt).to_double())
+  assert_eq(r.ui().held.mods, 0)
+  // a key of it with one held too
+  shut(r)
+  r.press_key(tr("android-misc.screen.key.control"))
+  open_keys(r)
+  r.t.tap_text("F4")
+  r.t.draw()
+  assert_eq(text(Some(r.inputs()[2]), "code"), "F4")
+  assert_eq(number(Some(r.inputs()[2]), "mods"), mod_ctrl.to_double())
+  assert_eq(r.ui().held.mods, 0)
   shut(r)
   screen_done(r.t)
 }
 
 ///|
-test "常用键 while driving: F1–F12 and the keys the row has not, each sent down and up; 控制中心 stays open" {
+test "常用键 while driving: F1–F12 and the keys the row has not, in 按键, each sent down and up; 按键 stays open" {
   let r = screen_rig()
   r.live()
-  open_center(r)
+  open_keys(r)
   r.t.tap_text("F5")
   r.t.draw()
   let ins = r.inputs()
@@ -204,7 +264,32 @@ test "常用键 while driving: F1–F12 and the keys the row has not, each sent 
   r.t.draw()
   assert_eq(text(Some(r.inputs()[2]), "code"), "PageDown")
   assert_true(r.t.find(tr("web-pages.screen.commonKeys")) is Some(_))
+  assert_eq(r.t.audit(), [])
   shut(r)
+  screen_done(r.t)
+}
+
+///|
+test "按键 at a computer's window: no button of a phone's; the viewer's bar's 组合键 the combos alone, open after each, a held modifier with them" {
+  let r = screen_rig(w=1280.0, h=800.0, platform=0)
+  r.t.run_for(@sf.later_ms)
+  r.live()
+  assert_true(r.labelled(tr("web-pages.screen.keysPanel")) is None)
+  open_keys(r, combos=true)
+  assert_true(r.t.find(tr("web-pages.screen.combo.taskManager")) is Some(_))
+  // (its keyboard has the rest)
+  assert_true(r.t.find("F5") is None)
+  assert_eq(r.t.audit(), [])
+  r.t.tap_text(tr("web-pages.screen.combo.taskManager"))
+  r.t.draw()
+  assert_eq(r.inputs().filter(fn(j) { text(Some(j), "t") == "key" }).length(), 2)
+  assert_true(@sf.presenting())
+  shut(r)
+  // only looking: none
+  r.state("live", control=false)
+  r.t.draw()
+  assert_true(r.labelled(tr("web-pages.screen.combos")) is None)
+  r.t.leave()
   screen_done(r.t)
 }
 
@@ -225,9 +310,9 @@ test "缩放 while driving a station that changes it: its steps, the recommended
   r.state("live", more={ "scale": scale })
   open_center(r)
   assert_true(r.t.find(tr("web-pages.screen.scale")) is Some(_))
+  open_choices(r, "web-pages.screen.scale", "100%")
   assert_true(r.t.find("150%（推荐）") is Some(_))
-  r.t.tap_text("125%")
-  r.t.draw()
+  choose_last(r, "125%")
   let ins = r.inputs()
   assert_eq(ins.length(), 1)
   assert_eq(text(Some(ins[0]), "t"), "scale")
@@ -237,7 +322,7 @@ test "缩放 while driving a station that changes it: its steps, the recommended
 }
 
 ///|
-test "缩放 with more steps than fit side by side: picked from a list with no search line (no keyboard for it)" {
+test "缩放 with many steps: picked from a list with no search line (no keyboard for it)" {
   // (an iPhone Duo's inner screen, sideways: 控制中心 a panel beside its button, its steps too many for one row)
   let r = screen_rig(w=951.0, h=669.0, platform=1)
   r.live()
@@ -248,11 +333,7 @@ test "缩放 with more steps than fit side by side: picked from a list with no s
   }
   r.state("live", more={ "scale": scale })
   open_center(r)
-  // (缩放 below 画质 and 帧率: the panel scrolled to it)
-  r.t.wheel(150.0, 400.0, 1000.0)
-  r.t.run_for(@sf.later_ms)
-  r.t.tap_text("100%")
-  r.t.run_for(@ui.move_most_ms)
+  open_choices(r, "web-pages.screen.scale", "100%")
   assert_true(r.t.find("350%") is Some(_))
   assert_true(r.t.find(tr("common.search")) is None)
   assert_false(r.t.key_catching())
@@ -284,21 +365,12 @@ test "分辨率 while driving a station that changes it: its modes, the one near
   }
   r.state("live", more={ "resolution": resolution })
   open_center(r)
-  // (分辨率 below 画质 and 帧率: the panel scrolled to it)
-  r.t.wheel(150.0, 400.0, 1000.0)
-  r.t.run_for(@sf.later_ms)
   assert_true(r.t.find(tr("web-pages.screen.resolution")) is Some(_))
-  // (the stage a little wider than 4:3: 1600×1200 nearest)
-  assert_true(r.t.find("1600×1200 最贴合") is Some(_))
-  r.t.tap_text("2560×1440")
-  r.t.run_for(@ui.move_most_ms)
+  open_choices(r, "web-pages.screen.resolution", "2560×1440")
   assert_true(r.t.find(tr("common.search")) is None)
-  // the nearest marked in the list itself
+  // the nearest marked among them (the stage a little wider than 4:3: 1600×1200 nearest)
   assert_true(r.t.find("1600×1200（推荐）") is Some(_))
-  // (the list's row, drawn over the panel's note naming the same)
-  let (px, py) = r.t.find_last("1600×1200").unwrap()
-  r.t.tap(px, py)
-  r.t.run_for(@ui.move_most_ms)
+  choose_last(r, "1600×1200")
   let ins = r.inputs()
   assert_eq(ins.length(), 1)
   assert_eq(text(Some(ins[0]), "t"), "resolution")
@@ -319,7 +391,7 @@ test "the modes offered: three of each shape, the one now and the nearest kept w
   let fits = resolution_fitting(modes, 951.0, 669.0)
   let shown = resolution_shown(modes, (3840, 2160), fits)
   assert_true(shown.contains((1920, 1080)))
-  assert_true(shown.length() <= 11, msg="\{shown}")
+  assert_true(shown.length() <= 11, msg="\{Repr(shown)}")
   assert_true(shown.contains((3840, 2160)))
   assert_true(shown.contains(modes[fits]))
   assert_eq(shown[0], (3840, 2160))
@@ -375,7 +447,7 @@ test "the bar says how long it has been seen; pressed, the view's figures, and �
   assert_true(r.t.find("3") is Some(_))
   r.tap_label(tr("web-pages.screen.stat.copy"))
   r.t.draw()
-  let said = @json.parse(r.t.clipboard()) catch { _ => abort("not JSON") }
+  let said = @json.parse(r.t.clipboard()) catch { _ => @halt.saying("not JSON") }
   assert_eq(text(Some(said), "picture"), "1280x720")
   assert_eq(text(Some(said), "codec"), "jpeg")
   assert_eq(number(Some(said), "fps"), 3.0)
@@ -426,7 +498,7 @@ fn simulator_live(r : ScreenRig) -> Unit {
 }
 
 ///|
-test "a simulator's page: its device's buttons by the picture, a finger where it touches; 控制中心 only the link's" {
+test "a simulator's page: its device's buttons by the picture, a finger where it touches; no 按键, 控制中心 no 触控板" {
   let r = screen_rig()
   simulator_live(r)
   assert_false(r.sess().pad(r.sess().src))
@@ -436,10 +508,10 @@ test "a simulator's page: its device's buttons by the picture, a finger where it
   assert_eq(ins.length(), 2)
   assert_eq(text(Some(ins[0]), "code"), "KeyH")
   assert_eq(number(Some(ins[0]), "mods"), (mod_meta | mod_shift).to_double())
+  assert_true(r.labelled(tr("web-pages.screen.keysPanel")) is None)
   open_center(r)
   assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
-  assert_true(r.t.find(tr("web-pages.screen.commonKeys")) is None)
-  assert_true(r.t.find(tr("web-pages.screen.mouseButtons")) is None)
+  assert_true(r.t.find(tr("android-misc.screen.trackpad")) is None)
   assert_true(r.t.find(tr("web-pages.screen.quality")) is Some(_))
   shut(r)
   screen_done(r.t)

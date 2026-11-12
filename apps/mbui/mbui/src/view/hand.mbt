@@ -35,6 +35,7 @@ pub fn Tree::lit_all(self : Tree, on : Bool) -> Unit {
 /// down it is placed in what holds it (as placed: its layout's place and its offset, Tree::place), how big it is, and
 /// its words' size and line, and the weight each of them is set in (`weights`: how many in a row at which, each piece's
 /// own where it is in pieces, View::words_runs; none where it says none).
+#derive(Debug)
 pub(all) struct HandNode {
   key : String
   holder : String
@@ -47,7 +48,7 @@ pub(all) struct HandNode {
   size : Double
   weights : Array[(Int, Int)]
   line : Double
-} derive(Debug)
+}
 
 ///|
 /// The live nodes as last placed, by the hand's measure (HandNode), what holds each before it.

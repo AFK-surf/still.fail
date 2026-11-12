@@ -74,7 +74,7 @@ let key_names : Array[(String, Int)] = [
 ///|
 /// A binding (Shift+Mod+H) as the key's code and the modifiers held, or None for one this app cannot have.
 fn binding_key(binding : String) -> (Int, Int)? {
-  let parts = binding.split("+").map(fn(p) { p.to_string() }).collect()
+  let parts = binding.split("+").map(fn(p) { p.to_owned() }).collect()
   // (a plus itself is no binding: the last part is always the key)
   let key = match parts.last() {
     Some(k) => k
@@ -177,9 +177,18 @@ pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   bindings.append(@sf.reader_bindings())
   // (the files' own where they are: sfdesk's files.mbt)
   bindings.append(files_bindings())
+  // (↓ ↑ in a chat's outline, with the cursor in its field too: the row the keys are at, sfpages' outline.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_down, 0)], action: "outline.down", when: In("Outline") })
+  bindings.push({ keys: [stroke(@ui.key_code_up, 0)], action: "outline.up", when: In("Outline") })
+  // (⇧Enter in ⌘F's bar, with the cursor in its field: the one before, sfpages' find_bar_node.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_enter, @ui.mod_shift_key)], action: "find.prev", when: In("Find") })
+  // (what a field offers as it is typed in, where it is open: sf's offers_node.mbt)
+  bindings.append(@sf.offers_bindings())
   // (Escape where a search is up, with the cursor in a field too, or a picture's old viewer, not in a field: sfpages'
   // search.mbt, sfbase's viewer.mbt)
   bindings.push({ keys: [stroke(@ui.key_escape, 0)], action: "search.escape", when: In("Search") })
+  // (Enter where a message's sharing is asked, whatever has the focus under it: sfpages' outside.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_enter, 0)], action: "outside.yes", when: In("OutsideAsk") })
   bindings.push({
     keys: [stroke(@ui.key_escape, 0)],
     action: "viewer.escape",
@@ -286,5 +295,8 @@ fn files_bindings() -> Array[@view.Binding] {
     b(@ui.key_of_char('['), mod_key() | shift, "files.tab_back", files),
     b(@ui.key_of_char('d'), @ui.mod_cmd | @ui.mod_alt, "files.split", files),
     b(@ui.key_of_char('g'), @ui.mod_cmd | shift, "files.go_to", files),
+    // (↓ ↑ in 前往文件夹, with the cursor in its field: what is chosen under it, sfdesk's files_go.mbt)
+    b(@ui.key_code_down, 0, "files.go_to.down", In("GoTo")),
+    b(@ui.key_code_up, 0, "files.go_to.up", In("GoTo")),
   ]
 }

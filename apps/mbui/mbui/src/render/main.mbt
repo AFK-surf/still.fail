@@ -58,7 +58,7 @@ fn num(s : String) -> Double {
 fn quoted(line : String) -> String {
   match line.find("\"") {
     Some(k) => {
-      let j = @json.parse(line.view(start_offset=k).to_owned()) catch { _ => return "" }
+      let j = @json.parse(line.exact_view(start=k).to_owned()) catch { _ => return "" }
       match j {
         String(s) => s
         _ => ""
@@ -108,7 +108,7 @@ fn parse(text : String) -> Dl {
         let last = t[t.length() - 1]
         let bytes = if last.has_suffix("\"") { -1 } else { num(last).to_int() }
         let src = match (line.find("\""), line.rev_find("\"")) {
-          (Some(k), Some(e)) if e > k => quoted(line.view(start_offset=0, end_offset=e + 1).to_owned())
+          (Some(k), Some(e)) if e > k => quoted(line.exact_view(start=0, end=e + 1).to_owned())
           _ => ""
         }
         dl.images[num(t[1]).to_int()] = (num(t[2]).to_int(), src, bytes)
@@ -185,7 +185,7 @@ fn main {
       let (si, sn) = seen(ia, na, a)
       draw(si, sn, ar, ag, ab)
       let parts = damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b)
-      say("mbui-render: \{path}: drawn again where it differs from \{from_path}: \{parts}")
+      say("mbui-render: \{path}: drawn again where it differs from \{from_path}: \{Repr(parts)}")
       let bench = arg("MBUI_DL_BENCH")
       if bench != "" {
         let times = num(bench).to_int()
@@ -226,7 +226,7 @@ fn main {
       tell_parts(damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b))
       let (si, sn) = seen(inst, n, dl)
       draw(si, sn, r, gg, b)
-      let whole = (if out.has_suffix(".png") { out.view(end_offset=out.length() - 4).to_owned() } else { out }) +
+      let whole = (if out.has_suffix(".png") { out.exact_view(end=out.length() - 4).to_owned() } else { out }) +
         ".whole.png"
       if !snapshot_drawn(out) {
         say("mbui-render: \{out}: not written")
@@ -246,7 +246,7 @@ fn main {
 
 ///|
 /// The glyphs placed, by their keys (instances).
-let placed : Map[Int, (Double, Double, Double, Double)] = {}
+let placed : Map[Int, (Double, Double, Double, Double)] = Map([])
 
 ///|
 /// The parts of the next frame drawn again told to the renderer (as a host's frame tells them: src/ui/hostcall.mbt).
@@ -281,7 +281,7 @@ fn instances(dl : Dl, path : String, atlas : @hostapi.Atlas, colour_atlas : @hos
   // each glyph made again: its atlas place here (placed as an app places it: @hostapi.Atlas), by the list's
   let shaped = FixedArray::make(4096, 0.0)
   let g = FixedArray::make(8, 0.0)
-  let places : Map[Int, (Double, Double, Double, Double)] = {}
+  let places : Map[Int, (Double, Double, Double, Double)] = Map([])
   let mut unknown = 0
   dl.glyphs.each(fn(no, gl) {
     let (size, weight, style, cluster, text) = gl
@@ -329,7 +329,7 @@ fn instances(dl : Dl, path : String, atlas : @hostapi.Atlas, colour_atlas : @hos
     }
   })
   // each image decoded again
-  let ids : Map[Int, Int] = {}
+  let ids : Map[Int, Int] = Map([])
   let info = FixedArray::make(4, 0.0)
   dl.images.each(fn(no, im) {
     let (px, src, bytes) = im

@@ -48,10 +48,10 @@ test "desktop: the pointer's shape follows what is under it, and the arrow once 
     w=400.0,
     h=300.0,
   )
-  t.move(10.0, 10.0)
+  t.move_to(10.0, 10.0)
   assert_eq(t.cursor(), Hand)
   let (fx, fy) = t.find("words").unwrap()
-  t.move(fx, fy)
+  t.move_to(fx, fy)
   assert_eq(t.cursor(), IBeam)
   t.leave()
   assert_eq(t.cursor(), Arrow)
@@ -86,7 +86,7 @@ test "desktop: what takes presses is a hand by itself; not what is off, a ground
     h=300.0,
   )
   let seen = [15.0, 45.0, 75.0, 105.0, 135.0, 165.0].map(fn(y) {
-    t.move(10.0, y)
+    t.move_to(10.0, y)
     t.cursor()
   })
   assert_eq(seen, [Hand, Hand, Arrow, Arrow, Arrow, Arrow])
@@ -109,9 +109,9 @@ test "desktop: a link in words picked with the pointer is a hand, the words roun
     h=300.0,
   )
   let (x, y, w, h) = t.rect_of("open and the words after it").unwrap()
-  t.move(x + 3.0, y + h / 2.0)
+  t.move_to(x + 3.0, y + h / 2.0)
   assert_eq(t.cursor(), Hand)
-  t.move(x + w - 3.0, y + h / 2.0)
+  t.move_to(x + w - 3.0, y + h / 2.0)
   assert_eq(t.cursor(), IBeam)
 }
 
@@ -132,9 +132,9 @@ test "desktop: a ground that takes presses keeps the I-beam over its words picke
     h=300.0,
   )
   let (x, y, _, h) = t.rect_of("words on a ground").unwrap()
-  t.move(x + 3.0, y + h / 2.0)
+  t.move_to(x + 3.0, y + h / 2.0)
   assert_eq(t.cursor(), IBeam)
-  t.move(10.0, 10.0)
+  t.move_to(10.0, 10.0)
   assert_eq(t.cursor(), Arrow)
 }
 
@@ -151,7 +151,7 @@ test "desktop: what moves under a resting pointer is what it hovers" {
     w=400.0,
     h=300.0,
   )
-  t.move(10.0, 50.0)
+  t.move_to(10.0, 50.0)
   assert_eq(t.cursor(), Arrow)
   shift.val = 40.0
   t.frame()
@@ -315,7 +315,7 @@ test "desktop: words of a selectable paragraph are picked by a drag and copied; 
     h=300.0,
   )
   let (_, y, _, h) = t.rect_of("hello wide world").unwrap()
-  t.move(2.0, y + h / 2.0)
+  t.move_to(2.0, y + h / 2.0)
   assert_eq(t.cursor(), IBeam)
   t.drag(1.0, y + h / 2.0, 200.0, y + h / 2.0)
   assert_eq(t.ctx().selected_text(), "hello wide world")
@@ -361,7 +361,7 @@ test "desktop: a drag from one paragraph into another picks the rest of the firs
   let (x1, y1) = (bx + bw / 2.0, by + bh / 2.0)
   t.drag(x0, y0, x1, y1)
   let down = t.ctx().selected_text()
-  let lines = down.split("\n").map(fn(l) { l.to_string() }).collect()
+  let lines = down.split("\n").map(fn(l) { l.to_owned() }).collect()
   assert_eq(lines.length(), 3, msg=down)
   assert_true(lines[0] != "" && lines[0] != "first words here" && "first words here".has_suffix(lines[0]), msg=down)
   assert_eq(lines[1], "the middle")
@@ -396,12 +396,12 @@ test "desktop: what is picked ends where the pointer let it go: dragged down, th
   assert_true(t.ctx().selection_end() is None)
   t.drag(x0, y0, x1, y1)
   let (ex, ey, eh) = t.ctx().selection_end().unwrap()
-  assert_true(ey <= y1 && ey + eh >= y1, msg="\{(ex, ey, eh)}")
-  assert_true((ex - x1).abs() < 15.0, msg="\{(ex, ey, eh)}")
+  assert_true(ey <= y1 && ey + eh >= y1, msg="\{Repr((ex, ey, eh))}")
+  assert_true((ex - x1).abs() < 15.0, msg="\{Repr((ex, ey, eh))}")
   t.drag(x1, y1, x0, y0)
   let (ex, ey, eh) = t.ctx().selection_end().unwrap()
-  assert_true(ey <= y0 && ey + eh >= y0, msg="\{(ex, ey, eh)}")
-  assert_true((ex - x0).abs() < 15.0, msg="\{(ex, ey, eh)}")
+  assert_true(ey <= y0 && ey + eh >= y0, msg="\{Repr((ex, ey, eh))}")
+  assert_true((ex - x0).abs() < 15.0, msg="\{Repr((ex, ey, eh))}")
 }
 
 ///|
@@ -464,13 +464,13 @@ test "desktop: words picked on down a list the wheel scrolls under the held poin
   t.draw()
   let (x, y, _, h) = t.rect_of("row 1 words").unwrap()
   t.press_at(x + 0.5, y + h / 2.0)
-  t.move(x + 20.0, 170.0)
+  t.move_to(x + 20.0, 170.0)
   // five rows scrolled under the pointer as it is held (the wheel's ease run out)
   t.wheel(x + 20.0, 170.0, 200.0)
   t.run_for(@ui.wheel_ease_ms)
   assert_true(t.rect_of("row 1 words") is None)
   t.release(x + 20.0, 170.0)
-  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_string() }).collect()
+  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_owned() }).collect()
   assert_true(lines.length() >= 8, msg=t.ctx().selected_text())
   for k in 0..<(lines.length() - 1) {
     assert_eq(lines[k], "row \{k + 1} words")
@@ -507,30 +507,30 @@ test "desktop: words picked with the pointer held past a list's shown foot (onto
   let (x, y, _, h) = t.rect_of("row 1 words").unwrap()
   t.press_at(x + 0.5, y + h / 2.0)
   // held over what floats over the foot, the pointer still: the list scrolls on by itself
-  t.move(x + 20.0, 180.0)
+  t.move_to(x + 20.0, 180.0)
   let o0 = t.list_offset()
   t.run_for(@ui.scrollbar_hold_ms)
   let o1 = t.list_offset()
   assert_true(o1 > o0 + 80.0, msg="\{o0} \{o1}")
   // (row 1 gone up out of view)
-  assert_true(t.rect_of("row 1 words").map(fn(r) { r.1 + r.3 <= 0.0 }).unwrap_or(true), msg="\{t.rect_of("row 1 words")}")
-  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_string() }).collect()
+  assert_true(t.rect_of("row 1 words").map(fn(r) { r.1 + r.3 <= 0.0 }).unwrap_or(true), msg="\{Repr(t.rect_of("row 1 words"))}")
+  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_owned() }).collect()
   assert_true(lines.length() >= 5, msg=t.ctx().selected_text())
   for k in 0..<(lines.length() - 1) {
     assert_eq(lines[k], "row \{k + 1} words")
   }
   // further past it, faster
-  t.move(x + 20.0, 199.0)
+  t.move_to(x + 20.0, 199.0)
   t.run_for(@ui.scrollbar_hold_ms)
   let o2 = t.list_offset()
   assert_true(o2 - o1 > o1 - o0, msg="\{o0} \{o1} \{o2}")
   // back in among the rows: it stops
-  t.move(x + 20.0, 100.0)
+  t.move_to(x + 20.0, 100.0)
   let o3 = t.list_offset()
   t.run_for(@ui.scrollbar_hold_ms)
   assert_eq(t.list_offset(), o3)
   // held past its top: it scrolls back up; let go, it stops
-  t.move(x + 20.0, -20.0)
+  t.move_to(x + 20.0, -20.0)
   t.run_for(@ui.wheel_ease_ms)
   let o4 = t.list_offset()
   assert_true(o4 < o3, msg="\{o3} \{o4}")
@@ -640,23 +640,28 @@ test "a wheel's ease is solved for the time: in frames of 16 ms, of 8, or at onc
   let at = @ui.wheel_ease_ms * 1.5
   let long_frame = @ui.drag_step_ms
   let short_frame = @ui.drag_step_ms / 2.0
+  // (each run gone through and read whole before the next is made: a Tester driven or read after another was made
+  // draws and reads the other's, tester_own.mbt)
   let sixteen = notched()
-  let eight = notched()
-  let rest = Ref(0.0)
-  let once = notched(rest~)
   let start = sixteen.time()
   while sixteen.time() + long_frame <= start + at {
     sixteen.frame(ms=long_frame)
   }
   sixteen.frame(ms=start + at - sixteen.time())
+  let by_sixteen = sixteen.list_offset()
+  let eight = notched()
+  let start = eight.time()
   while eight.time() + short_frame <= start + at {
     eight.frame(ms=short_frame)
   }
   eight.frame(ms=start + at - eight.time())
+  let by_eight = eight.list_offset()
+  let rest = Ref(0.0)
+  let once = notched(rest~)
   once.frame(ms=at)
   assert_true(once.list_offset() > 0.0 && once.list_offset() < 120.0)
-  assert_eq(sixteen.list_offset(), once.list_offset())
-  assert_eq(eight.list_offset(), once.list_offset())
+  assert_eq(by_sixteen, once.list_offset())
+  assert_eq(by_eight, once.list_offset())
   // its scroll bar shows while it moves and after, then fades: what moves until it is gone (the list's own rest), then
   // nothing
   // (its end goes on while the ease scrolls it: run to it until it is where it is)
@@ -786,7 +791,7 @@ test "desktop: a finger hovers over nothing, and lifted it is nowhere; a mouse h
   assert_eq(tapped_at, [22])
   assert_eq(seen.val, "false false")
   let t = @ui.Tester::new(view, platform=0)
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   t.draw()
   assert_eq(seen.val, "true true")
 }
@@ -922,9 +927,9 @@ test "desktop: a finger or a pointer reaches a target smaller than its room from
   // the pointer resting where a click reaches the first: the first lit (and the row that holds it), as a click there
   // is its
   let t = @ui.Tester::new(view, platform=0)
-  t.move(250.0, 14.0)
+  t.move_to(250.0, 14.0)
   t.draw()
-  assert_true(lit.contains("a") && !lit.contains("b"), msg="\{lit}")
+  assert_true(lit.contains("a") && !lit.contains("b"), msg="\{Repr(lit)}")
 }
 
 ///|
@@ -963,7 +968,7 @@ test "desktop: lit by the hand on it: a mouse resting on it, a finger pressing i
   t.draw()
   assert_false(lit.val)
   let t = @ui.Tester::new(view, platform=0)
-  t.move(20.0, 20.0)
+  t.move_to(20.0, 20.0)
   t.draw()
   assert_true(lit.val)
 }
@@ -971,10 +976,10 @@ test "desktop: lit by the hand on it: a mouse resting on it, a finger pressing i
 ///|
 test "a field leaving keys to the app: ↑ keeps its caret, Enter sends nothing; the app still reads them" {
   let f = @ui.Field::new(text="one\ntwo")
-  let leaves : Ref[Array[Int]] = Ref::new([])
-  let up = Ref::new(false)
-  let enter = Ref::new(false)
-  let sent : Ref[String?] = Ref::new(None)
+  let leaves : Ref[Array[Int]] = Ref([])
+  let up = Ref(false)
+  let enter = Ref(false)
+  let sent : Ref[String?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
     let r = c.editor("e", field=f, leaves=leaves.val)
     if r.submitted is Some(_) {

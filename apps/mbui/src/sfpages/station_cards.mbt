@@ -90,7 +90,7 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
         Some(Object(_)) as f =>
           c.box(style=nt_line, fn() {
             let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
-            let parts = words.split("\u{0}").map(fn(p) { p.to_string() }).collect()
+            let parts = words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
             c.text(parts.get(0).unwrap_or(""), style=nt_words) |> ignore
             figure(c, f)
             c.text(parts.get(1).unwrap_or(""), style=nt_words_cut) |> ignore
@@ -127,7 +127,6 @@ fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
     r.wraps(Is(Some(nt_lines))) |> ignore
     r.box(fn(part) {
       @sf.style_node(part, fn() { nt_part }, in_row=true)
-      part.cuts(Is(true)) |> ignore
       part.box(fn(l) {
         @sf.style_node(l, fn() { nt_line })
         @sf.words_node(l, fn() { text(net(), "path") }, fn() { nt_words_cut }) |> ignore
@@ -139,7 +138,7 @@ fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
           @sf.style_node(l, fn() { nt_line })
           let parts = fn() {
             let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
-            words.split("\u{0}").map(fn(p) { p.to_string() }).collect()
+            words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
           }
           @sf.words_node(l, fn() { parts().get(0).unwrap_or("") }, fn() { nt_words }) |> ignore
           figure_node(l, fn() { field(net(), "rtt") })

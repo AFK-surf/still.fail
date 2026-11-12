@@ -48,10 +48,11 @@ pub fn on_corner(corner : Double, size : Double, room? : Double) -> Double {
 ///|
 /// A surface (align.ts surface): its padding, and the corner of what sits in it (a pill: its half height; a row: what it
 /// has). Its own corner is the two together; what sits at its corner takes `inner` (the web's var(--panel-in)).
+#derive(Eq, Debug)
 pub(all) struct Surface {
   pad : Double
   inner : Double
-} derive(Eq, Show)
+}
 
 ///|
 /// A surface `pad` in, what sits at its corners rounded `inner`.

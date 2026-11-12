@@ -138,9 +138,9 @@ pub fn view_in(src : Source, place : String, room : Double) -> String {
 ///|
 /// Another way chosen for `place` (`prefs.set {driveViews: {place}}`).
 pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   o[place] = if place != "page" && v == "columns" { Json::null() } else { Json::string(v) }
-  (src.call)("prefs.set", { "driveViews": Json::object(o) }, fn(_) {  })
+  (src.call)("prefs.set", { "driveViews": Json::object(o) }, @sfbase.answer_unread)
 }
 
 ///|
@@ -421,12 +421,12 @@ priv enum ListLine {
 ///|
 /// Each list's lines as given and as its list made of them (rows_view), by the list's key.
 // kept across runs: forgot by drive_rows_reset (the app's reset)
-let drive_rows : Map[String, @ui.ListRows[ListLine]] = {}
+let drive_rows : Map[String, @ui.ListRows[ListLine]] = Map([])
 
 ///|
 /// Each list's lines' keys as last given.
 // kept across runs: forgot by drive_rows_reset (the app's reset)
-let drive_keys : Map[String, Array[String]] = {}
+let drive_keys : Map[String, Array[String]] = Map([])
 
 ///|
 fn drive_rows_of(key : String) -> @ui.ListRows[ListLine] {
@@ -534,7 +534,7 @@ pub fn columns_view(
   halves? : Bool = false,
   empty? : () -> Unit,
 ) -> Unit {
-  let parts = if open == "" { [] } else { open.split("/").map(fn(p) { p.to_string() }).collect() }
+  let parts = if open == "" { [] } else { open.split("/").map(fn(p) { p.to_owned() }).collect() }
   let paths = [at.path]
   let mut so_far = at.path
   for p in parts {
@@ -681,7 +681,7 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
         s.b.forget_widths(c, src)
         let kept = if w == column_w { Json::null() } else { Json::string(w.to_int().to_string()) }
         cols.every = Some((match kept { String(k) => k; _ => "" }, w))
-        (src.call)("prefs.set", { "driveViews": { "column": kept } }, fn(_) {  })
+        (src.call)("prefs.set", { "driveViews": { "column": kept } }, @sfbase.answer_unread)
       } else {
         s.b.keep_width(c, src, path, w)
       }

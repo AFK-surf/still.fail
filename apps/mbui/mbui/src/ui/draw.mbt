@@ -16,6 +16,7 @@
 ///|
 /// How a node is drawn, over how it is laid out: its opacity, its offset, its scale about a point of it (`ox`, `oy`:
 /// shares of its width and height).
+#derive(Eq, Debug)
 pub(all) struct Look {
   alpha : Double
   dx : Double
@@ -33,7 +34,13 @@ pub(all) struct Look {
   /// shows (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
   /// over that's (sf/motion.mbt rule 4); then all it holds at once, never its words after its icons and pictures
   words : Double
-} derive(Show, Eq, Debug)
+}
+
+///|
+/// As a frame's said lines write a drawn node's look (tester_rows.mbt): what `derive(Show)` wrote.
+pub impl Show for Look with output(self, logger) {
+  logger.write_string("{alpha: \{self.alpha}, dx: \{self.dx}, dy: \{self.dy}, sx: \{self.sx}, sy: \{self.sy}, ox: \{self.ox}, oy: \{self.oy}, rot: \{self.rot}, circle: \{self.circle}, words: \{self.words}}")
+}
 
 ///|
 /// As laid out.
@@ -182,6 +189,7 @@ priv struct Drawn {
 ///|
 /// A move of what is painted moved by a look of its own (Ctx::paint_node's `moved`): about (ox, oy) by sx, sy, then by
 /// dx, dy, turned by rot about where its point is drawn.
+#derive(Eq)
 priv struct Move {
   ox : Double
   oy : Double
@@ -190,7 +198,7 @@ priv struct Move {
   dx : Double
   dy : Double
   rot : Double
-} derive(Eq)
+}
 
 ///|
 priv struct DrawState {
@@ -512,29 +520,12 @@ pub fn Ctx::look(self : Ctx, i : Int, look : Look) -> Unit {
 }
 
 ///|
-/// How a glyph is drawn over how it is laid out: its opacity, offsets and uniform scale about its ink's middle. `sx`
-/// scales horizontally about its advance's middle.
-pub(all) struct GlyphLook {
-  alpha : Double
-  dx : Double
-  dy : Double
-  scale : Double
-  sx : Double
-} derive(Show, Eq)
-
-///|
-/// A glyph as it is painted, for its own look (Ctx::glyphs_by): its number (from 0 in the order painted, the order
-/// read in), where its line's box starts (x, y in the window) and its line's height, and the top and foot of what
-/// cuts the node that says the looks (the window's part it shows in; not what cuts a part of it, a code block's box). What is not a glyph is said with the number of the glyph after it, its own
-/// box's start and height.
-pub(all) struct GlyphAt {
-  index : Int
-  x : Double
-  y : Double
-  h : Double
-  top : Double
-  foot : Double
-} derive(Show, Eq)
+// How a glyph is drawn over how it is laid out, and a glyph as it is painted (mbui/view's words.mbt), taken in here by
+// name: what an old view's glyphs are drawn by (Ctx::glyphs_by), one type with what a node's are (View::glyphs_by).
+pub using @view {
+  type GlyphLook,
+  type GlyphAt,
+}
 
 ///|
 /// Each glyph of the words node `i` holds (the node's and all in it) drawn with what `f` gives for it as it is
@@ -608,6 +599,35 @@ pub fn Ctx::look_by(self : Ctx, i : Int, f : () -> Look) -> Unit {
   e.look_by = match e.look_by {
     Some(g) => Some(fn() { g().then(f()) })
     None => Some(f)
+  }
+}
+
+///|
+/// A node of the frame's as what is read later finds it (a look's closure read as the frame is painted: Ctx::look_by,
+/// bg_by…): the node itself, not the place it was built in. A list's row or a part kept as its nodes is put back
+/// elsewhere among the frame's as what is built before it makes more nodes or fewer (kept_nodes.mbt's head), its
+/// closures not made again; read by the place it was built in, they read another node there, or one left of a frame
+/// before past the frame's last, whose links are that frame's.
+struct NodeHeld {
+  c : Ctx
+  n : Node
+}
+
+///|
+/// Node `i` (built this frame), for what is read later to find where it is then (NodeHeld::at).
+pub fn Ctx::node_held(self : Ctx, i : Int) -> NodeHeld {
+  { c: self, n: self.nodes[i] }
+}
+
+///|
+/// Where the node is among the frame's nodes now (what the frame reads it by: Ctx::held_look, node_rect…); None where
+/// it is not among them (its row let go, out of the frame's as its list lays the frame's other rows).
+pub fn NodeHeld::at(self : NodeHeld) -> Int? {
+  let j = self.n.slot
+  if j >= 0 && j < self.c.count && physical_equal(self.c.nodes[j], self.n) {
+    Some(j)
+  } else {
+    None
   }
 }
 
@@ -837,7 +857,7 @@ fn Ctx::drawn_z(self : Ctx, i : Int) -> Int {
 ///|
 /// Whether something in node `i` is drawn moved this frame: then `i` is painted even where it is laid out outside
 /// what cuts it.
-fn Ctx::draw_carries(self : Ctx, i : Int) -> Bool {
+fn Ctx::draw_carries(_self : Ctx, i : Int) -> Bool {
   i < dr.carry.length() && dr.carry[i] == dr.build
 }
 
@@ -1377,7 +1397,8 @@ fn inst_outer_chosen(a : FixedArray[Double], b : Int, here : Int) -> Unit {
   }
   let mut most = dmax(own, clip_cut_least)
   let mut from = if own > clip_cut_least { -2 } else { -1 }
-  for k in if beyond && !apart { [here, here + 12] } else { [here] } {
+  let rows_at = if beyond && !apart { [here, here + 12] } else { [here] }
+  for k in rows_at {
     let d = clip_cut_depth(clip_stack, k, x0, y0, x1, y1, r, sm)
     if d > most {
       most = d
@@ -1738,6 +1759,15 @@ pub fn Ctx::build_number(self : Ctx) -> Int {
 pub fn Ctx::in_frame(self : Ctx) -> Bool {
   ignore(self)
   in_frame.val
+}
+
+///|
+/// Whether the frame is being painted now (frame_paint): its nodes those of the layout it is painted from, each where
+/// it is drawn (what the clock moves placed where it is now, Ctx::moved_place), as what is worked out as it is painted
+/// (Ctx::look_by, Ctx::glyphs_by) reads them.
+pub fn Ctx::painting(self : Ctx) -> Bool {
+  ignore(self)
+  paint_phase.val == 1
 }
 
 ///|

@@ -9,14 +9,13 @@
 ///|
 /// 账号 (AccountSettings, MeScreen).
 pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = look_of(c)
   let name = if here.person != "" { here.person } else { here.email }
   let how = if here.sub.has_prefix("em-") || here.sub.has_prefix("pw-") {
     @sf.t("web-pages.settings.account.email")
   } else {
     @sf.t("web-pages.settings.account.google")
   }
-  let accounts = match (core.topic)("accounts", Map::new()).get().value {
+  let accounts = match (core.topic)("accounts", Map([])).get().value {
     Some(Array(a)) => a
     _ => []
   }
@@ -320,7 +319,7 @@ fn pick_own_picture(core : Core, sub : String) -> Unit {
 /// Whether the account `sub` shows a picture of its own (the `workspaces` topic's `ownPicture`), rather than its
 /// sign-in's.
 fn own_picture_of(core : Core, sub : String) -> Bool {
-  match (core.topic)("workspaces", Map::new()).get().value {
+  match (core.topic)("workspaces", Map([])).get().value {
     Some(Array(entries)) =>
       entries.iter().any(fn(e) { text(field(Some(e), "account"), "sub") == sub && flag(Some(e), "ownPicture") })
     _ => false

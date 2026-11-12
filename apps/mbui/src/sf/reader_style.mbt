@@ -5,6 +5,7 @@
 /// The text's size (12 to 32), its lines' height as a multiple of it (1.2 to 2.4), the room either side (8 to 44),
 /// its face ("serif" or "sans"), whether paragraphs start indented two characters, the paper under it ("follow" from
 /// before: the light one, the app's dark being night; "white", "green", "grey", "night").
+#derive(Eq)
 pub(all) struct ReaderStyle {
   size : Int
   line : Double
@@ -12,7 +13,7 @@ pub(all) struct ReaderStyle {
   face : String
   indent : Bool
   paper : String
-} derive(Eq)
+}
 
 ///|
 /// One setting changed (setReaderStyle's Partial, one field at a time).
@@ -28,7 +29,7 @@ pub(all) enum ReaderStyleChange {
 ///|
 /// The core's defaults (client/core-ts/src/prefs.ts readerOf).
 pub let reader_style_default : ReaderStyle = {
-  size: 18,
+  size: 16,
   line: 1.7,
   margin: 22,
   face: "sans",

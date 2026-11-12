@@ -1,6 +1,6 @@
 ///|
 test "a press says the keys held as it went down, whatever is held or let go of after" {
-  let seen : Ref[@ui.Press?] = Ref::new(None)
+  let seen : Ref[@ui.Press?] = Ref(None)
   let t = @ui.Tester::new(
     fn(c) {
       let p = c.press()
@@ -19,7 +19,7 @@ test "a press says the keys held as it went down, whatever is held or let go of 
   t.draw()
   assert_eq(seen.val.map(fn(p) { p.mods }), Some(@ui.mod_cmd))
   t.hold_mods(0)
-  t.move(50.0, 120.0)
+  t.move_to(50.0, 120.0)
   t.draw()
   assert_eq(seen.val.map(fn(p) { p.mods }), Some(@ui.mod_cmd))
   t.release(50.0, 120.0)
@@ -29,7 +29,7 @@ test "a press says the keys held as it went down, whatever is held or let go of 
   t.press_at(50.0, 50.0)
   t.draw()
   t.hold_mods(@ui.mod_alt)
-  t.move(50.0, 120.0)
+  t.move_to(50.0, 120.0)
   t.draw()
   assert_eq(seen.val.map(fn(p) { p.mods }), Some(0))
 }

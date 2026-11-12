@@ -69,9 +69,9 @@ let device_body : @ui.Color = Data(0x1C1C1EFFL)
 ///|
 /// What the page shows in the picture's place: a simulator's with what debugs an app beside it, any other's the picture
 /// alone.
-fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit {
+fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, pair? : Bool = false) -> Unit {
   if !s.simulator() {
-    screen_stage(c, s, u, key)
+    screen_stage(c, s, u, key, pair~)
     return
   }
   // (beside a chat, in its tab, as narrow whatever the window: there is the chat to read too)
@@ -482,12 +482,13 @@ fn device_combos(s : ScreenSess, cased : DeviceCase?) -> Array[Combo] {
 
 ///|
 /// One line of the log as `screen.logs` says it: when (its time of day), how serious, which app, what.
+#derive(Eq)
 priv struct DebugLine {
   at : String
   level : String
   app : String
   words : String
-} derive(Eq)
+}
 
 ///|
 /// What debugs an app holds, the pane beside the device's and the 日志 panel's alike: what the panel's nodes read of it
@@ -582,7 +583,7 @@ fn debug_logs_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, from : @sf.Anchor)
       side=screen_panel_side(), w=debug_panel_w, tall=0.7, grows=true, focus=false)
   }
   if @sf.native_on() && !u.in_tab {
-    screen_native_panel(u, "logs", open)
+    screen_panel_toggle(u, "logs", open)
   } else {
     open()
   }
@@ -1103,7 +1104,7 @@ fn debug_apps_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor, push? : Stri
       w=net_panel_w, focus=false)
   }
   if @sf.native_on() && !u.in_tab {
-    screen_native_panel(u, "apps", open)
+    screen_panel_toggle(u, "apps", open)
   } else {
     open()
   }

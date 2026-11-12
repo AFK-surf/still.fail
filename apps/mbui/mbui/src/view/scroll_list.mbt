@@ -7,11 +7,12 @@
 
 ///|
 /// How a page's list moves where the tree is drawn (Tree::lists_feel): as the desktop's, iOS's or Android's.
+#derive(Eq)
 pub(all) enum ListFeel {
   Desktop
   Ios
   Android
-} derive(Eq)
+}
 
 ///|
 /// How far a finger moves on a page's list before it drags it (the window's points): Android's touch slop, 8 dp; 6
@@ -63,6 +64,86 @@ priv struct Notch {
   total : Double
   v0 : Double
   t0 : Double
+  /// when (ms after `t0`) it is drawn where it comes to, on the pixels it is drawn on (Scroll::ease_drawn_end): all of
+  /// it come from then on
+  end : Double
+}
+
+///|
+/// How far down the drawn list is moved at scroll `x`, `past` shown past an end: on the pixels it is drawn on (its
+/// host's grid where it sets the list's rows on it, else the tree's pixels), as Scroll::held_dy draws it.
+fn Scroll::drawn_off(self : Scroll, tree : Tree, at : Int, x : Double, past : Double) -> Double {
+  (self.drawn_by(tree, at))(-x + past)
+}
+
+///|
+/// Where node `at` (what a page's list holds) is drawn moved by `d` as it is laid out now: what is the same for every
+/// `d` worked out once (Tree::rows_placed's walk up what holds it), to the bit as rows_placed and the pixels' rounding
+/// say it, so that looking for a moment on a curve asks it many times for little.
+fn Scroll::drawn_by(self : Scroll, tree : Tree, at : Int) -> (Double) -> Double {
+  ignore(self)
+  let n = tree.nodes[at]
+  if tree.rows_grid > 0.0 && n.list_rows {
+    let g = tree.rows_grid
+    let first = tree.first_row(at)
+    guard first >= 0 else { return fn(d) { d } }
+    let up = tree.rows_laid_y(n.parent)
+    let ftop = tree.nodes[first].flex.top
+    // (Tree::rows_placed, its sums in its order)
+    let placed = fn(y : Double) {
+      let top = up + y + ftop
+      y + (top * g).round() / g - top
+    }
+    let y = n.flex.top + off_y(n)
+    let at_y = placed(y)
+    fn(d) { placed(y + d) - at_y }
+  } else if tree.pixel_grid > 0.0 {
+    let g = tree.pixel_grid
+    fn(d) { (d * g).round() / g }
+  } else {
+    fn(d) { d }
+  }
+}
+
+///|
+/// When (ms after it sets out) an ease of `total` from `x0` at `v0` (ease_come) is drawn where it comes to and stays
+/// so: what is left of it then under the half of a pixel it is drawn on that keeps it there (Scroll::drawn_off), worked
+/// out as it sets out from its own curve (what is left (total + k t) e^(-t / τ) changes sign once at most, then only
+/// falls: the last moment it is drawn elsewhere found back from ease_end, then to the µs). On no pixels (a tree none
+/// said), ease_end.
+fn Scroll::ease_drawn_end(self : Scroll, x0 : Double, total : Double, v0 : Double) -> Double {
+  let bound = ease_end(total, v0)
+  guard self.host is Some(v) && v.alive() && bound > 0.0 else { return bound }
+  let tree = v.tree
+  // (what it holds, drawn off as it scrolls: Scroll::held_dy's node)
+  let at = tree.nodes[v.at].scroll_held
+  guard at >= 0 else { return bound }
+  let n = tree.nodes[at]
+  guard (tree.rows_grid > 0.0 && n.list_rows) || tree.pixel_grid > 0.0 else { return bound }
+  let most = self.most()
+  let past = self.past_moved(tree.logic_said())
+  let by = self.drawn_by(tree, at)
+  let drawn = fn(t : Double) { by(-dclamp(x0 + ease_come(total, v0, t), 0.0, most) + past) }
+  let rest = drawn(bound)
+  let mut t = bound.floor()
+  while t > 0.0 && drawn(t) == rest {
+    t = t - 1.0
+  }
+  if t <= 0.0 && drawn(0.0) == rest {
+    return 0.0
+  }
+  // (drawn elsewhere at t, where it rests at t + 1: the moment between, to the µs)
+  let mut lo = t
+  let mut hi = t + 1.0
+  while hi - lo > 0.001 {
+    let mid = (lo + hi) / 2.0
+    if drawn(mid) == rest {
+      hi = mid
+    } else {
+      lo = mid
+    }
+  }
+  hi
 }
 
 ///|
@@ -218,7 +299,7 @@ fn Scroll::stretch_drawn(self : Scroll, t : Double) -> Double {
 /// negative (Android: its heights; iOS: the points shown moved), as an old view's list's (ui's Tester::list_overscroll).
 pub fn Scroll::past(self : Scroll, tree : Tree) -> Double {
   @signals.untracked(fn() {
-    match self.past_at(tree.logic_at()) {
+    match self.past_at(tree.logic_said()) {
       Some((edge, x, _)) => x * edge.to_double()
       None => 0.0
     }
@@ -491,7 +572,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
 fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   let (x0, total, v0) = match self.notch.untracked() {
     Some(n) => {
-      let (came, speed) = ease_state(n.total, n.v0, t - n.t0)
+      let (came, speed) = if t - n.t0 >= n.end { (n.total, 0.0) } else { ease_state(n.total, n.v0, t - n.t0) }
       (dclamp(n.x0 + came, 0.0, self.most()), n.total - came + d, speed)
     }
     None => {
@@ -505,7 +586,7 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   (self.settle_off)()
   self.settle_off = fn() {  }
   self.x.set(x0)
-  self.notch.set(Some({ x0, total, v0, t0: t }))
+  self.notch.set(Some({ x0, total, v0, t0: t, end: self.ease_drawn_end(x0, total, v0) }))
   self.scrolled_at(t)
   self.list_settles(v, t)
   true
@@ -521,7 +602,7 @@ fn Scroll::glide_to(self : Scroll, v : View, t : Double, to : Double) -> Unit {
   }
   (self.settle_off)()
   self.settle_off = fn() {  }
-  self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t }))
+  self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, end: self.ease_drawn_end(x, to - x, 0.0) }))
   self.scrolled_at(t)
   self.list_settles(v, t)
 }
@@ -537,6 +618,7 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   guard @signals.untracked(fn() { self.rest_now() }) is Some(rest) else { return }
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
   ignore(t)
+  v.tree.hand_at_end(rest)
   self.settle_off = v.at_moment(rest, fn() {
     self.settle_off = fn() {  }
     let flung = self.fling.untracked()

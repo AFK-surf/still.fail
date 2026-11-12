@@ -9,6 +9,7 @@
 /// system's size of words applied: -1.4, 1.4 times it), whether they wrap within
 /// the width they are given (else one line, as wide as they are, cut to what it is given ending in an ellipsis where it
 /// is given less: View::shrink; what is read out of them all of them).
+#derive(Eq, Debug)
 pub(all) struct WordsLook {
   size : Double
   weight : Int
@@ -19,26 +20,32 @@ pub(all) struct WordsLook {
   /// wrapped, broken where its lines come out as even as they may on as many lines (ui's TextPatch `balance`: a
   /// note's under a title)
   balance : Bool
-} derive(Eq, Debug)
+  /// wrapped, on so many lines at most (0: as many as they take), the last ending in an ellipsis where they are cut
+  /// after it, measured and drawn so (ui's TextPatch `max_lines`, as Ctx::text's and Ctx::rich's); on one line, none of
+  /// it. Said in the look, not on the node, so no node that does not say it carries it (2026-11-12)
+  max_lines : Int
+}
 
 ///|
 /// How far apart a node's letters are set besides their own spacing (ui's Tracking as it is resolved): a share of
 /// their size as it is drawn (the system's size of words applied), so many points whatever their size, or so many
 /// points at the system's size of words, made larger by it as a size of their own is (an old view's `tracking` said
 /// with its words, Ctx::text: Ctx::sp of it).
+#derive(Eq, Debug)
 pub(all) enum Spacing {
   Ems(Double)
   Points(Double)
   ScaledPoints(Double)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Letters as their font sets them, nothing added.
 pub let letters_own : Spacing = Ems(0.0)
 
 ///|
-/// Words as a node set them till they were said to be otherwise: 15 points, regular, 22 a line, wrapped.
-pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own, balance: false }
+/// Words as a node set them till they were said to be otherwise: 15 points, regular, 22 a line, wrapped, on as many
+/// lines as they take.
+pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own, balance: false, max_lines: 0 }
 
 ///|
 /// How a node's words in pieces (View::words_runs) are set where a piece says nothing of it itself, as an old view's
@@ -46,6 +53,7 @@ pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: t
 /// the words' size, and whether they are a person's words (in the face chosen for those). What changes how big they
 /// are (`code_scale`, `words`, whether code has a ground at all: its room either side, a label kept whole on its line)
 /// lays them out again; their inks (a ground's colour for another) draw them again alone.
+#derive(Eq, Debug)
 pub(all) struct RunsLook {
   link : Int64
   pressed : Int64
@@ -53,7 +61,7 @@ pub(all) struct RunsLook {
   code_ground : Int64
   code_scale : Double
   words : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Pieces set as an old view's paragraph is where it says nothing of it (Ctx::rich's own).
@@ -136,7 +144,9 @@ pub let runs_picker : Lent[(View) -> Live[(Int, Int)]] = Lent::new()
 ///|
 /// Which row of a list made by its key (View::each) it is in, nearest it, and where it is in that row (its place among
 /// what holds it, each from the row down): the same while the row's key is there, whatever is made in it anew where it
-/// was; the window's root and where it is from it where it is in none.
+/// was; a page's list's row (View::scrolls_window) by its list and its key's number there, whichever node it is made
+/// in (the number says which row, never where: given as it is first asked, it is compared, not ordered; where a row is
+/// among its list's keys now is View::row_order); the window's root and where it is from it where it is in none.
 pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
   let up : Array[Int] = []
   let mut at = self
@@ -144,7 +154,24 @@ pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
     up.push(p.kids().search_by(fn(k) { k.at == at.at }).unwrap_or(0))
     at = p
   }
-  (at.id(), up.rev())
+  // (a page's list's row, or the block made in it (marked as an each's row is): known by its key's number in that list,
+  // whatever node it is made in, read as its key is (a block taken for another key is that key's row from then))
+  match self.tree.rows_named.get(at.at) {
+    Some((list, number, _)) => {
+      up.push(number())
+      (list, up.rev())
+    }
+    None => (at.id(), up.rev())
+  }
+}
+
+///|
+/// Where a page's list's row (a row of View::scrolls_window, `self` that row's node) is among the list's keys now; none
+/// for any other node: the order its rows are in, whichever of them are made.
+pub fn View::row_order(self : View) -> Int? {
+  // (a row's node is marked so: no other node looked up)
+  guard self.live() is Some(n) && n.each_row else { return None }
+  self.tree.rows_named.get(self.at).map(fn(r) { (r.2)() })
 }
 
 ///|
@@ -256,13 +283,19 @@ pub fn words_run(text : String, weight? : Int = 0, ink? : Int64 = 0L) -> @text.R
 
 ///|
 /// Words in pieces measured as a test's are: as their words one after another (words_measure).
-pub fn runs_measure(runs : Array[@text.Run], look : WordsLook, set : RunsLook, width : Double) -> (Double, Double) {
+pub fn runs_measure(
+  runs : Array[@text.Run],
+  look : WordsLook,
+  set : RunsLook,
+  width : Double,
+  scale : Double,
+) -> (Double, Double) {
   ignore(set)
   let words = StringBuilder()
   for r in runs {
     words.write_string(r.text)
   }
-  words_measure(words.to_string(), look, width)
+  words_measure(words.to_string(), look, width, scale)
 }
 
 ///|
@@ -337,6 +370,8 @@ pub fn View::words_look(self : View, look : Live[WordsLook], loc~ : SourceLoc) -
     n.look.words_look = k
     // (on one line or not: held to its column's width or not)
     self.tree.capped_applied(self.at)
+    // (cut short: what of them is kept, as they look now)
+    self.tree.cut_applied(self.at)
     // (saying shorter words: how narrow it may be as they look now, and whether they are on one line)
     if n.shorter.length() > 0 {
       self.tree.give_way_applied(self.at)
@@ -348,6 +383,31 @@ pub fn View::words_look(self : View, look : Live[WordsLook], loc~ : SourceLoc) -
 }
 
 ///|
+/// Whether its words, where they do not wrap (WordsLook's `wrap` false), keep their line breaks, as it changes: each line
+/// a line of its own as it is, none broken, as wide as the widest, as tall as their lines (code shown as written, in
+/// what scrolls across: an old view's `breaks`, Ctx::text's and Ctx::rich's, CSS's pre); else, as by default, what
+/// breaks them is run on with a space (CSS's nowrap). Wrapped, their breaks are kept either way. Measured, drawn, found,
+/// picked and read out so (what hosts the tree: its `measure_kept`). Layout's and paint's.
+/// A property of its own, not WordsLook's (2026-11-11): every WordsLook is said whole, so a field of it is one to add
+/// to each that is said, on every branch not yet in; it may go there once few are.
+#callsite(autofill(loc))
+pub fn View::words_breaks(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, WordsBreaks, on, Both, fn(on) {
+    self.tree.nodes[self.at].look.words_breaks = on
+    // (how its words are set said: what follows it told, once this is)
+    self.words_told()
+  })
+  self
+}
+
+///|
+/// Whether its words keep their line breaks as it is said now (View::words_breaks).
+pub fn View::words_breaks_now(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  n.look.words_breaks
+}
+
+///|
 /// A last-resort ellipsis is intended without changing the words' layout sizing (as Ctx::text's allow_ellipsis).
 #callsite(autofill(loc))
 pub fn View::allow_ellipsis(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
@@ -356,8 +416,17 @@ pub fn View::allow_ellipsis(self : View, on : Live[Bool], loc~ : SourceLoc) -> V
 }
 
 ///|
-/// Whether a node's words or their enclosing layout explicitly say that the words may be cut. A fixed width is the
-/// boundary: a constraint on a more distant holder cannot allow cutting everything inside this one.
+/// Whether the app said a node's words may be cut, as an old view's line says it (ui's squeeze.mbt,
+/// Ctx::squeeze_cut_said): the words themselves (View::allow_ellipsis; a share of their holder's width, growing into
+/// its room or giving way along a row: View::width_share, View::grow, View::shrink above 0), or they or what holds
+/// them cut short (View::cuts) or held to a width at most (View::max_width). What holds them giving way along its row
+/// lays them out narrower, never says they may be cut (an old view's Auto box in a row gives way too, and says
+/// nothing): a row's part that says when its title may be cut (link_row_node's `title_cut`) says it so. Only what the
+/// app said: the framework's own bound on one line of words in a column (Tree::capped_applied's), the giving way it
+/// makes of words said shorter ways (Tree::give_way_applied's) and a scroll's giving way down its column
+/// (View::scrolls') say nothing.
+/// A fixed width is the boundary: a constraint on a more distant holder cannot allow cutting everything inside this
+/// one.
 pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
   if !self.lives(id) {
     return false
@@ -366,8 +435,17 @@ pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
   while at >= 0 && at < self.nodes.length() {
     let n = self.nodes[at]
     let style = n.flex.style
-    if (at == id.at && n.allow_ellipsis) || style.shrink > 0.0 || style.max_width_kind() != @flex.LEN_AUTO ||
-      (at == id.at && style.width_kind() == @flex.LEN_PCT) {
+    let own = at == id.at
+    // (what lays it out: what holds it, past any slot; how it gives way or grows is across only in a row)
+    let mut p = n.parent
+    while p >= 0 && self.nodes[p].slot {
+      p = self.nodes[p].parent
+    }
+    let in_row = p >= 0 && self.nodes[p].flex.style.direction is (Row | RowReverse)
+    let max_said = n.max_w_said is Some(Some(_)) || n.max_w_within
+    // (giving way or growing along its row: the words' own say alone)
+    let along = in_row && ((match n.shrink_said { Some(s) => s > 0.0; None => false }) || style.grow > 0.0)
+    if (own && (n.allow_ellipsis || along || style.width_kind() == @flex.LEN_PCT)) || n.cut || max_said {
       return true
     }
     if style.width_kind() == @flex.LEN_PT {
@@ -413,8 +491,12 @@ pub fn View::cuts(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
       n.shrink_said = None
       self.tree.cut_applied(self.at)
     } else {
-      // (said not to give way: so, whatever else would have it give way, View::shorter's)
+      // (said not to give way: so, whatever else would have it give way, View::shorter's; nothing of it kept as cut)
       n.shrink_said = Some(0.0)
+      if n.flex.style.cut_least == n.flex.style.cut_least {
+        n.flex.style.cut_least = 0.0 / 0.0
+        self.tree.layout_marked_at(self.at)
+      }
       self.tree.give_way_applied(self.at)
     }
   })
@@ -422,7 +504,11 @@ pub fn View::cuts(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
 }
 
 ///|
-/// Node `at`, cut short (View::cuts), giving way along what holds it where that is a row, not where it is a column.
+/// Node `at`, cut short (View::cuts), giving way along what holds it where that is a row, not where it is a column;
+/// there, its words on one line keeping four of their size (at its size of words) where its row leaves out what has not
+/// the room, before a part of the row leaves, and as the least of a row kept no narrower than what it holds (flex's
+/// cut_least: kept_of, fit_least_held), as an old view's words cut short keep them. Worked out again as all words are
+/// measured anew (Tree::words_again) and as its words are said (View::words).
 fn Tree::cut_applied(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   if !n.live || !n.cut {
@@ -437,6 +523,18 @@ fn Tree::cut_applied(self : Tree, at : Int) -> Unit {
   let s = if along { 1.0 } else { 0.0 }
   if n.flex.style.shrink != s {
     n.flex.style.shrink = s
+    self.layout_marked_at(at)
+  }
+  let look = n.look.words_look
+  // (what is not words measured takes nothing of this: kept_of)
+  let least = if along && !look.wrap {
+    @flex.cut_kept_ems * look.size * @signals.untracked(fn() { self.words_scale_at(at) })
+  } else {
+    0.0 / 0.0
+  }
+  let was = n.flex.style.cut_least
+  if !(was == least || (was != was && least != least)) {
+    n.flex.style.cut_least = least
     self.layout_marked_at(at)
   }
 }
@@ -488,16 +586,19 @@ pub fn View::gap(self : View, g : Live[Double], loc~ : SourceLoc) -> View {
 ///|
 /// Whether what it holds, laid out in a row, goes on in another line where the row has not the room (Some: the lines
 /// that far apart, its gap along each line as View::gap says; None: one line), as an old view's box's `flow` (with
-/// its `line_gap`), as it changes: layout's.
+/// its `line_gap`), as it changes: layout's. `reverse`: each line it goes on to over the one before it, the first at
+/// its foot (an old view's `flow_reverse`, flex's WrapReverse: a card's buttons, the first kept at the foot), what each
+/// line holds in its order along it; read out and stepped through by the keyboard in the order it is held, as ever,
+/// not by where it is drawn.
 #callsite(autofill(loc))
-pub fn View::wraps(self : View, lines : Live[Double?], loc~ : SourceLoc) -> View {
+pub fn View::wraps(self : View, lines : Live[Double?], reverse? : Bool = false, loc~ : SourceLoc) -> View {
   self.bind(loc~, Wraps, lines, Layout, fn(lines) {
     let n = self.tree.nodes[self.at]
     let st = n.flex.style
     n.line_gap = lines
     match lines {
       Some(g) => {
-        st.wrap = Wrap
+        st.wrap = if reverse { WrapReverse } else { Wrap }
         st.set_gap_row(Pt(g))
       }
       None => {
@@ -549,6 +650,37 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double], loc~ : SourceLoc)
 }
 
 ///|
+/// Whether, holding nothing laid out (nothing in it, or all of it laid out nowhere: View::laid_nowhere, a show's or a
+/// pick's gone), it takes no room, as it changes: laid out nowhere itself, its padding, margins and the gap before it in
+/// what holds it none (an old view's box `gone_empty`, CSS's :empty { display: none }), what it holds left out as one
+/// laid out nowhere is. Down a column, while what it holds makes its way from nothing or closes it to nothing (View::comes:
+/// the first to come, the last to go; not one in another's place), its padding top and foot and the gap before it open
+/// or close with that way, as much of them as the most of what it holds is there: called back half way, they turn with
+/// it; what comes or goes at once, at once. Only down a column: along a row, or as a row itself, all of its room is
+/// there till the frame it holds nothing, and none of it from that frame on. What a structure makes for what it shows
+/// (a show's, a pick's, an each's row's box) is nothing to it where it made nothing: a pick of a case that makes
+/// nothing holds nothing so, and one changed to it closes the way of the one before, its padding with it. A box the
+/// app says itself holding nothing (`v.box(fn(_) {})`) is something: it may be as tall or as padded as it says; say
+/// `gone_empty` on it for it to be nothing too. Layout's.
+#callsite(autofill(loc))
+pub fn View::gone_empty(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, GoneEmpty, on, Layout, fn(on) {
+    self.tree.nodes[self.at].flex.style.set_gone_empty(on)
+    // (what lays it out told it holds such: the first not a slot holding it, its boxes', Tree::boxes_put)
+    if on {
+      let mut at = self.tree.nodes[self.at].parent
+      while at >= 0 && self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
+        at = self.tree.nodes[at].parent
+      }
+      if at >= 0 {
+        self.tree.nodes[at].flex.holds_gone = true
+      }
+    }
+  })
+  self
+}
+
+///|
 /// Laid out nowhere while `on` says so, as it changes: no room of its own in what holds it, none of the gap that leaves
 /// between what it holds (a room shut: an old view's not built while it is), left out as one its row has not the room
 /// for is (View::drops, View::left_out): it and all it holds not drawn, pressed (by a finger, by its id, by a screen
@@ -577,15 +709,44 @@ pub fn View::lines_up(self : View, along : Live[Along?], loc~ : SourceLoc) -> Vi
 }
 
 ///|
-/// Where what it holds lies along it, as it changes (its start, by default; their middle; its end): what is left of its
-/// room on its main way before it, round it or after it. Layout's.
+/// Whether it fills what holds it across the way that lays it out (`on`: stretched from its start to its end there, its
+/// margin kept, as flex's align-self: stretch), whatever that lines up what it holds by (View::lines_up), as it
+/// changes; not said, or said off, as what holds it lines it up. An old view's box said Full across (a column's w=Full, a
+/// row's h=Full). Layout's.
 #callsite(autofill(loc))
-pub fn View::lies_along(self : View, along : Live[Along], loc~ : SourceLoc) -> View {
+pub fn View::fills_across(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, FillsAcross, on, Layout, fn(on) {
+    self.tree.nodes[self.at].flex.style.align_self = if on { Stretch } else { Auto }
+  })
+  self
+}
+
+///|
+/// Where what a node holds lies along the way it lays them out (View::lies_along; flex's justify): at its start, in its
+/// middle, at its end, or `Between`, the first at its start and the last at its end, what is left of its room shared
+/// out between them (each line's, where it wraps; one alone at its start). Along is the other thing: which end of
+/// another thing (an anchor, the node across) something lines up with, where being spread between makes no sense, so
+/// the two are types of their own and neither is made of the other.
+#derive(Eq, Debug)
+pub(all) enum Lies {
+  Start
+  Middle
+  End
+  Between
+}
+
+///|
+/// Where what it holds lies along it, as it changes (its start, by default; their middle; its end; spread from its
+/// start to its end, Lies's Between): what is left of its room on its main way before it, round it, after it or between
+/// them. Layout's.
+#callsite(autofill(loc))
+pub fn View::lies_along(self : View, along : Live[Lies], loc~ : SourceLoc) -> View {
   self.bind(loc~, LiesAlong, along, Layout, fn(a) {
     self.tree.nodes[self.at].flex.style.justify = match a {
       Start => FlexStart
       Middle => Center
       End => FlexEnd
+      Between => SpaceBetween
     }
   })
   self
@@ -633,7 +794,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
     if n.points != on {
       n.points = on
       self.tree.inputs_own_said(self.at)
-      self.tree.hits = self.tree.hits + 1
+      self.tree.hits_bump()
       self.tree.marked()
     }
   }
@@ -646,4 +807,68 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
       })
   }
   self
+}
+
+///|
+/// How a glyph is drawn over how it is laid out: its opacity, offsets and uniform scale about its ink's middle. `sx`
+/// scales horizontally about its advance's middle. One type for an old view's glyphs (ui's Ctx::glyphs_by, @ui.GlyphLook)
+/// and a node's (View::glyphs_by).
+#derive(Debug, Eq)
+pub(all) struct GlyphLook {
+  alpha : Double
+  dx : Double
+  dy : Double
+  scale : Double
+  sx : Double
+}
+
+///|
+/// A glyph as it is painted, for its own look (View::glyphs_by; an old view's Ctx::glyphs_by):
+/// - `index`: its number, from 0 in the order painted, the order read in. What is not a glyph (a list's mark, a
+///   quote's bar, a code's ground) is said with the number of the glyph after it.
+/// - `x`, `y`, `h`: where its line's box starts and its line's height: an old view's in the window, a node's in the
+///   node's own terms (where its words are drawn from, before it is placed, moved or scaled).
+/// - `top`, `foot`: the top and foot of what cuts what it is drawn in, in the same terms as `y`.
+/// - `line`: the line of its words it is on, from 0 (a line its words break onto, wrapped or kept: View::words_breaks).
+///   -1 for what is not a glyph.
+/// - `cx`: where its middle is along that line, from the line's start: its advance's start and half its advance, in
+///   the points its words are laid out in (the system's size of words applied; not what places, moves or scales them,
+///   nor a centred line's shift). What it is in the cells its words are cut into (ui's glyph_cells). 0 for what is not
+///   a glyph.
+#derive(Debug, Eq)
+pub(all) struct GlyphAt {
+  index : Int
+  x : Double
+  y : Double
+  h : Double
+  top : Double
+  foot : Double
+  line : Int
+  cx : Double
+}
+
+///|
+/// Each glyph of its words drawn with what `f` gives for `state` as it is said now and that glyph (GlyphAt): words
+/// coming or changing a glyph at a time. `state` is bound as any property is (what a way gives at the moment drawn,
+/// View::drawn_while, Way::shown_on; the cells two lines of words are cut into), and `f` reads its two arguments alone:
+/// no clock, no signal, nothing laid out (it is asked as the words are painted, under no tracking, as often as they
+/// are). So its words are drawn again as `state` changes, and only then: what a way gives that is over asks for no
+/// frame, as anything bound to it. How it is laid out, picked, pressed and read out is as without it. Paint's.
+#callsite(autofill(loc))
+pub fn[T : Eq] View::glyphs_by(self : View, state : Live[T], f : (T, GlyphAt) -> GlyphLook, loc~ : SourceLoc) -> View {
+  self.bind(loc~, GlyphsBy, state, Paint, fn(s) {
+    let n = self.tree.nodes[self.at]
+    n.glyphs_fn = Some(fn(at) { f(s, at) })
+    // (what it draws is another as this is: its words made again, Content's `glyphs_said`)
+    n.look.glyphs_said = n.look.glyphs_said + 1
+  })
+  self
+}
+
+///|
+/// What each glyph of node `id`'s words is drawn by as it is said now (View::glyphs_by): what hosts the tree asks it
+/// as it paints them. None where nothing is said, or it is gone.
+pub fn Tree::glyphs_of(self : Tree, id : NodeId) -> ((GlyphAt) -> GlyphLook)? {
+  guard self.lives(id) else { return None }
+  self.nodes[id.at].glyphs_fn
 }

@@ -13,7 +13,7 @@ fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : Strin
     ..base,
     call: fn(name, params, done) {
       match calls {
-        Some(all) => all.push({ name, params, bytes: None, done, heard: None })
+        Some(all) => all.push({ name, params, bytes: None, done })
         None => ()
       }
       (base.call)(name, params, done)
@@ -94,7 +94,7 @@ test "turned and flat (regular both ways, the fold across): the wide frame, the 
 test "a window 700 wide the system calls compact (beside another app): by its width, the tape, not the phone's pages" {
   let t = duo_chat(700.0, 890.0, "compact", "")
   assert_true(@sfdesk.is_wide(t.ctx()))
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
 }
 
 ///|
@@ -179,7 +179,7 @@ test "the fold half open then, the window the same size: the shell it calls for,
   let begun = duo_chat(626.0, 890.0, "regular", across("half"))
   let begun_half = (islands_across(), @sfdesk.is_wide(begun.ctx()))
   assert_eq(then_half, begun_half)
-  assert_true(then_half != (open_shell, wide_open), msg="\{open_shell} \{wide_open}")
+  assert_true(then_half != (open_shell, wide_open), msg="\{Repr(open_shell)} \{wide_open}")
 }
 
 ///|
@@ -191,7 +191,7 @@ test "turned sideways for a film, the bars the same: the window's sides given ba
   let sideways = islands_across()
   @hostapi.set_sideways(false)
   t.draw()
-  assert_true(upright.length() > 0 && upright.iter().all(fn(i) { i.1 == 382.0 }), msg="\{upright}")
-  assert_true(sideways.length() > 0 && sideways.iter().all(fn(i) { i.1 == 466.0 }), msg="\{sideways}")
+  assert_true(upright.length() > 0 && upright.iter().all(fn(i) { i.1 == 382.0 }), msg="\{Repr(upright)}")
+  assert_true(sideways.length() > 0 && sideways.iter().all(fn(i) { i.1 == 466.0 }), msg="\{Repr(sideways)}")
   assert_eq(islands_across(), upright)
 }

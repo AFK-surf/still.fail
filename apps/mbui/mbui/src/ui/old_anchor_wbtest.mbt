@@ -69,12 +69,12 @@ test "old_anchor: follows an old target the frame the old frame's own reading of
   let r1 = Some((0.0, 100.0, 50.0, 20.0))
   let r2 = Some((0.0, 200.0, 50.0, 20.0))
   let nowhere = Some((7.0, 8.0, 0.0, 0.0))
-  println("OLDANCHOR never \{never} shown \{shown} moved \{moved} gone \{gone} going \{going}")
+  println("OLDANCHOR never \{Repr(never)} shown \{Repr(shown)} moved \{Repr(moved)} gone \{Repr(gone)} going \{Repr(going)}")
   assert_eq(never, [(None, nowhere), (None, nowhere), (None, nowhere)])
   // (the node where the old build's reading is, each frame it reads one)
   for f in shown + moved {
     if f.0 is Some(_) {
-      assert_eq(f.1, f.0, msg="\{shown} \{moved}")
+      assert_eq(f.1, f.0, msg="\{Repr(shown)} \{Repr(moved)}")
     }
   }
   assert_eq((shown[shown.length() - 1], moved[moved.length() - 1]), ((r1, r1), (r2, r2)))

@@ -8,6 +8,7 @@
 ///|
 /// What the glyph draws (the core's `glyph` of the chats' list): stations online, those not (`connecting` of them on
 /// their way), failing, working; asleep while the core reaches nothing at all.
+#derive(Eq)
 pub(all) struct GlyphCounts {
   online : Int
   dim : Int
@@ -15,7 +16,7 @@ pub(all) struct GlyphCounts {
   working : Int
   asleep : Bool
   connecting : Int
-} derive(Eq)
+}
 
 // All in the web's 24-unit box.
 
@@ -393,7 +394,7 @@ fn glyph_icon_of(g : GlyphCounts) -> String {
       shape(ellipse_path(x, 12.0, 1.1, 1.25), 5, 0.0)
     }
   }
-  out.to_string().trim_end(chars=" ").to_string()
+  out.to_string().trim_end(chars=" ").to_owned()
 }
 
 ///|

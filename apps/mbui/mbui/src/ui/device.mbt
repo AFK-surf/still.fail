@@ -21,6 +21,7 @@
 ///|
 /// A haptic (@ui.haptic), as still.fail's Android app has them: Android's constant for each (Compose's
 /// HapticFeedbackType.LongPress is LONG_PRESS, TextHandleMove TEXT_HANDLE_MOVE), the nearest elsewhere.
+#derive(Eq, Debug)
 pub(all) enum Haptic {
   /// a long press took something (a row's menu, words picked)
   LongPress
@@ -34,7 +35,7 @@ pub(all) enum Haptic {
   Reject
   /// a key tapped
   KeyboardTap
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn Haptic::code(self : Haptic) -> Int {
@@ -94,6 +95,7 @@ pub fn copy_shown() -> Bool {
 
 ///|
 /// A picture on the clipboard, as the app takes it.
+#derive(Eq, Debug)
 pub(all) enum ClipPicture {
   /// none
   NoPicture
@@ -103,16 +105,17 @@ pub(all) enum ClipPicture {
   TooLarge
   /// one that could not be read
   Unreadable
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What the clipboard held: its words ("" none), its picture, its files (copied in macOS's Finder, or by an app that
 /// copies a picture as its file: each its name and bytes, @hostapi.ClipGot's).
+#derive(Eq, Debug)
 pub(all) struct Clipboard {
   text : String
   picture : ClipPicture
   files : Array[(String, Bytes)]
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A read of the clipboard under way (clipboard_read), waited on (an outside ticket) until it is taken.
@@ -123,8 +126,7 @@ pub struct ClipboardRead {
 
 ///|
 priv struct FakeClipRead {
-  /// the frame it was asked in, and its answer with the frame it was given in: taken from the frame after both
-  frame : Int
+  /// its answer with the frame it was given in: taken from the frame after it
   mut answer : (Clipboard, Int)?
 }
 
@@ -179,7 +181,7 @@ fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
 pub fn clipboard_read() -> ClipboardRead? {
   match @hostapi.clip_read() {
     Some(h) => {
-      let r : ClipboardRead = { host: h, taken: Ref::new(false) }
+      let r : ClipboardRead = { host: h, taken: Ref(false) }
       outside_start(outside_clip, r.outside_id(), "the clipboard read \{r.outside_id()}")
       Some(r)
     }
@@ -252,7 +254,7 @@ fn clip_said(c : Clipboard) -> Unit {
 /// A CLIPSAID line's clipboard (None: not one).
 fn clip_of_line(line : String) -> Clipboard? {
   guard line.find("CLIPSAID ") is Some(i) else { return None }
-  let j = @json.parse(line.view(start_offset=i + 9).to_owned()) catch { _ => return None }
+  let j = @json.parse(line.exact_view(start=i + 9).to_owned()) catch { _ => return None }
   guard j is Object(m) else { return None }
   let str = fn(k : String) -> String {
     match m.get(k) {
@@ -467,12 +469,13 @@ fn h_ime_inset() -> Double {
 
 ///|
 /// What a key catcher has typed into it, as the app reads it (see the file's head).
+#derive(Eq, Debug)
 pub(all) enum KeyIn {
   /// words, committed by the input method (or typed on a keyboard)
   Text(String)
   /// a key going down or up: the DOM's `key` and `code`, the modifiers held (key_in_*)
   Key(down~ : Bool, key~ : String, code~ : String, mods~ : Int)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A KeyIn's modifiers: Alt (Option), Ctrl, Meta (⌘, the Windows key), Shift.
@@ -511,7 +514,7 @@ fn DeviceState::new() -> DeviceState {
 ///|
 /// A key catcher's state: what the input method composes (not sent until committed), what came since the frame that
 /// last read it, what this frame reads, and which frame that is.
-struct Catcher {
+priv struct Catcher {
   mut composing : String
   came : Array[KeyIn]
   mut keys : Array[KeyIn]

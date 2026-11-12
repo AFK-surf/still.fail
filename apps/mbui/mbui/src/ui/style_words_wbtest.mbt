@@ -54,11 +54,11 @@ fn styled_alike(style : TextStyle, scale : Double, runs? : Bool = false) -> Unit
   // (counted by the census as the same size of words, line and spacing)
   assert_eq(new_counted, old_counted, msg="counted at \{scale}")
   let lines = old.map(fn(g) { g.1 }).fold(init=[], fn(a, y) { if a.contains(y) { a } else { a + [y] } })
-  assert_true(lines.length() > 1, msg="wrapped over one line only: \{lines}")
+  assert_true(lines.length() > 1, msg="wrapped over one line only: \{Repr(lines)}")
   assert_true(
     old.length() == new.length() &&
     old.iter().zip(new.iter()).all(fn(p) { (p.0.0 - p.1.0).abs() <= 1.0e-6 && (p.0.1 - p.1.1).abs() <= 1.0e-6 && p.0.2 == p.1.2 }),
-    msg="old \{old[:4]}\nnode \{new[:4]}",
+    msg="old \{Repr(old[:4])}\nnode \{Repr(new[:4])}",
   )
 }
 

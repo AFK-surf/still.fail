@@ -40,7 +40,7 @@ test "a cover's vertical crop can start at the top, middle or bottom" {
     place.val = position
     t.draw()
     let im = t.drawn_images()[0]
-    assert_true((im[5] - top).abs() < 0.001 && (im[7] - 0.2).abs() < 0.001, msg="\{im}")
+    assert_true((im[5] - top).abs() < 0.001 && (im[7] - 0.2).abs() < 0.001, msg="\{Repr(im)}")
   }
 }
 

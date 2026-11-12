@@ -90,7 +90,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
         t.press_at(x, y)
         t.run_for(@ui.long_press_ms)
         t.release(x, y)
-        t.run_for(@kit.sheet_rest("sf-present") - t.time())
+        t.run_for(@sf.presented_rest() - t.time())
       }
       t.draw()
       let role : @ui.Role = if platform == 0 { MenuItem } else { Button }
@@ -279,7 +279,7 @@ test "downloads: a file sent up is saved under its original name" {
       m["title"] = "report.pdf"
       Json::object(m)
     }
-    _ => abort("not a download")
+    _ => @halt.saying("not a download")
   }
   let src = downloads_src("home", [d], calls)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=0)
@@ -307,7 +307,7 @@ test "downloads: on a phone a picture or a film is kept in the photo album, said
     t.frame()
     t.frame()
     assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [(name, way)])
-    assert_true(t.find(said) is Some(_), msg="\{case}: \{t.words().map(fn(w) { w.0 }).join("|")}")
+    assert_true(t.find(said) is Some(_), msg="\{Repr(case)}: \{t.words().map(fn(w) { w.0 }).join("|")}")
   }
 }
 
@@ -432,8 +432,8 @@ test "desk: a file's card has its name's extension right after its stem, not at 
   assert_eq(stem.length(), 1)
   assert_eq(ext.length(), 1)
   // right after three characters of 13 (not some 180 on, where the card's words end)
-  assert_true((ext[0].1 - (stem[0].1 + stem[0].3)).abs() < 0.5, msg="\{stem[0]} \{ext[0]}")
-  assert_true(ext[0].1 - stem[0].1 < 3.0 * 13.0 + 1.0, msg="\{stem[0]} \{ext[0]}")
+  assert_true((ext[0].1 - (stem[0].1 + stem[0].3)).abs() < 0.5, msg="\{Repr(stem[0])} \{Repr(ext[0])}")
+  assert_true(ext[0].1 - stem[0].1 < 3.0 * 13.0 + 1.0, msg="\{Repr(stem[0])} \{Repr(ext[0])}")
 }
 
 ///|

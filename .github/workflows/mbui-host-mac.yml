@@ -12,6 +12,9 @@ on:
       - "apps/mbui/mbui/src/host/apple_*"
       - "apps/mbui/mbui/src/host/apple.h"
       - "apps/mbui/mbui/src/host/mac_app.m"
+      - "apps/mbui/mbui/src/host/station_install.h"
+      - "apps/mbui/mbui/src/host/mini_json.h"
+      - "apps/mbui/mbui/scripts/station_install_test.c"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
       - "apps/mbui/mbui/scripts/done_runner.py"
@@ -63,6 +66,8 @@ jobs:
               - "src/host/apple_*"
               - "src/host/apple.h"
               - "src/host/mac_app.m"
+              - "src/host/station_install.h"
+              - "src/host/mini_json.h"
               - "src/host/done_watch.h"
               - "src/ui/drive.mbt"
               - "scripts/done_runner.py"
@@ -76,6 +81,9 @@ jobs:
               - "src/host/host_native.mbt"
               - "src/kitdemo/main.mbt"
               - "src/host/moon.pkg"
+              - "src/hostapi/passwords.mbt"
+              - "src/ui/hostcall.mbt"
+              - "src/kitdemo/gallery/opcheck.mbt"
             marks:
               - "src/host/apple_views.m"
               - "src/host/apple.h"
@@ -99,6 +107,11 @@ jobs:
               - "scripts/host_contract.sh"
               - ".github/workflows/mbui-host-mac.yml"
         run: python3 scripts/ci_paths.py
+      - name: "What the host hands the station's installer: the token, the workspace lock's hash, nothing refused dropped (src/host/station_install.h)"
+        run: |
+          mkdir -p out
+          cc -Wall -Werror -Isrc/host scripts/station_install_test.c -o out/station_install_test
+          out/station_install_test
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh mac build
@@ -117,6 +130,9 @@ jobs:
       - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac site
+      - name: "The password manager's contract: a run of op ended, and none to run, each told between frames and read"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac op
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac runner

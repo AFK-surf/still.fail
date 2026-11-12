@@ -35,6 +35,7 @@ priv struct WordsOver {
 /// Words over words found on a frame drawn (any frame where the rule is not held: Tester::words_over_frames): the
 /// moment it was drawn at, the words under and over, where they meet (the middle of where both are seen in the
 /// window), whether the words over are a layer leaving.
+#derive(Eq, Debug)
 pub(all) struct WordsOverAt {
   at : Double
   under : String
@@ -42,17 +43,17 @@ pub(all) struct WordsOverAt {
   x : Double
   y : Double
   leaving : Bool
-} derive(Eq, Show)
+}
 
 ///|
 // kept across runs: begun anew by each Tester (words_over_begin)
-let words_over : WordsOver = { held: true, file: "", pairs: Set::new(), frames: [] }
+let words_over : WordsOver = { held: true, file: "", pairs: Set([]), frames: [] }
 
 ///|
 /// Each file's bar: how many pairs of words over words a Tester made there may show while what it walks through
 /// moves (the app's tests' known faults, falling as they are mended).
 // kept across runs: said once as a test program starts (its packages' `init`)
-let words_over_bars : Map[String, Int] = {}
+let words_over_bars : Map[String, Int] = Map([])
 
 ///|
 /// Exact pairs intentionally shown during a particular test's closing overlay fade. A pair in any other motion is
@@ -78,6 +79,7 @@ fn words_over_expected_closing(file : String, under : String, over : String, lea
 /// says it without line and column: "src/sfapp/chat_wbtest.mbt"), each how many pairs a Tester made there may show.
 /// Said by a test package as it starts (`fn init`); only falls.
 pub fn words_over_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("words_over", bars)
   for b in bars {
     words_over_bars.set(b.0, b.1)
   }
@@ -160,7 +162,7 @@ fn Ctx::words_over_leaving_layer(self : Ctx, under : InstBy, over : InstBy) -> B
 
 ///|
 /// The pairs of nodes' words the frame just drawn shows one over the other, each once: their words, where they meet.
-fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double, Bool)] {
+fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double, Bool, String, String)] {
   self.flat_from(0)
   let a = self.inst
   let ks : Array[Int] = []
@@ -228,8 +230,8 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
   }
   // (glyphs met through a grid of cells, not each with each)
   let cell = 24.0
-  let grid : Map[Int, Array[Int]] = {}
-  let pairs : Set[Int] = Set::new()
+  let grid : Map[Int, Array[Int]] = Map([])
+  let pairs : Set[Int] = Set([])
   for q in 0..<ks.length() {
     let (x0, y0, x1, y1) = rs[q]
     for gx in (x0 / cell).to_int()..=(x1 / cell).to_int() {
@@ -263,19 +265,23 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
           pairs.add(os[p] * 65536 + os[q])
           let under = who.get(os[p]).unwrap_or(Nobody)
           let over = who.get(os[q]).unwrap_or(Nobody)
-          out.push((self.by_said(under), self.by_said(over), px, py, self.words_over_leaving_layer(under, over)))
+          out.push(
+            (
+              self.by_said(under),
+              self.by_said(over),
+              px,
+              py,
+              self.words_over_leaving_layer(under, over),
+              self.words_over_made(under),
+              self.words_over_made(over),
+            ),
+          )
         }
         here.push(q)
       }
     }
   }
   out
-}
-
-///|
-/// All visible overlaps, including intentional closing fades (for diagnostics).
-fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)] {
-  self.words_over_details().map(fn(f) { (f.0, f.1, f.2, f.3) })
 }
 
 ///|
@@ -287,7 +293,7 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
   // Tester::words_over_frames)
   if !words_over.held {
     for f in c.words_over_details() {
-      let (under, over, x, y, leaving) = f
+      let (under, over, x, y, leaving, _, _) = f
       words_over.frames.push({ at: self.fake.time, under, over, x, y, leaving })
     }
     return
@@ -296,7 +302,7 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
     return
   }
   for f in c.words_over_details() {
-    let (under, over, x, y, leaving) = f
+    let (under, over, x, y, leaving, under_made, over_made) = f
     if words_over_expected_closing(words_over.file, under, over, leaving) {
       continue
     }
@@ -305,16 +311,18 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
       continue
     }
     words_over.pairs.add(pair)
+    let bar = words_over_bars.get(words_over.file).unwrap_or(0)
+    motion_known_said("words_over", words_over.file, words_over.pairs.length(), bar, pair)
     if self.motion == Count {
-      println("MOTION words_over \{words_over.file}: \{pair} at (\{x.round()}, \{y.round()}) at \{self.fake.time} (the Tester made at \{looks_made_at.val})")
+      println(
+        "MOTION words_over \{words_over.file}: \{pair} at (\{x.round()}, \{y.round()}) at \{self.fake.time} (under: \{under_made}; over: \{over_made}) (the Tester made at \{looks_made_at.val})",
+      )
       continue
     }
-    let bar = words_over_bars.get(words_over.file).unwrap_or(0)
     if words_over.pairs.length() > bar {
       let said = "words over words while it moves (words_over.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{pair} at (\{x.round()}, \{y.round()}); \{words_over.pairs.length()} pairs now, \{bar} known in \{words_over.file}"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
   }
 }
@@ -325,6 +333,37 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
 /// view's own and the same of the nodes made in its place at the same moments, no other). Where it holds the rule,
 /// none: what it finds fails it.
 pub fn Tester::words_over_frames(self : Tester) -> Array[WordsOverAt] {
+  self.reads_own()
   ignore(self)
   words_over.frames.copy()
+}
+
+///|
+/// Where what drew words was made, for a fault that names it: a node of the window's tree's, its place (or the app's
+/// that holds it, past the framework's own boxes); an old view's, "old view", and the node hosting it where one does.
+fn Ctx::words_over_made(self : Ctx, by : InstBy) -> String {
+  match by {
+    Node(id) => {
+      let s = source_said(id)
+      if s == "" { "a node" } else { s }
+    }
+    Old(i) => {
+      let m = self.sizes_steady_made(i)
+      // (" (…)" said bare)
+      if m.length() > 3 { m.unsafe_substring(start=2, end=m.length() - 1) } else { "old view" }
+    }
+    Nobody => ""
+  }
+}
+
+///|
+/// The pairs of nodes' words the frame last drawn shows one over the other, moving or not, each once, with where they
+/// meet: for a sweep of screens at rest (still.fail's words_large_wbtest.mbt), where words over words are otherwise
+/// the squeeze's, which measures an old view's boxes side by side but not the window tree's words.
+pub fn Tester::words_over_now(self : Tester) -> Array[String] {
+  self.reads_own()
+  ignore(self)
+  g()
+  .words_over_details()
+  .map(fn(f) { "「\{f.0}」 under 「\{f.1}」 at (\{f.2.round()}, \{f.3.round()})" })
 }

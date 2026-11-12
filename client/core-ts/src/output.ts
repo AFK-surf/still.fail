@@ -4,9 +4,13 @@
 // compared again, so a list of 2000 rows with one changed costs one row. Each is made in a computed (reactive.ts) that
 // reads the clock at the grain its times in words change by (present.ts `clockAt`): a new minute makes again only the
 // items that said a minute's words, one of days ago only at local midnight. What went out is marked in `shaped`
-// (util.ts), and frozen when shared values are checked: nothing changes it after.
+// (util.ts), and frozen when shared values are checked: nothing changes it after. A value given again as the very
+// object last made, with nothing it was made of changed since, is what went out, not made again at all (#last).
+import type { Product } from "../../i18n/brand.ts";
+import * as brand from "./brand.ts";
 import { type Spec, specOf, textOf } from "./collections.ts";
-import { conformTy, type Ty } from "./conform.ts";
+import { conformTy, keptShape, type Ty } from "./conform.ts";
+import { current as lang } from "./i18n.ts";
 import * as present from "./present.ts";
 import type { Topic } from "./protocol.ts";
 import { computed, observe, type Derived } from "./reactive.ts";
@@ -25,17 +29,38 @@ export class Output {
   #keep: (() => void) | null = null;
   /// Told as what went out is out of date (the clock moved on past what an item's words say): it goes out again.
   readonly #again: () => void;
+  /// The value last made whole and what it was made of (`said`: what its words are said in beyond it), while what
+  /// keeps it holds; and whether nothing it read has changed since (#fresh), cleared as its watch fires (an item's computed,
+  /// the clock's signals, any other tracked read of its decoration). Given the same `raw` again it is what goes out:
+  /// `profiles`, no keyed items, was copied, decorated and shaped whole again each time a dependency was touched and
+  /// gave the same value, 5 ms in Hermes on a Mac Studio (2026-11-11).
+  #last: { topic: Topic; raw: unknown; shapes: boolean; said: string; product: Product; out: { ok: unknown } } | null = null;
+  #fresh = false;
 
   constructor(again: () => void = () => {}) {
     this.#again = again;
   }
 
+  /// What went out last where shaping `raw` again (`c`, `shapes`) makes the same: its raw the very object, with the same
+  /// shape and words, and nothing its making read changed since. Else null.
+  kept(topic: Topic, raw: unknown, c: present.Clock, shapes: boolean): { ok: unknown } | null {
+    const last = this.#last;
+    if (last === null || !this.#fresh || last.raw !== raw || last.topic !== topic || last.shapes !== shapes) return null;
+    return last.said === said(topic, c) && last.product === brand.current() ? last.out : null;
+  }
+
   /// The value as it goes out, or the shape's error (`path: what`).
   shape(topic: Topic, raw: unknown, c: present.Clock, shapes: boolean): { ok: unknown } | { error: string } {
+    this.#c = c;
+    // (a minute or day moved on clears #fresh as it is set, where the last value read it)
+    present.clockAt(c);
+    const kept = this.kept(topic, raw, c, shapes);
+    if (kept !== null) return kept;
+    this.#last = null;
+    this.#fresh = true;
+    work.shapes++;
     const spec = specOf(topic);
     const ty = shapes ? present.shapeOf(topic) : undefined;
-    this.#c = c;
-    present.clockAt(c);
     const next = new Map<string, Memo>();
     let out: { ok: unknown } | { error: string } = { error: "" };
     try {
@@ -47,12 +72,16 @@ export class Output {
         const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", next) : input;
         const v = present.decorate(topic, copy(skeleton), c);
         out = ty === undefined ? { ok: v } : conformTy(ty, v);
-      }, () => this.#again());
+      }, () => {
+        this.#fresh = false;
+        this.#again();
+      });
       if ("ok" in out) {
         this.#keep = keep;
         was?.();
         this.#memo = next;
         sharedValue(out.ok);
+        this.#last = { topic, raw, shapes, said: said(topic, c), product: brand.current(), out };
       } else keep();
       return out;
     } catch (e) {
@@ -66,6 +95,7 @@ export class Output {
     this.#keep?.();
     this.#keep = null;
     this.#memo = new Map();
+    this.#last = null;
   }
 
   /// The value with each keyed item put as it goes out.
@@ -85,13 +115,25 @@ export class Output {
         }
         const inner = spec.item ? this.#build(topic, item, spec.item, itemTy, place, here, next) : item;
         const made = computed(() => {
-          const decorated = present.decorateItem(topic, copy(inner), this.#c);
+          // Decorated as it is, not a copy of it: an item's decoration (present.ts `decorateItem`: `session`, `times`)
+          // makes a new object of what it puts something in and never writes on what it is given. A copy of each was
+          // 1.3 ms of the 52 items of a chat list's first page in Hermes on a Mac Studio (2026-11-11).
+          const decorated = present.decorateItem(topic, inner, this.#c);
           let out = decorated;
           if (itemTy !== undefined) {
-            const shapedItem = conformTy(itemTy, decorated, here);
-            if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
-            out = shapedItem.ok;
+            // (as it was made beside it, where it was: a chat list's row kept beside its record, conform.ts shapedBeside)
+            const made = keptShape(decorated, itemTy);
+            if (made !== undefined) out = made;
+            else {
+              work.conformed++;
+              const shapedItem = conformTy(itemTy, decorated, here);
+              if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
+              out = shapedItem.ok;
+            }
           }
+          // (what goes out is marked as gone out, which other values that hold it take it as, shaped: never the item
+          // itself, where nothing was put in it nor shaped of it, no shape or one of `Value`: a copy of it, as before)
+          if (out === inner && !shaped.has(inner)) out = copy(inner);
           freeze(out);
           return out;
         });
@@ -115,9 +157,18 @@ export class Output {
 
 class ItemWrong extends Error {}
 
-/// A page needs its agents' identities and status, not their full histories. A client that asks for the compact chat
-/// reads the histories and jobs through their own topics; the full value stays available inside the core and to older
-/// clients. Invalid fields are left for the normal shape check to report.
+/// What a value's words are said in that its making does not track: the language and the product's name (module
+/// state, read as words are made), and the minute (with the offset from UTC) for a topic that says times in words.
+/// Its decoration reads the clock's signals for the minute or the day, but some of it reads `c.now` alone (a job's
+/// age, jobs.ts `shown`; a file's day, drive.ts): made again in another minute, as the clock's signals would say.
+function said(topic: Topic, c: present.Clock): string {
+  return `${lang()}\u0001${brand.name()}\u0001${present.ticks(topic) ? `${Math.floor(c.now / 60_000)}/${c.offsetMin}` : ""}`;
+}
+
+/// A page needs its agents' identities and status, not their jobs. A client that asks for the compact chat reads them
+/// through their own topic (`chatJobs`); the full value stays available inside the core and to older clients. (An
+/// agent's turns and threads go out to neither: its shape, ChatAgent, has them not.) Invalid fields are left for the
+/// normal shape check to report.
 function compactChat(value: unknown): unknown {
   if (!isObject(value) || !Array.isArray(value.agents)) return value;
   return {
@@ -125,8 +176,10 @@ function compactChat(value: unknown): unknown {
     agents: value.agents.map((agent: unknown) => {
       if (!isObject(agent)) return agent;
       const out = { ...agent };
-      for (const field of ["turns", "threads", "jobs"]) if (Array.isArray(agent[field])) out[field] = [];
-      if (Array.isArray(agent.jobs)) out.hasJobs = agent.jobs.length > 0;
+      if (Array.isArray(agent.jobs)) {
+        out.jobs = [];
+        out.hasJobs = agent.jobs.length > 0;
+      }
       return out;
     }),
   };

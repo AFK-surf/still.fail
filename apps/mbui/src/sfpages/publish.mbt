@@ -593,7 +593,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
   let paper_edge = if narrow { row_side_narrow } else { publish_paper_in }
   let paper_in = if narrow { paper_edge } else { paper_edge + @sf.message_avatar_reach }
   // (how much was hidden in each, by its seq: the preview's `messages`, by their n)
-  let hidden : Map[Double, String] = {}
+  let hidden : Map[Double, String] = Map([])
   for m in items(p, "messages") {
     match text(Some(m), "hiddenText") {
       "" => ()

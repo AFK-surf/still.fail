@@ -62,7 +62,7 @@ pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
 
 ///|
 /// The mark each chat has had, as its row was last drawn.
-let marks_seen : Map[String, String] = {}
+let marks_seen : Map[String, String] = Map([])
 
 ///|
 fn marks_reset() -> Unit {
@@ -148,7 +148,7 @@ pub fn state_line(
         // (the theme's lists' lead word: bold with touch, as the phone's Home.kt StateLine; 600 with keyboard and mouse,
         // ChatMark.css.ts)
         c.text(lead_text, style=words.then(look.state_lead)) |> ignore
-        c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
+        c.text(text.exact_view(start=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
       })
       |> ignore
     _ => c.text(text, style=words) |> ignore

@@ -31,11 +31,12 @@ pub fn takes_drops() -> Bool {
 ///|
 /// A file or folder let go on the window from outside, where its host says where it is (the Finder's): its path,
 /// whether it is a folder, how many bytes it has (a folder: 0).
+#derive(Eq, Debug)
 pub(all) struct DroppedPath {
   path : String
   dir : Bool
   size : Double
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Files from outside let go where they are said by their paths (DroppedPath), the frame they came in: what holds where
@@ -394,9 +395,7 @@ fn init {
         let on_field = !paths.is_empty() && c.editors.contains(hit_in(c.hit_ids, c.hit_rects, x, y))
         match (if on_field { None } else { files_take_at(x, y) }) {
           Some(take) => {
-            let p : Pick = { hosts: [@hostapi.dropped_pick(id)], got: [None] }
-            p.wait("files dropped")
-            take(p)
+            take(Pick::waits([@hostapi.dropped_pick(id)], "files dropped"))
           }
           // (taken by none as files: left to what takes them by their paths, else let go now)
           None =>
@@ -434,7 +433,7 @@ priv struct FilesOn {
 ///|
 /// What takes files from outside over each box (Ctx::on_files), by its id: what its last build said.
 // kept across runs: said as each box is built, let go with its page (Ctx::forget); a run's start clears it (drop_reset)
-let files_on : Map[Int, FilesOn] = {}
+let files_on : Map[Int, FilesOn] = Map([])
 
 ///|
 /// The box that takes them that files from outside are held over now (Ctx::on_files; 0 none): told as they leave it.
@@ -526,7 +525,8 @@ pub fn Tester::hold_files(self : Tester, at : (Double, Double)?) -> Unit {
 /// `files` (their names, a folder's by their way down and a folder itself with a "/" at its end, and bytes) let go on
 /// the window at (x, y), as a host says, with their `paths` where it says them (the Finder's: one for each of `files`,
 /// a folder as that file says, its size that file's bytes); taken as the frame that takes the message begins
-/// (Ctx::on_files), read by the frame after, as a pick is.
+/// (Ctx::on_files), what they hold told by the host's event after the message, at its moment (FakeHost::due), as a
+/// pick's is.
 pub fn Tester::drop_files(
   self : Tester,
   x : Double,
@@ -535,8 +535,14 @@ pub fn Tester::drop_files(
   paths? : Array[String] = [],
 ) -> Unit {
   self.picks(files)
-  self.fake.pick_asks.push({ kind: Files, frame: g().frame_no, taken: false })
+  self.fake.pick_asks.push({ kind: Files, said: false, taken: false })
   let id = self.fake.pick_asks.length()
+  // (what they hold told after the message, at its moment; where the test answers the pickers itself, as it says:
+  // Tester::pick_answer, the host's reading of them taking a while)
+  let f = self.fake
+  if !f.picks_by_hand {
+    f.due(f.time, "files dropped", fn() { fake_pick_said(f, id) })
+  }
   let m : Map[String, Json] = {
     "type": Json::string("drop"),
     "x": Json::number(x),

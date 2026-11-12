@@ -79,7 +79,7 @@ test "the layout by the window's width alone, on every screen: what a phone's or
     let said = "platform \{platform} \{w}x\{h} \{width} \{height}"
     assert_eq(@sf.layout(w), layout, msg=said)
     assert_eq(@sfdesk.is_wide(t.ctx()), layout != Small, msg=said)
-    assert_eq(@sfdesk.wide.tape, layout == Medium, msg=said)
+    assert_eq(@sfdesk.wide.tape.get(), layout == Medium, msg=said)
     ignore(t)
   }
 }
@@ -172,7 +172,7 @@ test "on a Mac's tape the sidebar's first row stands under the window's buttons 
   guard first is Some(bell) else { fail("no rail place") }
   let bell_mid = bell.rect.1 + bell.rect.3 / 2.0
   assert_true((bell_mid - y).abs() < 1.0, msg="the bell's middle \{bell_mid}, the row's \{y}")
-  assert_true(bell.rect.1 >= bottom, msg="the bell \{bell.rect} under the buttons' \{bottom}")
+  assert_true(bell.rect.1 >= bottom, msg="the bell \{Repr(bell.rect)} under the buttons' \{bottom}")
 }
 
 ///|
@@ -188,7 +188,7 @@ test "on the tape the window's buttons stand as far lower as its panels stand un
   // off the tape (Large), centred on the top row's first 44 again, moved back
   t.resize(1280.0, 840.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(!@sfdesk.wide.tape)
+  assert_true(!@sfdesk.wide.tape.get())
   assert_eq(t.window_buttons_down(), (0.0, moved.1))
   // and on it again
   t.resize(720.0, 840.0)
@@ -242,7 +242,7 @@ test "on the tape the sidebar left wide on a larger screen opens at the tape's m
     @sfdesk.wide.side_w.set(@sfdesk.side_max)
     t.frame()
     let most = @sfdesk.rail_w + @sfdesk.tape_side_max
-    let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
+    let page_at = fn() { said_at(t, "收起侧边栏").unwrap().0 }
     assert_true(page_at() > most && page_at() < most + 4.0 * apart, msg="\{at}: the page from \{page_at()}")
     assert_eq(@sfdesk.wide.side_w.get(), @sfdesk.side_max, msg=at)
     // dragged wider from there: no further than the tape's most; narrower, from where it shows
@@ -271,13 +271,13 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
     // the sidebar in use, its own 240: held a while first (a finger's hold on an edge is to drag it, no long press:
     // no words of it; a finger drags it only so, @sf.handle_drag), then dragged 60 wider, the page beside it as much further on as it goes; let go, the width kept
-    let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
+    let page_at = fn() { said_at(t, "收起侧边栏").unwrap().0 }
     let before = page_at()
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
     t.press_at(ex, ey)
     t.run_for(@ui.long_press_ms * 2.0)
     for i in 1..=6 {
-      t.move(ex + 10.0 * i.to_double(), ey)
+      t.move_to(ex + 10.0 * i.to_double(), ey)
       t.run_for(slow_drag_ms)
     }
     assert_eq(@sfdesk.wide.side_w.get(), 300.0, msg=at)
@@ -298,7 +298,7 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     t.leave()
     t.run_for(@ui.move_most_ms)
     assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel, msg=at)
-    let page_end = fn() raise { covered(t, "收起侧边栏").unwrap().1 }
+    let page_end = fn() { covered(t, "收起侧边栏").unwrap().1 }
     let shown = page_end()
     let (px, py) = edge_middle(t, "调整侧栏宽度")
     drag_slowly(t, px, py, 200.0, up=false, hold=true)
@@ -328,7 +328,7 @@ test "on the tape the edge beside the page pressed where it lies over the page: 
     let room = if platform == 2 { "medium" } else { "" }
     let at = "platform \{platform}"
     let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
-    let page_from = fn() raise { covered(t, "收起侧边栏").unwrap().0 }
+    let page_from = fn() { covered(t, "收起侧边栏").unwrap().0 }
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
     drag_slowly(t, ex, ey, 60.0, hold=true)
     t.frame()
@@ -352,7 +352,7 @@ test "on the tape the edge beside the page pressed where it lies over the page: 
 ///|
 test "on the tape the sidebar at first, the page showing beside it: a click there brings it over, nothing under it pressed" {
   let t = tape_chat(0, 720.0, 800.0)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // what shows of the page clicked: it comes over, what was under the click not pressed
   page_over(t, 720.0)
@@ -448,7 +448,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
       // (its first number: where it is across, in 1/64 px)
       let mut x = 0
       let mut sign = 1
-      for ch in line.view(start_offset=5) {
+      for ch in line.exact_view(start=5) {
         if ch == '-' {
           sign = -1
         } else if ch >= '0' && ch <= '9' {
@@ -458,7 +458,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
         }
       }
       if (sign * x).to_double() / 64.0 >= left {
-        out.push(line.to_string())
+        out.push(line.to_owned())
       }
     }
   }
@@ -481,7 +481,7 @@ test "on the tape the sidebar's list scrolled with a finger: the page beside dra
   // the list dragged: the page beside drawn again, as it was
   t.press_at(150.0, 600.0)
   for i in 1..=12 {
-    t.move(150.0, 600.0 - 15.0 * i.to_double())
+    t.move_to(150.0, 600.0 - 15.0 * i.to_double())
   }
   assert_eq(drawn_from(t, left), page)
   // let go: built anew (an event from outside), still as it was
@@ -561,7 +561,7 @@ test "on the tape a chat's side panel is a panel of its own after the page's: op
 test "on the tape back brings the sidebar over from the chat, and with the chats' sidebar in use is the system's" {
   // an opened fold's inner screen upright, a finger
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   page_over(t, 690.0)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.back()
@@ -581,14 +581,14 @@ test "off the tape to 用量, the sidebar's panel closes to the bar holding the 
   assert_true(t.find("返回会话") is Some(_))
   tap_said(t, "用量")
   t.run_for(@ui.move_most_ms / 2.0)
-  assert_false(@sfdesk.wide.tape)
+  assert_false(@sfdesk.wide.tape.get())
   assert_true(t.find("返回会话") is Some(_), msg="the settings' list as it closes")
   assert_true(t.find("新建对话") is None, msg="not the chats' list")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("返回会话") is None && t.find("新建对话") is None)
   tap_said(t, "设置")
   t.frame()
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   assert_true(t.find("返回会话") is Some(_), msg="the settings' list as it opens")
   assert_true(t.find("新建对话") is None)
 }
@@ -748,7 +748,7 @@ fn drag_slowly(
   let step = by / steps.to_double()
   for i in 1..=steps {
     t.run_for(slow_drag_ms)
-    t.move(x + step * i.to_double(), y)
+    t.move_to(x + step * i.to_double(), y)
   }
   if up {
     t.release(x + by, y)
@@ -879,7 +879,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
   let concentric = @ui.capsule_in(panel, h)
-  assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
+  assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{Repr(at)}")
   // (as high as its buttons 4 in its ends need, a finger's 44: 52; in the tape's 42, as a circle reads it
   // (the radius as given), that stands concentric no nearer than the ranges let (4))
   let r = panel
@@ -896,7 +896,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   let d = @sf.foot_fit(panel, panel, panel - @sf.card_corner, least=@sf.holds_least(side))
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
-  assert_true(near4(at, (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
+  assert_true(near4(at, (d, d, d, 0.0)), msg="the box from the panel's edges: \{Repr(at)}")
   assert_true((k - @ui.concentric(panel, d)).abs() < 0.01, msg="the box's corner: \{k}")
   assert_true(k <= @sf.card_corner + 0.01, msg="the box's corner: \{k}")
   assert_eq(s, side / 2.0)
@@ -941,7 +941,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   // the sidebar in use: its left corners at the window's (its ground a node of the window's tree: dock_node), the
   // page's right ones past its right edge as they will be there
   guard composer_and_panel(t) is Some((_, page)) else { fail("no composer in a panel") }
-  assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{page.radii}")
+  assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{Repr(page.radii)}")
   assert_true(
     t.boxes_held().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
     msg="no sidebar's panel with its left corners the window's",
@@ -957,9 +957,9 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   let d = @sf.foot_fit(pane, edge, pane - @sf.card_corner, least=@sf.holds_least(32.0))
   assert_true((d - @sf.panel_card_in).abs() < 0.01, msg="the box's place: \{d}")
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
-  assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
+  assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{Repr(at)}")
   let round = @ui.concentric(pane, d)
-  assert_true(near4(k.radii, (round, round, round, round)), msg="the box's corners: \{k.radii}")
+  assert_true(near4(k.radii, (round, round, round, round)), msg="the box's corners: \{Repr(k.radii)}")
   assert_eq(t.corner_faults(), [])
   // let go of: a capsule, its left end concentric with the panel's 28 (4 in), its right in the window's 11.2, too
   // square for it, as far in as the left; the box's place to the capsule's in the one change of shape
@@ -970,7 +970,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   // (concentric with the panel's corner where the ranges let it stand that far in, else as far in as the box was)
   let six = @sf.capsule_fit(pane, k.h, d)
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
-  assert_true(near4((at.0, at.1, at.2, 0.0), (six, six, six, 0.0)), msg="the capsule from the panel's edges: \{at}")
+  assert_true(near4((at.0, at.1, at.2, 0.0), (six, six, six, 0.0)), msg="the capsule from the panel's edges: \{Repr(at)}")
   assert_eq(t.corner_faults(), [])
 }
 
@@ -1009,6 +1009,26 @@ fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
 }
 
 ///|
+/// The middle, across, of the topmost words `words` drawn in the page's panel on the tape (words_in_page's panel: an
+/// old view's or a node of the window's tree's, as a chat's bar is: chat_bar_wide_node).
+fn words_middle_in_page(t : @ui.Tester, words : String) -> Double? {
+  let mut page : @ui.Laid? = None
+  for b in t.boxes_held() {
+    if b.radius >= 11.0 && b.w >= 300.0 && b.h >= 300.0 && b.y < 50.0 && (page is None || b.x > page.unwrap().x) {
+      page = Some(b)
+    }
+  }
+  guard page is Some(p) else { return None }
+  let mut found : (Double, Double)? = None
+  for w in t.words() {
+    if w.0 == words && w.1 >= p.x && w.1 < p.x + p.w && w.5 > 0.0 && (found is None || w.2 < found.unwrap().0) {
+      found = Some((w.2, w.2 + w.4 / 2.0))
+    }
+  }
+  found.map(fn(f) { f.1 })
+}
+
+///|
 /// The middle of the first words `words` drawn, across (their line's).
 fn words_middle(t : @ui.Tester, words : String) -> Double? {
   for b in t.boxes() {
@@ -1027,7 +1047,7 @@ test "on the tape a page's head is a chat's bar: its title where a chat's stands
     let chat = screen_in("chat", win, "zh")
     guard words_in_page(chat, "整理发布清单") is Some((cx, cy, cs)) else { fail("\{win.0}: no chat's title") }
     // the sidebar's first row and the page's bar on the tape's one line (@sf.tape_bar_over)
-    match (words_middle(chat, "新建对话"), words_middle(chat, "整理发布清单")) {
+    match (words_middle(chat, "新建对话"), words_middle_in_page(chat, "整理发布清单")) {
       (Some(a), Some(b)) => assert_true((a - b).abs() < 1.0, msg="\{win.0}: 新建对话's line \{a}, the chat's title's \{b}")
       _ => fail("\{win.0}: no 新建对话 or chat's title")
     }
@@ -1125,7 +1145,7 @@ test "on the tape the panels behind the one in use stand on a ground a step dark
     // the sidebar in use: the page behind (what shows of it at the right), on the darker ground, its words drawn as
     // before
     let (mx, my, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
-    assert_true(grounds_at(t, mx + 4.0, my).contains(behind), msg="dark \{dark}: the page's grounds \{grounds_at(t, mx + 4.0, my)}")
+    assert_true(grounds_at(t, mx + 4.0, my).contains(behind), msg="dark \{dark}: the page's grounds \{Repr(grounds_at(t, mx + 4.0, my))}")
     let (rx, ry) = t.find("首页的列表改成按天分组").unwrap()
     assert_false(grounds_at(t, rx, ry).contains(behind), msg="dark \{dark}: the sidebar's grounds")
     // the page brought over: the sidebar behind now (what shows of it at the left), the page on its own ground
@@ -1278,23 +1298,23 @@ fn settings_page_whole(t : @ui.Tester, words : String, w : Double) -> Bool {
 ///|
 test "on the tape a settings page opened at one of its own (⌘K's, the bell's 通知设置, 快捷键 from its dialog) shows beside their list, pressed whole in the window" {
   let t = tape_settings(600.0, fn() { @sfdesk.open_settings_at(@settings.Route::LocalStation) })
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of(local_none)}")
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of(local_none))}")
 }
 
 ///|
 test "on the tape a settings page a fixture opens as the app begins (a scripted run's, a picture's) is the one in use, as a row of their list opens it: whole in the window" {
   let t = tape_settings(600.0, fn() { open_fixture_mode("settings-local-station") }, first=true)
-  assert_true(@sfdesk.wide.tape)
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of(local_none)}")
+  assert_true(@sfdesk.wide.tape.get())
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of(local_none))}")
 }
 
 ///|
 test "on the tape the gear's settings: their list in use, its first row's page showing beside it" {
-  let t = tape_settings(600.0, fn() { open_page(Settings) })
-  assert_true(@sfdesk.wide.tape)
+  let _ = tape_settings(600.0, fn() { open_page(Settings) })
+  assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
 
@@ -1311,16 +1331,16 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("全局记忆 · 项目记忆")}")
+  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("全局记忆 · 项目记忆"))}")
   // a level further in from the page in use: a station's memory, then one of its pages
   t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("发布流程")}")
+  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("发布流程"))}")
   t.tap_text("发布流程")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("checklist")}")
+  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("checklist"))}")
 }
 
 ///|
@@ -1330,7 +1350,7 @@ test "on the tape, a chat's service opened from the chat in use: its side panel 
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   // (the chat in use, the sidebar beside it)
   @sfdesk.bring_page()
   t.run_for(@ui.move_most_ms)

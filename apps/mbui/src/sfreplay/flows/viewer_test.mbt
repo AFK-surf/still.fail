@@ -7,8 +7,6 @@
 test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
-    // The recording used a Mac window whose buttons occupy the app's top row.
-    f.t.set_window_inset(true)
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
     // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
     let handed = match f.r.sent_bytes_from("composer.add", "name", "e2e-photo-标注-") {
@@ -27,14 +25,14 @@ test "96-viewer" {
     // (where the run's pace had the row come with the list's first rows, nothing of the list moved: where it rests)
     let rows_end = @sfpages.rows_rest()
     if rows_end >= 0.0 {
-      f.run_to(rows_end)
+      f.run_to(fn() { rows_end })
     }
     f.tap("两张图片 201493")
     f.see("=willow")
     f.see("img:e2e-photo.jpg")
     f.tap("img:e2e-photo.jpg")
     // flown open from its thumbnail, its bars on once it is in
-    f.run_to(@sfapp.preview_rest())
+    f.run_to(@sfapp.preview_rest)
     // grown from its thumbnail, its whole picture here (复制 offered)
     f.see("icon:copy")
     f.see("icon:chevron-right")
@@ -59,10 +57,10 @@ test "96-viewer" {
     // (a phone's: into its photo album, said so: keep_way_of)
     f.see("已保存到相册")
     let kept = f.t.kept().filter(fn(k) { k.0.has_prefix("e2e-photo-标注-") && k.0.has_suffix(".png") })
-    f.check(kept.length() == 1, "kept: \{f.t.kept().map(fn(k) { k.0 })}")
+    f.check(kept.length() == 1, "kept: \{Repr(f.t.kept().map(fn(k) { k.0 }))}")
     f.check(
       f.t.kept_ways().iter().any(fn(k) { k.0.has_prefix("e2e-photo-标注-") && k.1.to_string() == "Photos" }),
-      "kept: \{f.t.kept_ways()}",
+      "kept: \{Repr(f.t.kept_ways())}",
     )
     f.check(f.t.marks_drawn().length() >= 1, "no marks drawn onto the picture")
     f.t.marks_make(marked)

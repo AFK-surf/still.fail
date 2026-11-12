@@ -118,7 +118,7 @@ fn normpath(p : Bytes) -> Bytes {
       s = k + 1
     }
   }
-  let buf = @buffer.new()
+  let buf = Buffer()
   buf.write_bytes(prefix)
   if absolute {
     buf.write_bytes(sep())

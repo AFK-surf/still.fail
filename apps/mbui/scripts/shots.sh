@@ -184,7 +184,7 @@ shoot() {
       build_mac sffix
       rm -rf out/shot-newchat; mkdir -p out/shot-newchat
       names=
-      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-picked home-bars place; do
+      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-new-browse-repos newchat-preset-new-clone newchat-preset-new-clones newchat-preset-picked home-bars place; do
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-newchat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-newchat/$m.png out/shots/mac-newchat-$m.png
         names="$names mac-newchat-$m"
@@ -192,7 +192,7 @@ shoot() {
     web-newchat)
       WAPP=sffix
       names=
-      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-picked home-bars place; do
+      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-new-browse-repos newchat-preset-new-clone newchat-preset-new-clones newchat-preset-picked home-bars place; do
         web_shot "MBUI_FIXTURE=$m" out/shots/web-newchat-$m.png
         names="$names web-newchat-$m"
       done ;;
@@ -314,15 +314,15 @@ shoot() {
     notify)
       build_mac sffix
       rm -rf out/shot-notify; mkdir -p out/shot-notify
-      for m in chat-flash chat-flash-mine settings-notify-off; do
+      for m in chat-flash chat-flash-mine chat-flash-notice settings-notify-off; do
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-notify on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-notify/$m.png out/shots/mac-notify-${m#chat-}.png
       done
-      names="mac-notify-flash mac-notify-flash-mine mac-notify-settings-notify-off" ;;
+      names="mac-notify-flash mac-notify-flash-mine mac-notify-flash-notice mac-notify-settings-notify-off" ;;
     web-notify)
       WAPP=sffix
       names=""
-      for m in chat-flash chat-flash-mine settings-notify-off; do
+      for m in chat-flash chat-flash-mine chat-flash-notice settings-notify-off; do
         web_shot "MBUI_FIXTURE=$m" out/shots/web-notify-${m#chat-}.png
         names="$names web-notify-${m#chat-}"
       done ;;

@@ -5,7 +5,7 @@ test "after: true once its condition has held so long by the tester's clock; off
   let done = Ref(false)
   // the delay the test gives `after`
   let hold_ms = 500.0
-  let t = @ui.Tester::new(fn(c) { done.val = after(c, "d", on.val, hold_ms, keep=keep.val) })
+  let t = @ui.Tester::new(fn(c) { done.val = @kit.after(c, "d", on.val, hold_ms, keep=keep.val) })
   on.val = true
   t.draw()
   let due = t.time() + hold_ms
@@ -40,23 +40,23 @@ test "after: true once its condition has held so long by the tester's clock; off
 ///|
 test "presence: shown comes in; not shown, built until its exit has played, then gone" {
   let shown = Ref(false)
-  let p : Ref[Presence] = Ref({ built: false, shown: false, t: @motion.Anim::new(0.0) })
-  let t = @ui.Tester::new(fn(c) { p.val = presence(c, "x", shown.val) })
+  let p : Ref[@kit.Presence] = Ref({ built: false, shown: false, t: @motion.Anim::new(0.0) })
+  let t = @ui.Tester::new(fn(c) { p.val = @kit.presence(c, "x", shown.val) })
   assert_false(p.val.built)
   shown.val = true
   t.draw()
   assert_true(p.val.built && p.val.shown)
-  t.run_for(presence_in_ms)
+  t.run_for(@kit.presence_in_ms)
   // (how far in, read at the frame's moment as its look reads it)
   assert_eq(p.val.t.get(t.ctx()), 1.0)
   shown.val = false
   t.draw()
   // half its exit's time
-  let mid_way = presence_out_ms / 2.0
+  let mid_way = @kit.presence_out_ms / 2.0
   t.run_for(mid_way)
   assert_true(p.val.leaving())
   assert_true(p.val.t.get(t.ctx()) < 1.0)
-  t.run_for(presence_out_ms - mid_way)
+  t.run_for(@kit.presence_out_ms - mid_way)
   assert_false(p.val.built)
   t.assert_idle()
 }
@@ -66,7 +66,7 @@ test "a button: pressed by a tap, by Enter, by Activate; disabled, by none of th
   let n = Ref(0)
   let disabled = @signals.signal(false)
   let t = @ui.Tester::new(fn(c) {
-    if button(c, "Go", disabled=disabled.get()).clicked {
+    if @kit.button(c, "Go", disabled=disabled.get()).clicked {
       n.val = n.val + 1
     }
   })

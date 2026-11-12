@@ -9,13 +9,26 @@
 /// let go at x (back if it went far enough or fast enough: whose back it is decides, as a stack does), called off; or
 /// back now: the system deciding, from where a gesture it followed had it (Tree::back_done), or a back with no gesture
 /// (a back key, ⌘[, a back button): one step, done once, no gesture begun or let go for it.
+#derive(Eq, Debug)
 pub(all) enum BackStep {
   Began(Double, Double)
   Moved(Double, Double)
   LetGo(Double, Double)
   CalledOff
   Back
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// As tests write a back gesture's step: what `derive(Show)` wrote.
+pub impl Show for BackStep with output(self, logger) {
+  match self {
+    Began(x, y) => logger.write_string("Began(\{x}, \{y})")
+    Moved(x, y) => logger.write_string("Moved(\{x}, \{y})")
+    LetGo(x, y) => logger.write_string("LetGo(\{x}, \{y})")
+    CalledOff => logger.write_string("CalledOff")
+    Back => logger.write_string("Back")
+  }
+}
 
 ///|
 /// What back does to it, while it takes input (as a key's: View::on_key): `f`, as back is done (the system's back let

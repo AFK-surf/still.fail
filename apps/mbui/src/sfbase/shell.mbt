@@ -20,6 +20,13 @@ pub(all) struct Shell {
   /// a detail of a chat opened where the layout has it (an agent's history by its key, jobs, letters, files, a
   /// service: the side panel's tabs on the wide frame, toggled): what a page asks of its chat (open_detail)
   detail : (Source, ChatRef, String) -> Unit
+  /// a file asked to be opened beside the page (its `view:` tab: viewer_tab.mbt) put there where the layout has a side
+  /// panel for the page in view (the wide frame's chat), in front: the tab it put there (that file's tab there
+  /// already, by whatever key it was opened with), none where it has nowhere (what asked opens it over the whole
+  /// window). What open_preview calls, never a page itself
+  beside : (String) -> String?
+  /// whether the layout has such a side panel for the page in view now: what offers to open a file there asks
+  beside_room : () -> Bool
   /// what back does where the layout has it (the tiers' table), none where back is the
   /// system's: what the keys, the frames and the pages' back call (back_step, go_back), never the stack themselves
   back : () -> (() -> Unit)?
@@ -33,7 +40,7 @@ pub(all) struct Shell {
 
 ///|
 /// The stack's own, until the pages say theirs (as they are first drawn): a page pushed, a new chat risen from the
-/// foot; a detail nowhere.
+/// foot; a detail nowhere, nothing beside.
 pub fn bare_shell() -> Shell {
   {
     home: nav_home,
@@ -43,6 +50,8 @@ pub fn bare_shell() -> Shell {
     open: stack_open,
     open_over: stack_open,
     detail: fn(_, _, _) {  },
+    beside: fn(_) { None },
+    beside_room: fn() { false },
     back: stack_back,
     show: fn() {  },
     edit_rail: fn() {  },
@@ -167,6 +176,24 @@ pub fn open_detail(src : Source, r : ChatRef, tab : String) -> Unit {
 pub let shell : Ref[Shell] = Ref(bare_shell())
 
 ///|
+/// Whether the layout has a side panel for the page in view (`beside_room` of the shell as it was last set:
+/// shell_set), told only as that changes: what offers to open a file there follows it (beside_offered), a node made
+/// once as well as an old view built each frame.
+// kept across runs: put back by pages.mbt's reset, as the shell is
+let beside_room_now : @signals.Signal[Bool] = @signals.signal(false)
+
+///|
+/// The pages' shell `s` said (each frame they are drawn, or as the app begins again): beside_room_now told where
+/// what it says of the side panel changed.
+pub fn shell_set(s : Shell) -> Unit {
+  shell.val = s
+  let room = @signals.untracked(s.beside_room)
+  if room != beside_room_now.untracked() {
+    beside_room_now.set(room)
+  }
+}
+
+///|
 /// A place's page at the stack's root: 对话 Home, 文件 Files, another its own.
 pub fn place_page(place : String) -> Page {
   match place {
@@ -180,8 +207,9 @@ pub fn place_page(place : String) -> Page {
 /// A place gone to (the bottom bar's, the rail's, back to the chats from another place's top), in every tier: what is
 /// over the pages put down (Shell's `close_overlays`), the stack back to its root and the place's page that root, in
 /// place; `way` the side it comes in from (the bar's order: -1 its left, 1 its right, 0 none). The same place again
-/// changes nothing. Whether it went.
-pub fn go_place(place : String, way? : Int = 0) -> Bool {
+/// changes nothing. Whether it went. `kept`: the page that leaves the root put on the stack's shelf and the place's taken
+/// back from it (nav_root_kept: the bottom bar's on 小屏), not let go and made anew.
+pub fn go_place(place : String, way? : Int = 0, kept? : Bool = false) -> Bool {
   let page = place_page(place)
   if app.nav.depth() == 1 && app.nav.top() == page {
     return false
@@ -190,7 +218,11 @@ pub fn go_place(place : String, way? : Int = 0) -> Bool {
     (shell.val.close_overlays)()
     app.switch_way = way
     nav_home()
-    app.nav.replace(page)
+    if kept {
+      nav_root_kept(page)
+    } else {
+      app.nav.replace(page)
+    }
   })
   true
 }

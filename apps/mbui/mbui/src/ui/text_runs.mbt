@@ -6,6 +6,7 @@
 
 ///|
 /// A line of words drawn (Tester::text_runs), in points.
+#derive(Debug, Eq)
 pub(all) struct TextRun {
   text : String
   x0 : Double
@@ -13,7 +14,7 @@ pub(all) struct TextRun {
   base : Double
   top : Double
   bottom : Double
-} derive(Show, Eq)
+}
 
 ///|
 priv struct TextRuns {
@@ -98,7 +99,7 @@ fn keep_rich_runs(lay : RichLayout, ox : Double, oy : Double, cy0 : Double, cy1 
     let b = if last + 1 < lay.starts.length() { lay.starts[last + 1] } else { lay.len }
     let (x0, x1) = lay.span_x(first, last + 1)
     text_runs.runs.push({
-      text: lay.text.unsafe_substring(start=a, end=b).trim(chars=" \t\n\r\u{3000}\u{a0}").to_string(),
+      text: lay.text.unsafe_substring(start=a, end=b).trim(chars=" \t\n\r\u{3000}\u{a0}").to_owned(),
       x0: ox + x0 + lay.pre[first],
       x1: ox + x1,
       base: top + lay.line_base[l],
@@ -112,6 +113,7 @@ fn keep_rich_runs(lay : RichLayout, ox : Double, oy : Double, cy0 : Double, cy1 
 /// The lines of words the last frame drew, in drawing order (in points): each line's words, where its first letter
 /// starts and its last ends, its baseline and its line's top and bottom.
 pub fn Tester::text_runs(self : Tester) -> Array[TextRun] {
+  self.reads_own()
   ignore(self)
   text_runs.runs.copy()
 }

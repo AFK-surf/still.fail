@@ -29,7 +29,7 @@ fn sideways_view(at : Ref[Double]) -> @ui.Tester {
 
 ///|
 test "sideways: what it holds is laid out as wide as it is, cut to the box" {
-  let t = sideways_view(Ref::new(0.0))
+  let t = sideways_view(Ref(0.0))
   t.draw()
   let (_, _, w, _) = t.rect_of("xxxx").unwrap()
   assert_eq(w, 600.0)
@@ -37,7 +37,7 @@ test "sideways: what it holds is laid out as wide as it is, cut to the box" {
 
 ///|
 test "sideways: a finger moving sideways drags it; up or down, the list scrolls" {
-  let at = Ref::new(0.0)
+  let at = Ref(0.0)
   let t = sideways_view(at)
   t.draw()
   let (_, y, _, _) = t.rect_of("xxxx").unwrap()
@@ -53,7 +53,7 @@ test "sideways: a finger moving sideways drags it; up or down, the list scrolls"
 
 ///|
 test "sideways: in a row drawn again as the list scrolled, a finger up or down on it scrolls the list, where it is scrolled to kept" {
-  let at = Ref::new(0.0)
+  let at = Ref(0.0)
   let t = sideways_view(at)
   t.set_rows_on_pixels(true)
   t.draw()
@@ -70,7 +70,7 @@ test "sideways: in a row drawn again as the list scrolled, a finger up or down o
   // the list dragged up a little by another row, slowly (no fling): the rows drawn again as it moves, not built
   t.press_at(150.0, 250.0)
   for i in 1..=6 {
-    t.move(150.0, 250.0 - 5.0 * i.to_double())
+    t.move_to(150.0, 250.0 - 5.0 * i.to_double())
   }
   assert_true(t.rows_kept() > 0, msg="\{t.rows_kept()}")
   // (held still past what the finger's speed is read from: let go, no fling)
@@ -90,7 +90,7 @@ test "sideways: in a row drawn again as the list scrolled, a finger up or down o
 
 ///|
 test "sideways: what it holds fades out towards an edge it goes on past, each pixel by where it is, not cut off there; at its start none at its start (the user, 2026-10-30: 「现在有很多粗暴裁剪的」)" {
-  let at = Ref::new(0.0)
+  let at = Ref(0.0)
   let t = sideways_view(at)
   t.draw()
   let y = t.rect_of("xxxx").unwrap().1
@@ -100,18 +100,18 @@ test "sideways: what it holds fades out towards an edge it goes on past, each pi
   }
   assert_true(fades().length() > 0, msg="no glyphs")
   // at its start: towards its end only
-  assert_true(fades().iter().all(fn(f) { f.0 <= 0.0 && f.1 > 0.0 }), msg="at its start: \{fades()[:3]}")
+  assert_true(fades().iter().all(fn(f) { f.0 <= 0.0 && f.1 > 0.0 }), msg="at its start: \{Repr(fades()[:3])}")
   t.drag(250.0, y + 5.0, 50.0, y + 5.0)
   t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
   assert_true(at.val > 0.0, msg="not scrolled")
   // scrolled on: towards its start, and towards its end while it goes on past it (600 wide in 300)
   let more = at.val < 300.0 - 0.5
-  assert_true(fades().iter().all(fn(f) { f.0 > 0.0 && (f.1 > 0.0) == more }), msg="scrolled to \{at.val}: \{fades()[:3]}")
+  assert_true(fades().iter().all(fn(f) { f.0 > 0.0 && (f.1 > 0.0) == more }), msg="scrolled to \{at.val}: \{Repr(fades()[:3])}")
 }
 
 ///|
 test "sideways: it stops at its ends" {
-  let at = Ref::new(0.0)
+  let at = Ref(0.0)
   let t = sideways_view(at)
   t.draw()
   let (_, y, _, _) = t.rect_of("xxxx").unwrap()
@@ -129,7 +129,7 @@ test "sideways: it stops at its ends" {
 ///|
 test "sideways: flung, it slows by a way solved once: at rest at a time of its own, the same at any frame rate" {
   let run = fn(step : Double) -> (Double, Double) raise {
-    let at = Ref::new(0.0)
+    let at = Ref(0.0)
     let t = sideways_view(at)
     t.draw()
     let (_, y, _, _) = t.rect_of("xxxx").unwrap()
@@ -252,7 +252,7 @@ test "sideways: a row in it is as wide as what it holds, not squeezed to the box
 
 ///|
 test "sideways across rows: a long text's rows scroll as one, as far as the widest of them" {
-  let at = Ref::new(0.0)
+  let at = Ref(0.0)
   let words = ["a".repeat(120), "b".repeat(80), "c".repeat(40)]
   let t = @ui.Tester::new(
     fn(c) {
@@ -285,8 +285,8 @@ test "sideways across rows: a long text's rows scroll as one, as far as the wide
 
 ///|
 test "sideways to its end: a path's end in view as it is first laid out and as it goes deeper, where it was left between" {
-  let path = Ref::new("a".repeat(100))
-  let at = Ref::new(0.0)
+  let path = Ref("a".repeat(100))
+  let at = Ref(0.0)
   let t = @ui.Tester::new(
     fn(c) {
       at.val = c.sideways_at("way")
@@ -307,7 +307,7 @@ test "sideways to its end: a path's end in view as it is first laid out and as i
 ///|
 /// A strip of tabs (`words`, size 10) filling a box 300 wide, sideways: each tab an equal share, never narrower than
 /// its words; the one keyed `shown` (its index) brought into view.
-fn strip_view(words : Ref[Array[String]], at : Ref[Double], shown? : Ref[Int] = Ref::new(-1)) -> @ui.Tester {
+fn strip_view(words : Ref[Array[String]], at : Ref[Double], shown? : Ref[Int] = Ref(-1)) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
       at.val = c.sideways_at("tabs")
@@ -332,8 +332,8 @@ fn strip_view(words : Ref[Array[String]], at : Ref[Double], shown? : Ref[Int] = 
 
 ///|
 test "sideways filling: what it holds as wide as the box where it needs no more, its parts sharing it; wider, scrolled" {
-  let words = Ref::new(["ab", "cd"])
-  let at = Ref::new(0.0)
+  let words = Ref(["ab", "cd"])
+  let at = Ref(0.0)
   let t = strip_view(words, at)
   t.draw()
   // two of 10 in 300: 150 each
@@ -352,9 +352,9 @@ test "sideways filling: what it holds as wide as the box where it needs no more,
 
 ///|
 test "sideways show: the part brought into view as it is first shown and as another is asked, scrolled as little as that takes" {
-  let words = Ref::new(["a".repeat(40), "b".repeat(40), "c".repeat(40)])
-  let at = Ref::new(0.0)
-  let shown = Ref::new(2)
+  let words = Ref(["a".repeat(40), "b".repeat(40), "c".repeat(40)])
+  let at = Ref(0.0)
+  let shown = Ref(2)
   let t = strip_view(words, at, shown~)
   t.draw()
   // the last (400 to 600) in view at once: its end at the box's

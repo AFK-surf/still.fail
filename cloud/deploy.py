@@ -39,8 +39,9 @@ else ~/stillfail-deploy:
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
-  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and nothing else
-            (POST /v1/admin/feedback/list, the team's feedback monitor's). Without it nobody reads them so.
+  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and marks their status, and
+            nothing else (POST /v1/admin/feedback/list and /v1/admin/feedback/<id>/status, the team's feedback
+            monitor's). Without it nobody reads or marks them so.
   admin     STILLFAIL_ADMIN_EMAIL, or <deploy>/admin-email: the operator console's Google account.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
@@ -88,8 +89,19 @@ AXIOM = DEPLOY / "axiom.json"
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
 APNS = DEPLOY / "apns.json"
+# The other product's apps' push credentials (src/fcm.ts, src/apns.ts): one cloud pushes to both products' apps.
+FCM_MORE = DEPLOY / "fcm-service-account-more.json"
+APNS_MORE = DEPLOY / "apns-more.json"
 REVIEW = DEPLOY / "review-accounts.json"
 FEEDBACK = DEPLOY / "feedback-token"
+# One cloud answering as the other product too (src/guests.ts), once the secret both know is there (forward-secret):
+# the guests its CLOUDS entry lists, with their Google client (guest-google-oauth.json, as google-oauth.json is); for a
+# cloud that moved into another, where it forwards (forward-to: an origin).
+GUEST_GOOGLE = DEPLOY / "guest-google-oauth.json"
+FORWARD_TO = DEPLOY / "forward-to"
+FORWARD_SECRET = DEPLOY / "forward-secret"
+# Present while accounts move between clouds (src/move.ts): every other call answered 503 moving.
+MOVING = DEPLOY / "moving"
 
 
 def admin_email(dry_run: bool) -> str:
@@ -143,6 +155,9 @@ CLOUDS = {
             "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5",
             "RELEASES_UPSTREAM": "https://app.still.fail/releases",
         },
+        # Answered as still.fail too once still.fail's accounts moved in (src/guests.ts, src/move.ts; the user,
+        # 2026-11-12): still.fail's hosts stay in its account, its API Worker forwarding here.
+        "guests": [{"origin": "https://app.still.fail", "beta": "https://app.youdid.wtf"}],
     },
 }
 CLOUD = env_var("CLOUD") or ""
@@ -282,6 +297,10 @@ def push() -> dict:
         value["APNS_KEY"] = APNS.read_text()
     else:
         print(f"note: {APNS} is missing; no pushes to iOS")
+    if FCM_MORE.exists():
+        value["FCM_SERVICE_ACCOUNT_MORE"] = FCM_MORE.read_text()
+    if APNS_MORE.exists():
+        value["APNS_KEY_MORE"] = APNS_MORE.read_text()
     return value
 
 
@@ -297,6 +316,25 @@ def review() -> dict:
 
 def feedback() -> dict:
     return {"FEEDBACK_TOKEN": FEEDBACK.read_text().strip()} if FEEDBACK.exists() else {}
+
+
+def guests() -> dict:
+    value = {}
+    listed = CLOUDS.get(CLOUD, {}).get("guests", [])
+    if listed and FORWARD_SECRET.exists():
+        google = json.loads(GUEST_GOOGLE.read_text())["web"] if GUEST_GOOGLE.exists() else {}
+        client = {"google_client_id": google["client_id"], "google_client_secret": google["client_secret"]} if google else {}
+        value["GUESTS"] = json.dumps([{**g, **client} for g in listed])
+    if FORWARD_TO.exists():
+        value["FORWARD_TO"] = FORWARD_TO.read_text().strip()
+    if MOVING.exists():
+        value["MOVING"] = "1"
+    if FORWARD_SECRET.exists():
+        secret = FORWARD_SECRET.read_text().strip()
+        if len(secret) < 32:
+            sys.exit(f"{FORWARD_SECRET}: 32 characters at least")
+        value["FORWARD_SECRET"] = secret
+    return value
 
 
 @contextmanager
@@ -510,7 +548,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback(), **guests()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:

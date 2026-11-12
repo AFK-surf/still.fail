@@ -110,13 +110,6 @@ fn lerp16(from : Int, to : Int, t : Int) -> Int {
 fn LowP::stage(self : LowP, s : Stage) -> Bool {
   let p = self
   match s {
-    MoveSourceToDestination =>
-      for i in 0..<16 {
-        p.dr[i] = p.r[i]
-        p.dg[i] = p.g[i]
-        p.db[i] = p.b[i]
-        p.da[i] = p.a[i]
-      }
     MoveDestinationToSource =>
       for i in 0..<16 {
         p.r[i] = p.dr[i]
@@ -344,7 +337,7 @@ fn LowP::stage(self : LowP, s : Stage) -> Bool {
         let y = p.fy[i]
         p.fx[i] = (x * x + y * y).sqrt()
       }
-    _ => abort("lowp: no such stage")
+    _ => @halt.saying("lowp: no such stage")
   }
   true
 }

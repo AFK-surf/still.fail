@@ -5,8 +5,11 @@
 // sets the rows' sum to end the other way, once (rows_turn_ms). One that does had its height changed by what the list was not told of (a gap left till the last frame of a close,
 // a height taken from another row), and shows as a jolt. Held on every frame a Tester draws, as words over words
 // are (words_over.mbt): what a test walks through is checked, not only what a test of motion looks at. Nor does a row
-// come to rest one way and go back the other soon after with nothing done by the hand between (rows_return_ms): up as
-// one thing came, down a moment later as another left, which reads as the list shaking however smooth each way is.
+// drawn come to rest one way and go back the other soon after with nothing done by the hand between
+// (rows_return_ms): up as one thing came, down a moment later as another left, which reads as the list shaking however
+// smooth each way is. Nor does a row go a whole step in the frame its list's way sets out again, many times as far as
+// in the frames round it (rows_step_least): the way setting out lets a speed taken up by, not a height put on at once
+// under it.
 //
 // Measured on the rows' places in their list as laid out (from the list's top: the list carried by its page moves
 // none of them), by their keys where the list is given them (ListRows) and else by their index; not while the list
@@ -21,6 +24,17 @@
 /// A frame's speed (points a frame) this far from the mean of the frames' round it, and by more than half the faster of
 /// theirs, is a jolt: a step, a stop on the way, a start at full speed (a smooth way starts from rest and slows to it).
 let rows_speed_least : Double = 3.0
+
+///|
+/// Where the list's way set out between the frames (the rows taking up its speed from where they were, no jolt of
+/// itself), a frame this far (points, a 60 a second frame's) and this many times as far as both of the frames round it
+/// is a step all the same: a row's height put on at once under the way's setting out (2026-11-10 the user: 「还是有很多
+/// 问题导致它乱跳」; a card come to a post still coming in put all over it up by the card's whole room in one frame, and
+/// the way set out again in that frame let it by).
+let rows_step_least : Double = 12.0
+
+///|
+let rows_step_times : Double = 4.0
 
 ///|
 /// How long after a list is first shown its rows may still come to stand at their own heights (guessed till laid out).
@@ -51,8 +65,9 @@ priv struct RowsSteady {
   /// when each row (by its list's id and its key) last turned back (rows_turn_ms)
   turned : Map[String, Double]
   /// each row's last way (rows_return_ms): which way (1 down, -1 up), how far, when it last moved so, how far it has
-  /// come back the other way since (0 none), when it set out, and whether a row left on it with none come
-  went : Map[String, (Double, Double, Double, Double, Double, Bool)]
+  /// come back the other way since (0 none), when it set out, whether a row left on it with none come, and whether the
+  /// row was drawn in a frame of its way back so far (not faint)
+  went : Map[String, (Double, Double, Double, Double, Double, Bool, Bool)]
   /// when the hand last pressed, let go, typed, scrolled or went back (rows_steady_hand)
   mut hand : Double
 }
@@ -64,7 +79,7 @@ let rows_steady : RowsSteady = {
   held: true,
   file: "",
   seen: {},
-  found: Set::new(),
+  found: Set([]),
   lists: {},
   window: (-1.0, -1.0),
   words: -1.0,
@@ -76,12 +91,13 @@ let rows_steady : RowsSteady = {
 ///|
 /// Each file's bar: how many jolts a Tester made there may show (the app's tests' known faults, falling as mended).
 // kept across runs: said once as a test program starts (its packages' `init`)
-let rows_steady_bars : Map[String, Int] = {}
+let rows_steady_bars : Map[String, Int] = Map([])
 
 ///|
 /// The jolts known in the tests of the files `bars` names (as words_over_known says its files), each how many a Tester
 /// made there may show. Said by a test package as it starts (`fn init`); only falls.
 pub fn rows_steady_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("rows_steady", bars)
   for b in bars {
     rows_steady_bars.set(b.0, b.1)
   }
@@ -110,7 +126,7 @@ fn rows_steady_begin(loc : String, held : Bool) -> Unit {
 /// said once: by whose row, how, when.
 fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[String] {
   let out : Array[String] = []
-  let here : Set[String] = Set::new()
+  let here : Set[String] = Set([])
   // (the window made another size, or words by the system's setting, since the last frame: what each list's rows are
   // laid out at for it is there at once, none of it a row's move; from this frame on anew, what was found kept)
   let words = @signals.untracked(font_scale)
@@ -138,7 +154,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
       }
     }
     rows_steady.lists[ln.id] = if shown_since < 0.0 { -1.0e9 } else { shown_since }
-    let settled = shown_since < 0.0 || now - shown_since > rows_first_ms
+    let settled = shown_since < 0.0 || now > shown_since + rows_first_ms
     let free = settled && !(st.held || st.moving() || st.easing() || now - st.put_at <= 1.5 * period)
     let view = st.vp_h
     let keys = match st.causes {
@@ -178,6 +194,17 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
         seen.clear()
         rows_steady.went.remove(key)
       }
+      // (coming or going where it is, less than half open: what it holds is not seen yet, or no more (row_gone_at),
+      // and where its room stands as the rows round it take their places is no step of anything seen; nor one with no
+      // room at all; nor its coming back, not seen, rows_steady_return)
+      let faint = n.fh < 1.0 || (match st.causes {
+        Some(c) if n.item >= 0 && n.item < keys.length() =>
+          match c.opened.get(keys[n.item]) {
+            Some((shown, natural)) => shown < row_gone_at * natural
+            None => false
+          }
+        _ => false
+      })
       // (moved one way, come to rest, then back the other way soon after: rows_return_ms)
       let returned = if free && shows && seen.length() > 0 {
         // (a row of it gone on the list's way, none come: what was at its end left with nothing in its place)
@@ -186,7 +213,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
             c.by.iter().any(fn(kc) { kc.1.0 is Goes(_) }) && !c.by.iter().any(fn(kc) { kc.1.0 is Comes(_) })
           None => false
         }
-        rows_steady_return(key, now, y - seen[seen.length() - 1].2, period, left~)
+        rows_steady_return(key, now, y - seen[seen.length() - 1].2, period, left~, faint~)
       } else {
         None
       }
@@ -209,7 +236,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
           None => -1.0
         }
         let turned = rows_steady.turned.get(key).unwrap_or(-1.0e9)
-        let (fault, turn) = rows_steady_fault(seen, period, set_out~, turned~)
+        let (fault, turn) = rows_steady_fault(seen, period, set_out~, turned~, faint~)
         if turn != turned {
           rows_steady.turned[key] = turn
         }
@@ -228,7 +255,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
               }
               None => ""
             }
-            out.push("row " + key + " (list " + st.named + ") " + f + " seen=\{seen}" + why)
+            out.push("row " + key + " (list " + st.named + ") " + f + " seen=[\{seen.map(fn(s) { "(\{s.0}, \{s.1}, \{s.2})" }).join(", ")}]" + why)
             said = true
           }
           None => ()
@@ -270,38 +297,51 @@ fn rows_steady_hand() -> Unit {
 /// to rest from (no move for more than a frame) less than rows_return_ms ago, by rows_back_least each, the hand having
 /// done nothing since that way set out, and neither way one a row left on with none come in its place (`left`: the
 /// list's room going back for what left, as it must with nothing to take its place; the user, 2026-11-09: 「维持往回退，
-/// 检查放行这种」): the jolt said.
+/// 检查放行这种」): the jolt said. Unless the row was drawn in none of the frames of its way back (`faint` in each: under
+/// row_gone_at, what it holds at alpha 0, or no room at all), from the frame it first moved back to this one, those it
+/// stood in between too: what is not seen shakes nothing (the coordinator of the migration, 2026-11-11: the judge holds
+/// what is seen on screen; words sent as a turn was over, 已完成 closing as their row opened and 处理中 opening under
+/// it 350 ms later, the closing row 0.14 of its 40 points tall as it came back 2.90, said, every row seen going up only).
+/// A row drawn in even one of them is said as before.
 fn rows_steady_return(
   key : String,
   now : Double,
   d : Double,
   period : Double,
   left~ : Bool,
+  faint~ : Bool,
 ) -> String? {
   if d.abs() < 0.25 {
+    // (standing on its way back: a frame of it all the same)
+    match rows_steady.went.get(key) {
+      Some((w, far, at, back, from, was_left, false)) if back > 0.0 && !faint =>
+        rows_steady.went[key] = (w, far, at, back, from, was_left, true)
+      _ => ()
+    }
     return None
   }
   let way = if d > 0.0 { 1.0 } else { -1.0 }
   match rows_steady.went.get(key) {
     None => {
-      rows_steady.went[key] = (way, d.abs(), now, 0.0, now, left)
+      rows_steady.went[key] = (way, d.abs(), now, 0.0, now, left, false)
       None
     }
-    Some((w, far, _, back, from, was_left)) if w == way => {
+    Some((w, far, _, back, from, was_left, _)) if w == way => {
       // (on its way still, or on it again: what came back is forgotten)
       ignore(back)
-      rows_steady.went[key] = (w, far + d.abs(), now, 0.0, from, was_left || left)
+      rows_steady.went[key] = (w, far + d.abs(), now, 0.0, from, was_left || left, false)
       None
     }
-    Some((w, far, at, back, from, was_left)) => {
+    Some((w, far, at, back, from, was_left, drawn)) => {
       let back = back + d.abs()
+      let drawn = drawn || !faint
       if back < rows_back_least {
-        rows_steady.went[key] = (w, far, at, back, from, was_left)
+        rows_steady.went[key] = (w, far, at, back, from, was_left, drawn)
         return None
       }
       // (a way the other way now: from here its own)
-      rows_steady.went[key] = (way, back, now, 0.0, now, left)
-      if was_left || left {
+      rows_steady.went[key] = (way, back, now, 0.0, now, left, false)
+      if was_left || left || !drawn {
         return None
       }
       let rest = now - at
@@ -321,12 +361,15 @@ fn rows_steady_return(
 /// frames `period` apart; its list's way set out last at `set_out`, the row last turned back at `turned`): the frame
 /// before the last going at a speed off the frames round it (not where the way set out between them: the rows go on
 /// from where they were, as fast as the way has them), or a move one way then back within rows_back_frames a second time
-/// within rows_turn_ms of the turn before. And when it turned back now (`turned` as it was where it did not).
+/// within rows_turn_ms of the turn before. And when it turned back now (`turned` as it was where it did not). Where the
+/// way did set out between them, a frame many times as far as both of those round it is a step all the same
+/// (rows_step_least, rows_step_times), unless `faint`: a row not half open, what it holds not seen.
 fn rows_steady_fault(
   seen : Array[(Double, Double, Double)],
   period : Double,
   set_out~ : Double,
   turned~ : Double,
+  faint? : Bool = false,
 ) -> (String?, Double) {
   let n = seen.length()
   let speed = fn(a : Int) {
@@ -335,14 +378,21 @@ fn rows_steady_fault(
     (y1 - y0) / (t1 - t0)
   }
   // its speed off the way the frames round it go: a step (a spike), a stop on its way (a dip), a start at full speed
-  if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 &&
-    !(set_out > seen[0].1 && set_out <= seen[3].1) {
+  if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 {
     let v0 = speed(0) * period
     let v1 = speed(1) * period
     let v2 = speed(2) * period
-    let off = (v1 - (v0 + v2) / 2.0).abs()
-    if off > rows_speed_least && off > 0.5 * dmax(v0.abs(), v2.abs()) {
-      return (Some("went \{v1} a frame between \{v0} and \{v2} at \{seen[2].1}"), turned)
+    if !(set_out > seen[0].1 && set_out <= seen[3].1) {
+      let off = (v1 - (v0 + v2) / 2.0).abs()
+      if off > rows_speed_least && off > 0.5 * dmax(v0.abs(), v2.abs()) {
+        return (Some("went \{v1} a frame between \{v0} and \{v2} at \{seen[2].1}"), turned)
+      }
+    } else if !faint && v1.abs() > rows_step_least * period / frame_period_default &&
+      v1.abs() > rows_step_times * dmax(v0.abs(), v2.abs()) {
+      // (the way set out between them: the rows go on from where they were at the speed it has them, which may be
+      // another than before; a frame many times as far as both of those round it is no speed taken up, but a step the
+      // way's setting out hid)
+      return (Some("went \{v1} in one frame as its list's way set out, between \{v0} and \{v2} at \{seen[2].1}"), turned)
     }
   }
   // one way, then back: once is the way's turning to where it now ends; again soon after, a jolt
@@ -367,7 +417,7 @@ fn rows_steady_fault(
         if at == turned {
           return (None, turned)
         }
-        if at - turned < rows_turn_ms {
+        if at < turned + rows_turn_ms {
           return (Some("moved \{d} at \{at}, back \{e} at \{seen[n - 1].1}, turned back at \{turned} before"), at)
         }
         return (None, at)
@@ -401,6 +451,7 @@ fn Tester::hold_rows_steady(self : Tester) -> Unit {
     }
     rows_steady.found.add(row)
     let bar = rows_steady_bars.get(rows_steady.file).unwrap_or(0)
+    motion_known_said("rows_steady", rows_steady.file, rows_steady.found.length(), bar, f)
     if self.motion == Count {
       println("MOTION rows_steady \{rows_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
       continue
@@ -408,8 +459,7 @@ fn Tester::hold_rows_steady(self : Tester) -> Unit {
     if rows_steady.found.length() > bar {
       let said = "rows not steady (rows_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{rows_steady.found.length()} now, \{bar} known in \{rows_steady.file}"
-      println(said)
-      abort(said)
+      @halt.saying(said)
     }
   }
 }

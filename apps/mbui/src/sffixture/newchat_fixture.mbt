@@ -32,6 +32,10 @@ pub(all) struct NewFix {
   presets : Array[Json]
   /// The first station's presets not said yet (their topic as a station still to answer has it)
   mut presets_late : Bool
+  /// The first station's repositories being cloned (the `presets` topic's `clones`), and those cloned since, among its
+  /// folders (`candidates`)
+  clones : Array[Json]
+  cloned : Array[Json]
   /// The models starred in the model control (`pick.like`), the first starred first
   liked : Array[String]
   /// MBUI_FIXTURE=newchat-providers…: as crowded, with keys of many providers besides (fix_providers)
@@ -57,6 +61,8 @@ pub let new_fix : NewFix = {
   tall: false,
   preset: "",
   presets_late: false,
+  clones: [],
+  cloned: [],
   presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
   liked: [],
   providers: false,
@@ -95,6 +101,37 @@ pub let fix_presets_said : Ref[Int] = Ref(0)
 /// The first station's presets said, late (newchat's `presets_late` let go), as a station answers once it can.
 pub fn fix_presets_say() -> Unit {
   new_fix.presets_late = false
+  fix_presets_said.val += 1
+  @settings.fixture_changed()
+}
+
+///|
+/// The made-up station's clone `id` done (`url`'s repository among its folders) or failed (`error`), as a station tells
+/// it on its `presets` topic.
+pub fn fix_clone_ends(id : String, error? : String = "") -> Unit {
+  guard new_fix.clones.iter().find_first(fn(x) { text(Some(x), "id") == id }) is Some(c) else { return }
+  match c {
+    Object(m) if error != "" => {
+      let failed = m.copy()
+      failed["state"] = "failed"
+      failed["error"] = Json::string(error)
+      new_fix.clones.retain(fn(x) { text(Some(x), "id") != id })
+      new_fix.clones.insert(0, Json::object(failed))
+    }
+    _ => {
+      new_fix.clones.retain(fn(x) { text(Some(x), "id") != id })
+      let name = text(Some(c), "name")
+      new_fix.cloned.push({
+        "path": Json::string("/Users/me/.stillfail/repos/" + name),
+        "name": Json::string(name),
+        "repo": Json::string(text(Some(c), "repo")),
+        "chats": 0.0,
+        "lastAt": 1793500000000.0,
+        "where": Json::string(text(Some(c), "repo")),
+        "cached": true,
+      })
+    }
+  }
   fix_presets_said.val += 1
   @settings.fixture_changed()
 }
@@ -144,7 +181,14 @@ pub fn fix_presets_of(station : String) -> Json {
       ],
     }
   } else {
-    { "presets": Json::array(new_fix.presets), "candidates": fix_candidates() }
+    {
+      "presets": Json::array(new_fix.presets),
+      "candidates": match fix_candidates() {
+        Array(a) => Json::array(a + new_fix.cloned)
+        other => other
+      },
+      "clones": Json::array(new_fix.clones),
+    }
   }
 }
 
@@ -181,7 +225,7 @@ pub fn fix_candidates() -> Json {
 }
 
 ///|
-/// A station a new chat can start on, as the core's `newChat` lists it (StationView): what it is, its agents at work
+/// A station a new chat can start on, as the core's `newChat` lists it (NewChatStation): what it is, its agents at work
 /// (`overview`) and what is left of its machine (`host`); how this device reaches it is the `stationNet` view's (the
 /// made-up stations' `net`: Willow's, none of Maple's).
 pub fn fix_station(id : String) -> Json {
@@ -202,8 +246,6 @@ pub fn fix_station(id : String) -> Json {
           ],
         },
         "overview": { "counts": { "running": 0 } },
-        "models": [],
-        "runtimes": [],
       }
     _ =>
       {
@@ -221,8 +263,6 @@ pub fn fix_station(id : String) -> Json {
           ],
         },
         "overview": { "counts": { "running": 2 } },
-        "models": [],
-        "runtimes": [],
       }
   }
 }
@@ -261,11 +301,9 @@ pub fn fix_crowded_model(model : String, name : String, family : String, maker :
     "model": Json::string(model),
     "name": Json::string(name),
     "family": Json::string(family),
-    "maker": { "id": Json::string(maker), "name": Json::string(fix_maker_name(maker)) },
-    "runtimes": Json::array(runtimes.map(Json::string(_))),
+    "maker": { "id": Json::string(maker) },
+    "runtimes": Json::array(runtimes.map(x => Json::string(x))),
     "ids": [Json::string(model)],
-    "efforts": {},
-    "accounts": {},
     "availability": "here",
   }
 }
@@ -322,11 +360,9 @@ pub fn fix_model(model : String) -> Json {
         "model": "claude-sonnet-5",
         "name": "Sonnet 5",
         "family": "Sonnet",
-        "maker": { "id": "anthropic", "name": "Anthropic" },
+        "maker": { "id": "anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-sonnet-5"],
-        "efforts": {},
-        "accounts": {},
         "availability": "here",
       }
     "gpt-6" =>
@@ -334,11 +370,9 @@ pub fn fix_model(model : String) -> Json {
         "model": "gpt-6",
         "name": "GPT-6",
         "family": "GPT",
-        "maker": { "id": "openai", "name": "OpenAI" },
+        "maker": { "id": "openai" },
         "runtimes": ["codex"],
         "ids": ["gpt-6"],
-        "efforts": {},
-        "accounts": {},
         "availability": "here",
       }
     _ =>
@@ -346,11 +380,9 @@ pub fn fix_model(model : String) -> Json {
         "model": "claude-opus-5-5",
         "name": "Opus 5.5",
         "family": "Opus",
-        "maker": { "id": "anthropic", "name": "Anthropic" },
+        "maker": { "id": "anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-opus-5-5"],
-        "efforts": {},
-        "accounts": {},
         "availability": "here",
       }
   }
@@ -380,13 +412,90 @@ fn fix_shown_models() -> Array[Json] {
 }
 
 ///|
-/// The models new chats here started on most, most first.
-fn fix_near() -> Array[String] {
-  if new_fix.crowded {
-    ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"]
-  } else {
-    ["claude-opus-5-5", "gpt-6"]
+/// A runtime by its short name, as the core says it after a model's name in a model control's panel (format.ts
+/// runtimeShort): CC, DSH.
+fn fix_runtime_short(runtime : String) -> String {
+  match runtime {
+    "claude" => "CC"
+    "codex" => "Codex"
+    "dsh" => "DSH"
+    "grok" => "GROK"
+    "cursor" => "Cursor"
+    "devin" => "Devin"
+    "hermes" => "Hermes"
+    "agy" => "AGY"
+    _ => "CC"
   }
+}
+
+///|
+/// The configurations taken out of those used most (`pick.forget`), each by fix_combo_key.
+let fix_forgotten : Array[String] = []
+
+///|
+/// A configuration by what it is: its model, runtime, effort and context (its tokens in digits, "" its whole window).
+fn fix_combo_key(model : String, runtime : String, effort : String, context : String) -> String {
+  model + "\u{1}" + runtime + "\u{1}" + effort + "\u{1}" + context
+}
+
+///|
+/// The configurations new chats here started on most, most first, as the core's `combos` has them: one model run two
+/// ways (Opus 5.5 at its whole window and kept to 300K; GPT-6 Astra 中 and 高), and one of a model the `-liked` modes
+/// and the tests star (Sonnet 5, Kimi For Coding), whichever is starred; those taken out (`pick.forget`:
+/// fix_forgotten) left out. Each `selected` while it is exactly what is drafted.
+fn fix_combos() -> Json {
+  let n = new_fix
+  let effort_word = fn(e : String) {
+    match e {
+      "low" => "低"
+      "medium" => "中"
+      "high" => "高"
+      _ => "默认深度"
+    }
+  }
+  // (model, runtime, effort, context in thousands of tokens: 0 its whole window)
+  let all : Array[(String, String, String, Int)] = if n.crowded {
+    [
+      ("gpt-6-astra", "codex", "medium", 0),
+      ("deepseek-v4-1-flash", "dsh", "high", 0),
+      ("gpt-6-astra", "codex", "high", 0),
+      ("kimi-for-coding", "claude", "high", 0),
+    ]
+  } else {
+    [
+      ("claude-opus-5-5", "claude", "high", 0),
+      ("gpt-6", "codex", "medium", 0),
+      ("claude-opus-5-5", "claude", "high", 300),
+      ("claude-sonnet-5", "claude", "low", 0),
+    ]
+  }
+  Json::array(
+    all
+    .filter(fn(c) { !fix_forgotten.contains(fix_combo_key(c.0, c.1, c.2, if c.3 > 0 { "\{c.3 * 1000}" } else { "" })) })
+    .map(fn(c) {
+      let (model, runtime, effort, context) = c
+      let o = Some(fix_model(model))
+      let parts = []
+      if items(o, "runtimes").length() > 1 {
+        parts.push(fix_runtime_short(runtime))
+      }
+      parts.push(effort_word(effort))
+      if context > 0 {
+        parts.push("\{context}K")
+      }
+      let tokens = if context > 0 { "\{context * 1000}" } else { "" }
+      {
+        "model": Json::string(model),
+        "runtime": Json::string(runtime),
+        "effort": Json::string(effort),
+        "fast": Json::null(),
+        "context": if context > 0 { Json::number((context * 1000).to_double()) } else { Json::null() },
+        "name": Json::string(text(o, "name")),
+        "text": Json::string(parts.join(" · ")),
+        "selected": Json::boolean(n.d_model == model && n.d_runtime == runtime && n.d_effort == effort && n.context == tokens),
+      }
+    }),
+  )
 }
 
 ///|
@@ -408,10 +517,10 @@ pub fn fix_pick() -> Json {
   }
   {
     "options": fix_pick_options(fix_shown_models()),
-    // (those used most, the starred left out)
-    "near": Json::array(fix_near().filter(fn(m) { !n.liked.contains(m) }).map(Json::string(_))),
-    // (every one starred, however often used)
-    "liked": Json::array(n.liked.map(Json::string(_))),
+    // (the configurations used most, starred or not)
+    "combos": fix_combos(),
+    // (every model starred, one of the configurations used most or not)
+    "liked": Json::array(n.liked.map(x => Json::string(x))),
     // (the makers of its models, in their order, as the core says them)
     "makers": {
       let makers : Array[(String, String, Int)] = []
@@ -419,7 +528,7 @@ pub fn fix_pick() -> Json {
         let id = text(field(Some(o), "maker"), "id")
         match makers.search_by(fn(m) { m.0 == id }) {
           Some(i) => makers[i] = (id, makers[i].1, makers[i].2 + 1)
-          None => makers.push((id, text(field(Some(o), "maker"), "name"), 1))
+          None => makers.push((id, fix_maker_name(id), 1))
         }
       }
       Json::array(makers.map(fn(m) { { "id": Json::string(m.0), "title": Json::string(m.1), "count": Json::number(m.2.to_double()) } }))
@@ -482,7 +591,7 @@ pub fn fix_pick() -> Json {
       "自动"
     },
     // who runs it as the control says it: the station's pick (no profile kept to)
-    "account": { "text": "自动分配", "auto": true, "level": "ok" },
+    "account": { "text": "自动分配", "level": "ok" },
     "autoNote": "由 station 选择：现在是 Claude 订阅",
     "changed": Json::boolean(changed),
     "was": [],
@@ -497,7 +606,7 @@ pub fn fix_pick() -> Json {
 
 ///|
 /// The models as the model control has them: each as it last ran here (`usual`, `usualText`; the one drafted as it is
-/// drafted) and how often new chats started on it (`uses`): the new chat's frequent ones, the rest never used.
+/// drafted): those new chats here started on, the rest never used.
 fn fix_pick_options(all : Array[Json]) -> Json {
   let n = new_fix
   let effort_word = fn(e : String) {
@@ -509,11 +618,11 @@ fn fix_pick_options(all : Array[Json]) -> Json {
       _ => ""
     }
   }
-  // (model: runtime, effort, uses)
-  let used : Map[String, (String, String, Int)] = if n.crowded {
-    { "gpt-6-astra": ("codex", "medium", 6), "deepseek-v4-1-flash": ("dsh", "high", 4), "swe-2": ("devin", "high", 2) }
+  // (model: runtime, effort)
+  let used : Map[String, (String, String)] = if n.crowded {
+    { "gpt-6-astra": ("codex", "medium"), "deepseek-v4-1-flash": ("dsh", "high"), "swe-2": ("devin", "high") }
   } else {
-    { "claude-opus-5-5": ("claude", "high", 9), "gpt-6": ("codex", "medium", 5) }
+    { "claude-opus-5-5": ("claude", "high"), "gpt-6": ("codex", "medium") }
   }
   Json::array(
     all.map(fn(o) {
@@ -523,13 +632,9 @@ fn fix_pick_options(all : Array[Json]) -> Json {
           let model = text(Some(o), "model")
           m["liked"] = Json::boolean(n.liked.contains(model))
           let many = items(Some(o), "runtimes").length() > 1
-          let ran = if model == n.d_model {
-            Some((n.d_runtime, n.d_effort, used.get(model).map(fn(u) { u.2 }).unwrap_or(0)))
-          } else {
-            used.get(model)
-          }
+          let ran = if model == n.d_model { Some((n.d_runtime, n.d_effort)) } else { used.get(model) }
           match ran {
-            Some((runtime, effort, uses)) => {
+            Some((runtime, effort)) => {
               m["usual"] = {
                 "runtime": Json::string(runtime),
                 "effort": if effort == "" { Json::null() } else { Json::string(effort) },
@@ -537,7 +642,7 @@ fn fix_pick_options(all : Array[Json]) -> Json {
               }
               let parts = []
               if many {
-                parts.push(@settings.runtime_label(runtime))
+                parts.push(fix_runtime_short(runtime))
               }
               if effort_word(effort) != "" {
                 parts.push(effort_word(effort))
@@ -545,9 +650,8 @@ fn fix_pick_options(all : Array[Json]) -> Json {
               if parts.length() > 0 {
                 m["usualText"] = Json::string(parts.join(" · "))
               }
-              m["uses"] = Json::number(uses.to_double())
             }
-            None => m["uses"] = Json::number(0.0)
+            None => ()
           }
           Json::object(m)
         }
@@ -598,11 +702,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     return {
       "kept": Json::string(n.station),
       "any": false,
-      "efforts": [],
-      "accounts": [],
-      "pickAccount": false,
       "waiting": false,
-      "frequent": [],
     }
   }
   // Its station has no profile, or its only available profiles are disabled.
@@ -616,13 +716,8 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "problem": Json::string(if f.mode == "newchat-disabled" { "Willow 的可用 Profile 均已停用，请在 Profile 页面重新启用。" } else { "" }),
       "model": Json::null(),
       "runtime": "",
-      "effort": "",
-      "efforts": [],
-      "accounts": [],
-      "pickAccount": false,
       "waiting": false,
       "pick": Json::null(),
-      "frequent": [],
     }
   }
   // its station's profiles not read yet (newchat-profiles)
@@ -634,28 +729,18 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "station": fix_station(n.station),
       "model": Json::null(),
       "runtime": "",
-      "effort": "",
-      "efforts": [],
-      "accounts": [],
-      "pickAccount": false,
       "waiting": true,
       "problem": "正在读取 Willow 的 Profile",
       "pick": Json::null(),
-      "frequent": [],
     }
   }
-  let effort_word = match n.effort {
-    "low" => "低"
-    "medium" => "中"
-    _ => "高"
-  }
   // (MBUI_FIXTURE=newchat-files: its stations lend their files, its 文件 tab open beside it; newchat-lend: they lend
-  // them, the tab not open, 文件 in its bar alone)
+  // them, the tab not open, 文件 in its bar alone: what the folders are is the files' own)
   let lend = fn(s : Json) -> Json {
     match s {
       Object(o) if f.mode == "newchat-files" || f.mode == "newchat-lend" => {
         let m = o.copy()
-        m["overview"] = { "drive": field(Some(fixture_station_drive(true)), "drive").unwrap_or(Json::null()) }
+        m["overview"] = { "drive": { "anywhere": true } }
         Json::object(m)
       }
       _ => s
@@ -668,26 +753,14 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "station": lend(fix_station(n.station)),
     "model": fix_model(n.model),
     "runtime": Json::string(n.runtime),
-    "effort": Json::string(n.effort),
-    "efforts": ["low", "medium", "high"],
-    "accounts": [],
-    "pickAccount": false,
     "waiting": false,
-    "pick": fix_pick(),
-    "frequent": if n.crowded { fix_crowded_frequent() } else { fix_frequent() },
-    "label": Json::string(effort_word),
+    "pick": fix_pick_face(),
     "preset": Json::string(n.preset),
     "presets": Json::array(
       n.presets.map(fn(p) {
         {
           "id": field(Some(p), "id").unwrap_or(Json::string("")),
           "name": field(Some(p), "name").unwrap_or(Json::string("")),
-          "dirs": Json::number(
-            match field(Some(p), "dirs") {
-              Some(Array(a)) => a.length().to_double()
-              _ => 0.0
-            },
-          ),
           "station": Json::string(text(Some(fix_station(n.station)), "station")),
           "stationName": Json::string(text(Some(fix_station(n.station)), "name")),
         }
@@ -701,7 +774,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "presetStation": Json::string(if n.preset == "" { "" } else { text(Some(fix_station(n.station)), "station") }),
     "presetName": Json::string(
       match n.presets.iter().find_first(fn(p) { field(Some(p), "id") == Some(Json::string(n.preset)) }) {
-        Some(p) => field(Some(p), "name").unwrap_or(Json::string("")).as_string().unwrap_or("")
+        Some(p) => (if field(Some(p), "name").unwrap_or(Json::string("")) is String(s) { Some(s) } else { None }).unwrap_or("")
         None => ""
       },
     ),
@@ -709,71 +782,40 @@ fn fix_new_chat_of(f : Fixture) -> Json {
 }
 
 ///|
-/// The frequent combinations of newchat-crowded: one naming its runtime, as the core names one of a model that runs on
-/// more than one.
-pub fn fix_crowded_frequent() -> Json {
-  let n = new_fix
-  let combo = fn(model : String, runtime : String, effort : String, name : String, runtime_text : String, effort_text : String) {
-    let o : Map[String, Json] = {
-      "model": Json::string(model),
-      "runtime": Json::string(runtime),
-      "effort": Json::string(effort),
-      "label": Json::string(
-        if runtime_text == "" {
-          name + " · " + effort_text
-        } else {
-          name + " · " + runtime_text + " · " + effort_text
-        },
-      ),
-      "name": Json::string(name),
-      "effortText": Json::string(effort_text),
-      "selected": Json::boolean(n.model == model && n.runtime == runtime && n.effort == effort),
+/// The new chat's model control as its page draws it closed (the core's NewChatPick, choose.ts `#face`): of the pick, what
+/// it runs on, its model's name, maker and runtimes, how hard it can think, Fast, the account it names.
+fn fix_pick_face() -> Json {
+  let p = Some(fix_pick())
+  let o : Map[String, Json] = Map([])
+  for k in ["value", "efforts", "fastText"] {
+    match field(p, k) {
+      Some(v) => o[k] = v
+      None => ()
     }
-    if runtime_text != "" {
-      o["runtimeText"] = Json::string(runtime_text)
-    }
-    Json::object(o)
   }
-  [
-    combo("gpt-6-astra", "codex", "medium", "GPT-6 Astra", "", "中"),
-    combo("deepseek-v4-1-flash", "dsh", "high", "DeepSeek V4.1 Flash", "DeepSeek Harness", "高"),
-    combo("swe-2", "devin", "high", "SWE-2", "", "高"),
-  ]
-}
-
-///|
-/// The frequent combinations of the plain fixture.
-pub fn fix_frequent() -> Json {
-  let n = new_fix
-  [
-    {
-      "model": "claude-opus-5-5",
-      "runtime": "claude",
-      "effort": "high",
-      "label": "Opus 5.5 · 高",
-      "name": "Opus 5.5",
-      "effortText": "高",
-      "selected": Json::boolean(n.model == "claude-opus-5-5" && n.effort == "high"),
-    },
-    {
-      "model": "gpt-6",
-      "runtime": "codex",
-      "effort": "medium",
-      "label": "GPT-6 · 中",
-      "name": "GPT-6",
-      "effortText": "中",
-      "selected": Json::boolean(n.model == "gpt-6" && n.effort == "medium"),
-    },
-    {
-      "model": "claude-sonnet-5",
-      "runtime": "claude",
-      "effort": "low",
-      "label": "Sonnet 5 · 低",
-      "name": "Sonnet 5",
-      "effortText": "低",
-      "selected": Json::boolean(n.model == "claude-sonnet-5" && n.effort == "low"),
-    },
-  ]
+  let vo = field(p, "valueOption")
+  if vo is Some(Object(_)) {
+    let m : Map[String, Json] = Map([])
+    for k in ["name", "maker", "runtimes"] {
+      match field(vo, k) {
+        Some(v) => m[k] = v
+        None => ()
+      }
+    }
+    o["valueOption"] = Json::object(m)
+  }
+  let account = field(p, "account")
+  if account is Some(Object(_)) {
+    let m : Map[String, Json] = Map([])
+    for k in ["text", "level"] {
+      match field(account, k) {
+        Some(v) => m[k] = v
+        None => ()
+      }
+    }
+    o["account"] = Json::object(m)
+  }
+  Json::object(o)
 }
 
 ///|
@@ -827,10 +869,10 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
         _ => "p-\{n.presets.length()}"
       }
       let dirs = match field(p, "dirs") {
-        Some(Array(a)) => a.map(fn(d) { d.as_string().unwrap_or("") })
+        Some(Array(a)) => a.map(fn(d) { (if d is String(s) { Some(s) } else { None }).unwrap_or("") })
         _ => []
       }
-      let made = fix_preset(id, field(p, "name").unwrap_or(Json::string("")).as_string().unwrap_or(""), dirs.map(fn(d) {
+      let made = fix_preset(id, (if field(p, "name").unwrap_or(Json::string("")) is String(s) { Some(s) } else { None }).unwrap_or(""), dirs.map(fn(d) {
         match d.rev_find("/") {
           Some(i) => d.unsafe_substring(start=i + 1, end=d.length())
           None => d
@@ -840,6 +882,40 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       n.presets.push(made)
       f.changed()
       Some(Ok(made))
+    }
+    // (one cloned: `acme/notes` it has already; `bad` refused; any other under way, told in its `clones`)
+    "preset.clone" => {
+      let url = text(p, "url")
+      if url == "bad" {
+        return Some(Err({ "code": "invalid", "message": "无法克隆这个地址" }))
+      }
+      let name = match url.rev_find("/") {
+        Some(i) => url.unsafe_substring(start=i + 1, end=url.length())
+        None => url
+      }
+      let repo = if url.has_prefix("https://") { url.unsafe_substring(start=8, end=url.length()) } else { "github.com/" + url }
+      if url == "acme/notes" {
+        return Some(Ok({ "state": "there", "path": "/Users/me/code/notes", "repo": "github.com/acme/notes", "name": "notes" }))
+      }
+      let id = "c-\{n.clones.length() + n.cloned.length() + 1}"
+      let one : Json = {
+        "id": Json::string(id),
+        "url": Json::string(url),
+        "repo": Json::string(repo),
+        "name": Json::string(name),
+        "state": "cloning",
+        "error": "",
+        "by": "me@example.com",
+        "startedAt": 1793500000000.0,
+      }
+      n.clones.insert(0, one)
+      f.changed()
+      Some(Ok(one))
+    }
+    "preset.cloneDrop" => {
+      take("id", fn(s) { n.clones.retain(fn(x) { text(Some(x), "id") != s }) })
+      f.changed()
+      Some(Ok(Json::object({})))
     }
     "preset.delete" => {
       take("id", fn(s) { n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(s)) }) })
@@ -873,6 +949,18 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       f.changed()
       Some(Ok(Json::object({})))
     }
+    "pick.forget" => {
+      let s = fn(k : String) {
+        match field(p, k) {
+          Some(String(v)) => v
+          Some(Number(n, ..)) => n.to_int64().to_string()
+          _ => ""
+        }
+      }
+      fix_forgotten.push(fix_combo_key(s("model"), s("runtime"), s("effort"), s("context")))
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
     "pick.save" => {
       // (with picks of its own, a model's as it last ran or a change in the panel: those picked first)
       take("model", fn(s) {
@@ -882,7 +970,11 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
       take("profile", fn(s) { n.d_profile = s })
-      take("context", fn(s) { n.context = s })
+      // (in tokens, as a configuration used most has it, or its digits, as the panel's context says it)
+      match field(p, "context") {
+        Some(Number(k, ..)) => n.context = k.to_int64().to_string()
+        _ => take("context", fn(s) { n.context = s })
+      }
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort

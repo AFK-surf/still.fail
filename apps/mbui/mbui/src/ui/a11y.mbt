@@ -40,6 +40,7 @@ let a11y_sep : String = "\u{1F}"
 
 ///|
 /// A node as the host is told it (see above): where it is from where what holds it is.
+#derive(Eq, Debug)
 struct A11yNode {
   id : Int
   role : String
@@ -55,13 +56,13 @@ struct A11yNode {
   actions : String
   widget : Int
   kids : Array[Int]
-} derive(Eq, Show)
+}
 
 ///|
 /// What a host keeps of what it was told (each node by its number, what holds each, which has the focus), as an update
 /// leaves it: what the app keeps of what it told (A11yTold) and a test's fake host of what it was told, made the same
 /// way a host makes it.
-struct A11yMirror {
+priv struct A11yMirror {
   nodes : Map[Int, A11yNode]
   holder : Map[Int, Int]
   mut focus : Int
@@ -86,7 +87,7 @@ fn A11yMirror::apply(self : A11yMirror, full : Bool, focus : Int, told : Array[A
   }
   self.focus = focus
   // (what this update's hold: none of it gone, wherever it was)
-  let held : Map[Int, Bool] = {}
+  let held : Map[Int, Bool] = Map([])
   for n in told {
     for k in n.kids {
       held[k] = true
@@ -240,13 +241,13 @@ fn a11y_update_text(full : Bool, focus : Int, told : Array[A11yNode]) -> String 
 fn a11y_update_read(text : String) -> (Bool, Int, Array[A11yNode])? {
   let lines = text.split("\n").to_array()
   guard lines.length() > 0 else { return None }
-  let head = lines[0].split(a11y_sep).map(fn(v) { v.to_string() }).to_array()
+  let head = lines[0].split(a11y_sep).map(fn(v) { v.to_owned() }).to_array()
   guard head.length() >= 3 && head[0] == "T" else { return None }
   let num = a11y_int
   let real = a11y_real
   let told : Array[A11yNode] = []
   for l in lines[1:] {
-    let f = l.split(a11y_sep).map(fn(v) { v.to_string() }).to_array()
+    let f = l.split(a11y_sep).map(fn(v) { v.to_owned() }).to_array()
     if f.length() < 17 || f[0] != "N" {
       continue
     }
@@ -264,7 +265,7 @@ fn a11y_update_read(text : String) -> (Bool, Int, Array[A11yNode])? {
       range: if f[12] == "" { None } else { Some((real(f[11]), real(f[12]), real(f[13]))) },
       actions: f[14],
       widget: num(f[15]),
-      kids: if f[16] == "" { [] } else { f[16].split(",").map(fn(k) { num(k.to_string()) }).to_array() },
+      kids: if f[16] == "" { [] } else { f[16].split(",").map(fn(k) { num(k.to_owned()) }).to_array() },
     })
   }
   Some((head[1] == "1", num(head[2]), told))
@@ -352,9 +353,9 @@ fn a11y_olds(
 ) -> Array[Int] {
   let tops : Array[Int] = []
   // by index in `old`: its node's number (0 hidden), where it is, its node in `out`
-  let num : Map[Int, Int] = {}
-  let place : Map[Int, (Double, Double)] = {}
-  let made : Map[Int, A11yNode] = {}
+  let num : Map[Int, Int] = Map([])
+  let place : Map[Int, (Double, Double)] = Map([])
+  let made : Map[Int, A11yNode] = Map([])
   for k in ks {
     let s = old[k]
     if s.hidden || hide(k) {
@@ -720,7 +721,7 @@ fn Ctx::a11y_tree_pass(self : Ctx, tree : @view.Tree, full : Bool, out : Array[A
         _ => ""
       }
     },
-    set=view_words_set,
+    set=fn(w, k) { view_words_set(w, k, false) },
     under=old_modal,
     whole=full,
   )
@@ -786,7 +787,7 @@ fn Ctx::a11y_tree_pass(self : Ctx, tree : @view.Tree, full : Bool, out : Array[A
   // what of the tree's the pass found, each after what holds it
   for e in pass.entries {
     let n = a11y_tree_num(e.id)
-    let (holder, holder_at, holder_named) = match e.parent {
+    let (_, holder_at, holder_named) = match e.parent {
       Some(p) => {
         let k = a11y_tree_num(p)
         (k, place_of(p), told.named.get(k).unwrap_or(k))
@@ -908,6 +909,7 @@ fn a11y_took(json : String) -> Unit {
 ///|
 /// Something reads the widgets out (a screen reader on), or not, from the next frame on.
 pub fn Tester::set_a11y(self : Tester, on : Bool) -> Unit {
+  host_setting_set("set_a11y")
   self.fake.a11y = on
   self.fake.wants = true
 }
@@ -945,8 +947,7 @@ fn Tester::hold_a11y_whole(self : Tester) -> Unit {
     return
   }
   let said = "what the host's accessibility was told is not what is read out, a frame drawn at \{self.fake.time} (mbui's src/ui/a11y.mbt: what changed not found):\n--- told\n\{has}--- read out\n\{whole}"
-  println(said)
-  abort(said)
+  @halt.saying(said)
 }
 
 ///|
@@ -995,7 +996,7 @@ fn a11y_real(s : String) -> Double {
     }
   }
   if i < chars.length() && (chars[i] == 'e' || chars[i] == 'E') {
-    let e = a11y_int(String::from_array(chars[i + 1:].to_array()).replace(old="+", new=""))
+    let e = a11y_int(String::from_array(chars[i + 1:].to_owned()).replace(old="+", new=""))
     for _ in 0..<(if e < 0 { -e } else { e }) {
       v = if e < 0 { v / 10.0 } else { v * 10.0 }
     }
@@ -1027,9 +1028,8 @@ fn Tester::hold_named(self : Tester, tree : Array[SemNode]) -> Unit {
     return
   }
   let said = "what can be done is named (mbui's src/ui/a11y.mbt, sem_unnamed), on a frame drawn at \{self.fake.time}:\n" +
-    bad.map(fn(s) { "  \{s.describe()} at \{s.rect}, actions \{s.actions}" }).join("\n")
-  println(said)
-  abort(said)
+    bad.map(fn(s) { "  \{s.describe()} at \{Repr(s.rect)}, actions \{Repr(s.actions)}" }).join("\n")
+  @halt.saying(said)
 }
 
 ///|

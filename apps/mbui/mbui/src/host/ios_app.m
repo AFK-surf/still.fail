@@ -760,8 +760,8 @@ static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
 
 // ---------------------------------------------------------------------------
 
-// Which way the app is held while it has not turned itself: a phone upright only (an iPhone: its short side under 600
-// points), a tablet as the person turns it.
+// Which way the app is held while it has not turned itself: a phone upright only (an iPhone), a tablet as the person
+// turns it. A foldable (an iPhone Duo) turns as it is held on either panel (MBController's `held`).
 static UIInterfaceOrientationMask mb_upright(void) {
   return UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad ? UIInterfaceOrientationMaskAll
                                                                                  : UIInterfaceOrientationMaskPortrait;
@@ -796,11 +796,13 @@ static MBController *the_controller;
   return self.dark ? UIStatusBarStyleLightContent : UIStatusBarStyleDarkContent;
 }
 // on its side while a film asks (@hostapi.set_sideways), the status bar and the home indicator out of its way then (as
-// Android's system bars: a swipe brings them for a while); else upright on an iPhone, as turned on an iPad (mb_upright),
-// an iPhone as turned too while the app lets it (@hostapi.set_turnable)
+// Android's system bars: a swipe brings them for a while); else as turned on a foldable, closed or open (the user,
+// 2026-11-10: an iPhone Duo's cover turns as its inner panel does, which iOS turns whatever the app asks), upright on
+// an iPhone, as turned on an iPad (mb_upright), an iPhone as turned too while the app lets it (@hostapi.set_turnable)
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations { return [self held]; }
 - (UIInterfaceOrientationMask)held {
   if (self.sideways) return UIInterfaceOrientationMaskLandscape;
+  if (self.hinge >= 0) return UIInterfaceOrientationMaskAllButUpsideDown;
   return self.turnable ? UIInterfaceOrientationMaskAllButUpsideDown | mb_upright() : mb_upright();
 }
 - (BOOL)prefersStatusBarHidden { return self.sideways; }
@@ -821,7 +823,10 @@ static MBController *the_controller;
     UIHingeInteraction *h = [[UIHingeInteraction alloc] initWithUpdateHandler:^(UIHingeInteraction *i, UIHingeInteractionUpdate *u) {
       MBController *c = weak;
       if (!c) return;
+      NSInteger was = c.hinge;
       c.hinge = u.hinge ? (NSInteger)u.hinge.status : -1;
+      // a hinge known (a foldable) or gone: the ways it may turn with it (`held`)
+      if ((was >= 0) != (c.hinge >= 0)) [c setNeedsUpdateOfSupportedInterfaceOrientations];
       [c sayFold];
     }];
     [self.view addInteraction:h];
@@ -1878,7 +1883,12 @@ static void tell_state(void) {
     say([NSString stringWithFormat:@"ios: %s", front ? "active" : shown ? "inactive" : "in the background"]);
   }
   if (!state_cb) return;
-  state_cb((shown ? 1 : 0) | (front ? 2 : 0));
+  // (told only as it changes: the same said again tells the app nothing, and draws nothing)
+  static int told_app = -1;
+  int s = (shown ? 1 : 0) | (front ? 2 : 0);
+  if (s == told_app) return;
+  told_app = s;
+  state_cb(s);
   [the_view requestFrame];
 }
 // Off the screen (in the background) and back: how long it was away said to the app (the system's `shown`, as
@@ -2509,8 +2519,9 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
 }
 
-void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
-  (void)url; (void)sha256; (void)size; (void)name; (void)now;
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now,
+                          moonbit_string_t delta) {
+  (void)url; (void)sha256; (void)size; (void)name; (void)now; (void)delta;
 }
 void mb_host_update_apply(moonbit_string_t said) { (void)said; }
 moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }

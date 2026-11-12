@@ -20,7 +20,7 @@ fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
 fn slide(t : @ui.Tester, x0 : Double, y0 : Double, x1 : Double, y1 : Double, steps : Int) -> Unit {
   for i in 1..=steps {
     let k = i.to_double() / steps.to_double()
-    t.move(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)
+    t.move_to(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)
   }
 }
 
@@ -93,7 +93,7 @@ test "a message that did not go: a finger can select and copy its words" {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -154,7 +154,7 @@ test "a message picked on its way and then delivered keeps its selection and quo
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -324,3 +324,7 @@ test "its words no longer laid out: what was picked goes in that very frame, not
   assert_eq(pk.ts, "")
   t.assert_idle()
 }
+
+///|
+/// How long a finger is held still for a long press (ViewConfiguration's long press timeout, as Compose has it).
+let long_press_ms : Double = @ui.long_press_ms

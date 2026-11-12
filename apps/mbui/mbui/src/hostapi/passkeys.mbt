@@ -15,6 +15,7 @@ pub struct PasskeyRun {
 /// How a signing ended: `code` 0 signed (the credential, its authenticator data, the signature and the user handle,
 /// base64url, and the client data it signed where the device made its own of the one given: macOS), 1 not (the person said no, or the device has no passkey the site takes), -1 none could be asked
 /// (`err` says why).
+#derive(Eq, Debug)
 pub(all) struct PasskeyDone {
   code : Int
   credential : String
@@ -23,7 +24,7 @@ pub(all) struct PasskeyDone {
   user_handle : String
   err : String
   client_data : String
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Whether this host can ask for a passkey at all (Windows).
@@ -112,7 +113,7 @@ pub fn b64url_of_hex(hex : String) -> String {
     }
     bytes.push(hi * 16 + lo)
   }
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let alphabet = b64url_chars.to_array()
   for i = 0; i < bytes.length(); i = i + 3 {
     let n = bytes.length() - i
@@ -135,7 +136,7 @@ pub fn b64url_of_hex(hex : String) -> String {
 /// Base64url (padded or not) as hex, lower case; "" for what is not base64url.
 pub fn hex_of_b64url(s : String) -> String {
   let alphabet = b64url_chars.to_array()
-  let bits = StringBuilder::new()
+  let bits = StringBuilder()
   let mut acc = 0
   let mut held = 0
   for c in s {

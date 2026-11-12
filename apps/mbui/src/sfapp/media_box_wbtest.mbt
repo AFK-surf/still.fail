@@ -91,7 +91,7 @@ test "a wide picture fills its taller chat preview without stretching, its middl
     (i[2] - 360.0).abs() < 0.5 && (i[3] - 160.0).abs() < 0.5 &&
     (i[4] - 0.275).abs() < 0.001 && (i[5] - 0.0).abs() < 0.001 &&
     (i[6] - 0.45).abs() < 0.001 && (i[7] - 1.0).abs() < 0.001
-  }), msg="\{images}")
+  }), msg="\{Repr(images)}")
   assert_false(thumb_of(t.ctx(), "ws1/st1/s-c1/uploads/fx/wide.png").unwrap().top_crop)
 }
 
@@ -124,7 +124,7 @@ test "a tall picture fills its wider chat preview without stretching" {
     (i[2] - 160.0).abs() < 0.5 && (i[3] - 300.0).abs() < 0.5 &&
     (i[4] - 0.0).abs() < 0.001 && (i[5] - 0.0).abs() < 0.001 &&
     (i[6] - 1.0).abs() < 0.001 && (i[7] - 0.375).abs() < 0.001
-  }), msg="\{images}")
+  }), msg="\{Repr(images)}")
   let thumb = thumb_of(t.ctx(), "ws1/st1/s-c1/uploads/fx/tall.png").unwrap()
   assert_true(thumb.top_crop)
   t.tap(80.0, 150.0)
@@ -166,8 +166,8 @@ test "a letterboxed strip waiting to load: what it waits on is its share of its 
   t.draw()
   let ground = t.drawn_rects().filter(fn(r) { (r.2 - 200.0).abs() < 0.5 })
   // its own proportions (200 : 4), 200 × 4 in the middle of its 200 × 16
-  assert_true(ground.iter().any(fn(r) { (r.3 - 4.0).abs() < 0.5 }), msg="\{ground}")
-  assert_false(ground.iter().any(fn(r) { (r.3 - 16.0).abs() < 0.5 }), msg="\{ground}")
+  assert_true(ground.iter().any(fn(r) { (r.3 - 4.0).abs() < 0.5 }), msg="\{Repr(ground)}")
+  assert_false(ground.iter().any(fn(r) { (r.3 - 16.0).abs() < 0.5 }), msg="\{Repr(ground)}")
 }
 
 ///|
@@ -175,6 +175,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
   new_run()
   let path = "uploads/fx/line.png"
   let f : SendFlight = {
+    n: 1,
     chat: "ws1/st1:s-c1",
     turns: "ws1/st1:s-c1",
     text: "",
@@ -185,7 +186,12 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     field_w: 300.0,
     field_h: 40.0,
     room: 0.0,
-    hold: fn(_, _) {  },
+    shaped: "",
+    held_lines: 1,
+    held_extras: -1.0,
+    sent_at: 0.0,
+    stopped: true,
+    foot_lift: fn(_) { 0.0 },
     desk: false,
     lines: None,
     lead: 0,
@@ -206,6 +212,8 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
   send_flight.set(Some(f))
   let t = @ui.Tester::new(
     fn(c) {
+      // (each frame before its list is built, as a chat's list does: their way said once their row is laid out)
+      flight_frame(c, f.chat)
       // its box in the message, 360 × 16, the picture's share of it its own proportions'
       let item = c.box(style=@ui.style(w=Fixed(360.0), h=Fixed(16.0)), fn() {  })
       flight_landing(c, f, item, path, share=@sfpages.picture_share(strip("line.png"), @sfpages.image_least), paint=Some(fn(w, h, fit, radius) {
@@ -223,9 +231,9 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
   t.draw()
   t.draw()
   // flown all the way (the phone's: over its first part, then settling)
-  t.run_for(flight_ms * @sfbase.fly_share(false))
+  t.run_for(@sfbase.flight_ms_of(f) * @sfbase.fly_share(false))
   let drawn = t.drawn_images()
-  assert_true(drawn.iter().any(fn(i) { (i[2] - 360.0).abs() < 0.5 && (i[3] - 7.2).abs() < 0.5 }), msg="\{drawn}")
+  assert_true(drawn.iter().any(fn(i) { (i[2] - 360.0).abs() < 0.5 && (i[3] - 7.2).abs() < 0.5 }), msg="\{Repr(drawn)}")
   // no ground under it: the message shows the picture on none
   let neutral = @sf.theme().p.neutral_bg
   assert_false(t.drawn_rects().iter().any(fn(r) { r.4 == neutral }))
@@ -237,6 +245,7 @@ test "a tall sent picture moves its crop to the top as it lands" {
   new_run()
   let path = "uploads/fx/tall.png"
   let f : SendFlight = {
+    n: 1,
     chat: "ws1/st1:s-c1",
     turns: "ws1/st1:s-c1",
     text: "",
@@ -247,7 +256,12 @@ test "a tall sent picture moves its crop to the top as it lands" {
     field_w: 300.0,
     field_h: 40.0,
     room: 0.0,
-    hold: fn(_, _) {  },
+    shaped: "",
+    held_lines: 1,
+    held_extras: -1.0,
+    sent_at: 0.0,
+    stopped: true,
+    foot_lift: fn(_) { 0.0 },
     desk: false,
     lines: None,
     lead: 0,
@@ -268,6 +282,8 @@ test "a tall sent picture moves its crop to the top as it lands" {
   send_flight.set(Some(f))
   let t = @ui.Tester::new(
     fn(c) {
+      // (each frame before its list is built, as a chat's list does: their way said once their row is laid out)
+      flight_frame(c, f.chat)
       let item = c.box(style=@ui.style(w=Fixed(160.0), h=Fixed(300.0)), fn() {  })
       flight_landing(c, f, item, path, top_crop=true, paint=Some(fn(w, h, fit, radius) {
         c.image("tall", w=Px(w), h=Px(h), fit~, radius~, bg=0L) |> ignore
@@ -281,13 +297,13 @@ test "a tall sent picture moves its crop to the top as it lands" {
   )
   t.draw()
   t.draw()
-  t.run_for(flight_ms * @sfbase.fly_share(false) * 0.5)
-  assert_true(t.drawn_images().iter().any(fn(i) { i[5] > 0.0 }), msg="\{t.drawn_images()}")
-  t.run_for(flight_ms * @sfbase.fly_share(false) * 0.5)
+  t.run_for(@sfbase.flight_ms_of(f) * @sfbase.fly_share(false) * 0.5)
+  assert_true(t.drawn_images().iter().any(fn(i) { i[5] > 0.0 }), msg="\{Repr(t.drawn_images())}")
+  t.run_for(@sfbase.flight_ms_of(f) * @sfbase.fly_share(false) * 0.5)
   assert_true(t.drawn_images().iter().any(fn(i) {
     (i[2] - 160.0).abs() < 0.5 && (i[3] - 300.0).abs() < 0.5 &&
     i[5].abs() < 0.001 && (i[7] - 0.375).abs() < 0.001
-  }), msg="\{t.drawn_images()}")
+  }), msg="\{Repr(t.drawn_images())}")
   send_flight.set(None)
 }
 
@@ -313,6 +329,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
   }
   let faced = Ref(0)
   let f : SendFlight = {
+    n: 1,
     chat: "ws1/st1:s-c1",
     turns: "ws1/st1:s-c1",
     text: "",
@@ -323,7 +340,12 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     field_w: 300.0,
     field_h: 40.0,
     room: 0.0,
-    hold: fn(_, _) {  },
+    shaped: "",
+    held_lines: 1,
+    held_extras: -1.0,
+    sent_at: 0.0,
+    stopped: true,
+    foot_lift: fn(_) { 0.0 },
     desk: true,
     lines: None,
     lead: 0,
@@ -344,6 +366,8 @@ test "an image sent while it goes up flies on to its place once it is up: its me
   send_flight.set(Some(f))
   let t = @ui.Tester::new(
     fn(c) {
+      // (each frame before its list is built, as a chat's list does: their way said once their row is laid out)
+      flight_frame(c, f.chat)
       let item = c.box(style=@ui.style(w=Fixed(240.0), h=Fixed(160.0)), fn() {  })
       flight_landing(c, f, item, @sfbase.file_key(shot.val), paint=Some(fn(w, h, fit, radius) {
         c.image("shot", w=Px(w), h=Px(h), fit~, radius~, bg=0L) |> ignore
@@ -367,6 +391,6 @@ test "an image sent while it goes up flies on to its place once it is up: its me
   // still the picture flying to its place, never drawn back where its tile was
   assert_eq(faced.val, 0)
   let drawn = t.drawn_images()
-  assert_true(drawn.iter().any(fn(i) { i[2] > 56.0 && i[2] < 240.0 }), msg="\{drawn}")
+  assert_true(drawn.iter().any(fn(i) { i[2] > 56.0 && i[2] < 240.0 }), msg="\{Repr(drawn)}")
   send_flight.set(None)
 }

@@ -19,8 +19,10 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
 - `web/`: the web's host of that app, a few pages of its own (Preact) and the design system `web/ui`.
 - `website/`: the official site. `rules/`: rules shared by the station, cloud and core, in MoonBit, built to JS.
 - `scripts/`: checks, releases, the CI plan. `vendor/`: patched upstream code (its README says each patch).
-- `docs/`: only how to build, run and operate (development.md, operations.md) and the release notes. Design is in the
-  code's comments and in these files; nothing else explains it.
+- `docs/`: only how to build, run and operate (development.md, operations.md, two notes on a station's setup) and
+  the release notes. Design is in the code's comments and in these files; nothing else explains it. A comment naming
+  another `docs/` file means a design document deleted in #4614 (`git show ec9da461f6^:docs/<name>.md`): where the
+  comment leaves a format or a protocol to it, that is its spec.
 
 ## These files are kept true
 
@@ -35,6 +37,12 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
 
 - One pull request per piece of work, from `origin/main`. Merging to main deploys the beta (`.github/workflows/pipeline.yml`,
   `scripts/plan.sh`: what each path deploys), so main is always releasable.
+- A bug's fix merges once its newest commit's checks passed; a change to the product or to what people see, when
+  the owner has said so (the user, 2026-10-31).
+- What people will notice of a change is said in its commit message's trailers: `Changelog:` a line for them, in
+  Chinese (`修复：…`, `新增：…`, `改进：…`); `Changelog-parts:` where they see it (`station`, `web`, `android`,
+  `desktop`, `cloud`); `Fixes: FB-<n>` a bug report it fixes. The apps' changelog and each stable release's notes
+  are written from these alone (`scripts/changelog.ts`); a change with nothing for people writes none.
 - `sh scripts/check.sh full origin/main..HEAD` checks what the range changed (the git hooks run its quick part);
   `STILLFAIL_CHECK_PART` narrows it. Run the part you changed before a PR; the whole of it is CI's.
 - A fix that cannot wait a day for the next stable release (a crash, data lost, people locked out, a release that does
@@ -50,6 +58,26 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
   to make one pass (`docs/development.md`, Tests). What cannot be made so is the side run's (`scripts/side.sh`). A
   check that fails and then passes on the same commit let something uncontrolled in: find it and take it out, never
   rerun it green or call it flaky.
+
+## To people there is one safe mode
+
+- A person's own lock (which devices are theirs) is the root of trust; a workspace's lock is going away as a thing
+  of its own (the user, 2026-11-05): it keeps the roster (members, stations) and follows each person's own lock for
+  their devices.
+- People are never asked to tell the two apart (the user, 2026-11-10): 安全模式, 受信任设备 and 批准 look and work as
+  they did before there was a lock of one's own. No page, prompt or refusal sends someone to 个人锁 to be let in to
+  a workspace, or names it where the workspace's lock was named before.
+- A person's devices are theirs alone to change: owners and admins take a member out, never one device of someone
+  else's (the user, 2026-11-10).
+- Everyone in safe mode comes to have a lock of their own with nobody asked (`client/core-ts/src/views/lock.ts`
+  `ownLockFor`): their devices trusted in a workspace's lock are put on it by the one of them that approved them
+  there, and take it from that one, a member's as an owner's, so that nobody approves a device again (the user,
+  2026-11-10). What that costs, known and taken: until a member's devices have a lock pinned, an owner or admin of a
+  workspace of theirs who rewrites its lock with a changed app can get a device of their own taken as that member's
+  (`vouchersIn` says how); the entries that did it stay in the lock. Do not widen it (never by a device id, never the
+  device that approved one already on the lock), and do not narrow it without the owner.
+- Every error, refusal and wait tells the person what to do next to get done what they set out to do; none is a dead
+  end (the user, 2026-11-12).
 
 ## No polling between still.fail's own parts
 
@@ -103,3 +131,24 @@ they changed on their event streams (`station/src/mesh/lock-events.ts`) and brin
 each other level (`station/src/mesh/lock-sync.ts`, `station/src/mesh/person-sync.ts`). The cloud is asked only where
 no station answers (one from before, all offline), and is sent what is signed for the stations and devices from
 before, never waited on; that goes 7 days after these stations ship.
+
+That sync is being replaced (2026-11-12): stations that took different entries at one place never came back to one
+chain (`station/test/lock-world-sim.ts` lists what that broke and what still does). What replaces it is modelled in
+`station/test/lock-fork-choice-model.ts` (each log's fork choice) and `station/test/lock-roster-model.ts` (a workspace
+said in its people's own logs). The stations go by the fork choice now (`station/src/cloud/log-keep.ts`), keeping a
+branch only for what another keeper took: a station never makes a fork itself (what a device brings goes on from its
+head, or is refused as before), so it never moves off an entry for one that came to it alone; stations of a lock still
+give each other all they keep and come to one chain. The core keeps what the stations showed it and goes by the same
+fork choice (`client/core-ts/src/lock-keep.ts`), so a device follows them off an entry that lost, and the device that
+signed it signs it again after the head where that still says what was meant (`againOf`), carrying to each station
+what it lacks of what the stations showed (`client/core-ts/src/views/lock.ts` `carry`). The cloud's copy, for the
+stations and devices from before, is kept the same way: what a station gives it as another keeper's goes by the fork
+choice (`cloud/src/lock.ts` `keepLockAt`), each station giving it its chain where the cloud's parts from it
+(`station/src/cloud/presence.ts` `planeParted`), so it names the stations' head again. What it is built to (the user,
+2026-11-12):
+
+- The lock's adversary is the cloud and every station but the one asked (`rules/protocol/lock.spthy`): only signatures
+  of devices on a lock decide. No cloud and no station orders entries, arbitrates between them, or is the one to follow.
+- What can be settled by rule is: a fork by the fork choice, an entry that lost its place signed again by its device.
+  What cannot (two devices removing each other, a device fully taken over, every signer lost) gets no more machinery:
+  it is recognised and handed to the person with a way out.

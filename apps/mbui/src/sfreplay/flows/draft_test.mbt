@@ -3,7 +3,7 @@
 
 ///|
 test "06-draft" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("draft"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -19,10 +19,10 @@ test "06-draft" {
     f.run_for(@ui.move_most_ms)
     f.see("=willow")
     // the draft back in the field (its words where 发消息 was)
-    let field = f.t.get(@ui.Role::TextField)
-    f.check(field.value.contains("还没发出去的草稿 082947"), "the field holds \{field.value.escape()}")
+    let value = f.t.query(@ui.Role::TextField).map(fn(x) { x.value }).unwrap_or("")
+    f.check(value.contains("还没发出去的草稿 082947"), "the field holds \{value.escape()}")
     // the bar moved by what this did (the field focused, the chat left) at rest
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     // The live recording checks the field here too; name the step for strict replay.
     f.field_visible("还没发出去的草稿 082947")
     f.end()

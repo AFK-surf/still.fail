@@ -5,21 +5,23 @@
 
 ///|
 /// Which side of its anchor a layer's content goes.
+#derive(Eq, Debug)
 pub(all) enum Side {
   Top
   Right
   Bottom
   Left
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Where along the side it lines up with the anchor: their starts (the left, right to left the right), their middles,
-/// their ends.
+/// their ends. (Where what a node holds lies along its own way, spread between its ends too, is Lies: words.mbt.)
+#derive(Eq, Debug)
 pub(all) enum Along {
   Start
   Middle
   End
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in a window `vw` by `vh`), Radix's Popper: on `side`,
@@ -72,7 +74,7 @@ pub fn place_beside(
   }
   // right to left, a start is the right
   let across = side == Top || side == Bottom
-  let along = if rtl && across {
+  let along : Along = if rtl && across {
     match along {
       Start => End
       End => Start
@@ -111,7 +113,9 @@ pub fn place_beside(
 
 ///|
 /// What a node goes beside (View::beside): its anchor, on which side of it, lined up how, how far off, kept how far
-/// inside the window; `at_pointer`: beside the point of it the pointer is at while the pointer is on it, not all of it.
+/// inside the window; `at_pointer`: beside the point of it the pointer is at while the pointer is on it, not all of it;
+/// `along_offset`: moved that much further along its side, in its own points.
+#derive(Eq, Debug)
 pub(all) struct Beside {
   anchor : NodeId
   side : Side
@@ -119,7 +123,18 @@ pub(all) struct Beside {
   offset : Double
   padding : Double
   at_pointer : Bool
-} derive(Eq, Debug)
+  width : BesideWidth
+  along_offset : Double
+}
+
+///|
+/// How wide what goes beside another is (View::beside's `width`): as wide as what it holds says (`Own`), or as wide as
+/// its anchor is laid out (`Anchor`: Radix's trigger width, a list a field offers as wide as the field).
+#derive(Eq, Debug)
+pub(all) enum BesideWidth {
+  Own
+  Anchor
+}
 
 ///|
 /// Placed beside node `anchor` (place_beside: on `side`, `offset` away, lined up `along` it, kept `padding` inside the
@@ -129,7 +144,22 @@ pub(all) struct Beside {
 /// last went beside it: it follows its anchor while both are there, and never goes anywhere else. `at_pointer`: beside
 /// the point in the window the pointer is at while it is on the anchor (Tree::point_at, placed again as it moves), as
 /// the anchor were that point (a tip by the pointer along a tall thin thing); the pointer gone off it, by the point of
-/// it the pointer was last at (following the anchor still); never on it, beside all of it.
+/// it the pointer was last at (following the anchor still); never on it, beside all of it. `width`: `Anchor`, as wide
+/// as its anchor is laid out (Tree::beside_widened: in the same layout, before it is placed by it; as the anchor is
+/// laid out, not as it is drawn bigger or smaller, which is its look's), its width said by nothing else. That takes
+/// the anchor and it to be drawn at one scale at rest: where they are not (an anchor in a box drawn half as big, this
+/// drawn whole over it), its width is the anchor's laid out, and it is not drawn as wide as the anchor is. `piece`:
+/// beside a piece of the anchor, not all of it (a link in its words: mbui/ui's `runs_link_piece`, the box round its
+/// pieces of line): asked as it is placed, given how wide and tall the anchor is laid out then, the piece in the
+/// anchor's own terms (x, y, w, h); none where it has no such piece now (its words said again without it), where it
+/// stays as it does when its anchor is drawn nowhere. Asked untracked, only as it is placed: what it reads changing
+/// places nothing again by itself. The anchor's words set again, its size, its place or what holds it moving does (the
+/// anchor laid out or placed again); a signal of the app's it reads does not: a piece by which of the words is picked
+/// (View::runs_picked) stays by the words picked when it was last placed as the pick moves on, till something is laid
+/// out or placed again. So it reads the anchor's words as they are laid out, nothing else. `along_offset`: moved
+/// that much further along its side (Ctx::place's): right, or down, beside a side across the anchor; right to left, the
+/// other way; from all of the anchor, or from its `piece` where it has one; in its own points, drawn as it is; kept in
+/// the window as ever (`padding`).
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -138,9 +168,20 @@ pub fn View::beside(
   offset? : Double = 4.0,
   padding? : Double = 8.0,
   at_pointer? : Bool = false,
+  width? : BesideWidth = Own,
+  piece? : (Double, Double) -> (Double, Double, Double, Double)?,
+  along_offset? : Double = 0.0,
 ) -> View {
   guard self.live() is Some(n) else { return self }
-  n.beside = Some({ anchor, side, along, offset, padding, at_pointer })
+  n.beside_piece = piece
+  // (beside another anchor now, or as wide as what it holds: what it was made as wide as before none of its own; said
+  // beside one for the first time, none kept of a node let go before at its index)
+  match n.beside {
+    Some(was) if was.anchor != anchor || width == Own => self.tree.beside_narrowed(self.at, width == Own)
+    Some(_) => ()
+    None => self.tree.beside_widths.remove(self.at)
+  }
+  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, width, along_offset })
   if !self.tree.besides_at.contains(self.at) {
     self.tree.besides_at.push(self.at)
   }
@@ -163,10 +204,18 @@ pub fn View::beside(
 /// it again (a ring of them), goes beside nothing: where it is laid out, each time. Those let go dropped.
 fn Tree::besides_placed(self : Tree) -> Unit {
   let live = self.besides_at.filter(fn(at) { self.nodes[at].live && self.nodes[at].beside is Some(_) })
+  // (those let go, or beside nothing now: no width kept for them)
+  if live.length() != self.besides_at.length() && self.beside_widths.length() > 0 {
+    for at in self.besides_at {
+      if !live.contains(at) {
+        self.beside_widths.remove(at)
+      }
+    }
+  }
   self.besides_at.clear()
   self.besides_at.append(live)
   // (1 being placed, 2 placed beside its anchor, 3 refused: where it is laid out)
-  let state : Map[Int, Int] = {}
+  let state : Map[Int, Int] = Map([])
   fn refused(at : Int) -> Unit {
     state[at] = 3
     // (on no side of anything)
@@ -179,7 +228,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
       self.places_rev = self.places_rev + 1
-      self.hits = self.hits + 1
+      self.hits_bump()
     }
   }
 
@@ -205,7 +254,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
             self.work.composed = self.work.composed + 1
             self.composed.push({ at, gen: n.gen })
             self.places_rev = self.places_rev + 1
-            self.hits = self.hits + 1
+            self.hits_bump()
           }
         None => ()
       }
@@ -247,6 +296,10 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       }
     }
     self.work.besides = self.work.besides + 1
+    // (as wide as its anchor is laid out, where it says so: laid out so alone, here, before it is placed by its size)
+    if b.width == Anchor {
+      self.beside_widened(at, self.nodes[b.anchor.at].lw)
+    }
     // (where its anchor is drawn and how big, where what holds it is: in the window's terms as the scene is composed,
     // Tree::projected; it goes there as big as what holds it draws it, its own scale about where it went after)
     guard self.window_place(b.anchor.at) is Some((ax, ay, ascale)) else { return stay() }
@@ -256,7 +309,15 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       None => (0.0, 0.0, 1.0)
     }
     // (where it is beside: all of its anchor as drawn now; by the pointer, the point it is at, while it is on it)
-    let (aw, ah) = (a.lw * ascale, a.lh * ascale)
+    let (ax, ay, aw, ah) = match n.beside_piece {
+      None => (ax, ay, a.lw * ascale, a.lh * ascale)
+      // (a piece of it: as it is laid out now, where it is drawn; none now, where it last was beside it)
+      Some(f) =>
+        match @signals.untracked(fn() { f(a.lw, a.lh) }) {
+          Some((x, y, w, h)) => (ax + x * ascale, ay + y * ascale, w * ascale, h * ascale)
+          None => return stay()
+        }
+    }
     let (px, py) = self.pointer_xy
     // (the pointer gone off it: by the point of it the pointer was last at, as the anchor is now, never jumping to all of
     // it; never on it (shown by the keyboard's focus), beside all of it)
@@ -278,6 +339,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       side=b.side,
       along=b.along,
       offset=b.offset,
+      along_offset=b.along_offset * hs,
       padding=b.padding,
     )
     // (where it grows from, where it is drawn bigger or smaller about the side it went on: View::scale's FromBeside)
@@ -296,7 +358,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
       self.places_rev = self.places_rev + 1
-      self.hits = self.hits + 1
+      self.hits_bump()
     }
     state[at] = 2
     true
@@ -304,6 +366,43 @@ fn Tree::besides_placed(self : Tree) -> Unit {
 
   for at in self.besides_at {
     place_one(at) |> ignore
+  }
+}
+
+///|
+/// Node `at`, beside its anchor as wide as that is laid out (View::beside's `Anchor`), made `w` wide where it was not
+/// already: its width said so in its style, it and what it holds laid out alone at once in what holds it (Tree::
+/// laid_over_alone: absolute in it, nothing else moves) and placed by that (Tree::walk, what it changed to be drawn again as
+/// any layout's), in the layout under way, before it is placed beside its anchor by its size: never a layout of all of
+/// it again, nothing marked to be laid out later, nothing read back. Only where the anchor's width changed (and as it is
+/// first placed); its width kept in the layout's own (Tree's beside_widths), never told a binding.
+fn Tree::beside_widened(self : Tree, at : Int, w : Double) -> Unit {
+  let n = self.nodes[at]
+  if self.beside_widths.get(at) == Some(w) {
+    return
+  }
+  self.beside_widths[at] = w
+  n.flex.style.set_width(Pt(w))
+  n.flex.dirty = true
+  // (laid out over the rest in what holds it, as the layout of all of it lays it out there: Tree::laid_over_alone)
+  guard n.parent >= 0 else { return }
+  let gen = self.laid_over_alone(at, n.parent)
+  self.walk(at, gen, true)
+  // (another size: what follows sizes told, and what is pointed at worked out again by its new box, as after any
+  // layout)
+  self.sizes_due = true
+  self.hits_bump()
+}
+
+///|
+/// Node `at` beside another anchor now (`own`: as wide as what it holds again): the width it was made as wide as its
+/// anchor no longer kept, made again by the next (its own again where `own`, laid out so as anything said of it is).
+/// Nothing where it was never made so.
+fn Tree::beside_narrowed(self : Tree, at : Int, own : Bool) -> Unit {
+  guard self.beside_widths.contains(at) else { return }
+  self.beside_widths.remove(at)
+  if own {
+    self.nodes[at].flex.style.set_width(Auto)
   }
 }
 
@@ -320,8 +419,16 @@ fn Tree::window_place(self : Tree, at : Int) -> (Double, Double, Double)? {
 
 ///|
 /// It let go as `owner` is, wherever it is held (what is drawn elsewhere for another, a tip in a layer over all of the
-/// window for the control it tells of: its scope the other's, nothing of it left once that one goes). It.
+/// window for the control it tells of: its scope the other's, nothing of it left once that one goes); laid out nowhere
+/// (none of it drawn, pressed or read out) from the moment `owner` starts leaving (View::on_leaving), at once, back as
+/// that comes back (View::come_back). It.
 pub fn View::lives_with(self : View, owner : View) -> View {
+  let hidden = @signals.signal(false, same=fn(a, b) { a == b })
+  // (bound in its own scope, not in what is being made where it is said (its owner's, perhaps): at rest with that as
+  // that leaves, it would be told nothing)
+  self.owning(fn() { self.laid_nowhere(By(fn() { hidden.get() })) |> ignore })
+  owner.on_leaving(fn() { hidden.set(true) }) |> ignore
+  owner.on_back(fn() { hidden.set(false) }) |> ignore
   owner.owns(fn() {
     guard self.live() is Some(_) else { return }
     match self.parent() {
@@ -341,11 +448,12 @@ pub fn View::lives_with(self : View, owner : View) -> View {
 /// it and what it holds draw, as they are laid out (the boxes of those with a ground, words, shapes, lines, a picture or
 /// an old view of their own): what is grown and shrunk where it is, not about a page's width (a room opening on a line
 /// to one side: reveal's, an old view's Ctx::held_look).
+#derive(Eq, Debug)
 pub(all) enum Pivot {
   At(Double, Double)
   FromBeside
   Drawn
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Where node `self` is drawn bigger or smaller about, in points where it is its own, laid out `w` by `h`.
@@ -474,11 +582,20 @@ pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
 /// What its words measure and how they are drawn changed for all of them (the system's size of words, how the theme
 /// shapes them): every node with words laid out and drawn again.
 pub fn Tree::words_again(self : Tree) -> Unit {
+  // (told as a room is laid out (the system's size of words asked of the host as words are measured in it between
+  // frames, a Tester's set before): every node marked once all of it is laid out, a change of its own then, as what is
+  // marked outside a room is; the room's own node marked in its own layout would be a fault)
+  if self.rooming >= 0 {
+    self.once_laid_out(fn() { self.words_again() })
+    return
+  }
   // (what shows words, and what is measured as what it hosts is: View::measured)
   for at, n in self.nodes {
     if n.live && (n.look.words != "" || n.flex.measure is Some(_)) {
       self.layout_marked_at(at)
       self.look_marked_at(at)
+      // (cut short: what of them is kept, at their size now)
+      self.cut_applied(at)
     }
   }
   self.words_redone.set(self.words_redone.untracked() + 1)

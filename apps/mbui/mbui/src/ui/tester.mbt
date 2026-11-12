@@ -25,10 +25,13 @@ pub struct Tester {
   /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
   mut on_way : Bool
   /// whether how what moves goes is judged on those frames too (MBUI_TEST_MOTION: test_motion_judged)
-  motion : MotionJudged
+  mut motion : MotionJudged
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
+  /// when the next input comes, as a run's script gave it (Tester::inputs_next; +inf: none said): a host's frames after
+  /// it not drawn ahead of it, what is owed then left to be drawn on the way to it and after
+  mut inputs_next : Double
   /// what the test looks at after each frame it draws, as it is drawn (Tester::each_frame): a frame an input's draw
   /// passes over on its way (the one that takes it, before the ones after) seen too
   mut each : (() -> Unit)?
@@ -73,6 +76,8 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
       fake.val = None
       shot_watch.val = None
       pass_look.val = None
+      corners_look.val = None
+      wait_look.val = None
       frame_look.val = None
       @hostapi.set_host(restore)
     }
@@ -88,6 +93,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 fn reset_globals() -> Unit {
   window_zoom_reset()
   journal_reset()
+  tree_frames_reset()
   run_let_go()
   // A run can end with a frame's resource handover still queued. Finish it before resetting the next run.
   frame_afters_run()
@@ -99,6 +105,10 @@ fn reset_globals() -> Unit {
   notices_reset()
   hand_reset()
   corners_hold.val = true
+  corners_known_now.val = []
+  presses_hold.val = true
+  placed_presented.val = None
+  kept_presented.val = None
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
@@ -109,6 +119,9 @@ fn reset_globals() -> Unit {
   tester_size.val = None
   env_kept.val = ""
   app_state.val = 3
+  app_shown_said.set(true)
+  app_front_said.set(true)
+  app_on_said.set(true)
   driver.val = None
   track_x.reset()
   track_y.reset()
@@ -150,6 +163,8 @@ fn reset_globals() -> Unit {
   update_told.set("")
   update_asked.clear()
   answers_waiting.clear()
+  outside_takers.clear()
+  @hostapi.autofill_forget()
   views_told.clear()
   code_fields.clear()
   code_clears.clear()
@@ -205,7 +220,7 @@ fn reset_globals() -> Unit {
   reset_drawing()
   let left = leaked_state()
   if left.length() > 0 {
-    abort("state kept from an earlier test: " + left.join(", "))
+    @halt.saying("state kept from an earlier test: " + left.join(", "))
   }
 }
 
@@ -214,6 +229,10 @@ fn reset_globals() -> Unit {
 fn leaked_state() -> Array[String] {
   let out = []
   let check = fn(name : String, n : Int) { if n > 0 { out.push(name) } }
+  // (the signals' graph in the middle of a change or a read: what ran before stopped inside one, and every set after it
+  // tells nothing (view's 185 of 435 on wasm-gc, 2026-11-11))
+  check("signals' change begun and never ended (batch)", @signals.batch_depth())
+  check("signals' reader left reading", if @signals.active_sub() is Some(_) { 1 } else { 0 })
   check("desk.menus", desk.menus.length() + desk.mutable_menus.length())
   check("desk.keys", desk.keys.length() + desk.mutable_keys.length())
   check("desk.sels", desk.sels.length() + desk.next_sels.length())
@@ -221,6 +240,8 @@ fn leaked_state() -> Array[String] {
   check("image_cache", image_cache.length())
   check("image_data", image_data.length())
   check("image_vector_drawers", image_vector_drawers.length())
+  // (a GIF that moves, its decoder with it: GifCycle)
+  check("moving_images", moving_images.length())
   check("code_fields", code_fields.length() + code_clears.length())
   check("open_views", open_views.length() + stacked_views.length())
   check("streams", open_streams.length() + stream_nodes.length())
@@ -236,6 +257,7 @@ fn leaked_state() -> Array[String] {
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.raised.length() + dr.carry.length())
   check("messages", fake_posted.length())
   check("inst_owners", inst_owners.owner.length())
+  check("key_taken", if @view.key_marks_left() { 1 } else { 0 })
   out
 }
 
@@ -271,6 +293,8 @@ fn leaked_state() -> Array[String] {
 /// mbui/src/film; never a test's), recorded as a host's are (MBUI_TEXT_RECORD=1 in `env`); `text` is then not read.
 /// `corners_held`: whether every frame it draws with nothing moving is held to the corner rule where the theme says
 /// its ladder (Tester::hold_corners); false for a test that draws a fault on purpose, to find it.
+/// `presses_held`: whether a frame it draws with presses said to be an area's that takes none there (Ctx::presses_to)
+/// stops the test; false for a test that says one wrong on purpose, to find it (Tester::presses_unheld).
 /// `window_corner`: how round the system draws the window's corners (@hostapi.window_corner: a Mac's 16, Windows 11's
 /// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt); `window_corners`
 /// each of them where they differ (top left, then round it: an iPhone Duo's outer screen, 8 along its hinge).
@@ -279,6 +303,9 @@ fn leaked_state() -> Array[String] {
 /// `nav_able`: whether the system lays out the app's tabs itself (an iPhone Duo's: @hostapi.nav_bar_able), as a host
 /// says it from the app's first frame on; Tester::set_nav_able changes it later.
 /// `before`: a live renderer's frame setup, called before every frame including the first (a film's offscreen target).
+/// `begun`: what the test sets for this run that its first frame is to show (a library's state, a film pinned), said
+/// once the run has begun (the globals put back, every on_reset hook run) and before the first frame is drawn, which
+/// is drawn here: what is set before the Tester is made is the run before's, put back as this one begins.
 /// `keeps_sources`: whether the window's tree keeps where in the source each node was made (Tester::sources_at); off
 /// for a run measured as a device runs it.
 /// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt, words_over.mbt).
@@ -308,15 +335,20 @@ pub fn Tester::new(
   copy_shown? : Bool = false,
   live? : Live,
   corners_held? : Bool = true,
+  presses_held? : Bool = true,
   window_corner? : Double = 0.0,
   window_corners? : FixedArray[Double],
   words_over_held? : Bool = true,
   nav_able? : Bool = false,
   tree? : (@view.View) -> Unit,
   before? : () -> Unit,
+  begun? : () -> Unit,
   keeps_sources? : Bool = true,
   loc~ : SourceLoc,
 ) -> Tester {
+  host_settings_given.val = ""
+  fake_dues.clear()
+  frames_by_clock_on.val = false
   let f = {
     time,
     late: 0.0,
@@ -367,6 +399,12 @@ pub fn Tester::new(
     image_srcs: {},
     images: {},
     image_ids: 0,
+    decode_after: {},
+    decode_due: {},
+    image_bytes: {},
+    image_bytes_now: 0,
+    image_bytes_most: 0,
+    made_at: loc.to_string(),
     bold: 0.0,
     ui_face: 0.0,
     generation: 0,
@@ -383,6 +421,7 @@ pub fn Tester::new(
     finished: [],
     site: [],
     cursor: 0,
+    cursors_told: 0,
     window_drags: 0,
     window_acts: [],
     zoomed: false,
@@ -400,6 +439,7 @@ pub fn Tester::new(
     window_corner,
     window_corners,
     font_scale: 1.0,
+    utc_offset: 0,
     nav_able,
     nav_said: "",
     a11y: false,
@@ -435,7 +475,9 @@ pub fn Tester::new(
     marks_out: [],
     marks_next: None,
     marks_by_hand: false,
+    picks_by_hand: false,
     rows_on_pixels: false,
+    groups: true,
     keeps_sources,
     shares: [],
     perf: -1,
@@ -490,6 +532,9 @@ pub fn Tester::new(
   reset_globals()
   // (each pass of a frame's build that kept rows built again keeping none and compared: tester_rows.mbt)
   pass_look.val = Some(rows_pass_looked)
+  // (each frame's corners worked out with what is kept worked out anew as well and the two compared: tester_corners.mbt)
+  corners_look.val = if test_corners_looked() { Some(corners_looked) } else { None }
+  wait_look.val = Some(wait_looked)
   // (each frame painted alone or of its looks alone built whole after it and the two compared: tester_looks.mbt)
   frame_look.val = Some(looks_looked)
   // (each shot taken kept, what it says, how big a picture it makes and what it drew: Tester::shot_drawn)
@@ -501,12 +546,32 @@ pub fn Tester::new(
     f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, x, y))
   })
   corners_hold.val = corners_held
+  corners_known_now.val = []
+  presses_hold.val = presses_held
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  focus_off_begun()
+  // (the file each bar of its is held by: motion_runs)
+  if motion_runs() {
+    let at = loc.to_string()
+    let file = match at.find(":") {
+      Some(i) => at.unsafe_substring(start=0, end=i)
+      None => at
+    }
+    println("MOTION made \{file}")
+    // (and counted here, a run at a rate counting its file (motion_counted): what may say it leaves the list, a file
+    // never run so, a sweep of the default rate's alone, says nothing of it)
+    if test_motion_judged(at) == Count {
+      println("MOTION counting \{file}")
+    }
+  }
+  looks_unjudged.val = false
+  motion_unjudged.val = false
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)
+  gaps_steady_begin(loc.to_string(), words_over_held)
   seen_whole.val = ""
   said_log.on = false
   frame_said.val = None
@@ -528,6 +593,10 @@ pub fn Tester::new(
     bench.mode = -1
   }
   fx_reset(seed)
+  // (the run begun: what the test sets for it, before its first frame is made or drawn)
+  if begun is Some(set) {
+    set()
+  }
   // (the window a tree made once: `tree`, the view under test the old frame around its old views; else the view its
   // one old view: view_host.mbt)
   match tree {
@@ -535,7 +604,9 @@ pub fn Tester::new(
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   }
   let between = test_frames_between()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, each: None, before }
+  tester_rested.clear()
+  frames_at_one.val = (-1.0, 0)
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -591,6 +662,7 @@ pub fn Tester::failed_images(self : Tester) -> Array[Int] {
 /// Failed decodes needed to draw the last painted frame, by the host's image id. A failure kept in the cache for a
 /// picture no longer in the frame is not one of these. `image_src` gives the source of each id.
 pub fn Tester::failed_images_drawn(self : Tester) -> Array[Int] {
+  self.reads_own()
   ignore(self)
   frame_failed_images.copy()
 }
@@ -632,6 +704,7 @@ pub fn Tester::finished_order(self : Tester) -> Array[(Int, Int)] {
 ///|
 /// What the app awaits from the host, as effect.mb's outside says it (what it is), oldest first.
 pub fn Tester::awaited(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   runtime().awaited().map(a => a.0)
 }
@@ -670,6 +743,10 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 /// A run that judges motion (MBUI_TEST_MOTION, test_motion_judged) judges those too, at a display's rate (60 a second
 /// or more): every frame a host at that rate draws while something moves.
 pub fn Tester::judges_motion(self : Tester) -> Bool {
+  // (a run whose frames are not judged: Tester::frames_unjudged; nor how what moves goes: Tester::motion_unjudged)
+  if looks_unjudged.val || motion_unjudged.val {
+    return false
+  }
   if self.between > 0.0 {
     // (a run at a rate: none of its frames where it holds results only, its other frames (an input's, what is due)
     // not the default run's either; every one where it judges motion)
@@ -702,22 +779,30 @@ fn Tester::motion_period(self : Tester) -> Double {
 ///|
 /// What a run at a frame rate holds of a motion (test_motion_judged): only results, the default's; how it goes frame to
 /// frame on run_for's way too, a fault failing its test; or that, each fault said and none failing.
+// Judge is made by tester_fps.mbt, a file of every target but wasm
+#warnings("-unused_constructor")
+#derive(Eq)
 pub enum MotionJudged {
   Results
   Judge
   Count
-} derive(Eq)
+}
 
 ///|
 /// The files whose Testers a run that counts motion only counts (test_motion_judged), not judges.
 // kept across runs: said once as a test program starts (its packages' `init`)
-let motion_counted_files : Set[String] = Set::new()
+let motion_counted_files : Set[String] = Set([])
 
 ///|
 /// The files whose Testers still show faults of how what moves goes at 60 or 120 a second (MBUI_TEST_MOTION `count`,
 /// what CI's runs counted): only counted there, every other file judged. Said by a test package as it starts
 /// (`fn init`); only shrinks: a file mended to none leaves the list.
 pub fn motion_counted(files : Array[String]) -> Unit {
+  if motion_runs() {
+    for f in files {
+      println("MOTION counted \{f}")
+    }
+  }
   for f in files {
     motion_counted_files.add(f)
   }
@@ -757,9 +842,30 @@ fn Tester::clock_frame(self : Tester, ms? : Double = 0.0) -> Unit {
     // a moment the test says: drawn there, whatever the display's frames
     self.frame_at(self.on_grid(want))
   } else {
-    self.frame_at(if want > next { self.tick_at(want) } else { next })
+    self.frame_at(self.at_due(if want > next { self.tick_at(want) } else { next }))
   }
 }
+
+///|
+/// A display's frame at `t`, or the moment something is due at (Tester::next_due: a wake, a motion's end) where that
+/// is a hair after it (within `due_hair`): the same moment summed one way or another, drawn at what is due, not a hair
+/// before it, where what ends then has not (a fade's end 5e-13 ms after the frame a grid of 7 a second put there: the
+/// frame drawn of its looks alone kept what the whole build let go). What is due a hair before the frame is past at it:
+/// the frame stays on the grid, the same double whatever is due (an old view's list and the window's tree's, each its
+/// own ease's end summed from its own moments: list_scroll_same_wbtest). run_for's on_grid holds the same the other way.
+fn Tester::at_due(self : Tester, t : Double) -> Double {
+  let due = self.next_due()
+  if due > self.fake.time && due > t && due - t < due_hair {
+    due
+  } else {
+    t
+  }
+}
+
+///|
+/// How near (ms) a frame and what is due are the same moment (Tester::at_due, run_for's frames on the way): a moment
+/// summed one way or another.
+let due_hair : Double = 1.0e-6
 
 ///|
 /// The display's first frame after `t` (Tester::frame): of its frames' times (set_frame_times) while they last, else on
@@ -776,10 +882,10 @@ fn Tester::tick_after(self : Tester, t : Double) -> Double {
       // the hair, and the frame after it would be that frame again: frames after it never drawn)
       let hair = grid_hair * self.period
       let mut k = ((t - self.origin) / self.period).floor() - 1.0
-      while self.origin + k * self.period <= t + hair {
+      while grid_moment(self.origin, k, self.period) <= t + hair {
         k = k + 1.0
       }
-      self.origin + k * self.period
+      grid_moment(self.origin, k, self.period)
     }
   }
 }
@@ -789,6 +895,20 @@ fn Tester::tick_after(self : Tester, t : Double) -> Double {
 /// summed one way or another.
 let grid_hair : Double = 1.0e-9
 
+///|
+/// How many of the display's frames fall after `from` and at or before `to`, on its frames' times (Tester::tick_after):
+/// what was drawn between two moments (a replay's first screen, Flow::until_at).
+pub fn Tester::frames_between(self : Tester, from : Double, to : Double) -> Int {
+  let mut n = 0
+  let mut t = self.tick_after(from)
+  while t <= to + grid_hair * self.period {
+    n = n + 1
+    t = self.tick_after(t)
+  }
+  n
+}
+
+///|
 ///|
 /// The display's first frame at or after `t`.
 fn Tester::tick_at(self : Tester, t : Double) -> Double {
@@ -801,10 +921,10 @@ fn Tester::tick_at(self : Tester, t : Double) -> Double {
       // (counted on the frames' times, as tick_after)
       let hair = grid_hair * self.period
       let mut k = ((t - self.origin) / self.period).floor() + 2.0
-      while self.origin + (k - 1.0) * self.period >= t - hair {
+      while grid_moment(self.origin, k - 1.0, self.period) >= t - hair {
         k = k - 1.0
       }
-      self.origin + k * self.period
+      grid_moment(self.origin, k, self.period)
     }
   }
 }
@@ -834,9 +954,18 @@ pub fn Tester::taken_at(self : Tester) -> Double {
 
 ///|
 /// The display's first frame at or after `t` on the clock: where a test sees what is so at `t` (a deadline, a motion's
-/// end), as a host shows it.
+/// end), as a host shows it. Never a moment before `t`: where the display's frame is a hair short of it (tick_at's
+/// grid_hair, a moment summed one way or another), `t` itself, as at_due draws what is due a hair after a frame. Drawn
+/// at that frame, what comes at `t` has not come (a clock's next second worked out as a few last bits past the frame:
+/// emit_kept_wbtest), the app asks for `t` again, and a host's frames put where it asks never go on
+/// (tester_display_frame_wbtest).
 pub fn Tester::display_frame(self : Tester, t : Double) -> Double {
-  self.tick_at(t)
+  let tick = self.tick_at(t)
+  if tick < t {
+    t
+  } else {
+    tick
+  }
 }
 
 ///|
@@ -850,19 +979,30 @@ pub fn Tester::set_frame_period(self : Tester, ms : Double) -> Unit {
 }
 
 ///|
+/// What is wrong with `times` as the frames' times set_frame_times is given (a time not later than now, or than the one
+/// before it), said; None where nothing is. The words set_frame_times stops with: the two are one asking.
+pub fn Tester::frame_times_wrong(self : Tester, times : Array[Double]) -> String? {
+  let mut before = self.fake.time
+  for i, at in times {
+    if !(at > before) {
+      return Some(
+        "Tester::set_frame_times: time \{i} (\{at}) is not later than " +
+        (if i == 0 { "now (\{before})" } else { "the one before it (\{before})" }),
+      )
+    }
+    before = at
+  }
+  None
+}
+
+///|
 /// The display's frames from now on at `times` (ms on the frames' clock, each later than the one before and than now):
 /// a run's own, as its tape had them, where every frame the Tester draws comes (an input's, run_for's, draw's); after
 /// the last, on the frame period from it. Grid and tape are one: the period's frames a table of times evenly apart.
 pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
-  let mut before = self.fake.time
-  for i, at in times {
-    if !(at > before) {
-      let s = "Tester::set_frame_times: time \{i} (\{at}) is not later than " +
-        (if i == 0 { "now (\{before})" } else { "the one before it (\{before})" })
-      println(s)
-      abort(s)
-    }
-    before = at
+  match self.frame_times_wrong(times) {
+    Some(s) => @halt.saying(s)
+    None => ()
   }
   self.times = times.copy()
   self.host_frames = true
@@ -872,9 +1012,54 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
 }
 
 ///|
-/// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew).
+/// The waits asked without their own `since` that count from no cause, from the frame's moment as it began, or from
+/// the latest of several (Ctx::held, wait_look): said as MOTION lines, each a place to give its `since` or to make a node.
+fn wait_looked(kind : String, loc : SourceLoc, causes : Array[(Double, String)]) -> Unit {
+  println("MOTION \{kind} \{sizes_steady.file}: \{loc} [\{causes.map(fn(c) { "(\{c.0}, \{c.1})" }).join(", ")}]")
+}
+
+///|
+/// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew). Stops,
+/// saying so, on frames_at_one_most of them one after another at one moment while the app waits for a later one
+/// (Tester::frame_at_said).
 pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
+  match self.frame_at_said(at) {
+    Some(s) => @halt.saying(s)
+    None => ()
+  }
   self.frame_shown_at(at, at)
+}
+
+///|
+/// The moment of the last frames frame_at drew one after another at one moment while the app waited for a later one,
+/// and how many.
+// kept across runs: put back by each Tester (Tester::new)
+let frames_at_one : Ref[(Double, Int)] = Ref((-1.0, 0))
+
+///|
+/// How many frames one after another at one moment, the app waiting for a later one, are frames that do not go on
+/// (Tester::frame_at_said): a test draws such a frame a few times (to look at it again), never so many.
+let frames_at_one_most = 1000
+
+///|
+/// What is wrong with a frame at `at` after those frame_at drew before it, said (frame_at stops on it; None where
+/// nothing is): frames_at_one_most one after another at one moment, the app asking for none there but a wake at a later
+/// moment (Tester::wanted_after; an input, a change or a frame asked for counts afresh). Frames put where the app asks
+/// (wanted_after, display_frame) that never come to what it waits for: a test walking them would go on for ever, the
+/// moment it waits for never there.
+fn Tester::frame_at_said(self : Tester, at : Double) -> String? {
+  let w = self.wanted_next()
+  let (was, n) = frames_at_one.val
+  let n = if at == was && w > at && w < @double.infinity { n + 1 } else { 1 }
+  frames_at_one.val = (at, n)
+  if n < frames_at_one_most {
+    return None
+  }
+  Some(
+    "Tester::frame_at: \{n} frames one after another at \{at}, the clock moved on by none: the app asks for its next " +
+    "at \{w} (\{self.wanted_why()})" +
+    (if w > at && w < @double.infinity { ", the display's frame for it \{self.display_frame(w)}" } else { "" }),
+  )
 }
 
 ///|
@@ -883,13 +1068,27 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
 /// frame is drawn for its vsync). The next events may come at any moment from `now`.
 pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Unit {
   let at = now
+  // (what was posted told at its moment, and what the fake host does at its own moments up to this frame's, before the
+  // clock comes there: posted_tell, FakeHost::due)
+  posted_tell()
+  fake_dues_to(self.fake, at)
   self.fake.time = at
   // decodes started last frame are done, the views opened are ready: the host's events for them (unless the test
   // says when: Tester::finish)
   if self.fake.auto_finish {
     for p in self.pending() {
+      // (one said to take a while: done at its own moment, not before; a frame is drawn there: next_due)
+      match self.fake.decode_due.get(p.1) {
+        Some(due) if p.0 == 1 && due > at + 1.0e-9 => continue
+        _ => ()
+      }
       self.finish(p.0, p.1)
     }
+  }
+  // what was posted since the frame before, told as a device's host tells it, between frames, before this one begins
+  // (messages.mbt: messages_between takes what changes only signals now, what is left this frame's)
+  if fake_posted.length() > 0 {
+    on_outside(outside_posted, 0, 0)
   }
   self.fake.wants = false
   // a scripted run's `resize`
@@ -906,11 +1105,16 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     None => ()
   }
   self.fake_pages_run()
+  // (what was said to move since the frame before, between frames (an input's handler): seen before this frame lets
+  // go of what is over by its moment, tester_time.mbt)
+  tester_rests_seen()
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   // (a bench's measured frame ends here: what follows is the Tester's own checks of it, which a device runs not)
   bench_frame_ends()
   self.hold_a11y_whole()
   self.frames = self.frames + 1
+  // (what the window's tree did in it, where a test asked: tester_tree_work.mbt)
+  tree_frame_kept()
   // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
   g().check_press_owners()
   // (how what moves goes from frame to frame, judged on a display's own frames: Tester::judges_motion)
@@ -918,6 +1122,7 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     self.hold_words_over()
     self.hold_rows_steady()
     self.hold_sizes_steady()
+    self.hold_gaps_steady()
   } else if !words_over.held && !self.on_way && self.period <= frame_period_default + 1.0e-9 {
     // (where a test does not hold the rule but reads which frames show words over words: kept on a run at a rate's
     // frames as on the default's, but for those on run_for's way)
@@ -925,14 +1130,73 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   self.hold_seen_whole_now()
   self.hold_corners()
+  // (where the focus a key moved along comes to rest, once what moved as it did is at rest: tester_focus_off.mbt)
+  self.focus_off_at_rest()
+  // (what it drew was placed by the layout it drew by: tester_placed.mbt)
+  self.hold_placed()
   match self.each {
     Some(f) => f()
     None => ()
   }
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
+  // (what is said to move, its end as it says it, kept by the Tester for rest_of once it is over: tester_time.mbt)
+  tester_rests_seen()
   // (as its host got it, where a test records it: tester_host.mbt)
   host_frame_drawn(at)
+  // (what the fake host does at a moment of its own that this frame asked for at its moment (a pick, a native call
+  // answered as it is asked: FakeHost::due) told as it ends, between frames, as a device's host answers after the
+  // frame that asked: fake_dues_after_frame)
+  fake_dues_after_frame(self.fake)
+  // (a block's key's marks put back by the change that set them: left set, every structure after them at once, unsaid)
+  if @view.key_marks_left() {
+    @halt.saying("a list's block's key mark (key_taking, key_taken) left set after a frame at \{at}")
+  }
+  // (what the window's tree keeps held to what working it out whole gives, where the frame changed it: the drawing
+  // order and the boxes each node lays out as the frame was presented, kept_at_present; whether each takes input as
+  // the frame's own work is done, here, what the next input meets: the old frame's modal layer is told the tree as its
+  // frame closes, view_frame_end, after it was presented; a scripted run's step after that, as an input between frames
+  // (drive_frame), what it changes still due here, told by the frame after. Not where a bench measures its frames, as
+  // kept_at_present)
+  match kept_presented.val {
+    Some(why) => {
+      kept_presented.val = None
+      @halt.saying("after the frame at \{at}, as it was presented: \{why}")
+    }
+    None => ()
+  }
+  match view_app.val {
+    Some(tree) if !bench_measuring.val =>
+      match tree.kept_inputs_said() {
+        Some(why) => @halt.saying("after the frame at \{at}: \{why}")
+        None => ()
+      }
+    _ => ()
+  }
+}
+
+///|
+/// What the window's tree keeps that working it out whole does not give, as the frame being drawn was presented
+/// (kept_at_present), for the Tester's frame end to stop on: None where nothing differed.
+let kept_presented : Ref[String?] = Ref(None)
+
+///|
+/// The frame presented now (FakeHost::present): what the window's tree draws by, as it keeps it, held to what working it
+/// out whole gives (the drawing order and each node's boxes: view's kept_checks.mbt, Tree::kept_drawn_said), as the
+/// frame stood the moment it was presented, as tester_placed.mbt holds its rule. What
+/// comes after that in the same frame (a scripted run's step, drive_frame: a finger's move scrolling a list, a row put
+/// in) is put in order for the frame after it, which lays it out: looked at as the frame ends, every frame of a drag
+/// ended with the next one's change already committed, the order due, and two in a row stopped the run as never held
+/// (#5620's bench, its list scenes: still.fail's instrbench, paged, list30, list1500). Not where a bench measures its
+/// frames (Tester::bench past its `log measure`): as the bench's other checks of a frame, no work of the app's.
+fn kept_at_present() -> Unit {
+  if bench_measuring.val || kept_presented.val is Some(_) {
+    return
+  }
+  match view_app.val {
+    Some(tree) => kept_presented.val = tree.kept_drawn_said()
+    None => ()
+  }
 }
 
 ///|
@@ -1027,6 +1291,7 @@ pub fn Tester::by_hand(self : Tester, f : () -> Unit) -> Unit {
 ///|
 /// Text committed by the input method (or typed on a hardware keyboard).
 pub fn Tester::type_text(self : Tester, s : String) -> Unit {
+  posted_tell()
   on_text(0, s, 0, 0)
   self.draw()
 }
@@ -1034,14 +1299,18 @@ pub fn Tester::type_text(self : Tester, s : String) -> Unit {
 ///|
 /// The input method's composition, with the caret at its end.
 pub fn Tester::compose(self : Tester, s : String) -> Unit {
+  posted_tell()
   on_text(1, s, s.length(), 0)
   self.draw()
 }
 
 ///|
 pub fn Tester::key(self : Tester, code : Int, mods? : Int = 0) -> Unit {
+  posted_tell()
+  let was = g().focus
   on_key(code, mods)
   self.draw()
+  self.focus_moved_held(code, mods, was)
 }
 
 ///|
@@ -1058,6 +1327,7 @@ pub fn Tester::backspace(self : Tester) -> Unit {
 /// The centre of the first text node (or editor placeholder) containing `s`. Here and in what else finds words, none
 /// of a page's bones: no words are drawn there (bones.mbt).
 pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
+  self.reads_own()
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -1086,9 +1356,10 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
 /// they are painted (Ctx::paint: a node, then its children; what flies over everything after all the rest), not the
 /// order they were made: a list's rows are made as it is laid out, after what was built over it.
 pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
-  let found : Ref[(Double, Double)?] = Ref::new(None)
+  let found : Ref[(Double, Double)?] = Ref(None)
   let over : Array[Int] = []
   fn walk(i : Int, overlay : Bool) -> Unit {
     if !overlay && c.drawn_entry(i) is Some(e) && e.z == z_flying {
@@ -1132,7 +1403,7 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
 pub fn Tester::tap_text(self : Tester, s : String) -> Unit {
   match self.find(s) {
     Some((x, y)) => self.tap(x, y)
-    None => abort("no text \"\{s}\" on screen")
+    None => @halt.saying("no text \"\{s}\" on screen")
   }
 }
 
@@ -1273,6 +1544,7 @@ pub fn Tester::site_says(self : Tester, event : String) -> Unit {
 ///|
 /// The holes (kind 9: where a native view shows) in the last frame, as (x, y, w, h).
 pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1287,6 +1559,7 @@ pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
 ///|
 /// The holes' corners in the last frame (kind 9, in the order of holes): 0 square, else their radius.
 pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1301,6 +1574,7 @@ pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
 ///|
 /// The same, each corner its own (top left, then round it: an instance's 36-39).
 pub fn Tester::hole_corners(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1317,6 +1591,7 @@ pub fn Tester::hole_corners(self : Tester) -> Array[(Double, Double, Double, Dou
 /// @hostapi.view_tex_base) and the part of its content there (u0, v0, du, dv: shares of the content's rect), as a host
 /// that draws the view's picture draws it.
 pub fn Tester::hole_parts(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1345,7 +1620,7 @@ fn r(x : Double) -> Int {
 ///|
 /// The laid-out tree as text: one node per line, indented by depth, with its
 /// rectangle; text nodes with their text and line count.
-pub fn Tester::dump(self : Tester) -> String {
+pub fn Tester::dump(_self : Tester) -> String {
   let sb = StringBuilder()
   dump_node(sb, 0, 0)
   sb.to_string()
@@ -1410,6 +1685,7 @@ fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
 /// The images the old views built in the last frame (Ctx::image), each its source and its size as laid out, drawn or
 /// not (none decoded yet, faded out): what an old view asked to be shown.
 pub fn Tester::image_nodes(self : Tester) -> Array[(String, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -1427,6 +1703,7 @@ pub fn Tester::image_nodes(self : Tester) -> Array[(String, Double, Double)] {
 /// text node's words, where its top left is drawn (moved by its own look and its ancestors': Ctx::drawn_at), its size
 /// as laid out, and how opaque it is drawn (its and its ancestors' opacities and looks' alphas, multiplied).
 pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   self.words_marked().map(fn(w) { w.0 })
 }
 
@@ -1491,12 +1768,14 @@ fn Tester::words_marked(self : Tester) -> Array[((String, Double, Double, Double
 /// The words Tester::words has of the app's own nodes, but those made where nothing is read out (Ctx::hidden_from_semantics:
 /// a picture drawn small to stand for itself, say), as a person reading the screen out would have them.
 pub fn Tester::words_said(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   self.words_marked().filter(fn(w) { !w.1 }).map(fn(w) { w.0 })
 }
 
 ///|
 /// The rectangle of the first node whose text contains `s` (x, y, w, h).
 pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
+  self.reads_own()
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -1521,6 +1800,7 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
 ///|
 /// Visible list rows: (item, y, height), top to bottom.
 pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
+  self.reads_own()
   let c = g()
   let out = []
   for i in 0..<c.count {
@@ -1539,6 +1819,7 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
 ///|
 /// Each list's visible rows' boxes (x, y, width, height), top to bottom, list by list as they were built.
 pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Double, Double)]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -1560,6 +1841,7 @@ pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Dou
 ///|
 /// The lines of the first text node whose text contains `s`, as laid out (an old view's, else a node's of the window's tree).
 pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
+  self.reads_own()
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -1586,7 +1868,8 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
   }
   // (or the words of a node of the window's tree, as it draws them (shorter ones in their place where it says them:
   // View::shorter, none of them where they are none): laid out as the tree lays them out at its width,
-  // view_words_measure's; on one line too long for it, cut with an ellipsis as it is drawn)
+  // view_words_measure's; on one line too long for it, or on more than it says it is drawn on, cut with an ellipsis as it
+  // is drawn)
   match view_tree() {
     Some(tree) => {
       let found : Ref[Array[String]?] = Ref(None)
@@ -1598,16 +1881,18 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
           return
         }
         let look = d.words_look
+        let scale = tree.words_scale_of(d.id)
         let tl = layout_words(
-          view_words_set(shown, look),
-          c.sp(look.size),
+          view_words_set(shown, look, d.words_breaks),
+          view_sp(scale, look.size),
           look.weight,
           if look.wrap { d.w } else { 1.0e9 },
           look.wrap,
           balance=look.balance,
-          line=view_line(c, look),
-          spacing=view_spacing(c, look),
+          line=view_line(scale, look),
+          spacing=view_spacing(scale, look),
           style=view_words_style(),
+          max_lines=look.max_lines,
         )
         let lines = Array::makei(tl.line_start.length(), fn(l) {
           let (a, b) = tl.line_range(l)
@@ -1629,7 +1914,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
 
 ///|
 /// The pointer moved to (x, y), no button down.
-pub fn Tester::move(self : Tester, x : Double, y : Double) -> Unit {
+pub fn Tester::move_to(self : Tester, x : Double, y : Double) -> Unit {
   finger(1, x, y)
   self.drawn_now()
 }
@@ -1647,13 +1932,14 @@ fn Tester::list_state(self : Tester) -> ListState {
       }
     }
   }
-  abort("no list on screen")
+  @halt.saying("no list on screen")
 }
 
 ///|
 /// The context the view is built in (between frames: for what a view would
 /// call on it while building, as Ctx::list_moved).
 pub fn Tester::ctx(self : Tester) -> Ctx {
+  self.reads_own()
   ignore(self)
   g()
 }
@@ -1688,6 +1974,7 @@ pub fn Tester::at_end(self : Tester) -> Bool {
 ///|
 /// Where row `item` of the list is (x, y, w, h), if built.
 pub fn Tester::row(self : Tester, item : Int) -> (Double, Double, Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -1759,7 +2046,7 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
       if name.length() == 1 {
         key_of_char(name.iter().next().unwrap())
       } else {
-        abort("no key \{name}")
+        @halt.saying("no key \{name}")
       }
   }
   self.key(code)
@@ -1839,6 +2126,8 @@ pub fn Tester::opened(self : Tester) -> Array[String] {
 ///|
 /// The clock moves on `ms`, no frame drawn.
 pub fn Tester::advance(self : Tester, ms : Double) -> Unit {
+  posted_tell()
+  fake_dues_to(self.fake, self.fake.time + ms)
   self.fake.time = self.fake.time + ms
 }
 
@@ -1978,6 +2267,7 @@ pub fn Tester::perf_said(self : Tester) -> (Array[Bool], Array[String]) {
 ///|
 /// The system asks for less transparency from now on, or no longer.
 pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
+  host_setting_set("set_reduce_transparency")
   self.fake.reduce_transparency = on
 }
 
@@ -1985,6 +2275,7 @@ pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
 /// The glass drawn in the last frame: (x, y, w, h, kind (5 frosted, 6
 /// liquid), the capture it shares (1, 2, …)).
 pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Double, Int, Int)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2008,8 +2299,35 @@ pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The same glass as far as it is drawn: its rect cut to its clip (a box over it that cuts it off, a sheet's foot),
+/// (x, y, w, h); none where nothing of it is left.
+pub fn Tester::drawn_glass_cut(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let kind = c.inst[b + 5].to_int()
+    if kind == 5 || kind == 6 {
+      let (x, y, w, h) = (c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3])
+      let (cx0, cy0, cx1, cy1) = (c.inst[b + 16], c.inst[b + 17], c.inst[b + 18], c.inst[b + 19])
+      let x0 = if cx1 > cx0 { dmax(x, cx0) } else { x }
+      let y0 = if cy1 > cy0 { dmax(y, cy0) } else { y }
+      let x1 = if cx1 > cx0 { dmin(x + w, cx1) } else { x + w }
+      let y1 = if cy1 > cy0 { dmin(y + h, cy1) } else { y + h }
+      if x1 > x0 && y1 > y0 {
+        out.push((x0, y0, x1 - x0, y1 - y0))
+      }
+    }
+  }
+  out
+}
+
+///|
 /// The same glass with its corner, the roundest of its four: (x, y, w, h, corner).
 pub fn Tester::drawn_glass_corners(self : Tester) -> Array[(Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2027,6 +2345,7 @@ pub fn Tester::drawn_glass_corners(self : Tester) -> Array[(Double, Double, Doub
 /// Whether each glass of the last frame (drawn_glass's order) frosts only what is under its own box (Glass's
 /// `contained`: its blur said below 0).
 pub fn Tester::drawn_glass_contained(self : Tester) -> Array[Bool] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2044,6 +2363,7 @@ pub fn Tester::drawn_glass_contained(self : Tester) -> Array[Bool] {
 /// The notches cut into the last frame's rectangles and frosted glass (Ctx::box `notch_r`): (kind (0 a rectangle, 5
 /// glass), its top, its circle's middle below the top, its radius, its fillets').
 pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2060,6 +2380,7 @@ pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Doubl
 ///|
 /// How many glyphs of the last frame are inked by the glass under them.
 pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   let c = g()
   let mut n = 0
@@ -2075,6 +2396,7 @@ pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
 /// The plain rectangles drawn in the last frame, as (x, y, w, h, colour
 /// RRGGBBAA with its opacity applied).
 pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2097,6 +2419,7 @@ pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Doub
 pub fn Tester::drawn_rect_corners(
   self : Tester,
 ) -> Array[(Double, Double, Double, Double, Int64, (Double, Double, Double, Double))] {
+  self.reads_own()
   let rs = self.drawn_rects()
   let out = []
   let c = g()
@@ -2117,6 +2440,7 @@ pub fn Tester::drawn_rect_corners(
 /// RRGGBBAA with its opacity applied). One of no opacity left (under half a step of 255) draws nothing and is none: a
 /// shadow's last frame as what casts it goes, the frame its card was gone in.
 pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2139,6 +2463,7 @@ pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Do
 ///|
 /// The glyphs drawn in the last frame: (x, y, colour).
 pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2160,6 +2485,7 @@ pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
 /// What shows of each glyph drawn in the last frame (seen at all: not wholly cut by its clip): its picture's box (x0,
 /// y0, x1, y1) cut by its clip.
 pub fn Tester::glyphs_shown(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let a = c.inst
@@ -2183,6 +2509,7 @@ pub fn Tester::glyphs_shown(self : Tester) -> Array[(Double, Double, Double, Dou
 /// Each glyph drawn in the last frame (seen at all) as it is drawn: its picture's box and the clip it is cut by (x0, y0,
 /// x1, y1 each), for what asks where words show within what cuts them (a column that scrolls).
 pub fn Tester::glyph_clips(self : Tester) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let a = c.inst
@@ -2200,6 +2527,7 @@ pub fn Tester::glyph_clips(self : Tester) -> Array[((Double, Double, Double, Dou
 /// What of each glyph drawn in the last frame is seen (glyphs_shown's), but for those whose middle something drawn
 /// after them hides (a fill nearly whole, a picture, glass: words_over_hides): what a person can read.
 pub fn Tester::glyphs_seen(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let a = c.inst
@@ -2234,6 +2562,7 @@ pub fn Tester::glyphs_seen(self : Tester) -> Array[(Double, Double, Double, Doub
 /// The rich paragraph whose text contains `s`, as laid out, and where it
 /// is (its content's top left).
 pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -2277,7 +2606,7 @@ fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
     if out.length() > 0 || c.runs.is_empty() || a <= 0.0 {
       return
     }
-    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w)
+    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id), kept=c.words_breaks)
     match lay.text.find(s) {
       Some(i) =>
         for r in lay.rects(i, i + s.length()) {
@@ -2297,10 +2626,18 @@ fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
 pub fn Tester::tap_run(self : Tester, s : String) -> Unit {
   let rs = self.run_rects(s)
   if rs.length() == 0 {
-    abort("no rich text \"\{s}\" on screen")
+    @halt.saying("no rich text \"\{s}\" on screen")
   }
   let (x, y, w, h) = rs[0]
   self.tap(x + w / 2.0, y + h / 2.0)
+}
+
+///|
+/// The picture at `src` takes `ms` to decode: asked for at a moment, its host says it is decoded at that moment and
+/// `ms` after it, on the timeline (a frame drawn there), not at the frame after it is asked for, as every other one
+/// is. Where the test says when itself (Tester::finish), that.
+pub fn Tester::decode_after(self : Tester, src : String, ms : Double) -> Unit {
+  self.fake.decode_after[src] = ms
 }
 
 ///|
@@ -2334,6 +2671,13 @@ pub fn Tester::image_loads(self : Tester) -> Array[(String, Int)] {
 }
 
 ///|
+/// The most bytes handed over for decodes (image_load_bytes) the host held at once in this run: what a host keeps of
+/// them till they are let go of (image_free), as a phone's Java side kept a GIF's every frame's (#5301).
+pub fn Tester::host_image_bytes_most(self : Tester) -> Int {
+  self.fake.image_bytes_most
+}
+
+///|
 /// How many decoded images are kept.
 pub fn Tester::images_kept(self : Tester) -> Int {
   self.fake.images.length()
@@ -2343,6 +2687,7 @@ pub fn Tester::images_kept(self : Tester) -> Int {
 /// Every instance drawn in the last frame in the order drawn, each its numbers whole (scene.mbt's layout: its rect 0-3,
 /// its kind 5, its clip 16-19 and 24-31, its outer 40-51…): what is cut where, read as the renderers read it.
 pub fn Tester::drawn_instances(self : Tester) -> Array[Array[Double]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   Array::makei(c.ninst, fn(k) { Array::makei(inst_size, fn(j) { c.inst[k * inst_size + j] }) })
@@ -2352,6 +2697,7 @@ pub fn Tester::drawn_instances(self : Tester) -> Array[Array[Double]] {
 /// Every instance drawn in the last frame in the order drawn (later over earlier): its kind (0 a rect, 4 an image…),
 /// x, y, w, h and opacity.
 pub fn Tester::drawn_order(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2366,6 +2712,7 @@ pub fn Tester::drawn_order(self : Tester) -> Array[(Int, Double, Double, Double,
 /// Every instance drawn in the last frame in the order drawn, with what cuts it: its kind, x, y, w, h, and the rect it
 /// is cut to (x0, y0, x1, y1: scene.mbt 16-19); what of it lies outside that is not seen.
 pub fn Tester::drawn_cut(self : Tester) -> Array[(Int, Double, Double, Double, Double, (Double, Double, Double, Double))] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2382,6 +2729,7 @@ pub fn Tester::drawn_cut(self : Tester) -> Array[(Int, Double, Double, Double, D
 /// rect's top and height, then from its top where it is 0 and how far below that it is whole, from its foot where it is
 /// 0 and how far above that it is whole (a soft of 0: none that way).
 pub fn Tester::drawn_fades(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2398,6 +2746,7 @@ pub fn Tester::drawn_fades(self : Tester) -> Array[(Int, Double, Double, Double,
 /// kind, its rect's top and height, then from its left how far it is whole past where it is 0, and from its right (0:
 /// none that way), with where each is 0.
 pub fn Tester::drawn_fades_across(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2413,6 +2762,7 @@ pub fn Tester::drawn_fades_across(self : Tester) -> Array[(Int, Double, Double, 
 /// The image instances drawn in the last frame: (x, y, w, h, u0, v0, du,
 /// dv, opacity).
 pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2441,6 +2791,7 @@ pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
 pub fn Tester::drawn_image_clips(
   self : Tester,
 ) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2511,6 +2862,7 @@ pub fn Tester::face_wider(self : Tester, face : Int, em : Double) -> Unit {
 /// Where the first text node containing `s` is drawn (its top left), moved as it and what holds it move
 /// (draw.mbt).
 pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -2523,7 +2875,7 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && view_words_set(d.words, d.words_look, d.words_breaks).contains(s) && d.alpha > 0.0 {
           return Some((d.x, d.y))
         }
       }
@@ -2537,6 +2889,7 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
 /// holding it that clips, where that box is drawn (a clip moves with its own look and its holders', not with what it
 /// holds); nothing shows when w or h is 0.
 pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -2569,7 +2922,7 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
       let drawn = tree.drawn_held()
       for e in drawn {
         let (d, holder, _) = e
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && view_words_set(d.words, d.words_look, d.words_breaks).contains(s) && d.alpha > 0.0 {
           let mut x0 = d.x
           let mut y0 = d.y
           let mut x1 = d.x + d.w
@@ -2601,6 +2954,7 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
 /// goes: (0.9, 0.9, 1.0)); words, as they are drawn, by their looks' `words` too (a panel's words after its ground).
 /// None when there is no such node.
 pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)? {
+  self.reads_own()
   let c = g()
   let found = self.node_named(what)
   guard found >= 0 else { return None }
@@ -2629,6 +2983,7 @@ pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)
 /// How far the node `what` (as look_of finds it) was turned in the last frame, in radians clockwise: its own look's
 /// and all its ancestors' together. None when there is no such node.
 pub fn Tester::turn_of(self : Tester, what : String) -> Double? {
+  self.reads_own()
   let c = g()
   let found = self.node_named(what)
   guard found >= 0 else { return None }
@@ -2720,8 +3075,11 @@ pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy
 /// A key (`code`, `mods` held) the host says came at `at` (its own moment), told now, later: no frame drawn.
 pub fn Tester::key_told(self : Tester, code : Int, mods : Int, at : Double) -> Unit {
   self.fake.event_at = at
+  posted_tell()
+  let was = g().focus
   on_key(code, mods)
   self.fake.event_at = -1.0
+  self.focus_moved_held(code, mods, was)
 }
 
 ///|
@@ -2729,6 +3087,7 @@ pub fn Tester::key_told(self : Tester, code : Int, mods : Int, at : Double) -> U
 /// drawn.
 pub fn Tester::text_told(self : Tester, s : String, at : Double) -> Unit {
   self.fake.event_at = at
+  posted_tell()
   on_text(0, s, 0, 0)
   self.fake.event_at = -1.0
 }
@@ -2813,6 +3172,7 @@ pub fn Tester::window_snap_rect(self : Tester) -> (Double, Double, Double, Doubl
 ///|
 /// The window maximized or not, from the next frame on (@hostapi.window_zoomed).
 pub fn Tester::set_window_zoomed(self : Tester, zoomed : Bool) -> Unit {
+  host_setting_set("set_window_zoomed")
   self.fake.zoomed = zoomed
   self.fake.wants = true
 }
@@ -2831,6 +3191,7 @@ pub fn Tester::set_window_snap(self : Tester, state : Int) -> Unit {
 /// what the old frame put over all of it at its root first; then the tree's, an old view's where the tree hosts one
 /// there, or where nothing of the tree's is and the one old view is the whole window, taking input.
 pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
+  self.reads_own()
   let c = self.ctx()
   let old = fn() { desk_drags(hit_in(c.hit_ids, c.hit_rects, x, y)) }
   match view_tree() {
@@ -2852,6 +3213,42 @@ pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
 }
 
 ///|
+/// What a press at (x, y) would land on, pressing nothing, found as drags_window_at finds it (view_pointer's order):
+/// "window" where it drags the window; "pressed" where what it lands on does something pressed (a node of the window's
+/// tree with its press or its drag said, as Tree::target_at has it, the rule of a press's room measuring by the same;
+/// an old view's target whose press is read, Ctx::takes_presses); "" where it lands on nothing that does (what is only
+/// pointed at or named, a top row that moves no window, nothing).
+pub fn Tester::press_lands_at(self : Tester, x : Double, y : Double) -> String {
+  self.reads_own()
+  let c = self.ctx()
+  let old = fn() {
+    let m = hit_marks(hit_in(c.hit_ids, c.hit_rects, x, y))
+    if (m & mark_drags) != 0 {
+      "window"
+    } else if (m & mark_takes) != 0 {
+      "pressed"
+    } else {
+      ""
+    }
+  }
+  match view_tree() {
+    None => old()
+    Some(tree) => {
+      old_hits_place(c, Some(tree))
+      if old_root_hit(c, x, y) {
+        return old()
+      }
+      match tree.target_at(x, y) {
+        TopRow(id) => if tree.moves_window(id) { "window" } else { "" }
+        Pressed(_) | Dragged(_) => "pressed"
+        Hosted(_) => old()
+        Nothing => if old_whole.val && island_allows(old_whole_island()) { old() } else { "" }
+      }
+    }
+  }
+}
+
+///|
 /// Tab (Shift+Tab when `back`): the focus to the next stop (focus.mbt).
 pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
   self.key(key_tab, mods=if back { mod_shift_key } else { 0 })
@@ -2861,6 +3258,7 @@ pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
 /// The semantics tree as it is read now (Ctx::semantics_tree): the old views' as the last frame built them, the window's
 /// tree's nodes as they say they are now.
 pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
+  self.reads_own()
   let tree = g().semantics_tree()
   self.hold_named(tree)
   tree
@@ -2869,6 +3267,7 @@ pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
 ///|
 /// The semantics tree as text, hidden nodes left out (Ctx::semantics_dump).
 pub fn Tester::semantics_dump(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   g().semantics_dump()
 }
@@ -2985,6 +3384,7 @@ pub fn Tester::all(
   disabled? : Bool,
   within? : SemNode,
 ) -> Array[SemNode] {
+  self.reads_own()
   self.found({ role, label, has, checked, selected, expanded, disabled, within })
 }
 
@@ -3002,6 +3402,7 @@ pub fn Tester::get(
   disabled? : Bool,
   within? : SemNode,
 ) -> SemNode raise {
+  self.reads_own()
   let f : Find = { role, label, has, checked, selected, expanded, disabled, within }
   let found = self.found(f)
   if found.length() == 1 {
@@ -3026,6 +3427,7 @@ pub fn Tester::query(
   disabled? : Bool,
   within? : SemNode,
 ) -> SemNode? {
+  self.reads_own()
   let found = self.found({ role, label, has, checked, selected, expanded, disabled, within })
   if found.is_empty() {
     None
@@ -3084,6 +3486,7 @@ pub fn Tester::act_on(self : Tester, s : SemNode, action : Action) -> Unit raise
 ///|
 /// The node that has the keyboard's focus, if it says something.
 pub fn Tester::focused(self : Tester) -> SemNode? {
+  self.reads_own()
   for s in self.semantics() {
     if s.focused {
       return Some(s)
@@ -3108,14 +3511,78 @@ fn Tester::hold_corners(self : Tester) -> Unit {
     return
   }
   let c = g()
-  let faults = c.held_corner_faults()
+  let faults = corners_unknown(c.held_corner_faults())
   if faults.is_empty() {
     return
   }
-  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; the rule: mbui's src/ui/corners.mbt):\n" +
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{Repr(c.corner_ladder)}; the rule: mbui's src/ui/corners.mbt):\n" +
     faults.join("\n")
-  println(said)
-  abort(said)
+  @halt.saying(said)
+}
+
+///|
+/// The corner faults a test knows and keeps (Tester::corners_known), as corner_fault_unplaced says them: those
+/// Tester::hold_corners passes over. None but where a test says them.
+// kept across runs: set again by each Tester (Tester::new)
+let corners_known_now : Ref[Array[String]] = Ref([])
+
+///|
+/// Faults of the corner rule this test knows and keeps (a design not yet decided, each with why where it is said):
+/// Tester::hold_corners passes over each fault that is one of them where it stands (corner_fault_unplaced: what it
+/// names by its words and size, its container the same, the rule's same words; where they stand on the window, and
+/// which of the frame's nodes they are, not compared: the same part as a list scrolls). Any other fails as ever:
+/// another part, another size, the rule's other words. Said once, after the Tester is made, for the rest of it.
+pub fn Tester::corners_known(self : Tester, known : Array[String]) -> Unit {
+  ignore(self)
+  corners_known_now.val = known.map(corner_fault_unplaced)
+}
+
+///|
+/// Of `faults`, those the test does not know (Tester::corners_known): what Tester::hold_corners fails on.
+fn corners_unknown(faults : Array[String]) -> Array[String] {
+  let known = corners_known_now.val
+  faults.filter(fn(f) { !known.contains(corner_fault_unplaced(f)) })
+}
+
+///|
+/// A fault of the corner rule said without where what it names stands: each `(at x,y ` of its as `(at * `, each
+/// `node n` as `node *` (Tester::corners_known's way of comparing).
+pub fn corner_fault_unplaced(fault : String) -> String {
+  let sb = StringBuilder()
+  let cs = fault.to_array()
+  let n = cs.length()
+  let starts = fn(i : Int, w : String) -> Bool {
+    let ws = w.to_array()
+    if i + ws.length() > n {
+      return false
+    }
+    for j in 0..<ws.length() {
+      if cs[i + j] != ws[j] {
+        return false
+      }
+    }
+    true
+  }
+  let mut i = 0
+  while i < n {
+    if starts(i, "(at ") {
+      sb.write_string("(at *")
+      i += 4
+      while i < n && cs[i] != ' ' {
+        i += 1
+      }
+    } else if starts(i, "node ") {
+      sb.write_string("node *")
+      i += 5
+      while i < n && cs[i] >= '0' && cs[i] <= '9' {
+        i += 1
+      }
+    } else {
+      sb.write_char(cs[i])
+      i += 1
+    }
+  }
+  sb.to_string()
 }
 
 ///|
@@ -3135,6 +3602,7 @@ fn Ctx::held_corner_faults(self : Ctx) -> Array[String] {
 /// shows at its end, for the rules held at rest (a card last in a panel ending in its foot corners: corner_faults).
 /// How many it scrolled.
 pub fn Tester::scroll_all_to_end(self : Tester) -> Int {
+  self.reads_own()
   let c = g()
   let at : Array[(Double, Double)] = c.with_tree_nodes(fn() {
     let out = []
@@ -3152,4 +3620,29 @@ pub fn Tester::scroll_all_to_end(self : Tester) -> Int {
   }
   self.run_for(move_most_ms)
   at.length()
+}
+
+///|
+/// How many things are drawn in their bones now (Ctx::bones, View::bones): what a page shows of what it still waits
+/// for. None: nothing on screen waits.
+pub fn Tester::bones_drawn(self : Tester) -> Int {
+  self.reads_own()
+  let _ = self
+  let c = g()
+  let mut n = 0
+  for i in 0..<c.count {
+    if c.nodes[i].bones != 0L {
+      n += 1
+    }
+  }
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.bones != 0L && d.alpha > 0.0 {
+          n += 1
+        }
+      }
+    None => ()
+  }
+  n
 }

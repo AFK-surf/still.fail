@@ -57,7 +57,7 @@ pub let scrollbar_fade_ms : Double = 200.0
 
 ///|
 /// How a bar shows (the file's head): what scrolls holds one; how long it scrolls the bar is told by it.
-struct Bar {
+priv struct Bar {
   /// when it last came in (the frames' clock), and from how far it showed then
   mut in_at : Double
   mut in_from : Double
@@ -271,19 +271,6 @@ fn Ctx::float_takes(
 }
 
 ///|
-/// Whether node `i` is node `root` or in it.
-fn Ctx::under(self : Ctx, i : Int, root : Int) -> Bool {
-  let mut p = i
-  while p >= 0 {
-    if p == root {
-      return true
-    }
-    p = self.nodes[p].parent
-  }
-  false
-}
-
-///|
 /// The bar of what scrolls `id` (a list's, a sideways or capped box's), until when what it is for scrolls, and the
 /// theme it was built in.
 fn Ctx::bar_owner(self : Ctx, id : Int) -> (Bar, Double, Theme)? {
@@ -302,7 +289,7 @@ fn Ctx::bar_owner(self : Ctx, id : Int) -> (Bar, Double, Theme)? {
 /// changes (Ctx::bar_moved): what draws one (Ctx::side_bar, Ctx::bar_where, as the frame is painted) reads its own,
 /// painted again as it changes, not as another's does.
 // kept across runs: put back as a run begins (reset_globals)
-let bars_hand : Map[Int, @signals.Signal[(Bool, Bool)]] = {}
+let bars_hand : Map[Int, @signals.Signal[(Bool, Bool)]] = Map([])
 
 ///|
 /// How the hand has the bar of `id` (near, held), read: its signal made as it is first read.

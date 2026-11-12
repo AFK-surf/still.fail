@@ -4,7 +4,7 @@
 
 ///|
 test "42-notice-looking" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("notice-looking"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -22,7 +22,7 @@ test "42-notice-looking" {
     f.see("端到端测试")
     f.no_notice("这个不该通知 083209")
     // the bottom bar at its end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

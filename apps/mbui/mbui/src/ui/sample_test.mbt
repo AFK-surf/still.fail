@@ -39,7 +39,7 @@ fn Way::at(self : Way, now : Double) -> Double {
 test "set out after a long rest: its start that frame's time, each frame handed that frame's, sampled at rest, then not" {
   let way_ms = 100.0
   let w = { start: -1.0, dur: way_ms, sampled: [], mover: @ui.Mover::new() }
-  let go = Ref::new(false)
+  let go = Ref(false)
   let seen : Array[(Double, Double)] = []
   let t = @ui.Tester::new(fn(c) {
     if go.val {

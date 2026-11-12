@@ -6,6 +6,8 @@
 // window's right under the reader's bar, 320 wide, on its paper (the old panel's place, desk_panel's: the text kept
 // clear of it as reader_column has it), its head the title and its close. It follows the tier as the window changes,
 // as the old panel did; closed (Escape, its close, the sheet let go, gone back), it goes as the sheet goes, or at once.
+// A reader in a tab beside a chat has the same docked panel in the tab's own stage (reader_layout_docked, laid by
+// sfbase's viewer_tab_node), going and coming back with the tab.
 
 ///|
 /// What of the reader the window's tree lays over it, in `root` (presented_nodes'): its layout's panel while one is
@@ -20,34 +22,11 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
   // docked at the window's right, under the bar (desk_panel's place)
   root.show(fn() { open() && !small() }, fn(o) {
     let r = reading()
-    let paper = fn() { reader_paper((viewer_host().reader_style)().paper) }
     // The reader can itself be inside the viewer's modal layer. Its panel must take input above that layer, while
     // presenters (whose serials start at 1) still open above the panel.
     o.over(Is(true)).stacked(Is(0)) |> ignore
     o.box(fn(top) { top.height(By(fn() { Some(viewer_bar_under()) })) |> ignore }) |> ignore
-    o.box(fn(row) {
-      style_node(row, fn() { desk_panel_row })
-      row.box(fn(room) { style_node(room, fn() { desk_panel_room }, in_row=true) }) |> ignore
-      row.box(fn(p) {
-        style_node(p, fn() { desk_panel_box.then(@ui.style(bg=Data(paper().ground))) }, in_row=true)
-        // (a press on it its own: not the text's under it)
-        p.presses(Is(true)).on_press(fn() {  }) |> ignore
-        p.box(fn(head) {
-          style_node(head, fn() { desk_panel_head })
-          words_node(head, fn() { t("web-pages.drive.reader.layout") }, fn() {
-            desk_panel_title.then(@ui.text_style(color=Data(paper().ink)))
-          })
-          |> ignore
-          head.box(fn(g) { style_node(g, fn() { desk_grow }, in_row=true) }) |> ignore
-          chip_node(head, fn() { "" }, close(r), icon="close", ink=fn() { paper().ink }, said=fn() { t("common.close") })
-          |> ignore
-        })
-        |> ignore
-        layout_body(p, false, paper)
-      })
-      |> ignore
-    })
-    |> ignore
+    reader_layout_docked(o, close(r))
   })
   // a sheet from the window's foot on 小屏, half of it tall, its title as the host's reader sheet heads it
   let x : PanelOf = {
@@ -94,6 +73,7 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
         layout_body(col, true, sheet_paper)
       },
       foot: None,
+      hugs: false,
     }),
   }
   let shut = fn() {
@@ -104,7 +84,48 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
   }
   root.box(made_for=loc, fn(layer) {
     layer.over(Is(true)).stacked(Is(0)) |> ignore
-    sheet_node(layer, fn() { open() && small() }, x, x.nodes.unwrap(), shut, shut, Unanchored)
+    sheet_node(
+      layer,
+      "sf-reader-layout",
+      fn() { open() && small() },
+      fn() { [{ n: 0, x, nodes: x.nodes, close: shut, from: Unanchored, lists: -1 }] },
+      shut,
+    )
+  })
+  |> ignore
+}
+
+///|
+/// The layout's panel docked at the right of `parent` (a column), from where it is to its foot: the text's room, then
+/// the panel 320 wide on the reader's paper (desk_panel's box), its head the title and its close (`close`), its controls
+/// (layout_body). `fits`: no wider than `parent` where that is less (a tab's stage beside a chat: viewer_tab_node's).
+#callsite(autofill(loc))
+pub fn reader_layout_docked(parent : @view.View, close : () -> Unit, fits? : Bool = false, loc~ : SourceLoc) -> Unit {
+  let paper = fn() { reader_paper((viewer_host().reader_style)().paper) }
+  parent.box(made_for=loc, fn(row) {
+    style_node(row, fn() { desk_panel_row })
+    row.box(fn(room) { style_node(room, fn() { desk_panel_room }, in_row=true) }) |> ignore
+    row.box(fn(p) {
+      style_node(p, fn() { desk_panel_box.then(@ui.style(bg=Data(paper().ground))) }, in_row=true)
+      if fits {
+        p.shrink(Is(1.0)).min_width(Is(Some(0.0))).clips(Is(true)) |> ignore
+      }
+      // (a press on it its own: not the text's under it)
+      ground_node(p) |> ignore
+      p.box(fn(head) {
+        style_node(head, fn() { desk_panel_head })
+        words_node(head, fn() { t("web-pages.drive.reader.layout") }, fn() {
+          desk_panel_title.then(@ui.text_style(color=Data(paper().ink)))
+        })
+        |> ignore
+        head.box(fn(g) { style_node(g, fn() { desk_grow }, in_row=true) }) |> ignore
+        chip_node(head, fn() { "" }, close, icon="close", ink=fn() { paper().ink }, said=fn() { t("common.close") })
+        |> ignore
+      })
+      |> ignore
+      layout_body(p, false, paper)
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -260,16 +281,12 @@ fn layout_swatch(
     presses_node(s, press)
     s.says(By(fn() { Some(@view.said(Button, label=glyph() + " " + name())) })) |> ignore
     s.box(fn(g) {
-      style_node(g, fn() { (if on() { desk_swatch_on } else { desk_swatch_off }).then(@ui.style(bg=Data(paper.ground))) })
-      g
-      .edge(By(fn() {
-        if on() {
-          (desk_swatch_on_line, p().accent)
-        } else {
-          (desk_swatch_off_line, alpha(p().ink, desk_swatch_line))
-        }
-      }))
-      |> ignore
+      // (its ring desk_swatch_on's B2 in the accent where it is on, desk_swatch_off's B1 in the page's ink, faint)
+      style_node(g, fn() {
+        (if on() { desk_swatch_on } else { desk_swatch_off }).then(
+          @ui.style(bg=Data(paper.ground), border_color=Data(if on() { p().accent } else { alpha(p().ink, desk_swatch_line) })),
+        )
+      })
       g.box(fn(m) {
         m
         .words_runs(By(fn() { [@ui.span(glyph(), serif=true)] }))
@@ -284,13 +301,6 @@ fn layout_swatch(
   })
   |> ignore
 }
-
-///|
-/// A swatch's ring (desk_swatch_on's border=B2, desk_swatch_off's B1).
-let desk_swatch_on_line : Double = 2.0
-
-///|
-let desk_swatch_off_line : Double = 1.0
 
 ///|
 /// A size's key in `row` (desk_size_key's): A− or A+, 32 high, 44 wide at least, quiet where it can go no further (not
@@ -309,6 +319,7 @@ fn layout_size_key(
     style_node(k, fn() { desk_size_key_box })
     k
     .alpha(By(fn() { if on() { desk_whole } else { desk_size_key_off } }))
+    .radius(By(desk_size_key_corner))
     .ground(By(fn() { if on() && lit_node(k) { @ui.tree_theme().color(Tint) } else { no_ground } }))
     .says(By(fn() { Some(@view.said(Button, label=said())) }))
     |> ignore

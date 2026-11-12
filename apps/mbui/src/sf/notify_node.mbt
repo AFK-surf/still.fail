@@ -553,7 +553,8 @@ pub fn way_tile_node(
             .lies_along(Is(Middle))
             .ground(By(fn() { @ui.tree_theme().color(Danger) }))
             |> ignore
-            words_node(m, fn() { "!" }, fn() { notify_alert_words }) |> ignore
+            // (part of the mark: at its size whatever the system's size of words)
+            mark_words_node(m, fn() { "!" }, fn() { notify_alert_words }) |> ignore
           })
           |> ignore
         })

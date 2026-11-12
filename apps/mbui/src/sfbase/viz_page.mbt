@@ -136,7 +136,7 @@ pub fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
         Some(String(p)) => {
           let words = p.trim().to_owned()
           if words != "" {
-            let cut = if words.length() > 4000 { words.view(end_offset=4000).to_owned() } else { words }
+            let cut = if words.length() > 4000 { words.clamped_view(end=4000).to_owned() } else { words }
             let took = match hears.follow_up {
               Some(f) => f(cut)
               None => false
@@ -167,7 +167,10 @@ pub fn viz_frame(
   if !viz_left_chats.is_empty() {
     viz_shown_again(key)
   }
-  let owner = c.id("viz/owner/" + key)
+  // (by the page it is drawn in, not by an id of where it is built: a chat's row is scoped by its index, and older
+  // messages come in before it as its chat is read back, which made the page again, loaded anew, the one before kept
+  // hidden; outside a page, by where it is built)
+  let owner = if c.page_owner() != 0 { c.page_owner() } else { c.id("viz/owner/" + key) }
   let f = match viz_frame_for(key, owner) {
     Some(f) => f
     None => {
@@ -285,7 +288,7 @@ pub fn viz_frame(
     if tall.target() != said {
       match c.row_way() {
         Some(way) => on_row_way(c, tall, said, way)
-        None => tall.animate(c, said, @motion.move(over=(said - tall.get(c)).abs()))
+        None => tall.animate(c, said, @motion.moved(over=(said - tall.get(c)).abs()))
       }
     }
     let h = tall.get(c)
@@ -512,7 +515,7 @@ pub fn viz_follow_up(station : String, session : String) -> (String) -> Bool {
 ///|
 /// Words a visualization asked to send, by the draft key of the chat whose composer they go into: taken by it.
 // kept across runs: put back by viz_pages_reset (sfbase's reset)
-pub let followed_into : Map[String, String] = {}
+pub let followed_into : Map[String, String] = Map([])
 
 ///|
 /// The visualization a message of chat `session` on `station` places, kept by session `key`, drawn there; the ways

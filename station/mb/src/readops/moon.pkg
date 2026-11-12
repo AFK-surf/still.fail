@@ -8,5 +8,8 @@ import {
   "station/jsjson",
   "station/locate",
   "station/nodepath",
+  "station/jscase",
+  "station/history",
+  "station/recent",
   "moonbitlang/core/json",
 }

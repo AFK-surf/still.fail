@@ -19,13 +19,13 @@ pub let faults_stop : Ref[Bool] = Ref(true)
 ///|
 /// The faults told so far (each told once).
 // kept across runs: what the host was told, never told again
-let faults_said : Map[String, Bool] = {}
+let faults_said : Map[String, Bool] = Map([])
 
 ///|
 /// A fault with no boundary round it known (said outside any node): stopped where faults stop, else told.
 pub fn fault(said : String) -> Unit {
   if faults_stop.val {
-    abort(said)
+    @halt.saying(said)
   }
   if !faults_said.contains(said) {
     faults_said[said] = true
@@ -68,7 +68,7 @@ pub fn View::faults_to(self : View, shown : (String) -> Unit) -> View {
   n.fault_to = Some(fn(said) {
     if !told.val {
       told.val = true
-      self.at_moment(self.tree.logic_at(), fn() { shown(said) }) |> ignore
+      self.at_moment(self.tree.logic_said(), fn() { shown(said) }) |> ignore
     }
   })
   self

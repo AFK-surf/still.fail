@@ -49,8 +49,16 @@ pub let preview_coming : Ref[(String, Json?)?] = Ref(None)
 pub let preview_broken : Ref[String?] = Ref(None)
 
 ///|
-/// MBUI_FIXTURE=chat-preview-<what>: which file opens.
+/// MBUI_FIXTURE=chat-preview-<what>: which file opens. (chat-view-side-audio: the song kept beside the chat stands as
+/// chat-preview-audio's.)
 pub fn fixture_preview(mode : String) -> Unit {
+  if mode == "chat-view-side-audio" {
+    match @sfbase.tab_viewer("ws1/st1:s-c1", fixture_view_tab(mode)) {
+      Some(v) => v.pinned = Some(fixture_song_stands)
+      None => ()
+    }
+    return
+  }
   let which = match mode {
     "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-swipe-wide" | "chat-preview-coming" | "chat-preview-coming-part" | "chat-preview-broken" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
@@ -99,19 +107,8 @@ pub fn fixture_preview(mode : String) -> Unit {
         None => ()
       }
       if viewer.get() is Some(v) {
-        // the song paused at 0:31 of 1:35, the same on every run
         if which.has_suffix(".m4a") {
-          v.pinned = Some({
-            state: 1,
-            duration: 95000.0,
-            position: 31000.0,
-            buffered: 95000.0,
-            playing: false,
-            buffering: false,
-            ended: false,
-            width: 0.0,
-            height: 0.0,
-          })
+          v.pinned = Some(fixture_song_stands)
         }
         if mode == "chat-preview-webm-unsupported" {
           v.pinned = Some({
@@ -129,6 +126,21 @@ pub fn fixture_preview(mode : String) -> Unit {
       }
     }
   }
+}
+
+///|
+/// How the made-up song stands: paused at 0:31 of 1:35, the same on every run.
+// kept across runs: a value (no field of it changes)
+let fixture_song_stands : @kit.MediaStatus = {
+  state: 1,
+  duration: 95000.0,
+  position: 31000.0,
+  buffered: 95000.0,
+  playing: false,
+  buffering: false,
+  ended: false,
+  width: 0.0,
+  height: 0.0,
 }
 
 ///|
@@ -209,7 +221,7 @@ pub fn fixture_named(path : String, p : Json?, done : (Result[(Json, Bytes), Jso
 
 ///|
 // kept across runs: the log and the PDF as made once, the same bytes whoever asks (each is made of nothing else)
-let fixture_made : Map[String, Bytes] = {}
+let fixture_made : Map[String, Bytes] = Map([])
 
 ///|
 /// The long log: 12000 lines, each saying which it is (and some Chinese, cut across parts' ends). Made once: it is read
@@ -235,7 +247,7 @@ fn fixture_log_made() -> Bytes {
 
 ///|
 // kept across runs: each picture as made once, the same bytes whoever asks (a picture is its size and side alone)
-let fixture_pngs : Map[(Int, Int, Bool), Bytes] = {}
+let fixture_pngs : Map[(Int, Int, Bool), Bytes] = Map([])
 
 ///|
 /// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen. Made once for each size and
@@ -344,7 +356,7 @@ fn fixture_pdf_made() -> Bytes {
   sb.write_string("xref\n0 \{objs.length() + 1}\n0000000000 65535 f \n")
   for o in offsets {
     let d = "\{o}"
-    sb.write_string("0000000000".view(end_offset=10 - d.length()).to_owned() + d + " 00000 n \n")
+    sb.write_string("0000000000".exact_view(end=10 - d.length()).to_owned() + d + " 00000 n \n")
   }
   sb.write_string("trailer\n<< /Size \{objs.length() + 1} /Root 1 0 R >>\nstartxref\n\{at}\n%%EOF\n")
   @utf8.encode(sb.to_string())

@@ -111,7 +111,7 @@ test("a provider is set up for each runtime from where it speaks", () => {
 test("opencode go sets up each runtime its own way", () => {
   const claude = accessEnv("claude", "opencode-go", "k", undefined, {});
   assert.equal(claude.ANTHROPIC_BASE_URL, OPENCODE);
-  assert.equal(claude.ANTHROPIC_SMALL_FAST_MODEL, "deepseek-flash");
+  assert.equal(claude.ANTHROPIC_SMALL_FAST_MODEL, "claude-haiku-5-5");
   assert.equal(accessEnv("codex", "opencode-go", "k", undefined, {}).OPENCODE_SESSION, "stillfail-{route}");
   assert.equal(Object.fromEntries(codexOverrides("opencode-go", "m", {})).model, '"m"');
   assert.equal(codexOverrides("subscription", undefined, {}).length, 2);

@@ -13,19 +13,19 @@
 /// it gone or not. Each kept while something of the window's tree reads its text (md_readers) or its answer is kept
 /// (parsed): let go as both are gone, never kept for each text there ever was.
 // kept across runs: put back as a run begins (on_reset)
-let md_answered : Map[String, @signals.Signal[Int]] = {}
+let md_answered : Map[String, @signals.Signal[Int]] = Map([])
 
 ///|
 /// How many of the window's tree's readers read each text now (table_node's, as made and as they say another).
 // kept across runs: put back as a run begins (on_reset)
-let md_readers : Map[String, Int] = {}
+let md_readers : Map[String, Int] = Map([])
 
 ///|
 /// The core's reading of each text something of the window's tree reads now (md_readers), held by them while they do,
 /// whatever the texts read lately (blocks_of's, which others push out): from its answer, or as it was kept as the
 /// first of them came; let go as the last goes.
 // kept across runs: put back as a run begins (on_reset)
-let md_held : Map[String, Array[MdBlock]] = {}
+let md_held : Map[String, Array[MdBlock]] = Map([])
 
 ///|
 fn init {
@@ -159,7 +159,7 @@ fn table_cell_runs(cell : Array[MdInline]) -> Array[@ui.Run] {
 /// words a person's.
 fn table_runs_look() -> @view.RunsLook {
   let p = theme().p
-  { ..@view.runs_plain, link: p.blue, pressed: alpha(p.blue, 0.14), code_ink: p.code_ink, code_ground: 0L, code_scale: 0.9, words: true }
+  { link: p.blue, pressed: alpha(p.blue, 0.14), code_ink: p.code_ink, code_ground: 0L, code_scale: 0.9, words: true }
 }
 
 ///|
@@ -203,6 +203,7 @@ pub fn table_node(
 /// A table (`table`, as it changes) as nodes in `outer` (table_node's, whatever reads its Markdown: a table alone, or
 /// one of a message's blocks, markdown_node's): its columns' widths from the room `outer` is given (View::by_room), `bleed` past
 /// it either side where it scrolls across; its copy key where `copy`; its links taken by `on_link` (`on_link_hold`).
+#callsite(autofill(loc))
 fn md_table_body_node(
   outer : @view.View,
   table : () -> MdTable?,
@@ -210,6 +211,8 @@ fn md_table_body_node(
   copy : Bool,
   on_link : (String) -> Unit,
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?,
+  fit? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
     outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
     // (its columns by the room it is given, laid out in that same layout)
@@ -228,7 +231,7 @@ fn md_table_body_node(
             (lo, hi, false)
           })
         })
-        table_widths(extents, room(), false, fn(x) { node_sp(outer, x) })
+        table_widths(extents, room(), fit, fn(x) { node_sp(outer, x) })
       }
       let widths = fn() {
         match table() {
@@ -236,6 +239,43 @@ fn md_table_body_node(
           None => ([], 0.0)
         }
       }
+      // (shown whole in the column where it fits not (`fit`, a chat's shared picture): its every part as much smaller
+      // as makes it as wide as the room, nothing of it to scroll to: Md::table's)
+      let scale = fn() {
+        if fit {
+          let total = widths().1
+          let avail = room()
+          if total > avail && avail > 0.0 {
+            avail / total
+          } else {
+            1.0
+          }
+        } else {
+          1.0
+        }
+      }
+      // (at once: whether it fits is the room's, the width the window or the column gives it, an arrangement by it and
+      // no coming or going of its own)
+      outer.pick(fn() { scale() < 1.0 }, at_once=true, fn(outer, fitted) {
+        if fitted {
+          outer.box(made_for=loc, fn(whole) {
+            whole.padding(Is((bleed, 0.0, bleed, 0.0))) |> ignore
+            table_frame_node(
+              whole,
+              table,
+              fn() {
+                let (ws, total) = widths()
+                let k = scale()
+                (ws.map(fn(w) { w * k }), total * k)
+              },
+              scale~,
+              on_link~,
+              on_link_hold~,
+            )
+          })
+          |> ignore
+          return
+        }
       // (its head's row's height, as it comes to in its room: where its copy key's middle is)
       let head_h : Ref[@view.View?] = Ref(None)
       // (its own key, whatever its words: two tables of the same each their own menu, copy and picture)
@@ -266,6 +306,7 @@ fn md_table_body_node(
         |> ignore
       })
       |> ignore
+      })
     })
     |> ignore
 }
@@ -282,6 +323,7 @@ fn table_frame_node(
   head_h? : Ref[@view.View?] = Ref(None),
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
+  scale? : () -> Double = fn() { 1.0 },
   loc~ : SourceLoc,
 ) -> Unit {
   beside.box(made_for=loc, fn(frame) {
@@ -315,14 +357,15 @@ fn table_frame_node(
           .width(By(fn() { widths().0.get(k) }))
           .padding(By(fn() {
             let (pl, pr) = pad()
-            (pl, table_cell_y, pr, table_cell_y)
+            let k = scale()
+            (pl * k, table_cell_y * k, pr * k, table_cell_y * k)
           }))
           .lies_along(Is(Middle))
           |> ignore
           // (its words as a message's, in pieces, a press on a link where it leads: runs_links)
           cell.box(fn(w) {
             let look = fn() -> @view.WordsLook {
-              let size = if head { 12.0 } else { 13.0 }
+              let size = (if head { 12.0 } else { 13.0 }) * scale()
               {
                 size,
                 weight: if head { 500 } else { 400 },
@@ -330,11 +373,13 @@ fn table_frame_node(
                 wrap: true,
                 tracking: @view.letters_own,
                 balance: false,
+                max_lines: 0,
               }
             }
             let runs = fn() { table_cell_runs(words()) }
             w
-            .words_runs(By(runs), look=look())
+            .words_runs(By(runs))
+            .words_look(By(look))
             .runs_look(By(table_runs_look))
             .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
             |> ignore
@@ -348,7 +393,7 @@ fn table_frame_node(
       line.show(fn() { r < rows().length() - 1 }, fn(rule) {
         rule
         .width(By(fn() { Some(widths().1) }))
-        .height(Is(Some(1.0)))
+        .height(By(fn() { Some(scale()) }))
         .ground(By(fn() { theme().p.line }))
         |> ignore
       })

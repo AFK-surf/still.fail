@@ -118,7 +118,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_over_done = (*env)->GetStaticMethodID(env, host_cls, "overDone", "(Z)V");
   updates_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Updates"));
   m_up_version = (*env)->GetStaticMethodID(env, updates_cls, "versionCode", "()I");
-  m_up_fetch = (*env)->GetStaticMethodID(env, updates_cls, "fetch", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;Z)V");
+  m_up_fetch = (*env)->GetStaticMethodID(env, updates_cls, "fetch", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;ZLjava/lang/String;)V");
   m_up_apply = (*env)->GetStaticMethodID(env, updates_cls, "apply", "(Ljava/lang/String;)V");
   m_up_package = (*env)->GetStaticMethodID(env, updates_cls, "installPackage", "(Ljava/lang/String;[B)V");
   m_up_state = (*env)->GetStaticMethodID(env, updates_cls, "state", "()Ljava/lang/String;");
@@ -711,10 +711,13 @@ int32_t mb_host_app_version(void) {
   return (*env)->CallStaticIntMethod(env, updates_cls, m_up_version);
 }
 
-void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
+// (`delta`: "" or the delta for this build, as JSON: Updates.fetch tries it before the whole package)
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now,
+                          moonbit_string_t delta) {
   JNIEnv *env = env_();
-  jstring u = jstr(env, url), h = jstr(env, sha256), n = jstr(env, name);
-  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_fetch, u, h, size, n, (jboolean)(now != 0));
+  jstring u = jstr(env, url), h = jstr(env, sha256), n = jstr(env, name), d = jstr(env, delta);
+  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_fetch, u, h, size, n, (jboolean)(now != 0), d);
+  (*env)->DeleteLocalRef(env, d);
   (*env)->DeleteLocalRef(env, u);
   (*env)->DeleteLocalRef(env, h);
   (*env)->DeleteLocalRef(env, n);
@@ -1161,12 +1164,25 @@ JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_snapshot(JNIEnv *env, jclass c, 
 
 // ---- images ----
 
+// An image whose load Java had no room for (its heap full: a NewByteArray or NewString of it NULL, or Images.load
+// thrown, an OutOfMemoryError pending): the exception cleared, as the GL thread's next JNI call would abort on it
+// (CheckJNI), and the image failed as a decode that gave nothing is (Native.imageDone), its id still freed by
+// mb_host_image_free. Told nothing: the app reads it failed as it asks (mb_host_image_info), at once.
+static int32_t image_unmade(JNIEnv *env, int id, const char *what) {
+  if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+  imgs[id] = (mb_image){-1, 0, 0, 0, 0, 0, 1};
+  LOG("image %d: no room in Java's heap for %s", id, what);
+  return id;
+}
+
 int32_t mb_host_image_load(moonbit_string_t src, int32_t max_px) {
   JNIEnv *env = env_();
   int id = image_new();
   jstring s = jstr(env, src);
+  if (!s) return image_unmade(env, id, "its source");
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_load, id, s, NULL, max_px);
   (*env)->DeleteLocalRef(env, s);
+  if ((*env)->ExceptionCheck(env)) return image_unmade(env, id, "its load");
   return id;
 }
 
@@ -1175,11 +1191,17 @@ int32_t mb_host_image_load_bytes(moonbit_bytes_t data, int32_t max_px) {
   int id = image_new();
   jsize n = Moonbit_array_length(data);
   jbyteArray b = (*env)->NewByteArray(env, n);
+  if (!b) return image_unmade(env, id, "its bytes");
   (*env)->SetByteArrayRegion(env, b, 0, n, (const jbyte *)data);
   jstring s = (*env)->NewStringUTF(env, "(bytes)");
+  if (!s) {
+    (*env)->DeleteLocalRef(env, b);
+    return image_unmade(env, id, "its name");
+  }
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_load, id, s, b, max_px);
   (*env)->DeleteLocalRef(env, s);
   (*env)->DeleteLocalRef(env, b);
+  if ((*env)->ExceptionCheck(env)) return image_unmade(env, id, "its load");
   return id;
 }
 

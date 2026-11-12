@@ -229,8 +229,8 @@ pub let vault_serial : Ref[Int] = Ref(0)
 
 ///|
 /// What `vault.putItem` is given for an item: the vault, the item's id where it is one already, what
-/// it holds (`words`: its fields' words by name, as typed), and, where agents may ask for it, how (`mode`, its hosts,
-/// its variable) and its longest grant (`lasts`: "default" its vault's).
+/// it holds (`words`: its fields' words by name, as typed; `about`, what it is for, its notes), and, where agents may
+/// ask for it, how (`mode`, its hosts, its variable), its longest grant (`lasts`: "default" its vault's) and its about.
 pub fn vault_put_params(
   vault : String,
   row : Json?,
@@ -243,6 +243,11 @@ pub fn vault_put_params(
 ) -> Array[(String, Json)] {
   let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }
   let name = words.get("name").unwrap_or("").trim(chars=" ").to_owned()
+  // (an editor without the field keeps the notes it had)
+  let about = match words.get("about") {
+    Some(a) => a.trim(chars=" \n").to_owned()
+    None => text(was, "notes")
+  }
   let fields : Array[(String, Json)] = []
   for f in vault_fields(k) {
     // a private key as pasted (its last line break is part of it); the rest without the spaces around them
@@ -256,7 +261,7 @@ pub fn vault_put_params(
     ("name", str(name)),
     ("fields", obj(fields)),
     ("domains", Json::array(strings(was, "domains").map(str))),
-    ("notes", str(text(was, "notes"))),
+    ("notes", str(about)),
   ])
   let params = [("vault", str(vault)), ("plain", plain_item)]
   match row {
@@ -283,6 +288,9 @@ pub fn vault_put_params(
     // its own longest grant (none: its vault's)
     if lasts != "default" {
       listing.push(("lasts", str(lasts)))
+    }
+    if about != "" {
+      listing.push(("about", str(about)))
     }
     params.push(("listing", obj(listing)))
   }

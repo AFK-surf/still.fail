@@ -6,7 +6,7 @@ test "files: a file made comes where it is, one taken out goes where it was, nei
   // (drive_tester's, the clock set after reset, which puts the fixture's own back, and before the fixture's steps
   // are said)
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("drive-motion")
   open_drive_fixture("drive-motion")
