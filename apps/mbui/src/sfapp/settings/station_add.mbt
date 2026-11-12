@@ -1,10 +1,10 @@
 // Adding a station (Settings.kt openAddStation, AddStationSteps, JoinStation, FirstStation; the narrow web's
-// Stations.tsx): a new machine named, the one command that installs still.fail there and joins it (`workspace.enroll`)
-// copied, and the wait for it to join; or, for whoever manages another workspace too, a station of that one added
-// here as it is (`station.join`). The workspace's owners and admins add stations: Station's ＋, or its first one in
-// the page itself while it has none. What the new machine will be is chosen as it is named (2026-11-10): a whole
-// station, or one that only runs tasks (a rig: `rig.add`, its command naming its person's own lock), which any member
-// adds, as theirs.
+// Stations.tsx): a new machine named, the command that installs still.fail there and joins it (`workspace.enroll`:
+// macOS's and Linux's, and Windows' in PowerShell) copied, and the wait for it to join; or, for whoever manages another
+// workspace too, a station of that one added here as it is (`station.join`). The workspace's owners and admins add
+// stations: Station's ＋, or its first one in the page itself while it has none. What the new machine will be is chosen
+// as it is named (2026-11-10): a whole station, or one that only runs tasks (a rig: `rig.add`, its command naming its
+// person's own lock), which any member adds, as theirs.
 
 ///|
 /// What the adding has come to: the sheet's (and the first station's, in its page) as they go on.
@@ -13,7 +13,7 @@ priv struct Adding {
   existing : @signals.Signal[Bool]
   /// one that only runs tasks (the mode's second side; a member's only one)
   tasks : @signals.Signal[Bool]
-  /// the command made: (install, command)
+  /// the commands made: (macOS's and Linux's, Windows' in PowerShell: "" from a cloud that gives none)
   made : @signals.Signal[(String, String)?]
   /// why the command could not be made, or a station not joined
   error : @signals.Signal[String]
@@ -480,7 +480,7 @@ fn make_station_command(core : Core, here : Here, tasks : Bool, name : String) -
     if tasks { obj([("workspace", str(here.workspace)), ("name", str(name))]) } else { obj([("workspace", str(here.workspace)), ("name", str(name)), ("account", str(here.sub))]) },
     fn(r) {
       match r {
-        Ok(v) => adding.made.set(Some((text(Some(v), "install"), text(Some(v), "command"))))
+        Ok(v) => adding.made.set(Some((text(Some(v), "install"), text(Some(v), "installWindows"))))
         Err(e) => adding.error.set(error_text(e))
       }
     },
@@ -489,7 +489,8 @@ fn make_station_command(core : Core, here : Here, tasks : Bool, name : String) -
 
 ///|
 /// The steps in node `v` (add_station_steps', its buttons the panel's foot): the name's line, its field and why the
-/// command could not be made; joined, said in green; else the command to run there, copied from here, and the wait.
+/// command could not be made; joined, said in green; else the commands to run there (macOS's and Linux's, Windows'
+/// where the cloud gave it), each under its system's name and copied from here, and the wait.
 fn add_station_steps_node(v : @view.View, core : Core, here : Here) -> Unit {
   let field = station_name_field()
   v.pick(fn() { add_step(core, here) }, fn(b, step) {
@@ -505,11 +506,23 @@ fn add_station_steps_node(v : @view.View, core : Core, here : Here) -> Unit {
         1 => joined_line_node(b, fn() { text(station_joined(core, here), "name") })
         _ => {
           @sf.words_node(b, fn() { tr("android-settings.station.run") }, fn() { step_run_words }) |> ignore
+          @sf.words_node(b, fn() { tr("android-settings.station.runUnix") }, fn() { step_label_words }) |> ignore
           command_box_node(b, core, fn() {
             match adding.made.get() {
               Some((install, _)) => install
               None => ""
             }
+          })
+          let windows = fn() {
+            match adding.made.get() {
+              Some((_, w)) => w
+              None => ""
+            }
+          }
+          b.show(fn() { windows() != "" }, fn(w) {
+            @sf.style_node(w, fn() { steps_column })
+            @sf.words_node(w, fn() { tr("android-settings.station.runWindows") }, fn() { step_label_words }) |> ignore
+            command_box_node(w, core, windows)
           })
           @sf.words_node(b, fn() { fill("android-settings.station.runNote", [("app", "still.fail")]) }, fn() { step_note_words })
           |> ignore
@@ -647,8 +660,9 @@ fn station_name_field() -> @ui.Field {
 }
 
 ///|
-/// A station's name, then the command that installs still.fail on that machine and joins it (one with still.fail too),
-/// copied from here, and the wait for it (AddStationSteps); joined, said in green with 完成 (`done`). `label` and `placeholder`: the name's line, as the first station's page words it.
+/// A station's name, then the commands that install still.fail on that machine and join it (one with still.fail too:
+/// macOS's and Linux's, Windows' where the cloud gave it), copied from here, and the wait for it (AddStationSteps);
+/// joined, said in green with 完成 (`done`). `label` and `placeholder`: the name's line, as the first station's page words it.
 fn add_station_steps(
   c : @ui.Ctx,
   core : Core,
@@ -683,9 +697,14 @@ fn add_station_steps(
           c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() { add_station_buttons(c, core, here, done) }) |> ignore
         }
       }
-      (Some((install, _)), None) => {
+      (Some((install, windows)), None) => {
         c.text(tr("android-settings.station.run"), style=step_run_words) |> ignore
+        c.text(tr("android-settings.station.runUnix"), style=step_label_words) |> ignore
         command_box(c, core, install)
+        if windows != "" {
+          c.text(tr("android-settings.station.runWindows"), style=step_label_words) |> ignore
+          command_box(c, core, windows)
+        }
         c.text(fill("android-settings.station.runNote", [("app", "still.fail")]), style=step_note_words) |> ignore
         wait_line(c, tr("android-settings.station.waiting"))
       }
