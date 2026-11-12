@@ -12,9 +12,12 @@
 // Where it is at a moment is worked out from where it set out, where it went, its way and that moment alone.
 //
 // No pair: one only let go of (or leaving) goes as it would have (what was let go of let go as the change ends, nothing
-// drawn between); one only made comes as it would have. Two of an id let go of or made in one change, or one made while
-// another of its id lives, is a fault (Tree::fault: a test fails), and none of them flies. A pair made again on its way
-// (opened, then closed before it is there) sets out from where it is drawn then, its old copy let go of at once.
+// drawn between); one only made comes as it would have. One let go of that no layout ever placed (made and let go in
+// one change: a page's list's blocks shown by their count in one pass of its fill, then not in a later; or made in a
+// box placed before, the box let go of in the same change) is none to fly from (Tree::departs_of, Node's `placed`).
+// Two of an id let go of or made in one change, or one made while another of its id lives, is a fault (Tree::fault: a
+// test fails), and none of them flies. A pair made again on its way (opened, then closed before it is there) sets out
+// from where it is drawn then, its old copy let go of at once.
 // Not yet: what the new one holds laid out again at each size on its way (it is drawn grown as it is laid out at its
 // end), its words morphing glyph by glyph, its scale and turn mixed, a way going on as fast as it went.
 
@@ -314,8 +317,8 @@ fn Tree::departs(self : Tree, holder : View, v : View) -> Bool {
   guard self.shared_n > 0 && self.in_change() && v.live() is Some(n) && n.left_at < 0.0 else {
     return false
   }
-  let found : Array[Int] = []
-  self.shared_in(v.at, found)
+  let found = self.departs_of(v)
+  // (none to fly: `v` let go of as it would have been, nothing parked)
   guard found.length() > 0 else { return false }
   self.departed(found, v.id(), false)
   holder.park(v) |> ignore
@@ -327,10 +330,20 @@ fn Tree::departs(self : Tree, holder : View, v : View) -> Bool {
 /// from it as the change is committed whole (Tree::pairs_now), it leaving meanwhile.
 fn Tree::departs_leaving(self : Tree, v : View) -> Unit {
   guard self.shared_n > 0 && self.in_change() && v.live() is Some(_) else { return }
-  let found : Array[Int] = []
-  self.shared_in(v.at, found)
+  let found = self.departs_of(v)
   guard found.length() > 0 else { return }
   self.departed(found, v.id(), true)
+}
+
+///|
+/// The shared nodes in node `v` (Tree::shared_in) that may fly from where they were drawn: each a layout has placed.
+/// It is the node that would fly that is asked, not `v`: one never placed (made and let go of in one change, a page's
+/// list's fill's passes; or made in a change in a box placed before it, the box let go of in the same change) was drawn
+/// nowhere, nothing flies from it, and it is let go of as it would have been.
+fn Tree::departs_of(self : Tree, v : View) -> Array[Int] {
+  let found : Array[Int] = []
+  self.shared_in(v.at, found)
+  found.filter(fn(at) { self.nodes[at].placed })
 }
 
 ///|
