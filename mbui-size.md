@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [fe6d90f2b](https://github.com/AFK-surf/still.fail/commit/fe6d90f2b3cc730886b022bcd142baf4f17ee3dd) mbui-ci: the macos job takes the C units main's la | 1.93 | 2.58 | 11.1 | 30.16 | 39.8 | 26.83 | 51.11 | 94.34 | 157.09 |
 | [75a11c513](https://github.com/AFK-surf/still.fail/commit/75a11c51362f975e75e0ac7ae2d4cf523b26dbae) app: a chat's rows ease from where a way lets go o | 1.93 | 2.58 | 11.1 | 30.16 | 39.79 | 26.83 | 51.11 | 94.75 | 184.76 |
 | [c447d3c8f](https://github.com/AFK-surf/still.fail/commit/c447d3c8f9f76ca9027e30d8acb148cc80a177ea) mbui: what comes down a column in a group set off  | 1.92 | 2.58 | 11.09 | 30.15 | 39.77 | 26.83 | 51.09 | 94.88 | 158.25 |
 | [d1960a64d](https://github.com/AFK-surf/still.fail/commit/d1960a64d14e7f3350aeaaa7989a5c40653b162a) station: a local status socket, what its agents do | 1.93 | 2.58 | 11.09 | 30.15 | 39.77 | 26.82 | 51.09 | 94.54 | 147.47 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [53b5a35c3](https://github.com/AFK-surf/still.fail/commit/53b5a35c302639bfceb213bbc6bb16bf2270dd92) rules: a log's active chain by the fork choice, a  | 1.87 | 2.49 | 10.47 | 29.27 | 36.98 | 26.06 | 48.67 | 93.5 | 184.15 |
 | [2b50fde2b](https://github.com/AFK-surf/still.fail/commit/2b50fde2be19676ab87251e91c3d5118130cb06c) mbui app: 声明了、没人读的 topic 换工作区时真正退订 (#5698) | 1.86 | 2.49 | 10.46 | 29.23 | 36.93 | 26.03 | 48.62 | 93.5 | 184.15 |
 | [6dd0313ad](https://github.com/AFK-surf/still.fail/commit/6dd0313ad4ab64bb6851cebf6b9a173c422e5513) test(station lock): the world runs the protocol as | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.13 | 185.46 |
-| [c25a2dceb](https://github.com/AFK-surf/still.fail/commit/c25a2dceb14a9f9408c2b495e93a083f6cb502cf) station: the machine's sample read on the main thr | 1.86 | 2.49 | 10.45 | 29.23 | 36.93 | 26.02 | 48.62 | 94.5 | 183.14 |
