@@ -1,12 +1,13 @@
 // A chat's page made with its inside nodes (sfbase's chat_page_nodes on; chat_page_made's `body`): its messages the
-// page's list (chat_body_node), the composer under them the page's old view as yet. What the old page floats over its
-// list, puts over its rows and flies over it is not here yet.
+// page's list (chat_body_node), the composer in the list's foot the page's old view as yet. What the old page floats
+// over its list, puts over its rows and flies over it is not here yet.
 
 ///|
 /// Chat `r`'s messages as `src` reads them (view_of_chat), in node `v`, growing to what the column it is in leaves
 /// them, once its view is read (till then none: its bones are the old page's), laid out by the room the column gives it
 /// (View::by_room: its width what the shell gives the page, as it changes), `top` over its first row (its bar's room),
-/// `foot` under its last, `lead` the unread line under its top, its tips `tips`, its time on top `stint`.
+/// `foot` under its last and the composer `composer` builds under that, in the list's foot (till the view is read, at
+/// the foot of the room it is given), `lead` the unread line under its top, its tips `tips`, its time on top `stint`.
 pub fn chat_page_body_node(
   v : @view.View,
   src : Source,
@@ -15,6 +16,7 @@ pub fn chat_page_body_node(
   stint~ : () -> Int,
   top? : () -> Double = fn() { list_top },
   foot? : () -> Double = fn() { list_foot },
+  composer? : (@view.View) -> Unit,
   lead? : Double = unread_lead,
 ) -> Unit {
   // (its view and entries as last read: once read, never none again while the page is)
@@ -43,6 +45,17 @@ pub fn chat_page_body_node(
   v.by_room(fn(b, room) {
     b.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     let width = fn() { room.width() }
+    // (the composer at the foot of the room before the view is read, in the list's foot once it is)
+    match composer {
+      Some(build) =>
+        b.show(fn() { read.get() is None }, fn(o) {
+          o.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+          o.box(fn(s) { s.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore }) |> ignore
+          build(o)
+        })
+        |> ignore
+      None => ()
+    }
     b.show(fn() { read.get() is Some(_) }, fn(o) {
       o.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
       let first = @signals.untracked(fn() { read.get().unwrap() })
@@ -76,6 +89,7 @@ pub fn chat_page_body_node(
         core~,
         top~,
         foot~,
+        composer?,
         lead~,
       )
       |> ignore

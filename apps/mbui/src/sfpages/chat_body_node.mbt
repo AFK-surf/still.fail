@@ -254,7 +254,8 @@ priv struct ChatBodyKeeps {
 /// it changes, the list's width as it changes: narrow or wide by it), its rows the entries `entries` says as they
 /// change (view_of_chat's) with what was sent from here and not in the chat yet (`sending`: sfbase's sending_now),
 /// answered with `core` where something is (a login's card, a request's answer); `top` over its first row (list_top:
-/// the chat's bar's room), `foot` under its last (the composer's room and the list's foot under the rows). In `scroll`,
+/// the chat's bar's room), `foot` under its last, then the composer `composer` builds in the list's foot (its room
+/// under the rows as tall as the two are laid out, as the composer changes: at once as yet). In `scroll`,
 /// put where `place` asks: at its end as it opens (followed there), at its unread line where it has one (`lead` under
 /// its top, as list_after puts it once); a chat too short to fill what shows at its foot, over the composer (the old
 /// list's from_end); the page before asked as it nears its top. `made`, told each row's key and what holds it as its row
@@ -268,6 +269,7 @@ fn chat_body_node(
   core? : @settings.Core? = None,
   top? : () -> Double = fn() { list_top },
   foot? : () -> Double = fn() { list_foot },
+  composer? : (@view.View) -> Unit,
   lead? : Double = unread_lead,
   scroll? : @view.Scroll = @view.Scroll::list(),
   place? : @view.ListPlace[String] = @view.ListPlace::new(),
@@ -317,13 +319,19 @@ fn chat_body_node(
       fn() { keys.get() },
       est=chat_row_est,
       bar=@ui.tree_scroll_bar(),
-      // (its Top, the chat's bar's room, the list's head; its Foot, the composer's room and the list's foot under its
-      // rows, the list's foot)
+      // (its Top, the chat's bar's room, the list's head; its Foot, the list's foot: the room under its rows, then the
+      // composer (`composer`), the room under the last row as tall as both are laid out)
       head=fn(h) {
         h.height(By(fn() { Some(top()) })) |> ignore
         made("top", h)
       },
-      foot=fn(f) { f.height(By(fn() { Some(foot()) })) |> ignore },
+      foot=fn(f) {
+        f.box(fn(g) { g.height(By(fn() { Some(foot()) })) |> ignore }) |> ignore
+        match composer {
+          Some(build) => build(f)
+          None => ()
+        }
+      },
       follows=fn() { true },
       // (what shows held by what is read: not by the row saying the page before comes, which what comes in is put in
       // under, going on down with what shows)

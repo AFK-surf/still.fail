@@ -548,8 +548,8 @@ fn narrow_made_as(
               // (its bar the page's node's, over its old view: chat_bar_node)
               over=chat_bar_node,
               stint~,
-              // (with chat_page_nodes on: its messages nodes, its composer under them its old view)
-              body=fn(col, s, r) {
+              // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
+              body=fn(col, s, r, composer) {
                 @sfpages.chat_page_body_node(
                   col,
                   s,
@@ -558,6 +558,7 @@ fn narrow_made_as(
                   stint~,
                   top=list_top,
                   foot=list_foot,
+                  composer~,
                   lead=unread_lead(),
                 )
               },

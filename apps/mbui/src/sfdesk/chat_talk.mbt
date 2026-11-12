@@ -109,33 +109,32 @@ let list_head_gap : Double = 24.0
 
 ///|
 /// Chat `r`'s messages where its page is made with its inside nodes (sfbase's chat_page_nodes: chat_page_made's
-/// `body`), in `v`, as wide as it is given: under the bar's room, `in_pane` the page a panel of its own (chat_bar_room).
-/// What the page's old view hands the system's bars said here as nodes (chat_bar_handed_node).
+/// `body`), in `v`, as wide as it is given: under the bar's room, `in_pane` the page a panel of its own (chat_bar_room);
+/// its composer made by `composer` in the list's foot. What the page's old view hands the system's bars said here as
+/// nodes (chat_bar_handed_node).
 fn chat_body_nodes(
   v : @view.View,
   src : Source,
   r : ChatRef,
   tips : @sf.TipLayer,
   stint : () -> Int,
+  composer : (@view.View) -> Unit,
   in_pane? : Bool = false,
 ) -> Unit {
-  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, top=fn() { chat_bar_room(in_pane~) + list_head_gap })
+  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, top=fn() { chat_bar_room(in_pane~) + list_head_gap }, composer~)
   chat_bar_handed_node(v, src, r)
 }
 
 ///|
-/// Chat `r`'s composer under its messages where its page is made with its inside nodes (sfbase's chat_page_nodes:
-/// chat_page_made's `foot`), at its own height, `apart` as chat_composer's; nothing over it or let go into it yet
-/// (chat_talk's layers).
+/// Chat `r`'s composer in its messages' list's foot where its page is made with its inside nodes (sfbase's
+/// chat_page_nodes: chat_page_made's `foot`), at its own height, never less than it takes opened with one line (its
+/// being opened or let go moves none of the messages: composer_open_room, as chat_talk's room keeps), `apart` as
+/// chat_composer's; nothing over it or let go into it yet (chat_talk's layers).
 fn chat_composer_nodes(c : @ui.Ctx, src : Source, r : ChatRef, apart : Bool) -> Unit {
   guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
-  let foot = c.box(style=chat_composer_under, fn() {
+  let foot = c.box(style=@ui.style(w=Full, min_h=Fixed(@sfpages.composer_open_room(c, c.width))), fn() {
+    c.spacer()
     @sfpages.chat_composer(c, src, w, r, view_of_chat(src, r).0, apart~)
   })
   @motion.scope(c, foot, bottom=true)
 }
-
-///|
-/// The composer's box under a chat's messages made as nodes (chat_composer_nodes): as wide as the pane.
-// kept across runs: a value (no field of it changes)
-let chat_composer_under : @ui.Style = @ui.css("w=Full")

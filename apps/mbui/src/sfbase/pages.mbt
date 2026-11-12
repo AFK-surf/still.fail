@@ -89,7 +89,8 @@ let chat_page_nodes_at_start : Bool = false
 /// time on top, `stint`; made while `drawn` says its entry is drawn: shown, or kept shown in place while the one on top
 /// waits, as its island is). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
 /// what is beside it reads by it too. With chat_page_nodes on as a chat's page is made: its inside nodes, chat `r`'s
-/// messages made by `body` in a column and under them its composer by `foot`, its old view in a node of its own.
+/// messages made by `body` in a column, given what makes its composer (by `foot`, its old view in a node of its own,
+/// as tall as it is laid out) in the node it is put in: the foot of the messages' list.
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -99,7 +100,7 @@ pub fn chat_page_made(
   over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
   stint? : () -> Int = fn() { 0 },
   drawn? : (Int) -> Bool = fn(serial) { app.nav.shows(serial) },
-  body? : (@view.View, Source, ChatRef) -> Unit,
+  body? : (@view.View, Source, ChatRef, (@view.View) -> Unit) -> Unit,
   foot? : (@ui.Ctx, Source, ChatRef) -> Unit,
 ) -> Source {
   let retained = page_entry_source(src, v, serial)
@@ -113,25 +114,26 @@ pub fn chat_page_made(
   }
   match inside {
     Some((b, f, r)) =>
-      // a column: the chat's messages growing to what it leaves them, the composer under them at its own height, its
+      // a column: the chat's messages growing to all of it, the composer in their list's foot at its own height, its
       // old view in a node of its own as yet (built as the stack's island is, what the page reads read there)
       v.box(fn(col) {
         col.grow(Is(1.0)).min_height(Is(Some(0.0))).ground(By(fn() { @sf.theme().p.bg })) |> ignore
         // (coming to need the viewer while open, felt, as its old view felt it)
         feel_needed_node(col, retained, r)
-        b(col, retained, r)
-        app.nav.page_island(
-          col,
-          serial,
-          fn(c, page) {
-            page_entry_read(serial, retained, page)
-            page_read(page)
-            f(c, retained, r)
-          },
-          key~,
-          natural=true,
-        )
-        |> ignore
+        b(col, retained, r, fn(n) {
+          app.nav.page_island(
+            n,
+            serial,
+            fn(c, page) {
+              page_entry_read(serial, retained, page)
+              page_read(page)
+              f(c, retained, r)
+            },
+            key~,
+            natural=true,
+          )
+          |> ignore
+        })
       })
       |> ignore
     None =>
