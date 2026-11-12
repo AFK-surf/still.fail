@@ -230,12 +230,12 @@ def read_template(name: str = "wrangler.jsonc") -> dict:
 CLOUDFLARE_FAILED = re.compile(r"\[code: 10013\]|\[code: 10500\]|internal server error|API returned a 5\d\d", re.I)
 
 
-def wrangler(*args, env=None, capture=False):
+def wrangler(*args, env=None, capture=False, input=None):
     command = ["pnpm", "exec", "wrangler", *args]
     if capture:
         # Kept apart (deploys run side by side), and shown when it fails.
         for tries in range(3):
-            done = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True)
+            done = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True, input=input)
             if done.returncode == 0 or not CLOUDFLARE_FAILED.search(done.stdout + done.stderr) or tries == 2:
                 break
             print(f"wrangler {' '.join(args)}: Cloudflare failed, asked again", file=sys.stderr, flush=True)
@@ -245,6 +245,20 @@ def wrangler(*args, env=None, capture=False):
             raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
         return done.stdout
     subprocess.run(command, cwd=ROOT, env=env, check=True)
+
+
+# The API's secrets that are there only while something is (src/move.ts MOVING, src/guests.ts the rest): `secret bulk`
+# only adds and changes, so one this deploy does not give is taken away, else a cloud once MOVING stays so.
+SWITCHED = ("MOVING", "FORWARD_TO", "FORWARD_SECRET", "GUESTS")
+
+
+def drop_unset(given: dict, local: Path, env) -> None:
+    listed = wrangler("secret", "list", "--format", "json", "--config", str(local), env=env, capture=True)
+    there = {s["name"] for s in json.loads(listed[listed.index("["):])}
+    for name in SWITCHED:
+        if name in there and name not in given:
+            wrangler("secret", "delete", name, "--config", str(local), env=env, capture=True, input="y\n")
+            print(f"note: secret {name} taken away", flush=True)
 
 
 def account_id() -> str:
@@ -572,10 +586,13 @@ def main() -> None:
         if part in ("web", "web-beta"):
             say_web_build(REPO / "dist" / "cloud-web", beta=part == "web-beta")
         if part in secrets_of:
+            given = secrets_of[part]()
             with tempfile.TemporaryDirectory(prefix="stillfail-secrets-") as directory:
                 path = Path(directory) / "secrets.json"
-                write_private(path, secrets_of[part]())
+                write_private(path, given)
                 wrangler("secret", "bulk", str(path), "--config", str(local), env=env, capture=True)
+            if part == "api":
+                drop_unset(given, local, env)
         print(f"deployed {part}", flush=True)
 
     # Docker only builds the relay's image: the other parts deploy without it (a CI runner may have none).
