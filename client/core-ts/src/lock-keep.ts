@@ -117,8 +117,12 @@ export function keep(was: Kept, brought: readonly Entry[], rules: LogRules): Too
 /// other entry at its place: the rules, said as the station said them); else `sign`, signed again after the head (the
 /// rules still to take it there, the caller's to check). "Since its parent": after the place where its branch parts from
 /// the chain held, its parent where that is on it, else the nearest entry up its branch kept `aside` that is.
+/// `before`: what since is this device's own acts made before it that lost their place with it, signed again (the
+/// caller's to know): looked past, as if not there, neither done nor otherwise, so what lost its place together is
+/// signed again in the order it was made, each as if made then (2026-11-13: a station taken out and put back by one
+/// device, both lost, ended out; taken out, put back, taken out, the third read as done by the first).
 export type Again = "done" | "otherwise" | "unmoved" | "sign";
-export function againOf(chain: readonly Entry[], aside: readonly Entry[], lost: Entry, subject: (e: Entry) => string | null): Again {
+export function againOf(chain: readonly Entry[], aside: readonly Entry[], lost: Entry, subject: (e: Entry) => string | null, before: (e: Entry) => boolean = () => false): Again {
   const lostHash = hashOf(lost);
   const at = new Map(chain.map((e, i) => [hashOf(e), i]));
   if (at.has(lostHash)) return "done";
@@ -128,7 +132,7 @@ export function againOf(chain: readonly Entry[], aside: readonly Entry[], lost: 
   const i = parent === null ? undefined : at.get(parent);
   if (i === undefined) return "unmoved";
   if (i === chain.length - 1) return "unmoved";
-  const since = chain.slice(i + 1);
+  const since = chain.slice(i + 1).filter((e) => !before(e));
   const meaning = canonical(lost.body ?? null);
   if (since.some((e) => e.kind === lost.kind && canonical(e.body ?? null) === meaning)) return "done";
   const about = subject(lost);

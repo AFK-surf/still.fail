@@ -193,13 +193,13 @@ type StationSim = {
 /// `shown` the entries a station showed it or took from it; `carried` what it carried to which station (`carry`).
 type Dev = {
   n: number; name: string; sub: string; base: Key; signer: Key; held: Map<string, Entry[]>; aside: Map<string, Entry[]>;
-  turn: Map<string, { busy: boolean; next: (() => void)[] }>; handled: Set<string>; tries: Map<string, number>; shown: Set<string>; carried: Set<string>;
+  turn: Map<string, { busy: boolean; next: (() => void)[] }>; handled: Set<string>; tries: Map<string, number>; again: Map<string, string>; shown: Set<string>; carried: Set<string>;
   /// `pending`: of each lock, what it signed that no station took nor refused (client/core-ts/src/lock-pending.ts),
   /// never on its chain, brought as it next reads a station (views/lock.ts `deliver`); `delivering`, the locks whose
   /// pending entries are being brought (one run at a time, as the core's `delivering`: a read meanwhile adds none).
   pending: Map<string, Entry[]>; delivering: Set<string>;
 };
-const devParts = () => ({ turn: new Map(), handled: new Set<string>(), tries: new Map<string, number>(), shown: new Set<string>(), carried: new Set<string>(), pending: new Map<string, Entry[]>(), delivering: new Set<string>() });
+const devParts = () => ({ turn: new Map(), handled: new Set<string>(), tries: new Map<string, number>(), again: new Map<string, string>(), shown: new Set<string>(), carried: new Set<string>(), pending: new Map<string, Entry[]>(), delivering: new Set<string>() });
 
 /// The same JSON whatever the order of its keys (an entry's body, compared by what it says).
 const sameJson = (v: unknown): string => JSON.stringify(v, (_k, x) => (x !== null && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
@@ -212,8 +212,9 @@ function subjectOf(e: Entry): string | null {
   return e.kind === "disable" ? "lock" : null;
 }
 /// What becomes of an entry that lost its place, by the chain held and what is aside (client/core-ts/src/lock-keep.ts
-/// `againOf`, the same rule): done, otherwise, unmoved or sign.
-function againOf(chain: Entry[], aside: Entry[], lost: Entry): "done" | "otherwise" | "unmoved" | "sign" {
+/// `againOf`, the same rule): done, otherwise, unmoved or sign; `before` what since is looked past (this device's own
+/// made before it that lost their place with it, signed again).
+function againOf(chain: Entry[], aside: Entry[], lost: Entry, before: (e: Entry) => boolean = () => false): "done" | "otherwise" | "unmoved" | "sign" {
   const at = new Map(chain.map((e, i) => [entryHash(e), i]));
   if (at.has(entryHash(lost))) return "done";
   const up = new Map(aside.map((e) => [entryHash(e), e]));
@@ -221,7 +222,7 @@ function againOf(chain: Entry[], aside: Entry[], lost: Entry): "done" | "otherwi
   for (let n = 0; parent !== null && !at.has(parent) && n <= aside.length; n++) parent = up.get(parent)?.prev ?? null;
   const i = parent === null ? undefined : at.get(parent);
   if (i === undefined || i === chain.length - 1) return "unmoved";
-  const since = chain.slice(i + 1);
+  const since = chain.slice(i + 1).filter((e) => !before(e));
   if (since.some((e) => e.kind === lost.kind && sameJson(e.body) === sameJson(lost.body))) return "done";
   const about = subjectOf(lost);
   return about !== null && since.some((e) => subjectOf(e) === about) ? "otherwise" : "sign";
@@ -673,6 +674,7 @@ class World {
       return false;
     }
     dev.tries.set(entryHash(entry), tries);
+    dev.again.set(entryHash(entry), entryHash(lost));
     this.log.push(`  ${dev.name} signs ${said(entry)} again in ${sp.name}, after ${said(chain.at(-1)!)}`);
     this.bring(dev, sp, chain, entry, chain, tries);
     return true;
@@ -718,13 +720,19 @@ class World {
       if (t.moved) this.log.push(`  ${dev.name} goes by #${entryHash(t.kept.entries.at(-1)!).slice(0, 6)} in ${sp.name}, the rules' choice, keeping ${t.kept.aside.length} aside`);
       dev.held.set(sp.ws, t.kept.entries);
       dev.aside.set(sp.ws, t.kept.aside);
-      // Its own entries the chain held went off: each signed again once, in its turn (views/lock.ts `hold`, `again`).
-      for (const e of [...t.kept.aside].sort((x, y) => x.seq - y.seq)) {
-        if (e.sig?.key !== dev.signer.id || dev.handled.has(entryHash(e))) continue;
+      // Its own entries the chain held went off: each signed again once, in its turn, in the order made, what it signed
+      // again of those before it looked past (views/lock.ts `hold`, `again`, `actsOf`).
+      const lost = [...t.kept.aside].sort((x, y) => x.seq - y.seq).filter((e) => e.sig?.key === dev.signer.id && !dev.handled.has(entryHash(e)));
+      for (const [i, e] of lost.entries()) {
         dev.handled.add(entryHash(e));
+        const earlier = new Set(lost.slice(0, i).map((x) => entryHash(x)));
+        const before = (x: Entry) => {
+          for (let h: string | undefined = entryHash(x), n = 0; h !== undefined && n <= AGAIN_MOST * lost.length + 1; h = dev.again.get(h), n++) if (earlier.has(h)) return true;
+          return false;
+        };
         this.turn(dev, sp, () => {
           const tries = dev.tries.get(entryHash(e)) ?? 0;
-          if (tries < AGAIN_MOST && againOf(dev.held.get(sp.ws) ?? [], dev.aside.get(sp.ws) ?? [], e) === "sign") this.signAgain(dev, sp, e, tries + 1);
+          if (tries < AGAIN_MOST && againOf(dev.held.get(sp.ws) ?? [], dev.aside.get(sp.ws) ?? [], e, before) === "sign") this.signAgain(dev, sp, e, tries + 1);
         });
       }
     } catch {}

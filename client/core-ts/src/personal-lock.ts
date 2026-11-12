@@ -216,6 +216,8 @@ export class PersonalLock {
   readonly #handled = new Set<string>();
   /// Of an entry signed again, how many signings it is from the one first signed (AGAIN_MOST at most).
   readonly #tries = new Map<string, number>();
+  /// Of an entry signed again, the one it was signed again for, by hash: what act each of this device's is (`#actsOf`).
+  readonly #again = new Map<string, string>();
   /// What this device signed that no station took yet, each person's (`pendingAs`): never on the chain pinned.
   readonly #pending = new Map<string, Pending[]>();
   /// Whether what is pending is being brought to the stations now (`#deliver`), and asked again meanwhile.
@@ -761,8 +763,9 @@ export class PersonalLock {
   /// In the turn: one entry signed after the chain pinned now (a genesis: none, the one pinned left), brought, and what
   /// is left of it once the turn is given up (the cloud's taking, then where it landed, `#landed`, in a turn again).
   /// `tries`: how many signings again of one that lost its place this is (0: the first signing); `of`: of a pending one,
-  /// its id. Pending: the entry, which the caller answers with.
-  #signHere(sub: string, seed: Uint8Array, kind: string, body: unknown, once: boolean, within: Asked | undefined, tries: number, of: string | null): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> {
+  /// its id; `from`: of one signed again, the entry it is signed again for. Pending: the entry, which the caller answers
+  /// with.
+  #signHere(sub: string, seed: Uint8Array, kind: string, body: unknown, once: boolean, within: Asked | undefined, tries: number, of: string | null, from: string | null = null): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (kind === "genesis") this.#pinned.delete(sub);
       // (after what is pending here that goes on from the chain pinned, one after another: what this device does is
@@ -774,6 +777,7 @@ export class PersonalLock {
       // (signed again: only where the rules still take it after the head; else the lock changed meanwhile)
       if (tries > 0 && checkChain(chain, sub) === null) return yield* Effect.fail(this.#changed(sub, e));
       if (tries > 0) this.#tries.set(hashOf(e), tries);
+      if (from !== null) this.#again.set(hashOf(e), from);
       const toCloud = this.#env.cloud(sub, "POST", PATH, { entries: [e] });
       const cloudTakes = once ? toCloud : Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
       const brought = this.#env.stations ? yield* Effect.result(this.#env.stations.bring(sub, chain, within)) : null;
@@ -850,7 +854,7 @@ export class PersonalLock {
       }
       if (how === "otherwise") return yield* Effect.fail(this.#changed(sub, e));
       if (how === "unmoved" || tries >= AGAIN_MOST) return yield* Effect.fail(refusal);
-      return yield* this.#signHere(sub, seed, e.kind, e.body, once, within, tries + 1, of);
+      return yield* this.#signHere(sub, seed, e.kind, e.body, once, within, tries + 1, of, hashOf(e));
     });
   }
 
@@ -867,16 +871,30 @@ export class PersonalLock {
   /// aside, a read having moved it to another branch while no seed was in hand), each signed again after the head once,
   /// where that still says what was meant (`#lost`'s rules); and those pending whose parent is not the head pinned any
   /// more, by the same rules, before a delivery finds them so (`#deliver`, which can only say they failed). Nothing more
-  /// is asked of the person; one let be just stops.
+  /// is asked of the person; one let be just stops. Those that lost their place together go in the order made, each as
+  /// if made then: what it signed again of those before it is looked past (`againOf`'s `before`), never another entry
+  /// of its own.
   #signAgain(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const lost = [...(this.#aside.get(sub) ?? [])].sort((a, b) => a.seq - b.seq).filter((e) => e.seq > 0 && e.sig?.key === this.#myKey && !this.#handled.has(hashOf(e)));
-      for (const e of lost) {
+      for (let i = 0; i < lost.length; i++) {
+        const e = lost[i]!;
         this.#handled.add(hashOf(e));
         const tries = this.#tries.get(hashOf(e)) ?? 0;
+        const earlier = new Set(lost.slice(0, i).map(hashOf));
+        const before = (x: Entry) => this.#actsOf(x).some((h) => earlier.has(h));
         const inTurn = Effect.suspend((): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> => {
-          if (tries >= AGAIN_MOST || againOf(this.#pinned.get(sub) ?? [], this.#aside.get(sub) ?? [], e, subjectOf) !== "sign") return Effect.succeed(Effect.succeed(null));
-          return this.#signHere(sub, seed, e.kind, e.body, true, within, tries + 1, null);
+          const none = Effect.succeed(Effect.succeed(null));
+          const pinned = this.#pinned.get(sub) ?? [];
+          const aside = this.#aside.get(sub) ?? [];
+          const how = againOf(pinned, aside, e, subjectOf, before);
+          // (decided otherwise since by this device's own later acts alone: what the person did last stands)
+          const others = () => againOf(pinned, aside, e, (x) => (x !== e && x.sig?.key === this.#myKey ? null : subjectOf(x)), before) === "otherwise";
+          if (how === "otherwise") return Effect.as(Effect.sync(() => others() && this.#letBe(sub, e, {})), Effect.succeed(null));
+          if (how !== "sign") return none;
+          if (tries >= AGAIN_MOST) return Effect.as(Effect.sync(() => this.#letBe(sub, e, {})), Effect.succeed(null));
+          return Effect.catch(this.#signHere(sub, seed, e.kind, e.body, true, within, tries + 1, null, hashOf(e)), (err) =>
+            Effect.as(Effect.sync(() => this.#letBe(sub, e, err.message === this.#changed(sub, e).message ? {} : { why: err.message })), Effect.succeed(null)));
         });
         yield* Effect.ignore(Effect.flatMap(this.#turn(sub).withPermits(1)(inTurn), (rest) => rest), { log: "Unhandled", message: "personal lock: an entry that lost its place signed again" });
       }
@@ -891,11 +909,36 @@ export class PersonalLock {
           const drop = (how: Partial<Pending> | null) => Effect.sync(() => this.#putPending(sub, (this.#pending.get(sub) ?? []).flatMap((x) => (x.id !== item.id ? [x] : how === null ? [] : [{ ...x, ...how }]))));
           if (how === "done") return Effect.as(drop(null), Effect.succeed(null));
           if (how !== "sign" || (now.tries ?? 0) >= AGAIN_MOST) return Effect.as(drop({ state: "failed", what: now.name }), Effect.succeed(null));
-          return Effect.catch(this.#signHere(sub, seed, e.kind, e.body, false, within, (now.tries ?? 0) + 1, item.id), (err) => Effect.as(drop({ state: "failed", what: now.name, ...(err.code === "lock_refused" ? {} : { why: err.message }) }), Effect.succeed(null)));
+          return Effect.catch(this.#signHere(sub, seed, e.kind, e.body, false, within, (now.tries ?? 0) + 1, item.id, hashOf(e)), (err) => Effect.as(drop({ state: "failed", what: now.name, ...(err.code === "lock_refused" ? {} : { why: err.message }) }), Effect.succeed(null)));
         });
         yield* Effect.ignore(Effect.flatMap(this.#turn(sub).withPermits(1)(inTurn), (rest) => rest), { log: "Unhandled", message: "personal lock: a pending entry signed again" });
       }
     });
+  }
+
+  /// An entry of this device's that lost its place, pinned before, not signed again (`#signAgain`: decided otherwise
+  /// since by someone else, signed again AGAIN_MOST times, or refused as it was signed again; `how.why` the words):
+  /// told as a pending one that failed is (`#deliver`'s), a device put on or taken off by its name; not this device's
+  /// own (the core's). Failed ones count apart from those waiting (`bounded`): it never holds a new change back.
+  #letBe(sub: string, e: Entry, how: { why?: string }): void {
+    const key = (e.body as J)?.key;
+    const act = key === this.#myKey ? null : e.kind === "device.remove" ? "removeDevice" : e.kind === "device" ? "approve" : null;
+    if (act === null) return;
+    const acts = this.#actsOf(e);
+    const id = acts[acts.length - 1]!;
+    const label = [...this.#lastSaid(sub).values()].find((d) => d.device.key === key)?.device.label ?? (e.body as J)?.label;
+    const name = typeof label === "string" && label !== "" ? label : t("web-pages.security.appDevice");
+    const row: Pending = { id, entry: e, act, name, at: e.at * 1000, state: "failed", ...(how.why !== undefined ? { why: how.why } : { what: name }) };
+    const items = this.#pending.get(sub) ?? [];
+    this.#putPending(sub, items.some((x) => x.id === id) ? items.map((x) => (x.id === id ? row : x)) : [...items, row]);
+  }
+
+  /// The acts an entry of this device's is, by hash: itself, and each it was signed again for (`#again`), back to the
+  /// first signed.
+  #actsOf(e: Entry): string[] {
+    const out = [hashOf(e)];
+    for (let up = this.#again.get(out[0]!); up !== undefined && !out.includes(up); up = this.#again.get(up)) out.push(up);
+    return out;
   }
 
   /// A lock begun here, this device its first (one the cloud has already gives way to it: `restart`).
