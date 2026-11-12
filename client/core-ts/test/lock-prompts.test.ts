@@ -11,7 +11,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
-import { BEHIND_MS, BEHIND_TRIES, Lock, held, pendingHeld, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
+import { BEHIND_MS, BEHIND_TRIES, Lock, fold, held, pendingHeld, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
@@ -451,9 +451,9 @@ test("a member or a station taken out of a locked workspace, or a member given a
   assert.ok(said.includes(`cloud DELETE /v1/workspaces/ws/stations/${ST}`), said.join());
   await r.host.time.pass(1_000);
   assert.ok(held(r.core.inner, "ws")!.entries.some((e) => e.kind === "station.remove" && (e.body as { key: string }).key === ST));
-  // (none left waiting. The removal of s2 ends failed, not taken: it and the role given were both signed after the same
-  // head, and delivered in turn the role's entry reads to `againOf` as s2 decided otherwise since; known, 2026-11-13)
-  assert.deepEqual(pendingHeld(r.core.inner, "ws").map((p) => [p.entry.kind, p.state]), [["member.remove", "failed"]]);
+  // (nothing left pending or failed: the role given and the removal brought in the order made, each as if made then)
+  assert.deepEqual(pendingHeld(r.core.inner, "ws").map((p) => [p.entry.kind, p.state]), []);
+  assert.ok(!fold(held(r.core.inner, "ws")!.entries).members.has("s2"), "s2 out");
   // One the lock does not name: the cloud's alone.
   said.length = 0;
   const length = r.cloud.chains.get("ws")!.length;

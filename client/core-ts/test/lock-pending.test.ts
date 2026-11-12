@@ -11,7 +11,7 @@ import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
 import { PENDING_MOST } from "../src/lock-pending.ts";
 import { jsonResponse } from "../src/testing.ts";
-import { ASKED_MS, held, pendingHeld, pendingRowOf, read } from "../src/views/lock.ts";
+import { ASKED_MS, fold, held, pendingHeld, pendingRowOf, read } from "../src/views/lock.ts";
 import { call } from "./helpers.ts";
 import { ME, PHONE, genesis, grant, rig } from "./lock-rig.ts";
 import { stationLater } from "./station-fixture.ts";
@@ -26,15 +26,17 @@ const SLACK_MS = 200;
 
 /// A station of the lock as station/src/mesh/serve.ts answers it: `silent`, asked, it never answers; `lateUntil`, till
 /// then what it is asked is held, and answered then; `refuse`, what is brought not on its head is refused (409);
-/// `rules`, what is brought is refused in these words (409), as the lock's rules refuse it there.
+/// `rules`, what is brought is refused in these words (409), as the lock's rules refuse it there; `readsSilent`, what it
+/// is asked to read never answered, what it is brought taken; `onTake`, told each entry it takes.
 function station(first: Entry, now: () => number) {
   const chain: Entry[] = [first];
-  const say = { silent: false, lateUntil: 0, rules: null as string | null };
+  const say = { silent: false, lateUntil: 0, rules: null as string | null, readsSilent: false, onTake: null as ((e: Entry) => void) | null };
   const head = (): Head => ({ seq: chain.length - 1, hash: entryHash(chain.at(-1)!), genesis: entryHash(chain[0]!) });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (say.silent) return Effect.never;
     if (now() < say.lateUntil) return Effect.andThen(Effect.sleep(say.lateUntil - now()), Effect.suspend(() => answer(method, path, body)));
     const serves = { takes: ["person"], serves: ["person", "devices", "told"] };
+    if (say.readsSilent && method === "GET") return Effect.never;
     if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) {
       const after = path === "/lock" ? -1 : Number(path.split("=")[1]);
       return Effect.succeed({ head: head(), entries: chain.filter((e) => e.seq > after), ...serves });
@@ -44,7 +46,11 @@ function station(first: Entry, now: () => number) {
       const es = (body as { entries: Entry[] }).entries;
       const last = es.at(-1)!;
       if (last.seq < chain.length) return entryHash(chain[last.seq]!) === entryHash(last) ? Effect.succeed({ taken: 0, head: head() }) : Effect.fail(new CoreError("lock_refused", "another entry is at its place", 409));
-      for (const e of es) if (e.seq === chain.length && e.prev === entryHash(chain.at(-1)!)) chain.push(e);
+      for (const e of es) {
+        if (e.seq !== chain.length || e.prev !== entryHash(chain.at(-1)!)) continue;
+        chain.push(e);
+        say.onTake?.(e);
+      }
       // (a lock turned off is let go of: the station keeps none after it, and says only that it took it)
       if (chain.at(-1) === last && last.kind === "disable") return Effect.succeed({ taken: 1, head: null });
       return chain.at(-1) === last ? Effect.succeed({ taken: 1, head: head() }) : Effect.fail(new CoreError("lock_refused", "not on its head", 409));
@@ -213,7 +219,7 @@ test("the head moved meanwhile about the same device otherwise: failed, said so,
   await s.told();
   await s.r.host.time.pass(500);
   assert.deepEqual(pendingHeld(s.inner, "ws").map((x) => x.state), ["failed"]);
-  assert.match(pendingRowOf(s.inner, "ws", pendingHeld(s.inner, "ws")[0]!).text, /^移除设备 .+：没有生效。另一台设备刚改过「.+」，请查看现在的状态，仍然需要的话再操作一次$/);
+  assert.match(pendingRowOf(s.inner, "ws", pendingHeld(s.inner, "ws")[0]!).text, /^移除设备 .+：没有生效。「.+」在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次$/);
   assert.equal(s.st.chain.length, 2);
   assert.ok(!s.removed(PHONE));
 });
@@ -383,4 +389,79 @@ test("the roster's calls and people added, their lock entry pending: the answer 
     assert.equal(a.ok?.pending?.state, "waiting", `${name}: ${JSON.stringify(a.ok)}`);
     assert.match(a.ok.pending.text, says, name);
   }
+});
+
+// ── in the order made ──
+// What a device has pending is brought in the order it was made, each as if made then: only what someone else did since
+// fails one (views/lock.ts `deliver`, `took`). 2026-11-13: a member given a role and then taken out with no station up
+// got the role and not the removal once the station was back, told another device had changed them.
+
+/// The cloud taking the roster's writes about s2 at once.
+function rosterAnswered(s: Setup) {
+  stationLater(s.r.host, (req) => {
+    const path = new URL(req.url).pathname;
+    if ((req.method === "PATCH" || req.method === "DELETE") && path === "/v1/workspaces/ws/members/s2") return Promise.resolve(jsonResponse(200, { ok: true }));
+    return undefined;
+  });
+}
+const kinds = (s: Setup) => s.st.chain.slice(1).map((e) => e.kind);
+const isMember = (s: Setup) => fold(held(s.inner, "ws")!.entries).members.has("s2");
+
+test("no station up, a member given a role and then taken out: the station back, both taken in that order, the member out, nothing left", async () => {
+  const s = await setUp();
+  rosterAnswered(s);
+  s.st.say.silent = true;
+  assert.equal((await s.timed("workspace.setRole", { member: "s2", role: "admin" })).ok?.pending?.state, "waiting");
+  assert.equal((await s.timed("workspace.removeMember", { member: "s2" })).ok?.pending?.state, "waiting");
+  s.st.say.silent = false;
+  await s.told();
+  await s.r.host.time.pass(1_000);
+  assert.deepEqual(kinds(s), ["member", "member.remove"]);
+  assert.deepEqual(pendingHeld(s.inner, "ws"), []);
+  assert.equal(isMember(s), false);
+});
+
+test("the same, another device changing that member at the station after the role: the removal fails, saying it was changed after it", async () => {
+  const s = await setUp();
+  rosterAnswered(s);
+  const signer = (await Effect.runPromise(Signer.load(s.r.host)))!;
+  s.st.say.silent = true;
+  await s.timed("workspace.setRole", { member: "s2", role: "admin" });
+  await s.timed("workspace.removeMember", { member: "s2" });
+  s.st.say.onTake = (e) => {
+    if (e.kind !== "member") return;
+    s.st.say.onTake = null;
+    const h = s.st.chain.at(-1)!;
+    s.st.chain.push(signer.sign(next("ws", { seq: h.seq, hash: entryHash(h), genesis: entryHash(s.st.chain[0]!) }, 2000, "member", { sub: "s2", email: "b@x.com", role: "member" })));
+  };
+  s.st.say.silent = false;
+  await s.told();
+  await s.r.host.time.pass(1_000);
+  assert.deepEqual(kinds(s), ["member", "member"]);
+  const items = pendingHeld(s.inner, "ws");
+  assert.deepEqual(items.map((x) => [x.entry.kind, x.state]), [["member.remove", "failed"]]);
+  assert.match(pendingRowOf(s.inner, "ws", items[0]!).text, /^移除成员 .+：没有生效。「.+」在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次$/);
+});
+
+test("a role given pending, and the member taken out directly once the station takes again: the stale role fails, the member stays out", async () => {
+  const s = await setUp();
+  rosterAnswered(s);
+  s.st.say.silent = true;
+  await s.timed("workspace.setRole", { member: "s2", role: "admin" });
+  // (the station takes what it is brought again, its reads not answered yet: nothing is delivered before the removal,
+  // which is pending a moment itself, the call's wait spent on the read, and taken before the older role)
+  s.st.say.silent = false;
+  s.st.say.readsSilent = true;
+  const out = await s.timed("workspace.removeMember", { member: "s2" });
+  assert.equal(out.error, undefined, JSON.stringify(out.error));
+  await s.r.host.time.pass(1_000);
+  assert.deepEqual(kinds(s), ["member.remove"]);
+  s.st.say.readsSilent = false;
+  await s.told();
+  await s.r.host.time.pass(1_000);
+  assert.deepEqual(kinds(s), ["member.remove"]);
+  const items = pendingHeld(s.inner, "ws");
+  assert.deepEqual(items.map((x) => [x.entry.kind, x.state]), [["member", "failed"]]);
+  assert.match(pendingRowOf(s.inner, "ws", items[0]!).text, /^把 .+ 改为.+：没有生效。「.+」在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次$/);
+  assert.equal(isMember(s), false);
 });

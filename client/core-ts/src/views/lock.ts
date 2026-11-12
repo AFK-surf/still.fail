@@ -231,9 +231,20 @@ export const pendingHeld = (inner: Inner, ws: string): readonly Pending[] => {
   const r = inner.data.record("lockPending", ws);
   return isObject(r) && Array.isArray(r.items) ? (r.items as Pending[]) : [];
 };
-function putPending(inner: Inner, ws: string, items: readonly Pending[]): void {
+/// This device's entries that were pending and a station took since, each with when its pending act was made (`at`,
+/// the queue's order; the last TOOK_MOST, kept with what is pending, `hold` the one place that notes them). What
+/// `deliver` brings is decided as if made then: one of these made before it decided nothing against it (`againOf`'s
+/// subject null for it); one made after it (or at the same ms) and taken first is the later act and wins, as an act
+/// made and taken directly does (a stale pending one fails against them).
+const TOOK_MOST = 32;
+type Took = { hash: string; at: number };
+const tookHeld = (inner: Inner, ws: string): readonly Took[] => {
+  const r = inner.data.record("lockPending", ws);
+  return isObject(r) && Array.isArray(r.took) ? (r.took as Took[]).filter((x) => isObject(x) && typeof x.hash === "string") : [];
+};
+function putPending(inner: Inner, ws: string, items: readonly Pending[], took: readonly Took[] = tookHeld(inner, ws)): void {
   const kept = bounded(items);
-  inner.data.put("lockPending", ws, kept.length === 0 ? undefined : { items: kept });
+  inner.data.put("lockPending", ws, kept.length === 0 && took.length === 0 ? undefined : { items: kept, ...(took.length > 0 ? { took: took.slice(-TOOK_MOST) } : {}) });
   touch(inner, ws);
 }
 
@@ -876,7 +887,7 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
       const on = new Set(now.entries.map(hashOf));
       const left = pending.filter((x) => !on.has(hashOf(x.entry)));
       if (left.length !== pending.length) {
-        putPending(inner, ws, left);
+        putPending(inner, ws, left, [...tookHeld(inner, ws), ...pending.filter((x) => on.has(hashOf(x.entry))).map((x) => ({ hash: hashOf(x.entry), at: x.at }))]);
         // (not one the cloud was sent as it was signed, `viaCloud`: read of it, perhaps, which put it on)
         const taken = pending.filter((x) => on.has(hashOf(x.entry)) && x.sent !== true).map((x) => x.entry);
         if (taken.length > 0) inner.runner.fork(Effect.ignore(inner.provider.request(sub, "POST", `/v1/workspaces/${encodeURIComponent(ws)}/lock`, { entries: taken }, null), { log: "Unhandled", message: "lock entries a station took sent to the cloud" }));
@@ -3032,7 +3043,11 @@ export class Lock {
         }
         let entry = item.entry;
         if (entry.prev !== h.head.hash) {
-          const how = againOf(h.entries, h.aside ?? [], entry, subjectOf);
+          // (what this device had pending, made before it and taken since, is no decision against it: made in that
+          // order; made after it, it is the later act; at the same ms, taken as the later act, the side where nothing
+          // made after it is undone)
+          const took = new Set(tookHeld(inner, ws).filter((x) => x.at < item.at).map((x) => x.hash));
+          const how = againOf(h.entries, h.aside ?? [], entry, (e) => (took.has(hashOf(e)) ? null : subjectOf(e)));
           if (how === "done") {
             yield* drop;
             continue;
@@ -3064,7 +3079,8 @@ export class Lock {
         if (named.length === 0) {
           const kept = yield* Effect.timeoutOption(Effect.result(self.#toCloud([entry], false)), CLOUD_WRITE_MS); // timer: a deadline (the turn is held meanwhile)
           if (kept._tag !== "Some" || kept.value._tag !== "Success") return;
-          yield* drop;
+          // (held as a station's taking is, so noted as this device's taken in turn, `took`; the cloud not sent it again)
+          putPending(inner, ws, pendingHeld(inner, ws).map((x) => (x.id === item.id ? { ...x, entry, sent: true } : x)));
           yield* self.#taken(signed, chain);
           continue;
         }

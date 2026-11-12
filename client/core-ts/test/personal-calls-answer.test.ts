@@ -723,8 +723,8 @@ function theirsOnPerson(s: Setup, kind: string, body: unknown) {
 }
 
 for (const c of [
-  { name: "another device put on meanwhile, the laptop untouched: their trusted devices said changed", body: { key: `ed25519:${"66".repeat(32)}`, id: "66".repeat(32), label: "tablet" }, says: "移除设备 laptop：没有生效。另一台设备刚改过受信任设备，请查看现在的状态，仍然需要的话再操作一次" },
-  { name: "the laptop itself changed meanwhile (renamed): it said changed", body: { key: LAPTOP_KEY, id: LAPTOP, label: "renamed", sign_key: LAPTOP_SIGNS }, says: "移除设备 laptop：没有生效。另一台设备刚改过「laptop」，请查看现在的状态，仍然需要的话再操作一次" },
+  { name: "another device put on meanwhile, the laptop untouched: their trusted devices said changed", body: { key: `ed25519:${"66".repeat(32)}`, id: "66".repeat(32), label: "tablet" }, says: "移除设备 laptop：没有生效。受信任设备在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次" },
+  { name: "the laptop itself changed meanwhile (renamed): it said changed", body: { key: LAPTOP_KEY, id: LAPTOP, label: "renamed", sign_key: LAPTOP_SIGNS }, says: "移除设备 laptop：没有生效。「laptop」在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次" },
 ]) {
   test(`a person's lock, pending, the head moved, no seed in hand: ${c.name}`, async () => {
     const s = await setUp();
@@ -767,4 +767,42 @@ test("the person's one station gone for good, taken out of their workspace: an o
   assert.ok(isRemove(LAPTOP_KEY)(s.personal.entries("s1").at(-1)!), "pinned");
   assert.ok(isRemove(LAPTOP_KEY)(s.personCloud.entries.at(-1)!), "the cloud keeps it");
   assert.deepEqual(pendingHeld(s.inner, "ws"), [], "and the workspace's removal of it taken too");
+});
+
+// ── in the order made ──
+// A person's lock: what is signed while something is pending goes on from it (personal-lock.ts `#pendingTail`), the
+// seed in hand only then, and `#deliver` brings each once the one before was taken; only another device's change since
+// fails them, each saying so. 2026-11-13: two own devices taken off with their station asleep, the second always
+// failed once it was back.
+
+test("a person's lock: two own devices taken off with their station silent; the station back: both off, nothing pending", async () => {
+  const s = await setUp({ tablet: true });
+  cloudAs(s.r, "all");
+  s.st.say.silent = true;
+  await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: LAPTOP_KEY });
+  await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: TABLET_KEY });
+  assert.deepEqual(s.personal.view("s1").pending.map((p: { state: string }) => p.state), ["waiting", "waiting"]);
+  s.st.say.silent = false;
+  await s.run(s.personal.refresh("s1"));
+  await s.r.host.time.pass(1_000);
+  const pinned = s.personal.entries("s1");
+  assert.ok(pinned.some(isRemove(LAPTOP_KEY)) && pinned.some(isRemove(TABLET_KEY)), pinned.map((e) => e.kind).join());
+  assert.deepEqual(s.personal.view("s1").pending, []);
+});
+
+test("a person's lock: the same, another device put on at the station meanwhile: both fail, each saying their trusted devices were changed after it", async () => {
+  const s = await setUp({ tablet: true });
+  cloudAs(s.r, "all");
+  s.st.say.silent = true;
+  await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: LAPTOP_KEY });
+  await timedCall(s.r, "adb.personalRemove", { sub: "s1", key: TABLET_KEY });
+  theirsOnPerson(s, "device", { key: `ed25519:${"99".repeat(32)}`, id: "99".repeat(32), label: "phone" });
+  s.st.say.silent = false;
+  await s.run(s.personal.refresh("s1"));
+  await s.r.host.time.pass(1_000);
+  const rows = s.personal.view("s1").pending as { state: string; text: string }[];
+  assert.deepEqual(rows.map((r) => r.text), [
+    "移除设备 laptop：没有生效。受信任设备在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次",
+    "移除设备 tablet：没有生效。受信任设备在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次",
+  ]);
 });

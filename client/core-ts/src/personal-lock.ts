@@ -570,8 +570,7 @@ export class PersonalLock {
     });
   }
 
-  #entry(sub: string, seed: Uint8Array, key: string, kind: string, body: unknown): Entry {
-    const before = this.#pinned.get(sub) ?? [];
+  #entry(sub: string, seed: Uint8Array, key: string, kind: string, body: unknown, before: readonly Entry[] = this.#pinned.get(sub) ?? []): Entry {
     const last = before[before.length - 1];
     const e = { v: 1 as const, ws: personOf(sub), seq: before.length, prev: last ? entryHash(last) : null, at: Math.floor(this.#env.host.nowMs() / 1000), kind, body };
     return { ...e, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } };
@@ -607,6 +606,20 @@ export class PersonalLock {
     let turn = this.#turns.get(sub);
     if (turn === undefined) this.#turns.set(sub, (turn = Semaphore.makeUnsafe(1)));
     return turn;
+  }
+
+  /// What is pending of `sub`'s lock that goes on from the chain pinned, one after another (the first's parent its
+  /// head, each next one's the one before), waiting: what a new entry is signed after.
+  #pendingTail(sub: string): Entry[] {
+    const pinned = this.#pinned.get(sub) ?? [];
+    const out: Entry[] = [];
+    let last = pinned[pinned.length - 1];
+    for (const x of this.#pending.get(sub) ?? []) {
+      if (x.state !== "waiting" || x.entry.seq !== pinned.length + out.length || x.entry.prev !== (last ? entryHash(last) : null)) continue;
+      out.push(x.entry);
+      last = x.entry;
+    }
+    return out;
   }
 
   /// What is pending of `sub`'s lock now, put: kept to the bound, written beside the lock (forked: a failure to write
@@ -752,8 +765,12 @@ export class PersonalLock {
   #signHere(sub: string, seed: Uint8Array, kind: string, body: unknown, once: boolean, within: Asked | undefined, tries: number, of: string | null): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (kind === "genesis") this.#pinned.delete(sub);
-      const e = this.#entry(sub, seed, this.#myKey!, kind, body);
-      const chain = [...(e.seq === 0 ? [] : (this.#pinned.get(sub) ?? [])), e];
+      // (after what is pending here that goes on from the chain pinned, one after another: what this device does is
+      // brought in the order it was done, each as if done then, the seed in hand only now; `#deliver` brings each once
+      // the one before was taken)
+      const after = kind === "genesis" ? [] : [...(this.#pinned.get(sub) ?? []), ...this.#pendingTail(sub)];
+      const e = this.#entry(sub, seed, this.#myKey!, kind, body, after);
+      const chain = [...(e.seq === 0 ? [] : after), e];
       // (signed again: only where the rules still take it after the head; else the lock changed meanwhile)
       if (tries > 0 && checkChain(chain, sub) === null) return yield* Effect.fail(this.#changed(sub, e));
       if (tries > 0) this.#tries.set(hashOf(e), tries);
