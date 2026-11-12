@@ -44,6 +44,16 @@ async function until(_what: string, check: () => boolean) {
 
 const FOREVER = "tail -f /dev/null";
 
+/// `clean` asked again while it answers pending, as an agent is told to (a removal answers early, after
+/// CLEAN_ANSWER_MS of the machine's time, while its lane is still busy: on a loaded CI runner it did, and the test
+/// read `pending` as the clean let through). Its answer, or what it refused with.
+async function cleaned(use: (name: string, args: Json) => Promise<any>, mirror: string): Promise<any> {
+  for (;;) {
+    const answer = await use("station_task", { action: "clean", mirror });
+    if (answer?.pending !== true) return answer;
+  }
+}
+
 function testClock() {
   const scope = Effect.runSync(Scope.make());
   cleanup.push(() => Effect.runPromise(Scope.close(scope, Exit.void)).catch(() => undefined));
@@ -355,7 +365,7 @@ describe("dirsync", { concurrency: true }, () => {
       await until("the first result is being downloaded", () => p.state.held.length > 0);
       const mirrors = await p.use("station_task", { action: "mirrors" });
       assert.equal(mirrors.mirrors.find((m: Json) => m.name === "back-race").busy, true);
-      await assert.rejects(p.use("station_task", { action: "clean", mirror: "back-race" }), /in use/);
+      await assert.rejects(cleaned(p.use, "back-race"), /in use/);
       await p.use("station_task", { key: "second", action: "prepare", command: "echo second > trace", dir, back: ["trace"] });
       await assert.rejects(p.use("station_task", { key: "second", action: "start" }), /first.*(collect|bring|result)/i);
     } finally {
@@ -380,7 +390,7 @@ describe("dirsync", { concurrency: true }, () => {
     assert.match(notice, /not brought back.*station_file.*release/);
     await p.use("station_task", { key: "next", action: "prepare", command: "echo second > trace", dir });
     await assert.rejects(p.use("station_task", { key: "next", action: "start" }), /first.*(collect|bring|result)/i);
-    await assert.rejects(p.use("station_task", { action: "clean", mirror: "failed-back" }), /in use/);
+    await assert.rejects(cleaned(p.use, "failed-back"), /in use/);
     p.state.failFileGet = false;
     await p.use("station_file", { key: "first", direction: "download", path: "failed-back/trace", local: "saved-trace" });
     assert.equal(readFileSync(join(p.home, "saved-trace"), "utf8"), "first\n");
