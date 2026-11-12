@@ -10101,7 +10101,8 @@ fn Tree::sizes_told(self : Tree) -> Bool {
 /// Node `id` (`within`: that part of it, its top and its foot in its own terms, asked once all is laid out; none there,
 /// all of it) brought into sight by what holds it that shows what it holds (View::shows: a column that scrolls), once
 /// all of it is laid out as it is next, before that is drawn: the innermost first, each that holds it then told where
-/// it is as the ones inside it moved it. Once, at this cause (the focus come to it): nothing brings it back of itself
+/// it is as the ones inside it moved it; one that holds it pinned over what it scrolls (a page's list's foot) asked
+/// nothing, it being in sight by that. Once, at this cause (the focus come to it): nothing brings it back of itself
 /// after.
 pub fn Tree::show_in_sight(self : Tree, id : NodeId, within? : () -> (Double, Double)?) -> Unit {
   self.shows_due.push((id, within.unwrap_or(fn() { None })))
@@ -10129,9 +10130,13 @@ fn Tree::shown_now(self : Tree) -> Unit {
     let mut x0 = tx
     let mut x1 = tx + self.nodes[id.at].flex.width * ts
     let mut i = self.nodes[id.at].parent
+    // (the one it was reached from: what a column holds pinned over what it scrolls (a page's list's foot, its bar) is
+    // in sight by being pinned, so nothing of the column is asked for it, its place kept (at its foot, following it))
+    let mut came = id.at
     while i >= 0 {
       let n = self.nodes[i]
       match n.shows {
+        Some(_) if n.scroll_held >= 0 && came != n.scroll_held => ()
         Some(f) => {
           let (vx, vy, vs) = self.placed(i)
           if n.shows_across {
@@ -10146,6 +10151,7 @@ fn Tree::shown_now(self : Tree) -> Unit {
         }
         None => ()
       }
+      came = i
       i = n.parent
     }
   }
