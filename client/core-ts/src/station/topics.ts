@@ -615,7 +615,10 @@ export class StationTopics implements Owner {
       if (latest === 0 && summary !== null) return { window: { first: 1, last: null, at: null, atOffset: null, caught: 0 }, bring: null };
       return { window: null, bring: null };
     }
-    // The latest page held, as far back as it runs unbroken.
+    // The latest page held, as far back as it runs unbroken: as many of its messages as the chat's page was told fill
+    // its screen (`chat.window`, views.ts chatFirstRows), else a page of its entries.
+    const rows = this.#core.views.chatFirstRows(station, id);
+    if (rows !== null) return { window: { first: this.#firstShown(station, id, span.max, rows).first, last: null, at: null, atOffset: null, caught: span.max }, bring: null };
     const page = data.logRange("entry", station, String(id), Math.max(1, latest - PAGE + 1), span.max);
     let first = span.max;
     while (first > 1 && page.has(first - 1) && first > latest - PAGE + 1) first--;
@@ -729,15 +732,39 @@ export class StationTopics implements Owner {
     return null;
   }
 
+  /// The first entry of a window ending at a chat's held entry `last` that holds `rows` of what the chat shows (its
+  /// messages, not what agents wrote each other nor edits: #shownTo's), as far back as it runs unbroken; `done` once it
+  /// holds them, or reaches the chat's first entry or WINDOW entries (else what is held ran out before them). Read back
+  /// from `last` a step at a time, `rows` entries a step, a further one only while fewer were found: a chat of
+  /// messages is read for as many entries as it shows.
+  #firstShown(station: string, id: number, last: number, rows: number): { first: number; done: boolean } {
+    const keys = new Set(members(this.summary(station, id)));
+    let first = last + 1;
+    let shown = 0;
+    let n = last;
+    while (n >= 1 && last - n < WINDOW) {
+      const from = Math.max(1, n - rows + 1);
+      const held = this.#core.data.logRange("entry", station, String(id), from, n);
+      for (; n >= from; n--) {
+        if (!held.has(n)) return { first, done: false };
+        first = n;
+        const e = held.get(n);
+        if (isObject(e) && e.kind === "message" && !isLetter(e, keys) && ++shown >= rows) return { first, done: true };
+      }
+    }
+    return { first, done: true };
+  }
+
   #window(station: string, id: number): [string, Window] | null {
     const tk = topicKey({ topic: "thread", station, thread: id });
     const w = this.#windows.get(tk);
     return w ? [tk, w] : null;
   }
 
-  /// The page before a chat's window into it (`chat.older`): from the device, else read now. Answers whether still
-  /// older ones exist.
-  older(station: string, id: number): Effect.Effect<boolean, CoreError> {
+  /// The page before a chat's window into it (`chat.older`): from the device, else read now; `rows`, as many of its
+  /// messages as its page asks for more (it keeps a screen of them above what shows), else the page whole. Answers
+  /// whether still older ones exist.
+  older(station: string, id: number, rows: number | null = null): Effect.Effect<boolean, CoreError> {
     return Effect.suspend(() => {
       const found = this.#window(station, id);
       if (!found) return Effect.succeed(false);
@@ -745,6 +772,14 @@ export class StationTopics implements Owner {
       return this.#older({ topic: "thread", station, thread: id }, tk, Effect.gen({ self: this }, function* () {
         const before = window.first;
         if (before <= 1) return false;
+        // As many as its page asks for, where the device holds them: read for those alone, not a page.
+        const asked = rows === null ? null : this.#firstShown(station, id, before - 1, rows);
+        if (asked !== null && asked.done && asked.first < before) {
+          window.first = asked.first;
+          const end = this.#shownTo(station, id, asked.first, window.last ?? this.#latest(station, id));
+          if (end !== null) window.last = end;
+          return asked.first > 1;
+        }
         const from = Math.max(1, before - PAGE);
         const held = () => this.#core.data.logRange("entry", station, String(id), from, before - 1);
         // Read now unless all held; its station not reached and it not held: not had now (said, not a page that never
@@ -755,6 +790,7 @@ export class StationTopics implements Owner {
         let first = before;
         while (first > from && items.has(first - 1)) first--;
         if (first === before) return false;
+        if (rows !== null) first = Math.max(first, this.#firstShown(station, id, before - 1, rows).first);
         window.first = first;
         // What shows past WINDOW goes at the other end: the window is short of its end from then on.
         const end = this.#shownTo(station, id, first, window.last ?? this.#latest(station, id));

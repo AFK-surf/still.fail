@@ -10,7 +10,8 @@
 // how long the person waits (`waited`: press to all it waits for answered) and when the new screen is whole (`quiet`:
 // press to the last first value of what the commit asked).
 //   wsswitch <data dir>   MB_CORE_BUNDLE: the core's script; SCREEN=small|wide (small); LIMIT: the list's first
-//                         window (30, sfbase first_window on both screens); AWAY_MS: how long away before the last switch;
+//                         window (30, sfbase first_window on both screens); CHAT_ROWS: a chat's (30, chat_first_window;
+//                         0: none told, its untold page); AWAY_MS: how long away before the last switch;
 //                         STATIONS=up: the stations up (the seed's `link` records, as a device last found them) and the
 //                         network never answering (still.fail cloud at 192.0.2.1, TEST-NET-1, which nothing routes),
 //                         so each link stays as a device's is as the app starts, on its way and taken for up (link.ts),
@@ -179,9 +180,13 @@ static void land_from(const char *text, NSString *ws) {
   snprintf(land_key, sizeof land_key, "%s", [chat[@"key"] UTF8String]);
 }
 
-// What the pane's page asks once workspaceMarks named it: a chat's view, or the workspace's new chat.
+// What the pane's page asks once workspaceMarks named it: a chat's view (how many of its last messages it opens on told
+// before it, as the app's client tells it: sfbase's chat_first_window, CHAT_ROWS, 30 on 大屏), or the workspace's new
+// chat.
+static int chat_rows;
 static void land(NSString *ws, int role, int start) {
   if (land_station[0]) {
+    if (chat_rows > 0) call(@"chat.window", [NSString stringWithFormat:@"{\"station\":\"%s\",\"session\":\"%s\",\"rows\":%d}", land_station, land_key, chat_rows]);
     sub("chat", role, [NSString stringWithFormat:@"{\"topic\":\"chat\",\"station\":\"%s\",\"session\":\"%s\",\"compact\":true}", land_station, land_key]);
   } else {
     call_ws("newChat", role, ws, "scope");
@@ -451,6 +456,7 @@ int main(int argc, char **argv) {
     double away = getenv("AWAY_MS") ? atof(getenv("AWAY_MS")) : 70000;
     wide_screen = getenv("SCREEN") && strcmp(getenv("SCREEN"), "wide") == 0;
     limit = getenv("LIMIT") ? atoi(getenv("LIMIT")) : 30;
+    chat_rows = getenv("CHAT_ROWS") ? atoi(getenv("CHAT_ROWS")) : 30;
     told = dispatch_semaphore_create(0);
     int up = getenv("STATIONS") && strcmp(getenv("STATIONS"), "up") == 0;
     mb_core_start(argv[1], up ? "http://192.0.2.1:9" : "http://127.0.0.1:9", 0, on_message, NULL);

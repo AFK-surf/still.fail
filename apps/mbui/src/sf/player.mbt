@@ -2622,15 +2622,18 @@ fn desk_narrow(width : Double) -> Bool {
 }
 
 ///|
-/// That line: the bar 8 over it (a phone's, clear of its corner), 16 high, in from its side as the timeline's track is.
+/// That line: the bar 8 over it (a phone's, clear of its corner), 16 high at least, in from its side as the timeline's
+/// track is.
 let desk_time_over : Double = 8.0
 
 ///|
 let desk_time_h : Double = 16.0
 
 ///|
+/// (grown by its words where their line is drawn higher than 16, its time's strong figures: a box with its height said
+/// held them 2 over, a chat's side panel's song at rest, corners_wbtest.mbt)
 // kept across runs: a value (no field of it changes)
-let desk_time_line : @ui.Style = @ui.style(h=Fixed(desk_time_h), pl=S2_5, justify=JCenter)
+let desk_time_line : @ui.Style = @ui.style(min_h=Fixed(desk_time_h), pl=S2_5, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

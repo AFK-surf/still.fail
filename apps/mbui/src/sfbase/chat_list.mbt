@@ -1201,18 +1201,40 @@ pub(all) struct ListMade {
 }
 
 ///|
-pub fn list_made(info : @ui.ListInfo?, n : Int, ask_rows : Array[Int]) -> ListMade {
+pub fn list_made(info : @ui.ListInfo?, n : Int, ask_rows : Array[Int], lr : @ui.ListReader) -> ListMade {
   match info {
     Some(i) =>
       {
         laid: i.first >= 0,
-        near_top: i.first >= 0 && i.first <= 3,
+        near_top: i.first >= 0 && chat_short_above(i, lr),
         near_end: i.last >= n - 4,
         at_end: i.at_end,
         away: i.first >= 0 && i.below > 120.0 && !i.gliding,
         asks_seen: asks_in_view(ask_rows, info),
       }
     None => { laid: false, near_top: false, near_end: false, at_end: false, away: false, asks_seen: false }
+  }
+}
+
+///|
+/// Whether less than a screen of a chat's list is above what shows (`info` as it was last laid out, `lr` the list as it
+/// is now): its page asks for more before it (chat_grow_rows), so that a hand reading it back at its fastest never
+/// comes to its top before they are in. Measured in points: the rows above at the height they were laid out at, one not
+/// laid out yet (above where it opened) at the least a row the core counts has (chat_row_least), never more than it
+/// can be; counted only as far as a screen.
+pub fn chat_short_above(info : @ui.ListInfo, lr : @ui.ListReader) -> Bool {
+  match lr.place() {
+    Some((first, off, _)) => {
+      let mut above = off
+      for k in 0..<first {
+        if above >= info.height {
+          break
+        }
+        above += lr.row_height(k).unwrap_or(chat_row_least)
+      }
+      above < info.height
+    }
+    None => false
   }
 }
 
@@ -2314,13 +2336,17 @@ pub fn list_after(
       }
       _ => ()
     }
-    // (read back by what the page builds from it: not at every step of a scroll, which changes none of that)
+    // (read back by what the page builds from it: not at every step of a scroll, which changes none of that; whether
+    // less than a screen is above what shows among it, a Bool, built again only as that turns)
     let ask_rows = ask_rows_of(v, list)
-    let info = c.list_info_as(key, fn(i) { list_made(i, n, ask_rows) })
-    // near the top: the page before comes in, once per page
+    let lr = c.list_reader(key)
+    let made = fn(i) { list_made(i, n, ask_rows, lr) }
+    let info = c.list_info_as(key, made)
+    let short_above = made(info).near_top
+    // less than a screen laid out above what shows: as many more before it as chat_grow_rows, once for each first
     match (info, v.thread) {
       // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
-      (Some(i), Some(thread)) if v.more && v.older == "" && rd.placed && i.first >= 0 && i.first <= 3 => {
+      (Some(_), Some(thread)) if v.more && v.older == "" && rd.placed && short_above => {
         // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
         let first = match v.first_entry {
           Some(f) => f
@@ -2339,7 +2365,11 @@ pub fn list_after(
             rd.asked.set(first)
             (src.call)(
               "chat.older",
-              { "station": Json::string(r.station), "thread": Json::number(thread) },
+              {
+                "station": Json::string(r.station),
+                "thread": Json::number(thread),
+                "rows": Json::number(chat_grow_rows.to_double()),
+              },
               fn(res) {
                 match res {
                   Err(e) => {

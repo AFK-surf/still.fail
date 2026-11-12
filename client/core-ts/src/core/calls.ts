@@ -62,13 +62,17 @@ export type Call =
   | { kind: "chatDiscardIn"; station: string; session: string; id: string }
   | { kind: "chatRetry"; station: string; thread: number; id: string }
   | { kind: "chatDiscard"; station: string; thread: number; id: string }
-  | { kind: "chatOlder"; station: string; thread: number }
+  /// The page before a chat's window (`rows`: as many of its messages more, else the page whole).
+  | { kind: "chatOlder"; station: string; thread: number; rows: number | null }
   | { kind: "chatNewer"; station: string; thread: number }
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
   | { kind: "chatCc"; station: string; thread: number; to: number; on: boolean }
   /// How many of a chat list's rows go out (views.ts `chatsWindow`): the list as its topic `chats` names it, its rows.
   | { kind: "chatsWindow"; list: Topic; rows: number }
+  /// How many of a chat's messages its page opens on at its end (views.ts `chatFirstRows`): the chat as its topic
+  /// `chat` names it (its thread, or its agent's session), its rows.
+  | { kind: "chatWindow"; station: string; thread: number | null; session: string | null; rows: number }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
   /// A chat's outline: the rest of the chat read onto the device; what it lists for words looked for.
@@ -563,14 +567,21 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       ]);
       return { kind: name === "chat.retry" ? "chatRetry" : "chatDiscard", station: p.station as string, thread: p.thread as number, id: p.id as string };
     }
-    case "chat.older":
+    case "chat.older": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["rows", "u32", "opt"],
+      ]);
+      return { kind: "chatOlder", station: p.station as string, thread: p.thread as number, rows: p.rows as number | null };
+    }
     case "chat.newer":
     case "chat.latest": {
       const p = read(params, [
         ["station", S, "req"],
         ["thread", "u64", "req"],
       ]);
-      const kind = name === "chat.older" ? "chatOlder" : name === "chat.newer" ? "chatNewer" : "chatLatest";
+      const kind = name === "chat.newer" ? "chatNewer" : "chatLatest";
       return { kind, station: p.station as string, thread: p.thread as number };
     }
     case "chat.place": {
@@ -602,6 +613,16 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       const list = parseTopic({ topic: "chats", scope: p.scope, mine: p.mine, watching: p.watching, hidden: p.hidden });
       if (list === null || p.scope === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "scope" }));
       return { kind: "chatsWindow", list, rows: p.rows as number };
+    }
+    case "chat.window": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "opt"],
+        ["session", S, "opt"],
+        ["rows", "u32", "req"],
+      ]);
+      if (p.thread === null && p.session === null) throw CoreError.invalid(t("core-misc.params.missing", { field: "thread" }));
+      return { kind: "chatWindow", station: p.station as string, thread: p.thread as number | null, session: p.session as string | null, rows: p.rows as number };
     }
     case "chat.around": {
       const p = read(params, [
