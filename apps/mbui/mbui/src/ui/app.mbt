@@ -186,10 +186,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   journal_frame(c, tw, t0, t3, t4)
   slow_probe(c, t, t3 - t0, t4 - t3, tree=t0 - tw)
   perf_log(c, t, t3 - t0, t4 - t3)
-  drive_frame(c)
   // (what the stacks the window's tree holds say of the frame, as it ends: built whole, painted alone or of its looks
-  // alone, and what came in as it was drawn taken (a scripted run's steps, drive_frame): a page one of them has in the
-  // hand moves with no clock read, nav_view.mbt)
+  // alone, a page one of them has in the hand as the frame drew it (one in the hand moves with no clock read),
+  // nav_view.mbt)
   nav_views_framed(c)
   // a motion said, not at its end; one read going (built or painted from where it is now: Ctx::shows_motion); a cycle
   // shown (motion_data.mbt)
@@ -201,6 +200,12 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // what of the widgets changed, for a screen reader reading them, as the frame left them (its layers, its focus, where
   // what a page in the hand moved is: a11y.mbt)
   c.a11y_after_paint()
+  // a scripted run's steps due now (drive.mbt), where a device's input comes: the frame presented and all of its own
+  // work done (the old frame's modal layer told the window's tree, view_frame_end: what takes input as a step's input
+  // meets it is as this frame left it, as for the next input). What a step gives the app asks for the frames after it
+  // as an input does (input_came); what it waits for in time, a wake at that time, before what the frame asks for next
+  // is said
+  drive_frame(c)
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
