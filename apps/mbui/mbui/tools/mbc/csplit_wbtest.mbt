@@ -674,3 +674,25 @@ fn one_data(files : Map[String, String]) -> String {
   names.sort()
   names.map(fn(n) { files[n] }).fold(init="", fn(a, b) { a + b })
 }
+
+///|
+test "moonc's prototype of fflush is <stdio.h> in the units" {
+  // halt's `extern "C" fn … = "fflush"`, as moonc writes it, in a program whose prelude has no <stdio.h>
+  let src = prelude_src.replace(old="#include <stdio.h>\n", new="") +
+    items_src
+    .replace(
+      old="#define _M0FP1a3ffi puts\n",
+      new="#define _M0FP1a3ffi puts\n\n#define _M0FP1a5flush fflush\n\nint32_t fflush(uint64_t);\n",
+    )
+    .replace(old="+ pre_tab[1];", new="+ pre_tab[1] + _M0FP1a5flush(0ull);")
+  let (files, _) = sp(src, unit_bytes=2)
+  let mut calls = 0
+  for n, text in files {
+    assert_false(has(text, "fflush(uint64_t)"), msg="\{n}: moonc's prototype of fflush")
+    if n.has_suffix(".c") && has(text, "_M0FP1a5flush(0ull)") {
+      calls += 1
+      assert_true(has(text, "#include <stdio.h>"), msg="\{n}: calls fflush without <stdio.h>")
+    }
+  }
+  assert_eq(calls, 1)
+}

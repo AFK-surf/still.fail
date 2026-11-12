@@ -320,6 +320,22 @@ fn tag_decl_only(flat : Bytes) -> Bool {
 }
 
 ///|
+/// A prototype moonc wrote for a C library function an `extern "C"` names, as the units have it: `fflush` (mbui's
+/// halt, its `fflush(NULL)` before it stops: #5419) is <stdio.h> in its place. moonc's own, `int32_t
+/// fflush(uint64_t);`, is refused (`conflicting types for 'fflush'`) by a unit that has the header, and on x86_64
+/// every unit has it on Android: the prelude's moonbit_simd.h brings immintrin.h, mm_malloc.h, stdlib.h and, in
+/// bionic's, stdio.h (mbui-ci's android-oldest, android-devices, android-streams-real; arm64 has no such chain). The
+/// call stays moonc's, `fflush(0ull)`, a null pointer constant that `FILE *` takes; should moonc ever pass it
+/// otherwise (a variable), that call fails to compile (an integer for a pointer), never a halt's words lost.
+fn libc_declared(name : Bytes, text : Bytes) -> Bytes {
+  if name == b"fflush" {
+    b"#include <stdio.h>\n"
+  } else {
+    text
+  }
+}
+
+///|
 fn classify(text : Bytes, line : Int) -> Decl raise SplitError {
   let t = strip(text)
   if word_at(t, 0, b"typedef") >= 0 {
@@ -670,7 +686,7 @@ fn split(src : Bytes, outdir : Bytes, unit_bytes? : Int = 0) -> Split raise Spli
         ntypes += 1
       }
       Proto(info) => {
-        decls.push(text)
+        decls.push(libc_declared(info, text))
         decl_kinds.push((2, info))
         if dropped {
           static_names.add(info)
