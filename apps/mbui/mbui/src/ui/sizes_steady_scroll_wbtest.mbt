@@ -354,3 +354,55 @@ test "sizes steady in a page's list's pinned foot: room growing over what stands
   assert_true(corrected.abs() > 0.5, msg="expected non-zero scroll correction reading up, got \{corrected}")
   assert_true(stepped.length() > 0, msg="a real step in the pinned foot: no jolt found")
 }
+
+// A page's list put elsewhere at once (Scroll::put: brought to a block, as a chat's page goes to a message): its bar's
+// thumb, moved by the column's offset alone, goes there in the frame that takes the put, as far along its track and as
+// long as what the list holds came to in that layout, as it does in a frame the hand scrolled it. No jolt of the
+// thumb's: the put's (rows_steady.mbt takes a list put elsewhere at once so). What the thumb does with nothing put and
+// nothing done by the hand is still judged (the test above, a plain column's).
+
+///|
+/// A page's list 400 by 200, at the top of a window 400 by 300, of eighty rows 50 tall (`est` 30: what is measured
+/// comes out another height than counted) with these bars, a mouse over it: sizes steady said but not held
+/// (steady_faults); its scroll.
+fn steady_list_put_case() -> (Tester, @view.Scroll) {
+  let scroll = @view.Scroll::list()
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0, words_over_held=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      col.scrolls_window(scroll, fn() { Array::makei(80, fn(i) { i }) }, est=30.0, bar=tree_scroll_bar(), fn(b, k) {
+        b.width(Is(Some(160.0))).height(Is(Some(50.0))).ground(Is(0x445566FFL)).words(Is("第\{k}行")) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.move_to(80.0, 100.0)
+  (t, scroll)
+}
+
+///|
+test "sizes steady: a page's list put elsewhere at once while its bar shows, the thumb there and as long as the list came to in the put's frame, none said of it" {
+  let thumb = fn(faults : Array[String]) { faults.filter(fn(f) { !f.contains("行") }) }
+  let (t, scroll) = steady_list_put_case()
+  steady_faults(t, 4) |> ignore
+  // (the wheel 100 down: its bar coming in; the hand's frames gone by, the bar out)
+  t.wheel(80.0, 100.0, 100.0)
+  let came = thumb(steady_faults(t, 20))
+  let shown = thumb_opacity(t, 380.0).unwrap_or(0.0)
+  let before = scroll.at(view_tree().unwrap())
+  // (put 2000 down at once, nobody's hand on it: the thumb down its track in one frame)
+  view_event(fn() { scroll.put(2000.0) })
+  let put = thumb(steady_faults(t, 6))
+  let after = scroll.at(view_tree().unwrap())
+  // (each by its own line, all of what was found said: the scroll from and to, the thumb as it came in, its opacity, what
+  // was said of it after the put)
+  let found = "scrolled \{before} to \{after}; came \{Repr(came)}; shown \{shown}; put \{Repr(put)}"
+  assert_true(came.is_empty(), msg="the thumb coming in said: " + found)
+  assert_true(shown > 0.0, msg="the thumb not shown at the put: " + found)
+  assert_true(after - before > 1000.0, msg="not put: " + found)
+  assert_true(put.is_empty(), msg="the thumb said in the put's frame: " + found)
+}
