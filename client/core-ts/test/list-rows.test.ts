@@ -1,6 +1,8 @@
-// A chat list's rows kept beside their records (db/account.ts `chat_row`, views.ts listRowKey): what the list's first
-// answer costs a core started anew on the workspace of real size (real-size.ts), as a workspace switched to answers it
-// (apps/mbui/core/wsswitch.m, scripts/core.sh ws-switch): counted, not timed. Its 30 rows were made of their records as
+// A chat list's rows kept beside their records (db/kept.ts KEPT.listRow, views.ts listRowKey): what is the list's own of
+// them, on the workspace of real size (real-size.ts), as a workspace switched to answers it (apps/mbui/core/wsswitch.m,
+// scripts/core.sh ws-switch), counted, not timed: what it sends of them, the surroundings their key says, their digest.
+// What every value kept beside its record is held to (a hit reads no record, a write costs by what was read, the same
+// as made now) is test/kept.test.ts's. Its 30 rows were made of their records as
 // it was asked (2.75 ms of its 7.5 in Hermes on a Mac Studio, their records read and parsed 1.0 ms more, shaped as they
 // went out 0.5 ms, and a young collection 0.45 ms for the 1 MB it allocated, 2026-11-12); a row is made as its record
 // is written, and kept beside it under the key of what else it was made with.
@@ -12,7 +14,7 @@ import { holdLanguage, setCurrent, t as words } from "../src/i18n.ts";
 import type { Topic } from "../src/protocol.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { CHAT_READS } from "../src/db/chat-reads.ts";
-import { LIST_ROW_MAKING } from "../src/views/views.ts";
+import { KEPT } from "../src/db/kept.ts";
 import { work, workSince, type Work } from "../src/work.ts";
 import { held } from "./real-size-asked.ts";
 import { OPENS, UP, fixture } from "./real-size.ts";
@@ -28,7 +30,7 @@ const LIST: Topic = { topic: "chats", scope: "ws", mine: false };
 const WINDOW = 30;
 
 /// The rows of every station of the workspace made as a list makes them (#listRow) in each language, and their
-/// digest (conform.ts textKey): another whenever a row is made otherwise, when LIST_ROW_MAKING is to be raised with it.
+/// digest (conform.ts textKey): another whenever a row is made otherwise, when KEPT.listRow.making is to be raised with it.
 const MADE: Record<number, string> = { 1: "1594267.1cilsvl.1jt1vru" };
 
 /// The real-size workspace written to a database as a core holds it, the core then stopped; its host, and when.
@@ -64,19 +66,6 @@ async function listAnew(host: FakeHost, base: number, options: RigOptions = {}) 
 const rowsOf = (value: J): J[] => value.days.flatMap((d: J) => d.items);
 const sqlOf = (host: FakeHost) => host.sqls.get(dbName("s1"))!;
 
-test("a_core_started_anew_answers_its_list_of_rows_kept_beside_their_records", async () => {
-  const { host, base } = await written();
-  // (the rows not kept as they were written are kept as the list first made them)
-  const warm = await listAnew(host, base);
-  const kept = await listAnew(host, base);
-  assert.equal(rowsOf(kept.value).length, WINDOW);
-  assert.equal(kept.first.rowJson, 0, "no record's JSON read");
-  assert.equal(kept.first.rows, 0, "no row made");
-  assert.equal(kept.first.rowsKept, WINDOW, "its window's rows, as they were kept");
-  assert.equal(kept.first.conformed, kept.value.days.length, "no row shaped as it went out: its days alone");
-  assert.equal(kept.text, warm.text);
-});
-
 test("a_list_of_kept_rows_goes_out_as_it_is_made_byte_for_byte_in_each_language", async () => {
   for (const lang of ["zh", "en"] as const) {
     setCurrent(lang);
@@ -96,68 +85,6 @@ test("a_list_of_kept_rows_goes_out_as_it_is_made_byte_for_byte_in_each_language"
   }
 });
 
-test("a_record_written_keeps_its_row_made_as_it_is_written_and_the_list_makes_none", async () => {
-  const { host, base } = await written();
-  await listAnew(host, base);
-  const station = UP[0];
-  const rows = fixture(base, OPENS).find(([topic]) => topic.topic === "chatRows" && topic.station === station)![1] as J[];
-  const changed = rows.map((r, i) => (i === 0 ? { ...r, unread: !r.unread, last: { ...r.last, text: "已经合并，CI 全绿。" } } : r));
-  const t = setup({ all: true, host });
-  for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
-  await t.host.time.pass(100);
-  const before = { ...work };
-  t.set({ topic: "chatRows", station }, changed);
-  await t.host.time.pass(100);
-  const wrote = workSince(before);
-  t.store.runner.shutdown();
-  assert.equal(wrote.rowsWritten, 1, "its row alone, as its record was written");
-  const anew = await listAnew(host, base);
-  assert.deepEqual([anew.first.rows, anew.first.rowJson], [0, 0]);
-  assert.ok(rowsOf(anew.value).some((r: J) => r.last?.preview === "已经合并，CI 全绿。"), "the list says it");
-});
-
-test("a_record_no_list_read_is_written_with_no_row_made_and_a_whole_station_written_makes_none", async () => {
-  const { host, base } = await written();
-  const station = UP[0];
-  const sql = sqlOf(host);
-  const rows = fixture(base, OPENS).find(([topic]) => topic.topic === "chatRows" && topic.station === station)![1] as J[];
-  const flipped = rows.map((r) => ({ ...r, unread: !r.unread }));
-  // (as a device that has synced the workspace and shown no list of it yet: what `written` asked, every way the app
-  // asks, kept every chat's row, the whole lists' too)
-  sql.exec("DELETE FROM chat_row");
-  // A station's records all written again before any list read one (as its first sync writes them): no row is made.
-  {
-    const t = setup({ all: true, host });
-    for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
-    await t.host.time.pass(100);
-    const before = { ...work };
-    t.set({ topic: "chatRows", station }, flipped);
-    await t.host.time.pass(100);
-    const wrote = workSince(before);
-    t.store.runner.shutdown();
-    assert.deepEqual([wrote.rowsWritten, wrote.rows, wrote.listed], [0, 0, 0], "no list read them: none made as they were written");
-    assert.equal(sql.all("SELECT count(*) FROM chat_row")[0]![0], 0);
-  }
-  // A list read its window: those are kept, and a record outside it written makes no row still.
-  const warm = await listAnew(host, base);
-  const shown = new Set(rowsOf(warm.value).filter((r: J) => r.station === station).map((r: J) => r.id));
-  const kept = new Set(sql.all("SELECT id FROM chat_row WHERE station = ?", [station]).map((r) => String(r[0])));
-  const out = flipped.find((r) => !kept.has(String(r.id)))!;
-  const inside = flipped.find((r) => shown.has(String(r.id)))!;
-  assert.ok(out !== undefined && inside !== undefined, "the station has a chat the list showed and one it did not");
-  const t = setup({ all: true, host });
-  for (const [topic, value] of fixture(base, OPENS)) if (!holds(topic)) t.set(topic, value);
-  await t.host.time.pass(100);
-  const before = { ...work };
-  t.set({ topic: "chatRows", station }, flipped.map((r) => (r === out || r === inside ? { ...r, unread: !r.unread } : r)));
-  await t.host.time.pass(100);
-  const wrote = workSince(before);
-  t.store.runner.shutdown();
-  assert.equal(wrote.rowsWritten, 1, "the one the list showed, not the one it did not");
-  assert.equal(sql.all("SELECT count(*) FROM chat_row WHERE station = ? AND id = ?", [station, String(out.id)])[0]![0], 0);
-  assert.equal(sql.all("SELECT count(*) FROM chat_row WHERE station = ? AND id = ?", [station, String(inside.id)])[0]![0], 1);
-});
-
 test("a_record_a_core_from_before_writes_takes_its_row_with_it_and_the_list_makes_that_one_alone", async () => {
   const { host, base } = await written();
   const warm = await listAnew(host, base);
@@ -167,7 +94,7 @@ test("a_record_a_core_from_before_writes_takes_its_row_with_it_and_the_list_make
   sql.run("UPDATE chat SET json = json_set(json, '$.last.text', 'CI 挂了，在看。') WHERE station = ? AND archived = 0 AND id = ?", [top.station, top.id]);
   assert.equal(sql.all("SELECT count(*) FROM chat_row WHERE station = ? AND id = ?", [top.station, top.id])[0]![0], 0, "its row went with it");
   const anew = await listAnew(host, base);
-  assert.deepEqual([anew.first.rows, anew.first.rowJson, anew.first.rowsKept], [1, 1, WINDOW - 1]);
+  assert.deepEqual([anew.first.rows, anew.first.rowJson, anew.first.listRowKept], [1, 1, WINDOW - 1]);
   assert.equal(rowsOf(anew.value)[0].last.preview, "CI 挂了，在看。");
   const again = await listAnew(host, base);
   assert.deepEqual([again.first.rows, again.first.rowJson], [0, 0], "kept again after it");
@@ -224,10 +151,10 @@ function madeOf(t: ReturnType<typeof setup>): { keys: Map<string, string | null>
   const rows = new Map<string, string>();
   for (const station of UP) {
     const db = t.data.of(station)!;
-    const maker = db.listRows!;
-    keys.set(station, maker.key(station));
+    const maker = db.kept.maker(KEPT.listRow)!;
+    keys.set(station, maker.key([station]));
     for (const [, record] of db.chatHead([station], 10_000)) {
-      const made = maker.make(station, record);
+      const made = maker.make([station, String(record.id)], record);
       rows.set(`${station} ${record.id}`, JSON.stringify(made === null ? null : [made.state, made.whole, made.sent]));
     }
   }
@@ -287,7 +214,7 @@ test("a_row_made_otherwise_under_another_of_what_else_it_reads_has_another_key",
 
 test("rows_are_made_as_list_row_making_says", async () => {
   // A change to how a row is made (its maker, a word of its, a shape it goes out as) changes this digest: raise
-  // LIST_ROW_MAKING with it, so that no row a core made before is taken as kept by this one, and write the digest here.
+  // KEPT.listRow.making with it, so that no row a core made before is taken as kept by this one, and write the digest here.
   const { host } = await written();
   const out: string[] = [];
   for (const lang of ["zh", "en"] as const) {
@@ -302,7 +229,7 @@ test("rows_are_made_as_list_row_making_says", async () => {
     }
   }
   const digest = textKey(out.join("\n"));
-  assert.equal(digest, MADE[LIST_ROW_MAKING], `rows are made otherwise than LIST_ROW_MAKING ${LIST_ROW_MAKING} says (${digest}): raise it and write the digest`);
+  assert.equal(digest, MADE[KEPT.listRow.making], `rows are made otherwise than KEPT.listRow.making ${KEPT.listRow.making} says (${digest}): raise it and write the digest`);
 });
 
 test("a_pinned_chat_whose_row_was_kept_stays_with_the_pinned_as_the_list_is_made_again", async () => {
@@ -382,7 +309,7 @@ test("a_change_of_one_chat_with_the_list_shown_reads_no_rows_text_but_that_chats
   const { t, u, texts, done } = await shown(host, base);
   try {
     const items = rowsOf(u.value);
-    // One in the window renamed by its station: its row made as its record is written (db/account.ts #keepListRow), the
+    // One in the window renamed by its station: its row made as its record is written (db/kept.ts `wrote`), the
     // window's keys read again, no record's JSON nor any row kept beside one read (those held are taken from the cache).
     // (its record as its station's stream gives it: read as the sync reads it, before)
     const top = items[2];
@@ -394,7 +321,7 @@ test("a_change_of_one_chat_with_the_list_shown_reads_no_rows_text_but_that_chats
     assert.equal(rowsOf(u.value)[2].title, "改了名");
     // (its own JSON read by its writer alone, to see whether what it is given is what it holds: account.ts putChat)
     const own = ["SELECT ord, json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?"];
-    assert.deepEqual([workSince(before).rowJson, workSince(before).rowsKept], [1, 0], "no other record's JSON, no kept row read");
+    assert.deepEqual([workSince(before).rowJson, workSince(before).listRowKept], [1, 0], "no other record's JSON, no kept row read");
     assert.deepEqual(texts, own, "nothing but keys read of the chat table");
     // One far below the window, as its station's stream gives it (its record read as the sync reads it, before): nothing
     // of it shown, nothing read but the window's keys.
@@ -405,7 +332,7 @@ test("a_change_of_one_chat_with_the_list_shown_reads_no_rows_text_but_that_chats
     const was = u.value;
     t.data.putChat(UP[1], { ...far, title: "远处改了名" });
     await t.read(u, 1);
-    assert.deepEqual([workSince(before).rowJson, workSince(before).rowsKept, workSince(before).rows], [1, 0, 0]);
+    assert.deepEqual([workSince(before).rowJson, workSince(before).listRowKept, workSince(before).rows], [1, 0, 0]);
     assert.deepEqual(texts, own);
     assert.deepEqual(rowsOf(u.value).map((r: J) => r.id), rowsOf(was).map((r: J) => r.id));
   } finally {

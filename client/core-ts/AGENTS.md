@@ -94,15 +94,19 @@ the moment it is made. A function writes only on objects it made this time: copy
 development build deep-freeze shared values (`src/util.ts` `sharedValue`); `scripts/writes.ts` refuses writes on
 parameters in the files that make views.
 
-## A list's rows are kept beside their records
+## What is made of a record is kept beside it
 
-A chat list's row is kept beside its record (`chat_row`, `src/db/schema.ts` ensureListRows) under the key of what else
-it is made with (`src/views/views.ts` listRowKey): kept as a list first reads it, and from then on made again as its
-record is written, so a write costs by what lists showed, not by how many chats a station has (a chat no list read
-has none made); the list's first answer reads those rows, no record (`test/list-rows.test.ts`; 2026-11-12). So `#listRow` reads nothing outside its record that the key does not say (the
-test makes each surrounding otherwise and fails where a row changes under the same key), and a change to how a row is
-made raises `LIST_ROW_MAKING` (its digest there says so). What a kept row cannot hold is the list's as it reads it:
-what is changing or asked here (`src/views/local.ts`), a message that did not go (`#unsentRow`), a chat opened from another.
+What the core makes of one record and of what else its key says is kept beside that record, by one mechanism
+(`src/db/kept.ts`, 2026-11-12: the owner's 「从架构设计和测试层面解决」, after it had been written by hand three times):
+a declaration in its `KEPT` says the table, the record it is made of, whether it is made as a reader first reads it
+(`read`: then at every write of its record, so a write costs by what was shown) or at every write (`written`), and how
+it is made (`making`); the views register its maker (Data.makes). Triggers drop a value as its record changes, whoever
+writes it; a hit reads no record. `test/kept.test.ts` holds every declaration to that on the workspace of real size, and a
+new one is an entry of its `HOW`. So a maker reads nothing outside its record that its key does not say (each
+declaration's own test varies its surroundings: list-rows.test.ts, profile-rows.test.ts), and a change to how one is
+made raises its `making` (their digests say so). What a kept row cannot hold is the reader's as it reads: a chat list's
+what is changing or asked here (`src/views/local.ts`), a message that did not go (`#unsentRow`), a chat opened from
+another; the accounts' list's merge across stations and its refills.
 
 ## A lock held here
 

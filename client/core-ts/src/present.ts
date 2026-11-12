@@ -122,6 +122,13 @@ const MILLIS = new Set(["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", 
 /// The fields `times` says in words (`time`), each a moment.
 export const TIME_KEYS: readonly string[] = [...SECONDS, ...MILLIS];
 
+/// When a window that refills at `resetsAt` refills, in words (as `windows` says it), read by the minute: what a row
+/// kept beside its part says of its windows as it goes out (views.ts windowShown).
+export function refillsOf(resetsAt: number, c: Clock): string {
+  byMinute();
+  return format.refillsIn(resetsAt, c.now);
+}
+
 /// What a window with `used` percent of it used has left, and how full it is.
 export function leftLevel(used: number): [number, string] {
   return [format.round(Math.max(100 - used, 0)), used >= 90 ? "red" : used >= 70 ? "amber" : "ok"];
@@ -1471,9 +1478,19 @@ function overview(value: J, c: Clock, station: string | null): J {
   const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
   const profiles = listed?.map(profile).sort((a, b) => kindOf(a) - kindOf(b) || Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
   if (profiles) v.profiles = profiles;
+  const logins = arr(v.machineLogins);
+  if (logins) v.machineLogins = loginsOffered(logins, profiles ?? []);
+  return v;
+}
+
+/// A station's own logins (an overview's `machineLogins`), each with whether it is offered as a profile (signed in, on a
+/// plan, its runtime not run by the machine's own profile already, its account not a subscription one of `profiles`
+/// is) and its plan in words: an overview's as it is decorated, and the accounts' list's beside its kept rows (views.ts
+/// #offeredOf), which hold of each profile what this reads.
+export function loginsOffered(logins: J[], profiles: J[]): J[] {
   const subscriptions: [J, string][] = [];
   const taken: J[] = [];
-  for (const p of profiles ?? []) {
+  for (const p of profiles) {
     if (get(get(p, "access"), "kind") === "subscription") {
       const runtime = get(p, "runtime");
       const email = str(get(p, "email"));
@@ -1481,9 +1498,8 @@ function overview(value: J, c: Clock, station: string | null): J {
     }
     if (get(p, "machine") === true && get(p, "runtime") !== undefined) taken.push(get(p, "runtime"));
   }
-  const logins = arr(v.machineLogins);
-  if (logins) {
-    v.machineLogins = logins.map((l) => {
+  {
+    return logins.map((l) => {
       const plan = knownPlan(get(l, "plan"));
       const email = str(get(l, "email"));
       const offered =
@@ -1496,7 +1512,6 @@ function overview(value: J, c: Clock, station: string | null): J {
       return isObject(l) ? { ...l, offered, planText } : l;
     });
   }
-  return v;
 }
 
 /// A subscription's plan as its vendor names it. Codex's `prolite`, `pro` and `promax` distinguish the three ChatGPT
