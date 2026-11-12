@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0c2cefade](https://github.com/AFK-surf/still.fail/commit/0c2cefade414d76375cce92d44602bc8192faf61) mbui: a chat's page made as nodes opens where it w | 1.93 | 2.59 | 11.13 | 30.47 | 39.88 | 27.15 | 51.9 | 94.44 | 134.93 |
 | [b57eff00e](https://github.com/AFK-surf/still.fail/commit/b57eff00eee66af42e2e90be5c9895b7ff3bf75b) The last of the names from before: preview frames' | 1.93 | 2.59 | 11.13 | 30.47 | 39.88 | 27.15 | 51.9 | 94.36 | 200.59 |
 | [bb67b07b0](https://github.com/AFK-surf/still.fail/commit/bb67b07b03885ed3cfb571eb91958cf04cabc716) mbui: a mouse's drag scrolls and flings the tree's | 1.93 | 2.59 | 11.12 | 30.36 | 39.88 | 27.02 | 51.63 | 94.19 | 127.67 |
 | [a7808b9dc](https://github.com/AFK-surf/still.fail/commit/a7808b9dc8996e16cb3ec3420f4093786cd9780c) docs/releases: stable 0.1.8498 (#5800) | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.21 | 138.29 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [5b5d29887](https://github.com/AFK-surf/still.fail/commit/5b5d29887d25bcd46af63b9331f2c0b51af2450e) app: a chat's list as nodes reads a row again only | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.41 | 186.24 |
 | [825299c07](https://github.com/AFK-surf/still.fail/commit/825299c07d914964bf0299a5991577392908bc80) mbui: close_option's replay found clean at every r | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.54 | 186.42 |
 | [32c8bd9d2](https://github.com/AFK-surf/still.fail/commit/32c8bd9d2c5943df7135f884643c7d539a0057f5) station: the Comma Task index says which chats Com | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.85 | 187.41 |
-| [a62811514](https://github.com/AFK-surf/still.fail/commit/a62811514cbead15878fbdbbd908acd4a0caa143) screens: what is pressed over the picture is its o | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.37 | 176.97 |
