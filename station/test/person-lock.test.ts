@@ -160,3 +160,37 @@ test("a chain whose entries say the key each device signs workspaces' locks with
   changed[1] = { ...changed[1]!, body: { key: second.key.id, id: second.base.hex, label: "second", sign_key: ed().id } };
   assert.throws(() => personFold(changed, sub), /signature invalid/);
 });
+
+test("a chain with web devices and a workspace's commitments is taken as it is, and lets its devices in as before; one of today folds as before", () => {
+  // (rules/src/lock/person.mbt: `web {id, label, exp}`, `web.remove {id}`, `ws {t, h}`, signed by a device on the log;
+  // nothing signs them yet, every part takes them from the rules' build on: station/test/lock-roster4-model.ts)
+  const w = workspace();
+  const lock = personal("carol");
+  const today = personFold(lock.chain, "carol");
+  assert.deepEqual(today, { sub: "carol", genesis: genesisOf(lock.chain), head: genesisOf(lock.chain), seq: 0, devices: [{ key: lock.first.key.id, id: lock.first.base.hex, label: "first" }], webs: [] });
+  const web = ed().hex;
+  lock.add("web", { id: web, label: "a browser", exp: 1000 + 31 * 86400 }, lock.first.key);
+  lock.add("ws", { t: "ab".repeat(32), h: "cd".repeat(32) }, lock.first.key);
+  lock.add("web.remove", { id: ed().hex }, lock.first.key);
+  const folded = personFold(lock.chain, "carol") as ReturnType<typeof personFold> & { webs: { id: string; at: number; exp: number }[] };
+  assert.equal(folded.seq, 3);
+  assert.deepEqual(folded.devices, today.devices, "its devices as they were");
+  assert.deepEqual(folded.webs, [{ id: web, label: "a browser", at: 1000, exp: 1000 + 31 * 86400 }]);
+  const chains = new PersonChains();
+  const { genesis, chain: taken } = checkChain(chains, lock.chain, "carol");
+  chains.keep(genesis, taken, WS);
+  assert.equal(chains.kept(genesis)?.length, 4, "kept as brought");
+  const bound = apply(w.state, signed(next(w.state, "person", { sub: "carol", person: genesis }), w.carol.signer), 2000);
+  assert.equal(admitPerson(bound, who("carol", lock.first.base), chains.kept(genesis)!).device, lock.first.base.hex);
+  // Their shapes, their bounds, and their signers held as a device's are.
+  const refused = (kind: string, body: unknown, by?: Key) => {
+    const one = personal("carol");
+    one.add(kind, body, by ?? one.first.key);
+    return () => personFold(one.chain, "carol");
+  };
+  assert.throws(refused("web", { id: web, label: "a browser", exp: 1000 + 31 * 86400 + 1 }), /31 days at most/);
+  assert.throws(refused("web", { id: web, label: "a browser" }), /a web device is \{id, label, exp\}/);
+  assert.throws(refused("ws", { t: "ab".repeat(32), h: "cd".repeat(32), ws: "w1" }), /a statement is \{t, h\}/);
+  assert.throws(refused("ws", { t: "ab".repeat(32), h: "cd".repeat(32) }, ed()), /not signed by a device/);
+  assert.throws(refused("ws.member", { ws: WS, sub: "dan", lock: "ab".repeat(32), role: "member" }), /unknown entry kind ws\.member/);
+});

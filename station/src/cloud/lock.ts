@@ -308,8 +308,7 @@ export function lockChain(entries: Entry[], root: string): Chain {
 }
 
 /// A person log's active chain among `entries` from its genesis of hash `root` (rules/src/lock/chain.mbt
-/// `person_chain`). The rules take a workspace's statements there (`ws.*`), which `personFold` refuses until every
-/// station takes them: the caller leaves them out. Throws why there is none.
+/// `person_chain`), by the same rules as `personFold`. Throws why there is none.
 export function personChain(entries: unknown[], root: string): Chain {
   return chainOf(rules.person_chain_js(entries, root, crypto));
 }

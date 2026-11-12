@@ -243,6 +243,8 @@ export type Roster = {
   pairs: Map<string, Role3>;
   admits: Stmt[];
   removes: Stmt[];
+  /// The rule it was worked out by.
+  rule: "steps" | "grounded";
   /// `grounded`: each argument's label (`a:<admit>`, `n:<pair>|<role>`, `c:<removal>|<admit>`), and the pairs left
   /// undecided (a circle of removals nothing outside decides).
   labels: Map<string, Label>;
@@ -285,7 +287,7 @@ export function roster(h: Holder, root: string, rule: "steps" | "grounded" = "gr
     }
   }
   const admits = stmts.filter((s) => s.e.kind === "ws.member"), removes = stmts.filter((s) => s.e.kind === "ws.member.remove");
-  const out: Roster = { rooted: h.logs.has(root), members: new Map(), stations: new Set(), letIn: new Map(), step1: new Map(), cancelled: new Set(), pairs: new Map(), admits, removes, labels: new Map(), undecided: new Set() };
+  const out: Roster = { rooted: h.logs.has(root), members: new Map(), stations: new Set(), letIn: new Map(), step1: new Map(), cancelled: new Set(), pairs: new Map(), admits, removes, rule, labels: new Map(), undecided: new Set() };
   if (!out.rooted) return out;
   if (rule === "grounded") return grounded(h, root, stmts, out);
   // 1. candidates, cancellations aside
@@ -972,7 +974,10 @@ export type Measured3 = {
 /// What a statement in force did to the list at `r`: null where it took effect, else why not.
 export function effect(r: Roster, it: Pick<Intent, "kind" | "body" | "log"> & { dev: { sub: string } }, h: string): string | null {
   const sub = it.dev.sub, pair = r.pairs.get(`${sub}|${it.log}`), p1 = r.step1.get(`${sub}|${it.log}`);
-  if (r.labels.size > 0) {
+  // (by the rule the list was worked out by: until 2026-11-13 by whether it had labels, and a grounded list with no admit
+  // and no cancellation, which a keeper of the fourth round lacking the bodies of every admit has, was told by steps
+  // 1-4's reasons, "its signer is no candidate" for a removal that names nothing in force; rules-fork.test.ts found it)
+  if (r.rule === "grounded") {
     const mine = `${sub}|${it.log}`;
     if (it.kind === "ws.member") {
       const l = r.labels.get(`a:${h}`);

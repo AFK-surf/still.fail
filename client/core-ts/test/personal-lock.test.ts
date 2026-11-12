@@ -6,7 +6,8 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { Adb } from "../src/adb.ts";
 import { CoreError, HostError } from "../src/error.ts";
-import { type Entry, entryHash } from "../src/lock.ts";
+import { generateKeyPairSync, sign as nodeSign } from "node:crypto";
+import { type Entry, entryHash, signedBytes } from "../src/lock.ts";
 import type { Mesh } from "../src/mesh.ts";
 import { PersonalLock, checkChain, grantHolds } from "../src/personal-lock.ts";
 import { Runner } from "../src/runtime.ts";
@@ -335,6 +336,31 @@ test("a chain holds only as signed by a device on it; a device off it signs no m
     a.runner.shutdown();
     b.runner.shutdown();
   }
+});
+
+test("a chain with web devices and a workspace's commitments is taken as it is; one of today as before", () => {
+  // (rules/src/lock/person.mbt: `web {id, label, exp}`, `web.remove {id}`, `ws {t, h}`, signed by a device on the log;
+  // nothing signs them yet, every part takes them from the rules' build on)
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const key = `ed25519:${(publicKey.export({ format: "der", type: "spki" }) as Buffer).subarray(-32).toString("hex")}`;
+  const chain: Entry[] = [];
+  const add = (kind: string, body: unknown) => {
+    const last = chain[chain.length - 1];
+    const e = { v: 1, ws: `person:${SUB}`, seq: chain.length, prev: last ? entryHash(last) : null, at: 1000, kind, body } as Omit<Entry, "sig">;
+    chain.push({ ...e, sig: { key, alg: "Ed25519", sig: nodeSign(null, Buffer.from(signedBytes(entryHash(e as Entry))), privateKey).toString("hex") } } as Entry);
+  };
+  add("genesis", { sub: SUB, device: { key, id: "aa".repeat(32), label: "first" } });
+  const today = checkChain([...chain], SUB);
+  assert.deepEqual([...today!.devices.keys()], [key]);
+  add("web", { id: "bb".repeat(32), label: "a browser", exp: 1000 + 31 * 86400 });
+  add("ws", { t: "cc".repeat(32), h: "dd".repeat(32) });
+  add("web.remove", { id: "bb".repeat(32) });
+  const now = checkChain([...chain], SUB);
+  assert.notEqual(now, null, "taken");
+  assert.deepEqual([...now!.devices.keys()], [key], "its devices as they were");
+  assert.equal(now!.hash, entryHash(chain[3]!));
+  add("ws.member", { ws: "w1", sub: "dan", lock: "ee".repeat(32), role: "member" });
+  assert.equal(checkChain([...chain], SUB), null, "round three's statements in the clear: refused");
 });
 
 test("a lock the cloud says began anew is not followed by itself", async () => {

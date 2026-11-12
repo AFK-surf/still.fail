@@ -75,8 +75,8 @@ const crypto = {
   endpointProof: () => false,
 };
 
-/// The kinds of a workspace's statements, which the rules' chain takes (`person_chain`) and their fold refuses until
-/// every station takes them (station/src/mesh/person-chains.ts STATEMENTS): refused here as there.
+/// Round three's statements of a workspace in the clear, which the rules refuse (station/src/mesh/person-chains.ts
+/// STATEMENTS): refused here as there.
 const STATEMENTS = new Set(["ws.member", "ws.member.remove", "ws.station", "ws.station.remove"]);
 
 /// A person log's rules for keeping (src/lock-keep.ts), of `sub`'s log of genesis hash `root`: its chain by the rules'
