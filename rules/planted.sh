@@ -86,6 +86,16 @@ plant "a deleted item written again" src/history/history.mbt "  if was {
 plant "an owner or admin makes someone's own device" src/role/role.mbt "  } else if had_own {
     false" "  } else if false {
     false"
+plant "a child comes before itself in the fork choice" src/fork/fork.mbt "  } else {
+    ha < hb
+  }" "  } else {
+    ha <= hb
+  }"
+plant "the fork choice keeps the first child it was given" src/fork/fork.mbt "    if ahead(ws[i], rs[i], ts[i], hs[i], ws[b], rs[b], ts[b], hs[b]) {
+      b = i
+    }" "    if ahead(ws[i], rs[i], ts[i], hs[i], ws[b], rs[b], ts[b], hs[b]) {
+      b = b
+    }"
 bad=0
 for d in "$work"/*; do
   name=$(cat "$d/name") verdict=$(cat "$d/verdict")

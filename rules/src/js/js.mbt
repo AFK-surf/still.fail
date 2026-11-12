@@ -539,3 +539,157 @@ pub fn vault_supersedes_js(a : JsValue, b : JsValue) -> Bool {
 pub fn item_supersedes_js(a : JsValue, b : JsValue) -> Bool {
   supersedes_of(a, b, "version")
 }
+
+// ── a log's fork choice and a workspace said in its people's logs (rules/src/lock/chain.mbt, roster.mbt) ─────────────
+// Nothing in the product calls these yet (2026-11-12): they are the rules the sync replacing today's is built to.
+
+///|
+/// The fork choice's tie value of a child: sha256 of its parent's hash and its signing key's id (hex).
+pub fn tie_of_js(parent : String, key : String, crypto : JsCrypto) -> String {
+  @lock.tie_of(parent, key, crypto)
+}
+
+///|
+fn step_name(s : @fork.Step) -> String {
+  match s {
+    Weight => "weight"
+    Removal => "removal"
+    Tie => "tie"
+    Hash => "hash"
+  }
+}
+
+///|
+/// Whether child `a` of a parent comes before child `b`, each `{weight, removal, tie, hash}`: the step that puts it
+/// first (`weight`, `removal`, `tie`, `hash`), or null.
+pub fn fork_before_js(a : JsValue, b : JsValue) -> JsValue {
+  let w = fn(v : JsValue) { js_num(js_get(v, "weight")).to_int() }
+  let r = fn(v : JsValue) { js_kind(js_get(v, "removal")) == 1 && js_bool(js_get(v, "removal")) }
+  let s = fn(v : JsValue, k : String) { js_str(js_get(v, k)) }
+  match @lock.before(w(a), r(a), s(a, "tie"), s(a, "hash"), w(b), r(b), s(b, "tie"), s(b, "hash")) {
+    Some(step) => js_of_str(step_name(step))
+    None => js_null()
+  }
+}
+
+///|
+/// A chain as JS has it: `{entries, at, hashes, off}`, `entries` the very values given, `off` for each entry given not
+/// on it `{at, why}` and `refusal` (`why` "refused"), `winner` and `step` ("beaten"), `under` ("below"); `why` also
+/// "no parent", "again".
+fn chain_js(entries : JsValue, ch : @lock.Chain) -> JsValue {
+  let es = js_new_array()
+  for i in ch.at {
+    js_push(es, js_at(entries, i))
+  }
+  let off = ch.off.map(fn(p) {
+    let m : Map[String, Json] = Map([("at", Json::number(p.0.to_double()))])
+    match p.1 {
+      NotValid(why) => {
+        m["why"] = Json::string("refused")
+        m["refusal"] = Json::string(why)
+      }
+      NoParent => m["why"] = Json::string("no parent")
+      Beaten(winner, step) => {
+        m["why"] = Json::string("beaten")
+        m["winner"] = Json::string(winner)
+        m["step"] = Json::string(step_name(step))
+      }
+      Below(top) => {
+        m["why"] = Json::string("below")
+        m["under"] = Json::string(top)
+      }
+      Again => m["why"] = Json::string("again")
+    }
+    Json::object(m)
+  })
+  let o = js_new_object()
+  js_put(o, "entries", es)
+  js_put(o, "at", to_js(Json::array(ch.at.map(fn(i) { Json::number(i.to_double()) }))))
+  js_put(o, "hashes", to_js(Json::array(ch.hashes.map(Json::string(_)))))
+  js_put(o, "off", to_js(Json::array(off)))
+  o
+}
+
+///|
+/// The workspace lock's active chain among `entries` (any order, branching) from the genesis of hash `genesis`, the
+/// fork choice weighing by `votes` ("roles" or "flat"), `now` as `apply_js` has it: as `chain_js` has it, or `{error}`.
+pub fn lock_chain_js(entries : JsValue, genesis : String, votes : String, now : JsValue, crypto : JsCrypto) -> JsValue {
+  let v : @lock.Votes = if votes == "flat" { Flat } else { Roles }
+  try chain_js(entries, @lock.lock_chain(entries_of(entries), genesis, v, opt_num(now), crypto)) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => refused(why)
+    @form.Invalid(why) => refused(why)
+    e => refused(e.to_string())
+  }
+}
+
+///|
+/// A person log's active chain among `entries` (any order, branching) from the genesis of hash `genesis`, a
+/// workspace's statements taken: as `chain_js` has it, or `{error}`.
+pub fn person_chain_js(entries : JsValue, genesis : String, crypto : JsCrypto) -> JsValue {
+  try chain_js(entries, @lock.person_chain(entries_of(entries), genesis, crypto)) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => refused(why)
+    @form.Invalid(why) => refused(why)
+    e => refused(e.to_string())
+  }
+}
+
+///|
+/// A person's chain as `person_fold_js` has it, a workspace's statements taken.
+pub fn person_fold_ws_js(entries : JsValue, sub : String, crypto : JsCrypto) -> JsValue {
+  let answer = try person_json(@lock.fold_person_ws(entries_of(entries), sub, crypto)) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => Json::object(Map([("error", Json::string(why))]))
+    @form.Invalid(why) => Json::object(Map([("error", Json::string(why))]))
+    e => Json::object(Map([("error", Json::string(e.to_string()))]))
+  }
+  to_js(answer)
+}
+
+///|
+fn opt_json(v : String?) -> Json {
+  match v {
+    Some(s) => Json::string(s)
+    None => Json::null()
+  }
+}
+
+///|
+/// Workspace `ws`'s list, rooted in the person log of genesis hash `root`, from `chains` (each person log's active
+/// chain, genesis first): `{rooted, members: [{sub, role, lock, admit, keys}], stations, pairs: [{sub, lock, role}],
+/// undecided: [{sub, lock}], cancelled, statements: [{hash, kind, log, by, label, why, decided}], labels: [[name,
+/// label]], refused: [{genesis, why}]}`, or `{error}` when the chains are none.
+pub fn roster_js(ws : String, root : String, chains : JsValue, crypto : JsCrypto) -> JsValue {
+  let cs : Array[Array[Json]] = []
+  for i in 0..<js_len(chains) {
+    let es = entries_of(js_at(chains, i)) catch { @form.Invalid(why) => return refused(why) }
+    cs.push(es)
+  }
+  let r = @lock.roster(ws, root, cs, crypto)
+  let s = Json::string(_)
+  to_js(Json::object(Map([
+    ("rooted", Json::boolean(r.rooted)),
+    ("members", Json::array(r.members.map(fn(m) {
+      Json::object(Map([
+        ("sub", s(m.sub)), ("role", s(m.role)), ("lock", s(m.lock)), ("admit", opt_json(m.admit)),
+        (
+          "keys",
+          match m.keys {
+            Some(ks) => Json::array(ks.map(s))
+            None => Json::null()
+          },
+        ),
+      ]))
+    }))),
+    ("stations", Json::array(r.stations.map(s))),
+    ("pairs", Json::array(r.pairs.map(fn(p) { Json::object(Map([("sub", s(p.0)), ("lock", s(p.1)), ("role", s(p.2))])) }))),
+    ("undecided", Json::array(r.undecided.map(fn(p) { Json::object(Map([("sub", s(p.0)), ("lock", s(p.1))])) }))),
+    ("cancelled", Json::array(r.cancelled.map(s))),
+    ("statements", Json::array(r.statements.map(fn(x) {
+      Json::object(Map([
+        ("hash", s(x.hash)), ("kind", s(x.kind)), ("log", s(x.log)), ("by", s(x.by)), ("label", s(x.label)),
+        ("why", opt_json(x.why)), ("decided", opt_json(x.decided)),
+      ]))
+    }))),
+    ("labels", Json::array(r.labels.map(fn(p) { Json::array([s(p.0), s(p.1)]) }))),
+    ("refused", Json::array(r.refused.map(fn(p) { Json::object(Map([("genesis", s(p.0)), ("why", s(p.1))])) }))),
+  ])))
+}
