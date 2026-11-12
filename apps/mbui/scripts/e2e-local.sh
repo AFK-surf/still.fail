@@ -294,6 +294,9 @@ export STILLFAIL_TEST_HOST=1
 export STILLFAIL_DATA=$STATION/data
 export STILLFAIL_MESH_NATIVE=$(native mesh)
 export STILLFAIL_RUNNER=$(native runner)
+# the station's MoonBit program, as a release has it beside main.js: its readers and the front that keeps its iroh
+# endpoint across handovers (station/native/launcher/src/front.rs)
+export STILLFAIL_MB_READER=$(native reader)
 export FAKE_DUMP=$STATION/fake-claude.jsonl
 EOF
   (. $RUN/station-env.sh && node $E/station/dist/main.js enroll $ORIGIN $token --data $STATION/data >$RUN/enroll.log 2>&1) \
@@ -831,7 +834,7 @@ thaw() {
 }
 
 case "${1:-all}" in
-  install) sources; for n in iroh-relay mesh runner launcher; do native $n > /dev/null; done ;;
+  install) sources; for n in iroh-relay mesh runner launcher reader; do native $n > /dev/null; done ;;
   up) up ;;
   snapshot) shift; snapshot "$@" ;;
   restore) shift; restore "$@" ;;
