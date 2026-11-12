@@ -253,22 +253,32 @@ export const OVERVIEW_PROFILED = ["profiles", "sharing", "mesh", "machineLogins"
 
 /// Each column of an overview's part (`station_part`) and how SQLite makes it of the overview's JSON.
 export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overviewPartOf], ["row", overviewRowOf], ["chat", overviewChatOf], ["formerly", overviewFormerlyOf], ["profiles", overviewProfilesOf], ["profiled", overviewProfiledOf]];
-/// What makes each column of a station's part of the overview `j` (the triggers', and where one is missing).
-const partInsert = (j: string, address: string) =>
-  `INSERT INTO station_part (address, ${PART_COLUMNS.map(([c]) => c).join(", ")}) SELECT ${address}, ${PART_COLUMNS.map(([, of]) => of(j)).join(", ")}`;
+/// The revision of a column of the part (`<column>_rev`), beside it: raised by the triggers as its text changes, so that
+/// a write is told what of the part changed by a few numbers, the texts not read (account.ts #overviewWritten). NULL
+/// where no trigger of this core counted it (a row a core that knows nothing of them put in).
+export const partRev = (column: string) => `${column}_rev`;
+/// What makes each column of a station's part of the overview `j` (`address` its station, `from` what the overview is
+/// read of; `key` the station as the second statement says it), the triggers' and where one is missing: the row kept in
+/// place where there is one, each column's revision raised where its text is another; one put in now counted from 0.
+const partPut = (j: string, address: string, from: string, key: string): [string, string] => [
+  `INSERT INTO station_part (address, ${PART_COLUMNS.map(([c]) => c).join(", ")}) SELECT ${address}, ${PART_COLUMNS.map(([, of]) => of(j)).join(", ")} ${from}
+        ON CONFLICT (address) DO UPDATE SET ${PART_COLUMNS.map(([c]) => `${c} = excluded.${c}, ${partRev(c)} = coalesce(station_part.${partRev(c)}, 0) + (station_part.${c} IS NOT excluded.${c})`).join(", ")}`,
+  `UPDATE station_part SET ${PART_COLUMNS.map(([c]) => `${partRev(c)} = 0`).join(", ")} WHERE address = ${key} AND ${partRev(PART_COLUMNS[0][0])} IS NULL`,
+];
+const triggerPut = () => partPut("new.json", "new.address", "WHERE json_valid(new.json)", "new.address").map((s) => `${s};`).join("\n        ");
 
 /// The triggers keeping each overview's part (station_part) as it changes or goes, whoever writes it, by name, as sqlite_master keeps them (no `IF NOT EXISTS`: SQLite keeps the
-/// statement without it).
+/// statement without it). An overview that is not JSON has none.
 const overviewTriggers = (): [string, string][] => [
   ["station_part_put", `CREATE TRIGGER station_part_put AFTER INSERT ON station WHEN new.kind = 'overview'
       BEGIN
-        DELETE FROM station_part WHERE address = new.address;
-        ${partInsert("new.json", "new.address")} WHERE json_valid(new.json);
+        DELETE FROM station_part WHERE address = new.address AND NOT json_valid(new.json);
+        ${triggerPut()}
       END`],
   ["station_part_set", `CREATE TRIGGER station_part_set AFTER UPDATE OF json ON station WHEN new.kind = 'overview' AND old.json IS NOT new.json
       BEGIN
-        DELETE FROM station_part WHERE address = new.address;
-        ${partInsert("new.json", "new.address")} WHERE json_valid(new.json);
+        DELETE FROM station_part WHERE address = new.address AND NOT json_valid(new.json);
+        ${triggerPut()}
       END`],
   ["station_part_drop", `CREATE TRIGGER station_part_drop AFTER DELETE ON station WHEN old.kind = 'overview'
       BEGIN
@@ -286,6 +296,9 @@ const spaced = (s: string) => s.replace(/\s+/g, " ").trim();
 /// read a few hundred bytes, or a chat's page some of the overview, not an overview of some 150 KB (nor walk its pages
 /// to a column after it). Kept by triggers on `station`, as `said` is, so a core that knows nothing of it (a web page
 /// still open from before, an app put back to an older one) keeps it too: nothing it holds is older than its overview.
+/// Its row is kept in place as the overview is written, each column beside its revision (partRev), raised where its
+/// text is another, so a write is told what changed without a text read; an older core's triggers put the row in anew,
+/// its revisions none, and what reads them takes that as anything changed.
 /// (What is made of an overview and kept beside it, whether this core can read it, is db/kept.ts's.) Made where missing
 /// at every open, as `said`; a trigger whose statement is not this core's (an earlier core's, without a column of
 /// these) made again, the columns added where they are not there, and every part made again with them; overviews
@@ -304,9 +317,9 @@ export function ensureOverviewParts(sql: Sql): void {
     let remade = false;
     // (a table an earlier core made: the columns it has not added, every part made again with them)
     const columns = sql.all("PRAGMA table_info(station_part)").map((r) => r[1]);
-    for (const [column] of PART_COLUMNS) {
+    for (const [column, type] of PART_COLUMNS.flatMap(([c]) => [[c, "TEXT"], [partRev(c), "INTEGER"]])) {
       if (columns.includes(column)) continue;
-      sql.exec(`ALTER TABLE station_part ADD COLUMN ${column} TEXT`);
+      sql.exec(`ALTER TABLE station_part ADD COLUMN ${column} ${type}`);
       remade = true;
     }
     for (const [name, statement] of overviewTriggers()) {
@@ -322,8 +335,10 @@ export function ensureOverviewParts(sql: Sql): void {
     if (remade) sql.exec("DELETE FROM station_part");
     // (asked first by the rows' keys alone: an overview is read only where its part is missing)
     const missing = sql.all("SELECT s.address FROM station s WHERE s.kind = 'overview' AND NOT EXISTS (SELECT 1 FROM station_part p WHERE p.address = s.address)");
+    const [put, counted] = partPut("st.json", "st.address", "FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)", "?");
     for (const [address] of missing) {
-      sql.run(`${partInsert("st.json", "st.address")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [address]);
+      sql.run(put, [address]);
+      sql.run(counted, [address]);
     }
     sql.exec("COMMIT");
   } catch (e) {

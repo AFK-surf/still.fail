@@ -20,7 +20,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { CHAT_COLUMNS, CHAT_MADE, type ChatColumnsMade, ensureChatColumns, ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, versionOf } from "./schema.ts";
+import { CHAT_COLUMNS, CHAT_MADE, type ChatColumnsMade, ensureChatColumns, ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, partRev, versionOf } from "./schema.ts";
 import { CHAT_READS, rowColumns, type ChatRead } from "./chat-reads.ts";
 import { KEPT, KEPT_ALL, KeptValues, type ListRow } from "./kept.ts";
 import { readItem, type Said } from "../elsewhere.ts";
@@ -289,6 +289,10 @@ const MD_SHOWN_EVERY = 86_400_000;
 
 /// The tables of what this device did itself: written again on their own when a burst could not be (a full disk).
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
+
+/// Where a document is kept (#putDoc): its table, the columns of its key and their values, and when its source confirmed
+/// it (null: not now; undefined: the table keeps none).
+type Doc = { table: string; keys: string[]; of: SqlValue[]; confirmed?: number | null };
 
 /// The chat columns of a row, and its JSON without them.
 type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number; state: string | null; watched: number };
@@ -652,7 +656,7 @@ export class AccountDb {
   }
 
   putAccountDoc(name: string, value: J, confirmed: number | null, topic: Topic | null): void {
-    this.#putDoc(K("acct", name), value, "SELECT json FROM account_doc WHERE name = ?", [name], "INSERT INTO account_doc (name, json, confirmed) VALUES (?, ?, ?) ON CONFLICT (name) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [name, json, confirmed], topic);
+    this.#putDoc(K("acct", name), value, { table: "account_doc", keys: ["name"], of: [name], confirmed }, topic);
   }
 
   dropAccountDoc(name: string, topic: Topic | null): void {
@@ -664,7 +668,7 @@ export class AccountDb {
   }
 
   putWorkspace(id: string, value: J, confirmed: number | null): void {
-    this.#putDoc(K("ws", id), value, "SELECT json FROM workspace WHERE id = ?", [id], "INSERT INTO workspace (id, json, confirmed) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [id, json, confirmed], { topic: "workspace", workspace: id });
+    this.#putDoc(K("ws", id), value, { table: "workspace", keys: ["id"], of: [id], confirmed }, { topic: "workspace", workspace: id });
   }
 
   dropWorkspace(id: string): void {
@@ -685,9 +689,8 @@ export class AccountDb {
   }
 
   putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic | null): void {
-    const put = () => this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
-    if (kind === "overview") this.#overviewWritten(station, put);
-    else put();
+    const doc = { table: "station", keys: ["address", "kind"], of: [station, kind], confirmed };
+    this.#putDoc(K("st", station, kind), value, doc, topic, kind === "overview" ? (put) => this.#overviewWritten(station, put) : undefined);
   }
 
   dropStationDoc(station: string, kind: string, topic: Topic | null): void {
@@ -781,32 +784,43 @@ export class AccountDb {
     return this.sql.all("SELECT 1 FROM station WHERE address = ? AND kind = 'overview'", [station]).length > 0;
   }
 
+  /// What each column of a station's part is now, as its revision says it (schema.ts partRev): -1 where it holds no text
+  /// (none held, or the overview not an object), its revision where it holds one, null where nothing says (a row a core
+  /// that knows nothing of them put in, or a database that keeps no parts). A few numbers: no text read.
+  #partRevs(station: string): (number | null)[] {
+    if (!this.#parts) return PART_COLUMNS.map(() => null);
+    const r = this.sql.all(`SELECT ${PART_COLUMNS.map(([c]) => `CASE WHEN ${partRev(c)} IS NOT NULL AND ${c} IS NULL THEN -1 ELSE ${partRev(c)} END`).join(", ")} FROM station_part WHERE address = ?`, [station])[0];
+    return PART_COLUMNS.map((_, i) => (r === undefined ? -1 : typeof r[i] === "number" ? r[i] : null));
+  }
+
   /// The overview written or dropped by `write`, its part with it (the triggers): said only where a column of the part
-  /// is not what it was, as `$overview-<column>` (what the chat list reads, `$overview-part`; a station's row,
-  /// `$overview-row`; a chat's page, `$overview-chat`; a link to a chat, `$overview-formerly`), and where the overview is
-  /// not what it was, as `$overview-fit`. What is kept beside the overview and its part (db/kept.ts: its verdict, its
-  /// accounts' rows) is made again of them as they are written.
+  /// changed (its revision moved, or nothing says it did not), as `$overview-<column>` (what the chat list reads,
+  /// `$overview-part`; a station's row, `$overview-row`; a chat's page, `$overview-chat`; a link to a chat,
+  /// `$overview-formerly`), what the cache holds of it let go and read again as a reader asks (#overviewColumn); and
+  /// where the overview is not what it was, as `$overview-fit`. What is kept beside the overview and its part
+  /// (db/kept.ts: its verdict, its accounts' rows) is made again of them as they are written, a column read for it only
+  /// where a value kept is to be made again.
   #overviewWritten(station: string, write: () => void): void {
     this.#write(() => {
-      const before = PART_COLUMNS.map(([column]) => this.#columnText(station, column));
+      const before = this.#partRevs(station);
       const key = K("st", station, "overview");
       const was = this.#cache.get(key);
       const overview = this.kept.writing("station", [station]);
       const profiled = this.kept.writing("station_part", [station]);
       write();
+      const after = this.#partRevs(station);
       for (const [i, [column]] of PART_COLUMNS.entries()) {
-        const after = this.#columnText(station, column);
-        if (after === before[i]) continue;
+        if (before[i] !== null && after[i] !== null && before[i] === after[i]) continue;
         // (its profiles read one by one, not parsed whole: each read again of them)
         if (column === "profiles") for (const id of this.#profilesRead.get(station) ?? []) this.#cache.delete(K("profile", station, id));
-        else this.#cache.set(K(column, station), after === undefined ? null : frozen(JSON.parse(after)));
-        if (column === "profiled") this.kept.wrote(profiled, this.#cache.get(K(column, station)) ?? undefined);
+        else this.#cache.delete(K(column, station));
+        if (column === "profiled") this.kept.wrote(profiled, () => this.#overviewColumn(station, column));
         this.#tell({ topic: `$overview-${column}`, station });
       }
       const now = this.#cache.get(key);
       if (now === was && now !== undefined) return;
       this.#tell({ topic: "$overview-fit", station });
-      this.kept.wrote(overview, isObject(now) ? now : undefined);
+      this.kept.wrote(overview, () => (isObject(now) ? now : undefined));
     });
   }
 
@@ -821,7 +835,7 @@ export class AccountDb {
   }
 
   putSlackApp(station: string, connect: string, value: J, confirmed: number | null): void {
-    this.#putDoc(K("slack", station, connect), value, "SELECT json FROM slack_app WHERE station = ? AND connect = ?", [station, connect], "INSERT INTO slack_app (station, connect, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (station, connect) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, connect, json, confirmed], { topic: "slackApp", station, connect });
+    this.#putDoc(K("slack", station, connect), value, { table: "slack_app", keys: ["station", "connect"], of: [station, connect], confirmed }, { topic: "slackApp", station, connect });
   }
 
   draft(station: string, chat: string): J {
@@ -831,7 +845,7 @@ export class AccountDb {
   putDraft(station: string, chat: string, value: J | undefined): void {
     const topic = { topic: "draft", station, chat };
     if (value === undefined) this.#dropDoc(K("draft", station, chat), "DELETE FROM draft WHERE station = ? AND chat = ?", [station, chat], topic);
-    else this.#putDoc(K("draft", station, chat), value, "SELECT json FROM draft WHERE station = ? AND chat = ?", [station, chat], "INSERT OR REPLACE INTO draft (station, chat, json) VALUES (?, ?, ?)", (json) => [station, chat, json], topic);
+    else this.#putDoc(K("draft", station, chat), value, { table: "draft", keys: ["station", "chat"], of: [station, chat] }, topic);
   }
 
   workspacePref(workspace: string, key: string): J {
@@ -840,7 +854,7 @@ export class AccountDb {
 
   putWorkspacePref(workspace: string, key: string, value: J | undefined, topic: Topic | null = null): void {
     if (value === undefined) this.#dropDoc(K("wpref", workspace, key), "DELETE FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], topic);
-    else this.#putDoc(K("wpref", workspace, key), value, "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], "INSERT OR REPLACE INTO workspace_pref (workspace, key, json) VALUES (?, ?, ?)", (json) => [workspace, key, json], topic);
+    else this.#putDoc(K("wpref", workspace, key), value, { table: "workspace_pref", keys: ["workspace", "key"], of: [workspace, key] }, topic);
   }
 
   /// What this device did and its station has not confirmed (views/local.ts): every row of one of its tables.
@@ -867,19 +881,34 @@ export class AccountDb {
     return value;
   }
 
-  #putDoc(key: string, value: J, select: string, selectParams: SqlValue[], upsert: string, params: (json: string) => SqlValue[], topic: Topic | null): void {
+  /// A document put (`doc`: its table, the columns of its key and their values, and when its source confirmed it where
+  /// the table keeps that, null where it did not now), `around` the write where one is given (what its triggers make
+  /// beside it: #overviewWritten). Whether it is the same as the one held is SQLite's to say, by a number: no document's
+  /// text comes back to be compared. The same: only when it was confirmed changes. Another, or none held: it is put,
+  /// kept in the cache as it is, and told.
+  #putDoc(key: string, value: J, doc: Doc, topic: Topic | null, around?: (put: () => void) => void): void {
     this.#write(() => {
       const json = JSON.stringify(value);
-      const was = this.sql.all(select, selectParams)[0]?.[0];
-      if (was === json) {
-        // The same: only when it was confirmed changes.
-        const p = params(json);
-        if (p[p.length - 1] !== null) this.#run(upsert, p);
+      const where = doc.keys.map((c) => `${c} = ?`).join(" AND ");
+      const same = this.sql.all(`SELECT json = ? FROM ${doc.table} WHERE ${where}`, [json, ...doc.of])[0]?.[0];
+      if (same === 1) {
+        if (doc.confirmed !== undefined && doc.confirmed !== null) this.#run(`UPDATE ${doc.table} SET confirmed = ? WHERE ${where}`, [doc.confirmed, ...doc.of]);
         return;
       }
-      this.#run(upsert, params(json));
-      this.#cache.set(key, frozen(JSON.parse(json)));
-      if (topic) this.#tell(topic);
+      const columns = [...doc.keys, "json", ...(doc.confirmed === undefined ? [] : ["confirmed"])];
+      const values = [...doc.of, json, ...(doc.confirmed === undefined ? [] : [doc.confirmed])];
+      const put = () => {
+        this.#run(
+          doc.confirmed === undefined
+            ? `INSERT OR REPLACE INTO ${doc.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`
+            : `INSERT INTO ${doc.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")}) ON CONFLICT (${doc.keys.join(", ")}) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)`,
+          values,
+        );
+        this.#cache.set(key, frozen(JSON.parse(json)));
+        if (topic) this.#tell(topic);
+      };
+      if (around === undefined) put();
+      else around(put);
     });
   }
 
@@ -1094,7 +1123,7 @@ export class AccountDb {
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
     // (its row kept beside it went with it, by the triggers: made again of it, where it is listed)
-    this.kept.wrote(beside, archived ? undefined : kept);
+    this.kept.wrote(beside, () => (archived ? undefined : kept));
     this.#loadedList(station, archived ? "archived" : "chats")?.set(id, kept, [ord]);
     this.#tellChatRead(station, archived, id, before, kept, before === undefined ? undefined : ordBefore, ord);
     if (!archived) this.#tellChat(station, id, before, kept);
@@ -1137,7 +1166,7 @@ export class AccountDb {
     const kept = this.kept.writing("chat", [station, id]);
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
     this.#cache.delete(K("chat", station, archived, id));
-    this.kept.wrote(kept, undefined);
+    this.kept.wrote(kept, () => undefined);
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
     this.#tellChatRead(station, archived, id, before, undefined, ordBefore, undefined);
     if (!archived) this.#tellChat(station, id, before, undefined);
