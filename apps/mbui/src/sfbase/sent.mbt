@@ -126,7 +126,6 @@ fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
 /// (flight.mbt). `now`, the core's time (its source's): close under the viewer's own row before it while the core says
 /// it would be (sent_joins), as its row will say.
 pub fn sent_local(
-  c : @ui.Ctx,
   rk : String,
   v : ChatView?,
   words : String,
@@ -156,7 +155,7 @@ pub fn sent_local(
       waits: if going.length() > 0 { @sf.t("common.uploading") } else { "" },
       progress: None,
       uploads: cards,
-      created_at: c.moment(),
+      created_at: now,
       refused: false,
     },
     // (a chat just made: none)

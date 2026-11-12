@@ -1526,7 +1526,7 @@ pub fn sent_key(String, String) -> String
 
 pub fn sent_let_go(Reading, SendFlight?) -> Bool
 
-pub fn sent_local(@ui.Ctx, String, ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?, now~ : Double) -> String
+pub fn sent_local(String, ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?, now~ : Double) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
 
