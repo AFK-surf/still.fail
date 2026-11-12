@@ -114,11 +114,32 @@ fn chat_goes_to(
 }
 
 ///|
+/// Chat `r`'s list (`jump` what it keeps of it, `place`, its view `view`) taken back to the newest: to where a go-to
+/// inside the chat kept the reader first (go_back_to), else to its end, asking the chat's latest page first where the
+/// window is short of it. The way to the newest pressed, and its key (chat.latest: chat_body_node's action).
+fn chat_to_newest(
+  src : Source,
+  r : ChatRef,
+  jump : ChatJump,
+  place : @view.ListPlace[String],
+  view : () -> ChatView,
+) -> Unit {
+  if (src.asks_outline)() && @sfbase.go_back_to(r) {
+    return
+  }
+  let cv = @signals.untracked(view)
+  if @sfbase.chat_latest_now(src, r, cv, @sf.t("web-main.chat.toLatest")) {
+    jump.latest = true
+  } else {
+    place.to_end()
+  }
+}
+
+///|
 /// The way to the newest (to_latest's) in the list's foot `foot`, over its top just over the send button (the composer's
 /// column `width` across, `float_in` in from its side, float_lift over the foot): shown while the list is away from its
 /// end or the window is short of the chat's end (`view().newer`; how many new messages wait there said then). Pressed,
-/// back to where a go-to inside the chat kept the reader first (go_back_to, named 回到刚才的位置), else to its end,
-/// asking the chat's latest page first where the window is short of it.
+/// chat_to_newest.
 fn chat_to_newest_node(
   foot : @view.View,
   src : Source,
@@ -132,17 +153,7 @@ fn chat_to_newest_node(
   let chat = r.station + "\u{1}" + r.session
   // (not in a replay of a run from before the outline, whose way to the newest went to the end alone: `asks_outline`)
   let back = fn() { (src.asks_outline)() && @sfbase.place_kept(chat) }
-  let press = fn() {
-    if (src.asks_outline)() && @sfbase.go_back_to(r) {
-      return
-    }
-    let cv = @signals.untracked(view)
-    if @sfbase.chat_latest_now(src, r, cv, @sf.t("web-main.chat.toLatest")) {
-      jump.latest = true
-    } else {
-      place.to_end()
-    }
-  }
+  let press = fn() { chat_to_newest(src, r, jump, place, view) }
   // (a row of no height at the foot's top, the button standing over it: where the composer is, whatever its height)
   foot.box(fn(stand) {
     stand.row(Is(true)).height(Is(Some(0.0))) |> ignore

@@ -367,7 +367,15 @@ fn chat_body_node(
     place.bring(k, offset~)
   }
   match to {
-    Some(r) => chat_goes_to(v, r, jump, place, fn() { rows.get() }, here.view, top, ask_older, shows)
+    Some(r) => {
+      chat_goes_to(v, r, jump, place, fn() { rows.get() }, here.view, top, ask_older, shows)
+      // ⌘↓ (chat.latest, the keymap's Chat with the field empty): as the way to the newest is pressed
+      v.on_action("chat.latest", fn(_) {
+        chat_to_newest(src, r, jump, place, here.view)
+        true
+      })
+      |> ignore
+    }
     None => ()
   }
   // the unread line come after it was made (what came while the app was away, read after the chat opened): there once,

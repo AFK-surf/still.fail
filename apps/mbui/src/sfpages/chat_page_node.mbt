@@ -22,6 +22,23 @@ pub fn chat_page_body_node(
   composer? : (@view.View) -> Unit,
   lead? : Double = unread_lead,
 ) -> Unit {
+  let draft = r.station + ":" + r.session
+  let w = @signals.untracked(fn() { @sfbase.writing(src, draft) })
+  // the chat's keys (keymap.ts's chat group: the keymap's Chat), its actions here, taken while the tree gives the page
+  // keys: Space with no field focused, the cursor in the composer (composer.focus, taken as it is next built); ⌘U the
+  // system's file picker for its draft (composer.file) but where the chat is offline; ⌘↓ the list's (chat_body_node)
+  v.key_context("Chat")
+  .on_action("composer.focus", fn(_) {
+    composer_take_focus()
+    @sfbase.draft_given(draft)
+    true
+  })
+  .on_action("composer.file", fn(_) {
+    guard @sfbase.view_of_chat(src, r).0 is Some(cv) && !cv.offline else { return false }
+    pick_files(w)
+    true
+  })
+  |> ignore
   // (its view and entries as last read: once read, never none again while the page is)
   let read : @signals.Computed[(ChatView, Array[Entry])?] = @signals.computed(
     fn(was) {
