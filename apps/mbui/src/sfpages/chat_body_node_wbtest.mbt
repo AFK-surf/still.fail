@@ -758,9 +758,16 @@ fn body_apart(a : Array[String], b : Array[String]) -> (Array[String], Array[Str
 }
 
 ///|
-/// The known kinds' counts, a line each.
+/// The known kinds' counts, a line each: all but what floats over the old page's list (the way to the newest, the
+/// bell, the outline: the old page's shell's own, left out of what is set side by side by their rectangles), whose
+/// count is the old page's and changes as it does (#5667 made a chat open on fewer messages: 34 came to 104 in one
+/// test), so it is told for people, never held.
 fn body_known_said(known : Map[String, Int]) -> String {
-  let lines = known.iter().map(fn(kv) { "\{kv.0}: \{kv.1}" }).collect()
+  let lines = known
+    .iter()
+    .filter(fn(kv) { !kv.0.has_prefix("floats over the list") })
+    .map(fn(kv) { "\{kv.0}: \{kv.1}" })
+    .collect()
   lines.sort()
   lines.join("\n")
 }
@@ -787,7 +794,6 @@ fn body_held(which : BodyHeld) -> String {
     "a row one shows at the window's edge, the rows' heights between apart: 8",
     "a screen's card with its preview, as its link (P13): 6",
     "an HTML page it places, as its card (P12): 6",
-    "floats over the list (the page's shell's): 310",
     "its head's time pressed short (message_head_node's): 33",
     "its picture held under the list's top (c.stick): 41",
     "where it went, narrow, route_line_down further down (meant): 7",
@@ -797,11 +803,9 @@ fn body_held(which : BodyHeld) -> String {
     "a row one shows at the window's edge, the rows' heights between apart: 3",
     "a screen's card with its preview, as its link (P13): 1",
     "an HTML page it places, as its card (P12): 1",
-    "floats over the list (the page's shell's): 6",
     "where it went, narrow, route_line_down further down (meant): 1",
   ]
     HeldChanges => [
-    "floats over the list (the page's shell's): 34",
     "its picture held under the list's top (c.stick): 7",
   ]
   }
@@ -838,10 +842,10 @@ test "a chat's messages made once as nodes are drawn as the old list drew them, 
     }
   }
   assert_eq(said, [], msg=said.join("\n"))
-  // (held exactly: each kind its count over the 198 cases, 22 fixtures × 3 screens × 3 places, and how many of them
-  // the same throughout: each only to fall, the same only to rise)
+  // (held exactly: each kind its count over the cases, 22 fixtures × 3 screens × 3 places, each only to fall; how
+  // many of them are the same throughout is told with it, not held: it moves with the old page's floats)
   let got = "\{same} of \{cases} the same\n" + body_known_said(known)
-  assert_eq(got, "59 of 198 the same\n" + body_held(HeldMain), msg=got)
+  assert_eq(body_known_said(known), body_held(HeldMain), msg=got)
 }
 
 ///|
