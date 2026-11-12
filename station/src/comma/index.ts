@@ -32,7 +32,8 @@ export function commaConnects(raw: Json): CommaConnect[] {
     }));
 }
 
-/// The line Comma's still.fail plugin shows, `comma <server> <token>`, as its server and token; null when it is not one.
+/// The line Comma's still.fail plugin shows, `comma <server> <token>`, as its server (an https or http origin, also
+/// when the line names the socket's `wss://` or `ws://`) and token; null when it is not one.
 export function commaLine(line: string): { server: string; token: string } | null {
   const words = line.trim().split(/\s+/);
   if (words.length !== 3 || words[0] !== "comma") return null;
@@ -43,8 +44,11 @@ export function commaLine(line: string): { server: string; token: string } | nul
   } catch {
     return null;
   }
-  if ((url.protocol !== "https:" && url.protocol !== "http:") || !/^[A-Za-z0-9_-]{8,512}$/.test(token)) return null;
-  return { server: url.origin, token };
+  // Comma shows its connector's address, which may be the socket's (`wss://…`, as its production does): kept as the
+  // https one, which the connection is made of either way (surface.ts).
+  const scheme = ({ "https:": "https:", "http:": "http:", "wss:": "https:", "ws:": "http:" } as Record<string, string>)[url.protocol];
+  if (scheme === undefined || !/^[A-Za-z0-9_-]{8,512}$/.test(token)) return null;
+  return { server: `${scheme}//${url.host}`, token };
 }
 
 /// A token as the pages are shown it.

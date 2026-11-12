@@ -93,6 +93,8 @@ class FakeComma {
 
 test("the line Comma shows reads as its server and token; anything else does not", () => {
   assert.deepEqual(commaLine("  comma https://api.comma.surf/ salix_conn_abcdef123  "), { server: "https://api.comma.surf", token: "salix_conn_abcdef123" });
+  assert.deepEqual(commaLine("comma wss://salix.comma.surf salix_conn_abcdef123"), { server: "https://salix.comma.surf", token: "salix_conn_abcdef123" });
+  assert.deepEqual(commaLine("comma ws://localhost:4000 salix_conn_abcdef123"), { server: "http://localhost:4000", token: "salix_conn_abcdef123" });
   assert.equal(commaLine("tailcat 100.1.2.3 4750"), null);
   assert.equal(commaLine("comma ftp://x salix_conn_abcdef123"), null);
   assert.equal(commaLine("comma https://api.comma.surf short"), null);

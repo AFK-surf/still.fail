@@ -2705,6 +2705,9 @@ test("connect_wizard_offers_comma_where_its_station_has_it_and_adds_a_connect_of
   flow.edit(topic, ui, { comma: { line: "tailcat 1.2.3.4 4750" } });
   assert.equal(flow.value(topic).comma.ready, false);
   assert.throws(() => flow.begin(topic, ui, "create", {}, false), "not a line Comma shows");
+  // Comma's production shows its connector's socket address.
+  flow.edit(topic, ui, { comma: { line: "comma wss://salix.comma.surf salix_conn_abc12345" } });
+  assert.equal(flow.value(topic).comma.ready, true);
   flow.edit(topic, ui, { comma: { line: " comma https://api.comma.surf salix_conn_abc12345 " } });
   view = flow.value(topic);
   assert.deepEqual([view.step, view.back, view.comma.ready], ["commaLine", "commaBind", true]);
