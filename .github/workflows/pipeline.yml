@@ -457,6 +457,10 @@ jobs:
           REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+          # Once still.fail's accounts moved into monoid's cloud (the variable CLOUD_MOVED on: workflows/move-cloud.yml),
+          # its API forwards there (cloud/src/guests.ts).
+          FORWARD_TO: ${{ vars.CLOUD_MOVED == 'on' && 'https://app.monoid.build' || '' }}
+          FORWARD_SECRET: ${{ vars.CLOUD_MOVED == 'on' && secrets.CLOUD_FORWARD_SECRET || '' }}
         run: sh .github/deploy.sh api
 
   # The app for the browser (each of the web's pages: apps/mbui/scripts/web-app.sh), built where MoonBit's cache is
@@ -530,7 +534,11 @@ jobs:
           STILLFAIL_CLOUD: monoid
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
           STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
-          DEPLOY_KEYS_JSON: ${{ secrets.MONOID_DEPLOY_KEYS_JSON }}
+          # Once still.fail's accounts moved in (CLOUD_MOVED on: workflows/move-cloud.yml): still.fail's keys, and answered
+          # as still.fail too (cloud/src/guests.ts).
+          DEPLOY_KEYS_JSON: ${{ vars.CLOUD_MOVED == 'on' && secrets.DEPLOY_KEYS_JSON || secrets.MONOID_DEPLOY_KEYS_JSON }}
+          FORWARD_SECRET: ${{ vars.CLOUD_MOVED == 'on' && secrets.CLOUD_FORWARD_SECRET || '' }}
+          GUEST_GOOGLE_OAUTH_JSON: ${{ vars.CLOUD_MOVED == 'on' && secrets.GOOGLE_OAUTH_JSON || '' }}
           GOOGLE_OAUTH_JSON: ${{ secrets.MONOID_GOOGLE_OAUTH_JSON || secrets.GOOGLE_OAUTH_JSON }}
           AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}

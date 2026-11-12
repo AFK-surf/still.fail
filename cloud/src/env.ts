@@ -38,6 +38,9 @@ export interface Env {
   /** What a forwarding cloud and the one it forwards to both know (32 characters at least): a forwarded request says
    * its origin and client under it, and is taken as made there only with it (guests.ts `served`). */
   FORWARD_SECRET?: string;
+  /** Set while its accounts move into another cloud, or another's into it (move.ts): every /v1/ call but the move's
+   * answered 503 moving. */
+  MOVING?: string;
   /** The admin's console's host (its /v1/ calls come here: see index.ts). */
   ADMIN_ORIGIN: string;
   /** Older origins of the console (comma-separated), answered like ADMIN_ORIGIN. */

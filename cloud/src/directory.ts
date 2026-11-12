@@ -1542,6 +1542,40 @@ export class Directory extends DurableObject<Env> {
     return { workspace, devices };
   }
 
+  // ── moving into another cloud (move.ts) ─────────────────────────────────
+
+  /** Every table but what is of this object's own sockets and counts (MOVE_SKIPPED), row by row. */
+  moveExport(): Record<string, Row[]> {
+    const tables = this.#rows("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite_%'").map((r) => r.name as string);
+    return Object.fromEntries(tables.filter((t) => !MOVE_SKIPPED.has(t)).map((t) => [t, this.#rows(`SELECT * FROM "${t}"`)]));
+  }
+
+  /** Each of `tables` made what another cloud's moveExport said, in one transaction (its rows taken out first); what
+   * a table here does not have of a row's columns refuses the whole. How many rows each now has. */
+  moveImport(tables: Record<string, Row[]>): Record<string, number> {
+    const here = new Set(this.#rows("SELECT name FROM sqlite_master WHERE type = 'table'").map((r) => r.name as string));
+    return this.ctx.storage.transactionSync(() => {
+      const counts: Record<string, number> = {};
+      for (const [table, rows] of Object.entries(tables)) {
+        if (MOVE_SKIPPED.has(table) || !here.has(table) || !/^[a-z_]+$/.test(table)) throw new Error(`move: no table ${table}`);
+        const columns = new Set(this.#rows(`PRAGMA table_info("${table}")`).map((r) => r.name as string));
+        this.#run(`DELETE FROM "${table}"`);
+        for (const row of rows) {
+          const names = Object.keys(row);
+          if (names.some((n) => !columns.has(n))) throw new Error(`move: ${table} has no column of ${names.join(",")}`);
+          this.#run(`INSERT INTO "${table}" (${names.map((n) => `"${n}"`).join(", ")}) VALUES (${names.map(() => "?").join(", ")})`, ...names.map((n) => row[n] as SqlStorageValue));
+        }
+        counts[table] = rows.length;
+      }
+      return counts;
+    });
+  }
+
+  /** The accounts there are (moving each one's object: move.ts). */
+  moveAccounts(): string[] {
+    return this.#rows("SELECT sub FROM users ORDER BY sub").map((r) => r.sub as string);
+  }
+
   // ── the admin's console ─────────────────────────────────────────────────
   // The caller has checked that the account is the admin's (admin.ts).
 
@@ -2242,6 +2276,10 @@ for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWo
   "lock", "appendLock", "clearLock", "requestLock", "lockRequests", "dropLockRequest"]) FAMILIES[name] = "workspaces";
 for (const name of ["adminUsers", "setMayCreate", "adminPending", "setPending", "removePending", "setBlocked", "setBeta", "adminDeleteWorkspace", "adminCreateWorkspace", "adminSetLimits",
   "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "replyToFeedback", "adminLoad"]) FAMILIES[name] = "admin";
+/** The tables that are this object's own, not moved into another cloud: its sockets' generations, the outbox to the
+ * objects (made again as things change), its counts. */
+const MOVE_SKIPPED = new Set(["outbox", "live", "hits"]);
+for (const name of ["moveExport", "moveImport", "moveAccounts"]) FAMILIES[name] = "admin";
 /** What it runs for itself rather than being called for. */
 const UNCOUNTED = new Set(["constructor", "handOff", "migrateStationMembers", "migrateFreePlan", "send", "settled", "sweep"]);
 
