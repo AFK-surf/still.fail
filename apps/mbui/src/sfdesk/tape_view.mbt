@@ -763,6 +763,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     row.box(fn(side) {
       tape_goes.parts.push(side)
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
+      tape_in_use(side, Side)
       tape_swipes(side, Side)
       // (the block, the tree's: its ground, the rail and a place's sidebar not made once in it, dock_node)
       side.box(fn(b) {
@@ -812,7 +813,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }))
       |> ignore
       tape_swipes(page, Page)
-      tape_panel_box(page, 0.0, fn(pane) { tape_page_pane(pane, src) })
+      tape_panel_box(page, Page, 0.0, fn(pane) { tape_page_pane(pane, src) })
       tape_cover(page, Page, fn() { tape_panel_room(page) })
     })
     |> ignore
@@ -825,7 +826,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }))
       |> ignore
       tape_swipes(panel, Panel)
-      tape_panel_box(panel, bar_gap_now(), fn(pane) { tape_side_node(pane, src) })
+      tape_panel_box(panel, Panel, bar_gap_now(), fn(pane) { tape_side_node(pane, src) })
       tape_cover(panel, Panel, fn() {
         let (_, t, _, b) = tape_panel_room(panel)
         (bar_gap_now(), t, 0.0, b)
@@ -897,10 +898,22 @@ fn tape_panel_room(n : @view.View) -> (Double, Double, Double, Double) {
 }
 
 ///|
-/// The panel in column `n`, its room round it (tape_panel_room) and `before` it (the side panel's 8 from the page's),
-/// what `held` puts in it.
-fn tape_panel_box(n : @view.View, before : Double, held : (@view.View) -> Unit) -> Unit {
+/// Whether panel `p` (what node `n` holds of it: the sidebar's column, its rail and sidebar; a panel's room, all it shows
+/// but its cover, which is the tape's: tape_cover) is the one in use as the keyboard has it
+/// (View::in_use): from the moment the tape is asked to it (its way there on) to the moment it is asked to another,
+/// wide.tape_at set at the cause's moment. Behind, nothing of it is gone to by Tab or given the focus (the rail, the
+/// sidebar, a page's bar, its old view and the composer in it, the side panel), what in it has the focus letting it go
+/// then; a press, a long press, a drag or the pointer on what shows of it are as they are (tape_cover).
+fn tape_in_use(n : @view.View, p : TapePane) -> Unit {
+  n.in_use(By(fn() { wide.tape_at.get() == p })) |> ignore
+}
+
+///|
+/// The panel `p` in column `n`, its room round it (tape_panel_room) and `before` it (the side panel's 8 from the
+/// page's), what `held` puts in it; in use as the keyboard has it while it is the one in use (tape_in_use).
+fn tape_panel_box(n : @view.View, p : TapePane, before : Double, held : (@view.View) -> Unit) -> Unit {
   n.box(fn(room) {
+    tape_in_use(room, p)
     room
     .over(Is(true))
     .padding(By(fn() {
@@ -937,6 +950,10 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
         // or pulled over, its own widgets read out)
         .says(By(fn() { Some(@view.said(Button, label=tape_words(p))) }))
         .hides(By(fn() { wide.tape_at.get() == p }))
+        // (the page's, while the sidebar is in use: a stop of the keyboard's after the sidebar's own, Enter or Space
+        // bringing the page over as a press does; the keyboard's one way to it, all of the page behind taking none:
+        // tape_in_use)
+        .focusable(By(fn() { p == Page && wide.tape_at.get() == Side }))
         // (pressed by a screen reader: brought over at that moment, as a tap brings it; a finger and the pointer its
         // gesture's, as ever: what drags a node is what a press on it finds)
         .on_press(fn() {
@@ -966,6 +983,23 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
           },
         )
         |> ignore
+        // (the keyboard's focus on it: a ring in the panel it covers, the theme's gap and width in from its edges,
+        // concentric with its corners)
+        cover.show(fn() { cover.focus_shown() }, fn(ring) {
+          let inset = fn() {
+            let t = @ui.tree_theme()
+            t.focus_gap + t.focus_w
+          }
+          ring
+          .over(Is(true))
+          .margin(By(fn() {
+            let i = inset()
+            (i, i, i, i)
+          }))
+          .radius(By(fn() { @ui.concentric(@sf.tape_corner, inset()) }))
+          .edge(By(fn() { (@ui.tree_theme().focus_w, @ui.tree_theme().focus) }))
+          |> ignore
+        })
       },
     )
   })
