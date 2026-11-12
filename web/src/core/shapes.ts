@@ -1817,6 +1817,11 @@ export interface NoticeShown {
 	/** The session waiting to retry at capacity, while this exact notice can cancel its retry. */
 	retrySession?: string;
 	/**
+	 * The session whose turn failed for the provider or the connection, while this exact notice can try it again
+	 * (重试: `session.retry`).
+	 */
+	againSession?: string;
+	/**
 	 * One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that
 	 * profile's page. Absent otherwise.
 	 */

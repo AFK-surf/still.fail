@@ -407,6 +407,8 @@ pub(all) struct Message {
   notice_md : Json?
   /// the agent whose capacity retry this notice can cancel, while that retry waits
   notice_retry_session : String
+  /// the agent whose failed turn this notice can try again (重试), while that turn is where it stands
+  notice_again_session : String
   /// a failure's own words, as what failed said them, shown under its words when the notice is opened
   notice_detail : String
   /// a chat's run changed: what it runs on now, said in place of its words where they have not the room on their line
@@ -565,6 +567,7 @@ pub fn message_of(m : Json) -> Message {
     },
     notice_md: field(field(s, "notice"), "md"),
     notice_retry_session: text(field(s, "notice"), "retrySession"),
+    notice_again_session: text(field(s, "notice"), "againSession"),
     notice_detail: text(field(s, "notice"), "detail"),
     notice_short: text(field(s, "notice"), "short"),
     notice_lines: items(field(s, "notice"), "lines").filter_map(fn(l) {

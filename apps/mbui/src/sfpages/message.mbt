@@ -748,6 +748,24 @@ fn is_viz(name : String) -> Bool {
 }
 
 ///|
+/// What a notice's action after its pill does: 取消 the capacity retry it announced while that waits (`session.cancelRetry`),
+/// or 重试 the failed turn it is about while that is where its agent stands (`session.retry`, as a reply would); as
+/// (the agent's session, the action's words, the call), None for neither.
+fn notice_after(m : Message) -> (String, String, String)? {
+  if m.notice_retry_session != "" {
+    Some((m.notice_retry_session, @sf.t("common.cancel"), "session.cancelRetry"))
+  } else if m.notice_again_session != "" {
+    Some((m.notice_again_session, @sf.t("common.retry"), "session.retry"))
+  } else {
+    None
+  }
+}
+
+///|
+/// A notice's action as it was last offered, by its key, for it to go as it was (its way along the row back to nothing).
+let notice_after_last : Map[String, (String, String, String)] = Map([])
+
+///|
 /// What still.fail itself says (SystemNotice): a pill across the chat in one line, a failure in red (the core's
 /// `notice`); pressed, all its words, what failed said of it (`detail`, as it said it), and its time under it. One that
 /// a chat's run changed: what changed, else (no room on the line) what it runs on now; pressed, how it ran and runs,
@@ -769,7 +787,8 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
     _ => None
   }
   let linked = m.profile != "" && m.notice_link >= 0 && m.notice_link <= said.length()
-  let retry = m.notice_retry_session != "" && here.list is Some(_)
+  let after = if here.list is Some(_) { notice_after(m) } else { None }
+  let retry = after is Some(_)
   let retry_key = "notice-retry/" + station + "/" + m.ts
   let retry_share = @motion.animate(c, retry_key, if retry { 1.0 } else { 0.0 }, spec=@motion.tween(@ui.row_size_ms, ease=Out))
   // gone to (a notification's, the outline's), its pill alone lit in the accent's ground: a row's band across the
@@ -857,8 +876,15 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
     if retry || retry_share > 0.0 {
       c.box(style=notice_with_action, fn() {
         pill()
-        let session = m.notice_retry_session
-        let busy = core_doing(src, ["session.cancelRetry"], [("station", station), ("key", session)])
+        // its 取消 or 重试 (as it was last, while it goes)
+        let (session, label, call) = match after {
+          Some(a) => a
+          None => notice_after_last.get(retry_key).unwrap_or(("", @sf.t("common.cancel"), "session.cancelRetry"))
+        }
+        if after is Some(a) {
+          notice_after_last[retry_key] = a
+        }
+        let busy = core_doing(src, [call], [("station", station), ("key", session)])
         let natural = match @motion.measured_size(c, retry_key) {
           Some((w, _)) => w
           None => 0.0
@@ -866,8 +892,8 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
         let cut = retry_share < 1.0
         let action = c.box(style=if cut { notice_action_cut.then(@ui.style(max_w=Fixed(natural * retry_share))) } else { notice_action_room }, fn() {
           let inner = c.box(style=notice_action_in, keep=cut, fn() {
-            @sf.button(c, @sf.t("common.cancel"), key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline, on_press=fn() {
-              act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
+            @sf.button(c, label, key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline, on_press=fn() {
+              act(src, label, "", call, {
                 "station": Json::string(station),
                 "key": Json::string(session),
                 "thread": Json::number(m.thread),

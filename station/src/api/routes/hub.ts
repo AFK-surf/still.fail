@@ -516,7 +516,7 @@ export const routes = (tools: Tools): Route[] => {
     ),
     {
       method: "POST",
-      pattern: /^\/*sessions\/+([^/]+)\/+(stop|cancel-retry|evict|warm|compact|clear|settings)(?:\/.*)?$/,
+      pattern: /^\/*sessions\/+([^/]+)\/+(stop|cancel-retry|retry|evict|warm|compact|clear|settings)(?:\/.*)?$/,
       handle: (r, [k, action]) =>
         write(async (s, a) => {
           const key = segment(k!);
@@ -529,6 +529,14 @@ export const routes = (tools: Tools): Route[] => {
               const { thread, seq } = input(r);
               if (!Number.isSafeInteger(thread) || !Number.isSafeInteger(seq) || (thread as number) <= 0 || (seq as number) <= 0) throw new Refused(400, "invalid retry notice");
               await a.hub.cancelRetry(key, thread as number, seq as number);
+              return ok({ ok: true });
+            }
+            // A failed turn's notice pressed (重试): taken up again where it stopped.
+            case "retry": {
+              session(s, key, r);
+              const { thread, seq } = input(r);
+              if (!Number.isSafeInteger(thread) || !Number.isSafeInteger(seq) || (thread as number) <= 0 || (seq as number) <= 0) throw new Refused(400, "invalid failure notice");
+              await a.hub.retryFailed(key, thread as number, seq as number);
               return ok({ ok: true });
             }
             case "evict":

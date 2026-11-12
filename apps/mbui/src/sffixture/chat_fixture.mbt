@@ -461,6 +461,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             outline_chat(f.mode, around=f.older > 0)
           } else if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
+          } else if f.mode == "chat-turn-failed" {
+            with_failed_turn(rich_chat(f.older), f.step > 0)
           } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {
             with_model_limit(rich_chat(f.older), f.mode == "chat-model-limit-after")
           } else if f.mode == "chat-run-change" {
@@ -2290,6 +2292,31 @@ fn with_overload_notice(v : Json, after : Bool, canceled : Bool) -> Json {
       let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
       if after && !canceled {
         notice["retrySession"] = "s-c1"
+      }
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "⚠️ " + words, "刚刚", { "notice": Json::object(notice) }),
+      ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chat `v` ending on a turn that lost its connection to the model's service ("chat-turn-failed"): its notice offers
+/// 重试 till it is pressed (`retried`: its agent goes on, the notice says it no more).
+fn with_failed_turn(v : Json, retried : Bool) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let words = if @sf.language() == "en" { "Connection lost; reply to retry" } else { "与模型服务的连接中断，回复即可重试" }
+      let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
+      if !retried {
+        notice["againSession"] = "s-c1"
       }
       o["messages"] = [
         msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),

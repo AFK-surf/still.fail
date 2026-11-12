@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_FAILED, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { claudeProject, homesFirst, transcriptPaths } from "../src/read/transcript.ts";
@@ -2987,6 +2987,55 @@ test("an overload notice identifies the retry it can cancel, even after another 
   assert.equal(r.store.lastTurn(key)!.declared, "waiting", "an old notice cannot cancel a later retry either");
   await r.hub.cancelRetry(key, thread.id, nextNotice.n);
   assert.equal(r.store.lastTurn(key)!.outcome, "aborted");
+  await r.close();
+});
+
+test("a failed turn's notice tries it again (重试) only while that turn is still where its session stands", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  const key = agent.options.route;
+  const thread = r.thread("C1", m.threadTs);
+  const lost = { kind: "failed" as const, reason: "network" as const, message: "fetch failed" };
+  agent.end(lost);
+  await settle();
+  const notice = r.said(thread.id).find((entry) => entry.text.includes("与模型服务的连接中断"))!;
+  assert.ok(notice);
+  assert.deepEqual(r.store.lastTurn(key)!.about, { thread: thread.id, seq: notice.n, ts: notice.ts });
+  // Another notice than the one it is about: nothing.
+  await r.hub.retryFailed(key, thread.id, notice.n + 1);
+  await settle();
+  assert.equal(agent.prompts.length, 1);
+  await r.hub.retryFailed(key, thread.id, notice.n);
+  await settle();
+  assert.equal(agent.prompts.length, 2);
+  assert.equal(agent.prompts[1], GO_ON_AFTER_FAILED);
+  assert.equal(r.store.lastTurn(key)!.kind, "resume");
+  // Pressed twice (a second press arriving late): the turn it started is not run again, nor is the old notice taken up.
+  await r.hub.retryFailed(key, thread.id, notice.n);
+  await settle();
+  assert.equal(agent.prompts.length, 2);
+  agent.end({ kind: "completed" });
+  await settle();
+  // (a turn ended in no state is asked again: whatever that started, the old notice starts nothing more)
+  const since = agent.prompts.length;
+  await r.hub.retryFailed(key, thread.id, notice.n);
+  await settle();
+  assert.equal(agent.prompts.length, since, "a turn that completed since is not tried again by an old notice");
+  assert.equal(agent.prompts.filter((p) => p === GO_ON_AFTER_FAILED).length, 1);
+  // A failure the person has to change something for (the network's way out) is not tried again by a press.
+  await r.accept(reply(m, "9999.4", "<@UBOT> 继续", { addressed: true }));
+  await settle();
+  const next = r.claude.last();
+  next.end({ kind: "failed", reason: "blocked", message: "blocked by a firewall" });
+  await settle();
+  const about = r.store.lastTurn(key)!.about!;
+  const prompts = r.claude.sessions.reduce((n, a) => n + a.prompts.length, 0);
+  await r.hub.retryFailed(key, about.thread, about.seq);
+  await settle();
+  assert.equal(r.claude.sessions.reduce((n, a) => n + a.prompts.length, 0), prompts);
   await r.close();
 });
 
