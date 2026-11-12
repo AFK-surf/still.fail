@@ -789,12 +789,15 @@ export class Store {
     let changed: (() => void)[] = [];
     // What equals the last value is the last value's (collections.ts share): what did not change goes on as the same
     // objects, which the diff and the items' shaping step over.
-    // (only what goes out: what reads a topic in the core reads what its source made)
+    // (only what goes out: what reads a topic in the core reads what its source made) What `share` did not give back as
+    // the last value differs from it: not compared again.
+    let shared = false;
     if (now.subscribers.length > 0 && computed !== undefined && "ok" in computed && now.value !== undefined && "ok" in now.value && now.value.ok !== computed.ok) {
       const kept = share(now.value.ok, computed.ok, specOf(topic));
       computed = kept === now.value.ok ? now.value : { ok: sharedValue(kept) };
+      shared = true;
     }
-    if (computed !== undefined && computed !== now.value && !sameValue(now.value, computed)) {
+    if (computed !== undefined && computed !== now.value && (shared || !sameValue(now.value, computed))) {
       // What is held tells its watchers as it changes (changed): only an error is news to them here.
       const news = !isHeld || "err" in computed || (now.value !== undefined && "err" in now.value);
       now.value = computed;

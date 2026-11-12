@@ -23,7 +23,9 @@ design rules (the user, 2026-10-03):
 6. **Changes are by key**: a view makes its topic's value again whole as anything it read changes; the store keeps
    what equals the last value as the same objects (`src/collections.ts` `share`), sends a keyed subscriber insert,
    patch, drop and move ops of its keyed lists (`diffKeyed`), and shapes again only items that are not the objects that
-   went out (`src/output.ts`). What that still walks for one change is counted (`test/view-work.test.ts`).
+   went out (`src/output.ts`). In each of these steps an item that is the object it was costs one comparison of two
+   references (or a lookup by the object) and nothing else; the rest is walked only for what is not the same. What
+   that still walks for one change is counted (`test/view-work.test.ts`).
 7. **Workspaces are isolated** from each other.
 
 ## What a topic sends is bounded
@@ -69,7 +71,8 @@ app asks held), reads at most twice what it writes (text bound to statements tha
 no faster; `OVER_WRITE` and `GROWS_WRITE` there, which only fall. A new cause is measured by being in `CAUSES`.
 What the views, the store and what goes out walk in memory is held the same way (`test/view-work.test.ts`): work.ts
 `walked` counts reads tracked, values made again, `share`'s and `equal`'s walks, keyed lists' diffs and the items put
-together, copied and fitted as they go out, each to the topic made or sent then; each cause, held, walks no more with
+together, copied and fitted as they go out, each to the topic made or sent then, past the items found the same objects
+(`same`, one comparison an item of what is shown: printed, not held); each cause, held, walks no more with
 what is shown three times as large (the lists' windows, the chat's messages, a `limit`, `lines`, `days`) nor with three
 times the chats. Those that do are in its `OVER_SHOWN` and `OVER_CHATS` as pairs (a cause, a counter that grows), which
 only fall as a set; by how much one grows is printed, not held (a field more in a row moves what it counts).

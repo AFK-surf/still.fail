@@ -17,6 +17,8 @@
 // no other change's to answer for here). On failure, and with VIEW_WORK_PRINT=1, the tables as they would be (to
 // paste), each pair's numbers and the topic whose walking grew most; and what each of `SHOWN_WHOLE`'s causes walks as
 // the rig is, by topic, with what each topic sent and whether it was made again.
+// `same` (items found the very objects they were, one comparison of two references each) is not held: it is one an
+// item of what is shown, the rest of the walk only for what is not the same. Its growth is printed beside.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
@@ -42,27 +44,27 @@ type Over = Record<string, (keyof Walked)[]>;
 /// The causes whose walking grows with what is shown three times as large, and which of their counters grow.
 const OVER_SHOWN: Over = {
   "quota": ["reads", "shared", "equaled", "copied", "fitted"],
-  "message": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
-  "agent": ["reads", "shared", "diffed", "built", "copied", "fitted"],
+  "message": ["reads", "shared", "equaled"],
+  "agent": ["reads", "shared", "diffed", "copied", "fitted"],
   "line": ["diffed", "fitted"],
-  "thing": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
-  "card": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
-  "archived": ["reads", "shared", "diffed", "built", "copied", "fitted"],
-  "renamed": ["reads", "shared", "diffed", "built", "copied", "fitted"],
-  "grown": ["reads", "shared", "diffed", "built", "copied", "fitted"],
+  "thing": ["reads", "shared", "equaled"],
+  "card": ["reads", "shared", "equaled", "diffed", "fitted"],
+  "archived": ["reads", "shared", "built", "fitted"],
+  "renamed": ["reads", "shared", "diffed"],
+  "grown": ["reads"],
   "down": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
-  "job": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
+  "job": ["reads", "shared", "equaled"],
   "usage": ["shared", "copied", "fitted"],
-  "screen": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
-  "member": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
+  "screen": ["reads", "shared", "equaled"],
+  "member": ["reads", "shared", "equaled"],
   "session": ["reads", "shared", "equaled", "copied", "fitted"],
   "decided": ["reads", "shared", "equaled"],
   "updating": ["reads", "shared", "equaled"],
-  "machine": ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"],
+  "machine": ["reads", "shared", "equaled", "copied", "fitted"],
   "login": ["shared"],
-  "release": ["reads", "shared", "diffed", "built", "fitted"],
+  "release": ["reads", "shared"],
   "quota six pages": ["shared", "equaled"],
-  "message six pages": ["reads", "shared", "equaled", "diffed", "built", "copied"],
+  "message six pages": ["reads", "shared", "equaled"],
 };
 /// The same with the workspace's chats three times.
 const OVER_CHATS: Over = {
@@ -71,8 +73,10 @@ const OVER_CHATS: Over = {
   "agent": ["shared", "copied", "fitted"],
   "thing": ["reads", "shared", "copied", "fitted"],
   "card": ["reads", "shared", "copied", "fitted"],
-  "renamed": ["diffed"],
-  "grown": ["reads"],
+  // (grown's built and fitted joined as the rows that are the objects they were came to be taken by one comparison:
+  // they were the whole window's before, alike at every size; now they are the rows the window grew by and the days
+  // those went into, two with three times the chats where one is as the rig is)
+  "grown": ["reads", "built", "fitted"],
   "down": ["shared", "equaled", "copied", "fitted"],
   "job": ["shared", "copied", "fitted"],
   "usage": ["shared", "copied", "fitted"],
@@ -191,12 +195,13 @@ function measured(shown: number, realSize: Record<string, number>): Promise<Foun
 
 type Grown = { cause: string; k: keyof Walked; was: number; now: number; topic: string };
 
-/// Of `a` and `b` (as the rig is, and the other setting), each cause and counter that grew, with the topic whose own
-/// count grew most.
-function grown(a: Found, b: Found): Grown[] {
+/// Of `a` and `b` (as the rig is, and the other setting), each cause and counter that grew (of `same` alone, or of the
+/// others), with the topic whose own count grew most.
+function grown(a: Found, b: Found, same: boolean): Grown[] {
   const out: Grown[] = [];
   for (const cause of Object.keys(a)) {
     for (const k of Object.keys(a[cause]!.total) as (keyof Walked)[]) {
+      if ((k === "same") !== same) continue;
       const was = a[cause]!.total[k];
       const now = b[cause]!.total[k];
       if (now <= was) continue;
@@ -231,26 +236,27 @@ function holding(name: string, over: Over, found: Grown[], causes: string[], cou
   return [`const ${name}: Over = {`, ...lines, "};", `// ${found.length} over, ${causes.length * counters - found.length} within; the topic that grew most, by pairs: ${ranked.map(([t, n]) => `${t} ${n}`).join(", ")}`, ...numbers].join("\n");
 }
 
-/// What `cause` walked as the rig is, by topic: the walks, ranked by their sum, the first six and the rest summed; of
-/// each, what it sent and whether it was made again.
+/// What `cause` walked as the rig is, by topic: the walks, ranked by their sum, the first six and the rest summed, and
+/// all of them; of each, what was found the same object (not in the sum), what it sent and whether it was made again.
 const WALKS = ["reads", "shared", "equaled", "diffed", "built", "copied", "fitted"] as const;
 function whole(cause: string, c: Cost): string {
   const sum = (w: Walked) => WALKS.reduce((n, k) => n + w[k], 0);
   const topics = Object.entries(c.by).sort((x, y) => sum(y[1]) - sum(x[1]) || (x[0] < y[0] ? -1 : 1));
   const row = (name: string, w: Walked, sent: Sent | undefined, again: string) =>
-    `| ${name} | ${WALKS.map((k) => w[k]).join(" | ")} | ${sum(w)} | ${sent === undefined ? "0" : `${sent.messages} msg, ${sent.ops} ops, ${sent.bytes} B`} | ${again} |`;
+    `| ${name} | ${WALKS.map((k) => w[k]).join(" | ")} | ${sum(w)} | ${w.same} | ${sent === undefined ? "0" : `${sent.messages} msg, ${sent.ops} ops, ${sent.bytes} B`} | ${again} |`;
   const rest = topics.slice(6);
   const restW = rest.reduce((acc, [, w]) => {
     for (const k of Object.keys(acc) as (keyof Walked)[]) acc[k] += w[k];
     return acc;
-  }, { reads: 0, recomputes: 0, shared: 0, equaled: 0, diffed: 0, built: 0, copied: 0, fitted: 0 } as Walked);
+  }, { reads: 0, recomputes: 0, shared: 0, equaled: 0, diffed: 0, built: 0, copied: 0, fitted: 0, same: 0 } as Walked);
   const restSent = rest.reduce((n, [t]) => n + (c.sent[t]?.bytes ?? 0), 0);
   return [
     `### ${cause}`,
-    `| topic | ${WALKS.join(" | ")} | sum | sent | made again |`,
-    `|---|${WALKS.map(() => "---").join("|")}|---|---|---|`,
+    `| topic | ${WALKS.join(" | ")} | sum | same | sent | made again |`,
+    `|---|${WALKS.map(() => "---").join("|")}|---|---|---|---|`,
     ...topics.slice(0, 6).map(([t, w]) => row(t === "" ? "(no topic)" : t, w, c.sent[t], w.recomputes > 0 ? `yes (${w.recomputes})` : "no")),
-    ...(rest.length > 0 ? [`| the other ${rest.length} | ${WALKS.map((k) => restW[k]).join(" | ")} | ${sum(restW)} | ${restSent} B | ${restW.recomputes} |`] : []),
+    ...(rest.length > 0 ? [`| the other ${rest.length} | ${WALKS.map((k) => restW[k]).join(" | ")} | ${sum(restW)} | ${restW.same} | ${restSent} B | ${restW.recomputes} |`] : []),
+    row("all", c.total, undefined, `${c.total.recomputes}`),
   ].join("\n");
 }
 
@@ -260,10 +266,16 @@ if (isMainThread) test("what_one_change_walks_follows_what_changed_not_what_is_s
   const causes = Object.keys(base);
   const errors = [base, shown, chats].flatMap((f) => Object.entries(f).flatMap(([c, x]) => (x.error !== undefined ? [`${c}: ${x.error}`] : [])));
   assert.deepEqual(errors, [], "every cause ran");
-  const counters = Object.keys(base[causes[0]!]!.total).length;
+  // (all but `same`, which is printed and not held)
+  const counters = Object.keys(base[causes[0]!]!.total).length - 1;
   const fail: string[] = [];
-  const tables = [holding("OVER_SHOWN", OVER_SHOWN, grown(base, shown), causes, counters, fail), holding("OVER_CHATS", OVER_CHATS, grown(base, chats), causes, counters, fail)].join("\n");
+  const tables = [holding("OVER_SHOWN", OVER_SHOWN, grown(base, shown, false), causes, counters, fail), holding("OVER_CHATS", OVER_CHATS, grown(base, chats, false), causes, counters, fail)].join("\n");
   if (print || fail.length > 0) console.log(tables);
+  if (print) {
+    for (const [name, other] of [["shown", shown], ["chats", chats]] as const) {
+      console.log(grown(base, other, true).map((g) => `// same (not held), ${name}: ${g.cause} ${g.was} -> ${g.now} (most: ${g.topic})`).join("\n"));
+    }
+  }
   if (print) for (const c of SHOWN_WHOLE) console.log(whole(c, base[c]!));
   assert.deepEqual(fail, []);
 });

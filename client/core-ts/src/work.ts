@@ -128,26 +128,33 @@ export const glanced = {
 /// What the views, the store and what goes out walked in memory: items looked at, each a plain count where the walk is,
 /// whatever topic it is for. A change of one thing must walk what changed, not what is held or shown
 /// (test/view-work.test.ts holds every cause of real-size-asked.ts `CAUSES` to it, with what is shown three times as
-/// large and with three times the chats).
+/// large and with three times the chats). What is found the same object as before costs one comparison, counted in
+/// `same` alone: the other counts are of what is walked past it.
 export const walked = {
   /// Reads a computed or an observer tracked (reactive.ts `tracked`): each signal or computed read, each time.
   reads: 0,
   /// Topics' values made again by their source (store.ts #compute).
   recomputes: 0,
   /// Objects and arrays collections.ts `share` went into past the same object, and the items of each array it mapped
-  /// (a keyed list's last items each put in its map as well).
+  /// between the same objects at its start and its end (a keyed list's last items there each put in its map as well).
   shared: 0,
   /// Objects and arrays util.ts `equal` compared past the same object.
   equaled: 0,
-  /// Items a keyed list's diff looked at (collections.ts `list`): the old list where it is the same items, else both
-  /// lists' keys taken whole.
+  /// Items a keyed list's diff took the keys of (collections.ts `list`): of both lists, between the same objects at their
+  /// start and their end.
   diffed: 0,
-  /// Items of keyed lists output.ts #build put together or looked up in its memo.
+  /// Items of keyed lists output.ts #build put together or looked up in its memo by their key: those not the object
+  /// an item was made of before.
   built: 0,
-  /// Objects and arrays output.ts `copy` walked.
+  /// Objects and arrays output.ts `copy` walked that had not gone out as they are.
   copied: 0,
-  /// Values conform.ts `fit` visited, those that went out as they are among them.
+  /// Values conform.ts `fit` visited that had not gone out as they are.
   fitted: 0,
+  /// Items found the same object as the one before, taken as they were with one comparison of two references (or one
+  /// lookup by the object): of a list `share` or a keyed list's diff trims at its start and its end, an item output.ts
+  /// finds made of the very object, a value `copy` or `fit` finds gone out. It follows what is shown, so it is printed and
+  /// not held (test/view-work.test.ts).
+  same: 0,
 };
 
 export type Walked = typeof walked;
@@ -170,7 +177,7 @@ export function walkingAs(topic: string): string {
     for (const k of Object.keys(walked) as (keyof Walked)[]) {
       const n = walked[k] - walkedAt[k];
       if (n === 0) continue;
-      if (w === undefined && (w = by.get(was)) === undefined) by.set(was, (w = { reads: 0, recomputes: 0, shared: 0, equaled: 0, diffed: 0, built: 0, copied: 0, fitted: 0 }));
+      if (w === undefined && (w = by.get(was)) === undefined) by.set(was, (w = { reads: 0, recomputes: 0, shared: 0, equaled: 0, diffed: 0, built: 0, copied: 0, fitted: 0, same: 0 }));
       w[k] += n;
     }
     walkedAt = { ...walked };
