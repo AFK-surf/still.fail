@@ -739,19 +739,33 @@ fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
 /// nothing of them changed (all of them on the list's way for nothing then, a way set off over it while that goes on
 /// from there: a side panel closed again as soon as it is open), and still as the pane is made another width by
 /// nothing that goes (the window, its edge dragged): no cause of a row's (apps/mbui/AGENTS.md, Motion). Each way held
-/// on is another (its id), so a way to a width held at before still sets the rows off on it.
+/// on is another (its id), so a way to a width held at before still sets the rows off on it. Where the way lets go of
+/// it at another width than it held it at (a page opened over the chat's held it at that page's pane, the chat staying
+/// beside its panel under it), the frame it lets go of it is the way's too: the rows another version again, for that
+/// way at the width it is there, on the list's way from it, not at their new heights at once in a frame nothing moved
+/// (rows_steady; view_beside_wbtest).
 fn laid_at_w(key : String, held : Bool, w : Double) -> String {
   if held {
-    let laid = "|" + @sfbase.page_way.id + "@" + w.to_string()
-    lists_held_w[key] = laid
+    let id = @sfbase.page_way.id
+    let laid = "|" + id + "@" + w.to_string()
+    lists_held_w[key] = (laid, id, w, true)
     return laid
   }
-  lists_held_w.get(key).unwrap_or("")
+  match lists_held_w.get(key) {
+    Some((laid, id, at, true)) => {
+      let laid = if (at - w).abs() < 0.5 { laid } else { "|" + id + "@" + w.to_string() }
+      lists_held_w[key] = (laid, id, w, false)
+      laid
+    }
+    Some((laid, _, _, _)) => laid
+    None => ""
+  }
 }
 
 ///|
-/// What each chat list's rows were last held for on a page's way (laid_at_w).
-let lists_held_w : Map[String, String] = Map([])
+/// What each chat list's rows were last held for on a page's way (laid_at_w): their `laid`, that way's id, the width
+/// it was laid out at, and whether it was held still as it was last built.
+let lists_held_w : Map[String, (String, String, Double, Bool)] = Map([])
 
 ///|
 /// How far from the left of a pane `frame_w` wide chat list `key`, laid out `list_w` wide, stands: in its middle; on a
