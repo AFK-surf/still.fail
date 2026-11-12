@@ -159,7 +159,9 @@ const LIMIT = ["rate limit", "rate_limit", "quota", "usage limit", "limit reache
 /// What they say when it is the provider: the model has no room for anyone just now (whatever account asks).
 export const OVERLOADED = ["overloaded", "at capacity"];
 /// What they say when the conversation no longer fits the model.
-const CONTEXT = ["context window", "context length", "context_length", "prompt is too long", "maximum context", "too many tokens", "input is too long"];
+/// pi-ai (DeepSeek Harness on a provider's route) says "context overflow" where the provider gave no words of its own,
+/// and its code is CONTEXT_WINDOW_EXCEEDED (FB-17).
+const CONTEXT = ["context window", "context_window", "context length", "context_length", "context overflow", "prompt is too long", "maximum context", "too many tokens", "input is too long"];
 /// What they say when the way to the provider broke: the request not sent, its answer cut off.
 const NETWORK = /stream disconnected|error sending request|connection (?:reset|refused|closed|error|failed)|network error|timed out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|fetch failed|dns error|tls handshake/i;
 
