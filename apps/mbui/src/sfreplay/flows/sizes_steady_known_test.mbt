@@ -7,10 +7,6 @@ fn init {
   @ui.sizes_steady_known([
     ("src/sfapp/tape.mbt", 1),
     ("src/sfreplay/flows/archive_restore_test.mbt", 1),
-    // (words sent flying to their row as a card comes under it at once, the test's agent's: where they are drawn in
-    // their row goes a few points back and forth as the row goes up under them on the list's way, one way on the
-    // screen; their row stepped up in one frame before, the card's room put on at once: under_post.mbt)
-    ("src/sfreplay/flows/close_option_test.mbt", 1),
     ("src/sfreplay/flows/glass_test.mbt", 1),
     ("src/sfreplay/flows/new_chat_test.mbt", 1),
     ("src/sfreplay/flows/service_page_test.mbt", 1),
