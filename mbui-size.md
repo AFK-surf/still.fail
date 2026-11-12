@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [33ffbb39f](https://github.com/AFK-surf/still.fail/commit/33ffbb39f0814ad4933e78856088d8da8b1d762b) mbui: what a page's list's block holds comes and g | 1.88 | 2.51 | 10.73 | 29.66 | 37.92 | 26.4 | 49.54 | 94.39 | 170.72 |
 | [022ba7280](https://github.com/AFK-surf/still.fail/commit/022ba728003387d92bfa4daec6f5b38a1dd5a273) core: a test's time passes without a flush after t | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.06 | 176.2 |
 | [edf3b5b3f](https://github.com/AFK-surf/still.fail/commit/edf3b5b3fa563b2c957c1d89cb9cf148a07857a9) station: a lock's stations come to one chain: what | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.75 | 189.85 |
 | [e0dbf4815](https://github.com/AFK-surf/still.fail/commit/e0dbf48150e60e8842d6ae5356addd5b758d65f2) mbui app: on 小屏 a kept place of the bottom bar com | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94 | 163.26 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e39116f76](https://github.com/AFK-surf/still.fail/commit/e39116f76d1349b37fa5dd49082fe565bb497070) core: past a call's 3 s the cloud is asked too, an | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94.01 | 190.1 |
 | [9414759c2](https://github.com/AFK-surf/still.fail/commit/9414759c2fdec23894aee9864bf012b4042cdc48) core: an entry a station of the lock refuses fails | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94.21 | 152.68 |
 | [b74057fd8](https://github.com/AFK-surf/still.fail/commit/b74057fd8d0d593b09d966dddb0071e3e5144d50) mbui: each bar set beside the most one Tester of i | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94 | 138.34 |
-| [a02efcc16](https://github.com/AFK-surf/still.fail/commit/a02efcc16431cd4a623b9be3b8e31a3082a0dbdf) test: new_pick_whole says a string's view owned an | 1.85 | 2.47 | 10.37 | 29.12 | 36.62 | 25.92 | 48.37 | 93.83 | 174.41 |
