@@ -937,7 +937,7 @@ fn triple_body(
   let t = @sf.theme()
   let row_h = t.rows.pick + 1.0
   let list_most = if sheet {
-    dmax(3.0 * row_h, dmin(triple_sheet_rows * row_h, c.window_size().1 * @sf.sheet_most - triple_sheet_rest))
+    dmax(3.0 * row_h, dmin(triple_sheet_rows * row_h, @sf.sheet_window_h(c) * @sf.sheet_most - triple_sheet_rest))
   } else {
     triple_list_h
   }

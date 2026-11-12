@@ -461,7 +461,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
       self.clicked.push(f.id)
       self.press_on_key(f.id)
       made_pressed(f.id)
-      self.focus_moved(self.focus, visible=true)
+      self.focus_moved(self.focus, visible=true, returned=self.focus_returned)
       return true
     }
   }
@@ -472,7 +472,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
 /// A primary press went down on `target` (0 nothing): it takes the focus if it does on a press; else the focus is let
 /// go from anything but a field (a field keeps it: what is tapped beside it, a send button, does not take its keys).
 fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
-  self.focus_moved(self.focus, visible=false)
+  self.focus_moved(self.focus, visible=false, returned=self.focus_returned)
   // a press on the ground of a layer that traps the focus leaves it where it is (in the layer)
   let trap = self.trapping_layer()
   if trap != 0 && target == trap {
@@ -597,9 +597,10 @@ fn Ctx::focus_keeps(self : Ctx, code : Int, mods : Int) -> Bool {
 /// opening or closing, a screen reader), the window's tree told at once of what of its own has it (its node's, Tree::
 /// focus_to: one focus, read on either side); a node's no longer able to take it (let go, another tree's, leaving,
 /// taking no press, under a modal layer), the focus to none.
-fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
+fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool, returned? : Bool = false) -> Unit {
   let was = self.focus
   self.focus = id
+  self.focus_returned = returned && id != 0
   match visible {
     Some(v) => self.focus_visible = v
     None => ()
@@ -607,6 +608,9 @@ fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
   // (both sides told as one change)
   @signals.start_batch()
   focus_told_tree(self)
+  if self.focus == 0 {
+    self.focus_returned = false
+  }
   // (come to a field of the tree's: its caret blinking from this moment, tree_field_focus_came)
   if self.focus != was {
     tree_field_focus_came(self)

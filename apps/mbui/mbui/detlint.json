@@ -108,7 +108,7 @@
       "src/kit/progress.mbt": 6,
       "src/kit/radio.mbt": 6,
       "src/kit/select.mbt": 13,
-      "src/kit/sheet.mbt": 12,
+      "src/kit/sheet.mbt": 10,
       "src/kit/simple.mbt": 3,
       "src/kit/slider.mbt": 10,
       "src/kit/switch.mbt": 8,
@@ -251,11 +251,11 @@
       "src/kit/toggle.mbt": 1,
       "src/motion/layer.mbt": 21
     },
-    "list-comes-off": {},
     "old-list": {
       "src/demo/main.mbt": 1,
       "src/kit/disclosure.mbt": 1
     },
+    "list-comes-off": {},
     "old-island": {},
     "old-panel": {},
     "click-read": {},
@@ -326,8 +326,8 @@
     "ui-current": {},
     "build-clock": {},
     "build-motion": {},
-    "list-comes-off": {},
     "old-list": {},
+    "list-comes-off": {},
     "old-island": {},
     "old-panel": {},
     "click-read": {},
@@ -337,7 +337,10 @@
     "abort-unsaid": {
       "src/halt/halt.mbt": 1
     },
-    "empty-on-done": {}
+    "empty-on-done": {},
+    "panic-test": {},
+    "read-before-run": {},
+    "reset-by-hand": {}
   },
   "tester": {
     "names": [

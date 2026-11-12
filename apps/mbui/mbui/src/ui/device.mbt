@@ -545,6 +545,7 @@ fn Ctx::catcher_of(self : Ctx, id : Int) -> Catcher {
 pub fn Ctx::key_catcher(self : Ctx, key : String) -> KeyCatch {
   let id = self.id(key)
   let st = self.catcher_of(id)
+  self.editor_layer[id] = self.layer_cur
   st.island = if self.layer_cur == 0 { island_building.val } else { None }
   if st.frame != self.frame_no {
     st.frame = self.frame_no

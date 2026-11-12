@@ -209,8 +209,12 @@ priv struct Presented {
   /// so or was said
   gone : () -> Unit
   mut ended : Bool
-  /// as a sheet, found taller than a sheet's most: that tall from then on, what it holds scrolling in it
-  mut over : Bool
+  /// as a sheet, the natural height last laid out for what it holds (0 none yet): capped to a sheet's most while
+  /// taller than the sheet's window height, un-capped again when the window grows back; whether an editor in it has
+  /// raised the soft keyboard, and the window height it was last laid out for while open
+  mut natural_h : Double
+  mut in_ime : Bool
+  mut win_h : Double
   /// beside what opened it as wide as what it holds (`fits`): the widest it has been laid out, never narrower from then
   /// on
   mut widest : Double
@@ -383,6 +387,7 @@ pub fn presenters_reset() -> Unit {
   presented_sheet_rests.clear()
   presented_sheet_next.val = 0
   presented_sheet_ended.val = -1.0
+  sheet_win_h.val = 0.0
 }
 
 ///|
@@ -458,7 +463,9 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     field_id: 0,
     gone,
     ended: false,
-    over: false,
+    natural_h: 0.0,
+    in_ime: false,
+    win_h: 0.0,
     widest: 0.0,
     steps,
     steps_made: 0,
@@ -2316,10 +2323,37 @@ pub let sheet_most : Double = 0.94
 let sheet_long_pick : Double = 0.66
 
 ///|
+/// The window height in force while building what a sheet holds (0 outside a sheet).
+// kept across runs: put back by presenters_reset
+let sheet_win_h : Ref[Double] = Ref(0.0)
+
+///|
+/// The height of the window for what a sheet holds (`present_sheet`, `sheet_node`): the screen's full height while no
+/// field in the sheet has the focus, or the room over the soft keyboard while one does. Outside a sheet, `c.window_size().1`.
+pub fn sheet_window_h(c : @ui.Ctx) -> Double {
+  if sheet_win_h.val > 0.0 {
+    sheet_win_h.val
+  } else {
+    c.window_size().1
+  }
+}
+
+///|
 /// `p` as a sheet: as tall as what it shows (measured as it is laid out), or its share of the window; the scrim (black
 /// at 28%) closing it when tapped, back, Escape, its top dragged down. Whether it is open, and whether it is drawn.
 fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
-  let (_, wh) = c.window_size()
+  let sheet_id = c.id(key)
+  let now_open = p.open && !c.will_dismiss(sheet_id)
+  let in_ime = now_open && (c.focused_editor_in_layer(sheet_id) || (p.in_ime && c.ime_inset() > 0.0))
+  let wh = if now_open {
+    p.in_ime = in_ime
+    p.win_h = c.window_size().1 + (if in_ime { 0.0 } else { c.ime_inset() })
+    p.win_h
+  } else if p.win_h > 0.0 {
+    p.win_h
+  } else {
+    c.window_size().1 + c.ime_inset()
+  }
   // what it holds, as tall as this frame lays it out (read back: laid out another height, the frame is built again),
   // so the sheet is as tall as that in the frame it shows, and with it as it changes: placed by its size, not chased
   // to the size the frame before measured (sf/motion.mbt)
@@ -2328,10 +2362,14 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     Some((_, h)) => Some(h)
     None => None
   }
-  // a panel taller than a sheet's most: the sheet that tall from then on, what it holds scrolling in it (as a dialog's
-  // body does), its foot in reach
-  if natural is Some(m) && m > wh * sheet_most {
-    p.over = true
+  // a panel taller than a sheet's most: the sheet that tall while taller, what it holds scrolling in it (as a dialog's
+  // body does), its foot in reach; un-capped again when the window grows back
+  if natural is Some(m) {
+    p.natural_h = m
+  }
+  let over = match natural {
+    Some(m) => m > wh * sheet_most
+    None => p.natural_h > wh * sheet_most
   }
   // a panel a share of the window caps (tall, not a form): that share, or as tall as what it holds where its lists say
   // so (measured_body), what the sheet takes besides its body as the last layout had it
@@ -2346,7 +2384,6 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     (true, Some(w), Some((_, whole)), Some((_, body))) => Some(w + dmax(whole - body, 0.0))
     _ => None
   }
-  let over = p.over
   let share = match p.shows {
     Pick(_, choices, _, _, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
@@ -2404,6 +2441,8 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   // it, as far as it has gone, closing from there)
   let scrim = scrim_of(p, true).unwrap_or(sheet_scrim)
   let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get(c) * p.pushed.get(), sinks=p.sinks, in_place=p.in_place.unwrap_or(-1.0), fn() {
+    let prev_wh = sheet_win_h.val
+    sheet_win_h.val = wh
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {
@@ -2421,6 +2460,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
         })
         |> ignore
     }
+    sheet_win_h.val = prev_wh
   })
   // what it comes to, for scripted runs (e2e: a sheet opened and closed by dragging)
   match r.dragged {
@@ -2947,7 +2987,7 @@ let step_head_gap : @ui.Style = @ui.css("gap=S1")
 ///|
 /// The window's height (what a long pick's list is capped by before the sheet's room shrinks it).
 fn wh_of(c : @ui.Ctx) -> Double {
-  c.window_size().1
+  sheet_window_h(c)
 }
 
 ///|

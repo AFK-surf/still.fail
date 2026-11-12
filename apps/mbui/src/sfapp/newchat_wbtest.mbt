@@ -636,7 +636,13 @@ test "a new chat's stations on every screen, Maple pressed: picked (newChat.pick
 /// machine's chips in the middle of their line, between the name's foot and the line under them, their words inside
 /// them; "" where nothing is.
 fn ns_rows_wrong(t : @ui.Tester, at : String) -> String {
-  let words = t.words().filter(fn(w) { w.5 > 0.0 })
+  let all = t.words().filter(fn(w) { w.5 > 0.0 })
+  let title = @sf.t("android-chat.new.station.pick")
+  // (the panel's own words, painted after its title over the page's controls underneath)
+  let words = match all.search_by(fn(w) { w.0 == title }) {
+    Some(i) => all[i + 1:].to_owned()
+    None => all
+  }
   let wrong : Array[String] = []
   for name in ["Willow", "Maple"] {
     guard t.semantics().filter(fn(n) { n.role == @ui.Role::Button && n.label == name && n.check is Some(_) && !n.hidden }).last() is Some(r) else {

@@ -65,8 +65,10 @@ fn sheet_old(
 /// `sized`: its lists as tall as what they hold, giving way where the sheet is short of room, scrolling in themselves
 /// there (what they say kept by the first, measured_body's; the second whether one of them said, as it was last built:
 /// one a share of the window tall fills that share till one does).
-fn sheet_old_body(c : @ui.Ctx, key : String, x : PanelOf, close : () -> Unit, pressed : Bool, back : (() -> Unit)?, sized? : (Int, Bool)) -> Unit {
+fn sheet_old_body(c : @ui.Ctx, key : String, x : PanelOf, close : () -> Unit, pressed : Bool, back : (() -> Unit)?, win_h~ : Double, sized? : (Int, Bool)) -> Unit {
   let capped = x.tall > 0.0 && !x.form
+  let prev_wh = sheet_win_h.val
+  sheet_win_h.val = win_h
   with_look(Narrow, fn() {
     let own_row = match (back, x.title_row) {
       (Some(b), Some(row)) => {
@@ -146,6 +148,7 @@ fn sheet_old_body(c : @ui.Ctx, key : String, x : PanelOf, close : () -> Unit, pr
       None => c.box(style=room, gone_empty=true, body) |> ignore
     }
   })
+  sheet_win_h.val = prev_wh
 }
 
 ///|
@@ -317,6 +320,29 @@ fn sheet_node(
       // (closed with another in its place: drawn no more)
       let vanished = fn() { layer.leaving() && taken() }
       let live = fn() { !layer.leaving() }
+      @ui.holds_ime_leaving(layer, active=fn() { !vanished() })
+      let had_ime : Ref[Bool] = Ref(false)
+      let live_win_h : Ref[Double] = Ref(0.0)
+      let ime_under = fn() {
+        let kb = layer.keyboard_inset()
+        let in_ime = live() && (@ui.focused_editor_in_node(layer) || (had_ime.val && kb > 0.0))
+        if live() {
+          had_ime.val = in_ime
+        }
+        if in_ime { 0.0 } else { kb }
+      }
+      let win_h = fn() { layer.window().1 + ime_under() }
+      let body_win_h = fn() {
+        let wh = win_h()
+        if live() {
+          live_win_h.val = wh
+          wh
+        } else if live_win_h.val > 0.0 {
+          live_win_h.val
+        } else {
+          wh
+        }
+      }
       // (how fast a finger had it going down as it let it go, closing it: what it sinks away at from there; none, from
       // rest)
       let let_go_speed : Ref[Double?] = Ref(None)
@@ -460,7 +486,9 @@ fn sheet_node(
         if going {
           dim.go(layer, 0.0, @kit.sheet_scrim_ms, ease=Out)
           // (closed on its way from as tall as it stood: it sinks away from where it is seen then, as fast as it went)
-          let off = carried()
+          let carried_off = carried()
+          let inset = if had_ime.val { @signals.untracked(fn() { layer.keyboard_inset() }) } else { 0.0 }
+          let off = (carried_off.0 - inset, carried_off.1)
           below.go(sheet_box, layer, 1.0, reach.untracked(), speed?=let_go_speed.val, off~)
           let_go_speed.val = None
         } else {
@@ -574,6 +602,7 @@ fn sheet_node(
       })
       layer
       .over(Is(true))
+      .margin(By(fn() { (0.0, 0.0, 0.0, -ime_under()) }))
       // (modal while open: closing, what is under it its own again as it begins to go)
       .modal(By(live))
       .hides(By(fn() { layer.leaving() }))
@@ -615,7 +644,7 @@ fn sheet_node(
             }
             None => {
               stood_v.val = 0.0
-              dmax(0.0, layer.window().1 - sheet.placed_window_now().1)
+              dmax(0.0, @signals.untracked(win_h) - sheet.placed_window_now().1)
             }
           }
         })
@@ -627,8 +656,9 @@ fn sheet_node(
           // it holds up to its share (`hugs`), no taller than that share)
           let pg = top()
           let under = reach.get()
-          let most = layer.window().1 * (if pg.x.grows { 1.0 } else { sheet_most }) + under
-          Some(if capped_of(pg.x) && hugs_of(pg) { dmin(most, pg.x.tall * layer.window().1 + under) } else { most })
+          let wh = win_h()
+          let most = wh * (if pg.x.grows { 1.0 } else { sheet_most }) + under
+          Some(if capped_of(pg.x) && hugs_of(pg) { dmin(most, pg.x.tall * wh + under) } else { most })
         }))
         .height(By(fn() {
           let pg = top()
@@ -640,7 +670,7 @@ fn sheet_node(
                 Some(tall.shown(sheet) + under)
               } else if capped_of(pg.x) && !hugs_of(pg) {
                 // (its share of the window, as the host's sheet is: present_sheet's)
-                Some(pg.x.tall * layer.window().1 + under)
+                Some(pg.x.tall * win_h() + under)
               } else {
                 None
               }
@@ -716,7 +746,7 @@ fn sheet_node(
           }
           guard from_y.val >= 0.0 else { return }
           let dy = d.wy - from_y.val
-          let total = layer.window().1
+          let total = @signals.untracked(win_h)
           // (let go: on from the speed it went at under the finger, whatever it goes to then, as the host's sheet hands
           // the finger's to its spring; points a millisecond down)
           let finger = if d.kind == Up { d.vy() } else { 0.0 }
@@ -791,7 +821,7 @@ fn sheet_node(
           sheet.pick(at_once=true, fn() { covered_by() is Some(_) }, fn(g, covered) {
             g.over(Is(true)).radius(Is(pane_corner)) |> ignore
             if !covered {
-              g.height(By(fn() { Some(layer.window().1 * 2.0) })) |> ignore
+              g.height(By(fn() { Some((win_h() + layer.keyboard_inset()) * 2.0) })) |> ignore
             }
             make(g)
           })
@@ -986,7 +1016,7 @@ fn sheet_node(
                       said(b)
                       let said_now = says_of(k)
                       let build = fn(c : @ui.Ctx, says : Bool) {
-                        sheet_old_body(c, "\{key}/\{k}", x, close, pressed, if heads_in_body { Some(go_back) } else { None }, sized=(
+                        sheet_old_body(c, "\{key}/\{k}", x, close, pressed, if heads_in_body { Some(go_back) } else { None }, win_h=body_win_h(), sized=(
                           pg.lists,
                           says,
                         ))
@@ -1019,7 +1049,7 @@ fn sheet_node(
                       b.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
                       said(b)
                       sheet_old(b, "\{key}/\{k}/body", gives=true, fn(c) {
-                        sheet_old_body(c, "\{key}/\{k}", x, close, pressed, if heads_in_body { Some(go_back) } else { None }, sized=(
+                        sheet_old_body(c, "\{key}/\{k}", x, close, pressed, if heads_in_body { Some(go_back) } else { None }, win_h=body_win_h(), sized=(
                           pg.lists,
                           true,
                         ))
@@ -1053,7 +1083,7 @@ fn sheet_node(
                       b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
                         said(s)
                         sheet_old(s, "\{key}/\{k}/body", fn(c) {
-                          sheet_old_body(c, "\{key}/\{k}", x, close, pressed, if heads_in_body { Some(go_back) } else { None })
+                          sheet_old_body(c, "\{key}/\{k}", x, close, pressed, if heads_in_body { Some(go_back) } else { None }, win_h=body_win_h())
                         }, reshaped=page_reshaped)
                         |> ignore
                       })

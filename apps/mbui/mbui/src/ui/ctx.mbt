@@ -696,6 +696,8 @@ pub struct Ctx {
   mut keys_layer : Int
   dismissals : Map[Int, Dismiss]
   layer_return : Map[Int, Int]
+  editor_layer : Map[Int, Int]
+  mut focus_returned : Bool
   mut press_down : (Double, Double)?
   // (the window's tree took that press: none of the old frame's targets did, whatever its targets lie under it)
   mut press_down_tree : Bool
@@ -939,6 +941,8 @@ fn Ctx::new() -> Ctx {
     keys_layer: 0,
     dismissals: Map([]),
     layer_return: Map([]),
+    editor_layer: Map([]),
+    focus_returned: false,
     press_down: None,
     press_down_tree: false,
     press_tree_stack: -2,
@@ -1107,6 +1111,8 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.shots_let_go()
   self.dismissals.clear()
   self.layer_return.clear()
+  self.editor_layer.clear()
+  self.focus_returned = false
   self.segs_cut(0)
   self.segs.shrink_to_fit()
 }
