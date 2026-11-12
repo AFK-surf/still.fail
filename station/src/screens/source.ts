@@ -16,7 +16,12 @@ export type Codec = "h265" | "h264" | "jpeg";
 export type FrameConfig = { codec: Codec; width: number; height: number; description?: Uint8Array; region?: Region };
 
 /// A part of the screen, 0..1 of its width and height: its left, its top, its width, its height.
-export type AudioFrame = { ts: number; data: Uint8Array };
+/// A 20 ms packet of system output: 3840 bytes of interleaved stereo PCM16, or one Opus packet (RFC 6716) of those 960
+/// frames where the view asked `opus` and the source encodes it (`codec` says which).
+export type AudioFrame = { ts: number; data: Uint8Array; codec: AudioCodec };
+export type AudioCodec = "pcm_s16le" | "opus";
+/// The longest Opus packet (RFC 6716 3.2.1).
+export const OPUS_MAX = 1275;
 
 export type Region = { x: number; y: number; w: number; h: number };
 
@@ -43,9 +48,11 @@ export type ScreenInput =
 /// source.
 /// `fit`: the viewer's own screen (a phone), in its CSS pixels and their scale: a source that lays itself out (a tab of
 /// the browser) does so for it while the view is open, as that phone's browser would; others take no notice.
+/// `opus`: the viewer decodes Opus too (with `audio`): a source that encodes it sends the sound so (about 64 kbit/s,
+/// where PCM is 1.5 Mbit/s), the others PCM.
 /// `gamut: "p3"`: the viewer shows a video tagged Display P3 as such: a source that has wider colours (this Mac's
 /// desktop) may send them; the others' stay sRGB, as they are without it.
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fps?: number; fit?: ViewFit; audio?: boolean; gamut?: "p3" };
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fps?: number; fit?: ViewFit; audio?: boolean; opus?: boolean; gamut?: "p3" };
 export type ViewFit = { width: number; height: number; scale: number };
 
 /// The codec a source that makes `own` (best first) sends a view: the first of them the view takes; for a preview
@@ -87,7 +94,7 @@ export function clipFits(clip: Clip): boolean {
 export interface ScreenView {
   /// The next frame once there is a new one, or null when the view ended (the source went away).
   next(): Promise<Frame | null>;
-  /// Negotiated system output: 48 kHz stereo PCM16, one bounded packet, null when unavailable.
+  /// Negotiated system output: 48 kHz stereo, PCM16 or Opus, one bounded packet, null when unavailable.
   nextAudio?(): Promise<AudioFrame | null>;
   /// Starts the next frame as a key frame (a client's decoder lost its state).
   keyframe(): void;

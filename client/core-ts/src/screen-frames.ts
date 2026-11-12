@@ -17,6 +17,9 @@ export const ACK = 17;
 export const KEYFRAME = 18;
 export const SET_CLIPBOARD = 19;
 export const LOOK = 20;
+export const SOUND = 21;
+/// A packet of sound: 20 ms of PCM16 (3840 bytes), or one Opus packet (at most 1275).
+const AUDIO_MAX = 3840;
 
 /// A clip's type on the wire.
 export type ClipType = "text" | "png";
@@ -43,7 +46,7 @@ export type StationFrame =
   | { config: FrameConfig }
   | { video: { key: boolean; ts: number; data: Uint8Array } }
   | { state: J }
-  | { audioConfig: { codec: "pcm_s16le"; sampleRate: 48000; channels: 2 } }
+  | { audioConfig: { codec: "pcm_s16le" | "opus"; sampleRate: 48000; channels: 2 } }
   | { audio: { ts: number; data: Uint8Array } }
   /// The screen's clipboard, changed: its type and its bytes (text in UTF-8).
   | { clipboard: { type: ClipType; data: Uint8Array } }
@@ -92,11 +95,11 @@ export class FrameReader {
       }
       case AUDIO_CONFIG: {
         const c = json(this.#take(length));
-        if (!isObject(c) || c.codec !== "pcm_s16le" || c.sampleRate !== 48000 || c.channels !== 2) throw new Error("unsupported screen audio format");
-        return { audioConfig: { codec: "pcm_s16le", sampleRate: 48000, channels: 2 } };
+        if (!isObject(c) || (c.codec !== "pcm_s16le" && c.codec !== "opus") || c.sampleRate !== 48000 || c.channels !== 2) throw new Error("unsupported screen audio format");
+        return { audioConfig: { codec: c.codec, sampleRate: 48000, channels: 2 } };
       }
       case AUDIO: {
-        if (length !== 3848) { this.#skip(length); throw new Error("invalid screen audio packet"); }
+        if (length <= 8 || length > 8 + AUDIO_MAX) { this.#skip(length); throw new Error("invalid screen audio packet"); }
         const head = this.#take(8);
         const view = new DataView(head.buffer);
         return { audio: { ts: view.getUint32(0) * TWO_32 + view.getUint32(4), data: this.#take(length - 8) } };
@@ -205,6 +208,11 @@ export function keyframeFrame(): Uint8Array {
   return frame(KEYFRAME, new Uint8Array(0));
 }
 
+/// The view's sound on (1) or off (0: muted here, the station sends none).
+export function soundFrame(on: boolean): Uint8Array {
+  return frame(SOUND, new Uint8Array([on ? 1 : 0]));
+}
+
 /// The part of the screen the client shows (null: the whole), and the bounds its pictures are to fit in (the device
 /// pixels it is shown in).
 export function lookFrame(region: Region | null, maxWidth: number, maxHeight: number): Uint8Array {
@@ -248,7 +256,7 @@ export function copiedFrame(type: ClipType, data: Uint8Array): Uint8Array {
 }
 
 /// What the client sends, read (the test station's side).
-export type ClientFrame = { input: J } | { ack: number } | { keyframe: true } | { look: J } | { clipboard: { type: ClipType | null; paste: boolean; data: Uint8Array } } | { other: number };
+export type ClientFrame = { input: J } | { ack: number } | { keyframe: true } | { sound: boolean } | { look: J } | { clipboard: { type: ClipType | null; paste: boolean; data: Uint8Array } } | { other: number };
 
 export function readClientFrames(buf: Uint8Array): [ClientFrame[], Uint8Array] {
   const frames: ClientFrame[] = [];
@@ -269,6 +277,9 @@ export function readClientFrames(buf: Uint8Array): [ClientFrame[], Uint8Array] {
       }
       case KEYFRAME:
         frames.push({ keyframe: true });
+        break;
+      case SOUND:
+        frames.push({ sound: payload[0] !== 0 });
         break;
       case LOOK:
         frames.push({ look: json(payload) });

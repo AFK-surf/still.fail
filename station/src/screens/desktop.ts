@@ -22,7 +22,7 @@ import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 import { helperUi } from "./ui.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, codecFor, regionOf } from "./source.ts";
+import { type AudioCodec, type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, OPUS_MAX, clipFits, codecFor, regionOf } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -135,7 +135,7 @@ export class Desktop implements ScreenSource {
     // `audio` in its info, and none is pulled.
     const audio = options.audio === true && !options.peek;
     for (let attempt = 0; ; attempt++) {
-      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(options.fps ? { fps: options.fps } : {}), ...(options.gamut ? { gamut: options.gamut } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(audio ? { audio: true } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view), new MacInput(), "ScreenCaptureKit", audio);
+      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(options.fps ? { fps: options.fps } : {}), ...(options.gamut ? { gamut: options.gamut } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(audio ? { audio: true, ...(options.opus ? { audioCodec: "opus" } : {}) } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view), new MacInput(), "ScreenCaptureKit", audio);
       this.#views.add(view);
       try {
         await view.ready;
@@ -207,8 +207,9 @@ type HelperError = Error & { code?: string };
 /// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes), 6 cursor (JSON {x, y, shape}: a video's
 /// pictures leave the pointer out), 7 region (JSON {region}: the part of the display the frames from the next on show,
 /// as it was framed; null the whole; said before the frame whose part is another than the last one's), 8 audio config
-/// (JSON {codec: "pcm_s16le", sampleRate: 48000, channels: 2}, or {error}: no more audio), 9 audio (8 bytes timestamp
-/// µs, then 3840 bytes of interleaved stereo PCM16).
+/// (JSON {codec: "pcm_s16le" | "opus", sampleRate: 48000, channels: 2}, or {error}: no more audio; `opus` only to a
+/// view opened with `audioCodec: "opus"`, which a helper that encodes none lets be), 9 audio (8 bytes timestamp µs, then
+/// 3840 bytes of interleaved stereo PCM16, or one Opus packet of those 20 ms).
 export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8, audio: 9 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
@@ -241,6 +242,8 @@ export class HelperView implements ScreenView {
   #waiting: ((frame: Frame | null) => void)[] = [];
   #config: FrameConfig | undefined;
   #audio = false;
+  /// What the helper said its packets are (message 8).
+  #audioCodec: AudioCodec = "pcm_s16le";
   #audioWait: ((frame: AudioFrame | null) => void) | null = null;
   /// The latest config said (a frame of another part of the display goes with it again, its part said), the part the
   /// next frame shows as the helper said it (null: the whole), and whether its info said it frames parts.
@@ -316,7 +319,8 @@ export class HelperView implements ScreenView {
       case 8: {
         let config: any;
         try { config = JSON.parse(payload.toString()); } catch { config = null; }
-        if (config?.codec !== "pcm_s16le" || config.sampleRate !== 48000 || config.channels !== 2) {
+        if ((config?.codec === "pcm_s16le" || config?.codec === "opus") && config.sampleRate === 48000 && config.channels === 2) this.#audioCodec = config.codec;
+        else {
           this.#audio = false;
           const resolve = this.#audioWait;
           this.#audioWait = null;
@@ -328,8 +332,9 @@ export class HelperView implements ScreenView {
         const resolve = this.#audioWait;
         this.#audioWait = null;
         if (!resolve) return;
-        if (payload.length !== 3848) { this.#audio = false; resolve(null); return; }
-        resolve({ ts: Number(payload.readBigUInt64BE(0)), data: new Uint8Array(payload.subarray(8)) });
+        const size = payload.length - 8;
+        if (this.#audioCodec === "pcm_s16le" ? size !== 3840 : size < 1 || size > OPUS_MAX) { this.#audio = false; resolve(null); return; }
+        resolve({ ts: Number(payload.readBigUInt64BE(0)), data: new Uint8Array(payload.subarray(8)), codec: this.#audioCodec });
         return;
       }
       case 2:

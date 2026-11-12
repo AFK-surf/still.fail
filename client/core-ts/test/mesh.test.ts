@@ -286,6 +286,33 @@ sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
   await close(s, station, mesh);
 });
 
+/// A view's sound is asked as Opus only where what taps the view decodes it (the shell's endpoint says `opus`); on the
+/// web's, PCM, which the page takes as it comes.
+for (const opus of [false, true]) {
+  sim(`a_screen_views_sound_is_asked_as_opus_${opus ? "where" : "only where"}_its_tap_decodes_it`, async (s) => {
+    if (opus) {
+      const bind = s.iroh.bind.bind(s.iroh);
+      s.iroh = { bind: (options) => Effect.map(bind(options), (endpoint) => Object.assign(endpoint, { opus: true as const })) };
+    }
+    const { mesh, station } = await setup(s);
+    station.screenFrames = [{ key: true, ts: 0, data: new Uint8Array(9) }];
+    const wire = wireOf(s, mesh);
+    const addr = StationAddr.parse(`w/${station.id()}`);
+    const ask = { maxWidth: 1280, maxHeight: 720, codecs: ["jpeg"], control: false, audio: "pcm_s16le" as const };
+    await s.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const view = yield* wire.screen!(addr, { method: "POST", path: "/admin/api/screens/desktop/view", headers: [] }, ask);
+          // (the head line went once the stream answered)
+          assert.equal(view.reply.status, 200);
+        }),
+      ),
+    );
+    assert.deepEqual(station.views[0]!.head.screen, { ...ask, ...(opus ? { opus: true } : {}), self: mesh.deviceId() });
+    await close(s, station, mesh);
+  });
+}
+
 sim("reaches_a_station_in_its_protocol", async (s) => {
   for (const [alpns, spoken] of [[[ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
     const { mesh, station } = await setup(s, await s.station(alpns));

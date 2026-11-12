@@ -4,9 +4,11 @@
 // (native/screen/src/audio.rs). Nothing more of macOS's than Screen Recording, which the view has already.
 //
 // Pulled as the station's transport takes them: message 9 in asks for one packet, sent as message 9 out once one is
-// there (8 bytes timestamp, µs of the capture clock the video's frames have, then 3840 bytes); at most 300 ms is kept,
-// the oldest dropped first. Message 8 out says the format once the capture is set up.
+// there (8 bytes timestamp, µs of the capture clock the video's frames have, then 3840 bytes, or one Opus packet of
+// those 20 ms for a view that asked `audioCodec: "opus"`: about 64 kbit/s, a twentieth of PCM's, by AudioToolbox's own
+// encoder); at most 300 ms is kept, the oldest dropped first. Message 8 out says the format once the capture is set up.
 @preconcurrency import ScreenCaptureKit
+import AVFoundation
 import CoreMedia
 import Foundation
 
@@ -23,13 +25,17 @@ final class SystemAudio: NSObject, SCStreamOutput {
   /// A format it cannot take was said (an error, message 8): nothing more.
   private var refused = false
 
-  init(channel: Channel) {
+  /// What makes each packet Opus, for a view that asked it; nil: PCM16 (not asked, or this Mac encodes none).
+  private let encoder: OpusPackets?
+
+  init(channel: Channel, opus: Bool = false) {
     self.channel = channel
+    encoder = opus ? OpusPackets() : nil
   }
 
   /// The format the packets are in (message 8), said before the first.
   func said() {
-    channel.sendJSON(8, ["codec": "pcm_s16le", "sampleRate": SystemAudio.rate, "channels": SystemAudio.channels])
+    channel.sendJSON(8, ["codec": encoder == nil ? "pcm_s16le" : "opus", "sampleRate": SystemAudio.rate, "channels": SystemAudio.channels])
   }
 
   /// One packet asked for (message 9 in): sent now when one is kept, else as one is made.
@@ -55,8 +61,45 @@ final class SystemAudio: NSObject, SCStreamOutput {
     flush()
   }
 
+  /// Made-up sound (a view's `synthetic`): 440 Hz and 1250 Hz on the left, 660 Hz on the right, a packet each 20 ms on
+  /// `now`'s clock (µs), as the capture's would come, until the view goes.
+  func tone(now: @escaping () -> Int64) {
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    var at = 0
+    timer.schedule(deadline: .now(), repeating: .milliseconds(20))
+    timer.setEventHandler { [weak self] in
+      guard let self else { return }
+      var pcm = [Int16](repeating: 0, count: AudioPackets.frames * 2)
+      for i in 0..<AudioPackets.frames {
+        let t = Double(at + i) / Double(SystemAudio.rate)
+        pcm[i * 2] = Int16((sin(2 * .pi * 440 * t) * 0.3 + sin(2 * .pi * 1250 * t) * 0.1) * 32767)
+        pcm[i * 2 + 1] = Int16(sin(2 * .pi * 660 * t) * 0.3 * 32767)
+      }
+      at += AudioPackets.frames
+      self.packets.add(pcm, at: now())
+      self.flush()
+    }
+    timer.resume()
+    toneTimer = timer
+  }
+  private var toneTimer: DispatchSourceTimer?
+
+  /// The view went: no more made-up sound.
+  func end() {
+    queue.sync {
+      toneTimer?.cancel()
+      toneTimer = nil
+    }
+  }
+
   private func flush() {
-    guard wanted, let (ts, data) = packets.pop() else { return }
+    guard wanted, let (ts, pcm) = packets.pop() else { return }
+    var data = pcm
+    if let encoder {
+      // (one in, one out: a packet the encoder gives nothing for is none to send; the next is)
+      guard let encoded = encoder.encode(pcm) else { return }
+      data = encoded
+    }
     wanted = false
     var payload = Data(count: 8)
     var be = UInt64(max(0, ts)).bigEndian
@@ -154,5 +197,51 @@ struct AudioPackets {
 
   mutating func pop() -> (Int64, Data)? {
     queued.isEmpty ? nil : queued.removeFirst()
+  }
+}
+
+/// 20 ms packets of interleaved stereo PCM16 at 48 kHz made into Opus packets of the same 20 ms (RFC 6716), one for
+/// one, by AudioToolbox's encoder at `bitrate`. Nil where this Mac has no such encoder. Used on SystemAudio's queue alone.
+final class OpusPackets {
+  static let bitrate = 64_000
+
+  private let converter: AVAudioConverter
+  private let input: AVAudioPCMBuffer
+  private let format: AVAudioFormat
+
+  init?() {
+    guard let pcm = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(SystemAudio.rate), channels: AVAudioChannelCount(SystemAudio.channels), interleaved: true),
+      let input = AVAudioPCMBuffer(pcmFormat: pcm, frameCapacity: AVAudioFrameCount(AudioPackets.frames))
+    else { return nil }
+    var opus = AudioStreamBasicDescription(
+      mSampleRate: Double(SystemAudio.rate), mFormatID: kAudioFormatOpus, mFormatFlags: 0, mBytesPerPacket: 0,
+      mFramesPerPacket: UInt32(AudioPackets.frames), mBytesPerFrame: 0, mChannelsPerFrame: UInt32(SystemAudio.channels),
+      mBitsPerChannel: 0, mReserved: 0)
+    guard let format = AVAudioFormat(streamDescription: &opus), let converter = AVAudioConverter(from: pcm, to: format) else { return nil }
+    converter.bitRate = OpusPackets.bitrate
+    self.converter = converter
+    self.input = input
+    self.format = format
+  }
+
+  /// One packet's PCM (3840 bytes) as one Opus packet; nil when the encoder gave none for it.
+  func encode(_ pcm: Data) -> Data? {
+    guard pcm.count == AudioPackets.bytes, let samples = input.int16ChannelData?[0] else { return nil }
+    pcm.withUnsafeBytes { raw in _ = raw.copyBytes(to: UnsafeMutableRawBufferPointer(start: samples, count: AudioPackets.bytes)) }
+    input.frameLength = AVAudioFrameCount(AudioPackets.frames)
+    let out = AVAudioCompressedBuffer(format: format, packetCapacity: 1, maximumPacketSize: max(1, converter.maximumOutputPacketSize))
+    var given = false
+    var error: NSError?
+    let status = converter.convert(to: out, error: &error) { _, said in
+      if given {
+        said.pointee = .noDataNow
+        return nil
+      }
+      given = true
+      said.pointee = .haveData
+      return self.input
+    }
+    guard status != .error, error == nil, out.packetCount == 1, out.byteLength > 0 else { return nil }
+    return Data(bytes: out.data, count: Int(out.byteLength))
   }
 }

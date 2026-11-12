@@ -126,7 +126,7 @@ test "a remote screen asks for Display P3 only where the system's video layer sh
 }
 
 ///|
-test "screen system audio negotiates only on a capable host, mutes immediately and stops on pause" {
+test "screen system audio negotiates only on a capable host, mutes immediately, tells the station and stops on pause" {
   let r = screen_rig(w=951.0, h=669.0, platform=1)
   r.t.set_stream_audio(true)
   let s = screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
@@ -141,14 +141,21 @@ test "screen system audio negotiates only on a capable host, mutes immediately a
   assert_true(r.t.stream_fed(st.id()).contains("audio bytes=3840"))
   s.toggle_audio()
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=0")
+  // the station is told to send none while muted, and again once it is not
+  assert_eq(r.told("screen.sound").last().unwrap().stringify(), "{\"view\":\"" + s.view + "\",\"on\":false}")
   let count = r.t.stream_fed(st.id()).length()
   r.say({ "audio": { "ts": 2 } }, bytes=packet)
   assert_eq(r.t.stream_fed(st.id()).length(), count)
   s.toggle_audio()
+  assert_true(r.told("screen.sound").last().unwrap().stringify().contains("\"on\":true"))
   r.say({ "audio": { "ts": 3 } }, bytes=packet)
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=3840")
   s.pause(s.src)
   assert_false(s.audio_ready.get())
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=0")
+  // opened again while muted: asked with its sound off from the start
+  s.toggle_audio()
+  s.open(s.src)
+  assert_true(r.told("screen.view").last().unwrap().stringify().contains("\"sound\":false"))
 }
 
