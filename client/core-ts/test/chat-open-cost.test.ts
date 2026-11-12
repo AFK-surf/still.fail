@@ -12,7 +12,10 @@ import { work, workSince } from "../src/work.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { held } from "./real-size-asked.ts";
 import { CHAT, OPENS, fixture } from "./real-size.ts";
-import { base as answersOf, entries, started, threadView } from "./station-fixture.ts";
+import { base as answersOf, entries, started, status, threadView } from "./station-fixture.ts";
+import { Core } from "../src/core.ts";
+import { EVICT_AFTER_MS } from "../src/store.ts";
+import { HostWire } from "../src/station/wire.ts";
 import { setup, ui } from "./views-rig.ts";
 
 holdLanguage();
@@ -291,4 +294,73 @@ test("a_chat_told_its_window_opens_still_at_what_is_unread_and_where_it_was_left
   assert.deepEqual(await opened(30, 120, 0, 40), [1, 89, 40], "where it was left");
   assert.deepEqual(await opened(30, 120, 0, 40), await opened(null, 120, 0, 40));
   assert.deepEqual(await opened(30, 120, 0, null), [91, 120, null], "at its end, the count");
+});
+
+test("a_chats_opening_reads_of_its_log_what_its_window_shows_and_a_page_told_grows_by_what_it_is_asked", async () => {
+  // Its window found as many of its messages as it was told by reading back 60 entries of its log (max(rows*2, PAGE)),
+  // more than the untold page read (50): it reads back a step of `rows` at a time, a further one only while fewer
+  // messages were found, and a window grown by `rows` reads those alone, where the device holds them.
+  const answers = answersOf();
+  answers["GET /threads"] = [threadView(7, 300)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 300, entries: entries(251, 300) };
+  for (let from = 1; from <= 201; from += 50) answers[`GET /threads/7/entries?from=${from}&to=${from + 49}`] = { last: 300, entries: entries(from, from + 49) };
+  const first = await started(answers);
+  await first.host.time.pass(500);
+  assert.equal(first.core.inner.data.logSpan("entry", "ws/st", "7")?.count, 300);
+  await first.core.close();
+  // (a core started again on what the device holds, its station not reached: its log read from the database)
+  const opened = async (rows: number | null) => {
+    const core = await Core.create(first.host, { clock: first.host.time.clock, sample: 0, wire: () => new HostWire(first.host) });
+    await first.host.time.pass(500);
+    const client = core.connect();
+    const values = new Map();
+    const before = { ...work };
+    if (rows !== null) call(core, client, 9, "chat.window", { station: "ws/st", thread: 7, rows });
+    subscribe(core, client, 1, parseTopic({ topic: "chat", station: "ws/st", thread: 7, compact: true })!);
+    await first.host.settle();
+    apply(first.host, values);
+    const read = workSince(before).logRows;
+    const shown = v(values, 1).messages.length;
+    const grow = { ...work };
+    call(core, client, 2, "chat.older", { station: "ws/st", thread: 7, ...(rows !== null ? { rows: 20 } : {}) });
+    await first.host.time.pass(100);
+    apply(first.host, values);
+    const grown = [v(values, 1).messages.length, workSince(grow).logRows];
+    await core.close();
+    return { shown, read, grown };
+  };
+  for (const k of Object.keys(answers)) if (k.startsWith("GET /threads/7/entries")) answers[k] = status(502, { error: "busy" });
+  const untold = await opened(null);
+  const told = await opened(30);
+  assert.deepEqual([untold.shown, untold.read, untold.grown], [50, 50, [100, 50]]);
+  assert.deepEqual([told.shown, told.read, told.grown], [30, 30, [50, 20]], "its log read for what it shows, and for the 20 it grows by");
+});
+
+test("a_chat_let_go_of_and_asked_again_untold_opens_on_its_untold_page", async () => {
+  // What a chat's page told of its first window is let go of with it (views.ts Views `stop`): asked again with nothing
+  // told, it opens as untold.
+  const answers = answersOf();
+  answers["GET /threads"] = [threadView(7, 120)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+  answers["GET /threads/7/entries?from=21&to=70"] = { last: 120, entries: entries(21, 70) };
+  answers["GET /threads/7/entries?from=1&to=20"] = { last: 120, entries: entries(1, 20) };
+  const { host, core } = await started(answers);
+  await host.time.pass(500);
+  const client = core.connect();
+  const values = new Map();
+  const topic = parseTopic({ topic: "chat", station: "ws/st", session: "k1", compact: true })!;
+  call(core, client, 9, "chat.window", { station: "ws/st", session: "k1", rows: 30 });
+  subscribe(core, client, 1, topic);
+  await host.settle();
+  apply(host, values);
+  const told = v(values, 1).messages.length;
+  core.receive(client, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  // (let go of by the core once nothing has asked it a while, the chat and then the thread it watched: within it,
+  // asked again, it is the same)
+  await host.time.pass(3 * EVICT_AFTER_MS, 1000);
+  subscribe(core, client, 2, topic);
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([told, v(values, 2).messages.length], [30, 50]);
+  core.close();
 });

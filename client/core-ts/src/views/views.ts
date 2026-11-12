@@ -70,6 +70,12 @@ const u64 = (v: J): number | null => (typeof v === "number" && Number.isInteger(
 const sharedOrCopied = (v: J): J => v !== null && typeof v === "object" && Object.isFrozen(v) ? v : structuredClone(v);
 
 const DAY_MS = 86_400_000;
+/// A chat's key among the first windows told (Views `setChatWindow`): its station, and its thread or its agent's
+/// session as its page names it.
+function chatWindowKey(station: string, thread: number | null, session: string | null): string {
+  return `${station}\u0001${thread ?? ""}\u0001${session ?? ""}`;
+}
+
 /// How many of a chat list's rows go out while it has not been told its window (`chats.window`, Views `chatsWindow`):
 /// what a page showed of it first before the app said how many it shows (only tests and replays of old runs ask so).
 export const WINDOW_UNTOLD = 50;
@@ -977,6 +983,8 @@ export class Views implements Owner {
     this.#views.delete(key);
     // (nothing holds the list any more: told again as it is asked again)
     if (view.topic === "chats") this.#windows.delete(windowKey(view));
+    // (nor the chat: its page tells its first window again before it asks it again)
+    if (view.topic === "chat") this.#chatWindows.delete(chatWindowKey(String(view.station), u64(view.thread), str(view.session) ?? null));
     if (view.topic === "chat") for (const k of [...this.#steadied.keys()]) if (k.startsWith(`shown\u0001${String(view.station)}\u0001`)) this.#steadied.delete(k);
     for (const w of live?.watches.values() ?? []) w.drop();
   }
@@ -3343,7 +3351,7 @@ export class Views implements Owner {
   /// told before the chat is asked; it asks more before them as less than a screen of them is above what shows
   /// (`chat.older` with its `rows`).
   setChatWindow(station: string, thread: number | null, session: string | null, rows: number): void {
-    this.#chatWindows.set(`${station}\u0001${thread ?? ""}\u0001${session ?? ""}`, rows);
+    this.#chatWindows.set(chatWindowKey(station, thread, session), rows);
   }
 
   /// How many of chat list `list`'s rows go out (`chatsWindow`'s): as it was told, WINDOW_UNTOLD where it was not.
