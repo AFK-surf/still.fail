@@ -22,8 +22,8 @@ export const CHAIN_MOST = 1024;
 /// kept every branch.
 export const AT_ODDS = "this device brought a lock at odds with the one its person has here";
 
-/// The kinds of a workspace's statements, which the rules' chain takes (`person_chain`) and `personFold` refuses until
-/// every station takes them (rules/src/lock/person.mbt `fold_person`): refused here as they were.
+/// Round three's statements of a workspace in the clear, which no log ever carried and the rules refuse now
+/// (rules/src/lock/person.mbt `fold_person`: a workspace's statement is a commitment, `ws`): refused here as they were.
 const STATEMENTS = new Set(["ws.member", "ws.member.remove", "ws.station", "ws.station.remove"]);
 
 /// Whose a chain is: its entries name the person's lock (`person:<sub>`).

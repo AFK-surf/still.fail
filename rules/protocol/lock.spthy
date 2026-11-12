@@ -19,7 +19,10 @@
  * with no device taken every key in the lock is a device's own, and a vault's key sealed to one is learned by no one
  * else (sealed_to_certified, vault_key_secret).
  * What is not: roles and who may sign which entry (proved in rules/src/role), entries taking devices or members out,
- * versions and epochs (rules/src/history), passkeys, the cryptography itself (perfect here).
+ * versions and epochs (rules/src/history), passkeys, the cryptography itself (perfect here), and the handover
+ * (`moved {root}`, 2026-11-13: an owner's, after which the chain takes nothing; it puts no key in the lock, so no lemma
+ * here is about it). Unproved, then: that the person log a station goes by after a `moved` is the one an owner's own
+ * device named.
  *
  * tamarin-prover --prove rules/protocol/lock.spthy   (CI: .github/workflows/rules.yml `protocol`)
  */

@@ -309,6 +309,9 @@ type X = {
   reuse: Body | undefined;
 };
 const XS = new WeakMap<World3, X>();
+/// What holds the rules to this model (rules-fork-check.ts) looks at: where set, called with the world at the points
+/// of the scripted worlds below that it names, and the bodies offered there that no keeper keeps (M2). Unset, nothing.
+export const look4: { at: ((w: World4, where: string, offered?: Body[]) => void) | null } = { at: null };
 /// The options of the world being made: round three's constructor makes the setup before a subclass's constructor can
 /// keep them.
 let making: W4Options = {};
@@ -1245,6 +1248,7 @@ export function m2(seed: number): M2Out {
   }
   out.why = w.x.refused;
   w.x.refused = before;
+  look4.at?.(w, `m2 seed ${seed}`, offers.map(([, b]) => b));
   return out;
 }
 
@@ -1332,12 +1336,14 @@ export function m5Clock(seed: number, skew: number, webAt: boolean): M5Clock {
   const exp = w.t + 1 + WEB_DEVICE_SECS;
   w.sign(A, "web", { id: webKey("alice").hex, label: "alice's browser", exp });
   w.level();
+  look4.at?.(w, `m5 skew ${skew}, a web device on`);
   const lets = (id: string) => w.stations.filter((h) => w.websAt(h, A.log).includes(id)).length;
   const now = w.t;
   const at: [number, number][] = [];
   for (const off of [-2 * skew - 1, -Math.ceil(skew / 2), Math.ceil(skew / 2), 2 * skew + 1]) {
     w.t = exp + off;
     at.push([off, lets(webKey("alice").hex)]);
+    look4.at?.(w, `m5 skew ${skew}, at exp ${off >= 0 ? "+" : ""}${off} s`);
   }
   w.t = now;
   w.sign(P, "web.remove", { id: webKey("alice").hex });
@@ -1348,6 +1354,7 @@ export function m5Clock(seed: number, skew: number, webAt: boolean): M5Clock {
   w.level();
   w.sign(A, "device.remove", { key: P.signer.id });
   w.level();
+  look4.at?.(w, `m5 skew ${skew}, taken off, and put on by a device taken off since`);
   const signerGone = lets(bob);
   const lifeDays = (e.body.exp - e.at) / DAY;
   const far = w.t + 10 * 365 * DAY;
@@ -1356,6 +1363,7 @@ export function m5Clock(seed: number, skew: number, webAt: boolean): M5Clock {
   if (farTaken) w.receive(A.h, [fe]), w.level();
   const start = w.t;
   const farNow = lets(webKey("dan").hex);
+  look4.at?.(w, `m5 skew ${skew}, dated ten years ahead`);
   // a station at the middle clock, sampled every day from now until it ran out: the days it counted
   const mid = w.stations[1];
   let farDays = 0;
@@ -1406,8 +1414,10 @@ export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any
   const inForce = (h: Holder) => kind === "web" ? w.websAt(h, A.log).includes(ROGUE_WEB.hex) : w.d4(h) === "off";
   w.reach(e!, [cut, ...(seed % 2 === 1 ? [w.devs[w.rng.int(w.devs.length)].h] : [])]);
   const before = w.stations.filter(inForce).length;
+  look4.at?.(w, `revoked ${kind} ${parent} seed ${seed}, before the sync`);
   w.note(`${cut.name} is back: every keeper syncs with every other`);
   w.level();
+  look4.at?.(w, `revoked ${kind} ${parent} seed ${seed}, after it`);
   const end = w.stations.filter(inForce).length;
   const differ = new Set(w.comparable().map((h) => w.stateSaid(h))).size > 1;
   const letGo = w.stations.filter((h) => !w.pinsOf(h).has(WS)).length;
@@ -1433,6 +1443,7 @@ export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any
   const recovered = kind === "web" || (typeof d0 !== "string" && d0.on === "on" && new Set(ks.map((h) => w.stateSaid(h))).size === 1 &&
     [...d0.members.keys()].sort().join() === [...baseList.members.keys()].sort().join() && d0.stations.join() === [...baseList.stations].sort().join());
   const why = recovered ? [] : d4Diff(base4, d0).filter((d) => !d.startsWith("apps "));
+  look4.at?.(w, `revoked ${kind} ${parent} seed ${seed}, at the end`);
   return { before, end, differ, letGo, steps, recovered, log: w.log, why };
 }
 
@@ -1453,10 +1464,12 @@ export function m6(seed: number, offFinal = false): M6Out {
   w.sign(B, "ws.off", { ws: WS });
   w.level();
   const notRootChanged = w.holders.filter((h, i) => w.stateSaid(h) !== before[i]).length;
+  look4.at?.(w, `m6 seed ${seed}, bob's open and off`);
   const keepers = w.comparable();
   w.sign(A, "ws.off", { ws: WS });
   w.level();
   const offAt = keepers.filter((h) => w.d4(h) === "off").length;
+  look4.at?.(w, `m6 seed ${seed}, alice's off`);
   const letGo = keepers.filter((h) => !w.pinsOf(h).has(WS)).length;
   for (let i = 0; i < 20; i++) w.send(w.holders[w.rng.int(w.holders.length)], w.holders[w.rng.int(w.holders.length)]);
   w.finish();
@@ -1471,6 +1484,7 @@ export function m6(seed: number, offFinal = false): M6Out {
   }
   w.level();
   const onAgain = keepers.filter((h) => w.d4(h) !== "off" && (w.d4(h) as D4).on === "on").length;
+  look4.at?.(w, `m6 seed ${seed}, on again`);
   return { keepers: keepers.length, offAt, letGo, steps, onAgain, sameList: keepers.every((h) => w.stateSaid(h) === base), notRootChanged, log: w.log };
 }
 
@@ -1572,9 +1586,11 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
   w.level(skip);
   const now = w.t;
   const before = d4Old(S, A.log, now + 1);
+  look4.at?.(w, `m7 seed ${seed}, said again in alice's log`);
   const moved = old(A, "moved", () => ({ root: A.log }))!;
   for (const h of w.holders) if (!skip.has(h)) w.takeOld(h, [moved]);
   w.level(skip);
+  look4.at?.(w, `m7 seed ${seed}, moved`);
   if (o.attack && removal) {
     const P = phone("alice");
     const fake = w.genesis({ ...ACCOMPLICE[0], sub: "alice", name: "a log of the revoked key's" });
@@ -1591,6 +1607,7 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
     w.takeOld(to, branch);
     w.levelOld(skip);
     w.level(skip);
+    look4.at?.(w, `m7 seed ${seed}, a second moved`);
   }
   if (o.away) {
     w.note(`${cut.name} is back`);
@@ -1598,6 +1615,7 @@ export function m7(seed: number, o: { away?: boolean; attack?: "same" | "any"; r
     w.level();
   }
   w.t = now + 2;
+  look4.at?.(w, `m7 seed ${seed}, at the end`);
   const roots = w.holders.map((h) => w.pinsOf(h).get(WS) ?? null);
   // compared: the keepers the workspace has after it (its stations, its members' devices: who is given its bodies)
   const listed = new Set(w.comparable());

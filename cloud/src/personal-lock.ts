@@ -34,7 +34,7 @@ export function extendPersonal(sub: string, kept: PersonalEntry[], raw: unknown)
 /** A person's lock as kept: its chain gone by (what every reader reads), and the entries off it. */
 export type PersonalKept = { entries: PersonalEntry[]; aside: PersonalEntry[] };
 
-/** The kinds of a workspace's statements, refused as personFold refuses them (station/src/mesh/person-chains.ts). */
+/** Round three's statements of a workspace in the clear, refused as personFold refuses them (station/src/mesh/person-chains.ts). */
 const STATEMENTS = new Set(["ws.member", "ws.member.remove", "ws.station", "ws.station.remove"]);
 
 /**

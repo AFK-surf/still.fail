@@ -11,7 +11,11 @@
  *     device signs workspaces' locks with is taken of the same entry (as a device of the person's putting it in a
  *     workspace's lock takes it: the same check).
  * What is not: that the device binding is its person's own (proved in rules/src/role, `binds`), a device taken off a lock,
- * the cryptography itself (perfect here).
+ * the cryptography itself (perfect here). Nor the kinds a device on a lock signs beside its devices (2026-11-13,
+ * rules/src/lock/person.mbt): a web device (`web`, `web.remove`: an id that signs nothing, so no lemma here, all of
+ * them about keys a station takes along the chain, is about it) and a workspace's commitment (`ws`). Unproved, then:
+ * that a web device a station lets in is one a device on the lock put on (the same check of the signer as a key's),
+ * and that a body a keeper takes is the one its signer committed to.
  *
  * tamarin-prover --prove rules/protocol/person.spthy   (CI: .github/workflows/rules.yml `protocol`)
  */
