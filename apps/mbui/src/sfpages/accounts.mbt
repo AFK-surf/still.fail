@@ -69,9 +69,17 @@ pub fn profile_node(
 ) -> Unit {
   let s = fn() { @settings.station_of(core, here(), address) }
   let o = fn() { field(s(), "overview") }
-  // (0 read the first time, 1 its profile there, 2 none of that id)
+  // (shown in a pane by a press that asked what it reads (sfbase's show_answered): what it asked let go once this first
+  // build has read it)
+  @sfbase.shown_read(@sfbase.profile_shown_at(address, id))
+  // (0 read the first time, 1 its profile there, 2 none of that id; the account it is, its own ask, answered too: the
+  // page opens whole, its stations' block with it. Opened from a list, it opens once both are answered and never shows
+  // this: a link straight to it may)
   let found = fn() {
-    if !(o() is Some(Object(_))) {
+    // (both read every time, so both are asked at once whichever comes first; its press waits for both before it
+    // opens it: sfbase's account_open.mbt)
+    let account = @settings.profile_read(core, here(), address, id).value
+    if !(o() is Some(Object(_))) || account is None {
       0
     } else if items(o(), "profiles").iter().any(fn(p) { text(Some(p), "id") == id }) {
       1
@@ -148,17 +156,8 @@ fn profile_found_node(
       None => None
     }
   }
-  // its row of the workspace's list: the account it is, on whichever stations have it
-  let entry = fn() -> Json? {
-    let list = items((core.topic)("profiles", { "scope": str(here().workspace) }).get().value, "items")
-    match
-      list.search_by(fn(e) {
-        items(Some(e), "members").iter().any(fn(m) { text(Some(m), "station") == address && text(Some(m), "profileId") == id })
-      }) {
-      Some(i) => Some(list[i])
-      None => None
-    }
-  }
+  // the account it is, on whichever stations have it: its own topic (`profile`), never the workspace's list
+  let entry = fn() -> Json? { @settings.profile_of(core, here(), address, id) }
   let open = profile_open()
   @sf.page_node(
     v,

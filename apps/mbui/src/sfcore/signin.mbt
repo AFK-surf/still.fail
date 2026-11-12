@@ -529,6 +529,12 @@ pub let trace_switches : Array[String] = [
   // old way gone from it, so only the replay reads it: a trace without it has the app's marks answered by its run's,
   // asked of the workspace then shown (@core.Replay's twin topics))
   "MBUI_MARKS_ONE",
+  // (an account a row each in the accounts' list, the core's ProfileRow, and one account whole its pages' own ask,
+  // `profile` (by its key, or by a station's profile of it): what the app asks since the list stopped taking each
+  // account with its members, places, stations and allowance's resets. Like MBUI_CONNECT_ROWS the app does not branch
+  // on it, its old way (one account read out of `profiles`' whole items) gone from it, so only the replay reads it: a
+  // trace without it has the app's rows and `profile` read out of its run's `profiles {scope}` (src/sfreplay/source.mbt))
+  "MBUI_PROFILE_ROWS",
 ]
 
 ///|

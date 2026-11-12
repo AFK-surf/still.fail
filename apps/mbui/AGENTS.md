@@ -224,7 +224,12 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   field a row lacks is the core's to add, not the list's to ask whole. Connects the same: a list their rows
   (`connects`), a connect's page that connect (`@settings.connect_of`), and a single-session connect's page, while its
   更换 row shows, what its choice of a session lists (`connectCandidates`), so that choice opens whole; nothing else
-  asks it.
+  asks it. Accounts the same: a list their rows (`profiles`, whose `several` and `usedCount` the core counts), an
+  account's pages that account whole (`profile`: `@settings.profile_read` by a station's profile of it,
+  `@settings.profile_by_key_read` by its key), and a press opens it only once what it shows is
+  answered, the screen as it was meanwhile (sfbase's `open_answered` and `show_answered`, through `press_wait`, what
+  the press asked handed to the page it opens: `hand_over`, `hand_over_shown`;
+  `src/sfapp/account_open_wbtest.mbt`), so it never opens on its bones.
 - A call whose answer nobody reads gives none to read it (`@core.call` with no `on_done`; a source's call
   `answer_unread`, sfbase's `source.mbt`): its answer is taken as it comes, awaited by nothing, building nothing. An
   empty `on_done` is no reader's and is refused (detlint's `empty-on-done`; the coordinator of the migration,
@@ -236,7 +241,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   the switch is the replay's alone, which gives the new asks out of what the trace has: without `MBUI_STATION_ROWS` the
   run's `stations` are kept by the replay (`@core.Replay::keep_stations`) and the rows, a station and its parts read
   out of them; without `MBUI_CONNECT_ROWS` one connect and its choice's sessions are read out of the run's `connects
-  {scope, mine:false}` (`src/sfreplay/source.mbt`).
+  {scope, mine:false}`, without `MBUI_PROFILE_ROWS` the accounts' rows and one account out of the run's `profiles
+  {scope}` (`src/sfreplay/source.mbt`).
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture

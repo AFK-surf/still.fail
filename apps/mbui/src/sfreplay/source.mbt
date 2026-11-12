@@ -144,6 +144,33 @@ fn connects_whole() -> Bool {
 }
 
 ///|
+/// Whether this Tester's run read one account off the accounts whole (its trace's head without MBUI_PROFILE_ROWS): the
+/// list's items were each account whole then, its pages reading theirs out of `profiles {scope}` at the same moments;
+/// here the list's rows (@settings.profiles_rows) and the app's `profile` (@settings.profile_said) are read out of that,
+/// as the core makes them.
+fn profiles_whole() -> Bool {
+  !@sfcore.trace_switch("MBUI_PROFILE_ROWS")
+}
+
+///|
+/// The accounts whole followed for the app's `profile` and `profiles` in such a run: `profiles {scope}`.
+fn profiles_params(params : Map[String, Json]) -> Map[String, Json] {
+  stations_params(params)
+}
+
+///|
+/// A scope's accounts whole followed for the app's topic `name` with `params` (follow_whole).
+fn follow_profiles(name : String, params : Map[String, Json]) -> @core.Sub {
+  follow_whole("profiles", profiles_params(params), name, params)
+}
+
+///|
+/// The app's `profile` with `params` read out of the run's accounts whole (profiles_whole).
+fn profile_made(params : Map[String, Json]) -> @sfapp.Topic {
+  made_once("profile", params, follow_profiles("profile", params), None, fn(all, _) { @settings.profile_said(all, params) })
+}
+
+///|
 /// Whether this Tester's run read a chat's whole row off the chats' list (its trace's head without MBUI_CHAT_ROW): its
 /// list's rows were whole then, so the app's `chatRow {station, session}` is that chat's row of the run's `chats` list
 /// of its workspace (all of its chats, as the app asks it now: @sfbase.chats_asked), null where it has none such
@@ -362,11 +389,18 @@ fn stations_made(name : String, params : Map[String, Json], stations : @core.Sub
           Some(Object(o)) if !o.contains("slackApps") => @settings.connects_of_stations(own_value, all)
           v => v
         }
-      "profiles" =>
-        match own_value {
+      "profiles" => {
+        let v = match own_value {
           Some(Object(o)) if !o.contains("machineLogins") => @settings.profiles_of_stations(own_value, all)
           v => v
         }
+        // (and a row each, where its items were whole: profiles_whole)
+        if profiles_whole() {
+          @settings.profiles_rows(v)
+        } else {
+          v
+        }
+      }
       _ => None
     }
   })
@@ -404,13 +438,22 @@ pub fn source() -> @sfapp.Source {
       if connects_whole() && of_connects(name) {
         return connects_made(name, params, follow_connects(name, params))
       }
+      if profiles_whole() && name == "profile" {
+        return profile_made(params)
+      }
       let s = if connects_whole() && is_all_connects(name, params) {
         follow_connects(name, params)
+      } else if profiles_whole() && name == "profiles" {
+        follow_profiles(name, params)
       } else {
         @core.follow_topic(name, params=replay_topic_params(name, params))
       }
       if stations_whole() && with_stations(name) {
         return stations_made(name, params, follow_stations(name, params), Some(s))
+      }
+      // (the accounts whole of such a run, a row each)
+      if profiles_whole() && name == "profiles" {
+        return made_once(name, params, s, None, fn(v, _) { @settings.profiles_rows(v) })
       }
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
@@ -426,6 +469,8 @@ pub fn source() -> @sfapp.Source {
         follow_stations(name, params).waiting
       } else if connects_whole() && of_connects(name) {
         follow_connects(name, params).waiting
+      } else if profiles_whole() && name == "profile" {
+        follow_profiles(name, params).waiting
       } else {
         @core.follow_topic(name, params=replay_topic_params(name, params)).waiting
       }
@@ -437,6 +482,8 @@ pub fn source() -> @sfapp.Source {
         @core.client.topic_generation("stations", params=stations_params(params))
       } else if connects_whole() && of_connects(name) {
         @core.client.topic_generation("connects", params=connects_params(params))
+      } else if profiles_whole() && name == "profile" {
+        @core.client.topic_generation("profiles", params=profiles_params(params))
       } else {
         @core.client.topic_generation(name, params=replay_topic_params(name, params))
       }
@@ -560,6 +607,11 @@ pub fn source() -> @sfapp.Source {
         leave_whole("connects", connects_params(params), name, params)
         return
       }
+      // (one account, or the accounts whole it is read out of: left once none of them holds those)
+      if profiles_whole() && (name == "profile" || name == "profiles") {
+        leave_whole("profiles", profiles_params(params), name, params)
+        return
+      }
       @core.leave_topic(name, params=replay_topic_params(name, params)) },
     release: fn(name, params) {
       if chat_rows_listed() && name == "chatRow" {
@@ -576,6 +628,10 @@ pub fn source() -> @sfapp.Source {
         @core.release_topic("connects", params=connects_params(params))
         return
       }
+      if profiles_whole() && name == "profile" {
+        @core.release_topic("profiles", params=profiles_params(params))
+        return
+      }
       @core.release_topic(name, params=replay_topic_params(name, params))
     },
     refresh: fn(name, params) {
@@ -585,6 +641,8 @@ pub fn source() -> @sfapp.Source {
         @core.refresh_topic("stations", params=stations_params(params))
       } else if connects_whole() && of_connects(name) {
         @core.refresh_topic("connects", params=connects_params(params))
+      } else if profiles_whole() && name == "profile" {
+        @core.refresh_topic("profiles", params=profiles_params(params))
       } else {
         @core.refresh_topic(name, params=replay_topic_params(name, params))
       }

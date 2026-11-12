@@ -170,7 +170,8 @@ fn drawn_names() -> Array[String] {
 }
 
 ///|
-/// Three places with the same account status: the current station, a link, and one still waiting for a profile.
+/// Three places with the same account status: the current station, a link, and one still waiting for a profile (the
+/// account's own topic, `profile`, which its page reads them of).
 fn alignment_places(s : Source) -> Source {
   fn shaped(v : Json) -> Json {
     match v {
@@ -201,7 +202,7 @@ fn alignment_places(s : Source) -> Source {
     ..s,
     topic_read: fn(name, params) {
       let v = s.topic(name, params).get().snapshot()
-      if name == "profiles" {
+      if name == "profile" {
         match v.value {
           Some(x) => { ..v, value: Some(shaped(x)) }
           None => v

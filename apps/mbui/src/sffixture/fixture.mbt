@@ -1104,7 +1104,11 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
       let all = fixture_topic_inner(f, "connects", { "scope": Json::string(text(p, "scope")), "mine": Json::boolean(false) })
       @settings.connect_said(all, text(p, "station"), text(p, "id"), name == "connectCandidates")
     }
-    "profiles" => @settings.profiles_of_stations(value, wholes())
+    // (the accounts a row each and `profile` one whole, of the accounts whole the made-up cores describe: the settings'
+    // fixture_profiles.mbt)
+    "profiles" => @settings.profiles_rows(@settings.profiles_of_stations(value, wholes()))
+    "profile" =>
+      @settings.profile_said(fixture_topic_inner(f, "profiles", { "scope": Json::string(text(Some(Json::object(params)), "scope")) }), params)
     "chat" if f.mode.has_prefix("chat-opened") && params.get("session") is Some(String("s-c1")) =>
       fixture_with_tabs(f, params, with_opened(value))
     "chat" if f.mode.has_prefix("chat-opener") && params.get("session") is Some(String("s-c1")) =>

@@ -1008,7 +1008,7 @@ const profile = (id: string, runtime: string, models: string[], checked: boolean
   quota: { state: "ok", windows: [{ label: "5 小时", usedPercent: used, resetsAt: null }], detail: null, checkedAt: 1 }, ...extra,
 });
 
-test("the profiles topic gives the app each station once when it has two copies", async () => {
+test("an account's topic gives the app each station once when it has two copies", async () => {
   const email = "same@x.com";
   const profiles = [
     profile("signed", "codex", [], true, 0, { email }),
@@ -1018,9 +1018,11 @@ test("the profiles topic gives the app each station once when it has two copies"
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "profiles", scope: "ws" });
+  subscribe(core, ui, 2, { topic: "profile", scope: "ws", key: `sub:codex:${email}` });
   await host.settle();
   apply(host, values);
-  const row = v(values, 1).items[0];
+  assert.equal(v(values, 1).items.length, 1, "one row");
+  const row = v(values, 2);
   assert.equal(row.members.length, 2);
   assert.deepEqual(row.places.map((p: J) => [p.station, p.profileId, p.usable]), [["ws/st", "signed", true]]);
   core.close();

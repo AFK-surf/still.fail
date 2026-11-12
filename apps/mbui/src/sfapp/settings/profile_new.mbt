@@ -117,8 +117,12 @@ pub fn start_login(core : Core, station : String, n : NewProfile, runtime : Stri
 /// leading to its page there.
 fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> Unit {
   let t = @sf.theme()
-  let topic = (core.topic)("profiles", { "scope": str(here.workspace) }).get()
-  let e = items(topic.value, "items").iter().find_first(fn(x) { text(Some(x), "key") == key })
+  // (that account alone, whole: its own topic, by its key; null where the workspace has it no more)
+  let topic = profile_by_key_read(core, here, key)
+  let e = match topic.value {
+    Some(Object(_)) as x => x
+    _ => None
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     match e {
       None => {
@@ -141,8 +145,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
           )
         }
       }
-      Some(ev) => {
-        let ev = Some(ev)
+      Some(_) as ev => {
         let p = field(ev, "profile")
         nav_bar(c, core, "Profile", text(p, "name"), sub=fn() {
           c.text(

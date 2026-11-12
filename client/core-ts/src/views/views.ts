@@ -83,7 +83,7 @@ export const WINDOW_UNTOLD = 50;
 /// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
 /// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
 /// does not offer it.)
-const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them.
@@ -1196,6 +1196,9 @@ export class Views implements Owner {
         break;
       case "chatJobs":
         return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) }];
+      // (one account: of the workspace's profiles, which follow its stations)
+      case "profile":
+        return [{ topic: "profiles", scope: view.scope }];
       // (an image of a chat steps through all of its, as far as it is on the device: its `letters`, all its entries)
       case "imageNear":
         return [
@@ -1651,6 +1654,8 @@ export class Views implements Owner {
       case "profiles": {
         return this.#profilesView(view.scope as string);
       }
+      case "profile":
+        return this.#profileOf(view);
       case "settings": {
         // Each station's name, whether it is up and its overview: what the settings say of them, not their pages.
         const stations = this.#stationsOr(view.scope as string);
@@ -2738,6 +2743,20 @@ export class Views implements Owner {
       return logins.length > 0 ? [{ station: s.address, stationName: s.name, logins }] : [];
     });
     return { ok: { ...listed, machineLogins } };
+  }
+
+  /// One account of a workspace (`profile`): its entry of the workspace's profiles as the core holds them whole (the
+  /// list sends each its row, ProfileRow), found by its key, or by a profile of it on a station (any of its members);
+  /// null where none is.
+  #profileOf(view: Topic): Value | undefined {
+    const all = this.value({ topic: "profiles", scope: view.scope });
+    if (all === undefined || "err" in all) return all;
+    const key = str(view.key);
+    const station = str(view.station);
+    const id = str(view.id);
+    const found = arr(get(all.ok, "items")).find((e) =>
+      key !== null ? get(e, "key") === key : arr(get(e, "members")).some((m) => get(m, "station") === station && get(m, "profileId") === id));
+    return { ok: found ?? null };
   }
 
   /// Which of a workspace's stations the viewer may change the mode of, as the cloud has it (cloud/src/directory.ts

@@ -188,9 +188,40 @@ test("profiles_keep_their_names_and_online_state_current", async () => {
   t.set(overview("ws/st"), overviewOf([], [profile("p1", { name: "New" })]));
   await t.read(u, 1);
   assert.equal(u.value.items[0].title, "New");
+  // (where each of its stations is up, its own page's: the row says only where it is, `where`)
+  const one = ui();
+  t.subscribe(2, { topic: "profile", scope: "ws", station: "ws/st", id: "p1" });
+  await t.read(one, 2);
+  assert.equal(u.value.items[0].members, undefined, "the list's row holds no members");
+  assert.equal(one.value.members[0].online, true);
   t.set(link("ws/st"), { state: "offline" });
-  await t.read(u, 1);
-  assert.equal(u.value.items[0].members[0].online, false);
+  await t.readAll([[u, 1], [one, 2]]);
+  assert.equal(one.value.members[0].online, false);
+  assert.equal(one.value.key, u.value.items[0].key);
+});
+
+test("an_accounts_row_is_what_the_list_draws_and_its_pages_ask_it_whole", async () => {
+  // The list's rows (ProfileRow): whether it is signed in on several stations, how many use it, made by the core; the
+  // rest of an account (its members, its check's detail, its allowance's resets) is its own topic's, asked by its key
+  // or by one station's profile of it.
+  const t = setup();
+  const [list, byKey, byStation, none] = [ui(), ui(), ui(), ui()];
+  const ada = { email: "ada@x.com", check: { state: "ok", detail: "可用", checkedAt: 1 } };
+  t.set(workspace(), { id: "ws", stations: [{ id: "a", name: "alpha", last_seen: null, version: null }, { id: "b", name: "beta", last_seen: null, version: null }] });
+  t.set(overview("ws/a"), overviewOf([], [profile("pa", { ...ada, usedBy: ["k1", "k2"] }), profile("solo")]));
+  t.set(overview("ws/b"), overviewOf([], [profile("pb", ada)]));
+  t.subscribe(1, { topic: "profiles", scope: "ws" });
+  t.subscribe(2, { topic: "profile", scope: "ws", key: "sub:claude:ada@x.com" });
+  t.subscribe(3, { topic: "profile", scope: "ws", station: "ws/b", id: "pb" });
+  t.subscribe(4, { topic: "profile", scope: "ws", station: "ws/b", id: "gone" });
+  await t.readAll([[list, 1], [byKey, 2], [byStation, 3], [none, 4]]);
+  const row = list.value.items.find((x: J) => x.key === "sub:claude:ada@x.com");
+  const solo = list.value.items.find((x: J) => x.key === "ws/a/solo");
+  assert.deepEqual([row.several, row.usedCount, solo.several, solo.usedCount], [true, 2, false, 0]);
+  assert.deepEqual([row.members, row.profile.check, row.profile.email], [undefined, undefined, undefined], "a row holds only what it draws");
+  assert.deepEqual(byKey.value, byStation.value, "the same account by its key or by a station's profile of it");
+  assert.deepEqual([byKey.value.key, byKey.value.members.length, byKey.value.profile.check.detail], ["sub:claude:ada@x.com", 2, "可用"]);
+  assert.equal(none.value, null, "a profile no station has: none");
 });
 
 test("profiles_follow_the_data_they_read_without_manual_invalidation", async () => {
@@ -1817,10 +1848,10 @@ test("a_stations_words_about_time_follow_the_minute_watched_or_asked_anew", asyn
   const ago = () => format.relativeTime(now - 30_000, t.host.nowMs(), 0);
   const [page, profiles] = [ui(), ui()];
   t.subscribe(1, { topic: "station", scope: "ws", station: "ws/a" });
-  t.subscribe(2, { topic: "profiles", scope: "ws" });
+  t.subscribe(2, { topic: "profile", scope: "ws", station: "ws/a", id: "p" });
   const said = async () => {
     await t.readAll([[page, 1], [profiles, 2]]);
-    return [page.value.overview.profiles[0].quota.time.checkedAt.ago, profiles.value.items[0].profile.quota.time.checkedAt.ago];
+    return [page.value.overview.profiles[0].quota.time.checkedAt.ago, profiles.value.profile.quota.time.checkedAt.ago];
   };
   assert.deepEqual(await said(), [ago(), ago()]);
   assert.equal(ago(), words("core-logic.format.ago.now"));
@@ -1834,10 +1865,10 @@ test("a_stations_words_about_time_follow_the_minute_watched_or_asked_anew", asyn
   await t.host.time.pass((EVICT_AFTER_MS * 5) / 4, 1000);
   const [page2, profiles2] = [ui(), ui()];
   t.subscribe(3, { topic: "station", scope: "ws", station: "ws/a" });
-  t.subscribe(4, { topic: "profiles", scope: "ws" });
+  t.subscribe(4, { topic: "profile", scope: "ws", station: "ws/a", id: "p" });
   await t.readAll([[page2, 3], [profiles2, 4]]);
   assert.notEqual(ago(), words("core-logic.format.ago.minutes", { n: 3 }));
-  assert.deepEqual([page2.value.overview.profiles[0].quota.time.checkedAt.ago, profiles2.value.items[0].profile.quota.time.checkedAt.ago], [ago(), ago()], "asked anew, minutes later");
+  assert.deepEqual([page2.value.overview.profiles[0].quota.time.checkedAt.ago, profiles2.value.profile.quota.time.checkedAt.ago], [ago(), ago()], "asked anew, minutes later");
 });
 
 test("a_part_of_a_stations_overview_is_its_pages_and_changes_only_with_it", async () => {
@@ -1865,7 +1896,7 @@ test("a_profiles_resets_say_when_they_end_wherever_its_overview_goes_out_and_as_
   // A profile's page showed when its resets end as it opened, and no longer a few seconds on, once its station's
   // overview was read again (the user, 2026-11-11): the page's value then shares with the one before, goes out as a
   // new value and has its times put again, and a row put again had lost what said when it ends. A part of the
-  // overview and the accounts' list never said it.
+  // overview and an account's own topic (`profile`) never said it.
   const t = setup({ all: true });
   const [page, part, list] = [ui(), ui(), ui()];
   const day = 86_400_000;
@@ -1887,10 +1918,10 @@ test("a_profiles_resets_say_when_they_end_wherever_its_overview_goes_out_and_as_
   t.set(overview("ws/a"), withResets(now - 60_000));
   t.subscribe(1, { topic: "station", scope: "ws", station: "ws/a" });
   t.subscribe(2, { topic: "stationPart", scope: "ws", station: "ws/a", part: "profiles" });
-  t.subscribe(3, { topic: "profiles", scope: "ws" });
+  t.subscribe(3, { topic: "profile", scope: "ws", key: "sub:claude:a@x.com" });
   const said = async () => {
     await t.readAll([[page, 1], [part, 2], [list, 3]]);
-    return [page.value.overview.profiles[0].quota, part.value[0].quota, list.value.items[0].profile.quota].map((q: J) => (q.resets as J[]).map((r) => `${r.title} ${r.leftText} ${r.text}`));
+    return [page.value.overview.profiles[0].quota, part.value[0].quota, list.value.profile.quota].map((q: J) => (q.resets as J[]).map((r) => `${r.title} ${r.leftText} ${r.text}`));
   };
   const rows = ["每周重置 剩 1 次 30 天 12 小时后到期", "Fable 重置 剩 1 次 118 天 12 小时后到期"];
   assert.deepEqual(await said(), [rows, rows, rows], "as it is first read");

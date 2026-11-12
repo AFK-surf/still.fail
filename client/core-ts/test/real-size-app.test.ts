@@ -33,7 +33,6 @@ const LEFT_OUT: Record<string, number> = {
   "usage/down": 88,
   "drive/file": 72,
   "chatLetters/letter": 40,
-  "profiles/down": 40,
   "usage/usage": 40,
   "devices/device": 24,
   "connects/down": 24,
