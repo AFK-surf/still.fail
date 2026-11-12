@@ -169,8 +169,10 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   let k = r.station + "\u{1}" + r.session
   let kept = match saved { Some(view) => Some(view); None => @sfbase.chat_kept_from(src, r) }
+  // (a page made as nodes tells it of what its list had in sight: sfpages' chat_read_node)
+  let told = @sfpages.chat_read_left(src, r, kept)
   match (kept, readings.get(k)) {
-    (Some(v), Some(rd)) if !src.read_only => {
+    (Some(v), Some(rd)) if !told && !src.read_only => {
       (src.call)("client.focus", { "left": focus_chat(r, v, None) }, @sfbase.answer_unread)
       match v.thread {
         Some(_) if rd.placed => tell_place(src, r, v, rd, exact=true)

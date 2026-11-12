@@ -66,7 +66,7 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: its last m
 /// rest, its last message the viewer's own where `mine`, the core's calls kept in `calls` (and answered as the
 /// fixture's, but the chat's picture: chat.publishPreview left unanswered). Its messages without their files: no
 /// picture's bytes handed to the host (this file has no bar for them, host_image_bytes_known_wbtest's), what a message
-/// offers of itself the same.
+/// offers of itself the same. As many messages as `came` says come after its last (each a copy of it, its seq the next).
 fn chat_nodes_calling(
   w : Double,
   h : Double,
@@ -74,7 +74,8 @@ fn chat_nodes_calling(
   calls : Array[(String, Json)],
   mine? : Bool = false,
   fixture_mode? : String = "chat",
-) -> @ui.Tester {
+  came? : @signals.Signal[Int] = @signals.signal(0),
+) -> (@ui.Tester, Source) {
   new_run()
   @sf.presenters_reset()
   @sfbase.chat_page_nodes.set(true)
@@ -87,19 +88,27 @@ fn chat_nodes_calling(
       let out = chat.copy()
       let messages = items(got.value, "messages")
       let n = messages.length()
-      out["messages"] = Json::array(
-        messages.mapi(fn(i, j) {
-          guard j is Object(was) else { return j }
-          let m = was.copy()
-          m.remove("attachments")
-          m.remove("placed")
-          if mine && i == n - 1 {
-            m["mine"] = Json::boolean(true)
-          }
-          Json::object(m)
-        }),
-      )
-      { ..got, value: Some(Json::object(out)) }
+      let kept = messages.mapi(fn(i, j) {
+        guard j is Object(was) else { return j }
+        let m = was.copy()
+        m.remove("attachments")
+        m.remove("placed")
+        if mine && i == n - 1 {
+          m["mine"] = Json::boolean(true)
+        }
+        Json::object(m)
+      })
+      let more = if text(Some(Json::object(params)), "session") == "s-c1" { came.get() } else { 0 }
+      for k in 1..=more {
+        guard kept[n - 1] is Object(last) else { break }
+        let m = last.copy()
+        let seq = number(Some(kept[n - 1]), "seq") + k.to_double()
+        m["seq"] = Json::number(seq)
+        m["ts"] = Json::string("ts\{seq}")
+        kept.push(Json::object(m))
+      }
+      out["messages"] = Json::array(kept)
+      { ..got, version: got.version + more, value: Some(Json::object(out)) }
     },
     call: fn(name, params, done) {
       calls.push((name, params))
@@ -113,7 +122,7 @@ fn chat_nodes_calling(
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   t.run_for(@ui.move_most_ms)
-  t
+  (t, src)
 }
 
 ///|
@@ -121,6 +130,19 @@ fn chat_nodes_calling(
 fn message_menu_shown(t : @ui.Tester, name : String) -> Unit raise {
   for item in ["复制消息", "复制消息链接", "多选"] {
     assert_true(t.find(item) is Some(_), msg="\{name}: \{item}")
+  }
+}
+
+///|
+/// What a `client.focus {chat}` told says: its end seen, the last message seen whole.
+fn chat_nodes_focus_told(j : Json) -> (Json?, Json?) {
+  match j {
+    Object(o) =>
+      match o.get("chat") {
+        Some(Object(ch)) => (ch.get("end"), ch.get("seen"))
+        _ => (None, None)
+      }
+    _ => (None, None)
   }
 }
 
@@ -137,7 +159,7 @@ test "大屏 with its inside nodes: an agent's message offers its ⋯ (named onc
   for mine in [false, true] {
     let name = if mine { "own" } else { "agent's" }
     let calls : Array[(String, Json)] = []
-    let t = chat_nodes_calling(1280.0, 800.0, 0, calls, mine~)
+    let (t, _) = chat_nodes_calling(1280.0, 800.0, 0, calls, mine~)
     let words = "做完了：列表、跳到最新的按钮"
     let (x, y, _, _) = t.rect_of(words).unwrap()
     t.move_to(x + 24.0, y + 8.0)
@@ -170,7 +192,7 @@ test "大屏 with its inside nodes: an agent's message offers its ⋯ (named onc
 
 ///|
 test "大屏 with its inside nodes: an agent's picture opens its card under a pointer, closed once the pointer has left it" {
-  let t = chat_nodes_calling(1280.0, 800.0, 0, [], fixture_mode="chat-working")
+  let (t, _) = chat_nodes_calling(1280.0, 800.0, 0, [], fixture_mode="chat-working")
   let card = "8 轮 · 共干了 1 小时 12 分"
   assert_true(t.find(card) is None)
   // (the picture of the last of the agent's messages: before its name, out in the margin)
@@ -353,5 +375,85 @@ test "the composer in the list's foot, on 小屏 and 大屏: read up the list, a
     at("a quote")
     @sfbase.writing_error(src, draft, "发送没有成功")
     at("an error")
+  }
+}
+
+///|
+test "a chat's page made with its inside nodes tells the core what is read and where it is, on 小屏 and 大屏: at its foot, covered, read up, left" {
+  for screen in [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)] {
+    let (name, w, h, platform) = screen
+    let calls : Array[(String, Json)] = []
+    let came = @signals.signal(0)
+    let (t, src) = chat_nodes_calling(w, h, platform, calls, came~)
+    let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+    guard @sfbase.view_of_chat(src, r).0 is Some(v) && v.messages.last() is Some(last) else {
+      fail("\{name}: the chat's view not read")
+    }
+    // (what is told of this chat: another's page tells of its own)
+    let focus = fn() {
+      calls
+      .filter(fn(c) {
+        c.0 == "client.focus" && @sfbase.text(@sfbase.field(Some(c.1), "chat"), "session") == r.session
+      })
+      .map(fn(c) { c.1 })
+    }
+    let places = fn() { calls.filter(fn(c) { c.0 == "chat.place" }).map(fn(c) { c.1 }) }
+    // opened at its foot: it shows, its end seen, its last message seen whole
+    guard focus().last() is Some(f) else {
+      fail("\{name}: the chat shown told nothing: \{Repr(calls.map(fn(c) { c.0 }))}")
+    }
+    assert_eq(chat_nodes_focus_told(f), (Some(Json::boolean(true)), Some(Json::number(last.seq))), msg=name)
+    // covered by another page: a message that comes tells nothing (it is not seen)
+    @sfbase.open_page_over(Chat({ station: "ws1/st1", session: "s-c3", title: "另一个", station_name: "Willow" }))
+    t.run_for(@ui.move_most_ms)
+    let (told, placed) = (focus().length(), places().length())
+    came.set(1)
+    t.run_for(@ui.move_most_ms)
+    assert_eq((focus().length(), places().length()), (told, placed), msg="\{name}: told while covered")
+    // shown again: told once what is in sight then, the message that came seen whole
+    assert_true(@sfbase.go_back(), msg=name)
+    t.run_for(@ui.move_most_ms)
+    let again = focus()[told:].to_owned()
+    assert_eq(again.length(), 1, msg="\{name}: \{Repr(again.map(fn(j) { j.stringify() }))}")
+    assert_eq(chat_nodes_focus_told(again[0]), (Some(Json::boolean(true)), Some(Json::number(last.seq + 1.0))), msg=name)
+    // read up: at rest, its end not seen, where it is told with a message and its offset, as the message at the top
+    // changes
+    let placed = places().length()
+    let (x, y) = (w * 0.6, h / 2.0)
+    t.move_to(x, y)
+    // (read up: as the wheel's first frame scrolls the list, the frames' judge takes the composer, pinned in the list's
+    // foot and still where it shows, for moved in its row by as much as the list went (598 on 大屏 at 60 frames a
+    // second): the list's to mend, as in the composer's own test above; what the core is told is held here as a result)
+    t.motion_unjudged(true)
+    t.wheel(x, y, -600.0)
+    t.run_for(@ui.move_most_ms)
+    guard focus().last() is Some(up) else { fail("\{name}: nothing told read up") }
+    assert_eq(chat_nodes_focus_told(up).0, Some(Json::boolean(false)), msg=name)
+    let read_up = places()[placed:].to_owned()
+    guard read_up.last() is Some(p) else { fail("\{name}: where it is not told read up") }
+    assert_true(
+      @sfbase.number(Some(p), "seq") >= 0.0 && @sfbase.field(Some(p), "offset") is Some(_),
+      msg="\{name}: \{p.stringify()}",
+    )
+    assert_eq(@sfbase.number(Some(p), "thread"), 7.0, msg=name)
+    for i in 1..<read_up.length() {
+      assert_true(
+        @sfbase.field(Some(read_up[i]), "seq") != @sfbase.field(Some(read_up[i - 1]), "seq"),
+        msg="\{name}: told again with the same message at the top: \{Repr(read_up.map(fn(j) { j.stringify() }))}",
+      )
+    }
+    // left: told once it shows no more, and where it was left; nothing told of it after
+    let before = places().length()
+    let shown = focus().length()
+    home()
+    t.run_for(@ui.move_most_ms)
+    let lefts = calls.filter(fn(c) {
+      c.0 == "client.focus" && @sfbase.text(@sfbase.field(Some(c.1), "left"), "session") == r.session
+    })
+    assert_eq(lefts.length(), 1, msg=name)
+    assert_true(places().length() <= before + 1, msg=name)
+    guard places().last() is Some(at) else { fail("\{name}: no place") }
+    assert_eq(@sfbase.field(Some(at), "seq"), @sfbase.field(Some(p), "seq"), msg="\{name}: left where it was read")
+    assert_eq(focus().length(), shown, msg="\{name}: told it shows after it was left")
   }
 }

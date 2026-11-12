@@ -90,7 +90,8 @@ let chat_page_nodes_at_start : Bool = false
 /// waits, as its island is). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
 /// what is beside it reads by it too. With chat_page_nodes on as a chat's page is made: its inside nodes, chat `r`'s
 /// messages made by `body` in a column, given what makes its composer (by `foot`, its old view in a node of its own,
-/// as tall as it is laid out) in the node it is put in: the foot of the messages' list.
+/// as tall as it is laid out) in the node it is put in, the foot of the messages' list, and whether its entry is
+/// drawn (as `drawn` says).
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -100,7 +101,7 @@ pub fn chat_page_made(
   over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
   stint? : () -> Int = fn() { 0 },
   drawn? : (Int) -> Bool = fn(serial) { app.nav.shows(serial) },
-  body? : (@view.View, Source, ChatRef, (@view.View) -> Unit) -> Unit,
+  body? : (@view.View, Source, ChatRef, (@view.View) -> Unit, () -> Bool) -> Unit,
   foot? : (@ui.Ctx, Source, ChatRef) -> Unit,
 ) -> Source {
   let retained = page_entry_source(src, v, serial)
@@ -133,7 +134,7 @@ pub fn chat_page_made(
             natural=true,
           )
           |> ignore
-        })
+        }, fn() { drawn(serial) })
       })
       |> ignore
     None =>

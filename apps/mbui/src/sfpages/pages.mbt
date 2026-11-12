@@ -41,6 +41,7 @@ pub fn reset() -> Unit {
   message_reset()
   rows_reset()
   login_cards_reset()
+  chat_reads.clear()
   relay_focus_reset()
   publish_reset()
   xsharing_reset()
