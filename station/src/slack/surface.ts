@@ -13,7 +13,7 @@ import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
 import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type ModelChoice, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
 import { type CardEnd, endedWords } from "../connects/card-ends.ts";
-import { type Stands, answerOf, answeredBlocks, endedBlocks, loginBlocks, loginCodeOf, loginEnteredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
+import { type Stands, type Words, answerOf, answeredBlocks, endedBlocks, loginBlocks, loginCodeOf, loginEnteredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
 import { NEW_CHAT_COMMAND } from "./apps.ts";
 import { modelOptions, modelValue, newChatBlocks, newChatView, submittedChat } from "./new-chat.ts";
 import { ThreadStatus } from "./status.ts";
@@ -259,8 +259,8 @@ export class SlackSurface extends ConnectedSurface {
   private channels = new Map<string, string | null>();
   /// The questions answered or closed (their messages' ts): a second press before the card changed is not said again.
   private answered = new Set<string>();
-  /// The questions posted after words too long for them (by the ts `post` gave, the first part's): their own message's
-  /// ts and words. One within QUESTION_CHARS is the message `post` gave. Kept while connected.
+  /// The questions posted (by the ts `post` gave, the first part's when words too long for them went before): their own
+  /// message's ts and the Markdown they show, to be shown again as they are answered or closed. Kept while connected.
   private questions = new Map<string, { ts: string; text: string }>();
   /// Each thread's newest message as the station saw it (by `channel/threadTs`), the bot's with what it posted (to be
   /// changed: `standsAt`), anyone else's with null; and where the thread stands said at its end: on the bot's message
@@ -416,8 +416,8 @@ export class SlackSurface extends ConnectedSurface {
           : questionBlocks(asking, question, stationLang());
       await send(asking, blocks, true);
       const ts = this.ends.get(`${thread.channel}/${thread.threadTs}`)?.ts;
-      if (before !== null && ts !== undefined) {
-        this.questions.set(before, { ts, text: asking });
+      if (ts !== undefined) {
+        this.questions.set(before ?? ts, { ts, text: asking });
         // (the oldest go once there are many: long answered or closed)
         if (this.questions.size > 500) this.questions.delete(this.questions.keys().next().value!);
       }
@@ -531,8 +531,8 @@ export class SlackSurface extends ConnectedSurface {
     // (entered: the login's end leaves it saying so)
     this.answered.add(asked);
     if (this.answered.size > 500) this.answered.delete(this.answered.values().next().value!);
-    const asking = text(payload?.message?.text);
-    const entered = loginEnteredBlocks(asking, (await this.userName(user)) ?? "", lang);
+    const [asking, words] = this.wordsOf(asked, payload);
+    const entered = loginEnteredBlocks(words, (await this.userName(user)) ?? "", lang);
     const key = `${channel}/${threadTs}`;
     if (this.stands.get(key)?.ts === asked) this.stands.delete(key);
     const end = this.ends.get(key);
@@ -547,6 +547,17 @@ export class SlackSurface extends ConnectedSurface {
       ],
       this.botToken,
     );
+  }
+
+  /// What a pressed card says, to be shown again under its answer: its message's text, and its words (cards.ts `Words`):
+  /// the Markdown it was posted with, or after a restart the blocks Slack sent with the press (its text only when it sent
+  /// none).
+  private wordsOf(asked: string, payload: Json): [string, Words] {
+    const posted = [...this.questions.values()].find((q) => q.ts === asked);
+    if (posted !== undefined) return [posted.text, { markdown: posted.text }];
+    const blocks = Array.isArray(payload?.message?.blocks) ? (payload.message.blocks as Json[]) : [];
+    const said = text(payload?.message?.text);
+    return [said, blocks.length > 0 ? { blocks } : { markdown: said }];
   }
 
   /// A card's send button pressed: said in its thread as the person's message, and the card changed to say who
@@ -588,9 +599,9 @@ export class SlackSurface extends ConnectedSurface {
         log.warn("slack", "could not tell the person their answer was unconfirmed", { error: (noticeError as Error).message }));
       throw error;
     }
-    const asking = text(payload?.message?.text);
+    const [asking, words] = this.wordsOf(asked, payload);
     const who = (await this.userName(user)) ?? "";
-    const answered = answeredBlocks(asking, who, answer.said, lang);
+    const answered = answeredBlocks(words, who, answer.said, lang);
     // (its buttons gone for good: never put back with where the thread stands)
     const key = `${channel}/${threadTs}`;
     if (this.stands.get(key)?.ts === asked) this.stands.delete(key);

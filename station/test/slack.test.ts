@@ -401,7 +401,10 @@ describe("slack", { concurrency: true }, () => {
     assert.deepEqual(t.map((b: any) => b.type), ["header", "markdown", "context"]);
     assert.deepEqual([t[0].text.text, t[1].text, t[2].elements[0].text], ["✍️ 需要你回答", "写个名字", "在这个线程里回复作答 · 名字"]);
     assert.equal(questionBlocks("写", { type: "text" }, "zh")[2].elements[0].text, "在这个线程里回复作答");
-    assert.deepEqual(answeredBlocks("选一个", "Ada", "<合并>", "zh")[1].elements[0].text, "✓ Ada 回答：&lt;合并&gt;");
+    assert.deepEqual(answeredBlocks({ markdown: "选一个" }, "Ada", "<合并>", "zh")[1].elements[0].text, "✓ Ada 回答：&lt;合并&gt;");
+    // Slack's own blocks of the words (a restart since it was posted): kept, its buttons and fields gone.
+    const held = [{ type: "rich_text", elements: [] }, { type: "table", rows: [] }, { type: "actions", elements: [] }, { type: "input" }];
+    assert.deepEqual(answeredBlocks({ blocks: held }, "Ada", "合并", "zh").map((b: any) => b.type), ["rich_text", "table", "context"]);
   });
 
   test("what a card's send button answers: the option chosen by its whole label, or the field's words; other actions none", () => {
@@ -456,6 +459,38 @@ describe("slack", { concurrency: true }, () => {
       assert.equal(fake.calls("chat.postEphemeral")[1]!.params.text, "这个问题已经回答过了");
       assert.equal(heard.length, 1);
       assert.deepEqual(fake.acks.map((a) => a.envelope_id).sort(), ["i1", "i2", "i3", "i4"], "each acknowledged at once");
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
+  test("an answered card shows its words again as posted, not as the flattened text Slack hands back with the press", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    try {
+      const words = "没告警的原因\n\n**欠费时发生了什么**\n\n- 第一项\n- 第二项\n\n要开 PR 吗？";
+      const asked = await surface.post({ channel: "C1", threadTs: "1.1" }, words, [], { type: "options", options: [{ label: "开 PR" }] });
+      // What Slack keeps as such a message's text (seen 2026-11-12): made of its blocks, each line break a space.
+      const flattened = "没告警的原因  *欠费时发生了什么*  • 第一项 • 第二项  要开 PR 吗？";
+      const rich = [{ type: "rich_text", elements: [{ type: "rich_text_section", elements: [{ type: "text", text: "没告警的原因" }] }] }, { type: "actions", elements: [] }];
+      const press = (ts: string, message: any) => ({
+        type: "block_actions", user: { id: "U1" }, channel: { id: "C1" },
+        message: { ts: asked, thread_ts: "1.1", text: flattened, blocks: rich, ...message },
+        actions: [{ action_id: "sf_answer", value: '{"l":["开 PR"]}', action_ts: ts }],
+        state: { values: { b1: { sf_pick: { selected_option: { value: "0" } } } } },
+      });
+      await (surface as any).answer(press("9.5", {}), async () => {});
+      const update = fake.calls("chat.update")[0]!.params;
+      assert.equal(update.text, words);
+      assert.deepEqual(JSON.parse(update.blocks!)[0], { type: "markdown", text: words }, "the Markdown as it was posted");
+      // A card the station no longer knows (posted before a restart): Slack's own blocks of it, its buttons gone.
+      const fresh = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+      await (fresh as any).answer(press("9.6", { ts: "7.7" }), async () => {});
+      const after = fake.calls("chat.update")[1]!.params;
+      assert.deepEqual(JSON.parse(after.blocks!).map((b: any) => b.type), ["rich_text", "context"]);
+      assert.deepEqual(JSON.parse(after.blocks!)[0], rich[0]);
     } finally {
       await surface.stop();
       await fake.close();
@@ -607,6 +642,7 @@ describe("slack", { concurrency: true }, () => {
       const update = fake.calls("chat.update")[0]!.params;
       assert.deepEqual(JSON.parse(update.blocks!).map((b: any) => b.type), ["markdown", "context"], "no field any more");
       assert.doesNotMatch(update.blocks!, /4\/0Ab-code/);
+      assert.equal(JSON.parse(update.blocks!)[0].text, "登录 gcloud：https://x/login/l1", "its words as posted, not the text Slack sent back");
       assert.equal(fake.calls("chat.postMessage").length, 1, "the code is never posted");
       // The login ending after its code was entered leaves the card saying so; one never entered loses its field.
       await surface.cardEnded({ channel: "C1", threadTs: "1.1" }, asked, "登录 gcloud：https://x/login/l1", { type: "login", login: "l1" }, { why: "withdrawn" });
