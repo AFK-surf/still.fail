@@ -730,7 +730,10 @@ test("over iroh: the trusted device takes the new one on its endpoint, and the c
   const code = (await prompts()).pairing[0].code;
   const done: any[] = [];
   r.core.inner.runner.fork(Effect.map(Effect.result(tryOne(r.core.inner, { id: trustedEnd.id(), d, workspaces: ["ws"] }, newEnd.id(), code)), (x) => done.push(x)));
-  await r.host.time.passUntil(5000, () => done.length !== 0);
+  // (10 ms at a time, never `passUntil`: what it waits on comes over a real socket, which no sleep of the clock shows,
+  // and each step's turns are the ones it comes in; passUntil took the steps that woke nothing at once and was done with
+  // 5 s in 64 ms, the answer still on its way: main fe6d90f2's check-linux 43217458770, 2026-11-12)
+  for (let i = 0; i < 500 && done.length === 0; i++) await r.host.time.pass(10);
   assert.equal(done[0]?._tag, "Success", String(done[0]?.failure?.message));
   const entry = r.cloud.chains.get("ws")!.at(-1)!;
   assert.equal((entry.body as { id: string }).id, newEnd.id());
