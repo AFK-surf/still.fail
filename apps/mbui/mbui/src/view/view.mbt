@@ -3165,7 +3165,10 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
     @signals.end_batch()
   }
   // (a block given another key in it: told whole now, what that told made at once, key_taken.mbt; told in turn, not
-  // yet: held till the flush telling it is over, as it was while that flush ran nested in this one)
+  // yet: held till the flush telling it is over, as it was while that flush ran nested in this one. Known: put back
+  // after what that flush's afters had asked before it (Tree::settle_after_change's settle_now), which ran with it put
+  // back when nested; a structure changed in such a settle is taken as given another key, at once. No test meets it
+  // yet; one that does wants a hook between the flush's loop and its afters, #5733)
   if in_turn && key_taking.val && !taking_was {
     @signals.after_flush(fn() { key_taking.val = false })
   } else {
