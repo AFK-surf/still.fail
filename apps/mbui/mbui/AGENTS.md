@@ -64,6 +64,11 @@ yet and you can add one, add it.
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.
+- What is pressed in a column that scrolls (a page's list or a plain one) stays where it was pressed, all the way, as
+  what the press opens or shuts round it comes or goes, over it or under it, at the column's foot too (the user,
+  2026-11-12: 「所有点击展开的控件，展开和收起前后点击的元素位置不能变化」): the framework's, from the press
+  (`src/view/press_stays.mbt`), not each control's: a control that opens or shuts says so (`View::says`, `expanded`),
+  which is all it takes; nothing it does may undo it.
 - A page's list has a node (a slot) only for the keys round what shows, a screen over and under it (`slots_margin`),
   a spacer over them and one under as tall as the rest are counted, so what a frame of it does is the same at 30 keys
   as at 15,000. A change of its keys costs the slots of the keys that came or went among them alone, brought up to the

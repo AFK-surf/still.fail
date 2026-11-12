@@ -210,7 +210,7 @@ test "touch wide: an agent's history as the agent writes builds no old view's ro
 // stays there as the agent works on (words come, a step ends), what was seen staying where the wheel put it. (desktop
 // 0.1.8131: within the head's height of its foot, whatever laid the panel out again, a row come to show, the agent's
 // next word, took it back to its foot: under an agent at work it could not be read up from its end at all.) What is
-// opened at its foot opens down from its line.
+// pressed open at its foot stays under the hand (mbui's press_stays.mbt).
 
 ///|
 /// The app in a desktop's window, an agent's history (as `history` says it) beside its chat.
@@ -331,18 +331,22 @@ test "the desk's history beside a chat: read 96 up from its foot, the agent's wo
 }
 
 ///|
-test "the desk's history beside a chat: a sent message's words opened at its foot open down, what is over them where it was" {
+test "the desk's history beside a chat: a sent message's words opened at its foot, the button pressed where it was" {
   let history = fling_history(12)
   let t = wheel_history(fn() { history })
-  // (its last turn's group, over the message it sent, whose words are folded to six lines)
-  let marker = "等 CI 跑完再合并"
-  let was = t.find(marker)
-  assert_true(was is Some(_), msg="no \{marker} in the history")
-  match t.find_last("展开 · 还有") {
-    Some((x, y)) => t.tap(x, y)
+  // (its last turn's message it sent, whose words are folded to six lines: what is over the button goes up as they
+  // open, the button stays under the hand)
+  let at = match t.find_last("展开 · 还有") {
+    Some((x, y)) => {
+      t.tap(x, y)
+      y
+    }
     None => fail("no words folded in the history")
   }
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("收起") is Some(_))
-  assert_eq(t.find(marker), was)
+  // (within half a point: what is over it measured as it grows, laid out on the window's pixels)
+  match t.find_last("收起") {
+    Some((_, y)) => assert_true((y - at).abs() < 0.5, msg="\{at} -> \{y}")
+    None => fail("not opened")
+  }
 }

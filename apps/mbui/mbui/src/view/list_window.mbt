@@ -472,6 +472,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let ks = @signals.untracked(keys)
     held_with.val = (ks.length(), ks.last())
   }
+  // (room kept under its foot for what was pressed to stay where it was as what is round it shrinks (press_stays.mbt):
+  // as much as that asks while it is held, then no more than still shows of it, going as it is scrolled off)
+  let press_room : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+  // (how far down its blocks and the room under them but that go, as they are counted now)
+  let blocks_foot = fn(all : Column[K]) {
+    let blocks_h = match all.last() {
+      Some(b) => b.top + b.h
+      None => 0.0
+    }
+    blocks_h + foot_room() + @signals.untracked(fn() { s.tuck_room.get() })
+  }
   // (where the scroll was as the anchor was last put: what it moved by since, carried to the anchor)
   let anchor_x : Ref[Double?] = Ref(None)
   // (the column marked laid out again: not while it is laid out, its fill going on to what that changed itself)
@@ -516,7 +527,85 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       Some(b) => b.top + b.h
       None => 0.0
     }
-    dmax(0.0, blocks_h + foot_room() + s.tuck_room.get() - vh)
+    dmax(0.0, blocks_h + foot_room() + s.tuck_room.get() + press_room.get() - vh)
+  }
+  // (a press in one of its blocks, press_stays.mbt: that block held so that what was pressed stays where it was: its
+  // key, how far under the top of what shows its top was, what lies over what was pressed in it (each node before it
+  // or before what holds it, down a column, in the block) and how tall that was then; none once the hand moves it or
+  // all the press set off has ended)
+  let pin : Ref[(K, Double, Array[View], Double)?] = Ref(None)
+  // (what was pressed: let go, or what was over it, held no more)
+  let pin_node : Ref[View?] = Ref(None)
+  let unpin : Ref[() -> Unit] = Ref(fn() {  })
+  let pin_ends = Ref(false)
+  // (where it was scrolled to as it was pressed: moved from there by the hand, held no more; and how many blocks it had,
+  // and its last, then: blocks come or gone since at its foot, where it follows it, followed again)
+  let pin_x = Ref(0.0)
+  let pin_with : Ref[(Int, K?)] = Ref((0, None))
+  let pin_foot = Ref(false)
+  // (how tall what lies over what was pressed is, each measured now as wide as it was last laid out)
+  let over_h = fn(over : Array[View]) {
+    let mut h = 0.0
+    for o in over {
+      if o.alive() && self.tree.nodes[o.at].flex.style.display != @flex.Display::DisplayNone {
+        h = h + @flex.measured_height(self.tree.nodes[o.at].flex, self.tree.nodes[o.at].flex.width)
+      }
+    }
+    h
+  }
+  s.pressed_said = fn(v) {
+    // (the block it is in, made here, and what lies over it there: none, nothing held)
+    let over : Array[View] = []
+    let mut found : K? = None
+    let mut i = v.at
+    while i >= 0 && i != self.at && found is None {
+      for b in blocks {
+        if b.0.at == i && b.0.alive() {
+          found = Some(@signals.untracked(b.1))
+        }
+      }
+      let up = self.tree.nodes[i].parent
+      if found is None && up >= 0 && self.tree.nodes[up].flex.style.direction is Column {
+        for c in self.tree.nodes[up].kids {
+          if c == i {
+            break
+          }
+          over.push(self.tree.handle(c))
+        }
+      }
+      i = up
+    }
+    guard found is Some(k) else { return fn() {  } }
+    let all = laid.untracked()
+    guard laid_at.get(k) is Some(j) && j < all.length() else { return fn() {  } }
+    // (where the top of what shows is: at its foot, followed there, where that is)
+    let shown_top = if s.at_foot() {
+      foot_top(all, match s.seen.untracked() {
+        Some((_, vh)) => vh
+        None => 0.0
+      })
+    } else {
+      top_now(all, @signals.untracked(at))
+    }
+    let below = all.top(j) - shown_top
+    let was = over_h(over)
+    let x_then = @signals.untracked(at)
+    let foot_then = s.at_foot() && @signals.untracked(follows)
+    fn() {
+      (unpin.val)()
+      pin.val = Some((k, below, over, was))
+      pin_node.val = Some(v)
+      pin_x.val = x_then
+      let ks = @signals.untracked(keys)
+      pin_with.val = (ks.length(), ks.last())
+      pin_foot.val = foot_then
+      // (all it set off ended: held so once more, in the layout of that moment, then no more)
+      pin_ends.val = false
+      unpin.val = self.at_moment(self.tree.cause_now() + @flex.move_most_ms, fn() {
+        pin_ends.val = true
+        laid_again()
+      })
+    }
   }
   // (following its foot, scrolled back to it by the hand or the wheel, at rest there: at its foot again, kept there
   // however far that comes to be as what it holds grows, till it is moved off it; told as that comes to be so, not each
@@ -560,7 +649,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           Some(b) => b.top + b.h
           None => 0.0
         }
-        foot + foot_room() + s.tuck_room.get() - vh - at() < screens * vh
+        foot + foot_room() + s.tuck_room.get() + press_room.get() - vh - at() < screens * vh
       }, same=fn(a, b) { a == b })
       self.reacts(fn() { (near.get() && wanting(), keys().length()) }, fn(now) {
         if now.0 {
@@ -659,7 +748,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(b) => b.top + b.h
         None => 0.0
       }
-      blocks_h + foot_room() + s.tuck_room.get()
+      blocks_h + foot_room() + s.tuck_room.get() + press_room.get()
     })
   }
   // (what is asked of it at a cause: done as the column is laid out again, or at once where it glides there)
@@ -1139,8 +1228,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // before what comes to show is measured; not moved, the one it had, whatever came or went over it)
     match anchor_x.val {
       Some(was) if !held && (x - was).abs() > 0.000001 => {
-        // (moved by the hand: held where it was no more)
+        // (moved by the hand: held where it was no more, nor by what was pressed)
         s.held = false
+        if (x - pin_x.val).abs() > 0.000001 {
+          pin.val = None
+          (unpin.val)()
+        }
         let all = laid.untracked()
         if all.length() > 0 {
           let i = ai.min(all.length() - 1).max(0)
@@ -1208,6 +1301,28 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       s.held = false
       held = false
     }
+    match (pin.val, pin_node.val) {
+      (Some((_, _, over, _)), Some(v)) if !v.alive() || over.iter().any(fn(o) { !o.alive() }) => {
+        pin.val = None
+        (unpin.val)()
+      }
+      _ => ()
+    }
+    if pin.val is Some(_) && pin_foot.val && !asked {
+      let ks = @signals.untracked(keys)
+      if pin_with.val != (ks.length(), ks.last()) {
+        pin.val = None
+        (unpin.val)()
+        s.to_foot()
+        follows_foot = true
+        held = false
+      }
+    }
+    // (held by what was pressed in a block: neither following its foot nor held at it meanwhile)
+    if !asked && pin.val is Some((k, _, _, _)) && laid_at.contains(k) {
+      follows_foot = false
+      held = false
+    }
     // (its foot followed no further than a block's top `margin` under where it shows from: held there, off its foot,
     // once it would go further, and followed no further after)
     let from = match place {
@@ -1235,6 +1350,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       // (a block brought to the middle: by its height as it is counted now, measured or not, again as it is measured)
       ai = ai.min(all.length() - 1).max(0)
+      // (held by what was pressed in a block: the block's top as far up as what lies over what was pressed grew since,
+      // the room under its foot as that asks)
+      if !asked && pin.val is Some((k, below, over, was)) && laid_at.get(k) is Some(i) && i < all.length() {
+        ai = i
+        aoff = over_h(over) - was - below
+        press_room.set(dmax(0.0, all.top(i) + aoff + vh - blocks_foot(all)))
+      }
       if centring {
         aoff = all.h(ai) / 2.0 - vh / 2.0
       }
@@ -1316,6 +1438,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         self.tree.room_bindings_run()
       }
     }
+    if pin_ends.val {
+      pin_ends.val = false
+      pin.val = None
+    }
+    // (held by what was pressed no more: the room kept for it no more than still shows)
+    if !(pin.val is Some((k, _, _, _)) && laid_at.contains(k)) {
+      let left = dmax(0.0, top + vh - blocks_foot(laid.untracked()))
+      if left < press_room.untracked() {
+        press_room.set(left)
+      }
+    }
     // (what the last pass found, alone: what showed before and shows no more let go now, in this layout)
     show_only(found)
     slots_cover(laid.untracked(), found, top, vh)
@@ -1335,6 +1468,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       if top < dmax(0.0, whole_now() - vh) - 0.5 {
         s.put(top)
       }
+    } else if !follows_foot && s.at_foot() {
+      // (held by what was pressed, off its foot from where it was there)
+      s.put(top)
     } else if !follows_foot && (top - x).abs() > 0.000001 {
       if s.as_list && !asked {
         s.grew_above(top - x)
@@ -1345,6 +1481,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (back at its foot at rest, where it follows its foot: kept there from now as what it holds grows)
     if !follows_foot &&
       !held &&
+      !(pin.val is Some((k, _, _, _)) && laid_at.contains(k)) &&
       @signals.untracked(follows) &&
       vh > 0.0 &&
       top >= dmax(0.0, whole_now() - vh) - 0.5 &&
@@ -1361,7 +1498,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   s.whole = Some(whole_now)
   let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
-    held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room() + s.tuck_room.get()) })) |> ignore
+    held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room() + s.tuck_room.get() + press_room.get()) })) |> ignore
     // (short of what shows, its blocks at its foot: at least as tall as the room it shows them in, they at its end)
     if from_end {
       held.min_height_share(Is(Some(1.0))).lies_along(Is(Lies::End)) |> ignore

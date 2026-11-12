@@ -314,17 +314,12 @@ fn steps_pressed(
 }
 
 ///|
-/// One of what the reader opens (a fold, a line, a group, a call), by its key, opened or shut as `v`, its line in the
-/// list, is pressed. Opened where the list follows its newest end, it opens down from where its line is, the list
-/// held there (Scroll::holds_here): following its end, the line went up as far as it opened, away from the hand.
-fn steps_flip(v : @view.View, key : String) -> Unit {
+/// One of what the reader opens (a fold, a line, a group, a call), by its key, opened or shut (what was pressed
+/// staying where it was: mbui's press_stays.mbt).
+fn steps_flip(key : String) -> Unit {
   if steps_own.opened.contains(key) {
     steps_own.opened.remove(key)
   } else {
-    match v.scroll_holding() {
-      Some(s) => s.holds_here()
-      None => ()
-    }
     steps_own.opened[key] = true
   }
 }
@@ -625,7 +620,12 @@ fn one_line_node(
   let open = fn() { steps_own.opened.contains(key) }
   v.box(fn(r) {
     @sf.style_node(r, fn() { h_one.then(@sf.row_least_h()) })
-    @sf.presses_node(r, fn() { steps_flip(r, key) })
+    @sf.presses_node(r, fn() { steps_flip(key) })
+    r
+    .says(By(fn() {
+      Some(@view.said(Button, label=if open() { @sf.t("web-main.fold") } else { line }, expanded=open()))
+    }))
+    |> ignore
     lead(r)
     r.show(fn() { !open() && line != "" }, fn(l) {
       l.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
@@ -713,7 +713,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           }
         }
         steps_box_node(t, h_fold_toggle, fn(b) {
-          steps_pressed(b, fn() { steps_flip(b, key) }, label=words)
+          steps_pressed(b, fn() { steps_flip(key) }, label=words, folds=true, open~)
           @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
         })
       })
@@ -993,7 +993,7 @@ fn group_node(
       let hot = fn() { @sf.lit_node(h) }
       h.ground(By(fn() { if @sf.lit_in_node(h) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
-      steps_pressed(h, fn() { steps_flip(h, gk) }, label=fn() { text(g, "summary") }, folds=true, open~)
+      steps_pressed(h, fn() { steps_flip(gk) }, label=fn() { text(g, "summary") }, folds=true, open~)
       h.box(fn(i) {
         @sf.style_node(i, fn() { h_icon })
         @sf.icon_node(i, "chevron-right", 14.0, By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } }), name_now=fn() {
@@ -1094,7 +1094,7 @@ fn opened_node(
       @sf.style_node(line, fn() { h_step_summary.then(@sf.row_least_h()) })
       line.ground(By(fn() { if @sf.lit_in_node(line) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
-      steps_pressed(line, fn() { steps_flip(line, rk) }, folds=true, open~)
+      steps_pressed(line, fn() { steps_flip(rk) }, folds=true, open~)
       summary(line)
     })
     |> ignore
