@@ -49,7 +49,8 @@ export const MeshLive = Layer.effectDiscard(
       // The launcher starts this process before stopping the old one. Its fixed UDP socket cannot be shared;
       // wait in this background fiber (not layer construction, which must signal ready to start the handover).
       // An unset address or port 0 gets a fresh port and can bind alongside the old process.
-      if (Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
+      // (Kept by the front, the endpoint is bound once and stays: taken over as it is.)
+      if (!process.env.STILLFAIL_MESH_FRONT && Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
         yield* Effect.promise(() => previous.gone);
       }
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
