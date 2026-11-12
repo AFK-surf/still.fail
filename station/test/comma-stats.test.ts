@@ -16,6 +16,10 @@ import { routerSays } from "../src/comma/chats.ts";
 import { CommaSurface } from "../src/comma/surface.ts";
 import { CommaTasks } from "../src/comma/tasks.ts";
 import { Rig } from "./hub-fakes.ts";
+import { newMessage } from "../src/store/store.ts";
+import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
+import * as read from "../src/read/store.ts";
+import { HOME, outflowChats } from "../src/read/outflow.ts";
 
 type Json = any;
 
@@ -371,6 +375,47 @@ test("the Router writes in a chat of the workspace as itself, once per key; a ch
     assert.throws(() => routerSays(rig.hub, stats, "another-ws", { ...w, key: "cm:k2" }), /no such chat/);
     const slack = rig.store.openThread("slack:ember", "C1", "100.1", null, null);
     assert.throws(() => routerSays(rig.hub, stats, home, { ...w, thread: slack.id, key: "cm:k3" }));
+  } finally {
+    stats.close();
+    await rig.hub.shutdown();
+  }
+});
+
+test("the Task index says which chats a Comma Router wrote in, with a key or without, after its idempotency record is gone; nothing of the others, nor of a station from before", async () => {
+  const rig = new Rig();
+  const stats = CommaStats.at(tempdir(), nothing, quiet);
+  try {
+    const chatOfKey = (key: string) => {
+      rig.store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws: null } as never);
+      const thread = rig.store.openThreadOf("ember", "CHAT", key, key, "ann@x", key);
+      rig.store.joinThread(thread.id, key, "ember");
+      return thread.id;
+    };
+    const keyed = chatOfKey("keyed");
+    const unkeyed = chatOfKey("unkeyed");
+    const people = chatOfKey("people");
+    const home = rig.hub.wsOf("keyed");
+    routerSays(rig.hub, stats, home, { thread: keyed, text: "选 main", key: "cm:k1", requester: "Router", connect: "cm" });
+    routerSays(rig.hub, stats, home, { thread: unkeyed, text: "ship it", key: "", requester: "Ops", connect: "cm" });
+    rig.store.insertMessage(newMessage(people, "people.1", "person", "ann@x", "please"));
+    // The idempotency record is cleaned up after BUILD_DAYS: what the index says does not go with it.
+    rig.store.db.exec("DELETE FROM comma_router_once_targets; DELETE FROM comma_router_once;");
+    installOutflowChatIndex(rig.store.db);
+    for (const scope of outflowChatScopes(HOME)) while (!outflowChatIndexStep(rig.store.db, scope).done) { /* bounded batches */ }
+    const got = outflowChats(read.makeStore(rig.store.db, rig.dir), 0) as Json;
+    const by = new Map<number, Json>(got.chats.map((c: Json) => [c.thread, c]));
+    assert.deepEqual([by.get(keyed).router, by.get(unkeyed).router, "router" in by.get(people)], [true, true, false]);
+
+    // As the Task index carries it; a row that comes to say it is a row changed, which Comma is sent again.
+    const before = got.chats.map((c: Json) => (c.thread === people ? c : { ...c, router: undefined }));
+    stats.apply([here([], {}, before)], [], FROM);
+    const rev = stats.tasks.rev();
+    assert.ok(stats.tasks.since(0, 10).map(taskWire).every((w: Json) => !("router" in w)), "a station from before: no field");
+    assert.equal(stats.apply([here([], {}, got.chats)], [], FROM).tasks, 2);
+    const wire = new Map(stats.tasks.since(rev, 10).map(taskWire).map((w: Json) => [w.task, w]));
+    assert.deepEqual([...wire.keys()].sort(), [String(keyed), String(unkeyed)].sort());
+    assert.ok([...wire.values()].every((w: Json) => w.router === true && w.rev > rev));
+    assert.deepEqual(stats.apply([here([], {}, [{ ...by.get(people), router: "yes" }, by.get(keyed), by.get(unkeyed)])], [], FROM).tasks, 0, "only true says it");
   } finally {
     stats.close();
     await rig.hub.shutdown();

@@ -60,7 +60,8 @@ export const CommaLive = Layer.effectDiscard(
       },
       there: async (station, op, args) => answerText(await bus.ask(station, { method: READ, workspace, op, args, whole: true })),
     });
-    // What moves the statistics or the Task index: the agents' spending, a chat's messages and its turns, and where
+    // What moves the statistics or the Task index: the agents' spending, a chat's messages (the Router's too: its
+    // first in a chat makes the row `router`) and its turns, and where
     // someone read a chat to (a done chat its creator has not read is one the Task index says waits for them).
     const usage = (changed: () => void) => store.subscribe((change) => void (["usage", "session", "thread", "read"].includes(change.type) && changed()));
     // Keep the old database for Router deduplication across a downgrade. Its unscoped indexes are not sent.

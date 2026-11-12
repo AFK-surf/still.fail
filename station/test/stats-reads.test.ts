@@ -9,7 +9,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
 import type { InWorkspace } from "../src/store/rows.ts";
 import * as read from "../src/read/store.ts";
-import { outflowChats, outflowMessages, outflowUsage } from "../src/read/outflow.ts";
+import { ROUTER_WROTE, outflowChats, outflowMessages, outflowUsage } from "../src/read/outflow.ts";
 import { usageOps } from "../src/read/ops-usage.ts";
 import { peerRead, textOf } from "../src/comma/peer.ts";
 import { bytesOf } from "../src/mesh/bus.ts";
@@ -317,6 +317,55 @@ test("what a chat asks of whom now: a need for its card's assignee over its crea
     const again = outflowChats(reader, 0) as any;
     assert.equal(again.chats.find((c: any) => c.thread === done).attention, undefined);
     assert.ok(again.chats.every((c: any) => c.url === undefined));
+  } finally { store.close(); }
+});
+
+test("a chat a Comma Router wrote in says so, by one keyed lookup of who wrote in it; a chat only people wrote in, or a platform's thread, says nothing", () => {
+  const store = Store.open(":memory:");
+  try {
+    const session = (key: string) => store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, createdBy: "ann@x" });
+    const chat = (key: string) => {
+      session(key);
+      const thread = store.openThreadOf("ember", "CHAT", key, key, "ann@x", key);
+      store.joinThread(thread.id, key, "ember");
+      store.insertMessage(newMessage(thread.id, `${key}.1`, "person", "ann@x", "please"));
+      return thread.id;
+    };
+    const routed = chat("routed");
+    // Long after it, as the Router's message is written (comma/chats.ts routerSaysOnce), among others'.
+    for (let i = 2; i < 40; i++) store.insertMessage(newMessage(routed, `routed.${i}`, i === 20 ? "person" : "agent", i === 20 ? "slack:cm:Router" : "routed", "said"));
+    const people = chat("people");
+    store.insertMessage(newMessage(people, "people.2", "person", "bob@x", "and me"));
+    store.insertMessage(newMessage(people, "people.3", "agent", "people", "done"));
+    // A platform's thread names its people by their ids there, whatever they look like: never the Router's.
+    session("slack");
+    const slack = store.openThread("slack:T1", "C1", "100.1", null, "slack:ember:U1");
+    store.joinThread(slack.id, "slack", "ember");
+    store.insertMessage(newMessage(slack.id, "100.1", "person", "slack:odd", "hi"));
+    readyChats(store);
+    const reader = read.makeStore(store.db, ".");
+    const db = reader.db;
+    let lookups = 0;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === ROUTER_WROTE) lookups++;
+        else if (sql.includes("thread_people")) throw new Error("went through who wrote in a chat");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    let got: any;
+    try { got = outflowChats(reader, 0); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+    const by = new Map<number, any>(got.chats.map((c: any) => [c.thread, c]));
+    assert.equal(by.get(routed).router, true);
+    assert.equal("router" in by.get(people), false);
+    assert.equal("router" in by.get(slack.id), false);
+    assert.equal(lookups, 2, "one for each still.fail chat");
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${ROUTER_WROTE}`).all(routed) as { detail: string }[]).map((r) => r.detail).join(" ");
+    assert.match(plan, /SEARCH thread_people USING PRIMARY KEY \(thread=\? AND author>\? AND author<\?\)/);
   } finally { store.close(); }
 });
 

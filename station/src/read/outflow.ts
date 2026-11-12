@@ -1,8 +1,9 @@
 // The statistics a Comma connect sends of the workspace (comma/stats.ts), as one station reads them of its own: what
-// its agents spent and the chats they worked in (with what each asks of whom now, and its link in the app), written
-// out field by field here, so that what the station keeps changing never changes what another station of another
-// version is answered (`outflow.read`, comma/peer.ts, named so as stations of every version answer it). The chats of
-// one workspace of the station's (its home one, unless another station of a workspace it joined asks).
+// its agents spent and the chats they worked in (with what each asks of whom now, its link in the app, and whether a
+// Comma Router wrote in it), written out field by field here, so that what the station keeps changing never changes
+// what another station of another version is answered (`outflow.read`, comma/peer.ts, named so as stations of every
+// version answer it). The chats of one workspace of the station's (its home one, unless another station of a workspace
+// it joined asks).
 import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
@@ -103,6 +104,14 @@ function attentionOf(s: Store, thread: store.ThreadRow, latest: Json | null, cre
   return null;
 }
 
+/// Whether a Comma Router ever wrote in still.fail chat `thread`, by one keyed range of who wrote in it (thread_people,
+/// kept by the entries' trigger, so of all its history and gone only with its entries). Its writes are the only
+/// person messages of a still.fail chat named `slack:<connect>:<requester>` (comma/chats.ts routerSaysOnce); people
+/// write there as their email (lifecycle.ts `say`), and the Router writes in no other chat.
+export const ROUTER_WROTE = "SELECT 1 FROM thread_people WHERE thread = ? AND author >= 'slack:' AND author < 'slack;' LIMIT 1";
+const routerWrote = (s: Store, thread: store.ThreadRow): boolean =>
+  thread.surface === store.STILLFAIL_SURFACE && s.db.prepare(ROUTER_WROTE).get(thread.id) !== undefined;
+
 /// A page of chats: at most `limit`, those after `before` (the `next` of the page before).
 export type ChatsPage = { limit: number; before: string | null };
 export const OUTFLOW_CHATS_PENDING = "outflow chat order is still being prepared";
@@ -117,8 +126,9 @@ const OUTFLOW_CHAT_FIRST = `SELECT thread, at FROM outflow_chat_order INDEXED BY
 /// `usage` rows name), where it is (`stillfail`, `slack`, `feishu`), title, how it stands, who started it, when, its
 /// latest activity, whether it is archived, and its agents' runtimes and models; what it asks of whom now
 /// (`attention`, attentionOf: absent when nothing) and, given where this station's pages are (`pages`), its link in the
-/// app (`url`, the page of its latest turn's session). With `page`, at most its `limit`, `more` when there are more and
-/// `next` to ask for them with; without, all of them.
+/// app (`url`, the page of its latest turn's session); `router: true` when a Comma Router ever wrote in it (routerWrote:
+/// absent when not). With `page`, at most its `limit`, `more` when there are more and `next` to ask for them with;
+/// without, all of them.
 export function outflowChats(s: Store, since: number, of: Of = HOME, page: ChatsPage | null = null, pages: PageBase | null = null): Json {
   // The read and this coverage check share the reader's snapshot. A concurrent write is settled before a retry.
   if (!outflowChatIndexReady(s.db, of)) throw new Error(OUTFLOW_CHATS_PENDING);
@@ -174,6 +184,7 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
       agents: members.map((m) => ({ runtime: sessions.get(m.session)!.runtime, model: sessions.get(m.session)!.model })),
       ...(attention === null ? {} : { attention }),
       ...(url === null ? {} : { url }),
+      ...(routerWrote(s, thread) ? { router: true } : {}),
     });
   }
   if (page === null) return { since, chats };
