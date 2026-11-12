@@ -473,7 +473,7 @@
   "station.updates.doneRestartNoVersion": "Updated (station restarted)",
   "station.updates.downloadStalled": "Download stalled for a minute",
   "station.updates.downloading": "Downloading",
-  "station.updates.downloadingSized": "Downloading {version} ({mb} MB)",
+  "station.updates.downloadingSized": "Downloading {version}: {got}/{mb} MB",
   "station.updates.downloadingSoFar": "Downloading {version}: {mb} MB so far",
   "station.updates.downloadingStation": "Downloading new version",
   "station.updates.draining": {

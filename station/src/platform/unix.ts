@@ -4,7 +4,7 @@ import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_pro
 import { chmodSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { release, type as osType, userInfo } from "node:os";
 import { basename, delimiter, join } from "node:path";
-import { copyFile, readFile, readdir } from "node:fs/promises";
+import { access, copyFile, readFile, readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, HostSample, Platform } from "./index.ts";
@@ -479,6 +479,17 @@ export const unix: Platform = {
   },
   /// The Antigravity CLI's own installer, as antigravity.google/cli gives it.
   agyInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://antigravity.google/cli | bash"] },
+  agyBuild: async () => {
+    const arch = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "amd64" : null;
+    if (arch === null) return null;
+    if (process.platform === "darwin") return `darwin_${arch}`;
+    if (process.platform !== "linux") return null;
+    // musl told as the installer tells it, by its libc's files.
+    const there = (f: string) => access(f).then(() => true, () => false);
+    if ((await there("/lib/libc.musl-x86_64.so.1")) || (await there("/lib/libc.musl-aarch64.so.1"))) return null;
+    return `linux_${arch}`;
+  },
+  agyStaging: (env, url) => (env.HOME ? join(env.HOME, ".cache", "antigravity", "staging", url.includes(".tar.gz") ? "agy.tar.gz" : "agy") : null),
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",

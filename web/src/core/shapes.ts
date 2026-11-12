@@ -1783,7 +1783,10 @@ export interface RuntimeInstall {
 	title: string;
 	/** Why the install failed. Absent otherwise. */
 	detail?: string;
-	/** Not installable by the viewer from here: who can, or why the station cannot. */
+	/**
+	 * Not installable by the viewer from here: who can, or why the station cannot. While installing with `percent`,
+	 * how much of its download is in, in words (正在下载 1.5.6：60/88 MB).
+	 */
 	note?: string;
 	/** The button's label (安装, 重试) when the viewer can install it now. Absent otherwise. */
 	action?: string;

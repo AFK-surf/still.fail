@@ -514,6 +514,8 @@ export const windows: Platform = {
     program: "powershell",
     args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://antigravity.google/cli/install.ps1 | iex"],
   },
+  agyBuild: async () => (process.arch === "arm64" ? "windows_arm64" : process.arch === "x64" ? "windows_amd64" : null),
+  agyStaging: (env, _url) => (env.LOCALAPPDATA ? join(env.LOCALAPPDATA, "antigravity", "staging", "agy.exe") : null),
   installerExt: "ps1",
   startInstaller,
   /// Vite+'s command is a shim of its own (codex.cmd, codex.exe) beside vp.exe; npm's a .cmd in its global prefix,

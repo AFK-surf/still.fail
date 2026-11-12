@@ -467,7 +467,7 @@
   "station.updates.doneRestartNoVersion": "已更新（station 已重启）",
   "station.updates.downloadStalled": "下载已停滞 1 分钟",
   "station.updates.downloading": "正在下载",
-  "station.updates.downloadingSized": "正在下载 {version}（{mb} MB）",
+  "station.updates.downloadingSized": "正在下载 {version}：{got}/{mb} MB",
   "station.updates.downloadingSoFar": "正在下载 {version}：已下载 {mb} MB",
   "station.updates.downloadingStation": "正在下载新版本",
   "station.updates.draining": "等待 {n} 个 agent 完成本轮后重启（新消息将排队）",
