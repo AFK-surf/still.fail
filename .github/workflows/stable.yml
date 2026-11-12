@@ -335,7 +335,7 @@ jobs:
     if: ${{ !cancelled() && needs.web.result == 'success' }}
     runs-on: [self-hosted, macos-ci]
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
