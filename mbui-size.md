@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [5ffe54e22](https://github.com/AFK-surf/still.fail/commit/5ffe54e22b7147c31ab5d34060d2d252b8c92f4c) app tests: page-seconds.txt written again from mai | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.24 | 178.87 |
 | [58efd9ace](https://github.com/AFK-surf/still.fail/commit/58efd9ace270f41d6109c3bb392ef52d3e649726) mbui: a shared node no layout ever placed is no de | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.67 | 154.42 |
 | [96748db6b](https://github.com/AFK-surf/still.fail/commit/96748db6be2c0d801d2e9fc545d8faea1e61b4e0) station: the copies' export and restore run in the | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.56 | 94.78 | 132.46 |
 | [1b05c672a](https://github.com/AFK-surf/still.fail/commit/1b05c672a12e27e9fa0a273613ed7a28a72776e4) app: a chat's rows as nodes offer their menu and t | 1.93 | 2.59 | 11.12 | 30.18 | 39.86 | 26.86 | 51.16 | 94.85 | 180.5 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [edf3b5b3f](https://github.com/AFK-surf/still.fail/commit/edf3b5b3fa563b2c957c1d89cb9cf148a07857a9) station: a lock's stations come to one chain: what | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94.75 | 189.85 |
 | [e0dbf4815](https://github.com/AFK-surf/still.fail/commit/e0dbf48150e60e8842d6ae5356addd5b758d65f2) mbui app: on 小屏 a kept place of the bottom bar com | 1.87 | 2.51 | 10.72 | 29.66 | 37.91 | 26.4 | 49.52 | 94 | 163.26 |
 | [eabadd6eb](https://github.com/AFK-surf/still.fail/commit/eabadd6eba08069dfe87aa9b5a553092db783dc0) Align 待处理's chat rows with the long jobs over them | 1.88 | 2.51 | 10.72 | 29.66 | 37.92 | 26.4 | 49.52 | 94.45 | 176.05 |
-| [36b56f216](https://github.com/AFK-surf/still.fail/commit/36b56f21638e00fceb91eb9653cd263970ed735a) screens: a Mac's clicks and wheels carry the modif | 1.87 | 2.51 | 10.72 | 29.65 | 37.91 | 26.39 | 49.52 | 94.27 | 188.24 |
