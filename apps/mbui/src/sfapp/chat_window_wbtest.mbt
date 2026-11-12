@@ -252,10 +252,6 @@ let long_ref : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理�
 let long_screens : Array[(String, Double, Double, Int)] = [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)]
 
 ///|
-/// How many frames running what shows of a chat stands still before its glide is taken for over.
-let long_still_frames : Int = 6
-
-///|
 /// How long a chat is let open before a test looks: its slide in, what it asks answered.
 let long_opened_ms : Double = @ui.move_most_ms * 2.0
 
@@ -364,7 +360,6 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
       let t = long_open(l, s)
       let frames = Ref(0)
       let fastest = Ref(0.0)
-      let still = Ref(0)
       let was : Ref[Map[Int, Double]] = Ref(long_places(t.words(), h))
       // (each frame: no bones, and while the core has more before it, the first message held not drawn: the top never
       // comes down empty; how far what shows moved since the frame before, the most of it kept)
@@ -392,11 +387,10 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
         if most > fastest.val {
           fastest.val = most
         }
-        still.val = if most == 0.0 { still.val + 1 } else { 0 }
         was.val = now
       }
-      // (at rest after a stroke once what shows has not moved for some frames: its glide over)
-      let resting = fn(rest : Double) { t.time() - rest < long_rest_ms - 1.0e-6 && still.val < long_still_frames }
+      // (the list at rest after a stroke: the time said, every frame of it looked at, never till it is seen to stand)
+      let resting = fn(rest : Double) { t.time() - rest < long_rest_ms - 1.0e-6 }
       // (read back through two growths after it opened, what came as it opened aside)
       let olders = fn() { l.asked.filter(fn(a) { a.has_prefix("older") }).length() }
       let opened = olders()
@@ -422,7 +416,6 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
           long_answered(l)
           look()
           let rest = t.time()
-          still.val = 0
           while resting(rest) {
             long_frame(t, l)
             look()
@@ -441,7 +434,6 @@ test "a chat read back on 小屏 with a finger and on 大屏 with a mouse: a scr
             look()
           }
           let rest = t.time()
-          still.val = 0
           while resting(rest) {
             long_frame(t, l)
             look()
