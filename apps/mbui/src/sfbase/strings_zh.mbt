@@ -1080,7 +1080,6 @@ let zh : Map[String, String] = {
   "web-main.model.forgetCombo": "从常用搭配移除 {name}",
   "web-main.model.noMatch": "没有匹配的模型",
   "web-main.model.none": "没有可用模型",
-  "web-main.model.only": "仅此",
   "web-main.model.otherSeries": "其他",
   "web-main.model.pick": "选择模型",
   "web-main.model.runtime": "运行时",

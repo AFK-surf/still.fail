@@ -3148,8 +3148,6 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // people added: each as one who has not signed in yet
     "workspace.addMembers" =>
       Some(Ok(obj([("joined", []), ("added", field(p, "emails").unwrap_or(Json::array([]))), ("already", [])])))
-    // a chat agent's run settings (a new chat's picks are the new chat fixture's)
-    "pick.set" if text(p, "of").has_prefix("session:") => Some(Ok(obj([])))
     _ => None
   }
 }

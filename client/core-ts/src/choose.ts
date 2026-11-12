@@ -759,6 +759,7 @@ export class Choose implements Owner {
     const pickedOf = (field: string) => text(field in draft ? draft[field] : get(value, field));
     const m = pickedOf("model");
     const runtime = pickedOf("runtime");
+    const nonePicked = "profiles" in draft && Array.isArray(draft.profiles) && normProfiles(draft.profiles) === null;
     const draftedAccounts = (): { asked: string[]; multi: boolean } => {
       if ("profiles" in draft) {
         const ps = normProfiles(draft.profiles);
@@ -822,28 +823,30 @@ export class Choose implements Owner {
     const fast = typeof fastRaw === "boolean" && fastRuntime(onName) ? fastRaw : null;
     const speedText = (f: boolean | null) => (f === true ? "Fast" : f === false ? t("core-logic.choose.speed.standard") : t("core-logic.choose.speed.plan"));
     const next = { model: nextModel, runtime: on ?? null, effort, profile, ...(profiles !== null ? { profiles } : {}), fast, context };
-    const changed = FIELDS.some((f) => !equal((next as J)[f] ?? null, value[f] ?? null));
+    const changed = !nonePicked && FIELDS.some((f) => !equal((next as J)[f] ?? null, value[f] ?? null));
     const { kept, keptProfiles, low, account: accountView } = named(value, valueOption, current, quiet);
     const effectiveFast = (o.kind === "new" || o.kind === "session") && runsFast(overview, value, current);
     const drafted = account(profile);
-    const who =
-      drafted !== undefined && typeof drafted.name === "string"
+    const who = nonePicked
+      ? t("core-logic.choose.account.none")
+      : drafted !== undefined && typeof drafted.name === "string"
         ? drafted.name.split("@")[0]
         : profiles !== null
           ? t("core-logic.choose.account.count", { n: profiles.length })
           : t("core-logic.choose.account.all");
     const subsetLevels = profiles !== null ? accounts.filter((a) => profiles.includes(a.id)).map((a) => get(quotaLine(get(a, "quota")), "level") ?? null) : [];
     const subsetLow = subsetLevels.length > 0 && subsetLevels.every((l) => l !== null) ? subsetLevels[0] : null;
-    const whoLevel = dropped ? "amber" : profile === null && profiles === null && kept === null && keptProfiles === null ? low : profiles !== null ? subsetLow : null;
+    const whoLevel = nonePicked || dropped ? "amber" : profile === null && profiles === null && kept === null && keptProfiles === null ? low : profiles !== null ? subsetLow : null;
     const currentName = typeof get(current, "name") === "string" ? current.name : "";
-    const autoNote =
-      profiles !== null
+    const autoNote = nonePicked
+      ? t("core-logic.choose.account.pick_one")
+      : profiles !== null
         ? t("core-logic.choose.account.subset_note")
         : current !== null && profile === null && kept === null && keptProfiles === null && on === value.runtime
           ? t("core-logic.choose.account.now", { name: currentName })
           : t("core-logic.choose.account.auto_note");
     // A chat's account picked again now (`pick.repick`), beside 全选: when at least two checked accounts can take it.
-    const repick = current !== null && profile === null && Math.max(runnable, accounts.length) > 1 && on === value.runtime ? t("core-logic.choose.account.repick") : null;
+    const repick = !nonePicked && current !== null && profile === null && Math.max(runnable, accounts.length) > 1 && on === value.runtime ? t("core-logic.choose.account.repick") : null;
     const optionName = option !== undefined && typeof option.name === "string" ? option.name : null;
     const nameOf = (x: string | null): string | null => {
       if (x === null) return null;
@@ -852,11 +855,11 @@ export class Choose implements Owner {
       return found !== undefined && typeof found.name === "string" ? found.name : x;
     };
     const accountText = (id: string | null) => (id === null ? t("core-logic.choose.account.auto") : (account(id)?.name ?? id));
-    const onCurrent = current !== null && accounts.some((a) => equal(a.id, current.id)) && (profiles === null || profiles.includes(current.id));
-    const movesOff = profile === null && kept === null && m !== null && current !== null && !onCurrent;
+    const onCurrent = !nonePicked && current !== null && accounts.some((a) => equal(a.id, current.id)) && (profiles === null || profiles.includes(current.id));
+    const movesOff = !nonePicked && profile === null && kept === null && m !== null && current !== null && !onCurrent;
     const modelName = nameOf(m);
     const effortText = effort ?? t("core-logic.choose.default_effort");
-    const chosenText = profile !== null ? accountText(profile) : profiles !== null ? t("core-logic.choose.account.count", { n: profiles.length }) : t("core-logic.choose.account.auto");
+    const chosenText = nonePicked ? t("core-logic.choose.account.none") : profile !== null ? accountText(profile) : profiles !== null ? t("core-logic.choose.account.count", { n: profiles.length }) : t("core-logic.choose.account.auto");
     const was = [
       nameOf(typeof value.model === "string" ? value.model : null) ?? t("core-logic.format.default_model"),
       text(get(value, "effort")) ?? t("core-logic.choose.default_effort"),
@@ -976,7 +979,7 @@ export class Choose implements Owner {
         value,
         valueOption: valueOption ?? null,
         account: accountView,
-        draft: { model: m, runtime: on ?? null, effort, profile, ...(profiles !== null ? { profiles } : {}), fast, context },
+        draft: { model: m, runtime: on ?? null, effort, profile, ...(nonePicked ? { profiles: [] } : profiles !== null ? { profiles } : {}), fast, context },
         option: option !== undefined ? (option.model ?? null) : null,
         runtimes: !fixed && runtimes.length > 1 ? runtimes : [],
         efforts,
@@ -996,8 +999,8 @@ export class Choose implements Owner {
         modelText: modelName ?? t("core-logic.choose.pick_model"),
         maker: option !== undefined ? (option.maker ?? null) : null,
         accountText: chosenText,
-        accountNote: profile !== null ? t("core-logic.choose.account.fixed") : profiles !== null ? t("core-logic.choose.account.subset_note") : t("core-logic.choose.account.auto_note"),
-        accountWarn: dropped || movesOff,
+        accountNote: nonePicked ? t("core-logic.choose.account.pick_one") : profile !== null ? t("core-logic.choose.account.fixed") : profiles !== null ? t("core-logic.choose.account.subset_note") : t("core-logic.choose.account.auto_note"),
+        accountWarn: nonePicked || dropped || movesOff,
         saveText,
         next,
         borrow,
@@ -1065,7 +1068,8 @@ export class Choose implements Owner {
     this.#changed();
   }
 
-  /// `pick.set`: picks in a control's panel. `open`: from what it runs on now again; `clear`: starts over too.
+  /// `pick.set`: picks in a control's panel. `open`: from what it runs on now again (`open: false` drops an incomplete
+  /// zero-account draft back to the saved accounts); `clear`: starts over too.
   set(station: string, oName: string, params: J): void {
     const o = of(oName);
     const key = topicKey({ topic: "pick", station, of: oName });
@@ -1074,6 +1078,13 @@ export class Choose implements Owner {
       this.#drafts.delete(key);
       this.#hand.delete(key);
       this.#handWas.delete(key);
+    } else if (get(params, "open") === false || (get(params, "model") !== undefined && get(params, "profiles") === undefined && get(params, "profile") === undefined)) {
+      const cur = this.#drafts.get(key);
+      if (cur !== undefined && Array.isArray(cur.profiles) && normProfiles(cur.profiles) === null) {
+        delete cur.profiles;
+        delete cur.profile;
+        if (Object.keys(cur).length === 0) this.#drafts.delete(key);
+      }
     }
     const fields = FIELDS.filter((f) => get(params, f) !== undefined);
     if (fields.length > 0) {
@@ -1106,12 +1117,26 @@ export class Choose implements Owner {
   /// picked first.
   save(station: string, oName: string, params: J = {}): Saved {
     const o = of(oName);
-    if (FIELDS.some((f) => get(params, f) !== undefined)) this.set(station, oName, Object.fromEntries(FIELDS.filter((f) => get(params, f) !== undefined).map((f) => [f, params[f]])));
+    const key = topicKey({ topic: "pick", station, of: oName });
+    if (FIELDS.some((f) => get(params, f) !== undefined)) {
+      if (get(params, "profiles") === undefined && get(params, "profile") === undefined) {
+        const cur = this.#drafts.get(key);
+        if (cur !== undefined && Array.isArray(cur.profiles) && normProfiles(cur.profiles) === null) {
+          delete cur.profiles;
+          delete cur.profile;
+          if (Object.keys(cur).length === 0) this.#drafts.delete(key);
+        }
+      }
+      this.set(station, oName, Object.fromEntries(FIELDS.filter((f) => get(params, f) !== undefined).map((f) => [f, params[f]])));
+    }
     const topic: Topic = { topic: "pick", station, of: oName };
     const view = this.#pick(topic, station, oName);
     if (view === undefined) throw CoreError.invalid(t("core-logic.choose.error.no_options_yet"));
     if ("err" in view) throw view.err;
     const v = view.ok as J;
+    if (Array.isArray(get(v.draft, "profiles")) && v.draft.profiles.length === 0) {
+      return { done: { saved: false } };
+    }
     const next = v.next;
     const overview = this.#env.store.get({ topic: "overview", station });
     if (Array.isArray(next.profiles) && next.profiles.length > 1 && overview !== undefined && get(overview, "accountSubsets") !== true) {
@@ -1122,7 +1147,6 @@ export class Choose implements Owner {
     if (v.borrow !== null && v.borrow !== undefined) throw CoreError.invalid(t("core-logic.choose.borrow.first"));
     // How it runs set with no model: set by hand in the panel, kept for the model picked in it next (`#hand`); set
     // to what it already was, still set.
-    const key = topicKey(topic);
     const set = get(params, "model") === undefined ? HOW.filter((f) => get(params, f) !== undefined) : [];
     if (set.length > 0) {
       const was = this.#hand.get(key);

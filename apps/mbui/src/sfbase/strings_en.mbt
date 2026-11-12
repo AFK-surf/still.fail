@@ -1096,7 +1096,6 @@ let en : Map[String, String] = {
   "web-main.model.forgetCombo": "Remove {name} from frequent",
   "web-main.model.noMatch": "No models match",
   "web-main.model.none": "No models available",
-  "web-main.model.only": "Only",
   "web-main.model.otherSeries": "Other",
   "web-main.model.pick": "Choose model",
   "web-main.model.runtime": "Runtime",

@@ -36,8 +36,14 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       _ => tr("android-chat.run.title")
     }
     if list != "" {
-      nav_bar(c, core, tr("android-chat.run.title"), title, on_back=fn() { run_list.remove(of) })
-      c.on_back(fn() { run_list.remove(of) })
+      let leave_list = fn() {
+        if list == "account" && field(field(v, "draft"), "profiles") is Some(Array(xs)) && xs.is_empty() {
+          pick([("open", Json::boolean(false))])
+        }
+        run_list.remove(of)
+      }
+      nav_bar(c, core, tr("android-chat.run.title"), title, on_back=leave_list)
+      c.on_back(leave_list)
     } else {
       nav_bar(c, core, tr("common.back"), title)
     }
@@ -101,16 +107,21 @@ fn run_view(
         })
       })
     }
-    let picked_ids : Array[String] = {
-      let ps = strings(draft, "profiles").filter(fn(s) { s != "" })
-      if !ps.is_empty() {
-        ps
-      } else {
-        match text(draft, "profile") {
-          "" => []
-          id => [id]
+    let picked_ids : Array[String]? = match field(draft, "profiles") {
+      Some(Array(xs)) => {
+        let out : Array[String] = []
+        for x in xs {
+          if x is String(s) && s != "" && !out.contains(s) {
+            out.push(s)
+          }
         }
+        Some(out)
       }
+      _ =>
+        match text(draft, "profile") {
+          "" => None
+          id => Some([id])
+        }
     }
     account_list(
       c,
@@ -119,10 +130,9 @@ fn run_view(
       runtime,
       picked_ids,
       fn(ids) {
-        if ids.is_empty() {
-          pick([("profiles", Json::null()), ("profile", Json::null())])
-        } else {
-          pick([("profiles", Json::array(ids.map(fn(s) { str(s) })))])
+        match ids {
+          None => pick([("profiles", Json::null()), ("profile", Json::null())])
+          Some(xs) => pick([("profiles", Json::array(xs.map(fn(s) { str(s) })))])
         }
       },
       auto_trail?=if repick == "" { None } else { Some(repicking) },
@@ -1167,19 +1177,21 @@ let chip_py : Double = 9.0
 let chip_corner : Double = 18.0
 
 ///|
-/// Who runs the model picked: what 全选 and multi-account mean, then 全选 (`[]`: the station's pool; `auto_trail` at
-/// its end) and each account it may be kept to, its provider's mark before it and its allowance after it, 18 from the
-/// sides. `pick` hears the subset of accounts picked (`[]`: 全选).
+/// Who runs the model picked: what 全选 and multi-account mean, then 全选 (`None`: the station's pool; `Some([])`:
+/// 全不选, waiting for one account to be tapped; `auto_trail` at 全选's end) and each account it may be kept to, its
+/// provider's mark before it and its allowance after it, 18 from the sides. `pick` hears the selection (`None`: 全选).
 fn account_list(
   c : @ui.Ctx,
   key : String,
   accounts : Array[Json],
   runtime : String,
-  picked : Array[String],
-  pick : (Array[String]) -> Unit,
+  picked : Array[String]?,
+  pick : (Array[String]?) -> Unit,
   auto_trail? : () -> Unit,
 ) -> Unit {
   let all_ids = accounts.map(fn(x) { text(Some(x), "id") }).filter(fn(x) { x != "" })
+  let single_only = accounts.length() <= 1
+  let all_on = picked is None
   scroll_page(c, key, [
     fn() {
       c.box(style=account_list_room, fn() {
@@ -1187,13 +1199,17 @@ fn account_list(
         @sf.choice_row(
           c,
           key + "/auto",
-          picked.is_empty(),
+          all_on,
           tr("android-chat.run.account.auto"),
-          disabled=accounts.length() <= 1 && picked.is_empty(),
+          disabled=single_only,
           trail?=auto_trail,
           on_press=fn() {
-            if !picked.is_empty() {
-              pick([])
+            if !single_only {
+              if all_on {
+                pick(Some([]))
+              } else {
+                pick(None)
+              }
             }
           },
         )
@@ -1201,37 +1217,35 @@ fn account_list(
           let av = Some(a)
           let id = text(av, "id")
           let own = text(av, "runtime")
-          let checked = picked.is_empty() || picked.contains(id)
-          let sole = picked.length() == 1 && picked[0] == id
-          let locked = accounts.length() <= 1 || sole
+          let checked = match picked {
+            None => true
+            Some(xs) => xs.contains(id)
+          }
           @sf.choice_row(
             c,
             key + "/" + id,
             checked,
             text(av, "name"),
-            disabled=locked,
+            disabled=single_only,
             lead=fn() { @sf.provider_logo(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
             tag=fn() { @sf.quota_chips(c, field(av, "quota"), marked=false, gap=6.0, key=key + "/" + id) },
             on_press=fn() {
-              if locked {
+              if single_only {
                 return
               }
-              if picked.is_empty() {
-                let next = all_ids.filter(fn(x) { x != id })
-                if !next.is_empty() {
-                  pick(next)
-                }
-              } else if picked.contains(id) {
-                let next = picked.filter(fn(x) { x != id })
-                if !next.is_empty() {
-                  pick(next)
-                }
+              let cur_ids = match picked {
+                None => all_ids
+                Some(xs) => xs
+              }
+              if cur_ids.contains(id) {
+                let next = cur_ids.filter(fn(x) { x != id })
+                pick(Some(next))
               } else {
-                let next = all_ids.filter(fn(x) { x == id || picked.contains(x) })
+                let next = all_ids.filter(fn(x) { x == id || cur_ids.contains(x) })
                 if next.length() >= all_ids.length() {
-                  pick([])
+                  pick(None)
                 } else {
-                  pick(next)
+                  pick(Some(next))
                 }
               }
             },

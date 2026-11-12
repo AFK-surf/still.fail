@@ -769,7 +769,6 @@
   "web-main.model.account": "Account",
   "web-main.model.auto": "Auto",
   "web-main.model.current": "Current",
-  "web-main.model.only": "Only",
   "web-main.model.selectAll": "All",
   "web-main.model.defaultEffort": "Default effort",
   "web-main.model.effort": "Effort",

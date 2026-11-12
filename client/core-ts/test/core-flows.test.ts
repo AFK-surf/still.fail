@@ -1734,7 +1734,25 @@ test("multi_account_guards_older_stations_and_saved_subset_repick_to_all", async
   assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), []);
   apply(r2.host, vals2);
   assert.equal(v(vals2, 1).who, "全选");
-  // Single-account pin (`仅此`) still works on older stations.
+  // Single-account pin (`全不选 -> 点一个`) still works on older stations, and `profiles: []` drafts 全不选 cleanly.
+  await ask(r2.host, r2.core, ui2, 20, "pick.set", { station: "ws/st", of: "session:k1", profiles: [] });
+  apply(r2.host, vals2);
+  assert.deepEqual(
+    [v(vals2, 1).draft.profiles, v(vals2, 1).who, v(vals2, 1).whoLevel, v(vals2, 1).autoNote, v(vals2, 1).repick ?? null, v(vals2, 1).changed, v(vals2, 1).accountText, v(vals2, 1).accountWarn],
+    [[], "未选择", "amber", "请选择至少一个账号", null, false, "未选择", true],
+  );
+  // Saving with 0 accounts drafted is a no-op that preserves the 0-account draft without hitting the station.
+  assert.deepEqual(await ask(r2.host, r2.core, ui2, 21, "pick.save", { station: "ws/st", of: "session:k1" }), { saved: false });
+  assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), []);
+  apply(r2.host, vals2);
+  assert.deepEqual(v(vals2, 1).draft.profiles, []);
+  // Closing the account sub-panel (`open: false`) reverts an incomplete 0-account draft back to the saved accounts.
+  await ask(r2.host, r2.core, ui2, 22, "pick.set", { station: "ws/st", of: "session:k1", open: false });
+  apply(r2.host, vals2);
+  assert.equal(v(vals2, 1).who, "全选");
+  assert.equal(v(vals2, 1).draft.profiles, undefined);
+  // Re-entering 全不选 (`profiles: []`) and tapping one account (`profiles: ["p2"]`) pins `p2` immediately.
+  await ask(r2.host, r2.core, ui2, 23, "pick.set", { station: "ws/st", of: "session:k1", profiles: [] });
   await ask(r2.host, r2.core, ui2, 11, "pick.save", { station: "ws/st", of: "session:k1", profiles: ["p2"] });
   assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), [{ model: "claude-opus-5-5", effort: null, profile: "p2" }]);
   // Migrated local multi-account subset on an older station clamps to the first selected account (`p1`) instead of unrestricted pool.
