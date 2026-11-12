@@ -533,3 +533,65 @@ test "a modal layer of the tree's at 2 holding an old view's field with the focu
   t.key_named("enter") |> ignore
   assert_eq((k.submitted, k.menu.get(), k.open.get()), ([], true, true))
 }
+
+///|
+/// An old view the whole window, its page (while `page_takes`, taking presses) holding a button "旧按钮"; while
+/// `open`, a modal layer of the tree's over it holding "取消", giving the focus to it as it opens; leaving over
+/// `layer_focus_leave_ms`.
+fn layer_page_tester(open : @signals.Signal[Bool], page_takes : @signals.Signal[Bool]) -> Tester {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.grow(Is(1.0)).presses(By(fn() { page_takes.get() })) |> ignore
+      old(h, fn(c) {
+        let id = c.id("旧按钮")
+        c.focusable(id)
+        let b = c.box(id~, w=Px(120.0), h=Px(40.0), top=100.0, left=0.0, fn() {  })
+        c.semantics(b, Button, id~, label="旧按钮", actions=[Activate])
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.show(fn() { open.get() }, fn(l) {
+      l.over(Is(true)).modal(By(fn() { !l.leaving() })) |> ignore
+      let no = l.box(fn(x) {
+        x
+        .width(Is(Some(80.0)))
+        .height(Is(Some(40.0)))
+        .presses(Is(true))
+        .focusable(Is(true))
+        .says(Is(Some(@view.said(Button, label="取消"))))
+        .on_press(fn() {  })
+        |> ignore
+      })
+      l.focus_opens(no) |> ignore
+    }, leave=layer_focus_leave_ms)
+  })
+  t.draw()
+  t
+}
+
+///|
+test "a layer of the tree's opened from an old view's button with the focus, closed in the change that puts that button's page away: the focus given back to none of it, not to the page put away; its page kept, back on the button" {
+  for put_away in [false, true] {
+    let open = @signals.signal(false)
+    let page_takes = @signals.signal(true)
+    let t = layer_page_tester(open, page_takes)
+    t.act(Button, Focus, label="旧按钮")
+    open.set(true)
+    t.draw()
+    let opened = layer_focused(t)
+    // (one change, as a question's 归档 is: the page under it taken off for another, the question gone)
+    @signals.start_batch()
+    if put_away {
+      page_takes.set(false)
+    }
+    open.set(false)
+    @signals.end_batch()
+    let closed = layer_focused(t)
+    t.run_for(layer_focus_leave_ms)
+    let want = if put_away { None } else { Some("旧按钮") }
+    assert_eq((opened, closed, layer_focused(t)), (Some("取消"), want, want), msg="put away: \{put_away}")
+  }
+}
