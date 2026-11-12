@@ -3655,8 +3655,8 @@ fn old_part_of(id : @view.NodeId) -> Int {
 ///|
 /// An event from outside handled by `f` at its own moment (the host's event time, taken once): the window's tree
 /// settled to it first, `f` run as one change with it as its cause's moment; an event in one, at that one's (Tree::event).
-fn view_event(f : () -> Unit, what? : String = "event") -> Unit {
-  view_event_said(fn() {  }, f, what~)
+fn view_event(f : () -> Unit, what? : String = "event", input? : Bool = false) -> Unit {
+  view_event_said(fn() {  }, f, what~, input~)
 }
 
 ///|
@@ -3667,7 +3667,7 @@ let event_depth : Ref[Int] = Ref(0)
 ///|
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
-fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") -> Unit {
+fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event", input? : Bool = false) -> Unit {
   let recording = event_depth.val == 0 && @hostapi.perf_recording()
   // (the outermost event between frames, into the window thread's journal: journal.mbt; one in a frame is the frame's)
   let journaled = event_depth.val == 0 && !frame_running.val
@@ -3679,7 +3679,7 @@ fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") 
   let in_frame = frame_running.val
   event_depth.val += 1
   match view_app.val {
-    Some(t) => t.event_said(h_event_time(), said, f)
+    Some(t) => t.event_said(h_event_time(), said, f, brings=input)
     None => {
       said()
       f()

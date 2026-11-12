@@ -780,12 +780,47 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let pin_x = Ref(0.0)
   let pin_with : Ref[(Int, K?)] = Ref((0, None))
   let pin_foot = Ref(false)
-  // (how tall what lies over what was pressed is, each measured now as wide as it was last laid out)
+  // (the node its blocks are held in, once made: what they hold set coming or going kept by it, Tree's list_inner)
+  let held_node = Ref(-1)
+  // (how tall what lies over what was pressed is, each measured now as wide as it was last laid out; where what it is
+  // or holds through its slots (a show's, a pick's, an each's) is on its way in or out, as tall as its way has it at
+  // the moment it is read, as Places reads a block on its way: measured whole, a way's opening would be counted all at
+  // once as it sets out)
   let over_h = fn(over : Array[View]) {
+    let tree = self.tree
+    let laying = tree.rooming == self.at
+    let t = tree.logic_said()
     let mut h = 0.0
     for o in over {
-      if o.alive() && self.tree.nodes[o.at].flex.style.display != @flex.Display::DisplayNone {
-        h = h + @flex.measured_height(self.tree.nodes[o.at].flex, self.tree.nodes[o.at].flex.width)
+      guard o.alive() && tree.nodes[o.at].flex.style.display != @flex.Display::DisplayNone else { continue }
+      let items = if tree.nodes[o.at].slot { tree.column_items(o.at) } else { [o.at] }
+      let on_way = items.iter().any(fn(k) {
+        let st = tree.nodes[k].flex.style
+        tree.nodes[k].live && st.come_at == st.come_at && st.come_to == st.come_to
+      })
+      if !on_way {
+        h = h + @flex.measured_height(tree.nodes[o.at].flex, tree.nodes[o.at].flex.width)
+        continue
+      }
+      // (one made since it was last laid out: as wide as what holds it was)
+      let wide = if tree.nodes[o.at].flex.width > 0.0 {
+        tree.nodes[o.at].flex.width
+      } else {
+        tree.nodes[tree.nodes[o.at].parent].flex.width
+      }
+      for k in items {
+        let m = tree.nodes[k]
+        guard m.live && m.flex.style.display != @flex.Display::DisplayNone else { continue }
+        let st = m.flex.style
+        // (how tall it comes to whole: what its way went to as it was last laid out, coming; measured, it is as tall as
+        // its way had it then, never laid out yet as tall as it comes to)
+        let whole = if st.come_goal == st.come_goal && st.come_to > 0.0 {
+          st.come_goal / st.come_to
+        } else {
+          @flex.measured_height(m.flex, if m.flex.width > 0.0 { m.flex.width } else { wide })
+        }
+        let at = if laying && st.come_now == st.come_now { st.come_now } else { t }
+        h = h + @flex.come_tall_at(st, whole, at)
       }
     }
     h
@@ -836,11 +871,33 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let ks = @signals.untracked(keys)
       pin_with.val = (ks.length(), ks.last())
       pin_foot.val = foot_then
-      // (all it set off ended: held so once more, in the layout of that moment, then no more)
+      // (all it set off ended: held so once more, in the layout of that moment, then no more. Its end the latest any
+      // of what was set coming or going in it at the press's moment declares (a row's way, what a block holds; a
+      // group turned back too), said once the change is told whole and its column's group with it, a wait inside a
+      // wait as the ways' own; where none declares one, as long as a Move takes at most)
       pin_ends.val = false
-      unpin.val = self.at_moment(self.tree.cause_now() + @flex.move_most_ms, fn() {
-        pin_ends.val = true
-        laid_again()
+      unpin.val = fn() {  }
+      let cause = self.tree.cause_now()
+      let mine = pin.val
+      @signals.after_flush(fn() {
+        @signals.after_flush(fn() {
+          guard physical_equal(pin.val, mine) else { return }
+          let mut end = @double.neg_infinity
+          let set_off = ways.map(fn(w) { w.0 })
+          set_off.append(self.tree.list_inner_at(held_node.val, cause))
+          for w in set_off {
+            match w.live() {
+              Some(n) if n.coming && n.flex.style.come_at == cause && n.flex.style.come_ends == n.flex.style.come_ends =>
+                end = dmax(end, n.flex.style.come_ends)
+              _ => ()
+            }
+          }
+          let end = if end > cause { end } else { cause + @flex.move_most_ms }
+          unpin.val = self.at_moment(end, fn() {
+            pin_ends.val = true
+            laid_again()
+          })
+        })
       })
     }
   }
@@ -1869,10 +1926,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room() + s.tuck_room.get() + press_room.get()) })) |> ignore
-    // (what its blocks hold that comes or goes down a column in them: in its one way, unless it is said at once)
-    if !at_once {
-      held.list_joins_inner(held.at)
-    }
+    // (what its blocks hold that comes or goes down a column in them: kept, how long a press there set off goes, and in
+    // its one way unless it is said at once)
+    held.list_keeps_inner(held.at, !at_once)
+    held_node.val = held.at
     // (short of what shows, its blocks at its foot: at least as tall as the room it shows them in, they at its end)
     if from_end {
       held.min_height_share(Is(Some(1.0))).lies_along(Is(Lies::End)) |> ignore

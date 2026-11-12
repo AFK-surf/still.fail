@@ -25,18 +25,14 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "card-motion": [7],
   "close-option": [7],
   "delete-failed": [7],
-  "draft": [7],
   "glass": [7],
   "history": [7],
   "markdown": [7],
-  "offline-retry": [7],
   "open-link": [7],
   "pick-words": [7],
   "quote": [7],
-  "send-card-paced": [7],
   "send-flying": [7],
   "send-paced": [7],
-  "send-text": [7],
   "service-page": [7],
   "station-file-sent": [7],
   // 6: sub {"topic":"workspace","workspace":…} | strict sub {"topic":"doing"}
@@ -46,7 +42,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "drive-zip": [7],
   "reader": [7],
   // 6: unsub {"topic":"status"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  "chinese-enter": [7],
   "dismiss": [7],
   "paste-long": [7],
   "paste-short": [7],
@@ -60,7 +55,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "station-rename": [7],
   "settings-decisions": [7],
   // 4: - | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  "bar-archive": [7],
   "notice-looking": [7],
   // wide-answer-reply at 120 (#5519): the new chat page sends its composer, machineSessions.list and status's
   // release in the frame at 1050 ms, notify.permission (sent once notify's values are in, which came after that
@@ -87,8 +81,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // 2: unsub {"topic":"status"} | strict sub {"topic":"workspace","workspace":…}
   "bar-glass": [7],
   "places": [7],
-  // 1: sub {"scope":…,"topic":"newChat"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  "draft-restart": [7],
   // 1: - | strict call lock.pair {"workspace":…}
   "lock-wait": [7],
   // 1: sub {"scope":…,"topic":"stations"} | strict sub {"scope":…,"topic":"newChat"}
