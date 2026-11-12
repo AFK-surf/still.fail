@@ -4,13 +4,11 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED};
-use super::{Out, audio_packets::Packets, audio_queue::AudioQueue};
+use super::{Out, audio_packets::{Packets, Runs}, audio_queue::AudioQueue};
 
 const RATE: u32 = 48_000;
 const CHANNELS: u16 = 2;
 const FRAME_BYTES: usize = CHANNELS as usize * 2;
-const PACKET_FRAMES: usize = 960; // 20 ms
-const PACKET_BYTES: usize = PACKET_FRAMES * FRAME_BYTES;
 
 pub struct Audio { next: Sender<()> }
 impl Audio {
@@ -55,9 +53,8 @@ unsafe fn run(rx: Receiver<()>, out: &Out, packets: Packets) -> windows::core::R
 
 unsafe fn pull(capture: &IAudioCaptureClient, rx: Receiver<()>, out: &Out, mut packets: Packets) -> windows::core::Result<()> {
     // Drain WASAPI without discarding packets within a normal capture or network burst.
-    let mut building = Vec::with_capacity(PACKET_BYTES);
+    let mut runs = Runs::new();
     let mut queued = AudioQueue::new();
-    let mut packet_ts = 0;
     let mut wanted = false;
     loop {
         match rx.recv_timeout(Duration::from_millis(5)) {
@@ -73,19 +70,13 @@ unsafe fn pull(capture: &IAudioCaptureClient, rx: Receiver<()>, out: &Out, mut p
                 let mut flags = 0;
                 let mut qpc = 0;
                 capture.GetBuffer(&mut data, &mut frames, &mut flags, None, Some(&mut qpc))?;
-                if flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32 != 0 { building.clear(); }
+                let discontinuity = flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32 != 0;
                 let silent = flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0;
                 let size = frames as usize * FRAME_BYTES;
                 // A packet from the system is bounded by its endpoint buffer. Copy before releasing that buffer.
-                for offset in 0..size {
-                    if building.is_empty() { packet_ts = qpc / 10 + (offset / FRAME_BYTES) as u64 * 1_000_000 / RATE as u64; }
-                    building.push(if silent || data.is_null() { 0 } else { *data.add(offset) });
-                    if building.len() == PACKET_BYTES {
-                        queued.push((packet_ts,
-                            std::mem::replace(&mut building, Vec::with_capacity(PACKET_BYTES))));
-                    }
-                }
+                let pcm: Vec<u8> = if silent || data.is_null() { vec![0; size] } else { std::slice::from_raw_parts(data, size).to_vec() };
                 capture.ReleaseBuffer(frames)?;
+                runs.add(qpc / 10, &pcm, discontinuity, |ts, packet| queued.push((ts, packet)));
             }
         }
         // (silence is none to send: the next with sound goes in its place)

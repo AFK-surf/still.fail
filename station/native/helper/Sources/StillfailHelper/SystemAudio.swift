@@ -26,7 +26,7 @@ final class SystemAudio: NSObject, SCStreamOutput {
   private var refused = false
 
   /// What makes each packet Opus, for a view that asked it; nil: PCM16 (not asked, or this Mac encodes none).
-  private let encoder: OpusPackets?
+  let encoder: OpusPackets?
 
   init(channel: Channel, opus: Bool = false) {
     self.channel = channel
@@ -59,6 +59,14 @@ final class SystemAudio: NSObject, SCStreamOutput {
     let at = pts.isValid ? Int64(CMTimeGetSeconds(pts) * 1_000_000) : Int64(DispatchTime.now().uptimeNanoseconds / 1000)
     packets.add(pcm, at: at)
     flush()
+  }
+
+  /// Sound captured from `at` (µs on the capture's clock), as a capture's handler takes it (on the queue).
+  func took(_ pcm: [Int16], at: Int64) {
+    queue.async {
+      self.packets.add(pcm, at: at)
+      self.flush()
+    }
   }
 
   /// Made-up sound (a view's `synthetic`): 440 Hz and 1250 Hz on the left, 660 Hz on the right, a packet each 20 ms on
@@ -95,22 +103,28 @@ final class SystemAudio: NSObject, SCStreamOutput {
   private func flush() {
     while wanted, let (ts, pcm) = packets.pop() {
       // Digital silence (an app holding its output open with nothing playing; ScreenCaptureKit itself sends nothing
-      // then) is not sent: as PCM it was 1.5 Mbit/s of zeros, as Opus 3-byte packets. The sound after it starts anew.
+      // then) is not sent once it has lasted `quiet` packets: as PCM it was 1.5 Mbit/s of zeros, as Opus 3-byte packets.
+      // Shorter (between two sounds, between a voice's words) it goes as any sound does. The sound after it starts anew.
       if pcm.allSatisfy({ $0 == 0 }) {
-        sentEnd = nil
-        continue
+        zeros += 1
+        if zeros >= SystemAudio.quiet {
+          sentEnd = nil
+          continue
+        }
+      } else {
+        zeros = 0
       }
       var data = pcm
       if let encoder {
         // After a gap (silence left out, sound that does not follow on) the encoder starts anew, as the client's
         // decoder does (client/shell ScreenTap): neither carries the sound before the gap into the packet after it.
-        if let end = sentEnd, abs(ts - end) <= AudioPackets.slack {} else { encoder.reset() }
+        if sentEnd != ts { encoder.reset() }
         // (one in, one out: a packet the encoder gives nothing for is none to send; the next is)
         guard let encoded = encoder.encode(pcm) else { return }
         data = encoded
       }
       wanted = false
-      sentEnd = ts + Int64(AudioPackets.frames) * 1_000_000 / Int64(SystemAudio.rate)
+      sentEnd = ts + AudioPackets.micros(Int64(AudioPackets.frames))
       var payload = Data(count: 8)
       var be = UInt64(max(0, ts)).bigEndian
       payload.replaceSubrange(0..<8, with: Data(bytes: &be, count: 8))
@@ -118,6 +132,9 @@ final class SystemAudio: NSObject, SCStreamOutput {
       channel.send(9, payload)
     }
   }
+  /// Packets of digital silence in a row so far; how many make silence that is not sent (200 ms).
+  private var zeros = 0
+  static let quiet = 10
   /// Where the sound last sent ends (µs of the capture clock); nil before any, and after silence left out.
   private var sentEnd: Int64?
 
@@ -170,31 +187,41 @@ final class SystemAudio: NSObject, SCStreamOutput {
   }
 }
 
-/// Interleaved stereo PCM16 as it comes, made into packets of exactly 960 frames (20 ms), each with the capture time of
-/// its first frame; at most 15 kept (300 ms), the oldest dropped first. Sound that does not follow on from the last (a
-/// gap, as ScreenCaptureKit sends nothing while nothing plays) starts a packet of its own: the part made before it is
-/// dropped, not joined to it under a time it was not captured at.
+/// Interleaved stereo PCM16 as it comes, made into packets of exactly 960 frames (20 ms); at most 15 kept (300 ms), the
+/// oldest dropped first. Sound that follows on from the sound before it (its time within `slack` of where that ends,
+/// counted by its frames) is one run, and a packet's time is where it starts in its run, by the frames before it: 20 ms
+/// on from the packet before it exactly, however a capture's said times jitter. Sound that does not follow on (a gap,
+/// as ScreenCaptureKit sends nothing while nothing plays) starts a run of its own: the part made before it is dropped,
+/// not joined to it under a time it was not captured at.
 struct AudioPackets {
   static let frames = 960
   static let bytes = frames * 4
   static let kept = 15
-  /// How far from where the last sound ended new sound may start and still follow on (µs).
-  static let slack: Int64 = 5_000
+  /// How far from where the sound before it ends (by its frames) new sound may start and still follow on (µs): half a
+  /// packet, more than a capture's said time jitters, less than any gap.
+  static let slack: Int64 = 10_000
 
   private var building: [Int16] = []
-  private var buildingAt: Int64 = 0
-  /// Where the last sound added ends (µs); nil before any.
-  private var end: Int64?
+  /// The run: when it started (µs), the frames that came in it, those of them in packets made; nil before any.
+  private var runAt: Int64?
+  private var runFrames: Int64 = 0
+  private var made: Int64 = 0
   private(set) var queued: [(Int64, Data)] = []
+
+  static func micros(_ frames: Int64) -> Int64 { frames * 1_000_000 / Int64(SystemAudio.rate) }
 
   /// `pcm` (interleaved stereo) captured from `at` (µs) on.
   mutating func add(_ pcm: [Int16], at: Int64) {
     let count = pcm.count / 2
-    if let end, abs(at - end) > AudioPackets.slack { building.removeAll(keepingCapacity: true) }
-    end = at + Int64(count) * 1_000_000 / Int64(SystemAudio.rate)
+    if let runAt, abs(at - (runAt + AudioPackets.micros(runFrames))) <= AudioPackets.slack {} else {
+      building.removeAll(keepingCapacity: true)
+      runAt = at
+      runFrames = 0
+      made = 0
+    }
+    runFrames += Int64(count)
     var frame = 0
     while frame < count {
-      if building.isEmpty { buildingAt = at + Int64(frame) * 1_000_000 / Int64(SystemAudio.rate) }
       let take = min(count - frame, AudioPackets.frames - building.count / 2)
       building.append(contentsOf: pcm[(frame * 2)..<((frame + take) * 2)])
       frame += take
@@ -202,7 +229,8 @@ struct AudioPackets {
         let data = building.withUnsafeBufferPointer { b in Data(buffer: UnsafeBufferPointer(start: b.baseAddress, count: b.count)) }
         // Little-endian on every Mac this runs on (arm64, x86_64): the bytes as they are.
         if queued.count == AudioPackets.kept { queued.removeFirst() }
-        queued.append((buildingAt, data))
+        queued.append((runAt! + AudioPackets.micros(made), data))
+        made += Int64(AudioPackets.frames)
         building.removeAll(keepingCapacity: true)
       }
     }
@@ -240,7 +268,10 @@ final class OpusPackets {
   /// The next packet starts the sound anew (after a gap): nothing of the sound before it is carried into it.
   func reset() {
     converter.reset()
+    resets += 1
   }
+  /// How many times it started anew.
+  private(set) var resets = 0
 
   /// One packet's PCM (3840 bytes) as one Opus packet; nil when the encoder gave none for it.
   func encode(_ pcm: Data) -> Data? {

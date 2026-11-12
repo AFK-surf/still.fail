@@ -193,8 +193,11 @@ export function parseInput(v: any): ScreenInput | null {
 }
 
 /// Digital silence: a source from before that sends it (an older still.fail Helper, stillfail-screen) sends 1.5 Mbit/s
-/// of zeros while nothing plays; left out, the client's player waits for sound as after any gap.
+/// of zeros while nothing plays; from QUIET packets of it in a row (200 ms) it is left out, the client's player waiting
+/// for sound as after any gap; shorter (between two sounds) it goes. Opus's is the sources' own to leave out (none from
+/// before sends Opus).
 const silent = (pcm: Uint8Array) => pcm.every((b) => b === 0);
+const QUIET = 10;
 
 /// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), the 画质
 /// chosen (`quality`: the most its bit rate goes to; none for 自动 and from a client before it), the 帧率 chosen (`fps`:
@@ -533,6 +536,8 @@ class ViewSession {
   /// (`sound` 0), what comes is taken and left out the same way, so the sound is as late as before once it is on again.
   async #audio(): Promise<void> {
     let configured = false;
+    // PCM's packets of digital silence in a row so far.
+    let zeros = 0;
     try {
       while (!this.#closed) {
         const next = await this.view.nextAudio!();
@@ -541,7 +546,8 @@ class ViewSession {
           await this.#send(KIND.audioConfig, Buffer.from(JSON.stringify({ codec: next.codec, sampleRate: 48000, channels: 2 })));
           configured = true;
         }
-        if (!this.#timed || !this.#soundOn || (next.codec === "pcm_s16le" && (this.pacer.backlogged() || silent(next.data)))) continue;
+        zeros = next.codec === "pcm_s16le" && silent(next.data) ? zeros + 1 : 0;
+        if (!this.#timed || !this.#soundOn || (next.codec === "pcm_s16le" && (this.pacer.backlogged() || zeros >= QUIET))) continue;
         const payload = Buffer.alloc(8 + next.data.length);
         payload.writeBigUInt64BE(BigInt(Math.round(next.ts)), 0);
         payload.set(next.data, 8);

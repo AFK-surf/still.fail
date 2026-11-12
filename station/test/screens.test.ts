@@ -332,9 +332,13 @@ test("the sound is left out while the pictures wait in front of the link, and wh
   view.give(4);
   await settle();
   assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 4n);
-  // Digital silence (a source from before sends it while nothing plays) is left out too; the sound after it goes.
-  view.give(99);
-  await settle();
+  // Digital silence (a source from before sends it while nothing plays): its first 9 packets go (a pause between two
+  // sounds), from the 10th it is left out; the sound after it goes.
+  for (let i = 0; i < 12; i++) {
+    view.give(99);
+    await settle();
+    if (i < 9) assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 99n);
+  }
   view.give(5);
   await settle();
   assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 5n);

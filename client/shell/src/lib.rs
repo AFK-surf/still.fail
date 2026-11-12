@@ -274,10 +274,11 @@ const FRAME_MAX: usize = 64 * 1024 * 1024;
 /// packet (RFC 6716 3.2.1).
 const PCM_PACKET: usize = 3840;
 const OPUS_MAX: usize = 1275;
-/// A packet's capture time this far (µs) from where the last one ended still follows on from it (the Helper's
-/// AudioPackets `slack`); one further is after a gap (left out before the round trip was known, muted, or silence not
-/// sent), decoded by a decoder made anew: one that went on from the sound before the gap blended that into it.
-const OPUS_SLACK: u64 = 5_000;
+/// A packet's capture time this far (µs) from where the last one ended still follows on from it: half a packet (the
+/// sources that encode Opus give each packet of a run its time 20 ms on from the last exactly: the Helper's
+/// AudioPackets, stillfail-screen's Runs); one further is after a gap (packets left out before the round trip was
+/// known, while muted, silence not sent), decoded by a decoder made anew, as its encoder was.
+const OPUS_SLACK: u64 = 10_000;
 
 impl ScreenTap {
     fn new(call: u64) -> Self {

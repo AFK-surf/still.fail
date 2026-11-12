@@ -1,17 +1,64 @@
-// What goes out for each 20 ms packet of system output (audio.rs): the PCM as it is, or one Opus packet of it for a
-// view that asked `audioCodec: "opus"` (opus-rs, the encoder of the decoder the apps' shell has: client/shell), and
-// nothing for digital silence (WASAPI's loopback goes on giving it while nothing plays: 1.5 Mbit/s of zeros as PCM).
-// After a gap (silence left out, a discontinuity) the encoder starts anew, as the client's decoder does then.
+// System output made into 20 ms packets (audio.rs's WASAPI capture: `Runs`), and what goes out for each (`Packets`): the
+// PCM as it is, or one Opus packet of it for a view that asked `audioCodec: "opus"` (opus-rs, the encoder of the decoder
+// the apps' shell has: client/shell), and nothing once digital silence has lasted QUIET packets (WASAPI's loopback goes
+// on giving it while nothing plays: 1.5 Mbit/s of zeros as PCM); shorter, between two sounds, it goes as sound does.
+// After a gap (silence left out, a discontinuity, a packet dropped) the encoder starts anew, as the client's decoder
+// does then (still.fail Helper's SystemAudio.swift, the same).
 const PACKET_FRAMES: usize = 960;
 const PACKET_BYTES: usize = PACKET_FRAMES * 4;
-/// How far (µs) a packet's capture time may be from where the last one sent ended and still follow on from it.
-const SLACK: u64 = 5_000;
+const PACKET_US: u64 = 20_000;
+/// How far (µs) a buffer's said time may be from where the sound before it ends (by its frames) and still follow on:
+/// half a packet, more than a capture's time jitters, less than any gap.
+const SLACK: u64 = 10_000;
+/// Packets of digital silence in a row from which none is sent (200 ms).
+const QUIET: u32 = 10;
 const BITRATE: i32 = 64_000;
+
+/// The capture's buffers made into packets of exactly 960 frames. Sound that follows on from the sound before it is one
+/// run, and a packet's time is where it starts in its run by the frames before it: 20 ms on from the one before it
+/// exactly, however the buffers' said times jitter. Sound that does not follow on starts a run of its own, the part of a
+/// packet made before it dropped.
+pub struct Runs {
+    building: Vec<u8>,
+    /// The run: when it started (µs), the frames that came in it, those of them in packets made; none before any.
+    at: Option<u64>,
+    frames: u64,
+    made: u64,
+}
+
+impl Runs {
+    pub fn new() -> Self {
+        Runs { building: Vec::with_capacity(PACKET_BYTES), at: None, frames: 0, made: 0 }
+    }
+
+    /// A buffer of interleaved stereo PCM16 captured from `at` (µs): each packet it completes given to `packet` with its
+    /// time. `discontinuity`: the capture says it does not follow on.
+    pub fn add(&mut self, at: u64, pcm: &[u8], discontinuity: bool, mut packet: impl FnMut(u64, Vec<u8>)) {
+        let follows = !discontinuity && self.at.is_some_and(|start| at.abs_diff(start + self.frames * 1_000_000 / 48_000) <= SLACK);
+        if !follows {
+            self.building.clear();
+            self.at = Some(at);
+            self.frames = 0;
+            self.made = 0;
+        }
+        self.frames += (pcm.len() / 4) as u64;
+        for chunk in pcm.chunks(4) {
+            self.building.extend_from_slice(chunk);
+            if self.building.len() == PACKET_BYTES {
+                let ts = self.at.unwrap() + self.made * PACKET_US;
+                self.made += 1;
+                packet(ts, std::mem::replace(&mut self.building, Vec::with_capacity(PACKET_BYTES)));
+            }
+        }
+    }
+}
 
 pub struct Packets {
     opus: Option<Box<opus_rs::OpusEncoder>>,
     /// Where the sound last sent ends (µs); none before any and after silence.
     sent_end: Option<u64>,
+    /// Packets of digital silence in a row so far.
+    zeros: u32,
 }
 
 fn encoder() -> Option<Box<opus_rs::OpusEncoder>> {
@@ -24,7 +71,7 @@ fn encoder() -> Option<Box<opus_rs::OpusEncoder>> {
 impl Packets {
     /// Opus where asked and it can be made, else PCM.
     pub fn new(opus: bool) -> Self {
-        Packets { opus: if opus { encoder() } else { None }, sent_end: None }
+        Packets { opus: if opus { encoder() } else { None }, sent_end: None, zeros: 0 }
     }
 
     pub fn codec(&self) -> &'static str {
@@ -36,14 +83,19 @@ impl Packets {
     pub fn payload(&mut self, ts: u64, pcm: &[u8]) -> Option<Vec<u8>> {
         if pcm.len() != PACKET_BYTES { return None; }
         if pcm.iter().all(|&b| b == 0) {
-            self.sent_end = None;
-            return None;
+            self.zeros += 1;
+            if self.zeros >= QUIET {
+                self.sent_end = None;
+                return None;
+            }
+        } else {
+            self.zeros = 0;
         }
         let mut payload = ts.to_be_bytes().to_vec();
         match &mut self.opus {
             None => payload.extend_from_slice(pcm),
             Some(e) => {
-                if !self.sent_end.is_some_and(|end| ts.abs_diff(end) <= SLACK) {
+                if self.sent_end != Some(ts) {
                     if let Some(fresh) = encoder() { *e = fresh; }
                 }
                 let samples: Vec<i16> = pcm.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
@@ -52,7 +104,7 @@ impl Packets {
                 payload.extend_from_slice(&out[..n]);
             }
         }
-        self.sent_end = Some(ts + 20_000);
+        self.sent_end = Some(ts + PACKET_US);
         Some(payload)
     }
 }
@@ -88,8 +140,51 @@ mod tests {
         }
         // a sine of 0.3: 0.21 RMS
         assert!((0.18..0.25).contains(&level), "{level}");
-        assert_eq!(packets.payload(1_200_000, &[0u8; PACKET_BYTES]), None, "silence is not sent");
+        // silence: its first 9 packets (180 ms, a pause between two sounds) go, from the 10th none
+        for n in 0..12u64 {
+            let sent = packets.payload(1_200_000 + n * 20_000, &[0u8; PACKET_BYTES]);
+            assert_eq!(sent.is_some(), n < 9, "packet {n} of silence");
+        }
         assert!(packets.payload(1_500_000, &tone(0)).is_some(), "the sound after it is");
+    }
+
+    /// Buffers of 10 ms whose said times jitter (±3 ms, now and then ±8: what a capture's clock gives) make packets 20 ms
+    /// apart exactly, and the encoder never starts anew; a gap (or a discontinuity said) starts a run of its own.
+    #[test]
+    fn jittered_capture_times_make_one_run_and_a_gap_another() {
+        let mut runs = Runs::new();
+        let mut packets = Packets::new(true);
+        let mut sent: Vec<u64> = vec![];
+        let jitter = [0i64, 3_000, -3_000, 1_000, -2_000, 8_000, -8_000, 2_000, -1_000, 3_000];
+        // 10 ms (480 frames) of a tone, the n-th
+        let buffer = |n: usize| -> Vec<u8> {
+            (0..480).flat_map(|i| {
+                let t = (n * 480 + i) as f64 / 48_000.0;
+                let v = ((2.0 * std::f64::consts::PI * 440.0 * t).sin() * 0.3 * 32767.0) as i16;
+                [v.to_le_bytes(), v.to_le_bytes()].concat()
+            }).collect()
+        };
+        let mut follows = 0;
+        for n in 0..200usize {
+            let at = (5_000_000 + n as i64 * 10_000 + jitter[n % jitter.len()]) as u64;
+            runs.add(at, &buffer(n), false, |ts, pcm| {
+                let was = packets.sent_end;
+                assert!(packets.payload(ts, &pcm).is_some());
+                if was == Some(ts) { follows += 1; }
+                sent.push(ts);
+            });
+        }
+        assert_eq!(sent.len(), 100);
+        assert!(sent.windows(2).all(|w| w[1] - w[0] == 20_000), "20 ms apart exactly");
+        assert_eq!(follows, 99, "one run: the encoder made anew for its first packet alone");
+        // 100 ms with nothing captured: a run of its own, its first packet's encoder anew
+        let mut after = vec![];
+        for n in 0..4usize { runs.add(7_100_000 + n as u64 * 10_000, &buffer(n), false, |ts, _| after.push(ts)); }
+        assert_eq!(after, vec![7_100_000, 7_120_000]);
+        let mut said = vec![];
+        runs.add(7_140_000, &buffer(0), true, |ts, _| said.push(ts));
+        runs.add(7_150_000, &buffer(1), false, |ts, _| said.push(ts));
+        assert_eq!(said, vec![7_140_000], "a discontinuity said: anew");
     }
 
     #[test]
@@ -99,6 +194,8 @@ mod tests {
         let sound = tone(0);
         let p = packets.payload(7, &sound).unwrap();
         assert_eq!((&p[..8], &p[8..]), (&7u64.to_be_bytes()[..], &sound[..]));
-        assert_eq!(packets.payload(20_007, &[0u8; PACKET_BYTES]), None);
+        // a packet of silence goes (a pause between two sounds); from the 10th in a row none
+        let silence: Vec<bool> = (1..=11u64).map(|n| packets.payload(7 + n * 20_000, &[0u8; PACKET_BYTES]).is_some()).collect();
+        assert_eq!(silence, [vec![true; 9], vec![false; 2]].concat());
     }
 }
