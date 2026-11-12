@@ -49,6 +49,17 @@ with the bound that keeps it small named (a cap's constant, a fixed set of field
 value: the value names it by a token and its bytes come beside a call's answer (a link's card's and a file's peek's:
 `src/peek-pictures.ts`; a chat's: `station.file`).
 
+## What answering reads follows what it sends
+
+What answering a way of asking reads of the database follows what it sends, not how much the device holds (the owner,
+2026-11-12: 「不应该这么无休止地扣细节」「这应该从架构设计和测试层面解决」, after two days of slow topics found one at a
+time by hand). `test/topic-work.test.ts` counts, in the database's own calls, the bytes of text every way of `ASKED`
+reads on a core started anew (and asked again), and each interaction the app sends (a start, a switch of workspace, a
+chat opened, a place of the bar) to its first screen and to rest: at most twice what it sends or 8 KB, and with the
+workspace's chats, messages, profiles, people or stations three times (real-size.ts `Size`, a worker thread a size), its
+reading growing no faster than what it sends. Those over now are in its `OVER_READ`, `OVER_READ_AGAIN` and `GROWS`, which
+only fall; a failure prints the statements that read most.
+
 ## What is shared is never written
 
 Unchanged things being the same object is what makes rule 6 work, so a value read from the database
