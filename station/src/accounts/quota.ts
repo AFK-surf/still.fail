@@ -23,6 +23,7 @@ import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles
 import { profileFetch } from "../ops/agent-env.ts";
 import { codexQuotaFailure } from "../../../client/core-ts/src/codex-quota.ts";
 import { claudeHeaders, claudeResets, type QuotaReset, USAGE_PATH } from "./claude-reset.ts";
+import { unanswered } from "../ops/unanswered.ts";
 
 type Json = any;
 
@@ -239,16 +240,6 @@ export function codexQuota(result: Json, lang: Lang = stationLang()): ProfileQuo
 
 /// Reaches a profile's codex app-server for its account/rateLimits/read.
 export type CodexRateLimits = (profile: Profile) => Promise<Json>;
-
-/// A socket's errors where the provider was not reached (through a proxy, https.request says them as they are).
-const UNREACHED = new Set(["ECONNREFUSED", "ECONNRESET", "ECONNABORTED", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"]);
-
-/// Whether a request to the provider got no answer at all: no way there (fetch's "fetch failed", a socket's error)
-/// or none in time.
-function unanswered(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return error.name === "TimeoutError" || (error instanceof TypeError && error.message === "fetch failed") || UNREACHED.has(String((error as NodeJS.ErrnoException).code));
-}
 
 function failed(error: unknown, lang: Lang): ProfileQuota {
   // One that never reached the provider said in words, not as Node says it.
