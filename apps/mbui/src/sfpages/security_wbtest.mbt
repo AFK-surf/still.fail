@@ -454,6 +454,6 @@ test "people added, answered with a change of the lock no station took yet: its 
   t.click(Button, label="添加")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find(said) is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
-  // (not the done words: 1 位 added to join at their first sign-in)
-  assert_true(t.find("首次登录") is None, msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // (not the done words: 「1 人首次登录 still.fail 时自动加入。」)
+  assert_true(t.find("1 人首次登录") is None, msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
