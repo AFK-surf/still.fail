@@ -16,10 +16,10 @@ import { apply as applyOps } from "../src/delta.ts";
 import { CoreError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
-import { keep } from "../src/lock-keep.ts";
+import { AGAIN_MOST, keep } from "../src/lock-keep.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { lockChain } from "../src/vault/lock-check.ts";
-import { ASKED_MS, Lock, TAKEN_MS, asked, fold, held, lockView, pendingHeld, read } from "../src/views/lock.ts";
+import { ASKED_MS, Lock, TAKEN_MS, asked, fold, held, lockView, pendingHeld, pendingRowOf, read } from "../src/views/lock.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { subscribe } from "./helpers.ts";
 import { ME, genesis, grant, rig, unhex, withoutMesh } from "./lock-rig.ts";
@@ -294,7 +294,9 @@ test("a read moves the chain held off this device's entry (two stations, another
 /// This device's `acts`, taken by A alone (S down) after `shared` (taken by both), all losing their place together:
 /// S's chain put as `theirs` makes it after what both took (another device's removal of THIRD first, which wins at the
 /// parent of the first act: a removal of a device that signs), S up and read, and the background's signing again let
-/// settle. T, the lock's third station, is down throughout.
+/// settle. T, the lock's third station, is down throughout. Each act a person's call (the call's wait, `asked`): one
+/// let be is theirs to be told of (what is pending, `failed`).
+const byHand = (w: { inner: Awaited<ReturnType<typeof setUp>>["inner"] }) => new Lock(w.inner, "ws", "s1", null, { byHand: true, within: asked(w.inner) });
 async function lostTogether(acts: [string, unknown][], shared: [string, unknown][] = [], theirs: (base: Entry[], w: Awaited<ReturnType<typeof setUp>>) => Entry[] = (base) => [signedBy(oldKey, base, 1002, "device.remove", { id: THIRD })]) {
   const w = await setUp([A, S, T]);
   w.st(T).say.down = true;
@@ -304,7 +306,7 @@ async function lostTogether(acts: [string, unknown][], shared: [string, unknown]
   w.st(S).say.down = true;
   const mine: Entry[] = [];
   for (const [kind, body] of acts) {
-    await w.run(new Lock(w.inner, "ws", "s1", null).append(kind, body));
+    await w.run(byHand(w).append(kind, body));
     mine.push(held(w.inner, "ws")!.entries.at(-1)!);
   }
   assert.deepEqual(w.st(A).chain().map(entryHash), [...base, ...mine].map(entryHash), "A took them all");
@@ -317,39 +319,42 @@ async function lostTogether(acts: [string, unknown][], shared: [string, unknown]
   for (const e of mine) assert.ok(!h.entries.some((x) => entryHash(x) === entryHash(e)), "each act lost its place");
   assert.deepEqual(w.st(S).chain().map(entryHash), h.entries.map(entryHash), "S has what is held");
   assert.deepEqual(w.st(A).chain().map(entryHash), h.entries.map(entryHash), "A has what is held");
-  assert.deepEqual(pendingHeld(w.inner, "ws"), [], "nothing pending or failed");
   // (what this device signed again, in the order it signed it)
   const again = h.entries.filter((e) => e.sig?.key === w.signer.id && e.seq > base.length && ![...mine, ...won].some((m) => entryHash(m) === entryHash(e)));
-  return { w, h, mine, base, again, after: fold(h.entries) };
+  return { w, h, mine, base, again, after: fold(h.entries), pending: pendingHeld(w.inner, "ws") };
 }
 
 const putBack = { key: T, name: "st2" };
 test("lost together, this device's station taken out then put back: both signed again in that order, the station in at the end", async () => {
-  const { after, again } = await lostTogether([["station.remove", { key: T }], ["station", putBack]]);
+  const { after, again, pending } = await lostTogether([["station.remove", { key: T }], ["station", putBack]]);
+  assert.deepEqual(pending, [], "nothing pending or failed");
   assert.deepEqual(again.map((e) => e.kind), ["station.remove", "station"], "both signed again, in the order made");
   assert.ok(after.stations.has(T), "the station put back is in");
 });
 
 test("lost together, this device's station put in then taken out: out at the end", async () => {
-  const { after, again } = await lostTogether([["station", putBack], ["station.remove", { key: T }]], [["station.remove", { key: T }]]);
+  const { after, again, pending } = await lostTogether([["station", putBack], ["station.remove", { key: T }]], [["station.remove", { key: T }]]);
+  assert.deepEqual(pending, [], "nothing pending or failed");
   assert.deepEqual(again.map((e) => e.kind), ["station", "station.remove"], "both signed again, in the order made");
   assert.ok(!after.stations.has(T), "the station taken out is out");
 });
 
 test("lost together, this device's station out, back, out again: out at the end (an earlier one signed again does not make the third done)", async () => {
-  const { after, again } = await lostTogether([["station.remove", { key: T }], ["station", putBack], ["station.remove", { key: T }]]);
+  const { after, again, pending } = await lostTogether([["station.remove", { key: T }], ["station", putBack], ["station.remove", { key: T }]]);
+  assert.deepEqual(pending, [], "nothing pending or failed");
   assert.deepEqual(again.map((e) => e.kind), ["station.remove", "station", "station.remove"], "all three signed again, in the order made");
   assert.ok(!after.stations.has(T), "out");
 });
 
 test("lost together, a member given a role then taken out by this device: out at the end, nothing failed", async () => {
-  const { after, again } = await lostTogether([["member", { ...s3, role: "admin" }], ["member.remove", { sub: "s3" }]], [["member", s3]]);
+  const { after, again, pending } = await lostTogether([["member", { ...s3, role: "admin" }], ["member.remove", { sub: "s3" }]], [["member", s3]]);
+  assert.deepEqual(pending, [], "nothing pending or failed");
   assert.equal(again.at(-1)?.kind, "member.remove", "the removal signed again, last");
   assert.ok(!after.members.has("s3"), "out");
 });
 
 test("lost, then the same member taken out by this device directly (taken at once, on the branch that won): the stale role is not signed again, the member stays out", async () => {
-  const { after, again } = await lostTogether([["member", { ...s3, role: "admin" }]], [["member", s3]], (base, w) => {
+  const { after, again, pending } = await lostTogether([["member", { ...s3, role: "admin" }]], [["member", s3]], (base, w) => {
     const Y = signedBy(oldKey, base, 1002, "device.remove", { id: THIRD });
     // (signed with this device's own key, later than the role: its later act, not one of those that lost their place)
     const D = w.signer.sign(next("ws", headOf([...base, Y]), w.r.host.nowMs() / 1000 + 1, "member.remove", { sub: "s3" }));
@@ -357,15 +362,87 @@ test("lost, then the same member taken out by this device directly (taken at onc
   });
   assert.deepEqual(again, [], "nothing signed again");
   assert.ok(!after.members.has("s3"), "out");
+  assert.deepEqual(pending, [], "nothing to tell: what decided otherwise is this device's own later act");
 });
 
 test("lost together, another device decided about the same member since: let be, as that device left it", async () => {
-  const { after, again } = await lostTogether([["member", { ...s3, role: "admin" }], ["member.remove", { sub: "s3" }]], [["member", s3]], (base) => {
+  const { after, again, pending, mine, w } = await lostTogether([["member", { ...s3, role: "admin" }], ["member.remove", { sub: "s3" }]], [["member", s3]], (base) => {
     const Y = signedBy(oldKey, base, 1002, "device.remove", { id: THIRD });
     return [Y, signedBy(oldKey, [...base, Y], 1003, "member", { ...s3, role: "admin" })];
   });
   assert.deepEqual(again, [], "nothing signed again (the role done by the other device, the removal decided otherwise)");
   assert.equal(after.members.get("s3")?.role, "admin", "as the other device left it");
+  // The removal, taken and answered done, undone: told as a pending one that failed is (the role is in effect, done).
+  assert.deepEqual(pending.map((x) => [x.id, x.state, x.act]), [[entryHash(mine[1]!), "failed", "removeMember"]], "one failed row, the removal");
+  const row = pendingRowOf(w.inner, "ws", pending[0]!);
+  assert.equal(row.state, "failed");
+  assert.ok(row.text.length > 0 && row.dismissText !== undefined, JSON.stringify(row));
+  const topic = lockView(w.inner, "ws") as { pending: { id: string }[] };
+  assert.deepEqual(topic.pending.map((x) => x.id), [entryHash(mine[1]!)], "on the lock's topic");
+});
+
+test("lost, and each time it is signed again another entry gets to its place first (AGAIN_MOST): let be, and told as failed in the station's words", async () => {
+  const w = await setUp([A, S]);
+  const a = w.st(A);
+  const s = w.st(S);
+  await w.run(new Lock(w.inner, "ws", "s1", null).append("member", s3));
+  const base = s.chain();
+  s.say.down = true;
+  await w.run(byHand(w).append("member", { ...s3, role: "admin" }));
+  const X = held(w.inner, "ws")!.entries.at(-1)!;
+  s.set([...base, signedBy(oldKey, base, 1002, "device.remove", { id: THIRD })]);
+  s.say.down = false;
+  a.say.down = true;
+  // Each signing again finds another device's entry (about another member) taken at its place just before.
+  let n = 0;
+  const another = () => {
+    if (n >= 5) return;
+    s.add(signedBy(oldKey, s.chain(), 1003 + n, "member", { sub: `s${10 + n}`, email: `m${n}@x.com`, role: "member" }));
+    n++;
+    s.say.before = another;
+  };
+  s.say.before = another;
+  await w.run(read(w.inner, "ws"));
+  await w.settle(10_000);
+  const tried = w.fresh().filter((e) => e.kind === "member" && (e.body as { role: string }).role === "admin");
+  assert.equal(tried.length, 1 + AGAIN_MOST, "X, and AGAIN_MOST signings again of it");
+  assert.ok(!held(w.inner, "ws")!.entries.some((e) => e.kind === "member" && (e.body as { role: string }).role === "admin"), "not in effect");
+  const pending = pendingHeld(w.inner, "ws");
+  assert.deepEqual(pending.map((x) => [x.id, x.state, x.act]), [[entryHash(X), "failed", "setRole"]], "one failed row, the role");
+  assert.equal(pending[0]!.why, FORK, "in the station's words");
+});
+
+test("pending, taken, then lost with a later pending one of this device about the same member: the first signed again, and the later one is brought signed again too, not failed", async () => {
+  const w = await setUp([A, S]);
+  const a = w.st(A);
+  const s = w.st(S);
+  await w.run(new Lock(w.inner, "ws", "s1", null).append("member", s3));
+  const base = s.chain();
+  // The role given with no station up: pending; then A up and read, it takes it (pending no more: `took`).
+  a.say.down = true;
+  s.say.down = true;
+  await w.run(byHand(w).append("member", { ...s3, role: "admin" }), 10_000);
+  assert.equal(pendingHeld(w.inner, "ws").length, 1, "the role pending");
+  const T1 = pendingHeld(w.inner, "ws")[0]!.entry;
+  a.say.down = false;
+  await w.run(read(w.inner, "ws"));
+  await w.settle();
+  assert.deepEqual(a.chain().map(entryHash), [...base, T1].map(entryHash), "A took the role");
+  assert.deepEqual(pendingHeld(w.inner, "ws"), [], "pending no more");
+  // The member taken out with no station up: pending, after the role.
+  a.say.down = true;
+  await w.run(byHand(w).append("member.remove", { sub: "s3" }), 10_000);
+  assert.equal(pendingHeld(w.inner, "ws")[0]?.entry.prev, entryHash(T1), "the removal pending after the role");
+  // S comes up on another branch (another device's removal of THIRD wins at the role's place): the role lost.
+  s.set([...base, signedBy(oldKey, base, 1002, "device.remove", { id: THIRD })]);
+  s.say.down = false;
+  await w.run(read(w.inner, "ws"));
+  await w.settle(5_000);
+  const h = held(w.inner, "ws")!;
+  const f = fold(h.entries);
+  assert.ok(!f.members.has("s3"), `out at the end: ${h.entries.map((e) => e.kind).join(" ")}`);
+  assert.deepEqual(pendingHeld(w.inner, "ws"), [], "nothing pending or failed");
+  assert.deepEqual(s.chain().map(entryHash), h.entries.map(entryHash), "S has what is held");
 });
 
 // The real-station end-to-end's round 7b (apps/mbui/e2e/locks.ts) as the side run of 2026-11-12 (run 43182403308) had

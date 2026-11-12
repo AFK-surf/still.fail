@@ -2544,6 +2544,19 @@ function readRefusing(inner: Inner, ws: string, station: string): Effect.Effect<
   });
 }
 
+/// This device's entries signed in a call a person waited on (`#within`), or signed again for one that was, by hash,
+/// the last ASKED_KEPT: one of these that lost its place and is not signed again is told them (`#letBe`); the core's own
+/// entries are not (a person's lock bound, their devices kept to it).
+const ASKED_KEPT = 64;
+const askedHeld = (inner: Inner, ws: string): readonly string[] => {
+  const r = inner.data.record("lockAsked", ws);
+  return Array.isArray(r) ? r.filter((x): x is string => typeof x === "string") : [];
+};
+function noteAsked(inner: Inner, ws: string, hash: string): void {
+  const was = askedHeld(inner, ws);
+  if (!was.includes(hash)) inner.data.put("lockAsked", ws, [...was, hash].slice(-ASKED_KEPT));
+}
+
 /// The acts an entry of this device's is, by hash: itself, and each it was signed again for (`Part.again`), back to
 /// the first signed.
 function actsOf(p: Part, e: Entry): string[] {
@@ -2882,12 +2895,38 @@ export class Lock {
         const h = held(self.#inner, self.ws);
         const tries = p.tries.get(hashOf(lost)) ?? 0;
         const before = (e: Entry) => actsOf(p, e).some((x) => earlier.has(x));
-        if (!h?.head || fold(h.entries).disabled || tries >= AGAIN_MOST || againOf(h.entries, h.aside ?? [], lost, subjectOf, before) !== "sign") return Effect.succeed(Effect.succeed(null));
-        return self.#signed(signer, lost.kind, lost.body, [], null, tries + 1, hashOf(lost));
+        const none = Effect.succeed(Effect.succeed(null));
+        if (!h?.head || fold(h.entries).disabled) return none;
+        const how = againOf(h.entries, h.aside ?? [], lost, subjectOf, before);
+        // (decided otherwise since by this device's own later acts alone: what the person did last stands, nothing to tell)
+        const others = () => againOf(h.entries, h.aside ?? [], lost, (e) => (e !== lost && e.sig?.key === signer.id ? null : subjectOf(e)), before) === "otherwise";
+        if (how === "otherwise") return Effect.as(Effect.sync(() => others() && self.#letBe(lost, {})), Effect.succeed(null));
+        if (how !== "sign") return none;
+        if (tries >= AGAIN_MOST) return Effect.as(Effect.sync(() => self.#letBe(lost, {})), Effect.succeed(null));
+        // (signed again and refused: decided otherwise or the rules take it no more after the head, `#changed`; else in a
+        // station's words, the last of AGAIN_MOST)
+        return Effect.catch(self.#signed(signer, lost.kind, lost.body, [], null, tries + 1, hashOf(lost)), (err) =>
+          Effect.as(Effect.sync(() => self.#letBe(lost, err.message === self.#changed(lost).message ? {} : { why: err.message })), Effect.succeed(null)));
       });
       const rest = yield* p.turn.withPermits(1)(inTurn);
       return yield* rest;
     });
+  }
+
+  /// In the turn: an entry of this device's that lost its place, taken before (the person answered it was done), not
+  /// signed again: decided otherwise since by someone else, signed again AGAIN_MOST times, or refused as it was signed
+  /// again (`how`: `why` a station's words). Told as a pending one that failed is (`deliver`'s `failed`: what changed
+  /// meanwhile, or why), where a person asked for it (`askedHeld`); the core's own are not. Its row's id the entry as
+  /// first signed; failed ones count apart from those waiting (`bounded`), so it never holds a new change back.
+  #letBe(lost: Entry, how: { why?: string }): void {
+    const inner = this.#inner;
+    const acts = actsOf(part(inner, this.ws), lost);
+    const mine = askedHeld(inner, this.ws);
+    if (!acts.some((x) => mine.includes(x))) return;
+    const id = acts[acts.length - 1]!;
+    const items = pendingHeld(inner, this.ws);
+    const row: Pending = { id, entry: lost, ...actOf(inner, this.ws, lost, true), at: lost.at * 1000, state: "failed", ...(how.why !== undefined ? { why: how.why } : { what: whatOf(inner, this.ws, lost) }) };
+    putPending(inner, this.ws, items.some((x) => x.id === id) ? items.map((x) => (x.id === id ? row : x)) : [...items, row]);
   }
 
   /// In the turn: `kind` and `body` signed after `after` (null: what is held now), brought, and what is left of it once
@@ -2913,6 +2952,8 @@ export class Lock {
       const p = part(inner, self.ws);
       if (tries > 0) p.tries.set(hash, tries);
       if (tries > 0 && of !== null) p.again.set(hash, of);
+      // (signed for a person, or again for one that was: theirs to be told of if it is undone, `#letBe`)
+      if (self.#within !== null || (of !== null && askedHeld(inner, self.ws).includes(of))) noteAsked(inner, self.ws, hash);
       // (the stations of the lock before it and after it: one it takes out is brought it too, and one it takes in; whose
       // taking counts are those it names after it, `named`: a station taken out is brought it behind, as one gone for
       // good never would take it, and its removal would wait for it for ever)
@@ -3078,6 +3119,7 @@ export class Lock {
             continue;
           }
           p.again.set(entryHash(again), hashOf(entry));
+          if (item.act !== null) noteAsked(inner, ws, entryHash(again));
           entry = again;
           // (a new entry: the cloud not sent it, `sent` no more)
           putPending(inner, ws, pendingHeld(inner, ws).map((x) => {
