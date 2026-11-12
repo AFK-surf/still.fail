@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [97e43caca](https://github.com/AFK-surf/still.fail/commit/97e43cacab55b1c942f136c91f094f1fb6fb9c4e) mbui: the structures one change marks are committe | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.67 | 176.55 |
 | [5b5d29887](https://github.com/AFK-surf/still.fail/commit/5b5d29887d25bcd46af63b9331f2c0b51af2450e) app: a chat's list as nodes reads a row again only | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.41 | 186.24 |
 | [825299c07](https://github.com/AFK-surf/still.fail/commit/825299c07d914964bf0299a5991577392908bc80) mbui: close_option's replay found clean at every r | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.54 | 186.42 |
 | [32c8bd9d2](https://github.com/AFK-surf/still.fail/commit/32c8bd9d2c5943df7135f884643c7d539a0057f5) station: the Comma Task index says which chats Com | 1.88 | 2.51 | 10.73 | 29.69 | 37.95 | 26.42 | 49.55 | 94.85 | 187.41 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f3f6e9e98](https://github.com/AFK-surf/still.fail/commit/f3f6e9e987573d96e484d62758a503ae64ba7b9e) mbui: the kept checks look at what was drawn as th | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.37 | 161.48 |
 | [90d1553f2](https://github.com/AFK-surf/still.fail/commit/90d1553f227953025dba5e8e6969aa5e7910f994) mbui: a list's heads' wake at a glide's end is not | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.01 | 168 |
 | [1cfe5cbab](https://github.com/AFK-surf/still.fail/commit/1cfe5cbab69f264d55ac6989e7ec5cdb717063a1) mbui: a bar to fall or a file to leave motion_coun | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.96 | 173.62 |
-| [6a55a1f22](https://github.com/AFK-surf/still.fail/commit/6a55a1f22207dc9dec05567c41050840cf5d2538) app: a page's bar made as nodes ends before a Wind | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.09 | 178.74 |
