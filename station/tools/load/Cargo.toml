@@ -22,5 +22,5 @@ noq-proto = { git = "https://github.com/zzj3720/noq", rev = "d578f818ad7580c4969
 swarm-discovery = { path = "../../../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../../../vendor/noq-udp" }
-iroh = { git = "https://github.com/zzj3720/iroh", rev = "d349d3ce77b272900da760fb8ebec0dc0fe114ba" }
-iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "d349d3ce77b272900da760fb8ebec0dc0fe114ba" }
+iroh = { git = "https://github.com/zzj3720/iroh", rev = "6ecd06898cadd879c89fc6d917750ccc6a6100a7" }
+iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "6ecd06898cadd879c89fc6d917750ccc6a6100a7" }
