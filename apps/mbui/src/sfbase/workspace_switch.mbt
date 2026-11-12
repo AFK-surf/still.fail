@@ -301,7 +301,10 @@ pub fn workspace_switch_node(
 /// taken by the pages' readers by then), added to and never taken back, and not again once all of it was answered (the chat opened last changing later is no first screen;
 /// the coordinator of the migration, 2026-11-12). What no reader took is let go of as another workspace comes in view,
 /// or none. A bridge till the old view is gone: a page made as nodes says what it reads where
-/// it is made.
+/// it is made. Known and left (the coordinator of the migration, 2026-11-12): where a page is put over Home as the app
+/// starts (a notification's chat, a scripted run's files' page), what only this read held is let go of as all of it is
+/// answered, between frames, and asked again by the frame after, whose old view's readers come only then (a few small
+/// values, once a start); it goes as those pages are made as nodes, their readers there at the moment of their cause.
 pub fn opens_ahead_node(
   v : @view.View,
   src : Source,

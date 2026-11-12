@@ -391,8 +391,14 @@ fn let_go_unread(declared : Array[(Source, String, Map[String, Json])]) -> Unit 
     let key = name + "\u{1}" + Json::object(params).stringify()
     match followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key && !t.independent }) {
       Some(i) if !followed_topics.val[i].holder.watched() => {
+        let holder = followed_topics.val[i].holder
         followed_topics.val = followed_topics.val.filter(fn(t) { !(physical_equal(t.source, src) && t.key == key && !t.independent) })
         (src.release)(name, params)
+        // (its holder, read once as it was declared and by no reader since, let go of what it read: else that read
+        // still follows the subscription, which the client then never ends, its unsubscribe never sent; till
+        // 2026-11-12, every switch of workspace left what was declared and never read subscribed:
+        // src/sfapp/declared_let_go_wbtest.mbt)
+        holder.dispose()
       }
       _ => ()
     }
