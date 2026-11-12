@@ -8680,17 +8680,37 @@ fn Tree::column_items(self : Tree, col : Int) -> Array[Int] {
 /// Group `g` of column `col`, its change made: what was set off at its moment and is still coming or going (`views`),
 /// and what was on its way down the column then, set off again from where its way had it and as fast; two or more, they
 /// are measured at its moment and the group's way said (flex's come_group_set), each in it then resting and let go as
-/// that way ends. One alone is left its own way, untouched.
-fn Tree::come_group_settle(self : Tree, col : Int, g : @flex.ComeGroup, views : Array[View]) -> Unit {
-  match self.come_groups.get(col) {
-    Some((h, _)) if physical_equal(h, g) => self.come_groups.remove(col)
-    _ => ()
-  }
+/// that way ends. One alone is left its own way, untouched. Set off as a layout is under way (by what a room's width
+/// makes there, View::by_room), what comes is not measured till that layout lays it out: the group is said once it has,
+/// in the same pass (`waited`), never of heights not known yet (each in it laid out none all the way, then all of it
+/// at its end: a chat's rows' gaps picked by its list's width, 2026-11-12).
+fn Tree::come_group_settle(
+  self : Tree,
+  col : Int,
+  g : @flex.ComeGroup,
+  views : Array[View],
+  waited? : Bool = false,
+) -> Unit {
+  guard !g.set else { return }
   let at = g.at
   // (set off at its moment and not let go or set off again since: still of it)
   let live = views.filter(fn(w) {
     w.live() is Some(m) && m.coming && m.flex.style.come_at == at
   })
+  // (what comes measured at the group's moment, how tall it goes to known: come_height's; in the middle of a layout,
+  // none is, and the group waits for it)
+  self.measured_now()
+  if !waited &&
+    live.iter().any(fn(w) {
+      w.live() is Some(m) && m.flex.style.come_to > 0.0 && m.flex.style.come_goal != m.flex.style.come_goal
+    }) {
+    self.once_laid_out(fn() { self.come_group_settle(col, g, views, waited=true) })
+    return
+  }
+  match self.come_groups.get(col) {
+    Some((h, _)) if physical_equal(h, g) => self.come_groups.remove(col)
+    _ => ()
+  }
   // (what is on its way down the column now, set off before: in it, and where it is a page's list's, in its blocks,
   // those of them let go or come to their way's end forgotten)
   let under_way = []
