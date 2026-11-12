@@ -12,6 +12,8 @@ import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, 
 import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login";
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
+import { asOrigin, forward, served } from "./guests";
+import { asProductOf } from "./here";
 import type { Env } from "./env";
 import { adminApi, api, blockAccount, FEEDBACK_REPLY_PATH, FEEDBACK_STATUS_PATH, feedbackList, liveOf, notBetaReply, onTestChannel, replyToFeedback, setFeedbackStatus } from "./api";
 import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
@@ -66,31 +68,46 @@ export default {
   // A /v1/* call in a recorded trace (a client core's) is a span of it, sent once the answer is out.
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     setCloud(env.PUBLIC_ORIGIN);
-    const parent = new URL(request.url).pathname.startsWith("/v1/") && request.headers.get("upgrade") === null ? parseTraceparent(request.headers.get("traceparent")) : null;
-    const started = Date.now();
-    // What the handler noted for the span never goes out with the answer.
-    const { response, notes } = takeNotes(await handle(request, env));
-    if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
-    return response;
+    // A cloud that moved into another (guests.ts): what reaches it goes there, but for its releases, which stay here.
+    if (env.FORWARD_TO && !new URL(request.url).pathname.startsWith("/releases/")) return forward(request, env);
+    // A request a guest forwarded is answered as made on its origin, as its product (guests.ts).
+    request = served(request, env);
+    const origin = new URL(request.url).origin;
+    env = asOrigin(env, origin);
+    return asProductOf(env.PUBLIC_ORIGIN === origin || betaOrigin(env) === origin ? origin : env.PUBLIC_ORIGIN, () => answer(request, env, ctx));
   },
   // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts; the
   // operator's devices told they were sampled), then the services checked for still.fail/status (status.ts); every
   // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so; hourly, the
-  // models' catalog made afresh from models.dev, the stations told when it changed (models.ts).
+  // models' catalog made afresh from models.dev, the stations told when it changed (models.ts). A cloud that moved
+  // into another (FORWARD_TO) has no stations of its own to tell.
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const minute = Math.floor(controller.scheduledTime / 60_000);
-    ctx.waitUntil(
-      sampleOwnRelay(env)
-        .catch(() => [])
-        .then(async (full) => {
-          await env.DIRECTORY.getByName("primary").tellAdmins({ type: "relays" }).catch(() => undefined);
-          await checkServices(env, full);
-        }),
-    );
-    if (minute % 60 === MODELS_MINUTE) ctx.waitUntil(checkModels(env).catch(() => undefined));
-    if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
+    return scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
+
+async function answer(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const parent = new URL(request.url).pathname.startsWith("/v1/") && request.headers.get("upgrade") === null ? parseTraceparent(request.headers.get("traceparent")) : null;
+  const started = Date.now();
+  // What the handler noted for the span never goes out with the answer.
+  const { response, notes } = takeNotes(await handle(request, env));
+  if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
+  return response;
+}
+
+async function scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  const minute = Math.floor(controller.scheduledTime / 60_000);
+  ctx.waitUntil(
+    sampleOwnRelay(env)
+      .catch(() => [])
+      .then(async (full) => {
+        await env.DIRECTORY.getByName("primary").tellAdmins({ type: "relays" }).catch(() => undefined);
+        await checkServices(env, full);
+      }),
+  );
+  if (minute % 60 === MODELS_MINUTE && !env.FORWARD_TO) ctx.waitUntil(checkModels(env).catch(() => undefined));
+  if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
+}
 
 /** Whether the request carries FEEDBACK_TOKEN, the team's feedback monitor's (unset or short: nobody's). */
 async function feedbackMonitor(env: Env, request: Request): Promise<boolean> {
@@ -175,7 +192,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       }
       if (!validSecret(body.code_challenge) || typeof body.name !== "string") return reply({ error: "invalid_login" }, 400);
       if (!(await consumeLoginRate(env, request))) return reply({ error: "rate_limited" }, 429, { "retry-after": "60" });
-      return env.LOGINS.getByName(body.id).startDevice(body.id, body.code_challenge, body.name);
+      return env.LOGINS.getByName(body.id).startDevice(body.id, body.code_challenge, body.name, env.PUBLIC_ORIGIN);
     } catch {
       return reply({ error: "invalid_request" }, 400);
     }

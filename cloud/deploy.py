@@ -94,6 +94,11 @@ FCM_MORE = DEPLOY / "fcm-service-account-more.json"
 APNS_MORE = DEPLOY / "apns-more.json"
 REVIEW = DEPLOY / "review-accounts.json"
 FEEDBACK = DEPLOY / "feedback-token"
+# One cloud answering as the other product too (src/guests.ts): the guests it answers as (a JSON list, guests.json);
+# for a cloud that moved into another, where it forwards (forward-to: an origin); and the secret both know.
+GUESTS = DEPLOY / "guests.json"
+FORWARD_TO = DEPLOY / "forward-to"
+FORWARD_SECRET = DEPLOY / "forward-secret"
 
 
 def admin_email(dry_run: bool) -> str:
@@ -307,6 +312,23 @@ def feedback() -> dict:
     return {"FEEDBACK_TOKEN": FEEDBACK.read_text().strip()} if FEEDBACK.exists() else {}
 
 
+def guests() -> dict:
+    value = {}
+    if GUESTS.exists():
+        listed = json.loads(GUESTS.read_text())
+        if not isinstance(listed, list) or not all(isinstance(g, dict) and str(g.get("origin", "")).startswith("https://") for g in listed):
+            sys.exit(f"{GUESTS}: expected a list of {{origin, beta?, google_client_id?, google_client_secret?}}")
+        value["GUESTS"] = json.dumps(listed)
+    if FORWARD_TO.exists():
+        value["FORWARD_TO"] = FORWARD_TO.read_text().strip()
+    if FORWARD_SECRET.exists():
+        secret = FORWARD_SECRET.read_text().strip()
+        if len(secret) < 32:
+            sys.exit(f"{FORWARD_SECRET}: 32 characters at least")
+        value["FORWARD_SECRET"] = secret
+    return value
+
+
 @contextmanager
 def docker_env():
     """A throwaway Docker config: an SSH session cannot unlock the macOS keychain Docker's default helper uses."""
@@ -518,7 +540,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback(), **guests()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:

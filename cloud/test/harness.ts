@@ -90,6 +90,11 @@ export async function harness(
     access?: true;
     /** Another cloud's releases its own bucket lacks some of (RELEASES_UPSTREAM, https://upstream.test/releases): its answer to each file asked there. */
     upstream?: (file: string, request: OutboundRequest) => { status: number; body?: string; headers?: Record<string, string> };
+    /** The other product's origins answered as that product (GUESTS, guests.ts), and the secret forwarded requests carry. */
+    guests?: unknown[];
+    forwardSecret?: string;
+    /** Moved into another cloud (FORWARD_TO): where its requests go, answered by `push` as every other outbound one. */
+    forwardTo?: string;
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -186,6 +191,9 @@ export async function harness(
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.fcmMore ? { FCM_SERVICE_ACCOUNT_MORE: options.fcmMore } : {}),
         ...(options.apns ? { APNS_KEY: options.apns } : {}),
+        ...(options.guests ? { GUESTS: JSON.stringify(options.guests) } : {}),
+        ...(options.forwardSecret ? { FORWARD_SECRET: options.forwardSecret } : {}),
+        ...(options.forwardTo ? { FORWARD_TO: options.forwardTo } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
         ...(options.mail ? { TEST_MAIL: "1" } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),

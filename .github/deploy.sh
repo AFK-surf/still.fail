@@ -7,7 +7,8 @@
 # machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), AXIOM_JSON,
 # VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, APNS_JSON (apns.json, the APNs key), FCM_SERVICE_ACCOUNT_MORE_JSON and APNS_MORE_JSON
 # (the other product's apps' push credentials), POSTHOG_JSON, APPLE_JSON (apple.json, Sign in with Apple), REVIEW_ACCOUNTS_JSON
-# (review-accounts.json, App Store review's password sign-in), FEEDBACK_TOKEN (feedback-token, the feedback monitor's: reads bug reports and marks their status).
+# (review-accounts.json, App Store review's password sign-in), FEEDBACK_TOKEN (feedback-token, the feedback monitor's: reads bug reports and marks their status), GUESTS_JSON, FORWARD_TO and
+# FORWARD_SECRET (one cloud answering as the other product too: cloud/src/guests.ts).
 set -eu
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile --prefer-offline > /dev/null
@@ -29,6 +30,9 @@ put posthog.json "${POSTHOG_JSON:-}"
 put apple.json "${APPLE_JSON:-}"
 put review-accounts.json "${REVIEW_ACCOUNTS_JSON:-}"
 put feedback-token "${FEEDBACK_TOKEN:-}"
+put guests.json "${GUESTS_JSON:-}"
+put forward-to "${FORWARD_TO:-}"
+put forward-secret "${FORWARD_SECRET:-}"
 umask 022
 # (another cloud's builds apart: STILLFAIL_CLOUD, cloud/deploy.py CLOUDS)
 builds="$HOME/${STILLFAIL_CLOUD:-stillfail}-deploy/builds"

@@ -7,6 +7,7 @@ import enCommon from "../../client/i18n/catalog/en/common.json" with { type: "js
 import zhCloud from "../../client/i18n/catalog/zh/cloud.json" with { type: "json" };
 import enCloud from "../../client/i18n/catalog/en/cloud.json" with { type: "json" };
 import { branded, productOf, STILLFAIL, type Product } from "../../client/i18n/brand.ts";
+import { productHere } from "./here.ts";
 
 export type Lang = "zh" | "en";
 type Words = Record<string, string | { one?: string; other: string }>;
@@ -39,9 +40,9 @@ export function setCloud(origin: string | undefined): void {
   product = productOf(origin ?? "");
 }
 
-/** The product this cloud is. */
+/** The product this cloud answers as: the one of the origin being answered (here.ts, a guest's: guests.ts), else its own. */
 export function cloudProduct(): Product {
-  return product;
+  return productHere() ?? product;
 }
 
 /** The words for `key` in a language, with `args` put in for `{name}`; `n` chooses between `one` and `other`. */
@@ -51,7 +52,7 @@ export function tr(language: Lang, key: string, args?: Args): string {
   if (found === undefined) text = key;
   else if (typeof found === "string") text = found;
   else text = (args && Number(args.n) === 1 ? found.one : undefined) ?? found.other;
-  text = branded(text, product);
+  text = branded(text, cloudProduct());
   if (!args) return text;
   return text.replace(/\{(\w+)\}/g, (all, name: string) => (name in args ? String(args[name]) : all));
 }

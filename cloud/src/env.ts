@@ -30,6 +30,14 @@ export interface Env {
   PUBLIC_ORIGIN: string;
   /** Older origins of the same (comma-separated): answered like PUBLIC_ORIGIN, never linked to (compat.ts). */
   PUBLIC_ORIGIN_ALIASES?: string;
+  /** The other product's origins this cloud answers as that product (guests.ts): a JSON list of {origin, beta?,
+   * google_client_id?, google_client_secret?}. */
+  GUESTS?: string;
+  /** Set on a cloud that moved into another: where its API's requests go (guests.ts `forward`), its releases still its own. */
+  FORWARD_TO?: string;
+  /** What a forwarding cloud and the one it forwards to both know (32 characters at least): a forwarded request says
+   * its origin and client under it, and is taken as made there only with it (guests.ts `served`). */
+  FORWARD_SECRET?: string;
   /** The admin's console's host (its /v1/ calls come here: see index.ts). */
   ADMIN_ORIGIN: string;
   /** Older origins of the console (comma-separated), answered like ADMIN_ORIGIN. */
