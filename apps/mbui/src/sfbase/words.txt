@@ -583,7 +583,10 @@ android-misc.screen.sendWaiting
 android-misc.screen.someoneDrives
 android-misc.screen.starting
 android-misc.screen.takeOver
+android-misc.screen.taken
+android-misc.screen.takenBy
 android-misc.screen.title
+android-misc.screen.took
 android-misc.screen.tools
 android-misc.screen.toolsClose
 android-misc.screen.touchWhat

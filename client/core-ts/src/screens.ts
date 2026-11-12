@@ -634,7 +634,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const parts = [mode];
       if (!state.control && controllers.length > 0) parts.push(t("core-views.screen.driving", { names: listed(controllers) }));
       if (state.control) {
-        // Driving it: an agent's input waits while a person drives (station/src/tools/computer.ts); another person's not.
+        // Driving it: an agent's input waits while a person drives (station/src/tools/computer.ts); another person drives
+        // beside it only on a station from before one drove at a time (hub.ts `drive`).
         const agents = drivers.filter((n) => n.startsWith(AGENT)).map(personShown);
         const people = drivers.filter((n) => !n.startsWith(AGENT));
         if (agents.length > 0) parts.push(t("core-views.screen.paused", { names: listed(agents) }));
@@ -920,10 +921,22 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (s.control === false && control) {
                   wanted = false;
                   state.watchOnly = (state.watchOnly ?? 0) + 1;
-                  if (bounds.taken) {
-                    bounds = { ...bounds };
-                    delete bounds.taken;
+                  // Taken by another (a person's 接管, an agent asked to): who, the viewer's own other device unnamed.
+                  if (typeof s.takenBy === "string") {
+                    state.taken = (state.taken ?? 0) + 1;
+                    state.takenBy = mine.includes(s.takenBy.toLowerCase()) ? [] : [personShown(s.takenBy)];
                   }
+                }
+                // Its person's ask spent once a stream drives (or is refused): the view's own reopens after it ask as any.
+                if (typeof s.control === "boolean" && control && bounds.taken) {
+                  bounds = { ...bounds };
+                  delete bounds.taken;
+                }
+                // Taken from people's views as it opened (their own other devices aside): said once.
+                const from = s.control === true && control ? othersOf(names(s.took), mine).map(personShown) : [];
+                if (from.length > 0) {
+                  state.took = (state.took ?? 0) + 1;
+                  state.tookFrom = from;
                 }
                 if (!state.control) {
                   delete state.login;

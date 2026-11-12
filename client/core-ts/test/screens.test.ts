@@ -833,6 +833,55 @@ each("a_view_made_to_only_look_from_elsewhere_stays_so_when_it_opens_again", asy
   core.close();
 });
 
+each("a_view_taken_by_another_says_who_once_and_one_that_takes_it_says_whose_views_it_took_it_from", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  views[0]!.send(join([stateFrame({ title: "t", control: true }), configFrame({ codec: "jpeg", width: 640, height: 480 }), videoFrame(true, 1, bytesOf(100, seed))]));
+  await host.settle();
+  // Bob takes it: only looking as if chosen, who took it said, the line saying he drives and 接管 a tap away.
+  views[0]!.send(join([stateFrame({ control: false, login: null, passkey: null, takenBy: "Bob" }), stateFrame({ viewers: ["a@x.com", "Bob"], controlledBy: ["Bob"] })]));
+  await host.settle();
+  said(host, log);
+  let s = lastState(log, 1);
+  assert.deepEqual([s.control, s.watchOnly, s.taken, s.takenBy, s.takeOver, s.line], [false, 1, 1, ["Bob"], true, "只看 · Bob 正在控制"]);
+  assert.equal(s.took, undefined);
+  // 接管: asked as its person's (taken), and said whose views it took it from (the viewer's own aside).
+  call(core, ui, 2, "screen.control", { view: "v", control: true });
+  await host.settle();
+  assert.deepEqual([views[1]!.ask.control, views[1]!.ask.taken], [true, true]);
+  views[1]!.send(stateFrame({ title: "t", control: true, took: ["Bob", "a@x.com"] }));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.control, s.took, s.tookFrom, s.taken], [true, 1, ["Bob"], 1]);
+  // Its ask spent: the view's own reopen (its link went) asks as any, never taking it back by itself.
+  views[1]!.end();
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 3);
+  assert.deepEqual([views[2]!.ask.control, views[2]!.ask.taken], [true, undefined]);
+  // Taken by the viewer on another device: unnamed; by an agent: as the agent. Each a take of its own.
+  views[2]!.send(stateFrame({ title: "t", control: true }));
+  await host.settle();
+  views[2]!.send(stateFrame({ control: false, takenBy: "A@x.com" }));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.taken, s.takenBy, s.took], [2, [], 1]);
+  call(core, ui, 3, "screen.control", { view: "v", control: true });
+  await host.settle();
+  views[3]!.send(stateFrame({ title: "t", control: true }));
+  await host.settle();
+  views[3]!.send(stateFrame({ control: false, takenBy: "agent: 部署" }));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.taken, s.takenBy, s.took], [3, ["Agent「部署」"], 1]);
+  core.close();
+});
+
 each("a_view_that_drops_is_opened_again_and_one_the_station_ends_says_why", async (seed) => {
   const { host, core, ui, views } = await viewing(seed);
   const log: J[] = [];
@@ -926,10 +975,11 @@ each("a_screen_an_agent_drives_opens_only_looking_and_is_taken_over_in_one_tap",
   said(host, log);
   s = lastState(log, 1);
   assert.deepEqual([s.control, s.takeOver, s.line], [true, false, "控制 · Agent「修登录」 已暂停 · Bob 也在查看"]);
-  // Asked to drive outright (control: true), it drives whoever else does.
+  // Asked to drive outright (control: true): asked so, not as its person's take (a page opened again asks so too); the
+  // station lets it drive only while no other person's view does.
   call(core, ui, 3, "screen.view", { station: "ws/st", screen: "browser:T1", view: "w", control: true });
   await host.settle();
-  assert.equal(views[2]!.ask.control, true);
+  assert.deepEqual([views[2]!.ask.control, views[2]!.ask.taken], [true, undefined]);
   core.close();
 });
 

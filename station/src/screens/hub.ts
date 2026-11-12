@@ -11,8 +11,8 @@ import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, ty
 /// device it came over (the credential's, so to be believed); `client`, `app`: the name and kind of app that device says
 /// it is (shown only; none from a client before them). `self`: the device's own main id as it says it, which its link's
 /// `device` is not on a link made for a LAN or a relay (only for it to know its own views). `agent`: an agent's own view (computer.ts). `end` and `watchOnly`:
-/// how a member elsewhere ends it or stops its input being taken, `by` naming them.
-export type Watcher = { name: string; control: boolean; tell(state: Record<string, unknown>): void; device?: string; self?: string; client?: string; app?: string; agent?: boolean; end?(by: string): void; watchOnly?(): void };
+/// how a member elsewhere ends it or stops its input being taken, `by` naming them (for `watchOnly`, who took it, if one did).
+export type Watcher = { name: string; control: boolean; tell(state: Record<string, unknown>): void; device?: string; self?: string; client?: string; app?: string; agent?: boolean; end?(by: string): void; watchOnly?(by?: string): void };
 
 /// One view as members are told of it: `id`, the hub's, to end it by; `at`,
 /// when it opened (ms).
@@ -175,7 +175,11 @@ export class ScreenHub implements Screens {
 
   /// POST /admin/api/screens/<id>/views/<view>/watch: the view goes on, only looking.
   watchOnly(id: string, view: string): void {
-    const w = this.#viewOf(id, view);
+    this.#lookOnly(id, this.#viewOf(id, view));
+  }
+
+  /// `w` goes on only looking, its device held from driving again by itself for WATCH_HELD_MS; `by`: who took it.
+  #lookOnly(id: string, w: Watcher, by?: string): void {
     if (!w.control) return;
     w.control = false;
     if (w.device) {
@@ -183,7 +187,7 @@ export class ScreenHub implements Screens {
       for (const [key, until] of this.#held) if (until <= now) this.#held.delete(key);
       this.#held.set(`${w.device}\n${id}`, now + WATCH_HELD_MS);
     }
-    w.watchOnly?.();
+    w.watchOnly?.(by);
     this.#tellPeople(id);
   }
 
@@ -200,12 +204,26 @@ export class ScreenHub implements Screens {
     return false;
   }
 
-  /// An agent asked by a person to take the screen (the `screen` tool's take_control): every person's view that drives it
-  /// goes on only looking; how many did.
-  takeControl(id: string): number {
+  /// Whether a view `device` opens of `id`, asking to drive, drives it: one person's view drives a screen at a time, any
+  /// number look (pengxiao, 2026-11-12). Its person asking (`taken`) takes it: every person's view on another device that
+  /// drives it goes on only looking, told it was `by` (an agent's waits as before). Opened again by itself (a link that
+  /// went, a resize), it drives only while no such view does, and not soon after it was made to only look (`mayDrive`).
+  /// `took`: whose views it took it from.
+  drive(id: string, device: string, taken: boolean, by: string): { control: boolean; took: string[] } {
+    if (!this.mayDrive(id, device, taken)) return { control: false, took: [] };
+    const others = [...(this.#views.get(id)?.values() ?? [])].filter((w) => w.control && !w.agent && w.device !== device);
+    if (others.length === 0) return { control: true, took: [] };
+    if (!taken) return { control: false, took: [] };
+    for (const w of others) this.#lookOnly(id, w, by);
+    return { control: true, took: [...new Set(others.map((w) => w.name))] };
+  }
+
+  /// An agent `by` asked by a person to take the screen (the `screen` tool's take_control): every person's view that
+  /// drives it goes on only looking; how many did.
+  takeControl(id: string, by?: string): number {
     if (this.get(id) === undefined) throw new ScreenRefused(404, "station.screen.notFound");
-    const driving = [...(this.#views.get(id)?.entries() ?? [])].filter(([, w]) => w.control && !w.agent && w.watchOnly !== undefined);
-    for (const [view] of driving) this.watchOnly(id, view);
+    const driving = [...(this.#views.get(id)?.values() ?? [])].filter((w) => w.control && !w.agent && w.watchOnly !== undefined);
+    for (const w of driving) this.#lookOnly(id, w, by);
     return driving.length;
   }
 

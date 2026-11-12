@@ -822,6 +822,70 @@ test "made to only look from elsewhere: 只看 chosen for it, input not sent, �
 }
 
 ///|
+test "taken by another as it drove: who said once, only looking, 接管 a tap away; one taken by nobody named says so plainly" {
+  let r = screen_rig()
+  r.state("live", control=true)
+  r.config()
+  r.frame(1000.0)
+  let said = app.toast.get().n
+  let took_by = fn(n : Double, by : Array[String]) {
+    r.state(
+      "live",
+      control=false,
+      controllers=["李雷"],
+      take_over=true,
+      line="只看 · 李雷 正在控制",
+      more={
+        "watchOnly": Json::number(n),
+        "taken": Json::number(n),
+        "takenBy": Json::array(by.map(Json::string)),
+      },
+    )
+  }
+  took_by(1.0, ["李雷"])
+  assert_eq(@sfbase.toast_words(), "李雷 接管了控制，你现在是只看")
+  assert_eq(app.toast.get().n, said + 1)
+  assert_false(r.sess().controlling())
+  assert_true(r.labelled("接管") is Some(_))
+  r.tap_at(0.5, 0.5)
+  assert_eq(r.inputs().length(), 0)
+  // the same take told again (who is on it changed): not said again
+  took_by(1.0, ["李雷"])
+  assert_eq(app.toast.get().n, said + 1)
+  // taken again, by the viewer on another device (unnamed)
+  took_by(2.0, [])
+  assert_eq(@sfbase.toast_words(), "控制已被接管，你现在是只看")
+  assert_eq(app.toast.get().n, said + 2)
+  screen_done(r.t)
+}
+
+///|
+test "接管 from a person: said once whose views only look now" {
+  let r = screen_rig()
+  r.state("live", control=false, controllers=["李雷"], take_over=true, line="只看 · 李雷 正在控制")
+  r.config()
+  r.frame(1000.0)
+  let said = app.toast.get().n
+  r.tap_label("接管")
+  assert_eq(field(Some(r.told("screen.control")[0]), "control"), Some(Json::boolean(true)))
+  r.state(
+    "live",
+    control=true,
+    controllers=[],
+    take_over=false,
+    line="控制 · 李雷也在看",
+    more={ "took": Json::number(1.0), "tookFrom": Json::array([Json::string("李雷")]) },
+  )
+  assert_eq(@sfbase.toast_words(), "已接管控制，李雷 改为只看")
+  assert_eq(app.toast.get().n, said + 1)
+  assert_true(r.t.find("已接管控制，李雷 改为只看") is Some(_))
+  // told again with the same take: not said again
+  r.state("live", control=true, more={ "took": Json::number(1.0), "tookFrom": Json::array([Json::string("李雷")]) })
+  assert_eq(app.toast.get().n, said + 1)
+  screen_done(r.t)
+}
+
+///|
 test "read only: no 只看/控制 to choose, no keyboard, a tap not sent" {
   let r = screen_rig()
   r.state("live", control=false, may=false)
