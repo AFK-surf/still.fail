@@ -30,6 +30,15 @@ asc_token
 asc_get "apps/$APP" > "$T/app.json"
 jq -e --arg app "$APP" --arg bid "$IOS_BUNDLE_ID" '.data.type == "apps" and .data.id == $app and .data.attributes.bundleId == $bid' "$T/app.json" >/dev/null || fail 'ASC app/bundle mismatch'
 
+# What is not done yet is left to the next round, ten in all.
+next_round() {
+  [ "$RELEASE_ROUND" -lt 10 ] || fail "build $RELEASE_BUILD $1 after ten rounds; add it by hand once it can be"
+  gh workflow run mbui-testflight-distribute.yml --repo "$GITHUB_REPOSITORY" --ref main \
+    -f product="$RELEASE_PRODUCT" -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD" -f external="$RELEASE_EXTERNAL" -f round=$((RELEASE_ROUND + 1))
+  summary "Build $RELEASE_BUILD $1: round $((RELEASE_ROUND + 1)) dispatched."
+  exit 0
+}
+
 # A token lasts 10 minutes: one for each try. Five failed requests in a row end it, none kept quiet.
 tries=${ASC_POLL_TRIES:-8}
 missed=0
@@ -51,13 +60,8 @@ while :; do
     [ "$missed" -lt 5 ] || fail 'five ASC requests failed in a row'
   fi
   tries=$((tries - 1))
-  if [ "$tries" = 0 ]; then
-    [ "$RELEASE_ROUND" -lt 10 ] || fail "build $RELEASE_BUILD still not processed; add it by hand once it is"
-    gh workflow run mbui-testflight-distribute.yml --repo "$GITHUB_REPOSITORY" --ref main \
-      -f product="$RELEASE_PRODUCT" -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD" -f external="$RELEASE_EXTERNAL" -f round=$((RELEASE_ROUND + 1))
-    summary "Build $RELEASE_BUILD still processing: round $((RELEASE_ROUND + 1)) dispatched."
-    exit 0
-  fi
+  [ "$tries" != 0 ] || next_round "still processing"
+
   sleep "${ASC_POLL_SECONDS:-30}"
 done
 
@@ -67,8 +71,17 @@ group_id() {
     fail "no single $([ "$2" = true ] && echo internal || echo external) group named \"$1\""
   jq -r '.data[0].id' "$T/group.json"
 }
+# (a build said VALID was, a moment after, no build to a group's relationships: Apple's 404 "There is no resource of type
+# 'builds' with id …", builds 59 and 61, 2026-11-11 and 12, the build never given to a group; so that is not yet, as
+# processing is: the next round finds it VALID again and adds it then)
 add_to_group() {
-  jq -cn --arg id "$build" '{data:[{type:"builds",id:$id}]}' | asc_post "betaGroups/$1/relationships/builds"
+  local said
+  if said=$(jq -cn --arg id "$build" '{data:[{type:"builds",id:$id}]}' | asc_post "betaGroups/$1/relationships/builds" 2>&1); then
+    return 0
+  fi
+  printf '%s\n' "$said" >&2
+  printf '%s' "$said" | grep -q "no resource of type 'builds'" || exit 1
+  next_round "VALID but not yet to be added to a group"
 }
 
 asc_token
