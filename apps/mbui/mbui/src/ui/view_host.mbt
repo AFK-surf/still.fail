@@ -1802,10 +1802,14 @@ fn Ctx::view_drawn(
     _ => ()
   }
   // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
-  // as big, as an old view's field is painted; not in its block, kept as it was made)
+  // as big, as an old view's field is painted; not in its block, kept as it was made. Drawn anew each time, as a picture
+  // is: no row it is in kept, nor the list drawn whole as one it is in (list_drawn_anew), whose copy held its caret as it
+  // was, its paint, which asks the caret's next turn, not run: on a host keeping groups a field in a page's list had no
+  // caret, or one that never blinked, till 2026-11-12, caret_kept_row_wbtest)
   match (if tree_fields.is_empty() { None } else { tree_fields.get(c.id) }) {
     Some(tf) if c.bones == 0L => {
       ride_spoil()
+      list_drawn_anew()
       self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
     }
     _ => ()
