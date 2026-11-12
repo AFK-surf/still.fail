@@ -84,6 +84,7 @@ fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   c.key_context("Chat")
   c.on_action("composer.focus", fn() {
     guard !switcher_open() else { return false }
+    tape_page_for_key(c.moment())
     c.focus_field(writing(src, "new:" + w.id).field)
     true
   })

@@ -275,3 +275,19 @@ test "中屏 with a keyboard, the page in use: ⌥↓ the chat after it in the p
   assert_false(on_first_chat(), msg="the chat after it not opened")
   assert_eq(t.focused().map(fn(s) { s.label }), Some("发消息"), msg="the focus: \{t.focus_said()}")
 }
+
+///|
+test "中屏 with a keyboard, the sidebar in use, a chat open: Space (按空格输入) brings the page over at that moment, its composer with the focus, in the window; nothing of the sidebar keeps it" {
+  let t = tape_chat(0, 720.0, 800.0)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  t.key(@ui.key_space)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("发消息"), msg="the focus: \{t.focus_said()}")
+  assert_true(in_window(t.focused().unwrap().rect, 720.0, 800.0), msg="the composer: \{t.focus_said()}")
+  for s in t.semantics() {
+    if s.focused && s.label != "发消息" {
+      fail("the focus kept by \{s.describe()} at \{Repr(s.rect)}")
+    }
+  }
+}
