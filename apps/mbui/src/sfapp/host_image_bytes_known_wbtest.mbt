@@ -29,7 +29,6 @@ fn init {
     ("src/sfapp/linger_wbtest.mbt", 89156),
     ("src/sfapp/newchat_send_wbtest.mbt", 231032),
     ("src/sfapp/notices_wbtest.mbt", 999086),
-    ("src/sfapp/pick_in_wbtest.mbt", 89368),
     ("src/sfapp/place_first_wbtest.mbt", 10862),
     ("src/sfapp/preview_tree_wbtest.mbt", 1934327),
     ("src/sfapp/preview_wbtest.mbt", 2894865),
