@@ -220,8 +220,14 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
       }
     } else {
       let words = if o.waits != "" { o.waits } else { @sf.t("web-main.chat.sending") }
-      // (shown once it has been on its way a while: from when its row was first drawn)
-      let shows = @kit.after(c, "sending/" + o.id, true, sending_shows_ms)
+      // (shown once it has been on its way a while, counted from when it was sent (the time of day): a chat opened on
+      // one long on its way shows it at once, and the row taken over by the core's, its id another, goes on as it was;
+      // from when its row was first drawn as well, for a source whose time of day stands still)
+      let gone = (src.now)() - o.created_at
+      let shows = gone >= sending_shows_ms || @kit.after(c, "sending/" + o.id, true, sending_shows_ms)
+      if !shows {
+        c.wake_in(sending_shows_ms - gone)
+      }
       let w = c.box(style=msg_waiting, fn() {
         @sf.progress_spinner(c, "sending/" + o.id, o.progress, size=waiting_spin) |> ignore
         c.text(words, style=msg_time) |> ignore

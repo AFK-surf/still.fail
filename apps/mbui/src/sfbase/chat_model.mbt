@@ -611,8 +611,8 @@ pub(all) struct Outgoing {
   /// its files still going up before it goes but its images, among its `attachments` already (`uploads`): each one's
   /// name, size and how much of it the station has
   uploads : Array[(String, Int, Int)]
-  /// when it was sent (the frames' clock's: "正在发送" shows a while after), and whether it was refused as it is (sent
-  /// again it would be again: its words go back to the composer)
+  /// when it was sent (the time of day, as Source.now says it: "正在发送" shows a while after), and whether it was
+  /// refused as it is (sent again it would be again: its words go back to the composer)
   created_at : Double
   refused : Bool
 }

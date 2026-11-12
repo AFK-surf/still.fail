@@ -921,7 +921,7 @@ fn new_send(
     marks~,
     runs~,
   )
-  let row = sent_local(c, rk, None, words, up, going~, quotes~, runs~, now=(src.now)())
+  let row = sent_local(rk, None, words, up, going~, quotes~, runs~, now=(src.now)())
   @sfbase.flight_carry_into(c, d.key, draft, rk, row)
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)

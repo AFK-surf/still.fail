@@ -2127,7 +2127,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(w.key, words)
   let runs = @sfbase.refs_sent_runs(w.key, words)
-  let row = sent_local(c, rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~, now=(src.now)())
+  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~, now=(src.now)())
   // its words take off from the field as they are (before it is emptied), the composer held as it is laid out for them
   // till they let go of it (theirs: composer_held_lines); on its way to another shape (a line more just typed), it
   // slows to rest from as fast as it went as they are sent (composer_view's @motion.stop_for), its room with it

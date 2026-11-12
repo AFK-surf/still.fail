@@ -19,7 +19,13 @@ fn outbox_chat(calls : Array[Made], out : Json, offline? : Bool = false) -> @ui.
 }
 
 ///|
-fn outgoing(state : String, refused? : Bool = false, error? : String = "", waits? : String = "") -> Json {
+fn outgoing(
+  state : String,
+  refused? : Bool = false,
+  error? : String = "",
+  waits? : String = "",
+  at? : Double = 0.0,
+) -> Json {
   {
     "id": "o-1",
     "text": "这条还在路上",
@@ -27,7 +33,7 @@ fn outgoing(state : String, refused? : Bool = false, error? : String = "", waits
     "final": Json::boolean(refused),
     "error": Json::string(error),
     "waits": Json::string(waits),
-    "createdAt": 0,
+    "createdAt": Json::number(at),
     "time": { "createdAt": { "at": 0, "ago": "刚刚", "full": "10/19 06:40:00", "until": "", "past": true } },
   }
 }
@@ -105,6 +111,15 @@ test "正在发送 shows under what is on its way only once it has been a while 
   t.run_for(@sfpages.sending_shows_ms)
   assert_true(outbox_seen(t, "正在上传 2 个文件"))
   assert_true(!outbox_seen(t, "正在发送"))
+}
+
+///|
+test "a chat opened on what has been on its way a while says 正在发送 under it at once, its wait counted from when it was sent" {
+  let calls : Array[Made] = []
+  // (sent 5 s before the source's time of day: the fixture's, 0)
+  let t = outbox_chat(calls, outgoing("sending", at=-5000.0))
+  t.draw()
+  assert_true(outbox_seen(t, "正在发送"))
 }
 
 ///|
