@@ -311,6 +311,10 @@ class ViewSession {
   #leave: () => void = () => {};
   #unwatch: () => void = () => {};
   #unclip: () => void = () => {};
+  /// What the screen's clipboard last held as this view knows it (said to it, or set by it): the same again is no new
+  /// copy. Windows bumps its clipboard's number several times for one copy (an app's delayed rendering, clipboard
+  /// history), each read the same text: said once, not a toast each (pengxiao, 2026-11-12).
+  #clipKnown: Buffer | null = null;
   #unlogin: () => void = () => {};
   #unpasskey: () => void = () => {};
   #unpoint: () => void = () => {};
@@ -477,7 +481,11 @@ class ViewSession {
     const types = this.control ? (this.source.clipboard?.() ?? []) : [];
     if (types.length > 0 && this.view.watchClipboard) {
       this.#unclip = this.view.watchClipboard((clip) => {
-        if (!this.#closed && types.includes(clip.type) && clipFits(clip)) void this.#send(KIND.clipboard, clipPayload(clip));
+        if (this.#closed || !types.includes(clip.type) || !clipFits(clip)) return;
+        const payload = clipPayload(clip);
+        if (this.#clipKnown !== null && this.#clipKnown.equals(payload)) return;
+        this.#clipKnown = payload;
+        void this.#send(KIND.clipboard, payload);
       });
     }
     // The login field in focus, to a person who drives it (their app offers to fill it from their password manager).
@@ -738,6 +746,7 @@ class ViewSession {
             if (!this.control || !this.view.setClipboard) break;
             const asked = parseClip(got.payload);
             if (asked === null || !(this.source.clipboard?.() ?? []).includes(asked.clip.type)) break;
+            this.#clipKnown = clipPayload(asked.clip);
             this.#then(() => this.view.setClipboard!(asked.clip, asked.paste));
             break;
           }

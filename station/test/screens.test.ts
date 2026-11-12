@@ -1925,6 +1925,31 @@ test("the clipboard: a view that drives it hears the source's copies and sets it
   assert.equal(view.copied, null, "no longer watched once the view ended");
 });
 
+test("the clipboard: the same copy heard again (Windows bumps its number several times for one) is said once, nor what the view set itself", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.types = ["text"];
+  hub.add(source);
+  const v = await open(hub, member);
+  await until(v.frames, KIND.video);
+  const view = source.views[0]!;
+  view.copied!({ type: "text", text: "一次" });
+  view.copied!({ type: "text", text: "一次" });
+  view.copied!({ type: "text", text: "一次" });
+  await v.stream.write(clipFrame(1, 1, Buffer.from("粘贴的")));
+  await settle();
+  // What the view set, heard back from the screen: it holds it already.
+  view.copied!({ type: "text", text: "粘贴的" });
+  view.copied!({ type: "text", text: "两次" });
+  view.copied!({ type: "text", text: "一次" });
+  await settle();
+  const said = [];
+  for (let i = 0; i < 3; i++) said.push((await until(v.frames, KIND.clipboard)).subarray(1).toString("utf8"));
+  assert.deepEqual(said, ["一次", "两次", "一次"]);
+  await v.stream.finish();
+  await v.served;
+});
+
 test("the clipboard only for a view that drives it: one that looks, a read-only member's, never hear it nor set it", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
