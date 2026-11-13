@@ -242,6 +242,25 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
   let shown_was = self.focus_visible
   self.focused = id
   self.focus_visible = visible
+  // (the page's list whose row it is in, walked up to once here: Tree::row_focus_holds)
+  if was != id {
+    self.focus_row_list = None
+    match id {
+      Some(to) => {
+        let mut i = to.at
+        while i >= 0 && self.focus_row_list is None {
+          match self.rows_named.get(i) {
+            Some(r) => self.focus_row_list = Some(r.0)
+            None => i = self.nodes[i].parent
+          }
+        }
+        if self.focus_row_list is Some(_) {
+          self.focus_row_n = self.focus_row_n + 1
+        }
+      }
+      None => ()
+    }
+  }
   // (a sequence of keys under way ends as the focus moves: keymap.mbt)
   if was != id {
     self.keys_end(FocusMoved)
@@ -263,6 +282,17 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
     _ => ()
   }
   @signals.end_batch()
+}
+
+///|
+/// Whether the focus is in one of the rows of the page's list `list` (Tree's focus_row_list), and the time it came
+/// into one (each coming one more): a list holds what shows while it is so, and its hand's bringing it to its foot
+/// lets go of the hold only till the focus next comes into a row (View::scrolls_window). One comparison where none is.
+fn Tree::row_focus_holds(self : Tree, list : NodeId) -> Int? {
+  match self.focus_row_list {
+    Some(l) if l == list => Some(self.focus_row_n)
+    _ => None
+  }
 }
 
 ///|
