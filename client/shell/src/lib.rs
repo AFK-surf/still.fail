@@ -1763,8 +1763,12 @@ impl Inner {
                 Ok(Answer::json(json!({})))
             }
             // Each stream the other end of a connection opens, given as it comes to the Unix socket at `path` as
-            // `istream.hand` gives one, its head the connection's id and the stream's (8 bytes each, big-endian) and a 0;
-            // kept as a stream here meanwhile (`istream.stopped`, `istream.reset`). Answered once the connection is gone.
+            // `istream.hand` gives one, its head the connection's id and the stream's (8 bytes each, big-endian), a 2
+            // and the stream's index on the connection (QUIC's, 8 bytes): each is handed by a task of its own, so their
+            // sockets come to the other side in any order, which puts them back in the order they were opened by it
+            // (a device's credential stream is its first; 2026-11-13, its requests came first and were refused as
+            // one). A 0 there and no index: a front from before. Kept as a stream here meanwhile
+            // (`istream.stopped`, `istream.reset`). Answered once the connection is gone.
             // What station/mb's front gives its Node, with no step of the program's for each stream.
             "conn.hand" => {
                 let on = id_of(&a)?;
@@ -1776,6 +1780,7 @@ impl Inner {
                         let _ = recv.stop(0u32.into());
                         break;
                     }
+                    let index = recv.id().index();
                     let halves = Arc::new(Halves {
                         conn: on,
                         ended: false.into(),
@@ -1788,7 +1793,8 @@ impl Inner {
                     let id = self.keep(Handle::IStream(halves.clone()));
                     let mut head = on.to_be_bytes().to_vec();
                     head.extend(id.to_be_bytes());
-                    head.push(0);
+                    head.push(2);
+                    head.extend(index.to_be_bytes());
                     let (inner, path) = (self.clone(), path.clone());
                     tokio::spawn(async move {
                         if let Err(e) = inner.hand(id, halves, &path, &head).await {

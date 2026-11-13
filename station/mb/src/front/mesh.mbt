@@ -51,7 +51,8 @@ pub async fn mesh(host : @host.Host, path : String) -> Unit {
   let (said, _) = host.shell("unix.listen", { "path": Json::string(path) })
   guard said is { "id": listening, .. } else { fail("the shell gave no listening socket") }
   let mesh : Mesh = { host, endpoint: None, options: "", said: Json::null(), waiting: [], clients: [], binds: 0 }
-  host.say(({ "listening": Json::string(path) } : Json).stringify())
+  // `streams`: how it hands Node the streams the other end opens (front.rs `STREAMS`): 2, each with its index.
+  host.say(({ "listening": Json::string(path), "streams": 2 } : Json).stringify())
   // Its stdin is the launcher's: ended (the launcher gone, or stopping the station), the endpoint goes with it.
   ignore(
     host.rt.fork(name="mesh parent", () => {
@@ -215,7 +216,7 @@ async fn Mesh::bind(self : Mesh, options : Json, key : Bytes) -> Json {
 
 ///|
 /// The streams the other end of connection `conn` opens, each given to `client` as it comes by the shell itself
-/// (`conn.hand`: its head the ids and a 0), till the connection is gone.
+/// (`conn.hand`: its head the ids, a 2 and the stream's index), till the connection is gone.
 fn Mesh::taking(self : Mesh, client : Client, conn : Json) -> Unit {
   ignore(
     self.host.rt.fork(name="mesh streams", () => {

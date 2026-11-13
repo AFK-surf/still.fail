@@ -22,6 +22,11 @@ const PROGRAM_IN_APP: &str = "station/stillfail-reader";
 const PROGRAM_VAR: &str = "STILLFAIL_MB_READER";
 /// How long it may take to listen.
 const LISTENS_WITHIN: Duration = Duration::from_secs(10);
+/// How it hands Node the streams a connection's other end opens (its first line's `streams`; none said: 1). 2: each
+/// with its index, so Node takes them in the order they were opened (a device's credential stream first, 2026-11-13).
+/// A front kept from before a raise here is replaced once by the launcher that takes it up (`current`): the one thing
+/// that does not come with an update, as it is kept across them.
+pub const STREAMS: u64 = 2;
 
 pub struct Front {
     pub pid: i32,
@@ -31,6 +36,8 @@ pub struct Front {
     pub socket: PathBuf,
     /// When it started; none for one a launcher before this one started.
     started: Option<Instant>,
+    /// How it hands Node streams (`STREAMS`).
+    streams: u64,
 }
 
 impl Front {
@@ -74,9 +81,9 @@ impl Front {
         // Reaped by waitpid in run.rs's serve(), not by std.
         drop(child);
         match listening(&mut out) {
-            Some(said) if said == socket.to_string_lossy() => {
+            Some((said, streams)) if said == socket.to_string_lossy() => {
                 log::info(&format!("the front listens (pid {pid}): {}", socket.display()));
-                Some(Front { pid, input, socket, started: Some(Instant::now()) })
+                Some(Front { pid, input, socket, started: Some(Instant::now()), streams })
             }
             other => {
                 log::warn(&format!("the front (pid {pid}) did not listen ({other:?}); each Node binds the station's endpoint itself"));
@@ -100,7 +107,7 @@ impl Front {
 
     /// What the launcher it becomes (`renew`) takes it up by.
     pub fn state(&self) -> Value {
-        json!({ "pid": self.pid, "input": self.input.as_raw_fd(), "socket": self.socket })
+        json!({ "pid": self.pid, "input": self.input.as_raw_fd(), "socket": self.socket, "streams": self.streams })
     }
 
     pub fn fds(&self) -> Vec<RawFd> {
@@ -114,12 +121,29 @@ impl Front {
         let socket = PathBuf::from(state["socket"].as_str()?);
         crate::run::cloexec_on(input);
         // SAFETY: the descriptor the launcher before handed on, owned by this one from here.
-        Some(Front { pid, input: unsafe { OwnedFd::from_raw_fd(input) }, socket, started: None })
+        Some(Front { pid, input: unsafe { OwnedFd::from_raw_fd(input) }, socket, started: None, streams: state["streams"].as_u64().unwrap_or(1) })
+    }
+
+    /// Itself where it hands streams as this launcher's release does; else ended (its connections go with it, the
+    /// devices dial again), so that one of the release starts in its place.
+    pub fn current(self) -> Option<Front> {
+        if self.streams >= STREAMS {
+            return Some(self);
+        }
+        log::warn(&format!("the front (pid {}) hands streams as {} and this release as {STREAMS}: ending it for the release's", self.pid, self.streams));
+        // SAFETY: a signal to this process's child (a launcher before this one started it in this same process), then
+        // its exit waited for, so the next binds its socket and the station's endpoint with it gone.
+        unsafe {
+            libc::kill(self.pid, libc::SIGKILL);
+            libc::waitpid(self.pid, std::ptr::null_mut(), 0);
+        }
+        None
     }
 }
 
-/// Where it said it listens (`{"listening": path}`, its first line), within LISTENS_WITHIN.
-fn listening(out: &mut std::process::ChildStdout) -> Option<String> {
+/// Where it said it listens and how it hands streams (`{"listening": path, "streams": n}`, its first line), within
+/// LISTENS_WITHIN.
+fn listening(out: &mut std::process::ChildStdout) -> Option<(String, u64)> {
     let deadline = Instant::now() + LISTENS_WITHIN;
     let mut line = vec![];
     let mut byte = [0u8; 1];
@@ -140,5 +164,5 @@ fn listening(out: &mut std::process::ChildStdout) -> Option<String> {
         }
     }
     let said: Value = serde_json::from_slice(&line).ok()?;
-    said["listening"].as_str().map(str::to_string)
+    said["listening"].as_str().map(|path| (path.to_string(), said["streams"].as_u64().unwrap_or(1)))
 }
