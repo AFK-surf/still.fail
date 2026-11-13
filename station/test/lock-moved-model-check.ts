@@ -67,21 +67,34 @@ function chainFor(w: World4, h: Holder, ws: string, root: string): Entry[] {
   return [g, moved];
 }
 
-/// A station under test standing for keeper `h` in `ws`, given what it stores, its bodies offered in `order`.
-function stand(w: World4, h: Holder, ws: string, root: string, offered: Body[]): Cloud {
-  const data = mkdtempSync(join(tmpdir(), "lmm-"));
-  writeState(data, {
-    origin: "https://app.still.fail", station: w.keyOfHolder(h), workspace: ws, workspace_name: "W", name: h.name, relay_url: "", relay_urls: [],
-    grant_keys: { keys: [] }, peers: [], revocations: [],
-  });
-  const c = new Cloud(data, false);
+/// A station under test standing for keeper `h` in `ws`: made once a world (and anew for a drawn other order), given
+/// at each look what came since: the entries the keeper stores (as another keeper's), its chain, the bodies offered.
+type Stood = { c: Cloud; given: Set<string> };
+function stand(w: World4, h: Holder, ws: string, root: string, offered: Body[], was?: Stood): Stood {
+  let s = was;
+  if (s === undefined) {
+    const data = mkdtempSync(join(tmpdir(), "lmm-"));
+    writeState(data, {
+      origin: "https://app.still.fail", station: w.keyOfHolder(h), workspace: ws, workspace_name: "W", name: h.name, relay_url: "", relay_urls: [],
+      grant_keys: { keys: [] }, peers: [], revocations: [],
+    });
+    s = { c: new Cloud(data, false), given: new Set() };
+  }
+  const c = s.c;
   const chain = chainFor(w, h, ws, root);
-  c.takeLock(chain.slice(0, 1));
+  if (c.chain() === null) c.takeLock(chain.slice(0, 1));
   c.takeLock(chain, null, true);
   const chains = personChainsOf(c);
-  for (const [g, k] of h.logs) chains.keep(g, [k.store.get(g)!, ...[...k.store.values()].filter((e) => hashOf(e) !== g)], ws, true);
-  for (const b of offered) c.takeBodies(null, [b]);
-  return c;
+  for (const [g, k] of h.logs) {
+    const fresh = [...k.store.values()].filter((e) => !s!.given.has(hashOf(e)));
+    if (fresh.length === 0) continue;
+    chains.keep(g, [k.store.get(g)!, ...fresh.filter((e) => hashOf(e) !== g)], ws, true);
+    for (const e of fresh) s.given.add(hashOf(e));
+  }
+  const mine = c.bodies(null);
+  const left = offered.filter((b) => !mine.has(bodyHash(b)));
+  if (left.length > 0) c.takeBodies(null, left);
+  return s;
 }
 
 /// The model's `bodiesFor` without what `to` has or was never to be given (who is given what, not what is new to it).
@@ -120,20 +133,19 @@ function d4Of(c: Cloud): D4 | string {
   return { on: "on", settings: canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys }), members, stations: [...s.stations.keys()].sort() };
 }
 
-const looked = new WeakMap<World4, Map<string, string>>();
+const stood = new WeakMap<World4, Map<string, Stood>>();
 
 /// Every keeper of `w` that goes by a root, compared at `at`: each station, and each device too, stood for by a station
 /// given what it keeps (a device keeps a workspace as a station does: the model's keepers are both); `extra`, bodies
-/// offered there that no keeper keeps (M2's).
-export function stations4(o: Out, w: World4, at: string, r: Rng, extra: Body[] = []) {
+/// offered there that no keeper keeps (M2's); `last`, the world's last look, where a station is also made anew and given
+/// the same in a drawn other order. A keeper of two workspaces is a station under test in each, offered the bodies of
+/// that one (and of none it keeps); a body of the other is that one's to judge.
+export function stations4(o: Out, w: World4, at: string, r: Rng, extra: Body[] = [], last = false) {
+  const mine = stood.get(w) ?? stood.set(w, new Map()).get(w)!;
   for (const h of w.holders) {
-    for (const [ws, root] of w.pinsOf(h)) {
+    const pins = w.pinsOf(h);
+    for (const [ws, root] of pins) {
       if (!root) continue;
-      // (a keeper nothing came to since it was last compared, by the same clock: compared already)
-      const was = (looked.get(w) ?? looked.set(w, new Map()).get(w)!);
-      const word = `${h.ver}|${root}|${w.clock(h)}|${w.x.order.length}|${extra.length}|${w.x.old.get(h)?.active.length ?? -1}`;
-      if (was.get(`${h.name}|${ws}`) === word) continue;
-      was.set(`${h.name}|${ws}`, word);
       o.stations++;
       o.moved++;
       const where = `${at}, ${h.name}, ${ws === WS ? "W1" : "W2"}`;
@@ -142,6 +154,7 @@ export function stations4(o: Out, w: World4, at: string, r: Rng, extra: Body[] =
       const refusedBy = new Map<string, string>();
       const offered: Body[] = [];
       for (const b of [...w.x.order.map((hb) => w.x.bodies.get(hb)!), ...extra]) {
+        if (typeof b?.ws === "string" && b.ws !== ws && pins.has(b.ws)) continue;
         const hb = bodyHash(b);
         if (kept.has(hb)) offered.push(b);
         else {
@@ -152,18 +165,26 @@ export function stations4(o: Out, w: World4, at: string, r: Rng, extra: Body[] =
           }
         }
       }
-      for (const order of [offered, shuffled(offered, r)]) {
-        const c = stand(w, h, ws, root, order);
-        try {
-          compare(o, where, w, h, ws, c, kept, refusedBy, order);
-        } finally {
-          rmSync(c.data, { recursive: true, force: true });
-        }
-        if (order !== offered) continue;
-        o.bodiesOffered += order.length;
+      o.bodiesOffered += offered.length;
+      const id = `${h.name}|${ws}`;
+      const s = stand(w, h, ws, root, offered, mine.get(id));
+      mine.set(id, s);
+      compare(o, where, w, h, ws, s.c, kept, refusedBy, offered);
+      if (!last) continue;
+      const again = stand(w, h, ws, root, shuffled(offered, r));
+      try {
+        compare(o, `${where}, in another order`, w, h, ws, again.c, kept, refusedBy, offered);
+      } finally {
+        rmSync(again.c.data, { recursive: true, force: true });
       }
     }
   }
+}
+
+/// The stations stood up for `w`, let go.
+function done(w: World4) {
+  for (const s of stood.get(w)?.values() ?? []) rmSync(s.c.data, { recursive: true, force: true });
+  stood.delete(w);
 }
 
 function compare(o: Out, where: string, w: World4, h: Holder, ws: string, c: Cloud, kept: Map<string, Body>, refusedBy: Map<string, string>, offered: Body[]) {
@@ -238,7 +259,8 @@ export function drawnWorlds(v: V3v, family: Family, from: number, to: number, st
       stations4(o, w, at(`quarter ${q + 1}`), r);
     }
     w.finish();
-    stations4(o, w, at("end"), r);
+    stations4(o, w, at("end"), r, [], true);
+    done(w);
     o.worlds++;
   }
   return o;
@@ -247,7 +269,7 @@ export function drawnWorlds(v: V3v, family: Family, from: number, to: number, st
 export function scriptedWorlds(from: number, to: number): Out {
   const o = fresh();
   const r = new Rng(from ^ 0x5a7f);
-  look4.at = (w, where, offered) => stations4(o, w, where, r, offered ?? []);
+  look4.at = (w, where, offered) => stations4(o, w, where, r, offered ?? [], true);
   try {
     for (let seed = from; seed <= to; seed++) {
       m2(seed);

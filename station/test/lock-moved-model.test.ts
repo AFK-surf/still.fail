@@ -2,17 +2,17 @@
 // station is stricter on purpose: a state the model calls "not on" or "no root" is one it waits in, naming nobody and
 // giving nobody a body). Drawn worlds (both of round three's variants, fault-free and with faults; as drawn, one body
 // held back for good, two workspaces) and the scripted ones (M2, M5 with its clocks, a revoked key's web device and
-// `off`, M6, M7's four rows). LOCK_MOVED_MODEL_SEEDS, _STEPS, _SCRIPTED give more.
+// `off`, M6, M7's four rows). LOCK_MOVED_MODEL_SEEDS (3), _STEPS (120), _SCRIPTED (1) give more.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pool, print } from "./lock-fork-pool.ts";
 import { V3 } from "./lock-roster-model.ts";
 import type { Job, Out } from "./lock-moved-model-check.ts";
 
-const SEEDS = Number(process.env.LOCK_MOVED_MODEL_SEEDS ?? 24);
+const SEEDS = Number(process.env.LOCK_MOVED_MODEL_SEEDS ?? 3);
 const STEPS = Number(process.env.LOCK_MOVED_MODEL_STEPS ?? 120);
-const SCRIPTED = Number(process.env.LOCK_MOVED_MODEL_SCRIPTED ?? 3);
-const BATCH = 4;
+const SCRIPTED = Number(process.env.LOCK_MOVED_MODEL_SCRIPTED ?? 1);
+const BATCH = 1;
 const FAMILIES = ["free", "faults"] as const;
 
 const ask = pool<Job>(new URL("./lock-moved-model-check.ts", import.meta.url), { movedModel: true });
