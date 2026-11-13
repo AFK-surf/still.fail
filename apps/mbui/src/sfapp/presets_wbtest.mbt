@@ -500,12 +500,13 @@ test "a preset can leave directories, station, and model unrestricted, or bind a
   t.frame()
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
-  // Pick Model via model panel, clear it with ×, then pick Opus 5.5
+  // Pick Model via the real triple model picker, clear it with ×, then pick Opus 5.5
   press(t, "不限模型")
   t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "常用搭配") && shows(t, "思考深度") && shows(t, "低") && shows(t, "中") && shows(t, "高") && shows(t, "自动分配"), msg=runs(t))
   press(t, "Opus 5.5")
   t.run_for(@ui.move_most_ms)
-  assert_true(shows(t, "Opus 5.5 · 高"), msg=runs(t))
+  assert_true(shows(t, "Opus 5.5 · 高 · 自动分配"), msg=runs(t))
   press(t, "清除模型")
   t.frame()
   assert_true(shows(t, "不限模型"), msg=runs(t))

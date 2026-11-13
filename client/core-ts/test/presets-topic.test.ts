@@ -228,5 +228,25 @@ test("a_preset_applies_its_optional_station_and_model_when_picked_or_leaves_them
   assert.equal(v(values, 2).preset, "free");
   assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
   assert.equal(v(values, 2).pick.value.effort, "high");
+
+  // `connect-new:preset` starts unrestricted (`value.model === null`) while still populating panel options/efforts,
+  // saves via `pick.save`, and resets to unrestricted via `pick.set({ clear: true })`.
+  subscribe(core, ui, 5, { topic: "pick", station: S, of: "connect-new:preset" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).value.model, undefined);
+  assert.equal(v(values, 5).option, "claude-sonnet-5-5");
+  assert.equal(v(values, 5).changed, true);
+
+  call(core, ui, 6, "pick.save", { station: S, of: "connect-new:preset", model: "claude-opus-5-5", effort: "medium" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).value.model, "claude-opus-5-5");
+  assert.equal(v(values, 5).value.effort, "medium");
+
+  call(core, ui, 7, "pick.set", { station: S, of: "connect-new:preset", clear: true });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).value.model, undefined);
   core.close();
 });

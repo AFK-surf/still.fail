@@ -141,6 +141,8 @@ export interface ScreenView {
   /// Answers the ask `a.id` with what the person's app signed (or that it signed nothing), if the page is still where
   /// it asked.
   passkey?(a: PasskeyAnswer): Promise<void>;
+  /// Hears a child screen (`browser:<id>`) this tab opened while driven (a link to a new window or an OAuth popup).
+  watchChild?(heard: (screenId: string) => void): () => void;
 }
 
 /// A login field in focus: the site's host (as the browser has its address, not as the page says it), and which field.
@@ -202,6 +204,18 @@ export interface ScreenSource {
   readonly peek?: boolean;
   /// The session that opened it (a tab of the browser an agent opened), when known.
   openedBy?(): string | undefined;
+  /// A browser tab a person opened on this station (kept in Chrome's persistent profile, hidden from agents).
+  readonly userTab?: boolean;
+  /// Whether this user tab is hibernated (its Chrome page closed to free memory until opened again).
+  sleeping?(): boolean;
+  /// The site (`hostname[:port]`) of a browser tab, without path, query or hash.
+  site?(): string | undefined;
+  /// Navigates a browser tab to `url`.
+  openUrl?(url: string): Promise<void>;
+  /// Reloads a browser tab.
+  reload?(): Promise<void>;
+  /// Hibernates a user tab now, closing its underlying Chrome page while keeping its saved address and title.
+  sleep?(): Promise<void>;
   /// Closes it for good (a tab of the browser, a simulator shut down); none: it is not closed from a person's app (the
   /// desktop).
   discard?(): Promise<void>;
@@ -231,6 +245,12 @@ export interface ScreenSource {
   readonly panels?: readonly Panel[];
 }
 
+/// The station's browser as `ScreenHub` reaches it without importing `browser/`.
+export interface ScreenBrowser {
+  available(): boolean;
+  openUserTab(url: string): Promise<string>;
+}
+
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.
 export interface Screens {
   add(source: ScreenSource): () => void;
@@ -238,6 +258,8 @@ export interface Screens {
   get(id: string): ScreenSource | undefined;
   /// Called with the list each time a source comes or goes (or its title changes).
   watch(listener: (sources: ScreenSource[]) => void): () => void;
+  /// Registers the station's browser so members can open persistent user pages (`POST /screens/browser`).
+  setBrowser?(browser: ScreenBrowser | null): void;
 }
 
 export function makeScreens(): Screens & { changed(): void } {

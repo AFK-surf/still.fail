@@ -910,21 +910,31 @@ fn new_send(
   let r : ChatRef = { station, session: key, title: @sf.t("web-main.newChat.title"), station_name: name }
   // its words, its quotes and its files from where they were typed, their cards and their tiles, into their row in
   // the chat's list, in it from now (sent_local), the list coming up with them, the composer held as tall as it is
-  // till they set out
-  @sfbase.flight_carry_start(
-    c,
-    d.key,
-    words,
-    flying_quotes(c, src, d, station) + flying_files(c, src, d),
-    field=d.field,
-    shaped=composer_shapes_sent(c, src, d, station),
-    // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
-    desk=!frame.in_place,
-    marks~,
-    runs~,
-  )
+  // till they set out.
+  // Where the chat it becomes is a page made as nodes, none is carried, till the flights' step: the page becomes it in
+  // this change, nothing there lets a flight go (flight_placed, flight_frame), and the chat's composer was held as tall
+  // as they took in it for good; with none, its composer is at its one line from this change, in which its list takes
+  // their row. The flights' step carries them on nodes again, and must then either let go in the sent key's change or
+  // have the list keep the room till it lets go.
+  let carried = !@signals.untracked(fn() { @sfbase.chat_page_nodes.get() })
+  if carried {
+    @sfbase.flight_carry_start(
+      c,
+      d.key,
+      words,
+      flying_quotes(c, src, d, station) + flying_files(c, src, d),
+      field=d.field,
+      shaped=composer_shapes_sent(c, src, d, station),
+      // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
+      desk=!frame.in_place,
+      marks~,
+      runs~,
+    )
+  }
   let row = sent_local(rk, None, words, up, going~, quotes~, runs~, now=(src.now)())
-  @sfbase.flight_carry_into(c, d.key, draft, rk, row)
+  if carried {
+    @sfbase.flight_carry_into(c, d.key, draft, rk, row)
+  }
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)
   fresh.sending.set(true)

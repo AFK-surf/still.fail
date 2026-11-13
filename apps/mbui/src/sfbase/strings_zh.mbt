@@ -2620,7 +2620,7 @@ let zh : Map[String, String] = {
   "web-pages.stations.permissions.section": "权限",
   "web-pages.stations.permissions.waiting": "等待允许",
   "web-pages.stations.processesFailed": "无法获取进程：{error}",
-  "web-pages.stations.processesLead": "still.fail 的桌面 App、station 和 agent 跑的程序在这台电脑上用了多少 CPU、内存和网络流量，按对话分开看。只在打开这一页时统计，只有 macOS 能统计。",
+  "web-pages.stations.processesLead": "still.fail 的桌面 App、station 和 agent 跑的程序在这台电脑上用了多少 CPU、内存和网络流量，按对话分开看。只在打开这一页时统计，macOS 和 Linux 能统计，Linux 不统计网络流量。",
   "web-pages.stations.processesOffline": "station 离线，看不到进程",
   "web-pages.stations.total": "共 {total}",
   "web-pages.stations.uses": "{name} 占用",

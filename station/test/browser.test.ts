@@ -9,7 +9,12 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { type Clock, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { StationBrowser, IDLE_MS } from "../src/browser/browser.ts";
+import { StationBrowser, IDLE_MS, USER_TAB_IDLE_MS } from "../src/browser/browser.ts";
+import { extractFirstHttpUrl, normalizeBrowserUrl, siteOfBrowserUrl } from "../src/browser/url.ts";
+import { ScreenHub } from "../src/screens/hub.ts";
+import { described, letGo } from "../src/tools/screen.ts";
+import { Admin } from "../src/api/admin.ts";
+import type { Viewer } from "../src/mesh/credential.ts";
 import { Browsers } from "../src/browser/browsers.ts";
 import { Gate } from "../src/browser/gate.ts";
 import { expired, keptOf, ofSites, siteCookies, stateOf } from "../src/browser/signins.ts";
@@ -1137,4 +1142,207 @@ test("the gate: what Chrome tells of other chats' targets never reaches the agen
   client({ id: 6, sessionId: "SA", method: "Target.getTargets", params: {} });
   assert.deepEqual(chrome({ id: 6, sessionId: "SA", result: { targetInfos: [{ targetId: "X", browserContextId: "C2" }] } }).down, [{ id: 6, sessionId: "SA", result: { targetInfos: [] } }]);
   assert.equal(client({ id: 7, sessionId: "SA", method: "Storage.getCookies", params: {} }).up[0].params.browserContextId, "C1");
+});
+
+test("browser URL helpers normalize bare hosts, extract embedded links, and reject email addresses or unsafe schemes", () => {
+  assert.equal(normalizeBrowserUrl("mail.proton.me"), "https://mail.proton.me/");
+  assert.equal(normalizeBrowserUrl("https://mail.proton.me/u/0/inbox"), "https://mail.proton.me/u/0/inbox");
+  assert.equal(normalizeBrowserUrl("localhost:3000/callback?code=1"), "http://localhost:3000/callback?code=1");
+  assert.equal(normalizeBrowserUrl("Click to sign in: https://claude.ai/magic-link#token=abc."), "https://claude.ai/magic-link#token=abc");
+  assert.equal(extractFirstHttpUrl("Hello,\nhttps://accounts.google.com/o/oauth2/auth?x=1, thanks!"), "https://accounts.google.com/o/oauth2/auth?x=1");
+  for (const bad of ["", "   ", "alice@proton.me", "javascript:alert(1)", "mailto:a@b.com", "file:///etc/passwd", "chrome://settings", "not a url"]) {
+    assert.equal(normalizeBrowserUrl(bad), null, JSON.stringify(bad));
+  }
+  assert.equal(siteOfBrowserUrl("https://Mail.Proton.me/u/0/inbox?token=secret"), "mail.proton.me");
+  assert.equal(siteOfBrowserUrl("about:blank"), undefined);
+});
+
+test("user pages: Arc-style idle hibernation, reload on open, station handover & cold restart, popup cleanup, and strict agent isolation", async () => {
+  const chrome = fakeChrome();
+  const { clock: c, adjust } = clock();
+  const dir = scratch();
+  const hub = new ScreenHub();
+  const b = new StationBrowser({ later: () => () => {}, dir, chrome: chrome.host, clock: c, screens: hub });
+  assert.equal(hub.listed("zh").browser, true);
+
+  // 1. Open a persistent user page (`mail.proton.me` -> `https://mail.proton.me/`).
+  const id = await hub.openBrowser("mail.proton.me");
+  assert.match(id, /^browser:u_[0-9a-f]{12}$/);
+  assert.equal(hub.list().length, 1, "no duplicate raw browser:<targetId> screen");
+  const cdp1 = chrome.made[0]!;
+  cdp1.emit("Target.targetInfoChanged", {
+    targetInfo: { targetId: "N1", type: "page", title: "Inbox (3) - Proton Mail", url: "https://mail.proton.me/u/0/inbox?secret=1", attached: false },
+  });
+  await b.flushed();
+  const file = join(dir, "user-tabs.json");
+  assert.equal(statSync(file).mode & 0o777, 0o600, "user-tabs.json written mode 0600");
+
+  // Listed to members with sanitized `site` only (no path/query secrets), `userTab: true`, `openUrl: true`, not sleeping.
+  const listedLive = hub.listed("zh").screens[0]!;
+  assert.equal(listedLive.id, id);
+  assert.equal(listedLive.userTab, true);
+  assert.equal(listedLive.sleeping, undefined);
+  assert.equal(listedLive.site, "mail.proton.me");
+  assert.equal(listedLive.title, "Inbox (3) - Proton Mail");
+  assert.equal(listedLive.openUrl, true);
+
+  // 2. Strictly hidden and refused for agents (`screen` tool + `computer` openAs).
+  assert.match(described(hub, "https://still.fail/w/w1/s/s1"), /no screen/);
+  assert.throws(() => described(hub, null, id), /person's own browser tab/);
+  assert.throws(() => letGo(hub, "agent: test", id, "disconnect_all", undefined), /person's own browser tab/);
+  await assert.rejects(hub.openAs(id, { maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] }, { name: "agent", control: true }), /person's own browser tab/);
+
+  // 3. While nobody views it, after USER_TAB_IDLE_MS it hibernates: Chrome target closed, screen entry stays with title & site!
+  await adjust(USER_TAB_IDLE_MS);
+  assert.deepEqual(cdp1.of("Target.closeTarget").map((x) => x.params), [{ targetId: "N1" }]);
+  cdp1.emit("Target.targetDestroyed", { targetId: "N1" });
+  const listedSleeping = hub.listed("zh").screens[0]!;
+  assert.equal(listedSleeping.id, id);
+  assert.equal(listedSleeping.sleeping, true);
+  assert.equal(listedSleeping.peek, undefined, "sleeping user tabs cannot be woken by chat link previews");
+  assert.equal(listedSleeping.title, "Inbox (3) - Proton Mail");
+  assert.equal(listedSleeping.site, "mail.proton.me");
+
+  // 4. Opening a view on the sleeping user tab transparently wakes it at its saved URL in Chrome's persistent default profile!
+  const view = await hub.get(id)!.open({ maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] });
+  assert.equal(cdp1.of("Target.createTarget").length, 2);
+  assert.equal(cdp1.of("Target.createTarget")[1]!.params.url, "https://mail.proton.me/u/0/inbox?secret=1");
+  assert.equal(cdp1.of("Target.createTarget")[1]!.params.browserContextId, undefined, "uses persistent default profile");
+  assert.equal(hub.listed("zh").screens[0]!.sleeping, undefined);
+
+  // 5. Clicking a popup / `target="_blank"` link while driving notifies `watchChild` and cleans up when the popup closes itself.
+  const childHeard: string[] = [];
+  const unchild = view.watchChild!((cid) => childHeard.push(cid));
+  cdp1.emit("Target.targetCreated", {
+    targetInfo: { targetId: "POP1", type: "page", title: "Verify sign-in", url: "https://claude.ai/magic-link", openerId: "N2" },
+  });
+  assert.equal(childHeard.length, 1);
+  assert.match(childHeard[0]!, /^browser:u_p_/);
+  assert.equal(hub.get(childHeard[0]!)?.userTab, true);
+  cdp1.emit("Target.targetDestroyed", { targetId: "POP1" });
+  assert.equal(hub.get(childHeard[0]!), undefined, "self-closed popup leaves no clutter behind");
+  unchild();
+  view.close();
+
+  // 6. Station handover (`close()` + `resume()` with Chrome still running) re-adopts the live target without reloading.
+  const runInfo = b.status();
+  await b.close();
+  chrome.leave({ pid: runInfo.pid!, started: 0, port: 9300, ws: runInfo.ws!, binary: "chrome", headless: false, userAgent: "UA" });
+  const origConnect = chrome.host.connect;
+  let resumedCdp: FakeCdp | null = null;
+  chrome.host.connect = async (ws) => {
+    const conn = (await origConnect(ws)) as FakeCdp;
+    if (!resumedCdp) {
+      resumedCdp = conn;
+      conn.answers["Target.setDiscoverTargets"] = () => {
+        conn.emit("Target.targetCreated", {
+          targetInfo: { targetId: "N2", type: "page", title: "Inbox (3) - Proton Mail", url: "https://mail.proton.me/u/0/inbox?secret=1" },
+        });
+        return {};
+      };
+    }
+    return conn;
+  };
+  const hub2 = new ScreenHub();
+  const b2 = new StationBrowser({ later: () => () => {}, dir, chrome: chrome.host, clock: c, screens: hub2 });
+  await b2.resume();
+  await turn();
+  assert.equal(hub2.listed("zh").screens.length, 1);
+  assert.equal(hub2.listed("zh").screens[0]!.id, id);
+  assert.equal(hub2.listed("zh").screens[0]!.sleeping, undefined, "still live after station handover");
+
+  // 7. Admin routes: navigate (`open-url`), `reload`, explicit `sleep`, cold restart while sleeping, and `close` removal.
+  chrome.host.connect = origConnect;
+  const admin = new Admin({ names: new Map(), read: async () => "{}", data: dir } as any, { screens: hub2, clock: c });
+  const member: Viewer = { sub: "u1", email: "u@a.com", name: "User", role: "admin", workspace: "w1", device: "d1" };
+  const viewerOnly: Viewer = { sub: "v1", email: "v@a.com", name: "Viewer", role: "viewer", workspace: "w1", device: "d2" };
+  const req = (method: string, path: string, body?: object, who: Viewer = member) =>
+    admin.handle({
+      method,
+      path,
+      query: [],
+      search: "",
+      headers: { "accept-language": "zh" },
+      body: Buffer.from(body ? JSON.stringify(body) : ""),
+      viewer: who,
+      lang: "zh",
+    });
+
+  assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/open-url`, { url: "mail.google.com" })).status, 200);
+  assert.equal(hub2.listed("zh").screens[0]!.site, "mail.google.com");
+  assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/open-url`, { url: "not a url" })).status, 400);
+  assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/reload`)).status, 200);
+  assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/sleep`)).status, 200);
+  assert.equal(hub2.listed("zh").screens[0]!.sleeping, true);
+  assert.equal((await req("POST", "/screens/browser", { url: "github.com" }, viewerOnly)).status, 403);
+
+  await b2.stop();
+  await b2.close();
+  chrome.leave(null);
+
+  // Cold boot with Chrome not running: saved user page appears immediately as sleeping!
+  const hub3 = new ScreenHub();
+  const b3 = new StationBrowser({ later: () => () => {}, dir, chrome: chrome.host, clock: c, screens: hub3 });
+  await b3.resume();
+  assert.equal(b3.status().running, false, "Chrome not started on cold boot until a tab is opened");
+  assert.equal(hub3.listed("zh").screens.length, 1);
+  assert.equal(hub3.listed("zh").screens[0]!.id, id);
+  assert.equal(hub3.listed("zh").screens[0]!.sleeping, true);
+  assert.equal(hub3.listed("zh").screens[0]!.site, "mail.google.com");
+
+  // Explicit close removes it permanently from disk and screens.
+  await hub3.closeScreen(id);
+  await b3.flushed();
+  assert.deepEqual(hub3.listed("zh").screens, []);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { tabs: [] });
+  await b3.close();
+});
+
+test("navigating a sleeping user tab while a wake is already in flight lands on the new URL instead of reverting", async () => {
+  const chrome = fakeChrome();
+  const { clock: c, adjust } = clock();
+  const dir = scratch();
+  const hub = new ScreenHub();
+  const b = new StationBrowser({ later: () => () => {}, dir, chrome: chrome.host, clock: c, screens: hub });
+
+  const id = await hub.openBrowser("https://old.example.com/");
+  const cdp = chrome.made[0]!;
+  await adjust(USER_TAB_IDLE_MS);
+  cdp.emit("Target.targetDestroyed", { targetId: "N1" });
+  assert.equal(hub.listed("zh").screens[0]!.sleeping, true);
+
+  // Hold `Target.createTarget` so we can issue `openUrl` mid-wake while `tab.waking` is in flight!
+  let finishCreate!: () => void;
+  cdp.answers["Target.createTarget"] = (p) =>
+    new Promise((resolve) => {
+      finishCreate = () => {
+        const targetId = "N_WAKE";
+        setImmediate(() =>
+          cdp.emit("Target.targetCreated", {
+            targetInfo: { targetId, type: "page", title: "Old Title", url: p.url, attached: false },
+          }),
+        );
+        resolve({ targetId });
+      };
+    });
+
+  const openingView = hub.get(id)!.open({ maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] });
+  await turn();
+  const navigating = hub.openUrl(id, "https://new.example.com/inbox");
+  await turn();
+  finishCreate();
+  const view = await openingView;
+  await navigating;
+  await b.flushed();
+
+  assert.equal(hub.listed("zh").screens[0]!.site, "new.example.com");
+  assert.ok(
+    chrome.made.flatMap((conn) => conn.of("Page.navigate")).some((x) => x.params.url === "https://new.example.com/inbox"),
+    "newly awakened target navigated to the mid-wake URL",
+  );
+  const stored = JSON.parse(readFileSync(join(dir, "user-tabs.json"), "utf8"));
+  assert.equal(stored.tabs[0].url, "https://new.example.com/inbox");
+
+  view.close();
+  await b.close();
 });

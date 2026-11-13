@@ -189,6 +189,9 @@ export interface Host {
   /// Whether what this host keeps is out of reach of still.fail cloud's code: an app's (desktop, Android), not a web
   /// page's, whose code the cloud serves. Only such a host keeps a key that signs for the workspace lock (lock.ts).
   appKeys?: boolean;
+  /// Whether the core offers `lock.handOver` (views/lock.ts `handOver`): a host made for tests says so (testing.ts, the
+  /// e2e device's, apps/mbui/e2e/device.ts), no other; nothing a person sets and nothing read of the environment.
+  handOverByTests?: boolean;
 
   /// Delivers a message to one connected UI.
   emit(client: ClientId, message: CoreMessage): void;

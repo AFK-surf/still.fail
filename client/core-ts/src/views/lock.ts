@@ -48,6 +48,7 @@ import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, type Stated, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
+import { type HandOverPlan, handOverPlan } from "../lock-handover.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -2603,6 +2604,12 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         if (secrets.length > 0) inner.runner.fork(writePlain(inner, c.workspace, secrets));
         break;
       }
+      // The chain handed over to its people's own logs: only where the host is one made for tests (no page offers it
+      // yet; the owner decides when it is done by itself), else as no such call is answered.
+      case "handOver":
+        if (inner.host.handOverByTests !== true) return yield* Effect.fail(new CoreError("unknown_call", t("core-misc.call.unknown", { name: "lock.handOver" })));
+        result = yield* handOver(inner, sub, c.workspace);
+        break;
       default:
         return yield* Effect.fail(CoreError.invalid(`no lock call ${c.name}`));
     }
@@ -2822,6 +2829,90 @@ export function movedWorks(inner: Inner, ws: string, sub: string, meant: Said[])
 export function sayAdmit(inner: Inner, sub: string, ws: string, meant: Said[], name: string): Effect.Effect<unknown, CoreError> {
   const shown = { act: "addMember" as const, name };
   return sayMoved(inner, sub, ws, meant, shown, actText(shown));
+}
+
+/// How many times one call of `handOver` works its statements out at most: each time again, the chain changed between
+/// them and the `moved` in a way they can say (another ask).
+const HAND_OVER_ROUNDS = 3;
+/// What `handOver` answers where members the chain names with a device that signs have no log of their own bound yet:
+/// it waits for them (their devices take their own lock by themselves, `ownLockFor`). Its words are the core's own: no
+/// page reaches it yet.
+export const notReady = (subs: readonly string[]): CoreError => new CoreError("lock_not_ready", `safe mode is handed over once ${subs.join(", ")} ${subs.length === 1 ? "has" : "have"} a lock of their own: their devices make one by themselves`, 409);
+/// The ask of a handover's statements (no page reaches it yet: the core's words).
+const HAND_OVER_REASON = "Keep safe mode in your own lock";
+/// A handover's `moved` refused in its turn because what is to be said changed: worked out again (`handOver`).
+const LACKING = "lock_handover_lacking";
+
+/// The workspace's chain handed over to its people's own logs by this device (the operation `lock.handOver`, which only
+/// a host made for tests offers: `Host.handOverByTests`): an owner's own app device, by the signer the chain names it
+/// with, its person bound there to their own log pinned here with this device on it (else refused as a change not
+/// allowed, nobody asked). Members the chain names with a device that signs and no log of their own: it waits for them
+/// (`notReady`, nothing said, nobody asked); those with neither are not said and come in afterwards as a newcomer does,
+/// by their first app device (the owner, 2026-11-13: 「开了安全模式那就需要 app」), the chain's role for them noted here
+/// as `added` notes one (`note`). What the state as if moved lacks of the chain's list is said in this person's own log
+/// in one ask (src/lock-handover.ts; `personal-lock.ts` `say`, with their web pages on the chain and this device's
+/// signer, `#restate`), brought to the workspace's stations as any statement's bodies are; once one of them took every
+/// one, `moved {root}` is signed on the chain by the workspace signer, nobody asked (`Lock.append`'s path), after the
+/// target is made again in its turn from the head held and found said (else said first, another ask; or, where the
+/// chain changed in a way it cannot say, refused as above). Pending (`{pending}`) while no station took what it said or
+/// the `moved`; carried on by calling it again, which says nothing twice. Null: handed over (or it was).
+export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<unknown, CoreError> {
+  return Effect.gen(function* () {
+    const personal = inner.adb.personal();
+    const notAllowed = () => new CoreError("forbidden", t("core-misc.lock.notAllowed"));
+    const within = asked(inner);
+    yield* within.wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a handover" }));
+    if (movedHere(inner, ws)) return null;
+    const signer = yield* Signer.load(inner.host);
+    const own = personal.root(sub), key = personal.keyId();
+    if (signer === null || own === null || key === null || personal.standing(sub) !== "member") return yield* Effect.fail(notAllowed());
+    const base = yield* new Lock(inner, ws, sub, null).base();
+    const who = { sub, genesis: own, key, base, signer: signer.id };
+    const planOf = (entries: readonly Entry[], log: readonly Entry[]) => {
+      const chains = new Map(logsOf(inner, ws, false));
+      chains.set(own, log);
+      return handOverPlan(ws, entries, who, chains, bodiesHeld(inner, ws), now(inner));
+    };
+    const refusal = (p: HandOverPlan): CoreError | null => ("refused" in p ? notAllowed() : "waits" in p ? notReady(p.waits) : null);
+    const salt = () => saltHex(inner);
+    for (let round = 0; round < HAND_OVER_ROUNDS; round++) {
+      // (what a call before said that no station took yet: brought now, and waited on)
+      if (personal.waitingIn(sub, ws) !== null) {
+        yield* personal.deliverNow(sub);
+        const waiting = personal.waitingIn(sub, ws);
+        if (waiting !== null) return { pending: waiting };
+      }
+      const p = planOf(held(inner, ws)?.entries ?? [], personal.after(sub));
+      const no = refusal(p);
+      if (no !== null || "refused" in p || "waits" in p) return yield* Effect.fail(no ?? notAllowed());
+      for (const u of p.unsaid) if (notedRole(inner, ws, sub, u.sub, u.email) === null) note(inner, ws, sub, u.sub, u.role);
+      const restate = personal.signKeys(sub).get(base)?.sign_key !== signer.id;
+      if (p.says.length > 0 || p.webs.length > 0 || restate) {
+        yield* personal.say(sub, ws, (after) => {
+          const q = planOf(held(inner, ws)?.entries ?? [], after);
+          if ("refused" in q || "waits" in q) return refusal(q)!;
+          const bodies = bodiesOf(ws, q.says, after, byHash(bodiesHeld(inner, ws)), salt);
+          return { bodies, shown: bodies.map(() => ({ act: null, name: nameOf(inner, ws) })), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
+        }, HAND_OVER_REASON);
+        touch(inner, ws);
+        const waiting = personal.waitingIn(sub, ws);
+        if (waiting !== null) return { pending: waiting };
+      }
+      // The `moved`, once every statement is taken: its target made again in the turn, from the head it goes after.
+      const guard = (entries: readonly Entry[]): CoreError | null => {
+        const q = planOf(entries, personal.entries(sub));
+        if ("refused" in q || "waits" in q) return refusal(q);
+        return q.says.length > 0 || q.webs.length > 0 ? new CoreError(LACKING, "what is to be said changed") : null;
+      };
+      // (the chain read again first, within the wait: the turn's head is what the stations have)
+      const lock = new Lock(inner, ws, sub, null, { within });
+      const out = yield* Effect.catch(lock.append("moved", { root: own }, [], false, guard), (e) => (e.code === LACKING ? Effect.succeed(LACKING) : Effect.fail(e)));
+      if (out === LACKING) continue;
+      touch(inner, ws);
+      return isObject(out) && isObject(out.pending) ? { pending: out.pending } : null;
+    }
+    return yield* Effect.fail(new CoreError("lock_refused", t("core-misc.lock.changedMeanwhile", { what: nameOf(inner, ws) }), 409));
+  });
 }
 
 const rootOnly = () => new CoreError("lock_root_only", "only the person who turned safe mode on turns it off or on again");
@@ -3363,7 +3454,10 @@ export class Lock {
   /// since its parent; refused where its subject was decided otherwise since, or the rules take it no more after the head
   /// (`core-misc.lock.changedMeanwhile`); else signed again after the head, AGAIN_MOST times at most; where the read
   /// moved nothing (its parent the head still), refused in the station's words, as before.
-  append(kind: string, body: unknown, waitFor: string[] = [], viaCloud = false): Effect.Effect<unknown, CoreError> {
+  ///
+  /// `guard`: asked in the turn, of the chain the entry would be signed after, just before it is signed: a CoreError
+  /// there is the call's, nothing signed (a handover's `moved`, its target made again from that head, `handOver`).
+  append(kind: string, body: unknown, waitFor: string[] = [], viaCloud = false, guard?: (entries: readonly Entry[]) => CoreError | null): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
       // (where the chain moved nothing follows it: nothing signed, nothing pending)
@@ -3376,7 +3470,11 @@ export class Lock {
       if (self.#within !== null && typeof out === "string") tookOut(self.#inner, self.ws, out);
       const after = yield* self.#before();
       if (self.#within !== null) yield* self.#within.begin();
-      const rest = yield* part(self.#inner, self.ws).turn.withPermits(1)(Effect.suspend(() => self.#ahead(kind, body) ?? self.#signed(signer, kind, body, waitFor, after ?? self.#mine, 0, null, viaCloud)));
+      const guarded = (): Effect.Effect<Effect.Effect<unknown, CoreError>, CoreError> | null => {
+        const why = guard?.((after ?? self.#mine)?.entries ?? held(self.#inner, self.ws)?.entries ?? []) ?? null;
+        return why === null ? null : Effect.fail(why);
+      };
+      const rest = yield* part(self.#inner, self.ws).turn.withPermits(1)(Effect.suspend(() => self.#ahead(kind, body) ?? guarded() ?? self.#signed(signer, kind, body, waitFor, after ?? self.#mine, 0, null, viaCloud)));
       return yield* rest;
     });
   }
@@ -3400,7 +3498,8 @@ export class Lock {
   again(lost: Entry, earlier: ReadonlySet<string> = new Set()): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
-      if (movedHere(self.#inner, self.ws)) return null;
+      // (nor a handover's `moved`, which is worked out again from the head by the next `handOver`)
+      if (movedHere(self.#inner, self.ws) || lost.kind === "moved") return null;
       const signer = yield* Signer.load(self.#inner.host);
       if (signer === null || lost.sig?.key !== signer.id) return null;
       const p = part(self.#inner, self.ws);
@@ -3621,6 +3720,11 @@ export class Lock {
           continue;
         }
         let entry = item.entry;
+        // (a handover's `moved` off the head is let go: the next `handOver` works out from the head what it hands over)
+        if (entry.prev !== h.head.hash && entry.kind === "moved") {
+          yield* drop;
+          continue;
+        }
         if (entry.prev !== h.head.hash) {
           // (what this device had pending, made before it and taken since, is no decision against it: made in that
           // order; made after it, it is the later act; at the same ms, taken as the later act, the side where nothing
@@ -3725,6 +3829,9 @@ export class Lock {
       const h = held(inner, self.ws);
       const how = h?.head ? againOf(h.entries, h.aside ?? [], entry, subjectOf) : "unmoved";
       if (how === "done") return Effect.succeed(Effect.succeed({ head: h!.head, stations: pinned }));
+      // (a handover's `moved` is never signed again here: what it hands over is worked out again from the head first,
+      // `handOver`)
+      if (entry.kind === "moved") return Effect.fail(new CoreError(LACKING, "the chain moved on before the handover's moved"));
       if (how === "otherwise") return Effect.fail(self.#changed(entry));
       if (how === "unmoved" || tries >= AGAIN_MOST) return Effect.fail(refused.error);
       return self.#signed(signer, entry.kind, entry.body, waitFor, null, tries + 1, of);

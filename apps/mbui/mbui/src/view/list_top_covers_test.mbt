@@ -1,5 +1,5 @@
-// What shows of a page's list, for what is brought into sight, is what floats over its top does not cover (what its bar
-// keeps clear of: View::scrolls' `bar_clear`, its top end): a block's field given the focus by the app under it comes
+// What shows of a page's list, for what is brought into sight, is what floats over its top does not cover (View::scrolls'
+// `top_covered`): a block's field given the focus by the app under it comes
 // to rest under it, not at the list's top (list_foot_focus_test's case; list_foot_covers_test's mirror). In one jump
 // and at 60, 120, 24 and 7 a second.
 

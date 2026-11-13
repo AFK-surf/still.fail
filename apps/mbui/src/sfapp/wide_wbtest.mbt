@@ -1101,11 +1101,16 @@ test "wide: words picked in a message are what ⌘C copies while the composer ke
   t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
   t.frame()
   assert_eq(t.ctx().selected_text(), "第二屏的插画")
-  assert_true(t.ctx().field_focused())
+  // (the composer keeps the keyboard: the host told a field of its words is in use, on a page of either kind)
+  let composing = fn() {
+    let (active, words, _, _) = t.ime()
+    active && words == "发布前再看一眼"
+  }
+  assert_true(composing(), msg="the composer's focus: \{Repr(t.ime())}")
   t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
   t.frame()
   assert_eq(t.clipboard(), "第二屏的插画")
-  assert_true(t.ctx().field_focused())
+  assert_true(composing(), msg="the composer's focus: \{Repr(t.ime())}")
 }
 
 ///|

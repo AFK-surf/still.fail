@@ -1291,7 +1291,6 @@ pub fn native_card_corner_at(Int32) -> Double
 
 pub fn native_clear() -> Double
 
-pub fn native_foot() -> Double
 
 pub fn native_foot_corner() -> Double?
 

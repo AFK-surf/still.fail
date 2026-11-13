@@ -317,6 +317,7 @@ export type ViewParts = {
 };
 
 export class TabView implements ScreenView {
+  watchChild?: (heard: (screenId: string) => void) => () => void;
   readonly #p: ViewParts;
   #received: Cast[] = [];
   #delivered: number[] = [];

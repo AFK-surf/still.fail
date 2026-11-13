@@ -922,14 +922,15 @@ pub let switch_slide : Double = 30.0
 let place_switch : @motion.Way = @motion.Way::new(1.0)
 
 ///|
-/// How far over the window's foot the toast is, for the window's tree's (toast's, followed): the wide frame's 24 and
-/// the system's tabs across the foot where they are; the narrow one's over the bar's room and the navigation bar.
+/// How far over what the system's bars leave of the window's foot the toast is, for the window's tree's (toast's,
+/// followed): the wide frame's 24; the narrow one's over the bar's room.
 fn toast_bottom_now(v : @view.View) -> Double {
   let wide = !(@sf.layout(v.window().0) is Small) || @sf.native_able()
+  // (over the system's bars at the window's foot: the toaster keeps clear of them itself, View::clear)
   if wide {
-    @sf.toast_bottom + @sf.native_foot()
+    @sf.toast_bottom
   } else {
-    bar_room + nav_foot()
+    bar_room
   }
 }
 
@@ -1372,13 +1373,16 @@ fn wide_reset() -> Unit {
 /// desktop app's hiddenInset: the rail's and the sidebar's tops, a phone's page under their band), on Windows the
 /// system's. On a phone the app is
 /// Android's whatever the phone: on iOS too its lists fling and give at their edges as Android's,
-/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
+/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as). So in a browser
+/// started with a finger (a phone's or a tablet's): a browser has no field's ways of its own for a finger, and the
+/// desktop's give a finger no way to its menu (粘贴 on a field held, its caret's handle tapped), as a finger has none to
+/// right-click.
 pub fn host_setup() -> Unit {
   @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0, inset=true)
   // out of sight till it has more than its ground to show (view_in): the first page as it is shown, else the splash
   // once it says that it waits (splash_label_ms), not an empty window for the page's first moments
   @hostapi.window_hold()
-  if @ui.platform() == 1 {
+  if @ui.platform() == 1 || (@ui.platform() == 4 && @ui.native_pointing() is Finger) {
     @ui.feel_as(2)
   }
 }

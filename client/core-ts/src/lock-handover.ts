@@ -1,0 +1,195 @@
+// What this device says to hand a workspace's chain over to its people's own logs (views/lock.ts `handOver`): who may
+// (an owner's own app device, by the signer the chain names it with, its person's own log bound there and pinned
+// here), what the chain's list is at its head (the target), and what this person's log is still to say so that the
+// state the rules make with that log as the root is that list (rules/src/lock/state4.mbt; the fourth round's model,
+// station/test/lock-roster4-model.ts `m7`). Worked out against "as if moved": the state of the logs and bodies held
+// plus what would be said, nothing signed, so a handover begun before says nothing twice. Pure: what is signed, kept
+// and brought is the caller's.
+// @ts-ignore: the MoonBit build's JS, untyped
+import * as rules from "../../../rules/js/rules.js";
+import { type Entry, canonical, entryHash } from "./lock.ts";
+import { fold, movedRoot } from "./lock-moved.ts";
+import { type Body, type Said, bodiesOf, byHash, commitOf } from "./lock-statements.ts";
+import { checkChain, crypto, personOf } from "./personal-lock.ts";
+import { checkLock, signerIn } from "./vault/lock-check.ts";
+
+// deno-lint-ignore no-explicit-any
+type J = any;
+const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
+
+/// The chain's list as the handover is to keep it: each member bound to a log of their own (their role, email, log),
+/// the stations, the settings, the root's person's email, and this person's web pages on the chain not run out.
+export type Target = {
+  members: Map<string, { role: string; email: string; lock: string }>;
+  stations: Set<string>;
+  settings: { origins: string[]; rp_id: string; cloud_keys: unknown };
+  email: string;
+  webs: Map<string, { label: string; exp: number }>;
+};
+/// What the rules' state rooted in this person's log lists, as compared with a target.
+export type AsIf = {
+  on: string;
+  settings: string | null;
+  email: string | null;
+  members: Map<string, { role: string; email: string; lock: string }>;
+  stations: Set<string>;
+  webs: Map<string, number>;
+  /// Each member's devices there (id, and an app's signer), for the tests to read.
+  devices: Map<string, { sub: string; kind: string; sign_key?: string }>;
+};
+/// A web page of this person's said on their log (`web {id, label, exp}`, personal-lock.ts `web`).
+export type Web = { id: string; label: string; exp: number };
+
+/// Who hands over: the device by its base key (`base`, its id on the chain) and the key it signs the chain with
+/// (`signer`), its person and the genesis of their log pinned here, the key this device signs that log with (`key`).
+export type Who = { sub: string; genesis: string; key: string; base: string; signer: string };
+
+export type HandOverPlan =
+  /// Not to be handed over by this device (why, the core's words).
+  | { refused: string }
+  /// Members the chain names with a device that signs and no log of their own bound: theirs take their own lock by
+  /// themselves (views/lock.ts `ownLockFor`); the handover waits for them.
+  | { waits: string[] }
+  /// What is still to be said (`says`, in order; `webs`), whom the chain names that is not said (no log of their own,
+  /// no device that signs: `unsaid`, with the chain's role), the target, and the state as if moved once it is said.
+  | { says: Said[]; webs: Web[]; unsaid: { sub: string; role: string; email: string }[]; target: Target; asIf: AsIf };
+
+/// The handover's plan for workspace `ws` by `who`, of the chain held (`entries`, its active chain), the person logs
+/// held (`chains`, by genesis; this person's own as it stands with what is pending after it), the bodies kept and this
+/// device's clock (unix seconds).
+export function handOverPlan(ws: string, entries: readonly Entry[], who: Who, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], now: number): HandOverPlan {
+  if (entries.length === 0) return { refused: "the workspace has no lock" };
+  if (movedRoot(entries) !== null) return { refused: "the chain moved already" };
+  let checked: ReturnType<typeof checkLock>;
+  try {
+    checked = checkLock([...entries], now);
+  } catch (e) {
+    return { refused: `the chain held does not check: ${(e as Error).message}` };
+  }
+  if (checked.disabled) return { refused: "the lock is off" };
+  const f = fold(entries);
+  // Who: an owner's own app device, signing the chain with the signer it names; its person bound to their log, which
+  // is pinned here with this device on it.
+  const d = checked.devices.get(who.base);
+  const by = signerIn(checked, who.signer, now);
+  if (d === undefined || d.kind !== "app" || d.sub !== who.sub || d.sign_key !== who.signer || !d.own) return { refused: "this device is not its person's own app device on the chain" };
+  if (by === null || by.role !== "owner" || !by.own || by.passkey) return { refused: "only an owner's own device hands the chain over" };
+  if (f.persons.get(who.sub) !== who.genesis) return { refused: "the chain does not bind this person to the log pinned here" };
+  const log = chains.get(who.genesis);
+  const mine = log === undefined ? null : checkChain(log, who.sub);
+  if (log === undefined || mine === null || !mine.devices.has(who.key)) return { refused: "this device is not on its person's own log" };
+  // The target: the chain's list at its head.
+  const members = new Map<string, { role: string; email: string; lock: string }>();
+  const waits: string[] = [];
+  const unsaid: { sub: string; role: string; email: string }[] = [];
+  for (const [sub, m] of f.members) {
+    if (sub === who.sub) continue;
+    const lock = f.persons.get(sub);
+    if (lock !== undefined) members.set(sub, { role: m.role, email: m.email, lock });
+    else if (checked.signed.has(sub)) waits.push(sub);
+    else unsaid.push({ sub, role: m.role, email: m.email });
+  }
+  if (waits.length > 0) return { waits: waits.sort() };
+  const webs = new Map<string, { label: string; exp: number }>();
+  for (const [id, x] of checked.devices) {
+    if (x.kind !== "web" || x.sub !== who.sub || typeof x.exp !== "number" || x.exp <= now) continue;
+    webs.set(id, { label: String(f.devices.get(id)?.label ?? ""), exp: x.exp });
+  }
+  const target: Target = {
+    members, stations: new Set(f.stations.keys()), webs,
+    settings: { origins: checked.origins, rp_id: checked.rp_id, cloud_keys: checked.cloudKeys },
+    email: f.members.get(who.sub)?.email ?? "",
+  };
+  // What the state as if moved lacks of it.
+  const before = asIfOf(ws, who, chains, bodies, now, crypto);
+  const says: Said[] = [];
+  const settings = canonical(target.settings);
+  if (before.on !== "on" || before.settings !== settings || before.email !== target.email) says.push({ kind: "open", ...target.settings, email: target.email });
+  const admits: Said[] = [];
+  for (const [sub, m] of before.members) {
+    if (sub === who.sub) continue;
+    const t = members.get(sub);
+    if (t !== undefined && t.role === m.role && t.email === m.email && t.lock === m.lock) continue;
+    says.push({ kind: "member.remove", sub });
+  }
+  for (const [sub, t] of members) {
+    const m = before.members.get(sub);
+    if (m === undefined || m.role !== t.role || m.email !== t.email || m.lock !== t.lock) admits.push({ kind: "member", sub, email: t.email, lock: t.lock, role: t.role });
+  }
+  says.push(...admits);
+  for (const key of before.stations) if (!target.stations.has(key)) says.push({ kind: "station.remove", key });
+  for (const key of target.stations) if (!before.stations.has(key)) says.push({ kind: "station", key });
+  const toWeb: Web[] = [];
+  for (const [id, w] of webs) if ((before.webs.get(id) ?? 0) < w.exp) toWeb.push({ id, label: w.label, exp: w.exp });
+  // And what it would be once said: the target, or this device cannot hand it over.
+  const asIf = says.length === 0 && toWeb.length === 0 ? before : afterSaying(ws, who, chains, bodies, says, toWeb, now);
+  const off = differs(target, asIf, who.sub);
+  if (off !== null) return { refused: `said, the list would not be the chain's: ${off}` };
+  return { says, webs: toWeb, unsaid, target, asIf };
+}
+
+/// What differs between the target and a state as if moved (null: nothing): the members bound to a log of their own,
+/// each one's role, email and log; the stations; the settings; this person's web pages.
+export function differs(t: Target, s: AsIf, sub: string): string | null {
+  if (s.on !== "on") return `state ${s.on}`;
+  if (s.settings !== canonical(t.settings)) return "settings";
+  if (s.email !== t.email) return `email ${sub}`;
+  for (const k of new Set([...t.members.keys(), ...s.members.keys()])) {
+    if (k === sub) continue;
+    const a = t.members.get(k), b = s.members.get(k);
+    if (a === undefined || b === undefined) return `member ${k}`;
+    if (a.role !== b.role) return `role ${k}`;
+    if (a.email !== b.email) return `email ${k}`;
+    if (a.lock !== b.lock) return `log ${k}`;
+  }
+  if (s.members.get(sub)?.role !== "owner") return `role ${sub}`;
+  if ([...t.stations].sort().join() !== [...s.stations].sort().join()) return "stations";
+  for (const [id, w] of t.webs) if ((s.webs.get(id) ?? 0) < w.exp) return `web ${id}`;
+  return null;
+}
+
+/// The state the rules make with `who`'s log as the root (`asIf`), the logs and bodies given, by `c`.
+function asIfOf(ws: string, who: Who, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], now: number, c: typeof crypto): AsIf {
+  const out = rules.state4_js(ws, who.genesis, [...chains.values()], bodies, now, c) as J;
+  const none: AsIf = { on: "error" in out ? "refused" : String(out.on), settings: null, email: null, members: new Map(), stations: new Set(), webs: new Map(), devices: new Map() };
+  if ("error" in out || (out.on !== "on" && out.on !== "off")) return none;
+  const s = out.state as J;
+  const persons = new Map<string, string>(arr(s.persons).map(([sub, g]) => [String(sub), String(g)]));
+  const members = new Map<string, { role: string; email: string; lock: string }>();
+  for (const [sub, m] of arr(s.members)) members.set(String(sub), { role: String(m?.role ?? ""), email: String(m?.email ?? ""), lock: persons.get(String(sub)) ?? "" });
+  const devices = new Map<string, { sub: string; kind: string; sign_key?: string }>();
+  const webs = new Map<string, number>();
+  for (const [id, d] of arr(s.devices)) {
+    devices.set(String(id), { sub: String(d.sub), kind: String(d.kind), ...(typeof d.sign_key === "string" ? { sign_key: d.sign_key } : {}) });
+    if (d.kind === "web" && d.sub === who.sub && typeof d.exp === "number") webs.set(String(id), d.exp);
+  }
+  return {
+    on: String(out.on), settings: canonical({ origins: arr(s.origins), rp_id: String(s.rp_id ?? ""), cloud_keys: s.cloud_keys ?? null }),
+    email: members.get(who.sub)?.email ?? null, members, stations: new Set(arr(s.stations).map(([key]) => String(key))), webs, devices,
+  };
+}
+
+/// The state as if moved once `says` and `webs` are said on `who`'s log, each entry made here, its signature taken as
+/// this device's key's by this crypto alone (as lock-statements.ts `plan` works one out): nothing signed.
+function afterSaying(ws: string, who: Who, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], says: readonly Said[], webs: readonly Web[], now: number): AsIf {
+  const log = [...(chains.get(who.genesis) ?? [])];
+  const made = new Set<string>();
+  const put = (kind: string, body: unknown) => {
+    const last = log[log.length - 1]!;
+    const e = { v: 1 as const, ws: personOf(who.sub), seq: log.length, prev: entryHash(last), at: Math.max(last.at, now), kind, body };
+    made.add(entryHash(e));
+    log.push({ ...e, sig: { key: who.key, alg: "Ed25519", sig: "" } });
+  };
+  for (const w of webs) put("web", { id: w.id, label: w.label, exp: w.exp });
+  let n = 0;
+  const salt = () => (n++).toString(16).padStart(32, "0");
+  const newBodies: Body[] = bodiesOf(ws, says, log, byHash(bodies), salt);
+  for (const b of newBodies) put("ws", commitOf(ws, who.genesis, b));
+  const c = { ...crypto, sigValid: (sig: J, hash: string) => (made.has(hash) && sig?.key === who.key) || crypto.sigValid(sig, hash) };
+  const all = new Map(chains);
+  all.set(who.genesis, log);
+  return asIfOf(ws, who, all, [...bodies, ...newBodies], now, c);
+}
+
+/// The state as if moved of what is held now (the tests read it: what the rules would make once the `moved` is on).
+export const asIfNow = (ws: string, who: Who, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], now: number): AsIf => asIfOf(ws, who, chains, bodies, now, crypto);

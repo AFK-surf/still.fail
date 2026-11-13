@@ -378,7 +378,7 @@ fn chat_body_node(
       fn() { keys.get() },
       est=chat_row_est,
       bar=@ui.tree_scroll_bar(),
-      bar_clear=fn() { (top(), 0.0) },
+      top_covered=top,
       // (its Top, the chat's bar's room, the list's head; its Foot, the list's foot: the room under its rows, then the
       // composer (`composer`), the room under the last row as tall as both are laid out)
       head=fn(h) {
@@ -427,6 +427,8 @@ fn chat_body_node(
       chat_goes_to(v, src, r, jump, place, fn() { rows.get() }, here.view, top, fn() { ask_older(false) }, shows)
       // (over the list: a passage a mouse picked in a message quoted by its pill)
       chat_quote_node(v, src, r, here, fn() { rows.get() })
+      // (a picture's 复制图片 chosen in its menu: read whole and put on the clipboard)
+      menus_image_node(v)
       // something sent from here into the chat (words, an answer picked on a card: sfbase's sent_here_told), read up
       // the list: it goes to its end as it is sent (where the window is short of the chat's end, as its latest page,
       // asked by the send, comes in: chat_jump_node's)

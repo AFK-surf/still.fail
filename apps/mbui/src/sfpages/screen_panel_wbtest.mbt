@@ -829,3 +829,127 @@ test "重启 App: the list the first time, and the app chosen at one press after
   assert_true(r.told("screen.apps").is_empty())
   screen_done(r.t)
 }
+
+///|
+test "页面 switcher separates user pages from agent pages, refreshes the current page, and switches pages in place" {
+  let screens : Json = {
+    "browser": true,
+    "control": true,
+    "known": true,
+    "outdated": false,
+    "screens": [
+      {
+        "id": "desktop",
+        "kind": "desktop",
+        "title": "Willow 的屏幕",
+        "width": 1920.0,
+        "height": 1080.0,
+        "line": "1920 × 1080",
+        "link": "",
+      },
+      {
+        "id": "browser:u_mail",
+        "kind": "browser",
+        "userTab": true,
+        "sleeping": false,
+        "closable": true,
+        "title": "收件箱 - Proton Mail",
+        "width": 1280.0,
+        "height": 800.0,
+        "line": "mail.proton.me · 1280 × 800",
+        "link": "",
+      },
+      {
+        "id": "browser:u_gh",
+        "kind": "browser",
+        "userTab": true,
+        "sleeping": true,
+        "closable": true,
+        "title": "GitHub",
+        "width": 0.0,
+        "height": 0.0,
+        "line": "已休眠 · github.com",
+        "link": "",
+      },
+      {
+        "id": "browser:tab-1",
+        "kind": "browser",
+        "closable": true,
+        "title": "Sign in · Anthropic",
+        "width": 1280.0,
+        "height": 720.0,
+        "line": "浏览器标签页 · 1280 × 720",
+        "link": "",
+      },
+    ],
+  }
+  for (w, h, platform) in [(390.0, 844.0, 2), (1280.0, 800.0, 0)] {
+    let r = screen_rig(w~, h~, platform~, screens~)
+    r.state("live", more={ "openUrl": Json::boolean(true), "title": Json::string("Sign in · Anthropic") })
+    r.config()
+    r.frame(1000.0)
+    assert_true(r.labelled(tr("web-pages.screen.pages")) is Some(_), msg="pages button at \{w}")
+    r.tap_label(tr("web-pages.screen.pages"))
+    r.t.run_for(@sf.later_ms)
+    to_sheet_rest(r.t)
+    assert_true(r.t.find(tr("web-pages.screen.goUrl")) is Some(_), msg="goUrl at \{w}")
+    assert_true(r.t.find(tr("web-pages.screen.reload")) is Some(_), msg="reload at \{w}")
+    assert_true(r.t.find(tr("web-pages.screen.userPages")) is Some(_), msg="userPages at \{w}")
+    assert_true(r.t.find(tr("web-pages.screen.agentPages")) is Some(_), msg="agentPages at \{w}")
+    assert_true(r.t.find("收件箱 - Proton Mail") is Some(_), msg="user mail tab at \{w}")
+    assert_true(r.t.find("GitHub") is Some(_), msg="sleeping user tab at \{w}")
+    assert_true(r.t.find(tr("web-pages.screen.openBrowser")) is Some(_), msg="openBrowser at \{w}")
+    assert_eq(r.t.audit(), [], msg="audit at \{w}")
+    // refresh the current browser page
+    r.t.tap_text(tr("web-pages.screen.reload"))
+    r.t.run_for(@sf.later_ms)
+    to_sheet_rest(r.t)
+    assert_eq(r.told("screen.reload").length(), 1, msg="reload called at \{w}")
+    assert_eq(text(Some(r.told("screen.reload")[0]), "screen"), "browser:tab-1")
+    // open 页面 again and switch directly to the user's Proton Mail page
+    r.tap_label(tr("web-pages.screen.pages"))
+    r.t.run_for(@sf.later_ms)
+    to_sheet_rest(r.t)
+    r.t.tap_text("收件箱 - Proton Mail")
+    r.t.run_for(@ui.move_most_ms)
+    to_sheet_rest(r.t)
+    match app.nav.top() {
+      Screen(at) => assert_eq(at.screen, "browser:u_mail")
+      _ => fail("expected Screen(browser:u_mail) at \{w}")
+    }
+    let views = r.told("screen.view")
+    assert_eq(text(Some(views[views.length() - 1]), "screen"), "browser:u_mail")
+    screen_done(r.t)
+  }
+}
+
+///|
+test "driving a browser page follows a child OAuth popup and returns when the popup closes" {
+  let r = screen_rig()
+  r.live()
+  r.state(
+    "live",
+    more={
+      "childOpened": Json::number(1.0),
+      "childScreen": Json::string("browser:oauth-1"),
+      "childTitle": Json::string("Sign in with Google"),
+    },
+  )
+  nav_rested(r.t)
+  match app.nav.top() {
+    Screen(at) => {
+      assert_eq(at.screen, "browser:oauth-1")
+      assert_true(at.until_gone)
+    }
+    _ => fail("expected child popup screen on top")
+  }
+  // when the OAuth popup finishes and closes (`gone`), `until_gone` pops back to the parent browser tab
+  r.state("gone", message="这个标签页已经关了")
+  r.finish()
+  nav_rested(r.t)
+  match app.nav.top() {
+    Screen(at) => assert_eq(at.screen, "browser:tab-1")
+    _ => fail("expected parent tab after child popup closed")
+  }
+  screen_done(r.t)
+}

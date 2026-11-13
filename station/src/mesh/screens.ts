@@ -254,6 +254,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const ask = asked(head.screen);
   if (ask.codecs.length === 0) return refuse(400, `screen.codecs: one of ${CODECS.join(", ")}`);
   if (ask.peek && !source.peek) return refuse(501, "this screen is not previewed");
+  if (readOnly(viewer) && source.sleeping?.()) return refuse(403, tr(lang, "station.screen.readOnlySleeping"));
   // A viewer (read-only member) sees, and does not drive; nor does anyone where the machine does not let the station
   // take input (a Mac without the Accessibility grant): said once it is open, when the source has looked again (what it
   // said before may be from before the grant was given).
@@ -323,9 +324,11 @@ class ViewSession {
   #clipKnown: Buffer | null = null;
   #unlogin: () => void = () => {};
   #unpasskey: () => void = () => {};
+  #unchild: () => void = () => {};
   #unpoint: () => void = () => {};
   #unturn: () => void = () => {};
   #title: string;
+  #site: string | undefined;
   /// The keys down and the pointer as its input last left them: let go of if it is made to only look.
   readonly #keys = new Map<string, Extract<ScreenInput, { t: "key" }>>();
   #pointer: Extract<ScreenInput, { t: "pointer" }> | null = null;
@@ -396,6 +399,7 @@ class ViewSession {
     this.#sleep = o.sleep;
     this.#lang = o.lang;
     this.#title = o.source.title();
+    this.#site = o.source.site?.();
   }
 
   /// A frame went: once the screen has been still for STILL_MS (no frame after it), if the rate has gone up since, the
@@ -433,6 +437,7 @@ class ViewSession {
     this.#unclip();
     this.#unlogin();
     this.#unpasskey();
+    this.#unchild();
     this.#unpoint();
     this.#unturn();
     this.view.close();
@@ -457,6 +462,7 @@ class ViewSession {
     this.#unclip();
     this.#unlogin();
     this.#unpasskey();
+    this.#unchild();
     // What it holds down is let go of: the key or button's own release would be dropped now.
     const held = [...this.#keys.values()].map((e): ScreenInput => ({ ...e, kind: "up" }));
     const at = this.#pointer;
@@ -471,14 +477,32 @@ class ViewSession {
     // How it starts: what it is and whether this view drives it; then who is on it (the hub tells everyone on it).
     // How its pictures are made (the statistics' 采集方式 and 编码器), where the source says.
     const video = this.view.video?.();
-    void this.#state({ title: this.#title, control: this.control, ...(this.took.length > 0 ? { took: this.took } : {}), ...(this.access ? { access: this.access } : {}), ...(video ? { video } : {}) });
+    void this.#state({
+      title: this.#title,
+      control: this.control,
+      ...(this.#site ? { site: this.#site } : {}),
+      ...(this.source.openUrl ? { openUrl: true } : {}),
+      ...(this.source.userTab ? { userTab: true } : {}),
+      ...(this.took.length > 0 ? { took: this.took } : {}),
+      ...(this.access ? { access: this.access } : {}),
+      ...(video ? { video } : {}),
+    });
     if (!this.peek) this.#leave = this.hub.join(this.id, { name: this.name, device: this.device, ...(this.self ? { self: this.self } : {}), ...(this.client ? { client: this.client } : {}), ...(this.app ? { app: this.app } : {}), control: this.control, tell: (people) => void this.#state(people), end: (by) => this.#stop(tr(this.#lang, "station.screen.endedBy", { by })), watchOnly: (by) => this.#watchOnly(by) });
     const unwatch = this.hub.watch(() => {
       if (this.hub.get(this.id) !== this.source) return this.#stop("gone");
       const title = this.source.title();
-      if (title !== this.#title) {
-        this.#title = title;
-        void this.#state({ title });
+      const site = this.source.site?.();
+      if (title !== this.#title || site !== this.#site) {
+        const patch: Record<string, unknown> = {};
+        if (title !== this.#title) {
+          this.#title = title;
+          patch.title = title;
+        }
+        if (site !== this.#site) {
+          this.#site = site;
+          patch.site = site ?? "";
+        }
+        void this.#state(patch);
       }
     });
     const unstop = this.hub.whenStopping(() => this.#stop("stopping"));
@@ -504,6 +528,12 @@ class ViewSession {
     if (this.control && this.view.watchPasskey) {
       this.#unpasskey = this.view.watchPasskey((passkey) => {
         if (!this.#closed) void this.#state({ passkey });
+      });
+    }
+    // A child tab (`target="_blank"` or OAuth popup) opened while driving this tab.
+    if (this.control && this.view.watchChild) {
+      this.#unchild = this.view.watchChild((childScreen) => {
+        if (!this.#closed) void this.#state({ childScreen });
       });
     }
     // The pointer, where the source's pictures leave it out (a video of the desktop): the client draws it.

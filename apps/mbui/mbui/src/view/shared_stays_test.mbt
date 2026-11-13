@@ -131,9 +131,11 @@ test "a flight with an end that stays drawn within that end's room as what held 
   p.tree.event(1000.0, fn() { p.open.set("a") })
   p.tree.frame(400.0, 800.0, now=1000.0) |> ignore
   let big = p.big.val.unwrap()
-  assert_eq(p.tree.lift_cut(big.id()), Some((0.0, 0.0, 400.0, 70.0)))
+  // (within where it is drawn: the thumbnail, 10 to 50 across, -20 to 20 down, its top 20 cut off)
+  assert_eq(p.tree.lift_cut(big.id()), Some((10.0, 0.0, 50.0, 20.0)))
   p.tree.frame(400.0, 800.0, now=1100.0) |> ignore
-  assert_eq(p.tree.lift_cut(big.id()), Some((0.0, 0.0, 400.0, 435.0)))
+  // (half way: the room opened to 435 down, all of where it is drawn then within it)
+  assert_eq(p.tree.lift_cut(big.id()), Some((30.0, 140.0, 200.0, 260.0)))
   p.tree.frame(400.0, 800.0, now=1200.0) |> ignore
   assert_eq(p.tree.lift_cut(big.id()), None)
 }

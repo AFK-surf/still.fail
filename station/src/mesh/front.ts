@@ -1,6 +1,6 @@
 // The station's endpoint kept by the MoonBit front (station/mb's src/front/mesh.mbt) instead of this process: what
 // `Mesh.bind` gives is asked of it on its Unix socket, a JSON object a line both ways, and each stream comes as a Unix
-// socket of its own to this process's (its first 8 bytes the stream's id), carried by the front's shell between iroh and
+// socket of its own to this process's (its head the connection's id and the stream's), carried by the front's shell between iroh and
 // that socket (client/shell's `istream.pipe`), those the other end opens given as they come: what comes as frames, a length (4 bytes, big-endian) then the bytes, its
 // end or what failed it as a frame of its own; what is written the same, its end finishing the stream. The front keeps
 // the endpoint across this process's handovers: the next one binds the same, and the devices' connections come to it.
@@ -40,7 +40,7 @@ class Front {
   /// Streams whose socket came before what asked for them was answered, and asks answered before their socket came.
   readonly #sockets = new Map<number, { conn: number; socket: Socket; carry: Buffer }>();
   readonly #wanted = new Map<number, { conn: number; resolve(s: { socket: Socket; carry: Buffer }): void; reject(e: Error): void }>();
-  /// The streams each connection's other end opened, as they came, till they are taken (`acceptBi`).
+  /// The streams each connection's other end opened, in the order it opened them, till they are taken (`acceptBi`).
   readonly #incoming = new Map<number, Incoming>();
   /// Every stream's socket open: closed with the endpoint, or ended with its connection when `forget` runs.
   readonly #open = new Set<Socket>();
@@ -145,7 +145,9 @@ class Front {
     let head = Buffer.alloc(0);
     const first = (data: Buffer) => {
       head = Buffer.concat([head, data]);
-      if (head.length < 17) return;
+      // The connection's id and the stream's, then 1 (one this process opened), 0 (the other end's, from a front
+      // before the order) or 2 (the other end's, with its index on the connection: 8 more bytes).
+      if (head.length < 17 || (head[16] === 2 && head.length < 25)) return;
       socket.off("data", first);
       socket.pause();
       const conn = Number(head.readBigUInt64BE(0));
@@ -161,6 +163,7 @@ class Front {
         byConn.delete(socket);
         if (byConn.size === 0) this.#connSockets.delete(conn);
       });
+      if (head[16] === 2) return void this.incomingOf(conn).give({ socket, carry: head.subarray(25), id, index: Number(head.readBigUInt64BE(17)) });
       const came = { socket, carry: head.subarray(17), id };
       if (head[16] === 0) return void this.incomingOf(conn).give(came);
       const wanted = this.#wanted.get(id);
@@ -198,14 +201,32 @@ class Front {
   }
 }
 
-/// What a connection's other end opened, as it came: taken in turn; none once the connection is gone.
-class Incoming {
-  readonly #came: { socket: Socket; carry: Buffer; id: number }[] = [];
-  #taker: ((s: { socket: Socket; carry: Buffer; id: number } | null) => void) | null = null;
+type Came = { socket: Socket; carry: Buffer; id: number };
+
+/// What a connection's other end opened, taken in turn in the order it opened them; none once the connection is gone.
+/// The front hands each stream on a socket of its own, so they come here in any order: one with its index (`index`)
+/// waits for those before it (a device opens its credential stream first and its requests at once after it, which
+/// taken first were refused as a credential, 2026-11-13). One from a front before the index goes as it came.
+export class Incoming {
+  readonly #came: Came[] = [];
+  /// Those that came before one opened ahead of them, by index; the index the next to be taken has.
+  readonly #early = new Map<number, Came>();
+  #nextIndex = 0;
+  #taker: ((s: Came | null) => void) | null = null;
   #ended = false;
 
-  give(s: { socket: Socket; carry: Buffer; id: number }) {
+  give(s: Came & { index?: number }) {
     if (this.#ended) return void s.socket.destroy();
+    if (s.index === undefined) return this.#put(s);
+    if (s.index !== this.#nextIndex) return void this.#early.set(s.index, s);
+    this.#put(s);
+    for (let next = this.#early.get(++this.#nextIndex); next; next = this.#early.get(++this.#nextIndex)) {
+      this.#early.delete(this.#nextIndex);
+      this.#put(next);
+    }
+  }
+
+  #put(s: Came) {
     const taker = this.#taker;
     if (taker) {
       this.#taker = null;
@@ -213,7 +234,7 @@ class Incoming {
     } else this.#came.push(s);
   }
 
-  take(): Promise<{ socket: Socket; carry: Buffer; id: number } | null> {
+  take(): Promise<Came | null> {
     const next = this.#came.shift();
     if (next) return Promise.resolve(next);
     if (this.#ended) return Promise.resolve(null);
@@ -223,6 +244,8 @@ class Incoming {
   end() {
     this.#ended = true;
     for (const s of this.#came.splice(0)) s.socket.destroy();
+    for (const s of this.#early.values()) s.socket.destroy();
+    this.#early.clear();
     const taker = this.#taker;
     this.#taker = null;
     taker?.(null);

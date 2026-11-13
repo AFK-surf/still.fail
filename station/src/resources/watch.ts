@@ -1,6 +1,7 @@
 // What of this machine still.fail uses (a station's 进程), as Activity Monitor says it: each look, every process's CPU
-// time, memory footprint and bytes read from and written to disk (macOS counts them, native/mesh/src/usage.rs) and the
-// bytes it took in and sent out over the network so far (nettop: what Activity Monitor's Network tab says), what each
+// time, memory footprint and bytes read from and written to disk (macOS counts them, native/mesh/src/usage.rs; Linux's
+// /proc, resources/linux.ts) and the bytes it took in and sent out over the network so far (macOS only: nettop, what
+// Activity Monitor's Network tab says), what each
 // used since the last look put to whose it is:
 // - a chat's: its agent's runner and all under it, its jobs' groups and all under them, and what runs in its directory
 //   on its own (a script its agent left running with nohup, under launchd now: its arguments name the directory);
@@ -55,7 +56,7 @@ export type ResourceOptions = {
   /// Owners of argument lines, or null to use the immediate directory list while its lookup is unready.
   placesInArguments?(lines: readonly string[]): Map<string, string> | null;
   /// Each pid's usage so far, null where not read.
-  usage(pids: number[]): (Usage | null)[];
+  usage(pids: number[]): (Usage | null)[] | Promise<(Usage | null)[]>;
   /// Each pid's traffic so far (those with none left out); null: not read.
   traffic?(): Promise<Map<number, Traffic> | null>;
   /// The agents' runners (their files, read off the station's thread).
@@ -146,7 +147,7 @@ export class ResourceWatch {
   readonly #followers = new Set<() => void>();
   /// Whether looks are going (a page asked lately).
   #going = false;
-  /// Whether anything was read: none, not macOS.
+  /// Whether anything was read: none, neither macOS nor Linux.
   #counted = false;
   /// Whether the network was read at the last look.
   #net = false;
@@ -211,7 +212,7 @@ export class ResourceWatch {
     const whose = whoseOf(table, this.#o, runners, args, () => this.#o.places?.() ?? [], this.#o.placesInArguments);
     const mine = table.filter((p) => whose.has(p.pid));
     const agent = agentsOwn(runners);
-    const used = this.#o.usage(mine.map((p) => p.pid));
+    const used = await this.#o.usage(mine.map((p) => p.pid));
     const traffic = this.#o.traffic ? await this.#o.traffic().catch(() => null) : null;
     this.#net = traffic !== null;
     const since = fresh ? this.#lastAt : null;

@@ -78,6 +78,9 @@ pub let new_fix : NewFix = {
 }
 
 ///|
+let preset_model_cleared : Ref[Bool] = Ref(false)
+
+///|
 /// A preset of the made-up station's: its directories clones in its repository cache (fix_candidates).
 pub fn fix_preset(id : String, name : String, dirs : Array[String], instructions : String) -> Json {
   {
@@ -1001,6 +1004,9 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       Some(Ok(Json::object({})))
     }
     "pick.set" => {
+      if field(p, "clear") is Some(True) && text(p, "of") == "connect-new:preset" {
+        preset_model_cleared.val = true
+      }
       match field(p, "open") {
         Some(True) => {
           n.d_model = n.model
@@ -1091,6 +1097,9 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       Some(Ok(Json::object({})))
     }
     "pick.save" => {
+      if text(p, "of") == "connect-new:preset" {
+        preset_model_cleared.val = false
+      }
       // (with picks of its own, a model's as it last ran or a change in the panel: those picked first)
       take("model", fn(s) {
         n.d_model = s

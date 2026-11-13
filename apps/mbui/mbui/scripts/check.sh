@@ -16,6 +16,8 @@ if [ "$(uname)" = Darwin ]; then
   cc -Wall -fobjc-arc -I "$D/../src/host" -I "$MOON_HOME/include" "$D/apple_render_test.m" \
     -framework Foundation -framework QuartzCore -framework Metal -framework CoreGraphics -framework ImageIO \
     -o "$D/../out/apple_render_test" && "$D/../out/apple_render_test" || exit 1
+  cc -Wall -Werror -fobjc-arc -I "$D/../src/host" "$D/ios_ime_test.m" \
+    -framework Foundation -framework CoreGraphics -o "$D/../out/ios_ime_test" && "$D/../out/ios_ime_test" || exit 1
 fi
 for t in ${TARGETS:-native}; do
   echo "=== $t"

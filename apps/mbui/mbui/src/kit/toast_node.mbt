@@ -139,7 +139,8 @@ fn toast_node_rest(key : String) -> Double? {
 
 ///|
 /// The toasts `toasts` gives as it changes in `parent`, over all of it: `bottom` over the window's foot in its middle,
-/// as wide as the window less 16 each side and `w` at most; each staying `duration(toast)` ms (as it says now); `look`
+/// both less what the system's bars reach in over them (View::clear: a navigation bar, the home indicator, a column
+/// down a side), as wide as that less 16 each side and `w` at most; each staying `duration(toast)` ms (as it says now); `look`
 /// building each (its ToastNode); `acted` and `gone` told with a toast's id as its action is taken and as it goes by
 /// itself (its time out, swiped away), each once, each its own. Read out as a region named `label`; its times as
 /// `key`'s (toast_due, toast_rest). The node.
@@ -168,8 +169,10 @@ pub fn toaster_node(
       }
     })
     |> ignore
+    // (the window less what the system's bars reach in over its sides: View::clear)
     let width = fn() {
-      let ww = v.window().0
+      let (_, right, _, left) = v.clear()
+      let ww = v.window().0 - left - right
       if w < ww - 32.0 {
         w
       } else {
@@ -180,7 +183,18 @@ pub fn toaster_node(
     v.over(Is(true)).over_all(Is(true)) |> ignore
     // (while one is given, and as the last given goes out: none, nothing of it, as toaster's builds nothing then)
     v.show(fn() { !toasts().is_empty() }, fn(room) {
-      room.grow(Is(1.0)).lines_up(Is(Some(Middle))).padding(By(fn() { (0.0, 0.0, 0.0, bottom()) })) |> ignore
+      // (clear of the system's bars: `bottom` over what they leave of the window's foot, in the middle of what they
+      // leave of its width)
+      room
+      .grow(Is(1.0))
+      .lines_up(Is(Some(Middle)))
+      .padding(
+        By(fn() {
+          let (_, right, foot, left) = v.clear()
+          (left, 0.0, right, foot + bottom())
+        }),
+      )
+      |> ignore
       room.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       room.box(fn(region) {
         region

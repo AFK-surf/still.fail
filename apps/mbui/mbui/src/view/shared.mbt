@@ -25,9 +25,12 @@
 // id that moves lives, it keeps its room and is drawn nowhere, whatever holds it says (the tree's say, by the id, never
 // what holds it). One that moves made in a change while it lives flies from where it was drawn as the change came, as
 // it looked; one that moves let go of in a change while it lives is drawn there no more, and it flies from where that
-// one was drawn back to its own place, drawn again as it sets out. Neither fades: one picture moves. Its room cut by
-// what holds it as it set out (under a bar) is what is drawn of it, on its way, as far as it is there (the cut opens to
-// the window as it leaves, closes to it as it comes back); a picture in it drawn on the way as the end that stays draws
+// one was drawn back to its own place, drawn again as it sets out. Neither fades: one picture moves. The one that moves
+// is drawn where it is held, not over the rest of its layer: what is drawn after it there (its viewer's bar) over it.
+// Its room cut by what holds it as it set out, and less what lies over the top of what scrolls it and what is pinned
+// over that one's foot (Scroll::top_covered, a page's list's foot: the bar a chat's list runs under, its composer), is
+// what is drawn of it, on its way, as far as it is there (the cut opens to the window as it leaves, closes to it as it
+// comes back); one wholly under them is drawn nowhere and pairs with nothing; a picture in it drawn on the way as the end that stays draws
 // it (covering, contained) in the box the way has, so it is as that end draws it at that end and as the other draws it
 // at the other. One that stays that is drawn nowhere (no layout placed it, scrolled out of the window, cut to nothing)
 // pairs with nothing: the other comes or goes as it would have. A change of the id of one that moves pairs nothing:
@@ -186,6 +189,18 @@ pub fn Tree::flight_drawn(
 }
 
 ///|
+/// When the flight of the one of id `id` under way ends (ms, the clock's); none where none of it flies.
+pub fn Tree::flight_ends_at(self : Tree, id : String) -> Double? {
+  for f in self.flights {
+    guard self.alive_id(f.node) else { continue }
+    let n = self.nodes[f.node.at]
+    guard n.share == Some(id) && n.lift is Some(_) else { continue }
+    return Some(f.start + f.dur)
+  }
+  None
+}
+
+///|
 /// What of the window node `id` is drawn within on a flight with an end that stays (View::shared's `stays`): that end's
 /// room as cut by what held it, opening to its layer's as it leaves it, closing to it as it comes back (x0, y0, x1, y1);
 /// none, on any other flight or none.
@@ -198,7 +213,25 @@ pub fn Tree::lift_cut(self : Tree, id : NodeId) -> (Double, Double, Double, Doub
   // (how far it is from that end: 0 there, 1 at the other)
   let p = 1.0 - l.k
   let t = if e.at_start { p } else { 1.0 - p }
-  Some((c0 + (x0 - c0) * t, c1 + (y0 - c1) * t, c2 + (x1 - c2) * t, c3 + (y1 - c3) * t))
+  // (and within where it is drawn on its way: what is seen of it, the box its corners round, Tree::lift_cut_corners)
+  let (lx, ly, lw, lh) = self.lift_rect(l)
+  Some(
+    (
+      dmax(c0 + (x0 - c0) * t, lx),
+      dmax(c1 + (y0 - c1) * t, ly),
+      dmin(c2 + (x1 - c2) * t, lx + lw),
+      dmin(c3 + (y1 - c3) * t, ly + lh),
+    ),
+  )
+}
+
+///|
+/// The corners (top left, then round it) what Tree::lift_cut gives is rounded by: the flight's own as it is drawn then,
+/// so that what is seen of it on its way, cut to the window or to that room, is as round as the flight has it; none
+/// where Tree::lift_cut gives none.
+pub fn Tree::lift_cut_corners(self : Tree, id : NodeId) -> (Double, Double, Double, Double)? {
+  guard self.alive_id(id) && self.nodes[id.at].lift is Some(l) && l.stays is Some(_) else { return None }
+  Some(self.look_from(id.at, 1.0).corners)
 }
 
 ///|
@@ -281,7 +314,8 @@ fn Tree::stays_marked(self : Tree, id : String) -> Unit {
 
 ///|
 /// The one that stays of id `id` a flight may come from or go to now: living, held in the window's tree, placed by a
-/// layout, and some of it seen in its layer as what holds it cuts it (Tree::seen_bounds); none, none.
+/// layout, and some of it seen in its layer as what holds it cuts it and as what covers what scrolls it leaves it
+/// (Tree::stays_bounds); none, none.
 fn Tree::stays_end(self : Tree, id : String) -> Int? {
   guard self.shared_stays.get(id) is Some(all) else { return None }
   for at in all {
@@ -289,7 +323,7 @@ fn Tree::stays_end(self : Tree, id : String) -> Int? {
     guard n.live && n.placed && self.attached(at) else { continue }
     let (x, y, _, s) = self.projected(at)
     let (w, h) = (n.lw * s, n.lh * s)
-    let (bx0, by0, bx1, by1) = self.seen_bounds({ at, gen: n.gen })
+    let (bx0, by0, bx1, by1) = self.stays_bounds(at)
     // (and within its layer, the window's part it is drawn in)
     let (lx, ly, lw, lh) = self.placed_window(self.top_node_of(at))
     let (x0, y0) = (dmax(dmax(x, bx0), lx), dmax(dmax(y, by0), ly))
@@ -302,6 +336,32 @@ fn Tree::stays_end(self : Tree, id : String) -> Int? {
 }
 
 ///|
+/// What of the window node `at` (one that stays) is seen within (x0, y0, x1, y1): what holds it cuts it to
+/// (Tree::seen_bounds), less what lies over the top of what scrolls it and what is pinned over its foot
+/// (Scroll::top_covered, a page's list's foot: the bar it runs under, its composer), as they are said now.
+fn Tree::stays_bounds(self : Tree, at : Int) -> (Double, Double, Double, Double) {
+  let n = self.nodes[at]
+  let (bx0, by0, bx1, by1) = self.seen_bounds({ at, gen: n.gen })
+  let mut top = by0
+  let mut foot = by1
+  let mut i = n.parent
+  while i >= 0 {
+    match self.scrolls_at.get(i) {
+      Some(sc) if !sc.across => {
+        let (_, y, s) = self.placed(i)
+        let h = self.nodes[i].flex.height * s
+        let (over, under) = @signals.untracked(fn() { (sc.top_covered(), sc.foot_covered_now()) })
+        top = dmax(top, y + over * s)
+        foot = dmin(foot, y + h - under * s)
+      }
+      _ => ()
+    }
+    i = self.nodes[i].parent
+  }
+  (bx0, top, bx1, foot)
+}
+
+///|
 /// Whether one of id `id` that stays (View::shared's `stays`) would be flown to now: one placed, some of it drawn in the
 /// window. What closes the other end asks it, to let that one go at once (flown back to it) rather than fade it out.
 pub fn Tree::stays_seen(self : Tree, id : String) -> Bool {
@@ -310,10 +370,10 @@ pub fn Tree::stays_seen(self : Tree, id : String) -> Bool {
 
 ///|
 /// The end that stays at node `at` as a flight takes it (Lift's `stays`): how it draws its picture, its room cut by what
-/// holds it, which end it is.
+/// holds it and by what covers what scrolls it (Tree::stays_bounds), which end it is.
 fn Tree::stays_of(self : Tree, at : Int, at_start : Bool) -> StaysEnd {
   let n = self.nodes[at]
-  let (bx0, by0, bx1, by1) = self.seen_bounds({ at, gen: n.gen })
+  let (bx0, by0, bx1, by1) = self.stays_bounds(at)
   {
     cover: n.look.image_cover,
     cover_at: n.look.image_cover_at,
@@ -1014,11 +1074,25 @@ fn Tree::ordered_lifted(self : Tree, top : Int, me : Int) -> Unit {
       _ => ()
     }
     if self.alive_id(f.node) && f.node.at != top {
-      self.lifting = true
-      self.ordered(f.node.at, me, top)
+      match self.nodes[f.node.at].lift {
+        Some(l) if !self.lifted_over(self.nodes[f.node.at], l) => ()
+        _ => {
+          self.lifting = true
+          self.ordered(f.node.at, me, top)
+        }
+      }
     }
   }
   self.lifting = false
+}
+
+///|
+/// Whether node `n`, on flight `l`'s way, is drawn over the rest of its layer: all are but the one that moves of a
+/// flight with an end that stays (the picture opened over everything from its thumbnail, and back), drawn where it is
+/// held, what is drawn after it in its layer (its viewer's bar) over it, where the flight has it.
+fn Tree::lifted_over(self : Tree, n : Node, l : Lift) -> Bool {
+  ignore(self)
+  !(l.stays is Some(_) && !n.share_stays)
 }
 
 ///|
