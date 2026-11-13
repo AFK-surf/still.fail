@@ -412,7 +412,7 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
         }
         if linux_setup {
           again_key(c, "screen-linux-setup/" + s.view, @sf.t("web-pages.screen.linuxSetup"), on_press=fn() {
-            @ui.open_url("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md") |> ignore
+            @ui.open_url("https://github.com/AFK-surf/monoid/blob/main/docs/linux-desktop-setup.md") |> ignore
           })
         }
       })

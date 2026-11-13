@@ -32,15 +32,15 @@ else:
     sha = deployed.get('revision', '')
 if not re.fullmatch(r'[0-9a-f]{40}', sha):
     raise SystemExit('The beta site does not name a full revision; refusing to guess its build.')
-runs = gh('run', 'list', '-R', 'AFK-surf/still.fail', '-w', 'pipeline', '--branch', 'main', '--commit', sha, '--limit', '20', '--json', 'databaseId,conclusion')
+runs = gh('run', 'list', '-R', 'AFK-surf/monoid', '-w', 'pipeline', '--branch', 'main', '--commit', sha, '--limit', '20', '--json', 'databaseId,conclusion')
 for run in runs:
     if args.revision and run['conclusion'] != 'success':
         continue
-    artifacts = gh('api', f"repos/AFK-surf/still.fail/actions/runs/{run['databaseId']}/artifacts")['artifacts']
+    artifacts = gh('api', f"repos/AFK-surf/monoid/actions/runs/{run['databaseId']}/artifacts")['artifacts']
     if not any(a['name'] == f'{ARTIFACT}-{sha}' and not a['expired'] for a in artifacts):
         continue
     with tempfile.TemporaryDirectory(prefix='stillfail-promote-') as directory:
-        subprocess.run(['gh', 'run', 'download', str(run['databaseId']), '-R', 'AFK-surf/still.fail', '-n', f'{ARTIFACT}-{sha}', '-D', directory], check=True)
+        subprocess.run(['gh', 'run', 'download', str(run['databaseId']), '-R', 'AFK-surf/monoid', '-n', f'{ARTIFACT}-{sha}', '-D', directory], check=True)
         metadata = json.loads((Path(directory) / 'build.json').read_text())
         if metadata.get('revision') != sha or (deployed is not None and metadata != deployed):
             raise SystemExit('Artifact metadata differs from the deployed beta build.')

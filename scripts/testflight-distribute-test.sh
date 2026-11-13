@@ -47,7 +47,7 @@ cat > "$W/bin/gh" <<'C'
 echo "gh $*" >> "$FAKE/dispatched"
 C
 chmod +x "$W/bin/curl" "$W/bin/gh"
-export PATH=$W/bin:$PATH RUNNER_TEMP=$W GITHUB_STEP_SUMMARY=$W/summary ASC_POLL_SECONDS=0 ASC_POLL_TRIES=6 GITHUB_REPOSITORY=AFK-surf/still.fail
+export PATH=$W/bin:$PATH RUNNER_TEMP=$W GITHUB_STEP_SUMMARY=$W/summary ASC_POLL_SECONDS=0 ASC_POLL_TRIES=6 GITHUB_REPOSITORY=AFK-surf/monoid
 export RELEASE_BUILD=5 RELEASE_VERSION=0.1.0 ASC_KEY_ID=ABCDE12345 ASC_ISSUER_ID=issuer
 export RELEASE_PRODUCT=stillfail
 export ASC_PRIVATE_KEY_B64=$(openssl ecparam -name prime256v1 -genkey -noout | openssl base64 -A)

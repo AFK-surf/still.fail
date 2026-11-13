@@ -234,7 +234,7 @@
   "faq.do-my-code-and.b6ce": "程式碼和對話會傳到雲端嗎？",
   "faq.no-chats-files-and.046c": "不會。對話、檔案和紀錄留在你的電腦上；中繼只轉送它讀不到的加密資料。",
   "faq.is-it-open-source.ad0a": "開源嗎？",
-  "faq.yes-under-the-mit.f731": "開源，採 MIT 授權，程式碼在 <a href=\"https://github.com/AFK-surf/still.fail\">GitHub</a>。",
+  "faq.yes-under-the-mit.f731": "開源，採 MIT 授權，程式碼在 <a href=\"https://github.com/AFK-surf/monoid\">GitHub</a>。",
   "end.add-a-computer-it.c266": "加一台電腦<span class=\"vh\">，</span><br>剩下的交給它",
   "end.ask-once-your-computers.6d9f": "交代一次，你的電腦會一直做到完成。",
   "end.open-monoid.5754": "開啟 monoid",

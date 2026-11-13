@@ -15,7 +15,7 @@ import os
 import re
 import subprocess
 
-REPO = 'AFK-surf/still.fail'
+REPO = 'AFK-surf/monoid'
 
 
 def output(*args):

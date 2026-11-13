@@ -12,11 +12,11 @@ D="$(cd "$(dirname "$0")" && pwd)"
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 for run in "$@"; do
-  gh run view "$run" -R AFK-surf/still.fail --json jobs \
+  gh run view "$run" -R AFK-surf/monoid --json jobs \
     --jq '.jobs[] | select(.name | test("app [1-4]/4")) | "\(.databaseId) \(.name)"' |
     while read -r job name; do
       case "$name" in *"at 60 fps"*) col=3 ;; *"at 120 fps"*) col=4 ;; *" fps"*) col=5 ;; *) col=2 ;; esac
-      gh api --allow-escape-sequences "repos/AFK-surf/still.fail/actions/jobs/$job/logs" 2>/dev/null |
+      gh api --allow-escape-sequences "repos/AFK-surf/monoid/actions/jobs/$job/logs" 2>/dev/null |
         sed -n "s|.*testexe: each file's seconds\( of stillfail/sfapp\)\{0,1\}: ||p" | tr ',' '\n' |
         awk -v c=$col 'NF == 2 { print $1, c, $2 }'
     done

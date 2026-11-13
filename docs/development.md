@@ -12,8 +12,8 @@ The commands below run from the repository root unless noted. The station, the c
 - Android additionally needs JDK 17 and the Android SDK (NDK 28.2.13676358 to build its shell or engine, or to strip them when packing); the apps (`apps/mbui/`), the web app included, need MoonBit and their platform's toolchain, as [its README](../apps/mbui/README.md) says.
 
 ```sh
-git clone https://github.com/AFK-surf/still.fail.git
-cd still.fail
+git clone https://github.com/AFK-surf/monoid.git
+cd monoid
 pnpm install --frozen-lockfile
 (cd cloud && pnpm install --frozen-lockfile)
 ```
