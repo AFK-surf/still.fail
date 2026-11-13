@@ -642,6 +642,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private android.view.ActionMode textMenu;
     private final android.graphics.Rect textMenuRect = new android.graphics.Rect();
     private int textMenuCan;
+    /** The words of the app's own item (Host.textMenuOwn), offered where textMenuCan says 64. */
+    String textMenuOwn = "";
+    /** The app's own item's id among the menu's (none of the system's android.R.id). */
+    private static final int TEXT_MENU_OWN = 0x6d620001;
 
     /** Shown over (x, y, w, h) in dp with what {@code can} offers, moved there when it is up; or put away. */
     void textMenu(boolean shown, double x, double y, double w, double h, int can) {
@@ -666,6 +670,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                 // nothing on the clipboard: no 粘贴 (as Compose's text toolbar offers it only then)
                 if ((textMenuCan & 4) != 0 && clipHasText()) m.add(0, android.R.id.paste, 2, android.R.string.paste);
                 if ((textMenuCan & 8) != 0) m.add(0, android.R.id.selectAll, 3, android.R.string.selectAll);
+                if ((textMenuCan & 64) != 0 && !textMenuOwn.isEmpty()) m.add(0, TEXT_MENU_OWN, 4, textMenuOwn);
             }
 
             @Override public boolean onCreateActionMode(android.view.ActionMode mode, android.view.Menu m) { items(m); return true; }
@@ -679,6 +684,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                 else if (id == android.R.id.selectAll) toGL(() -> Native.key(12, 0));
                 else if (id == android.R.id.copy) toGL(() -> Native.key(13, 0));
                 else if (id == android.R.id.cut) toGL(() -> Native.key(14, 0));
+                else if (id == TEXT_MENU_OWN) toGL(() -> Native.key(19, 0));
                 mode.finish();
                 return true;
             }

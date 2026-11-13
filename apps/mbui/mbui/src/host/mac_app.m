@@ -2150,6 +2150,9 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   (void)shown, (void)x, (void)y, (void)w, (void)h, (void)can;
 }
 
+// the app's own item of a floating text menu (@hostapi.text_menu_own): no such menu here
+void mb_host_text_menu_own(moonbit_string_t words) { (void)words; }
+
 void mb_host_edit_can(int32_t can) { edit_can_now = can; }
 
 void mb_host_clipboard_set(moonbit_string_t s) {

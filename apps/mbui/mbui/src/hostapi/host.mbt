@@ -69,6 +69,7 @@ pub(open) trait Host {
   group_drop(Self, Int) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
+  text_menu_own(Self, String) -> Unit = _
   edit_can(Self, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
@@ -540,6 +541,11 @@ impl Host with set_ime(_, _, _, _, _, _, _, _, _) {
 
 ///|
 impl Host with text_menu(_, _, _, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with text_menu_own(_, _) {
   ()
 }
 
@@ -1919,12 +1925,30 @@ pub let text_menu_undo : Int = 16
 pub let text_menu_redo : Int = 32
 
 ///|
+/// The app's own item (text_menu's `can`): the words text_menu_own last said, after the system's; chosen, it comes as
+/// the key key_menu_own, the menu then gone.
+pub let text_menu_own_item : Int = 64
+
+///|
+/// The key the app's own item of the floating text menu comes as, chosen (text_menu_own_item).
+pub let key_menu_own : Int = 19
+
+///|
 /// The system's floating menu for a field's words (Android's text toolbar: ActionMode.TYPE_FLOATING) `shown` over the
 /// window's rectangle (`x`, `y`, `w`, `h`: the words picked, or the caret), offering what `can` says (text_menu_*); or
 /// put away. What is chosen comes as the keys and the paste the field already takes (select all, copy, cut: keys 12,
 /// 13, 14; paste: the clipboard's words as text), the menu then gone. A host with none shows nothing.
 pub fn text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
   current.val.text_menu(shown, x, y, w, h, can)
+}
+
+///|
+/// The words of the app's own item of the floating text menu (a chat's 引用 of a message's words a finger picked),
+/// offered where text_menu's `can` has text_menu_own_item, after the system's items; said before the menu that offers
+/// it, again as they change. Chosen, it comes as the key key_menu_own, the menu then gone. Android's text toolbar and
+/// iOS's edit menu offer it, the web's bar too; a host with no floating menu nothing.
+pub fn text_menu_own(words : String) -> Unit {
+  current.val.text_menu_own(words)
 }
 
 ///|

@@ -330,6 +330,11 @@ impl @hostapi.Host for Native with text_menu(_, shown, x, y, w, h, can) {
 }
 
 ///|
+impl @hostapi.Host for Native with text_menu_own(_, words) {
+  ffi_text_menu_own(words)
+}
+
+///|
 impl @hostapi.Host for Native with edit_can(_, can) {
   ffi_edit_can(can)
 }

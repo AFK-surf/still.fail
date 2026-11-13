@@ -92,7 +92,8 @@ static CGFloat nav_right(void);
 - (BOOL)isEmpty { return self.a == self.b; }
 @end
 
-static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2 copy, 4 paste, 8 select all)
+static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2 copy, 4 paste, 8 select all, 64 own)
+static NSString *menu_own = @"";  // the words of the app's own item (@hostapi.text_menu_own)
 
 @interface MBView : UIView <UITextInput, UIEditMenuInteractionDelegate>
 @property(nonatomic, strong) CADisplayLink *link;
@@ -219,6 +220,13 @@ static void link_rate(CADisplayLink *l) {
                                          image:nil
                                     identifier:nil
                                        handler:^(UIAction *a) { mb_cb.key(12, 0); [me requestFrame]; }]];
+  }
+  // (the app's own, after the system's: chosen, the key 19)
+  if ((menu_can & 64) && menu_own.length > 0) {
+    [items addObject:[UIAction actionWithTitle:menu_own
+                                         image:nil
+                                    identifier:nil
+                                       handler:^(UIAction *a) { mb_cb.key(19, 0); [me requestFrame]; }]];
   }
   return [UIMenu menuWithChildren:items];
 }
@@ -1750,6 +1758,9 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
                                                                         sourcePoint:CGPointMake(x + w / 2, y)];
   [v.editMenu presentEditMenuWithConfiguration:c];
 }
+
+// The words of the app's own item of that menu (@hostapi.text_menu_own), offered where its `can` says 64.
+void mb_host_text_menu_own(moonbit_string_t words) { menu_own = mb_ns_from_string(words) ?: @""; }
 
 void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);

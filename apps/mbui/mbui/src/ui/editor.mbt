@@ -2432,8 +2432,17 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
     // (words a finger picked with the pointer, let go of: finger_select.mbt)
     _ => finger_menu()
   }
+  // (the words of the app's own item where it offers one: told before the menu, picked_menu)
+  let own = match want {
+    Some((_, _, _, _, can)) if (can & @hostapi.text_menu_own_item) != 0 =>
+      match picked_menu_own() {
+        Some((words, _)) => words
+        None => ""
+      }
+    _ => ""
+  }
   let sig = match want {
-    Some((x, y, w, h, can)) => "\{x.to_int()},\{y.to_int()},\{w.to_int()},\{h.to_int()},\{can}"
+    Some((x, y, w, h, can)) => "\{x.to_int()},\{y.to_int()},\{w.to_int()},\{h.to_int()},\{can},\{own}"
     None => ""
   }
   if sig == self.menu_sig {
@@ -2441,7 +2450,12 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
   }
   self.menu_sig = sig
   match want {
-    Some((x, y, w, h, can)) => h_text_menu(true, x, y, w, h, can)
+    Some((x, y, w, h, can)) => {
+      if own != "" {
+        h_text_menu_own(own)
+      }
+      h_text_menu(true, x, y, w, h, can)
+    }
     None => h_text_menu(false, 0.0, 0.0, 0.0, 0.0, 0)
   }
 }

@@ -2135,6 +2135,17 @@ fn key_in(code : Int, mods : Int) -> Unit {
     }
     return
   }
+  // the system's menu's own item over words a finger picked of the tree's: what offers it does it (picked_menu)
+  if code == @hostapi.key_menu_own && picked.finger && !field_picks(c) {
+    match picked_menu_own() {
+      Some((_, take)) => {
+        take()
+        h_request_frame()
+      }
+      None => ()
+    }
+    return
+  }
   // the system's menu's select all over words a finger picked: all of what they are in (finger_select.mbt)
   if code == key_select_all && picked.finger && !field_picks(c) {
     c.finger_select_all()

@@ -142,6 +142,14 @@ fn ffi_group_drop(id : Int) = "mbhost" "mb_host_group_drop"
 fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) = "mbhost" "mb_host_text_menu"
 
 ///|
+fn mbw_mb_host_text_menu_own(words : Int) = "mbhost" "mb_host_text_menu_own"
+
+///|
+fn ffi_text_menu_own(words : String) -> Unit {
+  mbw_mb_host_text_menu_own(@wasmrt.string_addr(words))
+}
+
+///|
 fn ffi_edit_can(can : Int) = "mbhost" "mb_host_edit_can"
 
 fn mbw_mb_host_set_ime(active : Int, x : Double, y : Double, w : Double, h : Double, text : Int, sel_start : Int, sel_end : Int) = "mbhost" "mb_host_set_ime"
