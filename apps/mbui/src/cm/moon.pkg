@@ -1,0 +1,13 @@
+import {
+  "mbui/ui",
+  "mbui/view",
+  "mbui/signals",
+  "mbui/motion",
+  "mbui/halt",
+}
+
+import {
+  "mbui/ui",
+  "mbui/view",
+  "mbui/signals",
+} for "wbtest"

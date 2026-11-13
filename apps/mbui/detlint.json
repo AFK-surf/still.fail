@@ -45,7 +45,9 @@
   ],
   "style": {
     "tokens": [
-      "src/sf/tokens.mbt"
+      "src/sf/tokens.mbt",
+      "src/cm/tokens.mbt",
+      "src/cm/tokens_made.mbt"
     ],
     "outside": [
       "src/sffilmcheck/main.mbt"
@@ -53,7 +55,8 @@
   },
   "library": {
     "roots": [
-      "src/sf"
+      "src/sf",
+      "src/cm"
     ],
     "imports": [
       "mbui/",
