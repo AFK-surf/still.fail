@@ -18,13 +18,16 @@ type J = any;
 const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
 
 /// The chain's list as the handover is to keep it: each member bound to a log of their own (their role, email, log),
-/// the stations, the settings, the root's person's email, and this person's web pages on the chain not run out.
+/// the stations, the settings, the root's person's email, this person's web pages on the chain not run out, and each
+/// app device of a member bound to a log that signs on the chain (by its id: its person and that signer), but the one
+/// handing over, whose signer the same ask says (`#restate`).
 export type Target = {
   members: Map<string, { role: string; email: string; lock: string }>;
   stations: Set<string>;
   settings: { origins: string[]; rp_id: string; cloud_keys: unknown };
   email: string;
   webs: Map<string, { label: string; exp: number }>;
+  apps: Map<string, { sub: string; sign_key: string }>;
 };
 /// What the rules' state rooted in this person's log lists, as compared with a target.
 export type AsIf = {
@@ -48,7 +51,9 @@ export type HandOverPlan =
   /// Not to be handed over by this device (why, the core's words).
   | { refused: string }
   /// Members the chain names with a device that signs and no log of their own bound: theirs take their own lock by
-  /// themselves (views/lock.ts `ownLockFor`); the handover waits for them.
+  /// themselves (views/lock.ts `ownLockFor`); the handover waits for them. So too a member bound to a log with an app
+  /// device that signs on the chain and is not on that log as held here (or whose log is not held): the state as if
+  /// moved names a member's devices by their log alone, so it would be out after the move.
   | { waits: string[] }
   /// What is still to be said (`says`, in order; `webs`), whom the chain names that is not said (no log of their own,
   /// no device that signs: `unsaid`, with the chain's role), the target, and the state as if moved once it is said.
@@ -95,8 +100,16 @@ export function handOverPlan(ws: string, entries: readonly Entry[], who: Who, ch
     if (x.kind !== "web" || x.sub !== who.sub || typeof x.exp !== "number" || x.exp <= now) continue;
     webs.set(id, { label: String(f.devices.get(id)?.label ?? ""), exp: x.exp });
   }
+  // Each app device of a member bound to a log that signs on the chain (`own`, not run out, a signer): to be in the state
+  // as if moved by that signer, else its member waits (below). The one handing over is said in the ask itself.
+  const apps = new Map<string, { sub: string; sign_key: string }>();
+  for (const [id, x] of checked.devices) {
+    if (id === who.base || x.kind !== "app" || typeof x.sign_key !== "string" || !f.persons.has(x.sub)) continue;
+    const s = signerIn(checked, x.sign_key, now);
+    if (s !== null && s.own && !s.passkey && s.sub === x.sub) apps.set(id, { sub: x.sub, sign_key: x.sign_key });
+  }
   const target: Target = {
-    members, stations: new Set(f.stations.keys()), webs,
+    members, stations: new Set(f.stations.keys()), webs, apps,
     settings: { origins: checked.origins, rp_id: checked.rp_id, cloud_keys: checked.cloudKeys },
     email: f.members.get(who.sub)?.email ?? "",
   };
@@ -123,13 +136,21 @@ export function handOverPlan(ws: string, entries: readonly Entry[], who: Who, ch
   for (const [id, w] of webs) if ((before.webs.get(id) ?? 0) < w.exp) toWeb.push({ id, label: w.label, exp: w.exp });
   // And what it would be once said: the target, or this device cannot hand it over.
   const asIf = says.length === 0 && toWeb.length === 0 ? before : afterSaying(ws, who, chains, bodies, says, toWeb, now);
+  const out = [...new Set([...apps].filter(([id, a]) => !hasApp(asIf, id, a)).map(([, a]) => a.sub))];
+  if (out.length > 0) return { waits: out.sort() };
   const off = differs(target, asIf, who.sub);
   if (off !== null) return { refused: `said, the list would not be the chain's: ${off}` };
   return { says, webs: toWeb, unsaid, target, asIf };
 }
 
+/// Whether a state as if moved names app device `id` as the target does: its person's, by that signer.
+const hasApp = (s: AsIf, id: string, a: { sub: string; sign_key: string }): boolean => {
+  const d = s.devices.get(id);
+  return d !== undefined && d.kind === "app" && d.sub === a.sub && d.sign_key === a.sign_key;
+};
+
 /// What differs between the target and a state as if moved (null: nothing): the members bound to a log of their own,
-/// each one's role, email and log; the stations; the settings; this person's web pages.
+/// each one's role, email and log; the stations; the settings; this person's web pages; the app devices that sign.
 export function differs(t: Target, s: AsIf, sub: string): string | null {
   if (s.on !== "on") return `state ${s.on}`;
   if (s.settings !== canonical(t.settings)) return "settings";
@@ -145,6 +166,7 @@ export function differs(t: Target, s: AsIf, sub: string): string | null {
   if (s.members.get(sub)?.role !== "owner") return `role ${sub}`;
   if ([...t.stations].sort().join() !== [...s.stations].sort().join()) return "stations";
   for (const [id, w] of t.webs) if ((s.webs.get(id) ?? 0) < w.exp) return `web ${id}`;
+  for (const [id, a] of t.apps) if (!hasApp(s, id, a)) return `device ${id}`;
   return null;
 }
 

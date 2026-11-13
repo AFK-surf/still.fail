@@ -2896,6 +2896,20 @@ const HAND_OVER_REASON = "Keep safe mode in your own lock";
 /// A handover's `moved` refused in its turn because what is to be said changed: worked out again (`handOver`).
 const LACKING = "lock_handover_lacking";
 
+/// The logs a workspace's chain binds its members by, as its stations give them before it moved (GET /lock/logs, which
+/// of a chain not moved gives those too: station/src/cloud/state.ts `logsOf`), kept as any logs given are (`keepLogs`):
+/// read by `handOver` before it works out its plan, and again before its `moved`, so that a member's app device that
+/// signs on the chain and is not on their log is waited for (src/lock-handover.ts `waits`), not dropped. One station
+/// that answers is enough, the others had OTHERS_MS more; what none gave is not held, and its member waits.
+function readBound(inner: Inner, ws: string): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const stations = lockStations(inner, ws);
+    const ask = (id: string) => inner.stations.requests.call(new StationAddr(ws, id), "GET", "/lock/logs", null, { quiet: true });
+    const answers = yield* answersOf(inner, stations.map(ask), () => OTHERS_MS, stations.map((id) => `${ws}/${id}`));
+    keepLogs(inner, ws, answers.flatMap((r) => (r._tag === "Success" ? arr(get(r.success, "chains")) : [])));
+  });
+}
+
 /// The workspace's chain handed over to its people's own logs by this device (the operation `lock.handOver`, which only
 /// a host made for tests offers: `Host.handOverByTests`): an owner's own app device, by the signer the chain names it
 /// with, its person bound there to their own log pinned here with this device on it (else refused as a change not
@@ -2916,6 +2930,7 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
     const within = asked(inner);
     yield* within.wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a handover" }));
     if (movedHere(inner, ws)) return null;
+    yield* within.wait(readBound(inner, ws));
     const signer = yield* Signer.load(inner.host);
     const own = personal.root(sub), key = personal.keyId();
     if (signer === null || own === null || key === null || personal.standing(sub) !== "member") return yield* Effect.fail(notAllowed());
@@ -2957,7 +2972,9 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
         if ("refused" in q || "waits" in q) return refusal(q);
         return q.says.length > 0 || q.webs.length > 0 ? new CoreError(LACKING, "what is to be said changed") : null;
       };
-      // (the chain read again first, within the wait: the turn's head is what the stations have)
+      // (the logs it binds read again, and the chain first in the turn, within the wait: a device approved on the chain
+      // meanwhile is found on its log or waited for)
+      yield* within.wait(readBound(inner, ws));
       const lock = new Lock(inner, ws, sub, null, { within });
       const out = yield* Effect.catch(lock.append("moved", { root: own }, [], false, guard), (e) => (e.code === LACKING ? Effect.succeed(LACKING) : Effect.fail(e)));
       if (out === LACKING) continue;
