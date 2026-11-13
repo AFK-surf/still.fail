@@ -1096,14 +1096,19 @@ fn group_node(
 fn step_label(name : String) -> String {
   match name {
     "Read" | "NotebookRead" | "view_image" | "read" | "read_file" | "view_file_outline" | "view_code_item" | "skill_read" => "读取"
-    "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch" | "edit" | "edit_file" | "replace_file_content" | "multi_replace_file_content" => "编辑"
+    "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch" | "edit" | "edit_file" | "replace_file_content" | "multi_replace_file_content" | "search_replace" | "delete_file" => "编辑"
     "Write" | "write" | "write_file" | "write_to_file" => "新建"
-    "Glob" | "Grep" | "LS" | "ToolSearch" | "glob" | "grep" | "grep_search" | "find_by_name" | "list_dir" | "search" => "搜索"
+    "Glob" | "Grep" | "LS" | "ToolSearch" | "search_tool" | "mcp_list_tools" | "glob" | "grep" | "grep_search" | "find_by_name" | "list_dir" | "search" => "搜索"
     "Bash" | "bash" | "BashOutput" | "KillShell" | "exec_command" | "exec" | "shell" | "local_shell" | "write_stdin" | "unified_exec" | "run_command" | "run_terminal_command" | "command_status" | "send_command_input" | "manage_task" => "命令"
     "WebFetch" | "WebSearch" | "web_search" | "web_fetch" | "search_web" | "read_url_content" => "网页"
     "Task" | "Agent" | "spawn_agent" | "subagent" | "invoke_subagent" | "define_subagent" | "manage_subagents" | "swarm" | "send_message" => "代理"
-    "chat_history" | "chat_list" | "chat_read" | "session_history" => "对话"
-    "chat_post" | "chat_state" | "session_send" | "chat_create" => "消息"
+    "chat_history" | "chat_list" | "chat_read" | "session_history" | "chat_archive" | "chat_leave" => "对话"
+    "chat_post" | "chat_state" | "session_send" | "chat_create" | "feishu_api" | "slack_api" => "消息"
+    "station_task" | "station_file" | "station_list" | "station_tool" | "relays" | "workspace_limit" => "远程"
+    "job_start" | "job_list" | "job_log" | "job_stop" | "sleep" | "get_output" => "任务"
+    "screen" | "browser" | "computer" => "屏幕"
+    "secret_list" | "secret_describe" | "secret_reask" | "secret_use" | "secret_save" | "secret_run" => "密钥"
+    "phone_use" | "phone_send" | "adb_devices" | "device_list" | "device_use" | "permissions" => "设备"
     "" => "工具"
     other => if other.length() > 10 { "工具" } else { other }
   }
@@ -1114,13 +1119,15 @@ fn step_label(name : String) -> String {
 fn step_node(v : @view.View, src : Source, station : String, key : String, rk : String, step : Json?) -> Unit {
   let failed = flag(step, "failed")
   opened_node(v, src, station, key, rk, step, fn(sum) {
-    steps_words(sum, fn() { step_label(text(step, "name")) }, if failed { h_step_name_red } else { h_step_name })
+    let label = step_label(text(step, "name"))
+    let show_secondary_hint = label == "读取" || label == "编辑" || label == "新建" || label == "搜索"
+    steps_words(sum, fn() { label }, if failed { h_step_name_red } else { h_step_name })
     steps_box_node(sum, h_grow_clip, fn(c) {
       match (text(step, "said"), text(step, "hint")) {
         ("", hint) => steps_run(c, fn() { hint }, h_step_hint_line, mono=true)
         (said, "") => steps_words(c, fn() { said }, h_step_said)
         (said, hint) =>
-          if said == hint {
+          if !show_secondary_hint || said == hint || said.contains(hint) {
             steps_words(c, fn() { said }, h_step_said)
           } else {
             c.box(fn(r) {
@@ -1282,7 +1289,7 @@ fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Un
         }
       })
       match field(parts, "result") {
-        Some(Array(list)) =>
+        Some(Array(list)) if list.length() > 0 =>
           steps_box_node(b, tool_result_box, fn(s) {
             for part in list {
               tool_part_node(s, Some(part))

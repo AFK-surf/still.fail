@@ -47,9 +47,57 @@ const SMALL = 600;
 const BRIEF_CHARS = 300;
 /// The fields of a call's input that say what it does: what an execution history names a call by before it is opened,
 /// and a chat's activity says it does (client/core-ts/src/activity.ts doing, history.ts describe, hint, fileOf).
-const SAYING = ["description", "toolSummary", "command", "cmd", "CommandLine", "file_path", "path", "Path", "notebook_path", "StartLine", "EndLine", "offset", "limit", "Target", "Replacement", "Content", "Overwrite", "pattern", "url", "query", "prompt"];
+const SAYING = [
+  "description",
+  "toolSummary",
+  "command",
+  "cmd",
+  "CommandLine",
+  "file_path",
+  "path",
+  "Path",
+  "target_file",
+  "target_directory",
+  "DirectoryPath",
+  "Directory",
+  "SearchDirectory",
+  "SearchPath",
+  "notebook_path",
+  "StartLine",
+  "EndLine",
+  "offset",
+  "limit",
+  "Target",
+  "Replacement",
+  "Content",
+  "Overwrite",
+  "old_string",
+  "new_string",
+  "pattern",
+  "Pattern",
+  "url",
+  "query",
+  "Query",
+  "prompt",
+  "Prompt",
+  "station",
+  "action",
+  "name",
+  "key",
+  "id",
+  "to",
+  "chat",
+  "title",
+  "file",
+  "method",
+  "Role",
+  "Recipient",
+  "Message",
+];
 /// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
 const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);
+const BOILERPLATE_THOUGHT_LINE =
+  /^(?:I'm thinking(?: through how to approach this)?\.?|Thinking(?:\s+process)?\.?:?|Thought\s+process:?|Process:?|Reasoning:?|`?\d{4}-\d{2}-\d{2}T[\d:.]+Z`?[),.;:]*)$/i;
 /// Each call's brief, as it was read (from its whole input, not one cut to MAX_TEXT).
 const briefs = new WeakMap<TimelineEntry, string>();
 
@@ -109,8 +157,9 @@ export function brief(e: TimelineEntry): TimelineEntry {
     return { ...e, text, brief: true };
   }
   if (e.kind === "thinking") {
-    const first = e.text.split("\n").find((l) => trim(l) !== "") ?? "";
-    return { ...e, text: firstChars(trim(first), BRIEF_CHARS), brief: true };
+    const lines = e.text.split("\n").map(trim).filter((l) => l !== "");
+    const first = lines.find((l) => !BOILERPLATE_THOUGHT_LINE.test(l)) ?? lines[0] ?? "";
+    return { ...e, text: firstChars(first, BRIEF_CHARS), brief: true };
   }
   return e;
 }

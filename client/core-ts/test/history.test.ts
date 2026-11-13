@@ -558,8 +558,8 @@ test("agy_tools_coalesced_reads_and_stage_splitting_are_grouped_cleanly", () => 
   assert.equal(coalesced.hint, "station/src/mesh");
   // < 50ms duration is hidden (not "0ms")
   assert.equal(coalesced.meta, "");
-  // Group 1 summary uses category counts (8 unique files across 9 steps) instead of raw tool name
-  assert.equal(g1.summary, "读取 8 个文件 · 共 9 项");
+  // Group 1 summary uses category counts + primary file basenames (8 unique files across 9 steps)
+  assert.equal(g1.summary, "读取 8 个文件（screens.ts、file3.ts 等） · 共 9 项");
 
   // Group 2 starts with the trailing thought before the edit, followed by Edit and Bash
   assert.equal(g2.rows[0].kind, "thought");
@@ -572,5 +572,83 @@ test("agy_tools_coalesced_reads_and_stage_splitting_are_grouped_cleanly", () => 
   assert.equal(g2.rows[2].content.said, "Unit test execution");
   assert.equal(g2.rows[2].content.hint, "pnpm test");
   assert.equal(g2.rows[2].content.meta, "2 秒");
-  assert.equal(g2.summary, "编辑 1 个文件、运行 1 条命令 · 共 2 项");
+  assert.equal(g2.summary, "编辑 1 个文件（screens.ts）、运行 1 条命令 · 共 2 项");
+});
+
+test("stillfail_tools_coalesced_edits_and_clean_thoughts_across_runtimes", () => {
+  const ws = "/Users/zuozijian/.stillfail/sessions/chat/c-4282c9a37cb40bab469a3b91c261af05/workspace/stillfail";
+  const timeline: J[] = [
+    { kind: "user", text: "optimize history" },
+    // Pure placeholder thought is skipped completely
+    { kind: "thinking", text: "I'm thinking through how to approach this." },
+    // Devin-style Process: header is stripped
+    { kind: "thinking", text: "Process:\n1. 先读取 skill 并检查 station 列表。" },
+    {
+      kind: "tool_call",
+      tool: "mcp_stillfail_skill_read",
+      callId: "s1",
+      text: JSON.stringify({ name: "stillfail-login", toolSummary: "Read stillfail-login skill" }),
+    },
+    { kind: "tool_result", callId: "s1", ok: true, text: "skill content" },
+    {
+      kind: "tool_call",
+      tool: "mcp_stillfail_station_list",
+      callId: "s2",
+      text: JSON.stringify({ toolSummary: "List workspace stations" }),
+    },
+    { kind: "tool_result", callId: "s2", ok: true, text: "{}" },
+    {
+      kind: "tool_call",
+      tool: "manage_task",
+      callId: "s3",
+      text: JSON.stringify({ Action: "status", TaskId: "3bd3d52b-1785-4f59-a73e-22a25fe11938/task-42" }),
+    },
+    { kind: "tool_result", callId: "s3", ok: true, text: "running" },
+    // 2 consecutive edits on the same file coalesce into 1 row
+    {
+      kind: "tool_call",
+      tool: "edit_file",
+      callId: "e1",
+      text: JSON.stringify({ Path: `${ws}/client/core-ts/src/history.ts`, Target: "a", Replacement: "b" }),
+      at: "2026-11-13T04:00:00.000Z",
+    },
+    { kind: "tool_result", callId: "e1", ok: true, text: "Made 1 replacement", at: "2026-11-13T04:00:01.000Z" },
+    {
+      kind: "tool_call",
+      tool: "edit_file",
+      callId: "e2",
+      text: JSON.stringify({ Path: `${ws}/client/core-ts/src/history.ts`, Target: "c", Replacement: "d" }),
+      at: "2026-11-13T04:00:01.000Z",
+    },
+    { kind: "tool_result", callId: "e2", ok: true, text: "Made 1 replacement", at: "2026-11-13T04:00:02.000Z" },
+    // Grep hint prefers pattern over path; command hint skips leading export/cd lines
+    {
+      kind: "tool_call",
+      tool: "grep",
+      callId: "g1",
+      text: JSON.stringify({ pattern: "presentHistory", path: `${ws}/client/core-ts/src/history.ts` }),
+    },
+    { kind: "tool_result", callId: "g1", ok: true, text: "found" },
+    {
+      kind: "tool_call",
+      tool: "bash",
+      callId: "b1",
+      text: JSON.stringify({ command: "export MBUI_TOOLS=/tmp/tools\ncd apps/mbui\n./scripts/check.sh" }),
+    },
+    { kind: "tool_result", callId: "b1", ok: true, text: "ok" },
+  ];
+  const g = presentHistory({ timeline }, cx([], [], [])).items[1].body.content;
+  assert.equal(g.rows[0].kind, "thought");
+  assert.equal(g.rows[0].content.first, "先读取 skill 并检查 station 列表。");
+  assert.equal(g.rows[1].content.said, "读取技能 stillfail-login");
+  assert.equal(g.rows[2].content.said, "查看 station 列表");
+  assert.equal(g.rows[3].content.said, "查看后台命令状态 task-42");
+  assert.equal(g.rows[4].content.name, "Edit");
+  assert.equal(g.rows[4].content.said, "history.ts · 2 处修改");
+  assert.equal(g.rows[4].content.hint, "client/core-ts/src");
+  assert.equal(g.rows[4].content.meta, "2 秒");
+  assert.equal(g.rows[5].content.name, "Grep");
+  assert.equal(g.rows[5].content.hint, "presentHistory");
+  assert.equal(g.rows[6].content.name, "Bash");
+  assert.equal(g.rows[6].content.hint, "./scripts/check.sh");
 });

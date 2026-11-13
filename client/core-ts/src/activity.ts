@@ -1,7 +1,7 @@
 // What an agent at work is doing, as a chat shows it: one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
-import { cleanCommand, cleanPath, closeCut as close } from "./tool-step.ts";
+import { cleanCommand, cleanPath, closeCut as close, summaryCommand } from "./tool-step.ts";
 import { get } from "./util.ts";
 
 /// A tool's name without its MCP prefix or ACP "Run " prefix.
@@ -16,8 +16,28 @@ export function toolName(tool: string): string {
 export function kindOf(tool: string, input?: string | Record<string, J> | null): string {
   const name = toolName(tool);
   const a = typeof input === "string" ? args(input) : input ?? null;
-  if (name.startsWith("File ") || name === "read_file" || name === "edit_file" || name === "write_file" || name === "write_to_file" || name === "replace_file_content" || name === "multi_replace_file_content") {
-    if (name === "edit_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "write_file" || name === "write_to_file") return "edit";
+  if (
+    name.startsWith("File ") ||
+    name === "read_file" ||
+    name === "edit_file" ||
+    name === "write_file" ||
+    name === "write_to_file" ||
+    name === "replace_file_content" ||
+    name === "multi_replace_file_content" ||
+    name === "search_replace" ||
+    name === "delete_file"
+  ) {
+    if (
+      name === "edit_file" ||
+      name === "replace_file_content" ||
+      name === "multi_replace_file_content" ||
+      name === "write_file" ||
+      name === "write_to_file" ||
+      name === "search_replace" ||
+      name === "delete_file"
+    ) {
+      return "edit";
+    }
     if (name === "read_file") return "read";
     if (a && (a.Target !== undefined || a.Replacement !== undefined || a.Content !== undefined || a.old_string !== undefined || a.new_string !== undefined || a.content !== undefined)) return "edit";
     return "read";
@@ -35,6 +55,8 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "Grep":
     case "LS":
     case "ToolSearch":
+    case "search_tool":
+    case "mcp_list_tools":
     case "glob":
     case "grep":
     case "grep_search":
@@ -65,6 +87,8 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "command_status":
     case "send_command_input":
     case "manage_task":
+    case "sleep":
+    case "get_output":
       return "command";
     case "WebFetch":
     case "WebSearch":
@@ -87,11 +111,14 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "chat_list":
     case "chat_read":
     case "session_history":
+    case "session_send":
+    case "chat_archive":
+    case "chat_leave":
       return "thread";
     default:
       if (a && typeof a.CommandLine === "string") return "command";
       if (a && (a.Target !== undefined || a.Replacement !== undefined || a.Content !== undefined)) return "edit";
-      if (a && typeof a.Path === "string") return "read";
+      if (a && (typeof a.Path === "string" || typeof a.target_file === "string")) return "read";
       if (/^(?:cd|git|pnpm|npm|node|cargo|python3?|sh|bash|zsh|rg|ls|cat|mkdir|rm|cp|mv|curl|gh)\b/.test(name)) return "command";
       return "other";
   }
@@ -167,8 +194,20 @@ export type Known = { stations?: ReadonlyMap<string, string>; tasks?: ReadonlyMa
 
 /// The line of a command that says what it does: not `exec 2>&1`, `set -e`, a comment or a shebang.
 function commandLine(command: string): string {
-  const lines = command.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "");
-  return lines.find((l) => !/^(#|set\s+-|exec\s+\d*[<>])/.test(l)) ?? lines[0] ?? "";
+  const lines = command.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "" && !/^(#|set\s+-|exec\s+\d*[<>])/.test(l));
+  return summaryCommand(lines.join("\n"));
+}
+
+function shortChatRef(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  const urlPart = s.includes("/chats/") ? (s.split("/chats/").pop() ?? s) : s;
+  try {
+    const decoded = decodeURIComponent(urlPart).replace(/^chat:/, "");
+    return decoded.length > 28 ? `${decoded.slice(0, 24)}…` : decoded;
+  } catch {
+    return urlPart.length > 28 ? `${urlPart.slice(0, 24)}…` : urlPart;
+  }
 }
 
 /// What a station task runs, in a few words: the name it was given, else its command.
@@ -191,7 +230,7 @@ export function tasksOf(timeline: J[]): Map<string, string> {
 }
 
 /// A call of still.fail's own tools said in words rather than by its name: what it does on which station (station_task,
-/// station_file), the tools it loads (ToolSearch's `select:`); null for any other.
+/// station_file), the tools it loads (ToolSearch's `select:`), and still.fail's workspace/chat/job/skill tools; null for any other.
 export function told(tool: string, input: string, known: Known = {}): string | null {
   const a = args(input);
   if (!a) return null;
@@ -206,34 +245,121 @@ export function told(tool: string, input: string, known: Known = {}): string | n
       return t(`core-logic.activity.remote.${a.direction === "download" ? "download" : "upload"}`, { station, what: path || key });
     }
     if (a.action === "list") return t("core-logic.activity.remote.list", { station });
+    if (a.action === "mirrors") return `在 ${station} 上查看同步目录`;
+    if (a.action === "clean") return `在 ${station} 上清理 ${typeof a.mirror === "string" && a.mirror ? a.mirror : "同步目录"}`;
+    if (a.action === "release") return `在 ${station} 上释放 ${key || "同步目录"}`;
     if (!["prepare", "start", "get", "log", "stop"].includes(a.action)) return null;
     const what = (a.action === "prepare" ? taskOf(a) : "") || known.tasks?.get(`${id}/${key}`) || key;
     return t(`core-logic.activity.remote.${a.action}`, { station, what });
   }
-  if (name === "ToolSearch" && typeof a.query === "string" && a.query.startsWith("select:")) {
-    const names = a.query.slice("select:".length).split(",").map((n) => toolName(n.trim())).filter((n) => n !== "");
-    if (names.length > 0) return t("core-logic.activity.tools", { names: names.join(t("core-logic.history.did.sep")) });
+  if (name === "station_list") {
+    return typeof a.station === "string" && a.station ? `查看 station ${a.station}` : "查看 station 列表";
   }
+  if (name === "skill_read") {
+    const skill = typeof a.name === "string" ? a.name : "";
+    const file = typeof a.file === "string" && a.file ? ` (${a.file})` : "";
+    return skill ? `读取技能 ${skill}${file}` : "读取技能";
+  }
+  if (name === "chat_post") {
+    if (typeof a.title === "string" && a.title && typeof a.text !== "string") return `设置对话标题「${a.title}」`;
+    if (typeof a.withdraw === "string" && a.withdraw) return "撤回选项卡片";
+    if (typeof a.send === "string" && a.send) return "发送暂存回复";
+    return null;
+  }
+  if (name === "chat_read" || name === "chat_history" || name === "session_history" || name === "session_send" || name === "chat_archive" || name === "chat_leave") {
+    const ref = shortChatRef(typeof a.chat === "string" ? a.chat : typeof a.to === "string" ? a.to : "");
+    if (name === "chat_history") return ref ? `读取对话历史 ${ref}` : "读取对话历史";
+    if (name === "chat_read") return ref ? `读取对话 ${ref}` : "读取对话";
+    if (name === "session_history") return ref ? `读取执行历史 ${ref}` : "读取执行历史";
+    if (name === "session_send") return ref ? `向 ${ref} 发送消息` : "向其他会话发送消息";
+    if (name === "chat_archive") return ref ? `归档对话 ${ref}` : "归档对话";
+    return ref ? `停止关注 ${ref}` : "停止关注对话";
+  }
+  if (name === "chat_list") {
+    return typeof a.query === "string" && a.query ? `查找对话「${firstLine(a.query)}」` : "查看对话列表";
+  }
+  if (name === "search") {
+    return typeof a.query === "string" && a.query ? `搜索工作区「${firstLine(a.query)}」` : "搜索工作区";
+  }
+  if (name === "job_start") {
+    const jname = typeof a.name === "string" && a.name ? firstLine(a.name) : typeof a.command === "string" ? commandLine(a.command) : "";
+    if (a.watch === true) return jname ? `启动监控任务 ${jname}` : "启动监控任务";
+    if (typeof a.port === "number") return jname ? `启动服务 ${jname} (:${a.port})` : `启动服务 (:${a.port})`;
+    return jname ? `启动后台任务 ${jname}` : "启动后台任务";
+  }
+  if (name === "job_list") return "查看后台任务列表";
+  if (name === "job_log") return typeof a.id === "string" && a.id ? `查看后台任务日志 ${a.id}` : "查看后台任务日志";
+  if (name === "job_stop") return typeof a.id === "string" && a.id ? `停止后台任务 ${a.id}` : "停止后台任务";
+  if (name === "screen") {
+    if (a.action === "take_control") return "接管屏幕控制";
+    return typeof a.id === "string" && a.id ? `查看屏幕 ${a.id}` : "查看屏幕列表";
+  }
+  if (name === "browser") {
+    return typeof a.action === "string" && a.action !== "endpoint" ? `浏览器 ${a.action}` : "启动会话浏览器";
+  }
+  if (name === "secret_list") return "查看密钥列表";
+  if (name === "secret_describe") return typeof a.item === "string" && a.item ? `更新密钥说明 ${a.item}` : "更新密钥说明";
+  if (name === "secret_reask") return "重新请求密钥授权";
+  if (name === "phone_use") return a.done === true ? "归还手机调试权限" : "请求手机调试权限";
+  if (name === "phone_send") return typeof a.path === "string" && a.path ? `发送文件到手机 ${a.path.split("/").pop() ?? a.path}` : "发送文件到手机";
+  if (name === "adb_devices") return "查看已连接 Android 设备";
+  if (name === "device_list") return "查看工作区设备列表";
+  if (name === "permissions") return typeof a.request === "string" && a.request ? `请求系统权限 ${a.request}` : "查看系统权限";
+  if (name === "relays") {
+    if (a.action === "add" || a.action === "remove") return `${a.action === "add" ? "添加" : "移除"}中继 ${typeof a.url === "string" ? a.url : ""}`.trim();
+    return "查看中继列表";
+  }
+  if (name === "workspace_limit") return typeof a.limit_gib === "number" ? `设置工作区空间上限 ${a.limit_gib} GiB` : "查看工作区空间上限";
+  if (name === "feishu_api") return typeof a.method === "string" && a.method ? `飞书 API ${a.method}` : "调用飞书 API";
+  if (name === "station_tool") {
+    const sub = typeof a.name === "string" ? a.name : "";
+    return a.arguments ? `调用 ${sub}`.trim() : `查看工具说明 ${sub}`.trim();
+  }
+  if (name === "ToolSearch" || name === "search_tool") {
+    if (typeof a.query === "string" && a.query.startsWith("select:")) {
+      const names = a.query.slice("select:".length).split(",").map((n) => toolName(n.trim())).filter((n) => n !== "");
+      if (names.length > 0) return t("core-logic.activity.tools", { names: names.join(t("core-logic.history.did.sep")) });
+    }
+    return typeof a.query === "string" && a.query ? `查找工具「${firstLine(a.query)}」` : "查找工具";
+  }
+  if (name === "mcp_list_tools") return "查看可用 MCP 工具";
+  if (name === "manage_task") {
+    const act = typeof a.Action === "string" ? a.Action : typeof a.action === "string" ? a.action : "";
+    const rawId = typeof a.TaskId === "string" ? (a.TaskId.split("/").pop() ?? a.TaskId) : "";
+    const tid = rawId ? ` ${rawId}` : "";
+    if (act === "list") return "查看后台命令列表";
+    if (act === "status") return `查看后台命令状态${tid}`;
+    if (act === "kill") return `停止后台命令${tid}`;
+    if (act === "send_input") return `向后台命令发送输入${tid}`;
+  }
+  if (name === "sleep") return typeof a.seconds === "number" ? `等待 ${a.seconds} 秒` : "等待";
+  if (name === "get_output") return typeof a.job_id === "string" && a.job_id ? `读取任务输出 ${a.job_id}` : "读取任务输出";
   return null;
 }
 
-/// What a call does, in a few words: its own description, else what still.fail's own tools say of it (told), else its
+/// What a call does, in a few words: what still.fail's own tools say of it (told), else its own description, else its
 /// verb and what it works on. The chat's activity says a running call so, and an execution history names a group of
 /// calls by its latest the same way.
 export function doing(tool: string, input: string, known: Known = {}): string {
+  const own = told(tool, input, known);
+  if (own) return own;
   const a = args(input) ?? {};
   const desc = typeof a.description === "string" ? a.description : typeof a.toolSummary === "string" ? a.toolSummary : "";
   const said = firstLine(desc);
   if (said) return said;
-  const own = told(tool, input, known);
-  if (own) return own;
   const kind = kindOf(tool, a);
+  const keys =
+    kind === "search"
+      ? ["pattern", "Pattern", "query", "Query", "queries", "path", "Path", "target_directory", "DirectoryPath", "SearchDirectory", "SearchPath", "file_path", "url"]
+      : ["command", "cmd", "CommandLine", "file_path", "target_file", "path", "Path", "target_directory", "DirectoryPath", "pattern", "Pattern", "url", "query", "Query", "queries", "prompt", "Prompt"];
   let target = "";
-  for (const name of ["command", "cmd", "CommandLine", "file_path", "path", "Path", "pattern", "Pattern", "url", "query", "Query", "queries", "prompt", "Prompt"]) {
+  for (const name of keys) {
     const v = a[name];
     const s = typeof v === "string" ? v : Array.isArray(v) ? v.filter((p): p is string => typeof p === "string").join(" ") : null;
     if (s === null) continue;
-    const raw = name === "command" || name === "cmd" || name === "CommandLine" ? cleanCommand(s) : name === "file_path" || name === "path" || name === "Path" ? cleanPath(s) : s;
+    const isCmd = name === "command" || name === "cmd" || name === "CommandLine";
+    const isPath = name === "file_path" || name === "target_file" || name === "path" || name === "Path" || name === "target_directory" || name === "DirectoryPath" || name === "SearchDirectory" || name === "SearchPath";
+    const raw = isCmd ? summaryCommand(s) : isPath ? cleanPath(s) : s;
     const line = firstLine(raw);
     target = kind === "read" || kind === "edit" ? (line.split("/").pop() ?? line) : line;
     break;
@@ -242,7 +368,7 @@ export function doing(tool: string, input: string, known: Known = {}): string {
     const p = cleanPath(tool.slice(5).trim());
     target = p.split("/").pop() ?? p;
   } else if (!target && kind === "command" && !["Bash", "bash", "run_command", "run_terminal_command", "exec", "exec_command", "shell", "local_shell"].includes(toolName(tool))) {
-    target = firstLine(cleanCommand(toolName(tool)));
+    target = firstLine(summaryCommand(toolName(tool)));
   }
   return `${kind === "other" ? toolName(tool) : verb(kind)} ${target}`.trim();
 }
