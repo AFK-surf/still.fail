@@ -13,11 +13,12 @@
 
 ///|
 /// What a page's list (View::scrolls_window) has in sight, counted by its keys' blocks (its head and its foot never
-/// the first or the last): `first` the first key that shows and `into` how far the top of what shows is down its
-/// block's top (less than 0 where its head shows over it: as much as the head shows, a table of contents telling that
-/// from its first key at the top), `last` the last that shows, `whole` the last wholly in what shows (over the foot's
-/// top, where it has one; none where none is), `from_foot` how far it is scrolled from its foot, `shows` how tall what
-/// shows is, `at_foot` whether it is at its foot.
+/// the first or the last): `first` the first key that shows under what covers its top (Scroll::top_covered: the bar it
+/// runs under; none, its own top) and `into` how far that edge is down its block's top (less than 0 where its head
+/// shows under it: as much as the head shows, a table of contents telling that from its first key at the top), `last`
+/// the last that shows, `whole` the last wholly in what shows (its top no higher than the edge under what covers its
+/// top, its foot over the foot's top, where it has them; none where none is), `from_foot` how far it is scrolled from
+/// its foot, `shows` how tall what shows is, `at_foot` whether it is at its foot.
 #derive(Eq, Debug)
 pub(all) struct Sight[K] {
   first : K
@@ -82,14 +83,18 @@ fn[K] sight_counted(all : Places[K], s : Scroll, t : Double, foot : Double, room
   }
   let x = dclamp(x, 0.0, most)
   let below = x + vh
-  let i = all.first_past(x).min(n - 1)
+  // (the first with something showing under what covers its top (Scroll::top_covered: the bar it runs under), how far
+  // down it that edge is)
+  let under = x + s.top_covered()
+  let i = all.first_past(under).min(n - 1)
   let j = (all.first_past(below - 1.0e-6).min(n - 1)).max(i)
-  // (wholly in what shows: its foot no lower than the foot's top, its top no higher than the top of what shows)
+  // (wholly in what shows: its foot no lower than the foot's top, its top no higher than the edge under what covers its
+  // top)
   let k = all.first_past(below - foot + 1.0e-6) - 1
-  let whole = if k >= 0 && k >= i && all.top(k) >= x - 1.0e-6 { Some(all.key(k)) } else { None }
+  let whole = if k >= 0 && k >= i && all.top(k) >= under - 1.0e-6 { Some(all.key(k)) } else { None }
   Some({
     first: all.key(i),
-    into: x - all.top(i),
+    into: under - all.top(i),
     last: all.key(j),
     whole,
     from_foot: most - x,

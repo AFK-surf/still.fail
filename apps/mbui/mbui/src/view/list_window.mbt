@@ -2123,7 +2123,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       }
       if centring {
-        aoff = counted(laid.untracked()).h(ai) / 2.0 - vh / 2.0
+        // (its middle at the middle of what shows between what covers its top and its pinned foot's top)
+        let (cover, under) = @signals.untracked(fn() { (s.top_covered(), s.foot_covered_now()) })
+        aoff = counted(laid.untracked()).h(ai) / 2.0 - (cover + vh - under) / 2.0
       }
       let most = dmax(0.0, whole_now() - vh)
       top = if follows_foot || to_end { most } else { dclamp(all.top(ai) + aoff, 0.0, most) }
@@ -3019,8 +3021,8 @@ pub fn[K] ListPlace::bring(self : ListPlace[K], key : K, offset? : Double = 0.0,
 }
 
 ///|
-/// Block `key` brought to the middle of where the list shows, its middle there as tall as it is counted then (an entry
-/// gone to).
+/// Block `key` brought to the middle of where the list shows, between what covers its top (Scroll::top_covered) and its
+/// pinned foot's top, its middle there as tall as it is counted then (an entry gone to).
 pub fn[K] ListPlace::centre(self : ListPlace[K], key : K) -> Unit {
   self.from = None
   self.asked = Some(Centre(key))
