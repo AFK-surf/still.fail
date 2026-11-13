@@ -598,7 +598,7 @@ jobs:
       # (failing where a bar is to fall or a file to leave the list, once every run it was given went through: one cut
       # short found less than there is, and a bar it set beside that would be said to fall for nothing)
       - env:
-          STRICT: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && '' || '1' }}
+          STRICT: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && '0' || '1' }}
           NAME: "the app's bars"
         run: |
           # (the app's jobs' alone: mbui's own, motion-mbui-*, are mbui-ci's)
