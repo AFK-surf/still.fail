@@ -48,7 +48,7 @@ pub fn history_steps_node(v : @view.View, src : Source, station : String, key : 
   let lkey = "history-steps/" + station + "/" + key
   let head = fn() { steps_head_of(src, params, lkey) }
   steps_fills(v)
-  v.pick(fn() { steps_state(head()) }, fn(p, state) {
+  v.pick(at_once=true, fn() { steps_state(head()) }, fn(p, state) {
     steps_fills(p)
     match state {
       0 =>
@@ -208,12 +208,12 @@ fn steps_list_node(
         at_once=true,
         near_top=(0.5, wants_older, ask_older),
         fn(slot, k) {
-          slot.pick(fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {
+          slot.pick(at_once=true, fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {
             guard picked.row is Some(row) else { return }
             steps_box_node(p, if row is Edge { steps_row_first } else { steps_row }, fn(r) {
               match row {
                 Edge =>
-                  r.pick(fn() { steps_head_of(src, params, lkey).more }, fn(e, more) {
+                  r.pick(at_once=true, fn() { steps_head_of(src, params, lkey).more }, fn(e, more) {
                     if more {
                       steps_box_node(e, steps_edge_wait, fn(w) {
                         @sf.wait_line_node(w, fn() { steps_head_of(src, params, lkey).edge }) |> ignore

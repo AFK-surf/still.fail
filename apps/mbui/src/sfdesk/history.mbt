@@ -61,7 +61,7 @@ fn history_head_node(v : @view.View, src : Source, r : ChatRef, key : String, ti
         @sf.style_node(id, fn() { wh_identity }, in_row=true)
         id.min_width(Is(Some(0.0))) |> ignore
         @sfpages.model_triple_node(id, src, station, "session:" + key, saved=@sf.t("web-pages.chat.pickSaved"))
-        id.show(fn() { items(a(), "attention").length() > 0 }, fn(s) { wh_summary_node(s, a, tips) })
+        id.show(at_once=true, fn() { items(a(), "attention").length() > 0 }, fn(s) { wh_summary_node(s, a, tips) })
       })
       |> ignore
       h.box(fn(k) {
@@ -139,7 +139,7 @@ fn wh_details_node(
   v.box(fn(d) {
     @sf.style_node(d, fn() { wh_details_box })
     let tiles = fn() { text(card(), "cost") != "" || field(card(), "cache") is Some(_) || field(card(), "context") is Some(_) }
-    d.pick(fn() { compacts() || clears() }, fn(t, opens) {
+    d.pick(at_once=true, fn() { compacts() || clears() }, fn(t, opens) {
       if opens {
         @sfpages.usage_tiles_node(t, card, tips, context=manage, busy~, compacts~)
       } else {
@@ -155,7 +155,7 @@ fn wh_details_node(
     }
     // (and after it what it has going in the background and its checklist, a mark that opens them: the first to
     // give way, the line's own words whole till then)
-    d.show(fn() { quiet() != "" }, fn(q) {
+    d.show(at_once=true, fn() { quiet() != "" }, fn(q) {
       @sf.style_node(q, fn() { wh_quiet_line })
       q.fits(Is(true)) |> ignore
       @sf.words_node(q, quiet, fn() { wh_quiet_one }).shrink(Is(1.0)).min_width(Is(Some(0.0))).fit_whole(Is(true)) |> ignore
@@ -180,20 +180,20 @@ fn wh_details_node(
       },
     )
     // process state and evict action on their own single line aligned under the runtime name (never wrapped beside centered icons)
-    d.show(fn() { text(s(), "processText") != "" || text(s(), "process") == "warm" }, fn(p) {
+    d.show(at_once=true, fn() { text(s(), "processText") != "" || text(s(), "process") == "warm" }, fn(p) {
       wh_line_node(
         p,
         fn(_) {  },
         fn(w) {
-          w.show(fn() { text(s(), "processText") != "" }, fn(t) {
+          w.show(at_once=true, fn() { text(s(), "processText") != "" }, fn(t) {
             @sf.words_node(t, fn() { text(s(), "processText") }, fn() { wh_words })
             .shrink(Is(1.0))
             .min_width(Is(Some(0.0)))
             |> ignore
           })
-          w.show(fn() { text(s(), "process") == "warm" }, fn(e) {
+          w.show(at_once=true, fn() { text(s(), "process") == "warm" }, fn(e) {
             e.row(Is(true)).lines_up(Is(Some(Middle))).shrink(Is(0.0)) |> ignore
-            e.show(fn() { text(s(), "processText") != "" }, fn(sep) {
+            e.show(at_once=true, fn() { text(s(), "processText") != "" }, fn(sep) {
               @sf.words_node(sep, fn() { " · " }, fn() { wh_words }) |> ignore
             })
             wh_evict_node(e, src, station, key, tips)
@@ -209,7 +209,7 @@ fn wh_details_node(
     wh_line_node(
       d,
       fn(m) {
-        m.pick(fn() { look().map(fn(st) { (st.emoji, st.icon) }) }, fn(x, mark) {
+        m.pick(at_once=true, fn() { look().map(fn(st) { (st.emoji, st.icon) }) }, fn(x, mark) {
           match mark {
             Some((emoji, icon)) if emoji != "" || icon != "" =>
               @sf.station_mark_node(x, fn() { emoji }, fn() { icon }, wh_mark_side, fn() { @sf.theme().p.muted }, fn() { 0 })
@@ -246,11 +246,11 @@ fn wh_details_node(
       },
       fn(e) {
         let low = fn() { items(host(), "meters").filter(fn(m) { text(Some(m), "level") != "ok" }) }
-        e.show(fn() { low().length() > 0 }, fn(x) { @sf.meter_chips_node(x, low, tips~) })
+        e.show(at_once=true, fn() { low().length() > 0 }, fn(x) { @sf.meter_chips_node(x, low, tips~) })
       },
     )
     // its context, by hand (ContextLine)
-    d.show(fn() { compacts() || clears() }, fn(c) {
+    d.show(at_once=true, fn() { compacts() || clears() }, fn(c) {
       wh_line_node(
         c,
         fn(m) { @sf.icon_node(m, "shrink", wh_mark_side, By(fn() { @sf.theme().p.muted })) |> ignore },
@@ -321,7 +321,7 @@ fn wh_transcript_node(v : @view.View, src : Source, station : String, key : Stri
       p
     }
   }
-  v.show(fn() { path.get() != "" }, fn(o) {
+  v.show(at_once=true, fn() { path.get() != "" }, fn(o) {
     let name = fn() {
       let whole = path.get()
       let cut = match whole.rev_find("/") {

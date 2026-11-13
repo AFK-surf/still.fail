@@ -44,7 +44,7 @@ fn history_node(
     top=fn() { frame().top },
     trailing=fn(e) {
       e.gap(By(fn() { @sf.keys_apart(size=34.0, least=4.0) })) |> ignore
-      e.show(fn() { agent() is Some(_) && history_tab.get() == 0 }, fn(f) {
+      e.show(at_once=true, fn() { agent() is Some(_) && history_tab.get() == 0 }, fn(f) {
         let on = fn() { @sfpages.history_only_io() }
         @sf.round_key_node(
           f,
@@ -55,7 +55,7 @@ fn history_node(
           ink=fn() { if on() { @sf.theme().p.accent } else { @sf.theme().p.text } },
         )
       })
-      e.show(fn() { title() != "" && link() != "" }, fn(k) {
+      e.show(at_once=true, fn() { title() != "" && link() != "" }, fn(k) {
         @sf.round_key_node(k, "copy", fn() { tr("web-mobile.history.copyLink") }, fn() {
           copy_chat_link(@signals.untracked(title), @signals.untracked(link))
         }, icon_size=18.0)
@@ -63,7 +63,7 @@ fn history_node(
     },
   )
   // its head, once the chat says what the agent is
-  v.show(fn() { agent() is Some(_) }, fn(h) { history_head_node(h, src, r, agent) })
+  v.show(at_once=true, fn() { agent() is Some(_) }, fn(h) { history_head_node(h, src, r, agent) })
   // the agent's history followed from then on as long as the page is, whichever tab reads it (each made as its tab is
   // shown): not let go and asked again as the tabs change
   let held : Ref[@sfbase.TopicLease?] = Ref(None)
@@ -76,7 +76,7 @@ fn history_node(
   // all the room left, scrolling in it; while the chat does not say what the agent is yet, its rows in their bones
   // (what could not be read over them in red)
   let tips = @sf.TipLayer::new(fn() { Some(v) })
-  v.show(fn() { agent() is None }, fn(w) {
+  v.show(at_once=true, fn() { agent() is None }, fn(w) {
     w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     @sf.waiting_node(w, fn(s) { @sfpages.steps_sample_node(s, r.station, key, tips) }, error=fn() {
       match chat().error {
@@ -85,7 +85,7 @@ fn history_node(
       }
     }, fill=true)
   })
-  v.show(fn() { agent() is Some(_) }, fn(h) { history_summary_node(h, agent, tips) })
+  v.show(at_once=true, fn() { agent() is Some(_) }, fn(h) { history_summary_node(h, agent, tips) })
   // kept per tab so switching 步骤 <-> 详情 preserves the steps scroll position
   v.box(fn(tabs) {
     tabs.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
@@ -166,11 +166,11 @@ fn history_actions_node(v : @view.View, src : Source, r : ChatRef, agent : () ->
     status == "running" || status == "queued"
   }
   let has_evict = fn() { text(s(), "process") == "warm" }
-  v.show(fn() { has_stop() || has_evict() }, fn(row) {
+  v.show(at_once=true, fn() { has_stop() || has_evict() }, fn(row) {
     @sf.style_node(row, fn() { @sf.keys_row(size=28.0) })
     row.shrink(Is(0.0)) |> ignore
     let one = fn(when : () -> Bool, icon : String, done : String, call : String) {
-      row.show(when, fn(o) {
+      row.show(at_once=true, when, fn(o) {
         let dkey = fn() { call + "/" + r.station + "/" + key() }
         @sf.disc_key_node(
           o,
@@ -184,7 +184,7 @@ fn history_actions_node(v : @view.View, src : Source, r : ChatRef, agent : () ->
           side=28.0,
           ground=fn() { @sf.theme().p.chip },
           fn(k) {
-            k.pick(fn() { doing(dkey()) }, fn(i, busy) {
+            k.pick(at_once=true, fn() { doing(dkey()) }, fn(i, busy) {
               if busy {
                 @sf.spinner_node(i, size=12.0) |> ignore
               } else {
@@ -222,7 +222,7 @@ fn model_mark_big_node(
     .lines_up(Is(Some(Middle)))
     .lies_along(Is(Middle))
     |> ignore
-    m.pick(fn() { (maker(), runtime()) }, fn(i, mr) {
+    m.pick(at_once=true, fn() { (maker(), runtime()) }, fn(i, mr) {
       @sf.maker_mark_node(i, mr.0, mr.1, size * (if xs { 0.6 } else { 0.56 })) |> ignore
     })
     let b = if xs { 11.0 } else { 15.0 }
@@ -230,7 +230,7 @@ fn model_mark_big_node(
     let inner = b - ring * 2.0
     m.box(fn(o) {
       o.over(Is(true)) |> ignore
-      o.show(fn() { state() != "" }, fn(g) {
+      o.show(at_once=true, fn() { state() != "" }, fn(g) {
         g
         .width(Is(Some(b)))
         .height(Is(Some(b)))

@@ -129,7 +129,8 @@ fn side_narrower(src : Source, n : @view.View, serial : Int) -> @sfbase.ColumnLa
     return { by: 0.0, across: 0.0, laid: pane }
   }
   if t == @double.infinity || !way.goes_at(t) {
-    return { by: 0.0, across: 0.0, laid: pane - way.target() }
+    let open = side_now(src, r).0.length() > 0
+    return { by: 0.0, across: 0.0, laid: pane - (if open { side_whole(src, n) } else { 0.0 }) }
   }
   let ends = (way.value_at(way.starts_at()), way.target())
   laid_across(pane - way.value_at(t), pane - dmax(ends.0, ends.1), pane - dmin(ends.0, ends.1))
@@ -158,7 +159,7 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
       _ => None
     }
   }
-  v.pick(fn() { chat().map(chat_key) }, fn(col, key) {
+  v.pick(at_once=true, fn() { chat().map(chat_key) }, fn(col, key) {
     guard key is Some(key) && @signals.untracked(chat) is Some(r) else {
       col.width(Is(Some(0.0))) |> ignore
       return
@@ -179,7 +180,7 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
     .clips(By(fn() { !over() && at() < side_whole(src, col) }))
     .offset(By(fn() { (pane_aside_at(src, col), 0.0) }))
     |> ignore
-    col.show(fn() { side_shown(src, r).0.length() > 0 }, fn(p) {
+    col.show(at_once=true, fn() { side_shown(src, r).0.length() > 0 }, fn(p) {
       p
       .grow(Is(1.0))
       .min_height(Is(Some(0.0)))
@@ -198,7 +199,7 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
       let island = fn(n : @view.View, build : (@ui.Ctx) -> Unit, natural : Bool) {
         app.nav.page_island(n, serial, fn(c, _page) { build(c) }, key=tape_island_key, natural~)
       }
-      p.pick(fn() { history_in_front(src, r) }, fn(q, agent) {
+      p.pick(at_once=true, fn() { history_in_front(src, r) }, fn(q, agent) {
         q.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
         if agent == "" {
           // (every other tab: the panel's old view, all of it)
@@ -226,7 +227,7 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
       })
     })
     // its edge, beside the page only
-    col.show(fn() { !over() && open() }, fn(e) { side_edge_node(e, src, r, tips) })
+    col.show(at_once=true, fn() { !over() && open() }, fn(e) { side_edge_node(e, src, r, tips) })
   })
 }
 
