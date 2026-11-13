@@ -2678,6 +2678,8 @@ export const SHAPES: Record<string, Shape> = {
     ["presetName", "String", { default: true, said: true, doc: "Its name, as the station's presets say it (\"\" until they are read)." }],
     ["presets", vec("NewChatPreset"), { default: true, doc: "The workspace's presets, every station's up now, to pick from (a station's none until they are read)." }],
     ["presetMarks", vec("PresetMark"), { default: true, doc: "The picked preset's first folders' marks, its control's look." }],
+    ["presetModel", "bool", { default: true, doc: "The picked preset names the model its chats run (choose.ts `presetBinds`): `pick` is the preset's, and the\nmodel control shows it and does not open (to run another is to edit the preset or pick none)." }],
+    ["presetStations", "bool", { default: true, doc: "The picked preset names the stations its chats start on: `stations` are those alone." }],
   ], { doc: "A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs\nthere, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has.\nHow hard it thinks, how fast, the account kept to and who could run it are its control's (`pick`, as it draws them\nclosed): the core's own value (choose.ts `newChat`) has them too (`effort`, `fast`, `profile`, `efforts`, `accounts`,\n`pickAccount`), and the combinations used most here (`frequent`)." }),
   NewChatPick: struct([
     ["value", "Picked", { doc: "What a new chat runs on there now, as `pick`'s `value`." }],

@@ -64,6 +64,8 @@
   "core-logic.choose.error.no_stations_yet": "Stations not loaded yet",
   "core-logic.choose.error.no_such": "No such choice: {of}",
   "core-logic.choose.error.none_online": "No station is online",
+  "core-logic.choose.error.preset_model": "The model is set by the preset “{name}”; to use another, edit the preset or pick “No preset”",
+  "core-logic.choose.error.preset_station": "The preset “{name}” opens chats only on the stations it names; switch to one of them (wait for it if it is offline), or edit the preset or pick “No preset”",
   "core-logic.choose.error.station_account_subsets": "Update this station before selecting multiple accounts",
   "core-logic.choose.force.dropped": "Account “{account}” can't run {model}; switched to auto",
   "core-logic.choose.force.moves_off": "Account “{account}” can't run {model}; will switch to one that can",

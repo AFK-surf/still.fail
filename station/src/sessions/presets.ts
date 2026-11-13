@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { protectedPlace } from "../drive/fs.ts";
 import { SKILL_HOMES } from "./agent-home.ts";
+import { type Lang, tr } from "../ops/i18n.ts";
 
 /// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
 /// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
@@ -52,7 +53,30 @@ export type Preset = {
 
 /// What a chat was opened with: the preset as it was then, each folder's `elsewhere` said where it is not the chat's
 /// station's.
-export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string; model?: PresetModel };
+export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string; model?: PresetModel; stations?: string[] };
+
+/// What a preset binds its chats to, as the page shows it unchangeable (the user, 2026-11-13: 「锁住，绑定了的不能改」):
+/// the model it names (and its runtime, where it names one), and the stations (ids or addresses) they may be opened
+/// on. Where a chat asked for differs, why it is not opened, said with the way to have it (edit the preset, or open it
+/// with none); null: it may be. How it runs that model (effort, accounts, Fast) only the app holds to: a level or an
+/// account no longer offered here would otherwise make the preset open nothing. `here`: this station's id (null: none
+/// known, the stations not held to).
+export function presetRefusal(
+  p: { name: string; model?: PresetModel; station?: string; stations?: string[] },
+  here: string | null,
+  asked: { runtime: string; model: string | null },
+  lang: Lang,
+): string | null {
+  const m = p.model;
+  if (m !== undefined && (asked.model !== m.model || (m.runtime !== undefined && m.runtime !== asked.runtime))) {
+    return tr(lang, "station.presets.modelBound", { preset: p.name, model: m.model });
+  }
+  const named = p.station !== undefined ? [p.station] : (p.stations ?? []);
+  if (here !== null && named.length > 0 && !named.some((s) => s === here || s.endsWith(`/${here}`))) {
+    return tr(lang, "station.presets.stationBound", { preset: p.name });
+  }
+  return null;
+}
 
 const FILE = "presets.json";
 const COPY = ".stillfail-preset.json";
@@ -379,7 +403,17 @@ export function presetCopyInput(v: unknown): PresetCopy {
   if (name === "" || Array.from(name).length > NAME_MAX) throw new Error("presetCopy: a preset needs a name");
   const dirs = dirsOf(o.dirs).slice(0, DIRS_MAX);
   const instructions = (str(o.instructions) ?? "").slice(0, INSTRUCTIONS_MAX);
-  return { id: str(o.id) ?? "", name, dirs: dirs.map(({ station: _s, stationName: _n, guides: _g, skills: _k, ...d }) => d), instructions };
+  const model = modelOf(o.model);
+  const st = stationsOf({ stations: o.stations });
+  const stations = st.station !== undefined ? [st.station] : st.stations;
+  return {
+    id: str(o.id) ?? "",
+    name,
+    dirs: dirs.map(({ station: _s, stationName: _n, guides: _g, skills: _k, ...d }) => d),
+    instructions,
+    ...(model ? { model } : {}),
+    ...(stations ? { stations } : {}),
+  };
 }
 
 /// What a chat whose session workspace is `workspace` was opened with, if anything.

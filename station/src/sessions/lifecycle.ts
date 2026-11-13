@@ -2,7 +2,7 @@
 // add_to_thread, say, bind_single, configure, archive, archive_chat, auto_archive, delete_session,
 // continue_machine_session). Archiving here is the record (archived, hidden) and what goes with it (the process ends,
 // other stations are told); packing an archived session's files is the hub's ColdStorage.
-import { type PresetCopy, keepCopy } from "./presets.ts";
+import { type PresetCopy, keepCopy, presetRefusal } from "./presets.ts";
 import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { rm } from "node:fs/promises";
@@ -160,6 +160,11 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const profiles = all.filter((p) => here.has(p.id));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
   const model = trimmed(options.model);
+  // (what its preset binds it to, held here too: an app from before or another way in changes none of it)
+  const preset = trimmed(options.preset);
+  const bound = options.presetCopy ?? (preset !== null ? hub.presets.get(options.ws ?? hub.workspaces()[0] ?? null, preset) : null);
+  const refused = bound === null ? null : presetRefusal(bound, hub.station(), { runtime, model }, lang);
+  if (refused !== null) throw new Error(refused);
   let profile;
   if (wantedProfiles !== null) {
     const subset = [];
@@ -183,7 +188,6 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const workspace = chatWorkspace(config.dataDir, key);
   mkdirSync(workspace, { recursive: true });
   // (before its rows: one that names no preset of its workspace makes no chat)
-  const preset = trimmed(options.preset);
   if (options.presetCopy) keepCopy(workspace, options.presetCopy);
   else if (preset !== null) hub.presets.keepFor(workspace, options.ws ?? hub.workspaces()[0] ?? null, preset);
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });

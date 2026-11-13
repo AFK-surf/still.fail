@@ -406,7 +406,8 @@ fn new_controls(
       open_triple(address, "new")
     }
     // (its face, as the page has it: its panel asked as the hand comes to it, opened whole once answered)
-    model_triple(c, src, address, "new", face=p, small=true, floating~)
+    // (a preset that names its model: shown as the preset's, not opened; changed by editing the preset or picking none)
+    model_triple(c, src, address, "new", face=p, small=true, floating~, bound=flag(v, "presetModel"))
   }
 }
 
@@ -424,6 +425,8 @@ fn new_station_control(
 ) -> Unit {
   let t = @sf.theme()
   let from = c.id("new/station")
+  // (a preset that names the stations: only those offered, none to pick where it names the one it is on)
+  let fixed = flag(v, "presetStations") && items(v, "stations").length() <= 1
   let open = fn() {
     @sf.panel_nodes(@sf.t("android-chat.new.station.pick"), fn(n, close) { station_rows_node(n, src, w, v, close) }, from=Of(from))
   }
@@ -441,16 +444,18 @@ fn new_station_control(
         c.text(text(station, "name"), style=new_capsule_words) |> ignore
       })
       |> ignore
-      @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
+      if !fixed {
+        @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
+      }
     },
     on_press=fn() {
-      if !going {
+      if !going && !fixed {
         open()
       }
     },
   )
   // (asked from elsewhere: opened as it is seen)
-  if !c.in_bones() && take_asked("station") {
+  if !c.in_bones() && !fixed && take_asked("station") {
     open()
   }
 }

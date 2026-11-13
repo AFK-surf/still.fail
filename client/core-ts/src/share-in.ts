@@ -183,7 +183,9 @@ export class ShareIn implements Owner {
     let row: J | undefined;
     let key: string;
     if (target.id === undefined) {
-      this.#inner.choose.pickNew(scope, { station: target.station.slice(target.station.lastIndexOf("/") + 1) });
+      // (a station the preset picked does not name: the chat is opened there with none)
+      const id = target.station.slice(target.station.lastIndexOf("/") + 1);
+      this.#inner.choose.pickNew(scope, { station: id, ...(this.#inner.choose.allows(scope, id) ? {} : { preset: "", presetStation: "" }) });
       key = newKey ?? `new:${scope}`;
     } else {
       row = (this.#rows(scope) ?? []).find((r) => r.station === target.station && r.id === target.id);

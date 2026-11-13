@@ -37,6 +37,9 @@ pub(all) struct NewFix {
   presets : Array[Json]
   /// The first station's presets not said yet (their topic as a station still to answer has it)
   mut presets_late : Bool
+  /// MBUI_FIXTURE=newchat-preset-bound: the preset picked names its model and the station it is on (the core's
+  /// `presetModel`, `presetStations`: those alone offered)
+  mut bound : Bool
   /// The first station's repositories being cloned (the `presets` topic's `clones`), and those cloned since, among its
   /// folders (`candidates`)
   clones : Array[Json]
@@ -69,6 +72,7 @@ pub let new_fix : NewFix = {
   unmarked: false,
   preset: "",
   presets_late: false,
+  bound: false,
   clones: [],
   cloned: [],
   presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
@@ -829,7 +833,13 @@ fn fix_new_chat_of(f : Fixture) -> Json {
   }
   {
     "kept": Json::string(n.station),
-    "stations": [lend(fix_station("st1")), lend(fix_station("st2"))],
+    "stations": if n.preset != "" && n.bound {
+      [lend(fix_station(n.station))]
+    } else {
+      [lend(fix_station("st1")), lend(fix_station("st2"))]
+    },
+    "presetModel": Json::boolean(n.preset != "" && n.bound),
+    "presetStations": Json::boolean(n.preset != "" && n.bound),
     "any": true,
     "station": lend(fix_station(n.station)),
     "model": fix_model(n.model),

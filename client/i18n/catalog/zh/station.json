@@ -526,6 +526,8 @@
   "station.drive.permission": "station 无权执行此操作",
   "station.presets.clone.invalid": "不是能克隆的 Git 地址",
   "station.presets.clone.readOnly": "只读成员不能往这台 station 克隆仓库",
+  "station.presets.modelBound": "预设「{preset}」指定用 {model}，对话只能用它开；要换模型，请编辑这个预设，或选「不用预设」",
+  "station.presets.stationBound": "预设「{preset}」不在这台 station 上开对话；请换到它指定的 station，或编辑预设、选「不用预设」",
   "station.drive.manage": "只读成员无法固定文件夹",
   "station.drive.is_a_directory": "这是一个文件夹",
   "station.drive.not_a_directory": "此项不是文件夹",

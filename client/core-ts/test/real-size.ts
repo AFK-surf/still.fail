@@ -1286,8 +1286,8 @@ function presetsOf(now: number, station: number): J {
   return {
     presets: station === 0
       ? [
-        { id: "p-app", name: "still.fail App", dirs: [{ path: `/Users/${s.host}/src/app`, repo: "github.com/acme/app" }, { path: `/Users/${s.host}/src/design-system`, repo: "github.com/acme/design-system" }], instructions: "改 UI 前先在 Pixel 8 和 iPhone 16 上各录一段前后对比；提交前跑 `pnpm test` 和 `pnpm exec tsgo --noEmit`。", stations: ["maple", "willow"], model: { model: "claude-opus-5-5", runtime: "claude", effort: "high", profiles: ["claude-maple-0", "claude-maple-1"] }, createdBy: PEOPLE[0].email, createdAt: now - 20 * DAY, updatedAt: now - 2 * DAY },
-        { id: "p-infra", name: "Infra", dirs: [{ path: `/Users/${s.host}/src/infra`, repo: "github.com/acme/infra" }], instructions: "生产环境的改动先在 staging 跑一遍，改动前在 #infra 说一声。", createdBy: PEOPLE[1].email, createdAt: now - 41 * DAY, updatedAt: now - 9 * DAY },
+        { id: "p-app", name: "still.fail App", dirs: [{ path: `/Users/${s.host}/src/app`, repo: "github.com/acme/app" }, { path: `/Users/${s.host}/src/design-system`, repo: "github.com/acme/design-system" }], instructions: "改 UI 前先在 Pixel 8 和 iPhone 16 上各录一段前后对比；提交前跑 `pnpm test` 和 `pnpm exec tsgo --noEmit`。", createdBy: PEOPLE[0].email, createdAt: now - 20 * DAY, updatedAt: now - 2 * DAY },
+        { id: "p-infra", name: "Infra", dirs: [{ path: `/Users/${s.host}/src/infra`, repo: "github.com/acme/infra" }], instructions: "生产环境的改动先在 staging 跑一遍，改动前在 #infra 说一声。", stations: ["maple", "willow"], model: { model: "claude-opus-5-5", runtime: "claude", effort: "high", profiles: ["claude-maple-0", "claude-maple-1"] }, createdBy: PEOPLE[1].email, createdAt: now - 41 * DAY, updatedAt: now - 9 * DAY },
       ]
       : [],
     candidates: repos.map((r, i) => ({ path: `/Users/${s.host}/src/${r}`, name: r, repo: `github.com/acme/${r}`, chats: 40 - i * 6, lastAt: now - (i + 1) * 5 * HOUR, where: `~/src/${r}` })),

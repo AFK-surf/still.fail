@@ -29,6 +29,7 @@ pub fn fixture_reset() -> Unit {
   new_fix.unmarked = false
   new_fix.preset = ""
   new_fix.presets_late = false
+  new_fix.bound = false
   new_fix.clones.clear()
   new_fix.cloned.clear()
   new_fix.liked.clear()

@@ -127,6 +127,8 @@ export type HubOptions = {
   link?: (key: string) => string | undefined;
   /// The workspaces the station is in now, its home one first; none outside any.
   workspaces?: () => string[];
+  /// This station's id in its workspaces (null: none yet, outside any).
+  station?: () => string | null;
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
   /// Another session being taken up: the launcher hears the station gets on with it (ops/launcher.ts `taking`).
@@ -155,6 +157,7 @@ export class Hub {
   readonly drivers: Map<string, AgentDriver>;
   readonly link: (key: string) => string | undefined;
   readonly workspaces: () => string[];
+  readonly station: () => string | null;
   readonly cold: ColdStorage;
   readonly accounts: Accounts;
   readonly clock: Clock.Clock;
@@ -269,6 +272,7 @@ export class Hub {
     this.drivers = new Map(options.drivers.map((d) => [d.runtime(), d]));
     this.link = options.link ?? (() => undefined);
     this.workspaces = options.workspaces ?? (() => []);
+    this.station = options.station ?? (() => null);
     this.cold = options.cold ?? NOTHING_COLD;
     this.machineRoots = options.machineRoots ?? machineRoots;
     this.places = options.places ?? new Places();

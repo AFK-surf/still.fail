@@ -535,6 +535,8 @@
   "station.drive.permission": "The station isn't allowed to do that",
   "station.presets.clone.invalid": "Not a Git address that can be cloned",
   "station.presets.clone.readOnly": "A read-only member can't clone repositories onto this station",
+  "station.presets.modelBound": "The preset “{preset}” runs {model}, and its chats open only with it; to use another model, edit the preset or pick “No preset”",
+  "station.presets.stationBound": "The preset “{preset}” does not open chats on this station; switch to a station it names, or edit the preset or pick “No preset”",
   "station.drive.manage": "Read-only members can't pin folders",
   "station.drive.is_a_directory": "That is a folder",
   "station.drive.not_a_directory": "That isn't a folder",
