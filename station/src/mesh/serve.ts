@@ -224,9 +224,12 @@ export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, 
 /// Whether a device's connection is given `ws`'s bodies and logs: let in by its lock (while on); while its people's
 /// logs say it is off, the connection was let in by the control plane's word alone, so only where the list made of the
 /// bodies names that very device as the lock's admission would (its base key's proof of the endpoint, and an app's
-/// person's log as kept here). A connection that brought no proof (`lock` on its hello) is given none while off.
+/// person's log as kept here). A connection that brought no proof (`lock` on its hello) is given none while off. While
+/// the station waits for the root's log or its `open` (`waiting`) nobody is let in, and a connection let in before the
+/// chain moved, still open, is given none either.
 function givesDevice(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"]): boolean {
-  if (cloud.locked(ws) !== null) return true;
+  const locked = cloud.locked(ws);
+  if (locked !== null) return locked.waiting !== true;
   const li = cloud.list(ws);
   const s = li?.state;
   if (!s || li!.waiting === true || s.moved !== undefined || cloud.chain(ws)?.state?.moved === undefined) return false;

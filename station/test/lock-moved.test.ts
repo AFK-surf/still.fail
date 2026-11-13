@@ -166,6 +166,27 @@ test("without the root's log, or its open, nobody is let in, never by the folded
   assert.equal(inLock(c, bob, "admin", bob.viewer.device).viewer.role, "admin");
 });
 
+test("while it waits, a connection let in before is given no bodies and no logs; once on again, it is", () => {
+  clock = NOW;
+  const w = world();
+  const said = handover(w);
+  const c = station(w);
+  for (const l of [w.bob, w.carol]) bring(c, l);
+  // alice's log and every body of hers but the open: no open in force, so it waits
+  personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
+  c.takeBodies(null, [...w.alice.bodies.values()].filter((b) => b.kind !== "open"));
+  assert.equal(c.waiting(), true);
+  assert.ok(c.bodies(null).all().size > 0);
+  const v = as("alice", w.alice.app, "owner").viewer;
+  const part = (p: string) => (lockPartRoute(c, p, "GET", Buffer.alloc(0), v) as any)[1];
+  assert.deepEqual(part("bodies"), { bodies: [], lacking: [] }, "bodies to nobody while it waits");
+  assert.deepEqual(part("logs"), { chains: [] }, "logs to nobody while it waits");
+  c.takeBodies(null, [said.open.body]);
+  assert.equal(c.waiting(), false);
+  assert.equal(part("bodies").bodies.length, c.bodies(null).all().size);
+  assert.equal(part("logs").chains.length, 3);
+});
+
 test("the chain changing branch to one without moved makes the folded chain the state again, and back", () => {
   clock = NOW;
   const w = world();
