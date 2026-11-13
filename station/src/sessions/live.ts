@@ -82,7 +82,7 @@ const SAYING = [
   "Recipient",
   "Message",
 ];
-/// The output rate is told at most this often, over this window (bytes / 4 ≈ tokens).
+/// The output rate is told at most this often, over this window (tokens as `tokensOf` guesses them).
 const RATE_EVERY_MS = 1_000;
 const RATE_WINDOW_MS = 2_000;
 const RATE_FIRST_MS = 500;
@@ -117,7 +117,24 @@ export function briefInput(input: string): string {
   return JSON.stringify(kept);
 }
 
-type Rate = { buckets: [number, number][]; toldAt: number; told: number };
+/// What the model wrote in each quarter second of the window, by the step it wrote it in: a step that ends takes its
+/// own out, and steps written at once (subagents side by side) add up.
+type Rate = { buckets: { at: number; id: string; tokens: number }[]; toldAt: number; told: number };
+
+/**
+ * About how many tokens a piece of output is, without the model's tokenizer: about four characters of ASCII to a
+ * token, and about one and a half of anything else (Chinese, Japanese, Korean: a character is 3 bytes of UTF-8, so the
+ * bytes / 4 this was before put them at about one token per 1.3 characters of English).
+ */
+export function tokensOf(text: string): number {
+  let ascii = 0;
+  let other = 0;
+  for (const c of text) {
+    if (c.codePointAt(0)! < 0x80) ascii += 1;
+    else other += 1;
+  }
+  return ascii / 4 + other / 1.5;
+}
 /// `behind`: the transcript of the runtime session it runs in now is not written yet (a runtime writes it once its
 /// conversation has begun), so where its history goes on is looked for again on each read. `tail` null while where its
 /// transcripts stand is read off the main thread (`ready`).
@@ -359,8 +376,9 @@ export class LiveHub {
         this.emit(key, { type: "step", event });
         break;
       // What a step writes as it goes is not told: its words come with its transcript entry. How fast it writes is.
+      // Only what the model writes, its words and a call's input: a call's output (a command's, as it runs) is not.
       case "delta":
-        this.counted(key, Buffer.byteLength(event.text));
+        if (event.field !== "output") this.counted(key, event.id, tokensOf(event.text));
         break;
       case "start": {
         const input = briefInput(event.input ?? "");
@@ -391,10 +409,17 @@ export class LiveHub {
         if (kept.length === steps.length) return;
         this.steps.set(key, kept);
         this.emit(key, { type: "step", event });
-        // A step ended: the model is not writing (until its next output).
+        // A step ended: what it wrote no longer counts. Once no step's does, the model is not writing (until its next
+        // output); while another's still does (a subagent side by side), the rate goes on with theirs.
         const rate = this.rates.get(key);
-        this.rates.delete(key);
-        if (rate && rate.told > 0) this.emit(key, { type: "rate", tokensPerSecond: 0 });
+        if (rate) {
+          const now = this.time.now();
+          rate.buckets = rate.buckets.filter((b) => b.id !== event.id && b.at > now - RATE_WINDOW_MS);
+          if (rate.buckets.length === 0) {
+            this.rates.delete(key);
+            if (rate.told > 0) this.emit(key, { type: "rate", tokensPerSecond: 0 });
+          }
+        }
         this.soon(key);
         break;
       }
@@ -804,21 +829,22 @@ export class LiveHub {
 
   /// Output written: its rate is told once half a second of it has come (a first few bytes say nothing of the pace),
   /// then when a second has passed since it last was.
-  private counted(key: string, bytes: number) {
+  private counted(key: string, id: string, tokens: number) {
     const now = this.time.now();
     let rate = this.rates.get(key);
     if (!rate) this.rates.set(key, (rate = { buckets: [], toldAt: 0, told: 0 }));
-    const bucket = Math.floor(now / 250) * 250;
-    const last = rate.buckets.at(-1);
-    if (last && last[0] === bucket) last[1] += bytes;
-    else rate.buckets.push([bucket, bytes]);
-    rate.buckets = rate.buckets.filter(([at]) => at >= now - RATE_WINDOW_MS);
+    const at = Math.floor(now / 250) * 250;
+    const same = rate.buckets.find((b) => b.at === at && b.id === id);
+    if (same) same.tokens += tokens;
+    else rate.buckets.push({ at, id, tokens });
+    rate.buckets = rate.buckets.filter((b) => b.at > now - RATE_WINDOW_MS);
     if (now - rate.toldAt < RATE_EVERY_MS) return;
-    const first = rate.buckets[0]![0];
+    const first = Math.min(...rate.buckets.map((b) => b.at));
     if (rate.toldAt === 0 && now - first < RATE_FIRST_MS) return;
-    const span = Math.min(RATE_WINDOW_MS, Math.max(250, now - first));
-    const total = rate.buckets.reduce((sum, [, b]) => sum + b, 0);
-    const tokensPerSecond = Math.max(1, Math.round((total * 1000) / (4 * span)));
+    // Over the quarters it holds, this one's whole (the window was a quarter more than its length, a rate an eighth high).
+    const span = Math.min(RATE_WINDOW_MS, now - first + 250);
+    const total = rate.buckets.reduce((sum, b) => sum + b.tokens, 0);
+    const tokensPerSecond = Math.max(1, Math.round((total * 1000) / span));
     rate.toldAt = now;
     rate.told = tokensPerSecond;
     this.emit(key, { type: "rate", tokensPerSecond });

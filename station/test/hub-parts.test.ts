@@ -15,7 +15,7 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { HELD_AFTER_MS, type History, type LiveMessage, LiveHub, briefInput, inBrief } from "../src/sessions/live.ts";
+import { HELD_AFTER_MS, type History, type LiveMessage, LiveHub, briefInput, inBrief, tokensOf } from "../src/sessions/live.ts";
 import type { SessionUsage } from "../src/read/usage.ts";
 import { chainOf, entriesOf, lengthOf, stateOf } from "../src/read/transcripts.ts";
 import { prepare, prepareHere } from "../src/sessions/local-links.ts";
@@ -781,6 +781,54 @@ test("how fast the model writes is told once half a second of it has come", asyn
   hub.event("s", { kind: "end", id: "x" });
   assert.equal(rates().at(-1), 0);
   assert.ok(!got.some((m) => m.type === "step" && m.event.kind === "delta"), "no delta is told");
+  hub.close();
+  await settle(1);
+});
+
+test("the rate counts what the model writes, not what a call outputs, in tokens of its script, its steps side by side added up", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const hub = new LiveHub(() => null);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  const rates = () => got.flatMap((m) => (m.type === "rate" ? [m.tokensPerSecond] : []));
+  // A command's output as it runs is not the model writing.
+  hub.event("s", { kind: "start", id: "cmd", step: "tool", tool: "Bash", input: "{}" });
+  for (let i = 0; i < 4; i++) {
+    hub.event("s", { kind: "delta", id: "cmd", field: "output", text: "x".repeat(100_000) });
+    t.mock.timers.tick(500);
+  }
+  assert.deepEqual(rates(), [], "a call's output is no rate");
+  // 40 tokens a quarter second of English, then of Chinese: 160 token/s each (each long enough to fill the window).
+  hub.event("s", { kind: "start", id: "a", step: "text" });
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "a", field: "text", text: "x".repeat(160) });
+    t.mock.timers.tick(250);
+  }
+  assert.equal(rates().at(-1), 160);
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "a", field: "text", text: "字".repeat(60) });
+    t.mock.timers.tick(250);
+  }
+  assert.equal(rates().at(-1), 160, "a Chinese character is not 3/4 of a token");
+  assert.equal(tokensOf("abcd字字字"), 3);
+  // A subagent writing beside it adds to it; one of them ending leaves the other's.
+  hub.event("s", { kind: "start", id: "b", step: "text", subagent: true, parent: "agent" });
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "a", field: "text", text: "x".repeat(160) });
+    hub.event("s", { kind: "delta", id: "b", field: "text", text: "x".repeat(160) });
+    t.mock.timers.tick(250);
+  }
+  // Told as the first of the two writes of a quarter comes: the other's of that quarter not in yet.
+  assert.equal(rates().at(-1), 300);
+  hub.event("s", { kind: "end", id: "a" });
+  assert.notEqual(rates().at(-1), 0, "the subagent still writes");
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "b", field: "text", text: "x".repeat(160) });
+    t.mock.timers.tick(250);
+  }
+  assert.equal(rates().at(-1), 160);
+  hub.event("s", { kind: "end", id: "b" });
+  assert.equal(rates().at(-1), 0);
   hub.close();
   await settle(1);
 });
