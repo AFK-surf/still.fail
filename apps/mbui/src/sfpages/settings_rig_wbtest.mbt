@@ -112,7 +112,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     StationArchiving(st) => station_archiving_node(p, core, here, st, on_back=core.pop, frame~, width~)
     AutoDecisions => decisions_node(p, core, here, on_back=core.pop, frame~, width~)
     AutoCompletion => completion_node(p, core, here, on_back=core.pop, frame~, width~)
-    Usage => usage_node(p, core, here, on_back=core.pop, frame~, width~)
+    Usage => usage_node(p, core, src, here, on_back=core.pop, frame~, width~)
     Shortcuts => {
       // (recording while it is the one on top, as every frame says it: its stay there as it is made)
       let stay = @signals.untracked(fn() { app.nav.top_stay().1 })

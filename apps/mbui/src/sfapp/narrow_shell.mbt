@@ -625,7 +625,7 @@ fn narrow_made_as(
     Setting(Usage) =>
       // (what it does in its place's top bar as a place; at its head as a page of the stack)
       made("usage", fn(p, core, here, frame, _stint, acts) {
-        @sfpages.usage_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
+        @sfpages.usage_node(p, core, src, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
       })
     Setting(Shortcuts) =>
       // (recording while it is the one on top of the stack: its stay there, stint's)
