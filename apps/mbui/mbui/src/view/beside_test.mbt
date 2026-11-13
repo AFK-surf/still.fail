@@ -421,3 +421,56 @@ test "beside: moved along its side by along_offset, either way, from its anchor'
   // (a piece of its anchor 10 in: from the piece's start, 110, 5 on)
   assert_eq(beside_shifted(100.0, 5.0, piece=true), (115.0, 126.0), msg="from its piece")
 }
+
+///|
+test "beside keeping its side: above its anchor where it had not the room below, kept above as it comes to fit below, only its top moving; shown again, below; one not keeping it goes below at once" {
+  let h = @signals.signal(200.0, same=fn(a, b) { a == b })
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = Map([])
+  let make = fn(keeps : Bool) {
+    @view.Tree::new(
+      fn(root) {
+        root.box(fn(a) {
+          ids["a"] = a.id()
+          a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(Is((100.0, 250.0))) |> ignore
+        })
+        |> ignore
+        root.show(at_once=true, fn() { on.get() }, fn(b) {
+          ids["b"] = b.id()
+          b
+          .width(Is(Some(60.0)))
+          .height(By(fn() { Some(h.get()) }))
+          .beside(ids["a"], side=Bottom, offset=6.0, keeps_side=keeps)
+          |> ignore
+        })
+      },
+      time=fn() { 0.0 },
+    )
+  }
+  let t = make(true)
+  t.frame(400.0, 400.0) |> ignore
+  let at = fn() {
+    let d = t.drawn_of(ids["b"]).unwrap()
+    (d.y, d.h)
+  }
+  // (200 tall: 116 below, 236 above: above, its foot 6 over its anchor)
+  assert_eq(at(), (44.0, 200.0), msg="above: no room below")
+  // (80 tall: it would fit below now; kept above, its foot where it was)
+  t.event(10.0, fn() { h.set(80.0) })
+  t.frame(400.0, 400.0) |> ignore
+  assert_eq(at(), (164.0, 80.0), msg="kept above, only its top moved")
+  assert_eq(t.went_over(ids["b"]), Some(@view.Side::Top))
+  // (shown again: on whichever side has the room then)
+  t.event(20.0, fn() { on.set(false) })
+  t.event(30.0, fn() { on.set(true) })
+  t.frame(400.0, 400.0) |> ignore
+  assert_eq(at(), (276.0, 80.0), msg="shown again: below")
+  // (one not keeping its side: below as soon as it fits)
+  h.set(200.0)
+  on.set(true)
+  let u = make(false)
+  u.frame(400.0, 400.0) |> ignore
+  u.event(10.0, fn() { h.set(80.0) })
+  u.frame(400.0, 400.0) |> ignore
+  assert_eq(u.drawn_of(ids["b"]).map(fn(d) { d.y }), Some(276.0), msg="not keeping it: below")
+}
