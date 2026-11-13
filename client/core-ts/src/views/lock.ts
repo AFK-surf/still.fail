@@ -985,9 +985,11 @@ export function deliver(inner: Inner, ws: string): void {
 }
 
 /// What a pending entry does, in words (src/lock-pending.ts `Act`), as the lock held says it: shown only where a person
-/// asked for it (`shown`: a call they wait on), else the core's own.
+/// asked for it (`shown`: a call they wait on), else the core's own; but a handover's `moved`, which is the upgrade of
+/// safe mode the owner's page says (`upgrade`) however it was signed, by `lock.handOver` or by itself (`movedBySelf`).
 function actOf(inner: Inner, ws: string, e: Entry, shown: boolean): { act: Act | null; name: string; role?: string } {
   const name = whatOf(inner, ws, e);
+  if (e.kind === "moved") return { act: "handOver", name };
   if (!shown) return { act: null, name };
   const b = (e.body ?? {}) as J;
   const f = stateOf(inner, ws);
@@ -2444,6 +2446,10 @@ export function lockView(inner: Inner, ws: string): J {
       })
       .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
   }
+  const upgrade = upgradeOf(inner, ws);
+  const root = movedHere(inner, ws) && role === "owner" && force.said !== "waiting" ? rootOf(inner, ws) : null;
+  const rootText = root !== null && root.sub !== sub ? t("core-misc.lock.rootOnlyPage", { name: root.name }) : null;
+  const onAgain = root !== null && root.sub === sub && force.said === "off";
   return {
     available: true,
     locked,
@@ -2476,6 +2482,12 @@ export function lockView(inner: Inner, ws: string): J {
     // What this device did that no station took yet: not in effect, and nothing above shows it as if it were.
     // (and of their own lock: to people there is one safe mode, and this is the page that says what is not in effect)
     ...pendingFields(pendingRows(inner, ws)),
+    // What the upgrade of safe mode waits for, on the owner's device that is to hand it over (`upgradeOf`).
+    ...(upgrade !== null ? { upgrade } : {}),
+    // A moved workspace: who alone turns it off or on again, said to another owner (`rootTextOf`); to that person, while
+    // it is off, the button that turns it on again (`lock.open`).
+    ...(rootText !== null ? { rootText } : {}),
+    ...(onAgain ? { onAgainText: t("core-misc.lock.reason.enable") } : {}),
   };
 }
 
@@ -2740,10 +2752,11 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         if (secrets.length > 0) inner.runner.fork(writePlain(inner, c.workspace, secrets));
         break;
       }
-      // The chain handed over to its people's own logs: only where the host is one made for tests (no page offers it
-      // yet; the owner decides when it is done by itself), else as no such call is answered.
+      // The chain handed over to its people's own logs: where chains are handed over by themselves (`handsOver`: the
+      // owner's page offers it as `upgrade.askText` where only an ask is lacking), or the host is one made for tests;
+      // else as no such call is answered.
       case "handOver":
-        if (inner.host.handOverByTests !== true) return yield* Effect.fail(new CoreError("unknown_call", t("core-misc.call.unknown", { name: "lock.handOver" })));
+        if (inner.host.handOverByTests !== true && !handsOver(inner)) return yield* Effect.fail(new CoreError("unknown_call", t("core-misc.call.unknown", { name: "lock.handOver" })));
         result = yield* handOver(inner, sub, c.workspace);
         break;
       default:
@@ -2916,7 +2929,7 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     const notAllowed = () => new CoreError("forbidden", t("core-misc.lock.notAllowed"));
     if (own === null || key === null || root === null || personal.standing(sub) !== "member") return yield* Effect.fail(lockMoved());
     // (on and off are said in the root's log alone: the rules count them nowhere else)
-    if (meant.some((m) => m.kind === "open" || m.kind === "off") && own !== root) return yield* Effect.fail(rootOnly());
+    if (meant.some((m) => m.kind === "open" || m.kind === "off") && own !== root) return yield* Effect.fail(rootOnly(inner, ws));
     const worked = (after: readonly Entry[]) => {
       const chains = new Map(logsOf(inner, ws, false));
       chains.set(own, after);
@@ -2993,12 +3006,10 @@ export function stationsWaited(inner: Inner, ws: string, entries: readonly Entry
   const ready = new Set(servesHeld(inner, ws));
   return [...fold(entries).stations.keys()].filter((id) => !ready.has(id));
 }
-/// What `handOver` answers where its `moved` waits for stations (`stationsWaited`). Its words are the core's own: no
-/// page reaches it yet.
-export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[]): CoreError => {
-  const names = ids.map((id) => str(arr(get(view(inner, ws), "stations")).find((s) => s?.id === id)?.name) || id.slice(0, 8));
-  return new CoreError("lock_stations_not_ready", `safe mode is handed over once ${names.join(", ")} ${names.length === 1 ? "has" : "have"} been updated and reached: a station from before would keep letting people in by the workspace's list of before`, 409);
-};
+/// What `handOver` answers where its `moved` waits for stations (`stationsWaited`): the lines the owner's page shows of
+/// them (`waitedLines`), joined.
+export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[]): CoreError =>
+  new CoreError("lock_stations_not_ready", waitedLines(inner, ws, { waits: [], stations: ids }).join(t("core-misc.lock.listSep")), 409);
 
 /// Whether chains are handed over by themselves here: from HAND_OVER_FROM by this device's clock (src/lock-handover.ts;
 /// null, never yet), or on a host made for tests that says so (`Host.handOverAuto`).
@@ -3009,12 +3020,46 @@ export function handsOver(inner: Inner): boolean {
 /// How many times one call of `handOver` works its statements out at most: each time again, the chain changed between
 /// them and the `moved` in a way they can say (another ask).
 const HAND_OVER_ROUNDS = 3;
-/// What `handOver` answers where members the chain names with a device that signs have no log of their own bound yet:
-/// it waits for them (their devices take their own lock by themselves, `ownLockFor`). Its words are the core's own: no
-/// page reaches it yet.
-export const notReady = (subs: readonly string[]): CoreError => new CoreError("lock_not_ready", `safe mode is handed over once ${subs.join(", ")} ${subs.length === 1 ? "has" : "have"} a lock of their own: their devices make one by themselves`, 409);
-/// The ask of a handover's statements (no page reaches it yet: the core's words).
-const HAND_OVER_REASON = "Keep safe mode in your own lock";
+/// What `handOver` answers where members the chain names are not ready (a device that signs and no log of their own
+/// bound yet: their devices take their own lock by themselves, `ownLockFor`; or an app device of theirs on the chain
+/// and not on their log): the lines the owner's page shows of them (`waitedLines`), joined.
+export const notReady = (inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[] }): CoreError =>
+  new CoreError("lock_not_ready", waitedLines(inner, ws, { ...w, stations: [] }).join(t("core-misc.lock.listSep")), 409);
+/// The ask of a handover's statements: what the person is asked for, as the page's button says it.
+const handOverReason = () => t("core-misc.lock.reason.handOver");
+
+/// How many of those a handover waits for the owner's page names, one a line (`waitedLines`); the rest in a last line.
+const WAITED_LINES = 6;
+
+/// Whom and what a handover of `ws` waits for, a sentence each, saying what to do (the owner's page, `upgradeOf`, and
+/// the refusals `lock_not_ready` and `lock_stations_not_ready`): each member not ready by their name (or email), a
+/// device of theirs on the chain and not on their log by its name where the chain names it, each station by its name;
+/// WAITED_LINES at most, the rest counted in a last line.
+function waitedLines(inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[]; stations: readonly string[] }): string[] {
+  const chain = fold(held(inner, ws)?.entries ?? []);
+  const people = arr(get(view(inner, ws), "members"));
+  const who = (sub: string) => str(get(people.find((m) => m?.sub === sub), "name")) || chain.members.get(sub)?.email || str(get(people.find((m) => m?.sub === sub), "email")) || sub;
+  const lines: string[] = [];
+  for (const sub of w.waits) {
+    const named = (w.devices ?? []).filter((d) => d.sub === sub).map((d) => chain.devices.get(d.id)).filter((d): d is J => d !== undefined && typeof d.label === "string" && d.label !== "");
+    if (named.length === 0 && (w.devices ?? []).some((d) => d.sub === sub)) lines.push(t("core-misc.lock.upgrade.deviceUnnamed", { name: who(sub) }));
+    else if (named.length === 0) lines.push(t("core-misc.lock.upgrade.member", { name: who(sub) }));
+    for (const d of named) lines.push(t("core-misc.lock.upgrade.device", { name: who(sub), device: deviceText({ kind: "app", label: d.label, older: Array.isArray(d.endpoints) }) }));
+  }
+  const stations = arr(get(view(inner, ws), "stations"));
+  for (const id of w.stations) lines.push(t("core-misc.lock.upgrade.station", { name: str(stations.find((s) => s?.id === id)?.name) || chain.stations.get(id) || id.slice(0, 8) }));
+  return lines.length <= WAITED_LINES ? lines : [...lines.slice(0, WAITED_LINES), t("core-misc.lock.upgrade.more", { n: lines.length - WAITED_LINES })];
+}
+
+/// What the owner's device that is to hand `ws` over says of it (the `lock` topic's `upgrade`): whom and what it waits
+/// for (`handOverState`'s `waits` and `stations`), or, where only an ask is lacking (`asks`), the button that asks
+/// (`askText`, `lock.handOver`). None while the `moved` is on its way, once moved, and on any other device.
+function upgradeOf(inner: Inner, ws: string): J | null {
+  const s = handOverWhere(inner, ws);
+  if (s === null || "moving" in s) return null;
+  const titleText = t("core-misc.lock.upgrade.title");
+  return "asks" in s ? { titleText, lines: [], askText: t("core-misc.lock.upgrade.ask") } : { titleText, lines: waitedLines(inner, ws, s) };
+}
 /// A handover's `moved` refused in its turn because what is to be said changed: worked out again (`handOver`).
 const LACKING = "lock_handover_lacking";
 
@@ -3063,7 +3108,7 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
       chains.set(own, log);
       return handOverPlan(ws, entries, who, chains, bodiesHeld(inner, ws), now(inner));
     };
-    const refusal = (p: HandOverPlan): CoreError | null => ("refused" in p ? notAllowed() : "waits" in p ? notReady(p.waits) : null);
+    const refusal = (p: HandOverPlan): CoreError | null => ("refused" in p ? notAllowed() : "waits" in p ? notReady(inner, ws, p) : null);
     const salt = () => saltHex(inner);
     for (let round = 0; round < HAND_OVER_ROUNDS; round++) {
       // (what a call before said that no station took yet: brought now, and waited on)
@@ -3082,8 +3127,8 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
           const q = planOf(held(inner, ws)?.entries ?? [], after);
           if ("refused" in q || "waits" in q) return refusal(q)!;
           const bodies = bodiesOf(ws, q.says, after, byHash(bodiesHeld(inner, ws)), salt);
-          return { bodies, shown: bodies.map(() => ({ act: null, name: nameOf(inner, ws) })), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
-        }, HAND_OVER_REASON);
+          return { bodies, shown: handOverShown(inner, ws, bodies.length), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
+        }, handOverReason());
         touch(inner, ws);
         const waiting = personal.waitingIn(sub, ws);
         if (waiting !== null) return { pending: waiting };
@@ -3100,7 +3145,9 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
       // meanwhile is found on its log or waited for)
       yield* within.wait(readBound(inner, ws));
       const lock = new Lock(inner, ws, sub, null, { within });
-      const out = yield* Effect.catch(lock.append("moved", { root: own }, [], false, guard), (e) => (e.code === LACKING ? Effect.succeed(LACKING) : Effect.fail(e)));
+      // (moved meanwhile by itself, `movedBySelf`, where chains are handed over so and the page's button called this:
+      // handed over, as asked)
+      const out = yield* Effect.catch(lock.append("moved", { root: own }, [], false, guard), (e) => (e.code === LACKING ? Effect.succeed(LACKING) : e.code === "lock_moved" && movedHere(inner, ws) ? Effect.succeed(null) : Effect.fail(e)));
       if (out === LACKING) continue;
       touch(inner, ws);
       return isObject(out) && isObject(out.pending) ? { pending: out.pending } : null;
@@ -3108,6 +3155,11 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
     return yield* Effect.fail(new CoreError("lock_refused", t("core-misc.lock.changedMeanwhile", { what: nameOf(inner, ws) }), 409));
   });
 }
+
+/// What `n` statements of a handover of `ws` show while they are not in effect: one row, the last one's, the upgrade
+/// of safe mode (the others ride on it, as `sayMoved`'s said again first do).
+const handOverShown = (inner: Inner, ws: string, n: number): { act: Act | null; name: string }[] =>
+  Array.from({ length: n }, (_, i) => ({ act: i === n - 1 ? ("handOver" as const) : null, name: nameOf(inner, ws) }));
 
 /// Whether `sub`'s device here is the one to hand `ws` over by itself now: chains handed over so (`handsOver`), the
 /// chain held not moved, `sub` the person to (src/lock-handover.ts `mayHandOver`, by the chain held and this clock).
@@ -3151,7 +3203,7 @@ export function handOversIn(inner: Inner, sub: string): { ws: string; make: Stat
         if ("refused" in q || "waits" in q) return new CoreError("lock_not_ready", "refused" in q ? q.refused : `waits for ${q.waits.join(", ")}`);
         for (const u of q.unsaid) if (notedRole(inner, ws, sub, u.sub, u.email) === null) note(inner, ws, sub, u.sub, u.role);
         const bodies = bodiesOf(ws, q.says, after, byHash(bodiesHeld(inner, ws)), () => saltHex(inner));
-        return { bodies, shown: bodies.map(() => ({ act: null, name: nameOf(inner, ws) })), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
+        return { bodies, shown: handOverShown(inner, ws, bodies.length), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
       },
     });
   }
@@ -3199,6 +3251,13 @@ export function movedBySelf(inner: Inner, ws: string): Effect.Effect<void> {
 /// (`stationsWaited`: what is to be said is said meanwhile, the `moved` waits), either empty, not both, no deadline; `asks`, something is still to be said and no ask of the person's own lock's key came yet (what the
 /// security page will offer); `moving`, all said, the `moved` not taken yet. Worked out as read, of what is held.
 export function handOverState(inner: Inner, ws: string): null | { waits: string[]; stations: string[] } | { asks: true } | { moving: true } {
+  const s = handOverWhere(inner, ws);
+  return s !== null && "waits" in s ? { waits: s.waits, stations: s.stations } : s;
+}
+
+/// `handOverState`, with the devices of members waited for that the chain names and their log does not (the plan's
+/// `devices`), which the owner's page names (`upgradeOf`).
+function handOverWhere(inner: Inner, ws: string): null | { waits: string[]; devices?: { sub: string; id: string }[]; stations: string[] } | { asks: true } | { moving: true } {
   const sub = inner.workspaces.owner(ws);
   if (sub === null || movedHere(inner, ws) || !handingOver(inner, ws, sub)) return null;
   const who = whoHere(inner, sub);
@@ -3207,11 +3266,26 @@ export function handOverState(inner: Inner, ws: string): null | { waits: string[
   const q = planHere(inner, ws, who, held(inner, ws)?.entries ?? [], personal.after(sub));
   if ("refused" in q) return null;
   const stations = stationsWaited(inner, ws, held(inner, ws)?.entries ?? []);
-  if ("waits" in q || stations.length > 0) return { waits: "waits" in q ? q.waits : [], stations };
+  if ("waits" in q || stations.length > 0) return { waits: "waits" in q ? q.waits : [], ...("waits" in q && q.devices !== undefined ? { devices: q.devices } : {}), stations };
   return q.says.length > 0 || q.webs.length > 0 || personal.signKeys(sub).get(who.base)?.sign_key !== who.signer ? { asks: true } : { moving: true };
 }
 
-const rootOnly = () => new CoreError("lock_root_only", "only the person who turned safe mode on turns it off or on again");
+/// Turning a moved workspace off or on again by anyone but the root's person: refused, saying who and the way out
+/// (`stillfail lock reset` on a station's machine lets go of that station's lock alone).
+const rootOnly = (inner: Inner, ws: string) => new CoreError("lock_root_only", t("core-misc.lock.rootOnly", { name: rootOf(inner, ws)?.name ?? "" }));
+
+/// The person whose log a moved workspace's state is rooted in (the root's genesis's `sub`), by the name the workspace's
+/// view gives them, else the email the list in force gives them, else the one their latest `open` kept here says;
+/// null where the root's log is not held.
+function rootOf(inner: Inner, ws: string): { sub: string; name: string } | null {
+  const root = inForceOf(inner, ws).root;
+  if (root === null) return null;
+  const sub = str(get(logsOf(inner, ws, false).get(root)?.[0]?.body, "sub"));
+  if (sub === null) return null;
+  const named = str(get(arr(get(view(inner, ws), "members")).find((m) => m?.sub === sub), "name"));
+  const opened = bodiesHeld(inner, ws).filter((b) => get(b, "kind") === "open").map((b) => str(get(b, "email"))).filter((x) => x !== null).at(-1);
+  return { sub, name: named || stateOf(inner, ws).members.get(sub)?.email || opened || sub };
+}
 
 /// Whether a moved workspace may be turned off here, before anyone is asked (its secrets opened, `sayMoved`): this
 /// device on its person's own lock, that person the root's.
@@ -3219,7 +3293,7 @@ function offAllowed(inner: Inner, sub: string, ws: string): Effect.Effect<void, 
   return Effect.suspend(() => {
     if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
     const own = inner.adb.personal().root(sub);
-    return own !== null && own === inForceOf(inner, ws).root ? Effect.void : Effect.fail(rootOnly());
+    return own !== null && own === inForceOf(inner, ws).root ? Effect.void : Effect.fail(rootOnly(inner, ws));
   });
 }
 
@@ -3296,8 +3370,7 @@ function onOffMoved(inner: Inner, sub: string, ws: string, on: boolean): Effect.
     const st = force.settings;
     const email = force.f.members.get(sub)?.email;
     if (st === undefined || email === undefined) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
-    // (no words of its own yet for turning it on again, nor a pending row's: the core's, and none shown)
-    return sayMoved(inner, sub, ws, [{ kind: "open", origins: st.origins, rp_id: st.rp_id, cloud_keys: st.cloud_keys, email }], { act: null, name }, "Turn security mode on again");
+    return sayMoved(inner, sub, ws, [{ kind: "open", origins: st.origins, rp_id: st.rp_id, cloud_keys: st.cloud_keys, email }], { act: "enable", name }, t("core-misc.lock.reason.enable"));
   });
 }
 

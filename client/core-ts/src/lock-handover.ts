@@ -53,8 +53,9 @@ export type HandOverPlan =
   /// Members the chain names with a device that signs and no log of their own bound: theirs take their own lock by
   /// themselves (views/lock.ts `ownLockFor`); the handover waits for them. So too a member bound to a log with an app
   /// device that signs on the chain and is not on that log as held here (or whose log is not held): the state as if
-  /// moved names a member's devices by their log alone, so it would be out after the move.
-  | { waits: string[] }
+  /// moved names a member's devices by their log alone, so it would be out after the move: those devices (`devices`,
+  /// by their id on the chain), which the owner's page names (views/lock.ts `upgradeOf`).
+  | { waits: string[]; devices?: { sub: string; id: string }[] }
   /// What is still to be said (`says`, in order; `webs`), whom the chain names that is not said (no log of their own,
   /// no device that signs: `unsaid`, with the chain's role), the target, and the state as if moved once it is said.
   | { says: Said[]; webs: Web[]; unsaid: { sub: string; role: string; email: string }[]; target: Target; asIf: AsIf };
@@ -170,8 +171,8 @@ export function handOverPlan(ws: string, entries: readonly Entry[], who: Who, ch
   for (const [id, w] of webs) if ((before.webs.get(id) ?? 0) < w.exp) toWeb.push({ id, label: w.label, exp: w.exp });
   // And what it would be once said: the target, or this device cannot hand it over.
   const asIf = says.length === 0 && toWeb.length === 0 ? before : afterSaying(ws, who, chains, bodies, says, toWeb, now);
-  const out = [...new Set([...apps].filter(([id, a]) => !hasApp(asIf, id, a)).map(([, a]) => a.sub))];
-  if (out.length > 0) return { waits: out.sort() };
+  const lacking = [...apps].filter(([id, a]) => !hasApp(asIf, id, a)).map(([id, a]) => ({ sub: a.sub, id }));
+  if (lacking.length > 0) return { waits: [...new Set(lacking.map((x) => x.sub))].sort(), devices: lacking };
   const off = differs(target, asIf, who.sub);
   if (off !== null) return { refused: `said, the list would not be the chain's: ${off}` };
   return { says, webs: toWeb, unsaid, target, asIf };

@@ -208,7 +208,8 @@ const EMPTY: Record<string, Record<string, string>> = {
   "driveBrowse phone": { "chosen.names": STATE, open: STATE, widths: STATE },
   "driveBrowse columns": { "chosen.names": STATE, open: STATE, widths: STATE },
   // (this device being approved face to face)
-  "lock": { "me.pair.approvers": STATE },
+  // (`upgrade`: a handover of safe mode under way on the owner's device, which none is while it is not done by itself)
+  "lock": { "me.pair.approvers": STATE, "upgrade.lines": STATE },
   "vaults": { refused: ERROR },
   // (a simulator's panels and case: none is up)
   "screens": { "screens[].panels": STATE, "screens[].chrome": STATE },
