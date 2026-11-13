@@ -2536,7 +2536,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
           // (pending on their own lock alone: its row as this workspace's topic shows it, `ownPendingRows`)
           return off === null ? null : { pending: { ...off.pending, id: `${OWN_PENDING}${off.pending.id}` } };
         }
-        result = yield* lock.append("device.remove", { id: param("device") });
+        // (where the chain moved, a web page of the person's is taken off their own log, `web.remove`)
+        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* lock.append("device.remove", { id: param("device") });
         break;
       }
       case "disable": {
@@ -2612,9 +2613,10 @@ export function enrolled(inner: Inner, _sub: string, ws: string, made: unknown):
   return Effect.gen(function* () {
     if (inner.provider.kind !== "stillfail" || !lockToRead(inner, ws)) return made;
     yield* asked(inner).wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read for an enrollment" }));
-    if (movedHere(inner, ws)) return yield* Effect.fail(lockMoved());
     const h = held(inner, ws);
-    const on = !!h?.head && !fold(h.entries).disabled;
+    // (where the chain moved its head is pinned all the same, on or off: the station pins the chain, which says where
+    // its state is said, and lets in only what that state names; taken into the list by `addStation` after)
+    const on = !!h?.head && (movedHere(inner, ws) || !fold(h.entries).disabled);
     // None held on here (a device that has not read it yet, and did not just now) and the workspace's view saying it is
     // locked: its head as the view says it, the cloud's word as where no station answered. Never the commands without
     // it there: they would enroll a station the lock does not protect (#5540).
@@ -2623,7 +2625,7 @@ export function enrolled(inner: Inner, _sub: string, ws: string, made: unknown):
     if (head === null || !isObject(made)) return made;
     // Held: as a station of the lock last said it this run (part(inner, ws).heads, which the read just made sets for
     // each that answered), where that is on the chain held.
-    for (const id of on ? fold(h!.entries).stations.keys() : []) {
+    for (const id of on ? stateOf(inner, ws, h!.entries).stations.keys() : []) {
       const theirs = part(inner, ws).heads.get(id);
       if (theirs != null && onChain(h, theirs)) {
         head = theirs;
@@ -2807,6 +2809,27 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
   });
 }
 
+/// A web page of this person's renewed (`web`, its id with `exp` WEB_DEVICE_SECS from now) or taken off (`web.remove`)
+/// where the chain moved: on their own log, which lets it into every moved workspace of theirs, the person asked once
+/// (personal-lock.ts `web`). Only theirs, by a device on the log that binds them there: an owner or admin renews or
+/// takes off no one else's page (a person's devices are theirs alone, the root AGENTS.md); one not listed there, or
+/// another's, is refused in the words of a change not allowed, nobody asked. An app device is not one of these: it is
+/// taken off its person's own log (`onOwnLock`), else `lock_moved` as before.
+function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web" | "web.remove"): Effect.Effect<unknown, CoreError> {
+  return Effect.suspend(() => {
+    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    const f = stateOf(inner, ws);
+    const d = f.devices.get(id);
+    if (d === undefined) return Effect.fail(CoreError.invalid("no such device in the lock"));
+    if (d.kind !== "web") return Effect.fail(lockMoved());
+    if (d.sub !== sub || f.persons.get(sub) !== inner.adb.personal().root(sub)) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
+    const name = deviceText({ kind: "web", label: str(d.label) ?? "" });
+    const reason = actText({ act: kind === "web" ? "renew" : "removeDevice", name });
+    const body = kind === "web" ? { id, label: str(d.label) ?? "", exp: now(inner) + WEB_DEVICE_SECS } : { id };
+    return Effect.tap(inner.adb.personal().web(sub, kind, body, reason), () => Effect.sync(() => touch(inner, ws)));
+  });
+}
+
 /// A moved workspace turned off (`off`) or on again (`open`, with the settings in force and the root's person's email),
 /// by the root's person alone.
 function onOffMoved(inner: Inner, sub: string, ws: string, on: boolean): Effect.Effect<unknown, CoreError> {
@@ -2844,8 +2867,9 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
 /// asked too past it (see `ASKED_MS`).
 export function added(inner: Inner, sub: string, ws: string, role: string, answer: unknown): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
-    // (where the chain moved, as `roster` answers; the cloud has added them by now, as an enrollment it made, `enrolled`)
-    if (movedHere(inner, ws)) return yield* Effect.fail(lockMoved());
+    // (where the chain moved: the cloud's word alone, nothing said in the lock until their first device is let in,
+    // which an owner's or admin's device names with the log of their own it brings; a credential lets nobody in)
+    if (movedHere(inner, ws)) return null;
     const within = asked(inner);
     const m = yield* managed(inner, sub, ws, within);
     if (m === null || (role === "owner" && m.role !== "owner")) return null;
@@ -3142,8 +3166,8 @@ export class Lock {
   renew(device: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
-      // (where the chain moved its devices are not the chain's: nothing signed there, whichever is named)
-      if (movedHere(self.#inner, self.ws)) return yield* Effect.fail(lockMoved());
+      // (where the chain moved its web pages are its people's own logs': a later `web` of the same id there)
+      if (movedHere(self.#inner, self.ws)) return yield* webMoved(self.#inner, self.sub, self.ws, device, "web");
       const d = fold(held(self.#inner, self.ws)?.entries ?? []).devices.get(device);
       if (!d) return yield* Effect.fail(CoreError.invalid("no such device in the lock"));
       return yield* self.append("device", { ...d, exp: now(self.#inner) + WEB_DEVICE_SECS });
@@ -3155,6 +3179,8 @@ export class Lock {
     const self = this;
     return Effect.gen(function* () {
       if (shortCode(station) !== code.trim().toUpperCase()) return yield* Effect.fail(CoreError.invalid("the code does not match that station's"));
+      // (where the chain moved: `station {key}` said in this person's own log, as `joinStation` says it there)
+      if (movedHere(self.#inner, self.ws)) return yield* stationMoved(self.#inner, self.sub, self.ws, station);
       const s = arr(get(view(self.#inner, self.ws), "stations")).find((x) => x.id === station);
       return yield* self.append("station", { key: station, name: s?.name ?? "" }, [station]);
     });

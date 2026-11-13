@@ -213,10 +213,12 @@ export type Statements = (after: readonly Entry[]) => { bodies: unknown[]; shown
 const LATE = Symbol("late");
 
 /// What an entry of a person's own lock is about, for one that lost its place (src/lock-keep.ts `againOf`): the device
-/// (its key) of `device` and `device.remove`; a genesis has none, and is never signed again.
+/// (its key) of `device` and `device.remove`, the web page (its id) of `web` and `web.remove`; a genesis has none, and
+/// is never signed again.
 function subjectOf(e: Entry): string | null {
-  const key = (e.body as J)?.key;
-  return (e.kind === "device" || e.kind === "device.remove") && typeof key === "string" ? `device ${key}` : null;
+  const b = e.body as J;
+  if ((e.kind === "web" || e.kind === "web.remove") && typeof b?.id === "string") return `web ${b.id}`;
+  return (e.kind === "device" || e.kind === "device.remove") && typeof b?.key === "string" ? `device ${b.key}` : null;
 }
 
 const PATH = "/v1/me/personal-lock";
@@ -1232,6 +1234,25 @@ export class PersonalLock {
       const pending = yield* this.#append(sub, seed, "device.remove", { key }, false, within);
       if (key !== this.#myKey && pending === null) yield* this.#addApproved(sub, seed, within);
       this.#env.told?.(sub, this.#pinned.get(sub) ?? []);
+      return pending === null ? null : { pending: pendingRow(pending, this.#env.stations?.names?.(sub) ?? []) };
+    });
+  }
+
+  /// A web page of the person's on their own lock (`web {id, label, exp}`: let in until `exp` to every workspace whose
+  /// chain moved to its people's logs, src/lock-moved.ts; the same id with a later `exp`, renewed), or taken off
+  /// (`web.remove {id}`): signed as a device is put on or taken off (`addDevice`, `removeDevice`), no statement and no
+  /// body, the person asked once (`seed`, read as they were asked already, asks nothing more). Null, or, no station of
+  /// theirs up, `{pending}`, its row.
+  web(sub: string, kind: "web" | "web.remove", body: { id: string; label?: string; exp?: number }, reason: string, seed: Uint8Array | null = null): Effect.Effect<{ pending: PendingRow } | null, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const signed = seed ?? (yield* this.#unseal(reason));
+      const within = this.asked();
+      yield* this.#signAgain(sub, signed, within);
+      yield* this.#restate(sub, signed, within);
+      const said = kind === "web" ? { id: body.id, label: body.label ?? "", exp: body.exp ?? 0 } : { id: body.id };
+      const pending = yield* this.#append(sub, signed, kind, said, false, within);
+      if (pending === null) yield* this.#addApproved(sub, signed, within);
       return pending === null ? null : { pending: pendingRow(pending, this.#env.stations?.names?.(sub) ?? []) };
     });
   }

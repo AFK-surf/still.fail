@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, asked, baseOf, deviceText, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, stateOf, view, withBound } from "./lock.ts";
+import { Lock, asked, baseOf, deviceText, held, inForceOf, live, lockSeen, movedHere, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, stateOf, view, withBound } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -118,8 +118,9 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 /// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (ms).
 /// `personal`: it asks into this person's own locks, each account's it can be let into here, not a workspace
 ///; `places` is empty then. `seed`: the key, read as the person was asked before the code showed.
-/// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on).
-type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean }[]; hidden: boolean; away: Deferred.Deferred<void> };
+/// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on); `moved`: its
+/// chain moved to its people's own logs, where a web page is let in by an entry of its person's own log (`movedPlace`).
+type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean; moved?: true }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -177,6 +178,13 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     const account = inner.workspaces.owner(ws);
     const h = held(inner, ws);
     if (account === null || !h?.head) continue;
+    if (movedHere(inner, ws)) {
+      const c = movedPlace(inner, w, ws, account, hello, peer, me, now);
+      if (c === null || (who !== null && c.sub !== who.sub)) continue;
+      who ??= c;
+      places.push({ ws, sub: c.sub, account, moved: true });
+      continue;
+    }
     let lock;
     try {
       lock = checkLock(h.entries, now);
@@ -204,6 +212,28 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     places.push({ ws, sub: c.sub, account, ...(lock.members.has(c.sub) ? {} : { joins: true }) });
   }
   return { places, who };
+}
+
+/// Who asks in workspace `ws`, whose chain moved to its people's own logs (src/lock-moved.ts), where this device lets
+/// them in there: a web page of this device's own person, its credential checked against the cloud keys the root's
+/// `open` says, this device in force there as theirs (on the log that binds them, pinned here, signing it with the key
+/// the state names). A web page is let in there by an entry of its person's own log, which only a device on that log
+/// signs: an owner or admin lets nobody else's page in (fewer let in than on a chain, where one of theirs could let a
+/// member's first page in). An app is not let in here: its person's own devices put it on their log (the personal
+/// exchange, `personalAsked`), and every moved workspace of theirs follows that.
+function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, peer: string, me: string, now: number): { sub: string; email: string; name: string } | null {
+  if (get(hello, "kind") !== "web") return null;
+  const force = inForceOf(inner, ws);
+  if (force.said !== "on") return null;
+  const personal = inner.adb.personal();
+  const root = personal.root(account);
+  const mine = force.f.devices.get(me);
+  if (root === null || personal.standing(account) !== "member" || force.f.persons.get(account) !== root) return null;
+  if (mine === undefined || mine.kind !== "app" || mine.sub !== account || mine.sign_key !== personal.keyId()) return null;
+  // (one let in there already, not run out: nothing to sign; renewed on the security page, `Lock.renew`)
+  if (live(force.f.devices.get(peer), now) !== undefined) return null;
+  const c = credentialOf(str(get(w, "credential")) ?? "", force.settings?.cloud_keys, ws, peer, now);
+  return c === null || c.sub !== account ? null : c;
 }
 
 /// The requested workspaces this app knows about whose cloud view names a lock it has not read yet. If its held chain
@@ -371,7 +401,23 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
     const failed: { ws: string; error: string }[] = [];
     // (its entry pending in a workspace's lock, no station of it up: the first such row, which the answer carries)
     let pending: unknown = null;
+    // Where the chain moved: one `web` entry of the person's own log lets the page into every such workspace of theirs,
+    // the person asked once for all of them (not once a workspace); the others' chains as before, in the same approval.
+    const moved = a.places.filter((p) => p.moved === true);
+    if (moved.length > 0) {
+      const sub = moved[0]!.sub;
+      const exp = Math.floor(inner.host.nowMs() / 1000) + WEB_DEVICE_SECS;
+      const put = yield* Effect.result(inner.adb.personal().web(sub, "web", { id: a.device, label: a.label, exp }, t("core-misc.personal.reason.add")));
+      for (const p of moved) {
+        if (put._tag === "Success") done.push(p.ws);
+        else failed.push({ ws: p.ws, error: put.failure.message });
+      }
+      if (put._tag === "Success" && put.success !== null) pending ??= put.success.pending;
+      const within = asked(inner);
+      for (const p of moved) yield* within.wait(Effect.ignore(read(inner, p.ws), { log: "Unhandled", message: "pairing workspace read" }));
+    }
     for (const p of a.places) {
+      if (p.moved === true) continue;
       const body: J = { id: a.device, sub: p.sub, kind: a.kind, label: a.label };
       if (a.kind === "app" && a.signKey !== null) body.sign_key = a.signKey;
       if (a.kind === "web") body.exp = Math.floor(inner.host.nowMs() / 1000) + WEB_DEVICE_SECS;
@@ -524,6 +570,14 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
     // (nor where its person bound a lock of their own that it is not on: approved into this one it would still be
     // refused, the stations letting their app devices in on that lock alone; it joins that one, views/lock.ts `run`)
     if (f.disabled || (had !== undefined && !unsigned) || onBoundPerson(inner, ws) || offOwnLock(inner, ws)) continue;
+    // (where the chain moved: its state's, of its people's own logs; a web page is let in there by its own person's
+    // devices alone, `movedPlace`)
+    if (movedHere(inner, ws)) {
+      if (inForceOf(inner, ws).said !== "on") continue;
+      workspaces.push(ws);
+      approvers.set(ws, [...f.devices.values()].filter((d) => d.id !== base && d.kind === "app" && d.sub === sub && typeof d.sign_key === "string").map((d) => d.id));
+      continue;
+    }
     workspaces.push(ws);
     let checked: Checked | null = null;
     try {
