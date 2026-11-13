@@ -216,11 +216,40 @@ export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, 
       tail.unshift(entry);
     }
     const out = sub === null ? null : toldOut(cloud, ws, device, hello);
-    return { error: e.message, code: e.code, lock: lockHead(cloud, ws), ...person, ...(tail.length > 0 ? { entries: tail } : {}), ...(out !== null ? { out } : {}) };
+    const left = sub === null ? null : leftOf(cloud, ws, device, hello, sub);
+    return { error: e.message, code: e.code, lock: lockHead(cloud, ws), ...person, ...(tail.length > 0 ? { entries: tail } : {}), ...(out !== null ? { out } : {}), ...(left !== null ? { left } : {}) };
   }
   const left = leftOutFor(cloud, hello, device, accepted);
   if (left !== null) return { error: LEFT_OUT[left], code: "lock_station", why: left };
   return { error: (e as Error).message };
+}
+
+/// How many devices a refusal names to ask at most (a line of a few KB).
+const APPROVERS_MOST = 16;
+
+/// What a device refused where `ws`'s chain moved is told when the state in force there does not name it (2026-11-14:
+/// such a device was given no logs and read the workspace as waiting for good, nobody to ask): that it is left out, and
+/// whom to ask, the base ids of the app devices that may let it in, `APPROVERS_MOST` at most: its person's own where
+/// the list names them (on the log that binds them: only those put a device of theirs on it), else the owners' and
+/// admins' (they say someone's first device's `member`). Nothing else of the list: a hint the device does not trust,
+/// dialling them as before a move, the device dialled checking everything itself (client/core-ts/src/views/pair.ts),
+/// so a station that names others only sends it where nobody lets it in. None while the station waits for the root's
+/// log or its `open` (it names nobody, so it cannot tell who is left out), while it is off (nobody is refused for it),
+/// where the chain did not move, or to a device the list names (refused for another reason).
+function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub: string): { approvers: string[] } | null {
+  if (cloud.chain(ws)?.state?.moved === undefined) return null;
+  const locked = cloud.locked(ws);
+  if (locked === null || locked.waiting === true || locked.state === null) return null;
+  const s = locked.state;
+  const proof = lockProof(hello?.lock);
+  const ids = [device, ...(proof && endpointProof(ws ?? cloud.home() ?? "", proof.base, device, proof.proof) ? [proof.base] : [])];
+  if (ids.some((id) => s.devices.has(id))) return null;
+  const named = s.members.has(sub);
+  const approvers = [...s.devices.values()]
+    .filter((d) => d.kind === "app" && (named ? d.sub === sub : ["owner", "admin"].includes(s.members.get(d.sub)?.role ?? "")))
+    .map((d) => d.id)
+    .slice(0, APPROVERS_MOST);
+  return { approvers };
 }
 
 /// How much of what took a device out a refusal tells at most.

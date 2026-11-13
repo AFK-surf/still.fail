@@ -34,7 +34,7 @@ export const hooks: {
   enrolled?: (inner: Inner, sub: string, workspace: string, made: unknown) => Effect.Effect<unknown, CoreError>;
   /// A station refused this device for the workspace lock (what to say of it); why a station is not asked now
   /// (views/lock.ts).
-  lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown; out?: unknown }) => CoreError | null;
+  lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown; out?: unknown; left?: unknown }) => CoreError | null;
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
   /// A member about to be taken out of a workspace or given another role, or a station taken out: so in its lock
   /// first, by this device's signature where it signs there (views/lock.ts).

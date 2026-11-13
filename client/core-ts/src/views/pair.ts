@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, asked, baseOf, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -646,12 +646,18 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
     // that one first (`run`'s pair). Where the state is not said here (this device not let in, so given no bodies),
     // those who may let it in are dialled as the chain held before it moved names them, and its person's own devices
     // this device has heard of: whom it dials lets nobody in (the device dialled checks everything itself).
+    // Told by a station it is left out there (views/lock.ts `leftIn`, the state not given it): those it said to ask.
     if (movedHere(inner, ws)) {
       const force = inForceOf(inner, ws);
       if (force.said === "off") continue;
       const personal = inner.adb.personal();
       if (inner.host.appKeys === true && personal.standing(sub) !== "none" && personal.standing(sub) !== "member") continue;
       workspaces.push(ws);
+      const left = force.said === "waiting" ? leftIn(inner, ws) : null;
+      if (left !== null) {
+        approvers.set(ws, left.filter((id) => id !== base));
+        continue;
+      }
       const known = force.said === "on" ? f : fold(h.entries);
       const first = inner.host.appKeys === true && (!known.members.has(sub) || (force.said === "on" && known.persons.get(sub) !== personal.root(sub)));
       const here = [...known.devices.values()].filter((d) => d.id !== base && d.kind === "app" && typeof d.sign_key === "string" && (d.sub === sub || (first && ["owner", "admin"].includes(known.members.get(d.sub)?.role ?? ""))));
@@ -1025,7 +1031,10 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
         const sub = place.slice("person:".length);
         yield* inner.adb.personal().joined(sub, arr(get(get(approved, "chains"), sub)) as Entry[]);
       }
-      for (const ws of y.approvedIn.filter((w) => !isPerson(w))) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      for (const ws of y.approvedIn.filter((w) => !isPerson(w))) {
+        approvedHere(inner, ws);
+        yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      }
     } else if (checked.some((m) => y.met.get(m.id) === m)) {
       y.state = "wrong";
       y.left = left;

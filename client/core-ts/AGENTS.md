@@ -193,9 +193,15 @@ another; the accounts' list's merge across stations and its refills.
   a vault keyed for someone a statement, or their own log, took out waits, read by what of the state took its version
   (kept beside the vaults, `vaultTook`, as the vaults held change and as the state is made anew, never as a topic is
   answered; a device begun anew since kept none and shows it not), and is keyed anew by its owner's device as its key
-  is next unsealed for something the person does. A device taken out
+  is next unsealed for something the person does; an item that device writes meanwhile, the key in hand, waits for
+  that first (vault.ts `#writable`, 2026-11-14), never refused for its own device's keying. A device taken out
   takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
-  `outOf` says who took it out and when (no words for the page yet). One that lost its
+  `outOf` says who took it out and when (no words for the page yet). A device the stations' state does not name
+  is given no log nor body, and told by their refusal that it is left out and whom to ask (views/lock.ts
+  `heardLeft`, `leftIn`; station/src/mesh/serve.ts `leftOf`; 2026-11-14): its page is as before a move, not
+  confirmed and able to ask, its try dialling those (views/pair.ts `waitingIn`), a hint that lets nobody in; once let
+  in it is tried again as the read after its approval finds it refused (`refusedAgain`). Only waiting (no refusal
+  says so), it waits as before. `test/lock-left-out.test.ts` runs it on the station's own code. One that lost its
   place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:
   judged with the others lost with it in the order made by what its body is about (`src/personal-lock.ts` `#how`), the
   same body where its `prev` still stands before it, else one made anew (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,

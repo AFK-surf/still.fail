@@ -83,6 +83,8 @@ type Of = Extract<Call, { kind: "vault" }>;
 
 /// How long a vault's key stays unsealed in memory after it was last unsealed.
 export const UNLOCK_MS = 5 * 60_000;
+/// How long a write by the owner's device waits for its vault to be keyed anew first (`#writable`).
+const REKEY_WAIT_MS = 1_500;
 /// The secure storage's box key (X25519, asks the person to be read), and its public half where the app keeps the
 /// rest (no asking needed to know it).
 export const BOX_KEY = "vault-box";
@@ -1332,6 +1334,26 @@ class Vaults {
     return fail("vault_unknown", t("core-misc.vault.unknown"));
   }
 
+  /// Vault `id` to have an item written in it by this device (`who`): `#vault`, but one waiting to be keyed anew whose
+  /// owner this device's person is, its key in hand here, is keyed anew first (`#rekey`, awaited: the key in hand only,
+  /// never the box key read for it) and then written in. The lead's decision, 2026-11-14 (the locks' end to end on real
+  /// stations: an item opened, so its vault's key in hand and the keying anew set going, then written at once, was
+  /// refused `vault_waiting`, telling the owner to wait for their own device). Any other device, or none in hand: as
+  /// `#vault` says.
+  #writable(lock: Checked, id: string, who: { sub: string; device: string }): Effect.Effect<Vault, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      const v = held(inner, self.ws).vaults[id];
+      const inHand = v !== undefined && (mem(inner).keys.get(keyOf(v))?.until ?? 0) > inner.host.nowMs();
+      if (v !== undefined && !v.deleted && !trusted(lock, v) && v.owner === who.sub && inHand && v.keys.some((k) => k.cert.device === who.device) && waitingAs(inner, self.ws, lock, v) !== null) {
+        // (a station that takes no write keys nothing anew: waited for a while, then refused as before, naming it)
+        yield* Effect.timeoutOption(self.#rekey(v.id, v.seq), REKEY_WAIT_MS); // timer: a deadline
+      }
+      return yield* self.#vault(lock, id);
+    });
+  }
+
   /// Vault `id` to be read, and the lock it is read by (`readAs`: one waiting to be keyed anew, as the lock took it).
   #readable(lock: Checked, id: string, self: { device: string }): Effect.Effect<{ v: Vault; as: Checked }, CoreError> {
     const v = held(this.#inner, this.ws).vaults[id];
@@ -1864,7 +1886,7 @@ class Vaults {
       const inner = self.#inner;
       const body = yield* Effect.try({ try: () => ({ plain: plainOf(plain), listing: listingOf(listing) }), catch: asCoreError });
       const { lock, signer, self: who } = yield* self.#ready();
-      const v = yield* self.#vault(lock, vault);
+      const v = yield* self.#writable(lock, vault, who);
       if (!v.members.includes(who.sub)) return yield* fail("vault_unknown", t("core-misc.vault.unknown"));
       const key = yield* self.#key(v, who, false, t("core-misc.vault.reason.unlock", { name: v.name }));
       const item = id ?? `i_${ulid(inner.host)}`;
@@ -1881,8 +1903,8 @@ class Vaults {
   deleteItem(vault: string, id: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
-      const { lock, signer } = yield* self.#ready();
-      const v = yield* self.#vault(lock, vault);
+      const { lock, signer, self: who } = yield* self.#ready();
+      const v = yield* self.#writable(lock, vault, who);
       const prev = items(self.#inner, self.ws, vault)[id];
       if (!prev || prev.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
       const next = sign({ v: 1 as const, ws: self.ws, vault, id, version: prev.version + 1, epoch: v.epoch, deleted: true as const, ct: "", at: nowS(self.#inner) }, TAG.item, signer);

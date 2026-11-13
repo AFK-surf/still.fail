@@ -1192,6 +1192,60 @@ test("a device taken out of the lock by another device of its person's, this one
   r.core.close();
 });
 
+/// Station writes of a vault's version keyed anew (epoch above `from`) held till let go: what a write sent meanwhile does.
+function holdRekey(r: Awaited<ReturnType<typeof rig>>, from: number) {
+  const gate: { letGo: (() => void) | null } = { letGo: null };
+  stationLater(r.host, (req) => {
+    if (gate.letGo !== null || req.method !== "PUT" || !req.url.includes("/vault/vaults")) return undefined;
+    const body = JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array()));
+    if (!(body.epoch > from)) return undefined;
+    return new Promise((resolve) => (gate.letGo = () => resolve(jsonResponse(200, r.st.reply(req)))));
+  });
+  return gate;
+}
+
+/// An item written by the owner's device while its vault, waiting to be keyed anew, is being keyed anew with the key in
+/// hand (opened just before): what the write answers before the keying anew is let go, and after.
+async function putWhileKeying(r: Awaited<ReturnType<typeof rig>>, gate: { letGo: (() => void) | null }, vault: string) {
+  type Out = { ok?: any; error?: Error & { code?: string } } | null;
+  const got: { out: Out } = { out: null };
+  r.ask("vault.putItem", { vault, plain: { kind: "token", name: "now", fields: { value: "2" } }, listing: { name: "now", kind: "token", modes: ["proxy"], hosts: ["api.example.test"] } }).then((ok) => void (got.out = { ok }), (error) => void (got.out = { error }));
+  await r.host.time.pass(300, 10);
+  const before: Out = got.out;
+  gate.letGo?.();
+  stationLater(r.host, () => undefined);
+  for (let i = 0; i < 300 && got.out === null; i++) await r.host.time.pass(10);
+  return { before, after: got.out as Out };
+}
+
+test("the owner's device writes an item at once after opening one of a vault waiting to be keyed anew (2026-11-14, the locks' end to end): the vault keyed anew first, with the key in hand, then the item written; not refused `vault_waiting`", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  await r.restart();
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: r.phone.hex }, r.phone);
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  assert.equal(r.st.vaults.get(id)!.epoch, 0, "the vault waits to be keyed anew");
+  const gate = holdRekey(r, 0);
+  assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  assert.ok(gate.letGo !== null, "the keying anew set going by the opening, held at the station");
+  const { before, after } = await putWhileKeying(r, gate, id);
+  assert.equal(before?.error?.code, undefined, `not refused while it is keyed anew: ${before?.error?.message}`);
+  assert.ok(after?.ok !== undefined, `written: ${after?.error?.message}`);
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [1, ["ab".repeat(32)]], "keyed anew without the phone");
+  assert.equal(r.st.items.get(after!.ok.id)!.epoch, 1, "the item written under the new key");
+  r.core.close();
+});
+
 test("a device this one took out of the lock at the person's asking, two vaults of theirs holding its key and locked here: the box key read once, both keyed anew", async () => {
   const r = await rig();
   r.putLock();
@@ -2195,6 +2249,31 @@ test("a moved workspace: a member a statement took out: their key's vault waits 
   await r.host.time.pass(500, 10);
   r.take();
   assert.deepEqual([vaults().vaults[0].members.length, vaults().vaults[0].waits], [1, undefined], "the old version not held over the new");
+  r.core.close();
+});
+
+test("a moved workspace: the owner's device writes an item at once after opening one of the vault a statement left waiting: keyed anew first, then written; with no key in hand still refused", async () => {
+  const r = await movedRig(true);
+  const { id, admit } = await s2In(r);
+  const items = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  const item = items().items[0].id;
+  await r.ask("vault.open", { item });
+  const cert = d2Cert();
+  r.st.boxes.set(D2, cert);
+  r.push("vault-box", cert);
+  await r.host.time.pass(500, 10);
+  await r.ask("vault.lock", {});
+  const old = r.st.vaults.get(id)!;
+  await r.say({ kind: "member.remove", sub: "s2", cancels: [admit] });
+  await fails(r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "x", fields: { value: "1" } } }), "vault_waiting");
+  const gate = holdRekey(r, old.epoch);
+  assert.equal((await r.ask("vault.open", { item })).plain.fields.value, "ghp_x");
+  assert.ok(gate.letGo !== null, "the keying anew set going by the opening, held at the station");
+  const { before, after } = await putWhileKeying(r, gate, id);
+  assert.equal(before?.error?.code, undefined, `not refused while it is keyed anew: ${before?.error?.message}`);
+  assert.ok(after?.ok !== undefined, `written: ${after?.error?.message}`);
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.epoch, v.members], [old.epoch + 1, ["s1"]], "keyed anew without s2");
   r.core.close();
 });
 
