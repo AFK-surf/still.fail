@@ -58,10 +58,10 @@ pub fn chat_pops_open() -> (Bool, Bool) {
 
 ///|
 /// ⌘F's bar opened in chat `r`: what opens under the bar closed.
-pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
+pub fn chat_find_open(r : ChatRef) -> Unit {
   chat_own.info_open.set(false)
   chat_own.jobs_open.set(false)
-  find_open(c, chat_key(r))
+  find_open(chat_key(r))
 }
 
 ///|
@@ -83,7 +83,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       c.key_context("Chat")
       c.on_action("chat.find", fn() {
         guard v.thread is Some(_) else { return false }
-        chat_find_open(c, r)
+        chat_find_open(r)
         true
       })
       chat_keys(c, src, w, r, v, chat)

@@ -420,6 +420,9 @@ fn chat_body_row(
   let row = fn() { now.get() }
   let entry = fn() { row().entry }
   let top = fn() { chat_body_gap_room(row().gap, (here.width)()) }
+  // (the words ⌘F found, bold in a message's words while its bar is open in this chat: find_words_in)
+  let chat = here.station + "\u{1}" + here.session
+  let found = fn() { find_words_in(chat) }
   slot.pick(fn() { chat_body_kind(entry()) }, fn(p, kind) {
     made(k, p)
     let m0 = match @signals.untracked(entry) {
@@ -449,11 +452,11 @@ fn chat_body_row(
       KEmpty => frame(fn(b) { chat_empty_node(b) |> ignore })
       KLine => frame(fn(b) { unread_line_node(b) |> ignore })
       KNewer => frame(fn(b) { pages_coming_node(b, fn() { false }) |> ignore })
-      KMine => mine_said_node(p, src, here, k, side, top, m, share=message_share_of(src, here, m)) |> ignore
+      KMine => mine_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m)) |> ignore
       KNotice => notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied) |> ignore
-      KPerson => person_said_node(p, src, here, k, side, top, m, share=message_share_of(src, here, m)) |> ignore
+      KPerson => person_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m)) |> ignore
       KAgent =>
-        agent_said_node(p, src, here, k, side, top, m, share=message_share_of(src, here, m), core~, code=fn(lang) {
+        agent_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), core~, code=fn(lang) {
           if lang == "mermaid" {
             Some(fn(b, code) { @sfbase.viz_mermaid_node(b, src, here.station, code, fn() { @sf.theme().p.subtle }, here.tips) })
           } else {

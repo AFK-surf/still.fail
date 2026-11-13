@@ -1080,3 +1080,119 @@ test "大屏, a chat's page made with its inside nodes: a 文件 tab's row carri
   assert_eq(draft_files(), "首页截图.png/path 季度数据.csv/path", msg="on the composer")
   assert_eq(calls.filter(fn(c) { c.0 == "composer.add" }).length(), 2, msg="on the composer")
 }
+
+///|
+/// The fixture's chat s-c1 (its messages whole, as the old page's find's tests have it: chat_find_wbtest) with its page's
+/// inside nodes, `w` by `h` on `platform`, at rest, the core's calls kept in `calls` and answered as the made-up core
+/// answers them (`chat.find` its own finding, `chat.find.go` the real core's kept answers).
+fn find_nodes_open(calls : Array[(String, Json)], w : Double, h : Double, platform : Int) -> @ui.Tester {
+  new_run()
+  @sf.presenters_reset()
+  @sfbase.chat_page_nodes.set(true)
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// Whether the words `s` of a message are drawn within the window's height `h` (a message's words in pieces as the
+/// tree lays them out: Tester::run_rects).
+fn find_nodes_in_sight(t : @ui.Tester, s : String, h : Double) -> Bool {
+  let rs = t.run_rects(s)
+  rs.length() > 0 && rs.iter().all(fn(r) { r.1 >= 0.0 && r.1 + r.3 <= h })
+}
+
+///|
+test "大屏, a chat's page made with its inside nodes: ⌘F opens the find's bar; what is typed asked of the core once after the typing pause; the list at the message found, its words drawn, the words marked; Enter the next; Esc closes it, nothing marked, nothing left to go to" {
+  let calls : Array[(String, Json)] = []
+  let h = 800.0
+  let t = find_nodes_open(calls, 1280.0, h, 0)
+  let key = "ws1/st1\u{1}s-c1"
+  let goes = fn() { calls.filter(fn(c) { c.0 == "chat.find.go" }).map(fn(c) { c.1.stringify() }) }
+  assert_true(t.find("在对话中查找") is None, msg="the bar before ⌘F")
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("在对话中查找") is Some(_), msg="⌘F: no bar")
+  assert_eq(@sfpages.find_chat(), key)
+  // (typed into the bar's field: it took the keyboard as it opened)
+  t.type_text("截图")
+  t.draw()
+  assert_eq(@sfpages.find_query(), "截图")
+  assert_eq(calls.filter(fn(c) { c.0 == "chat.find" }).length(), 0, msg="asked before the typing pause")
+  t.run_for(@sfpages.find_typing_ms)
+  t.run_for(@ui.move_most_ms)
+  // (asked of what the device holds: the rest, asked where that was not all of the chat, is another ask, ask_bringing)
+  let asked = calls.filter(fn(c) { c.0 == "chat.find" && !flag(Some(c.1), "bring") })
+  assert_eq(asked.length(), 1, msg="\{Repr(calls.map(fn(c) { c.0 }))}")
+  assert_eq(text(Some(asked[0].1), "query"), "截图")
+  assert_eq(number(Some(asked[0].1), "thread"), 7.0)
+  // where the reader starts, as the core says from what the list shows: the first of three (seq 8), in sight, the
+  // words the rows are given to mark the words looked for
+  assert_true(t.find("1/3") is Some(_), msg="where the reader is: \{@ui.list_text(goes())}")
+  assert_true(find_nodes_in_sight(t, "高度先按 90 估", h), msg="the message found (8) at \{Repr(t.run_rects("高度先按 90 估"))}")
+  assert_eq(@sfpages.find_words_in(key), ["截图"])
+  assert_true(!@sfbase.go_tos.contains(key), msg="the message found still to go to")
+  // Enter: the next (10)
+  t.key(@ui.key_code_enter)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("2/3") is Some(_), msg="Enter: \{@ui.list_text(goes())}")
+  assert_true(find_nodes_in_sight(t, "前要先登录", h), msg="the next (10) at \{Repr(t.run_rects("前要先登录"))}")
+  assert_true(!@sfbase.go_tos.contains(key), msg="the next still to go to")
+  // Esc: the bar closed, nothing marked, nothing left to go to
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("在对话中查找") is None, msg="Esc: the bar still open")
+  assert_eq(@sfpages.find_chat(), "")
+  assert_eq(@sfpages.find_words_in(key), [])
+  assert_true(!@sfbase.go_tos.contains(key), msg="Esc: still to go to")
+  assert_true(find_nodes_in_sight(t, "前要先登录", h), msg="Esc: the message gone from \{Repr(t.run_rects("前要先登录"))}")
+}
+
+///|
+test "大屏, a chat's page made with its inside nodes: its find open, another chat opened lets it go" {
+  let calls : Array[(String, Json)] = []
+  let t = find_nodes_open(calls, 1280.0, 800.0, 0)
+  let key = "ws1/st1\u{1}s-c1"
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  t.type_text("截图")
+  t.draw()
+  t.run_for(@sfpages.find_typing_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfpages.find_chat(), key)
+  assert_eq(@sfpages.find_words_in(key), ["截图"])
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
+  @ui.came_from_outside()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfpages.find_chat(), "", msg="another chat opened: the find still open")
+  assert_eq(@sfpages.find_words_in(key), [])
+  assert_true(!@sfbase.go_tos.contains(key), msg="another chat opened: still to go to")
+  assert_true(t.find("在对话中查找") is None, msg="another chat opened: a find's bar there")
+}
+
+///|
+test "a chat's page made with its inside nodes, a page pushed over it on 小屏: ⌘F does nothing of the chat's" {
+  let calls : Array[(String, Json)] = []
+  let t = find_nodes_open(calls, 390.0, 844.0, 2)
+  @sfbase.open_page(Archived)
+  @ui.came_from_outside()
+  t.run_for(@ui.move_most_ms)
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfpages.find_chat(), "")
+  assert_true(t.find("在对话中查找") is None, msg="a find's bar over the page over the chat")
+  assert_true(@sfbase.go_back(), msg="no way back to the chat")
+  @ui.came_from_outside()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfpages.find_chat(), "", msg="back in the chat")
+  assert_eq(calls.filter(fn(c) { c.0 == "chat.find" }).length(), 0)
+}

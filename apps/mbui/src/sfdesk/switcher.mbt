@@ -232,7 +232,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
     Chat(r) => {
       let view = view_of_chat(src, r).0
       if view is Some({ thread: Some(_), .. }) {
-        offer(action_offered("chat.find", "search", fn() { chat_find_open(c, r) }))
+        offer(action_offered("chat.find", "search", fn() { chat_find_open(r) }))
         // (its outline: beside its rail or its round button where one shows, its field taking the keys; not in a replay
         // of a run from before the outline, whose app offered none: Source's `asks_outline`)
         match view {

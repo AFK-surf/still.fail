@@ -96,6 +96,48 @@ fn chat_read_node(
 }
 
 ///|
+/// The list ⌘F goes along where chat `r`'s page is made as nodes (find.mbt's FindList): the messages showing out of
+/// what its list last had in sight as it was told the core (the first message in sight and the last; none where it was
+/// told none), the list to a message as any go-to inside the chat is (sfbase's go_to: chat_goes_to brings it just under
+/// the list's room; the words found are bold in every row while the bar is open in it, find_words_in, so a go-to's own
+/// words are not kept for it), nothing left to go to as it is let go.
+fn chat_nodes_find_list(r : ChatRef) -> FindList {
+  let k = r.station + "\u{1}" + r.session
+  {
+    showing: fn() {
+      guard chat_reads.get(k) is Some(a) && a.sight is Some((s, rs)) else { return (-1.0, -1.0) }
+      let seq = fn(key : String) {
+        match rs.rows.get(key).map(fn(row) { row.entry }) {
+          Some(Said(m)) => Some(m.seq)
+          _ => None
+        }
+      }
+      let (from, to) = match (rs.keys.search(s.first), rs.keys.search(s.last)) {
+        (Some(a), Some(b)) => (a, b)
+        _ => return (-1.0, -1.0)
+      }
+      let mut first = -1.0
+      for i = from; i <= to; i = i + 1 {
+        if seq(rs.keys[i]) is Some(q) {
+          first = q
+          break
+        }
+      }
+      let mut last = -1.0
+      for i = to; i >= from; i = i - 1 {
+        if seq(rs.keys[i]) is Some(q) {
+          last = q
+          break
+        }
+      }
+      (first, last)
+    },
+    go: fn(seq, _) { @sfbase.go_to(r, seq, keep_place=false) },
+    forget: fn() { @sfbase.go_tos.remove(k) },
+  }
+}
+
+///|
 /// The core told chat `r` (view `v`) shows, its end seen or not, and the last message seen whole, as either changes.
 fn chat_read_focus(src : Source, r : ChatRef, v : ChatView, a : ChatRead, end : Bool) -> Unit {
   let said = "\{end} \{a.whole}"

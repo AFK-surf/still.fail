@@ -632,8 +632,12 @@ fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, 
 
 ///|
 /// The list's ⌘F goes along: the messages showing, the list to a message with the words marked
-/// in it, its marks let go.
+/// in it, its marks let go. Where the chat's page is made as nodes (sfbase's chat_page_nodes), that page's list's
+/// (chat_nodes_find_list).
 pub fn chat_find_list(r : ChatRef) -> FindList {
+  if @sfbase.chat_page_nodes.untracked() {
+    return chat_nodes_find_list(r)
+  }
   let k = chat_key(r)
   {
     showing: fn() {
