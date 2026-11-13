@@ -38,8 +38,8 @@ class Front {
   #next = 0;
   readonly #asked = new Map<number, { resolve(v: any): void; reject(e: Error): void }>();
   /// Streams whose socket came before what asked for them was answered, and asks answered before their socket came.
-  readonly #sockets = new Map<number, { socket: Socket; carry: Buffer }>();
-  readonly #wanted = new Map<number, { resolve(s: { socket: Socket; carry: Buffer }): void; reject(e: Error): void }>();
+  readonly #sockets = new Map<number, { conn: number; socket: Socket; carry: Buffer }>();
+  readonly #wanted = new Map<number, { conn: number; resolve(s: { socket: Socket; carry: Buffer }): void; reject(e: Error): void }>();
   /// The streams each connection's other end opened, as they came, till they are taken (`acceptBi`).
   readonly #incoming = new Map<number, Incoming>();
   /// Every stream's socket open: closed with the endpoint, or ended with its connection when `forget` runs.
@@ -115,17 +115,28 @@ class Front {
       this.#connSockets.delete(conn);
       for (const s of sockets) s.end();
     }
+    for (const [id, w] of this.#wanted) {
+      if (w.conn !== conn) continue;
+      this.#wanted.delete(id);
+      w.reject(new Error("the connection is closed"));
+    }
+    for (const [id, s] of this.#sockets) {
+      if (s.conn !== conn) continue;
+      this.#sockets.delete(id);
+      s.socket.destroy();
+    }
   }
 
   /// The socket of stream `id`, once it came.
-  socketOf(id: number): Promise<{ socket: Socket; carry: Buffer }> {
+  socketOf(id: number, conn: number): Promise<{ socket: Socket; carry: Buffer }> {
     const came = this.#sockets.get(id);
     if (came) {
       this.#sockets.delete(id);
-      return Promise.resolve(came);
+      return Promise.resolve({ socket: came.socket, carry: came.carry });
     }
     if (this.#gone) return Promise.reject(this.#gone);
-    return new Promise((resolve, reject) => this.#wanted.set(id, { resolve, reject }));
+    if (this.#forgotten.has(conn)) return Promise.reject(new Error("the connection is closed"));
+    return new Promise((resolve, reject) => this.#wanted.set(id, { conn, resolve, reject }));
   }
 
   #took(socket: Socket) {
@@ -155,8 +166,8 @@ class Front {
       const wanted = this.#wanted.get(id);
       if (wanted) {
         this.#wanted.delete(id);
-        wanted.resolve(came);
-      } else this.#sockets.set(id, came);
+        wanted.resolve({ socket: came.socket, carry: came.carry });
+      } else this.#sockets.set(id, { conn, socket: came.socket, carry: came.carry });
     };
     socket.on("data", first);
     socket.on("error", () => {});
@@ -414,7 +425,7 @@ class FrontConnection implements Connection {
     const said = await this.#front.ask(op, { conn: this.#id });
     if (said?.end) return null;
     const id = Number(said.stream);
-    return new FrontStream(this.#front, id, await this.#front.socketOf(id), op !== "openUni");
+    return new FrontStream(this.#front, id, await this.#front.socketOf(id, this.#id), op !== "openUni");
   }
 
   async acceptBi() {

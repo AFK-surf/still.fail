@@ -36,8 +36,9 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   const socketPath = join(dir, "front.sock");
 
   let streamsPath = "";
+  let nextStream = 20;
   const pendingClosed = new Map<number, (ok: unknown) => void>();
-  let resolveAccept!: (ok: unknown) => void;
+  let resolveAccept: ((ok: unknown) => void) | undefined;
   const server = createServer((c) => {
     createInterface({ input: c }).on("line", (line) => {
       const msg = JSON.parse(line) as { id: number; op: string; conn?: number; streams?: string };
@@ -48,6 +49,8 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
         c.write(JSON.stringify({ id: msg.id, ok: [] }) + "\n");
       } else if (msg.op === "accept") {
         resolveAccept = (ok) => c.write(JSON.stringify({ id: msg.id, ok }) + "\n");
+      } else if (msg.op === "openBi") {
+        c.write(JSON.stringify({ id: msg.id, ok: { stream: nextStream++ } }) + "\n");
       } else if (msg.op === "conn.closed") {
         pendingClosed.set(msg.conn!, (ok) => c.write(JSON.stringify({ id: msg.id, ok }) + "\n"));
       } else if (msg.op === "close") {
@@ -62,9 +65,14 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   const endpoint = await mesh.bind({ secretKey: Buffer.alloc(32), alpns: [Buffer.from("stillfail/test")], relayUrls: [], discovery: false });
   t.after(() => endpoint.close().catch(() => {}));
 
+  const waitAccept = async () => {
+    while (!resolveAccept) await new Promise((r) => setImmediate(r));
+    const fn = resolveAccept;
+    resolveAccept = undefined;
+    return fn;
+  };
   const accepting = endpoint.accept();
-  while (!resolveAccept) await new Promise((r) => setImmediate(r));
-  resolveAccept({ conn: 1, remote: "11".repeat(32), alpn: "74657374", via: null, paths: [], stats: { txBytes: 0, rxBytes: 0 } });
+  (await waitAccept())({ conn: 1, remote: "11".repeat(32), alpn: "74657374", via: null, paths: [], stats: { txBytes: 0, rxBytes: 0 } });
   const conn = (await accepting)!;
 
   // 1. Stream 10 ends abruptly from front without PIPE_END/PIPE_FAILED: Node half closes too.
@@ -100,4 +108,20 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   await new Promise<void>((resolve) => late.once("connect", resolve));
   late.write(Buffer.concat([streamHead(1, 12, 0), frame(Buffer.from("late"))]));
   await lateClosed;
+
+  // 4. Closing a connection rejects pending openBi() in #wanted and destroys unclaimed #sockets entries.
+  const accepting2 = endpoint.accept();
+  (await waitAccept())({ conn: 2, remote: "22".repeat(32), alpn: "74657374", via: null, paths: [], stats: { txBytes: 0, rxBytes: 0 } });
+  const conn2 = (await accepting2)!;
+  const orphan = connect(streamsPath);
+  const orphanClosed = new Promise<void>((resolve) => orphan.once("close", () => resolve()));
+  await new Promise<void>((resolve) => orphan.once("connect", resolve));
+  orphan.write(streamHead(2, 99, 1));
+  const pendingOpen = conn2.openBi();
+  while (!pendingClosed.has(2)) await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setTimeout(r, 20));
+  pendingClosed.get(2)!({ kind: "peer", reason: "idle", text: "idle" });
+  await conn2.closed();
+  await assert.rejects(pendingOpen, /connection is closed/);
+  await orphanClosed;
 });
