@@ -12,6 +12,7 @@ import { DeviceRefused, PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.
 import { followLock } from "./lock-sync.ts";
 import { followPersons } from "./person-sync.ts";
 import { tellLocks } from "./lock-events.ts";
+import { followMarks, stationMarksOf, tellMarks } from "./station-marks.ts";
 import { followWays, tellWays, waysOf } from "./ways.ts";
 import { personChainsOf } from "./serve.ts";
 import { Traces } from "./traces.ts";
@@ -130,6 +131,16 @@ export const MeshLive = Layer.effectDiscard(
       );
       yield* Effect.acquireRelease(
         Effect.sync(() => tellWays(waysOf(cloud.state), (event, data, of, to) => events.tell(event, data, of, to))),
+        (stop) => Effect.sync(stop),
+      );
+      // The stations' names and marks (mesh/station-marks.ts): a copy kept by each station of a workspace, and their
+      // changes told to the devices.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followMarks(stationMarksOf(cloud.state), call)),
+        (stop) => Effect.sync(stop),
+      );
+      yield* Effect.acquireRelease(
+        Effect.sync(() => tellMarks(stationMarksOf(cloud.state), (event, data, of, to) => events.tell(event, data, of, to))),
         (stop) => Effect.sync(stop),
       );
       const connections = yield* FiberSet.make();

@@ -137,6 +137,8 @@
   "core-misc.decisionForm.closed": "自动决策草稿已关闭",
   "core-misc.decisionForm.pickModel": "请选择用于完成检查的模型",
   "core-misc.doing.rechecking": "station 未响应，等待其恢复后确认操作是否成功",
+  "core-misc.stationMark.offline": "「{name}」离线，等它上线后才能修改名字和图标",
+  "core-misc.stationMark.unknown": "这个工作区里没有这台 station",
   "core-misc.host.bad_message": "无法识别的消息：{error}",
   "core-misc.host.bad_subprotocol": "WebSocket 子协议无效",
   "core-misc.host.crashed": "核心崩溃：{reason}",

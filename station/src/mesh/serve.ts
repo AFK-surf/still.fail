@@ -12,10 +12,11 @@ import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
-import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
+import { type Admitted, managesStation, readOnly, revoked, verifyMemberOf } from "./credential.ts";
 import { SeenDevices } from "./seen-devices.ts";
 import { foldChain, takeChain } from "./person-sync.ts";
 import { AT_ODDS } from "./person-chains.ts";
+import { MarkRefusal, stationMarksOf } from "./station-marks.ts";
 import { WaysRefusal, setRelays, setWay, waysOf as workspaceWaysOf } from "./ways.ts";
 import { join } from "node:path";
 import { FORK, NOT_GIVEN, meshDir, personChainsOf } from "../cloud/state.ts";
@@ -417,6 +418,32 @@ export function waysRoute(cloud: Cloud, method: string, body: Buffer, viewer: Ad
     return [400, { error: "relays: a list of URLs, or way and on" }];
   } catch (e) {
     if (e instanceof WaysRefusal) return [e.message.startsWith("the last relay") ? 409 : 400, { error: e.message }];
+    throw e;
+  }
+}
+
+/// GET /station-marks: the names and marks this station keeps of the asker's workspace's stations, by id (mesh/
+/// station-marks.ts; one with none kept is as still.fail cloud lists it). PUT /station-mark: this station's own changed,
+/// `{name, emoji, icon}` (each left out stays as it was; "" takes an emoji or an icon away), by an owner or an admin.
+export function stationMarksRoute(cloud: Cloud, method: string, body: Buffer, viewer: Admitted["viewer"], own: boolean): [number, unknown] {
+  const marks = stationMarksOf(cloud);
+  const ws = viewer.workspace || cloud.home() || "";
+  if (!own) return method === "GET" ? [200, { marks: marks.of(ws) }] : [405, { error: "GET" }];
+  if (method !== "PUT") return [405, { error: "PUT" }];
+  if (!managesStation(viewer)) return [403, { error: "only the workspace's owners and admins change a station's name and icon" }];
+  let said: any;
+  try {
+    said = JSON.parse(body.toString("utf8") || "{}");
+  } catch {
+    return [400, { error: "invalid JSON" }];
+  }
+  if (said === null || typeof said !== "object") return [400, { error: "name, emoji, icon" }];
+  try {
+    // (where it keeps none yet, its name as the cloud lists it here; the device sends all three, so its emoji and icon)
+    const was = { name: cloud.membership(ws)?.name || cloud.state?.name || "", emoji: "", icon: "" };
+    return [200, marks.change({ name: said.name, emoji: said.emoji, icon: said.icon }, was)];
+  } catch (e) {
+    if (e instanceof MarkRefusal) return [400, { error: e.message }];
     throw e;
   }
 }
@@ -873,6 +900,12 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   // The workspace's ways (mesh/ways.ts): read by its members' devices, changed from the app's 连接方式.
   if ((at < 0 ? rest : rest.slice(0, at)) === "/ways") {
     const [status, said] = waysRoute(m.cloud, method, body, viewer);
+    return answer(status, said);
+  }
+  // The stations' names and marks (mesh/station-marks.ts): read by its members' devices, this station's own changed.
+  const marksPath = at < 0 ? rest : rest.slice(0, at);
+  if (marksPath === "/station-marks" || marksPath === "/station-mark") {
+    const [status, said] = stationMarksRoute(m.cloud, method, body, viewer, marksPath === "/station-mark");
     return answer(status, said);
   }
   const lockPart = /^\/lock\/(person|devices|bodies|logs)$/.exec(at < 0 ? rest : rest.slice(0, at));

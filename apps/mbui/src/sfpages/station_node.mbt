@@ -318,6 +318,7 @@ fn station_head_node(
         @sf.presses_node(m, fn() {
           let now = @signals.untracked(s)
           let workspace = @signals.untracked(here)
+          guard flag(now, "online") else { @settings.mark_offline(core, text(now, "name")) }
           open_mark_pick(core, text(now, "name"), text(now, "emoji"), text(now, "icon"), @sf.t("android-settings.station.emojiWhat"), fn(
             emoji,
             icon,

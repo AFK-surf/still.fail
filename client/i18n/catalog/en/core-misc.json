@@ -137,6 +137,8 @@
   "core-misc.decisionForm.closed": "The automatic decisions draft was closed",
   "core-misc.decisionForm.pickModel": "Choose a model for the completion check",
   "core-misc.doing.rechecking": "Station not responding; waiting to confirm whether it succeeded",
+  "core-misc.stationMark.offline": "{name} is offline: its name and icon can be changed once it is back online",
+  "core-misc.stationMark.unknown": "This workspace has no such station",
   "core-misc.host.bad_message": "Unrecognized message: {error}",
   "core-misc.host.bad_subprotocol": "Invalid WebSocket subprotocol",
   "core-misc.host.crashed": "Core crashed: {reason}",

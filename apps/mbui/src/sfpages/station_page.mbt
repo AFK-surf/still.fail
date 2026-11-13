@@ -129,6 +129,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
       let mid = c.id("station-mark/" + address)
       if manager {
         c.on_press(mid, fn() {
+          guard online else { @settings.mark_offline(core, name) }
           open_mark_pick(core, name, text(s, "emoji"), text(s, "icon"), @sf.t("android-settings.station.emojiWhat"), fn(
             emoji,
             icon,
@@ -214,6 +215,7 @@ fn joined_text(s : Json?) -> String {
 /// Its name asked anew (RenameStationDialog), kept when it changed (`workspace.renameStation`).
 fn station_rename(core : Core, here : Here, s : Json?) -> Unit {
   let name = text(s, "name")
+  guard flag(s, "online") else { @settings.mark_offline(core, name) }
   ask(@sf.t("web-pages.settings.stations.rename"), name, @sf.t("web-pages.settings.stations.namePrompt"), @sf.t("common.save"), fn(
     line,
   ) {

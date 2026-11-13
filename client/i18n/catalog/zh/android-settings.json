@@ -509,6 +509,7 @@
   "android-settings.station.image": "上传图片",
   "android-settings.station.imageAnother": "更换图片",
   "android-settings.station.imageFailed": "无法读取此图片，或无法压缩到足够小",
+  "android-settings.station.markOffline": "「{name}」离线，等它上线后才能修改名字和图标",
   "android-settings.station.emojiWhat": "设置图标",
   "android-settings.station.emojiSet": "已设置图标",
   "android-settings.station.renamePlaceholder": "例如机器名：willow",

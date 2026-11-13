@@ -85,6 +85,16 @@
   packets and one that is slow is not taken, so an approval would guard nothing; the tool adds one only once this
   station reached it as a relay, and who added it is kept and shown.
 
+## A station's name and icon
+
+- A station's name and mark (an emoji, a glyph, a picture's address) are its own (`src/mesh/station-marks.ts`; the
+  user, 2026-11-14: 「谁看都存在 station 上」, one for every workspace it is in, changed only while it is up): set on it by an
+  owner or admin (`PUT /station-mark`), a copy of each kept by the other stations of its workspaces and brought level
+  between them, read by devices (`GET /station-marks`) and told changed (`stationMarks`). One with no record yet is as
+  still.fail cloud lists it; the device writes the cloud too while apps from before read only that list. A picture
+  itself stays in the cloud's store of pictures, the record keeping its address. A station that only runs tasks keeps
+  none (it asks and answers nothing new); its name stays the cloud's.
+
 ## A station's mode: whole, or only tasks (a rig)
 
 - A station is whole, or it only runs tasks (只执行任务; `rig` in the code: `src/rig/`; the user, 2026-11-04 and

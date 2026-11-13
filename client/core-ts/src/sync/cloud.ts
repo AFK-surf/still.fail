@@ -20,6 +20,7 @@ import { equal, isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
 import { CARRY_BYTES, type LockClaim } from "../lock.ts";
 import * as prefs from "../prefs.ts";
 import { Priority } from "./scheduler.ts";
+import { keptMarks, overlaid } from "../station-marks-kept.ts";
 
 /// The first wait before an events socket is opened again; it doubles up to a minute, back to the first after one
 /// held a minute.
@@ -240,7 +241,8 @@ export class CloudSync {
         // down): tried now, as when the event says so.
         const was = core.data.shared(topic);
         const offline = new Set((isObject(was) && Array.isArray(was.stations) ? was.stations : []).flatMap((s) => (isObject(s) && typeof s.id === "string" && s.online === false ? [s.id] : [])));
-        core.data.set(topic, answer.success);
+        // (its stations' names and marks as the stations keep them laid over the cloud's list: station-marks-kept.ts)
+        core.data.set(topic, overlaid(answer.success, keptMarks(core.data, id)));
         const now = answer.success;
         for (const s of isObject(now) && Array.isArray(now.stations) ? now.stations : []) {
           if (isObject(s) && typeof s.id === "string" && s.online === true && offline.has(s.id)) core.stations?.cameOnline(`${id}/${s.id}`);
