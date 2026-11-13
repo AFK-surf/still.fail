@@ -679,6 +679,9 @@ struct Node {
   /// the id it is one thing by with another, and how it flies from that one (View::shared: shared.mbt); none, not
   mut share : String?
   mut share_flight : Flight?
+  /// the end of a flight that stays where it is (View::shared's `stays`: a thumbnail), drawn nowhere while one of its
+  /// id that moves lives
+  mut share_stays : Bool
   /// on a flight's way, drawn over the rest of its layer where the flight has it (shared.mbt); none, where it is
   mut lift : Lift?
 }
@@ -1196,6 +1199,9 @@ pub struct Tree {
   /// whether what flies is being put in the order over the rest of its layer (Tree::ordered_lifted): shared.mbt
   priv shared_live : Map[String, Int]
   priv mut shared_n : Int
+  /// of those, how many with each id move (none said to stay: View::shared's `stays`), and those that stay, by id
+  priv shared_moving : Map[String, Int]
+  priv shared_stays : Map[String, Array[Int]]
   priv departures : Array[Departure]
   priv arrivals : Array[NodeId]
   priv mut pairs_asked : Bool
@@ -1477,6 +1483,8 @@ pub fn Tree::new(
     on_modals: fn() {  },
     shared_live: {},
     shared_n: 0,
+    shared_moving: {},
+    shared_stays: {},
     departures: [],
     arrivals: [],
     pairs_asked: false,
@@ -1746,6 +1754,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.source = None
       n.share = None
       n.share_flight = None
+      n.share_stays = false
       n.lift = None
       i
     }
@@ -1902,6 +1911,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         source: None,
         share: None,
         share_flight: None,
+        share_stays: false,
         lift: None,
       })
       self.nodes.length() - 1
@@ -11307,7 +11317,7 @@ fn Tree::each_drawn_in_order(
         lx = fx
         ly = fy
       }
-      None => ()
+      None => if n.share_stays && self.stays_hidden(n) { a = 0.0 }
     }
     wx.unsafe_set(i, x)
     wy.unsafe_set(i, y)
@@ -11412,7 +11422,7 @@ pub fn Tree::drawn_one(
         ux = fx
         uy = fy
       }
-      None => ()
+      None => if n.share_stays && self.stays_hidden(n) { a = 0.0 }
     }
   }
   Some((c, x, y, a, s, ux, uy, i))
@@ -11776,7 +11786,7 @@ fn Tree::projected(self : Tree, at : Int) -> (Double, Double, Double, Double) {
         a = fa
         s = fs
       }
-      None => ()
+      None => if m.share_stays && self.stays_hidden(m) { a = 0.0 }
     }
   }
   (x, y, a, s)
