@@ -33,8 +33,8 @@ export interface OperationParams {
   "decision.close": { thread: number; seq: number; option: string };
   "chat.report": { thread: number; seq: number };
   "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; profiles?: string[] | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; preset?: string | null | undefined };
-  "preset.add": { name: string; dirs: unknown; instructions?: string | null | undefined };
-  "preset.put": { id: string; name: string; dirs: unknown; instructions?: string | null | undefined };
+  "preset.add": { name: string; dirs: unknown; instructions?: string | null | undefined; autoStation?: boolean | null | undefined; stations?: string[] | null | undefined; model?: unknown };
+  "preset.put": { id: string; name: string; dirs: unknown; instructions?: string | null | undefined; autoStation?: boolean | null | undefined; stations?: string[] | null | undefined; model?: unknown };
   "preset.delete": { id: string };
   "preset.clone": { url: string };
   "preset.cloneDrop": { id: string };

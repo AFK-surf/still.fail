@@ -581,7 +581,80 @@ export class Choose implements Owner {
     if (station !== null) this.#keepStation(scope, station);
     // the preset, whichever station it is of (`presetStation`, its address; "" for none)
     const preset = get(params, "preset");
-    if (typeof preset === "string") this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: text(get(params, "presetStation")) ?? "" }, false);
+    if (typeof preset === "string") {
+      const presetStation = text(get(params, "presetStation")) ?? "";
+      this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: presetStation }, false);
+      if (preset !== "" && station === null && !FIELDS.some((f) => get(params, f) !== undefined)) {
+        const found = this.#online(scope);
+        const online = Array.isArray(found) ? found[0] : [];
+        const picked = this.#picked(scope, this.#workspacePresets(online));
+        if (picked !== undefined) {
+          const p = picked.p;
+          const pm = get(p, "model");
+          const wantModel = isObject(pm) ? text(get(pm, "model")) : null;
+          const pickBest = (pool: J[]): string | null => {
+            if (pool.length === 0) return null;
+            const compatible =
+              wantModel !== null
+                ? pool.filter((s) => typeof s.station === "string" && optionOf(this.#onStation(s.station)[0], wantModel) !== undefined)
+                : pool;
+            const list = compatible.length > 0 ? compatible : pool;
+            const sorted = [...list].sort((a, b) => {
+              const ra = typeof get(get(get(a, "overview"), "counts"), "running") === "number" ? a.overview.counts.running : 0;
+              const rb = typeof get(get(get(b, "overview"), "counts"), "running") === "number" ? b.overview.counts.running : 0;
+              return ra - rb;
+            });
+            const best = sorted[0];
+            return best !== undefined && typeof best.id === "string" ? best.id : null;
+          };
+          let targetStationId: string | null = null;
+          const singleStation = text(get(p, "station"));
+          const subsetStations = Array.isArray(get(p, "stations"))
+            ? get(p, "stations").filter((x: unknown): x is string => typeof x === "string" && x !== "")
+            : [];
+          if (singleStation !== null) {
+            const match = online.find((s) => s.id === singleStation || s.station === singleStation);
+            targetStationId = match !== undefined && typeof match.id === "string" ? match.id : stationId(singleStation);
+          } else if (subsetStations.length > 0) {
+            const pool = online.filter((s) => subsetStations.includes(s.id) || subsetStations.includes(s.station));
+            targetStationId = pickBest(pool);
+          } else if (get(p, "autoStation") === true) {
+            targetStationId = pickBest(online);
+          }
+          if (targetStationId !== null && targetStationId !== "") {
+            this.#keepStation(scope, targetStationId);
+          }
+          if (isObject(pm) && wantModel !== null) {
+            const id = targetStationId ?? this.#shown(scope);
+            const addr = address(scope, id);
+            const [options, now] = this.#onStation(addr);
+            const next: J = {
+              runtime: now.runtime,
+              model: now.entry !== null ? now.entry.model : null,
+              effort: now.effort,
+              fast: now.fast,
+              context: now.context,
+              profile: now.profile,
+              profiles: now.profiles,
+            };
+            const runs = arr(get(optionOf(options, wantModel), "runtimes"));
+            const rt = text(get(pm, "runtime"));
+            if (rt !== null) {
+              next.runtime = rt;
+            } else if (!runs.some((r) => equal(r, next.runtime))) {
+              next.runtime = runs[0] ?? next.runtime;
+            }
+            next.model = wantModel;
+            next.effort = text(get(pm, "effort"));
+            if (typeof get(pm, "fast") === "boolean") next.fast = pm.fast;
+            if (get(pm, "context") !== undefined) next.context = contextOf(pm.context);
+            if (get(pm, "profile") !== undefined) next.profile = text(pm.profile) ?? "";
+            if (get(pm, "profiles") !== undefined) next.profiles = normProfiles(pm.profiles);
+            this.#keepChoice(scope, id, next);
+          }
+        }
+      }
+    }
     if (FIELDS.some((f) => get(params, f) !== undefined)) {
       const id = station ?? this.#shown(scope);
       const addr = address(scope, id);

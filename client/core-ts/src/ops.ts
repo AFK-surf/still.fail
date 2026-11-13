@@ -95,8 +95,8 @@ export const PARAMS: Record<string, string> = {
   "decision.close": "thread:number seq:number option:string",
   "chat.report": "thread:number seq:number",
   "session.new": "runtime?:string profile?:string profiles?:strings model?:string effort?:string fast?:boolean context?:number preset?:string",
-  "preset.add": "name:string dirs:json instructions?:string",
-  "preset.put": "id:string name:string dirs:json instructions?:string",
+  "preset.add": "name:string dirs:json instructions?:string autoStation?:boolean stations?:strings model?:json",
+  "preset.put": "id:string name:string dirs:json instructions?:string autoStation?:boolean stations?:strings model?:json",
   "preset.delete": "id:string",
   "preset.clone": "url:string",
   "preset.cloneDrop": "id:string",
@@ -446,9 +446,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/sessions", p.pick(["runtime", "profile", "profiles", "model", "effort", "fast", "context", "preset"]), { kind: "session", key: null });
     // The workspace's presets on the station: what a chat starts knowing, chosen as it is opened.
     case "preset.add":
-      return op("POST", () => "/presets", { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
+      return op("POST", () => "/presets", { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "", ...p.pick(["autoStation", "stations", "model"]) }, { kind: "presets" });
     case "preset.put":
-      return op("PUT", () => `/presets/${p.at("id")}`, { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
+      return op("PUT", () => `/presets/${p.at("id")}`, { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "", ...p.pick(["autoStation", "stations", "model"]) }, { kind: "presets" });
     case "preset.delete":
       return op("DELETE", () => `/presets/${p.at("id")}`, null, { kind: "presets" });
     // A repository cloned from git into the station's repository cache, to be picked once there: answers at once

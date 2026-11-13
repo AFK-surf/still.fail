@@ -472,6 +472,58 @@ test "by touch in the window's middle (a fold laid open) the preset's dialog, �
 }
 
 ///|
+test "a preset can leave directories, station, and model unrestricted, or bind and clear station and model via the two capsules" {
+  new_run()
+  let calls : Array[Made] = []
+  let t = preset_mode("newchat-preset-new", wide=true, src=preset_calls("newchat-preset-new", calls))
+  assert_true(shows(t, "不限 Station") && shows(t, "不限模型"), msg=runs(t))
+  t.tap_text("比如：still.fail 开发")
+  t.type_text("代码审查")
+  t.frame()
+  // Pick Station via multi-select panel, clear it with ×, then pick Willow
+  press(t, "不限 Station")
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "全选"), msg=runs(t))
+  press(t, "全选")
+  t.frame()
+  press(t, "Maple")
+  t.frame()
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "Willow"), msg=runs(t))
+  press(t, "清除 Station")
+  t.frame()
+  assert_true(shows(t, "不限 Station"), msg=runs(t))
+  press(t, "不限 Station")
+  t.run_for(@ui.move_most_ms)
+  press(t, "Willow")
+  t.frame()
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  // Pick Model via model panel, clear it with ×, then pick Opus 5.5
+  press(t, "不限模型")
+  t.run_for(@ui.move_most_ms)
+  press(t, "Opus 5.5")
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "Opus 5.5 · 高"), msg=runs(t))
+  press(t, "清除模型")
+  t.frame()
+  assert_true(shows(t, "不限模型"), msg=runs(t))
+  press(t, "不限模型")
+  t.run_for(@ui.move_most_ms)
+  press(t, "Opus 5.5")
+  t.run_for(@ui.move_most_ms)
+  // Create with dirs=[] and bound station + model
+  press(t, "创建")
+  t.frame()
+  let made = Some(named(calls, "preset.add")[0].params)
+  assert_eq(text(made, "name"), "代码审查")
+  assert_eq(items(made, "dirs").length(), 0)
+  assert_eq(items(made, "stations"), [Json::string("st1")])
+  assert_eq(text(field(made, "model"), "model"), "claude-opus-5-5")
+}
+
+///|
 test "the preset's screens keep every rule, on a phone and on a desk" {
   let faults : Array[String] = []
   for mode in [

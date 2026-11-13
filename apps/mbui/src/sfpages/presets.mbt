@@ -68,6 +68,8 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
         }
       })
       |> ignore
+    } else if name != "" {
+      @sf.icon(c, "sparks", size=new_mark, color=t.p.accent_text) |> ignore
     } else {
       @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
     }
@@ -156,6 +158,10 @@ priv struct PresetClone {
 priv struct PresetEditing {
   dirs : @signals.Signal[Array[Json]]
   clones : @signals.Signal[Array[PresetClone]]
+  auto_station : @signals.Signal[Bool]
+  station : @signals.Signal[String]
+  stations : @signals.Signal[Array[String]]
+  model : @signals.Signal[Json?]
   name : @ui.Field
   instructions : @ui.Field
   mut auto : String
@@ -192,6 +198,10 @@ fn preset_dialog(
   let e : PresetEditing = {
     dirs: @signals.signal([]),
     clones: @signals.signal(clones),
+    auto_station: @signals.signal(false, same=fn(a, b) { a == b }),
+    station: @signals.signal("", same=fn(a, b) { a == b }),
+    stations: @signals.signal([]),
+    model: @signals.signal(None),
     name: @ui.Field::new(),
     instructions: @ui.Field::new(),
     auto: "",
@@ -262,6 +272,10 @@ fn preset_fields(
     e.name.set(text(Some(p), "name"))
     e.instructions.set(text(Some(p), "instructions"))
     e.dirs.set(items(Some(p), "dirs"))
+    e.auto_station.set(flag(Some(p), "autoStation"))
+    e.station.set(text(Some(p), "station"))
+    e.stations.set(items(Some(p), "stations").filter_map(fn(s) { if s is String(str) && str != "" { Some(str) } else { None } }))
+    e.model.set(field(Some(p), "model"))
   })
   // its name: the first folder's until one is typed
   v.reacts(
@@ -315,6 +329,7 @@ fn preset_fields(
         ""
       }
     }, fn(b) { preset_dirs_node(b, src, address, stations, e, close) })
+    preset_capsules_node(col, src, address, stations, e)
     @sf.field_node(col, fn() { @sf.t("web-main.preset.name") }, fn(b) {
       @sf.input_node(b, e.name, placeholder=@sf.t("web-main.preset.namePlaceholder")) |> ignore
     })
@@ -657,7 +672,7 @@ fn preset_foot(
   @sf.foot_spacer_node(v)
   @sf.button_node(v, fn() { @sf.t("common.cancel") }, close, tone=Ghost) |> ignore
   let named = fn() { e.name.text().trim(chars=" \n").to_owned() }
-  let ready = fn() { e.dirs.get().length() > 0 && named() != "" && !e.clones.get().iter().any(fn(k) { clone_failed(src, k) is None }) }
+  let ready = fn() { named() != "" && !e.clones.get().iter().any(fn(k) { clone_failed(src, k) is None }) }
   @sf.button_node(
     v,
     fn() { if id == "" { @sf.t("web-main.preset.create") } else { @sf.t("common.save") } },
@@ -684,6 +699,26 @@ fn preset_foot(
           }),
         ),
         "instructions": Json::string(@signals.untracked(fn() { e.instructions.text() })),
+      }
+      if e.auto_station.untracked() {
+        params["autoStation"] = Json::boolean(true)
+      } else if e.station.untracked() != "" {
+        params["stations"] = Json::array([Json::string(e.station.untracked())])
+      } else if e.stations.untracked().length() > 0 {
+        params["stations"] = Json::array(e.stations.untracked().map(fn(s) { Json::string(s) }))
+      }
+      match e.model.untracked() {
+        Some(m) if text(Some(m), "model") != "" => {
+          let pm : Map[String, Json] = { "model": Json::string(text(Some(m), "model")) }
+          if text(Some(m), "runtime") != "" {
+            pm["runtime"] = Json::string(text(Some(m), "runtime"))
+          }
+          if text(Some(m), "effort") != "" {
+            pm["effort"] = Json::string(text(Some(m), "effort"))
+          }
+          params["model"] = Json::object(pm)
+        }
+        _ => ()
       }
       if id != "" {
         params["id"] = Json::string(id)
@@ -1111,6 +1146,340 @@ let preset_drop_words : Int = 1
 ///|
 /// The last it gives up, after the station's name: its chevron.
 let preset_drop_chevron : Int = new_drop_station_name + 1
+
+///|
+/// Station 与模型（可选）：一行双胶囊，支持不限（不选）或指定 Station（单选/多选自动分配）与模型。
+fn preset_capsules_node(
+  col : @view.View,
+  src : Source,
+  address : String,
+  stations : Array[Json],
+  e : PresetEditing,
+) -> Unit {
+  let has_station = fn() {
+    e.auto_station.get() || e.station.get() != "" || e.stations.get().length() > 0
+  }
+  let station_words = fn() {
+    let first_name = match stations.get(0) {
+      Some(s) if text(Some(s), "name") != "" => text(Some(s), "name")
+      _ => preset_station_name(address, "", stations)
+    }
+    if e.auto_station.get() {
+      if first_name != "" { "自动 · " + first_name } else { "自动分配" }
+    } else if e.station.get() != "" {
+      let sid = e.station.get()
+      match stations.iter().find_first(fn(s) { text(Some(s), "id") == sid || text(Some(s), "station") == sid }) {
+        Some(s) if text(Some(s), "name") != "" => text(Some(s), "name")
+        _ => sid
+      }
+    } else if e.stations.get().length() > 0 {
+      "\{e.stations.get().length()} 台 station"
+    } else {
+      "不限 Station"
+    }
+  }
+  let has_model = fn() {
+    match e.model.get() {
+      Some(m) => text(Some(m), "model") != ""
+      None => false
+    }
+  }
+  let model_words = fn() {
+    match e.model.get() {
+      Some(m) if text(Some(m), "model") != "" => {
+        let mname = if text(Some(m), "name") != "" { text(Some(m), "name") } else { text(Some(m), "model") }
+        let eff = effort_text(text(Some(m), "effort"))
+        if eff != "" { mname + " · " + eff } else { mname }
+      }
+      _ => "不限模型"
+    }
+  }
+  @sf.field_node(col, fn() { "Station 与模型（可选）" }, fn(b) {
+    b.box(fn(bar) {
+      @sf.style_node(bar, fn() { preset_simple_capsules })
+      preset_capsule_pill(
+        bar,
+        fn(l) {
+          @sf.icon_node(
+            l,
+            "sliders",
+            15.0,
+            By(fn() { if has_station() { @sf.theme().p.text } else { @sf.theme().p.muted } }),
+          )
+          |> ignore
+        },
+        station_words,
+        has_station,
+        fn() { preset_station_open(src, address, stations, e) },
+        "清除 Station",
+        fn() {
+          e.auto_station.set(false)
+          e.station.set("")
+          e.stations.set([])
+        },
+      )
+      preset_capsule_pill(
+        bar,
+        fn(l) {
+          @sf.icon_node(
+            l,
+            "sparks",
+            15.0,
+            By(fn() { if has_model() { @sf.theme().p.accent_text } else { @sf.theme().p.muted } }),
+          )
+          |> ignore
+        },
+        model_words,
+        has_model,
+        fn() { preset_model_open(src, address, e) },
+        "清除模型",
+        fn() { e.model.set(None) },
+      )
+    })
+    |> ignore
+  })
+}
+
+///|
+fn preset_capsule_pill(
+  parent : @view.View,
+  lead : (@view.View) -> Unit,
+  words : () -> String,
+  has_value : () -> Bool,
+  on_open : () -> Unit,
+  clear_label : String,
+  on_clear : () -> Unit,
+) -> Unit {
+  parent.box(fn(pill) {
+    @sf.style_node(pill, fn() { preset_capsule_outer })
+    pill
+    .radius(Is(999.0))
+    .ground(By(fn() { if has_value() { @sf.theme().p.neutral_bg } else { 0L } }))
+    .edge(By(fn() { (1.0, @sf.theme().p.line) }))
+    |> ignore
+    pill.box(fn(btn) {
+      @sf.style_node(btn, fn() { if has_value() { preset_capsule_btn_active } else { preset_capsule_btn } })
+      btn
+      .radius(Is(999.0))
+      .ground(By(fn() { if @sf.lit_node(btn) { @sf.theme().p.hover } else { 0L } }))
+      .says(By(fn() { Some(@view.said(Button, label=words())) }))
+      |> ignore
+      @sf.presses_node(btn, on_open)
+      lead(btn)
+      @sf.words_node(btn, words, fn() { if has_value() { new_capsule_words } else { preset_capsule_quiet } }) |> ignore
+      @sf.icon_node(btn, "chevron-down", new_chevron, By(fn() { @sf.theme().p.muted })) |> ignore
+    })
+    |> ignore
+    pill.show(has_value, fn(c) {
+      c.box(fn(x) {
+        @sf.style_node(x, fn() { preset_capsule_clear_btn })
+        x
+        .radius(Is(999.0))
+        .ground(By(fn() { if @sf.lit_node(x) { @sf.theme().p.hover } else { 0L } }))
+        .says(Is(Some(@view.said(Button, label=clear_label))))
+        |> ignore
+        @sf.presses_node(x, on_clear)
+        @sf.icon_node(x, "close", 13.0, By(fn() { @sf.theme().p.muted })) |> ignore
+      })
+      |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+fn preset_station_id(s : Json) -> String {
+  let id = text(Some(s), "id")
+  if id != "" { id } else { text(Some(s), "station") }
+}
+
+///|
+fn preset_station_open(
+  _src : Source,
+  _address : String,
+  stations : Array[Json],
+  e : PresetEditing,
+) -> Unit {
+  let all_ids = stations.map(preset_station_id).filter(fn(id) { id != "" })
+  let current_selected = fn() -> Array[String] {
+    if e.auto_station.get() {
+      all_ids
+    } else if e.station.get() != "" {
+      [e.station.get()]
+    } else {
+      e.stations.get()
+    }
+  }
+  let apply_selected = fn(next : Array[String]) {
+    if next.length() == 0 {
+      e.auto_station.set(false)
+      e.station.set("")
+      e.stations.set([])
+    } else if next.length() == 1 {
+      e.auto_station.set(false)
+      e.station.set(next[0])
+      e.stations.set([])
+    } else if all_ids.length() > 1 && next.length() >= all_ids.length() {
+      e.auto_station.set(true)
+      e.station.set("")
+      e.stations.set([])
+    } else {
+      e.auto_station.set(false)
+      e.station.set("")
+      e.stations.set(next)
+    }
+  }
+  let unrestricted = fn() {
+    !e.auto_station.get() && e.station.get() == "" && e.stations.get().length() == 0
+  }
+  let all_checked = fn() {
+    e.auto_station.get() || (all_ids.length() > 1 && e.stations.get().length() >= all_ids.length())
+  }
+  let some_checked = fn() {
+    !unrestricted() && !all_checked()
+  }
+  @sf.panel_nodes(
+    @sf.t("android-chat.new.station.pick"),
+    fn(n, close) {
+      @sf.choice_row_node(
+        n,
+        fn() { "不限 Station" },
+        unrestricted,
+        compact=true,
+        note=fn() { "保持新对话当前选中的 station" },
+        press=fn() {
+          apply_selected([])
+          close()
+        },
+      )
+      @sf.choice_row_node(
+        n,
+        fn() { @sf.t("web-main.model.selectAll") },
+        fn() { false },
+        compact=true,
+        lead=fn(l) { @sf.check_mark_node(l, all_checked, mixed=some_checked) },
+        note=fn() { "在所有可用 station 间按负载自动分配" },
+        press=fn() {
+          if all_checked() {
+            apply_selected([])
+          } else {
+            e.auto_station.set(true)
+            e.station.set("")
+            e.stations.set([])
+          }
+        },
+      )
+      for s in stations {
+        let sid = preset_station_id(s)
+        let sname = preset_station_name(text(Some(s), "station"), text(Some(s), "name"), stations)
+        let checked = fn() {
+          e.auto_station.get() || e.station.get() == sid || e.stations.get().contains(sid)
+        }
+        @sf.choice_row_node(
+          n,
+          fn() { sname },
+          fn() { false },
+          compact=true,
+          lead=fn(l) { @sf.check_mark_node(l, checked) },
+          note=fn() { text(Some(s), "summary") },
+          press=fn() {
+            let cur = @signals.untracked(current_selected)
+            if cur.contains(sid) {
+              apply_selected(cur.filter(fn(x) { x != sid }))
+            } else {
+              apply_selected([..cur, sid])
+            }
+          },
+        )
+      }
+      n.box(fn(z) { @sf.style_node(z, fn() { preset_list_end }) }) |> ignore
+    },
+    from=Unanchored,
+  )
+}
+
+///|
+fn preset_model_open(src : Source, address : String, e : PresetEditing) -> Unit {
+  let pick_view = fn() {
+    src.topic("pick", { "station": Json::string(address), "of": Json::string("new") }).get().value
+  }
+  @sf.panel_nodes(
+    @sf.t("android-chat.new.model"),
+    fn(n, close) {
+      @sf.choice_row_node(
+        n,
+        fn() { "不限模型" },
+        fn() { !(e.model.get() is Some(_)) },
+        compact=true,
+        note=fn() { "保持新对话当前选中的模型与思考深度" },
+        press=fn() {
+          e.model.set(None)
+          close()
+        },
+      )
+      for opt in items(pick_view(), "options") {
+        let one = Some(opt)
+        let mid = text(one, "model")
+        let mname = if text(one, "name") != "" { text(one, "name") } else { mid }
+        let usual = field(one, "usual")
+        let rt = if text(usual, "runtime") != "" {
+          text(usual, "runtime")
+        } else {
+          match items(one, "runtimes").get(0) {
+            Some(String(r)) => r
+            _ => ""
+          }
+        }
+        let eff = text(usual, "effort")
+        let maker_id = text(field(one, "maker"), "id")
+        let chosen = fn() { text(e.model.get(), "model") == mid }
+        @sf.choice_row_node(
+          n,
+          fn() { mname },
+          chosen,
+          compact=true,
+          lead=fn(l) { ignore(@sf.maker_mark_node(l, maker_id, rt, 16.0)) },
+          note=fn() { text(one, "usualText") },
+          press=fn() {
+            e.model.set(
+              Some(
+                Json::object({
+                  "model": Json::string(mid),
+                  "name": Json::string(mname),
+                  "runtime": Json::string(rt),
+                  "effort": Json::string(eff),
+                }),
+              ),
+            )
+            close()
+          },
+        )
+      }
+      n.box(fn(z) { @sf.style_node(z, fn() { preset_list_end }) }) |> ignore
+    },
+    from=Unanchored,
+  )
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_simple_capsules : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_capsule_outer : @ui.Style = @ui.css("row align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_capsule_btn : @ui.Style = @ui.css("row min_h=S11 px=S3 gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_capsule_btn_active : @ui.Style = @ui.css("row min_h=S11 pl=S3 pr=S1_5 gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_capsule_clear_btn : @ui.Style = @ui.css("row w=S11 h=S11 align=ACenter justify=JCenter")
 
 ///|
 /// The control's words while no preset is picked: as quiet as what says what is not chosen.

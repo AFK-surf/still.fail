@@ -440,6 +440,14 @@ pub fn model_triple(
           })
           |> ignore
       }
+      match text(v, "subagentText") {
+        "" => ()
+        sub =>
+          c.box(style=triple_part, fn() {
+            c.text(sub, style=words) |> ignore
+          })
+          |> ignore
+      }
       if account is Some(Object(_)) {
         // (each of its pieces in the control's row: its name the first to go, then the rest of it)
         let profile = field(account, "profile")
@@ -1963,7 +1971,9 @@ fn triple_accounts_node(n : @view.View, src : Source, station : String, of : Str
     fn() { false },
     compact=true,
     disabled=single_only,
-    lead=fn(l) { @sf.check_mark_node(l, all_on, dimmed=single_only) },
+    lead=fn(l) {
+      @sf.check_mark_node(l, all_on, mixed=fn() { !all_on() && !none_on() }, dimmed=single_only)
+    },
     note=fn() { text(v(), "autoNote") },
     note_ink=fn() { if none_on() { @sf.theme().p.warn_ink } else { @sf.theme().p.muted } },
     trail?=if of.has_prefix("session:") {
