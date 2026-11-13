@@ -1425,10 +1425,14 @@ pub fn Tester::text_menu(self : Tester) -> (Bool, Double, Double, Double, Double
 }
 
 ///|
-/// The words of the app's own item of the floating text menu as the host was last told them (@hostapi.text_menu_own;
-/// "" none).
-pub fn Tester::text_menu_own(self : Tester) -> String {
-  self.fake.text_menu_own
+/// The words of the app's own items of the floating text menu as the host was last told them, in their order
+/// (@hostapi.text_menu_own; none: none told).
+pub fn Tester::text_menu_own(self : Tester) -> Array[String] {
+  if self.fake.text_menu_own == "" {
+    []
+  } else {
+    self.fake.text_menu_own.split("\n").map(fn(s) { s.to_owned() }).collect()
+  }
 }
 
 ///|

@@ -893,7 +893,7 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
 }
 
-// The words of the app's own item of that menu (Host.textMenuOwn), offered where its `can` says 64.
+// The words of the app's own items of that menu, a line each (Host.textMenuOwn), offered where its `can` says 64.
 void mb_host_text_menu_own(moonbit_string_t words) {
   JNIEnv *env = env_();
   jstring j = jstr(env, words);

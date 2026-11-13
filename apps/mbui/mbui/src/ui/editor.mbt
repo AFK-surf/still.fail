@@ -2432,13 +2432,10 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
     // (words a finger picked with the pointer, let go of: finger_select.mbt)
     _ => finger_menu()
   }
-  // (the words of the app's own item where it offers one: told before the menu, picked_menu)
+  // (the words of the app's own items where it offers some, a line each: told before the menu, picked_menu)
   let own = match want {
     Some((_, _, _, _, can)) if (can & @hostapi.text_menu_own_item) != 0 =>
-      match picked_menu_own() {
-        Some((words, _)) => words
-        None => ""
-      }
+      picked_menu_own().map(fn(i) { i.0 }).join("\n")
     _ => ""
   }
   let sig = match want {

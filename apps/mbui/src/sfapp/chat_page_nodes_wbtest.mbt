@@ -1297,7 +1297,7 @@ test "小屏, a chat's page made with its inside nodes: a finger held still on a
   guard @ui.picked_now() is Some(p) else { fail("nothing picked by the finger held still") }
   assert_true(p.finger && p.text != "" && p.of.length() == 1, msg="\{p.text} of \{@ui.list_text(p.of)}, a finger's \{p.finger}")
   assert_true(t.text_menu().0, msg="no text menu over what the finger picked")
-  assert_eq(t.text_menu_own(), "引用")
+  assert_eq(t.text_menu_own(), ["引用"])
   assert_true(quote_nodes_pill(t) is None, msg="a pill over a finger's pick")
   let picked = p.text
   t.key(@hostapi.key_menu_own)

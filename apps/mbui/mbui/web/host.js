@@ -2515,9 +2515,10 @@
   // the native hosts' menus do (the field's keys 14, 13, 12; the clipboard's words put in as typed), in the
   // browser's language; put away when not shown, and as one of it is pressed.
   let menuEl = null;
-  // the words of the app's own item (@hostapi.text_menu_own), offered where `can` says 64, after the others
-  let menuOwn = '';
-  H.textMenuOwn = (s) => { menuOwn = s; };
+  // the words of the app's own items, a line each in their order (@hostapi.text_menu_own), offered where `can` says 64,
+  // after the others; the k-th chosen, the key 60 + k (8 at most)
+  let menuOwn = [];
+  H.textMenuOwn = (s) => { menuOwn = s ? s.split('\n').slice(0, 8) : []; };
   H.textMenu = (shown, x, y, w, h, can) => {
     if (!shown) {
       if (menuEl) { menuEl.remove(); menuEl = null; }
@@ -2539,7 +2540,7 @@
       [2, zh ? '复制' : 'Copy', () => cb.key(13, 0)],
       [4, zh ? '粘贴' : 'Paste', () => navigator.clipboard?.readText().then((t) => { if (t) { cb.text(0, t, 0, 0); H.requestFrame(); } }).catch(() => {})],
       [8, zh ? '全选' : 'Select all', () => cb.key(12, 0)],
-      [64, menuOwn, () => cb.key(19, 0)],
+      ...menuOwn.map((label, k) => [64, label, () => cb.key(60 + k, 0)]),
     ];
     menuEl.replaceChildren();
     for (const [bit, label, act] of items) {

@@ -52,8 +52,11 @@ fn chat_quote_take(src : Source, draft : String, rows : () -> ChatBodyRows) -> U
 fn chat_quote_node(v : @view.View, src : Source, r : ChatRef, rows : () -> ChatBodyRows) -> Unit {
   let draft = r.station + ":" + r.session
   // (a finger's pick: 引用 in the system's text menu over it, for what the list holds, where it lies within one message)
-  @ui.picked_menu(v, fn(_) { chat_picked_message(rows).map(fn(_) { @sf.t("web-main.chat.quote") }) }, fn() {
-    chat_quote_take(src, draft, rows)
+  @ui.picked_menu(v, fn(_) {
+    match chat_picked_message(rows) {
+      Some(_) => [(@sf.t("web-main.chat.quote"), fn() { chat_quote_take(src, draft, rows) })]
+      None => []
+    }
   })
   |> ignore
   v.pick(fn() { chat_quotable(rows).map(fn(q) { q.0.made }) }, fn(holds, made) {

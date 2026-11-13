@@ -362,12 +362,13 @@ final class Host {
     }
 
     /**
-     * The words of the app's own item of that menu (@hostapi.text_menu_own), offered where its {@code can} says 64,
-     * after the system's; chosen, the key 19. Said before the menu that offers it (posted in the same order).
+     * The words of the app's own items of that menu, a line each in their order (@hostapi.text_menu_own), offered where
+     * its {@code can} says 64, after the system's; the k-th chosen, the key 60 + k (8 at most). Said before the menu
+     * that offers them (posted in the same order).
      */
     static void textMenuOwn(String words) {
         main.post(() -> {
-            if (view != null) view.textMenuOwn = words;
+            if (view != null) view.textMenuOwn = words.isEmpty() ? new String[0] : words.split("\n", 8);
         });
     }
 

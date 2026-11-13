@@ -1925,13 +1925,18 @@ pub let text_menu_undo : Int = 16
 pub let text_menu_redo : Int = 32
 
 ///|
-/// The app's own item (text_menu's `can`): the words text_menu_own last said, after the system's; chosen, it comes as
-/// the key key_menu_own, the menu then gone.
+/// The app's own items (text_menu's `can`): those text_menu_own last said, in its order, after the system's; the k-th
+/// chosen comes as the key key_menu_own + k, the menu then gone.
 pub let text_menu_own_item : Int = 64
 
 ///|
-/// The key the app's own item of the floating text menu comes as, chosen (text_menu_own_item).
-pub let key_menu_own : Int = 19
+/// The key the app's own first item of the floating text menu comes as, chosen (text_menu_own_item): the k-th
+/// key_menu_own + k, as many as text_menu_own_most.
+pub let key_menu_own : Int = 60
+
+///|
+/// How many items of its own the app offers in the floating text menu at most (text_menu_own: the rest left out).
+pub let text_menu_own_most : Int = 8
 
 ///|
 /// The system's floating menu for a field's words (Android's text toolbar: ActionMode.TYPE_FLOATING) `shown` over the
@@ -1943,10 +1948,11 @@ pub fn text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, c
 }
 
 ///|
-/// The words of the app's own item of the floating text menu (a chat's 引用 of a message's words a finger picked),
-/// offered where text_menu's `can` has text_menu_own_item, after the system's items; said before the menu that offers
-/// it, again as they change. Chosen, it comes as the key key_menu_own, the menu then gone. Android's text toolbar and
-/// iOS's edit menu offer it, the web's bar too; a host with no floating menu nothing.
+/// The words of the app's own items of the floating text menu, a line each in their order (a chat's 引用, 分享这一轮,
+/// 复制链接 of a message's words a finger picked; text_menu_own_most at most), offered where text_menu's `can` has
+/// text_menu_own_item, after the system's items; said before the menu that offers them, again as they change. The k-th
+/// chosen comes as the key key_menu_own + k, the menu then gone. Android's text toolbar (its overflow where they do
+/// not fit) and iOS's edit menu offer them, the web's bar too; a host with no floating menu nothing.
 pub fn text_menu_own(words : String) -> Unit {
   current.val.text_menu_own(words)
 }
