@@ -11,10 +11,15 @@
 /// Station `address`'s page (StationSettings, StationScreen) made once in node `v`, as wide as `width` gives it, in the
 /// frame it is given: while the stations are read, or where it is gone, a made-up one's in its bones (station_waiting's);
 /// made again as the viewer comes to manage it or not. `stint`: the page's time on top (what a picture put up for its
-/// mark is asked for on).
+/// mark is asked for on). Its parts' choice pressed, what the part pressed reads as it is first drawn is asked of `src`
+/// (station_part_asks) and the page stays as it is, the choice showing what was pressed; the part is switched to whole in
+/// the frame that is answered, in the press's where it is already (sfbase's switch_answered): never a part's rows come one
+/// by one as the core answers them. What it reads by (@settings.station_parts: the part shown) changes only then; another
+/// part pressed, or the page left, gives the wait up, the choice back on what is shown.
 pub fn station_node(
   v : @view.View,
   core : Core,
+  src : Source,
   here : () -> Here,
   address : String,
   on_back~ : () -> Unit,
@@ -53,13 +58,13 @@ pub fn station_node(
     }
     match k.0 {
       Some(true) =>
-        station_view_node(p, core, here, fn() { @settings.station_of(core, here(), address) }, k.1, None, on_back, frame, said, width, tips, stint)
+        station_view_node(p, core, src, here, fn() { @settings.station_of(core, here(), address) }, k.1, None, on_back, frame, said, width, tips, stint)
       // (while they are read: a made-up one's in its bones, waiting on them; removed, or a link from before, the same,
       // waiting on nothing)
       found => {
         let wait = if found is None { @sf.t("common.readingStations") } else { "" }
         let sample = station_sample()
-        station_view_node(p, core.quiet(), here, fn() { Some(sample) }, false, Some(wait), on_back, frame, said, width, tips, stint)
+        station_view_node(p, core.quiet(), src, here, fn() { Some(sample) }, false, Some(wait), on_back, frame, said, width, tips, stint)
       }
     }
   })
@@ -71,6 +76,7 @@ pub fn station_node(
 fn station_view_node(
   p : @view.View,
   core : Core,
+  src : Source,
   here : () -> Here,
   s : () -> Json?,
   manager : Bool,
@@ -106,6 +112,53 @@ fn station_view_node(
       _ => "overview"
     }
   }
+  // (a part pressed and what waits for what it reads: one at a time. Pressed, the choice shows it; what is shown is
+  // `part`'s till what it reads is answered, then switched to it whole: station_node's)
+  let pressed : @signals.Signal[String?] = @signals.signal(None)
+  let waiting : Ref[@sfbase.PressWait?] = Ref(None)
+  let press = fn(to : String) {
+    @signals.untracked(fn() {
+      guard pressed.get() != Some(to) else { return }
+      // (the one pressed before: waited for no more, the choice back on what is shown)
+      match waiting.val {
+        Some(w) => {
+          waiting.val = None
+          w.give_up()
+        }
+        None => ()
+      }
+      if to == part() {
+        pressed.set(None)
+        return
+      }
+      pressed.set(Some(to))
+      // (in its bones nothing is read: switched at once)
+      let asks = if bones is None { station_part_asks(core, here(), address, s(), manager, to) } else { [] }
+      let w = @sfbase.switch_answered(
+        src,
+        asks,
+        station_shown_at(address),
+        fn() {
+          @settings.station_parts[address] = to
+          pressed.set(None)
+        },
+        let_go=fn() {
+          if pressed.untracked() == Some(to) {
+            pressed.set(None)
+          }
+        },
+      )
+      if w.waiting() {
+        waiting.val = Some(w)
+      }
+    })
+  }
+  let chosen = fn() {
+    match pressed.get() {
+      Some(p) => p
+      None => part()
+    }
+  }
   let blocks = fn() {
     let out = ["parts"]
     out.append(
@@ -120,8 +173,8 @@ fn station_view_node(
   }
   let block = fn(b : @view.View, key : String) {
     match key {
-      "parts" => station_parts_node(b, address)
-      "resources" => station_resources_node(b, core, here, s)
+      "parts" => station_parts_node(b, chosen, press)
+      "resources" => station_resources_node(b, core, here, s, fn() { press("processes") })
       "userPages" => station_user_pages_node(b, core, here, s)
       "agentPages" => station_agent_pages_node(b, core, here, s)
       "screens" => station_screens_node(b, core, here, s)
@@ -189,12 +242,18 @@ fn station_view_node(
 /// its screens, profiles, connects and folders, and what else of it has a page of its own.
 fn station_overview_keys(core : Core, s : Json?) -> Array[String] {
   let address = text(s, "station")
+  station_overview_keys_by(s, station_part_read(core, address, station_screens_ask(address)).value)
+}
+
+///|
+/// The keys of its overview's parts (station_overview_keys'), its screens as `screens` says them (None: not answered).
+fn station_overview_keys_by(s : Json?, screens : Json?) -> Array[String] {
   let o = field(s, "overview")
   let out = []
   if flag(s, "online") && field(s, "host") is Some(Object(_)) {
     out.push("resources")
   }
-  match (core.topic)("screens", { "station": str(address) }).get().value {
+  match screens {
     Some(Object(_)) as v => {
       let all = items(v, "screens")
       if all.iter().any(fn(sc) { is_user_screen(Some(sc)) }) || (flag(v, "browser") && flag(v, "control")) {
@@ -259,6 +318,89 @@ fn station_settings_keys(s : Json?, manager : Bool) -> Array[String] {
   }
   if field(o, "network") is Some(Object(_)) {
     out.push("network")
+  }
+  out
+}
+
+///|
+/// What a part of station `address`'s page reads by (each read's ask, said where the read is: a topic and its params),
+/// as it reads it: saying so where a part pressed handed it what it asked (sfbase's switch_answered, shown_read).
+fn station_part_read(core : Core, address : String, ask : (String, Map[String, Json])) -> @settings.Read {
+  let r = (core.topic)(ask.0, ask.1).get()
+  @sfbase.shown_read(station_shown_at(address))
+  r
+}
+
+///|
+/// What station `address`'s page's readers say they have read anew by, what a part pressed asked handed to them
+/// (sfbase's switch_answered, shown_read).
+fn station_shown_at(address : String) -> String {
+  "station\u{1}" + address
+}
+
+///|
+/// Its screens (the core's `screens` of station `address`): what its overview's keys and its screens' parts read.
+fn station_screens_ask(address : String) -> (String, Map[String, Json]) {
+  ("screens", { "station": str(address) })
+}
+
+///|
+/// How this device reaches station `address` (the core's `stationNet`): its resources' line.
+fn station_net_ask(address : String) -> (String, Map[String, Json]) {
+  ("stationNet", { "station": str(address) })
+}
+
+///|
+/// The workspaces station `address` is in (the core's `memberships`): its 设置's, for its managers.
+fn station_memberships_ask(address : String) -> (String, Map[String, Json]) {
+  ("memberships", { "station": str(address) })
+}
+
+///|
+/// The draft `form` of station `address`'s agents' variables (the core's `agentEnvForm`): its 设置's editor's.
+fn station_env_form_ask(address : String, form : String) -> (String, Map[String, Json]) {
+  ("agentEnvForm", { "station": str(address), "form": str(form) })
+}
+
+///|
+/// What block `key` of station `address`'s page (`s` whole, as it is now) reads as it is first drawn, each by the ask its
+/// read is made by. Not yet what comes of an answer (the card of each login under way, `machineLogin` of the ids only
+/// `machineLogins` says), nor its variables' draft (`agentEnvForm`, opened by its editor's first build): asked and
+/// opened at the press, the login's card that came after was drawn by no frame of its own (settings_wbtest's 设置).
+fn station_block_asks(core : Core, here : Here, address : String, s : Json?, key : String) -> Array[(String, Map[String, Json])] {
+  match key {
+    "resources" => [station_net_ask(address), resources_ask(here, address)]
+    "userPages" | "agentPages" | "screens" => [station_screens_ask(address)]
+    "devices" => if (core.devices_on)() { [@settings.devices_ask(here)] } else { [] }
+    "processes" => if flag(s, "online") { [resources_ask(here, address)] } else { [] }
+    "logins" => [logins_ask(address)]
+    // (up, it is the part's last, under its variables' editor: made only as it is scrolled to, which asks it then; away,
+    // the part is three short blocks, all of it drawn as it comes)
+    "workspaces" => if flag(s, "online") { [] } else { [station_memberships_ask(address)] }
+    _ => []
+  }
+}
+
+///|
+/// What part `part` of station `address`'s page (`s` whole, as it is now) reads as it is first drawn (station_node's
+/// press asks it): each of its blocks' (station_block_asks), its overview's screens first, which say which blocks it has.
+fn station_part_asks(core : Core, here : Here, address : String, s : Json?, manager : Bool, part : String) -> Array[(String, Map[String, Json])] {
+  let keys = match part {
+    "processes" => ["processes"]
+    "settings" => station_settings_keys(s, manager)
+    "machine" => []
+    _ => ["screens", ..station_overview_keys_by(s, None)]
+  }
+  let out : Array[(String, Map[String, Json])] = []
+  let said : Map[String, Bool] = Map([])
+  for key in keys {
+    for ask in station_block_asks(core, here, address, s, key) {
+      let k = ask.0 + Json::object(ask.1).stringify()
+      if !said.contains(k) {
+        said[k] = true
+        out.push(ask)
+      }
+    }
   }
   out
 }
@@ -419,18 +561,14 @@ fn station_actions_node(
 }
 
 ///|
-/// The parts to pick from (Body's Segmented, station_parts_choice's).
-fn station_parts_node(b : @view.View, address : String) -> Unit {
+/// The parts to pick from (Body's Segmented, station_parts_choice's): the one `chosen` says (pressed, from the press),
+/// one picked `press`ed.
+fn station_parts_node(b : @view.View, chosen : () -> String, press : (String) -> Unit) -> Unit {
   @sf.page_choice_node(
     b,
     fn() { station_part_names.map(fn(p) { @sf.t("web-pages.stations.page.part." + p) }) },
-    fn() {
-      match @settings.station_parts.get(address) {
-        Some(p) => station_part_names.search(p).unwrap_or(0)
-        None => 0
-      }
-    },
-    fn(i) { @settings.station_parts[address] = station_part_names[i] },
+    fn() { station_part_names.search(chosen()).unwrap_or(0) },
+    fn(i) { press(station_part_names[i]) },
   )
 }
 
@@ -470,23 +608,23 @@ fn st_mark_node(l : @view.View, icon : () -> String) -> Unit {
 
 ///|
 /// What is left of the machine (and what its agents take of it), this device's connection to it, what still.fail uses
-/// of it opening its 进程 (station_overview's 资源).
-fn station_resources_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?) -> Unit {
+/// of it opening its 进程 (station_overview's 资源: `processes`, its choice's press).
+fn station_resources_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?, processes : () -> Unit) -> Unit {
   st_section_node(b, fn() { @sf.t("web-pages.stations.page.resources") }, fn(sec) {
     @sf.group_node(sec, fn(g) {
       @sf.block_node(g, fn(k) {
         k.box(fn(r) {
           @sf.style_node(r, fn() { st_resources_in })
           let address = @signals.untracked(fn() { text(s(), "station") })
-          let net = fn() { (core.topic)("stationNet", { "station": str(address) }).get().value }
-          let uses = fn() { items(resources_of(core, here(), address), "stations").get(0) }
+          let net = fn() { station_part_read(core, address, station_net_ask(address)).value }
+          let uses = fn() { items(station_part_read(core, address, resources_ask(here(), address)).value, "stations").get(0) }
           station_dials_node(r, fn() { field(s(), "host") })
           r.show(fn() { net() is Some(Object(_)) }, fn(x) { station_net_node(x, net) })
           r.show(fn() { items(field(s(), "overview"), "processes").length() > 0 }, fn(x) {
             @sf.words_node(x, fn() { text(field(s(), "overview"), "processesText") }, fn() { st_memory }) |> ignore
           })
           // (what still.fail itself uses of the machine, opening its 进程: read while shown)
-          r.show(fn() { uses() is Some(_) }, fn(x) { station_uses_node(x, address, uses) })
+          r.show(fn() { uses() is Some(_) }, fn(x) { station_uses_node(x, uses, processes) })
         })
         |> ignore
       })
@@ -839,7 +977,7 @@ fn station_processes_node(b : @view.View, core : Core, here : () -> Here, s : ()
 /// which chat, and how many tries, pressed open to them. Nothing when there are none. Away (`online` false), no card of
 /// one under way: it can be neither done nor cancelled until it is back.
 fn station_logins_node(b : @view.View, core : Core, station : String, online : () -> Bool) -> Unit {
-  let view = fn() { (core.topic)("machineLogins", { "station": str(station) }).get().value }
+  let view = fn() { station_part_read(core, station, logins_ask(station)).value }
   let active = fn() { if online() { items(view(), "logins").filter(fn(l) { flag(Some(l), "active") }) } else { [] } }
   let tools = fn() { items(view(), "tools") }
   b.show(fn() { flag(view(), "supported") && active().length() + tools().length() > 0 }, fn(p) {
@@ -1055,12 +1193,10 @@ fn station_env_node(b : @view.View, core : Core, address : String, env : () -> J
 }
 
 ///|
-/// The draft of a station's variables (station_env_editor's) in node `k`, typed in `field_`: the field (following the
-/// draft every page of it shares, the latest edit kept while the core catches up), what is wrong under it (a line the
-/// core cannot take), 取消 while changed, 保存. What is typed told the core as it is typed; one typed while it saves,
-/// once it is done.
-fn station_env_editor_node(k : @view.View, core : Core, address : String, field_ : @ui.Field) -> Unit {
-  let form = match env_forms.get(address) {
+/// The draft of station `address`'s variables its editor follows (station_env_editor's): the one opened for it here,
+/// else one opened now (the core's `agentEnv.form.open`, by an id of this device's), once, as the editor is first built.
+fn station_env_form(core : Core, address : String) -> String {
+  match env_forms.get(address) {
     Some(f) => f
     None => {
       env_forms_made.val += 1
@@ -1070,7 +1206,16 @@ fn station_env_editor_node(k : @view.View, core : Core, address : String, field_
       f
     }
   }
-  let d = fn() { (core.topic)("agentEnvForm", { "station": str(address), "form": str(form) }).get().value }
+}
+
+///|
+/// The draft of a station's variables (station_env_editor's) in node `k`, typed in `field_`: the field (following the
+/// draft every page of it shares, the latest edit kept while the core catches up), what is wrong under it (a line the
+/// core cannot take), 取消 while changed, 保存. What is typed told the core as it is typed; one typed while it saves,
+/// once it is done.
+fn station_env_editor_node(k : @view.View, core : Core, address : String, field_ : @ui.Field) -> Unit {
+  let form = station_env_form(core, address)
+  let d = fn() { station_part_read(core, address, station_env_form_ask(address, form)).value }
   let draft = match env_drafts.get(address) {
     Some(draft) => draft
     None => {
@@ -1407,7 +1552,7 @@ fn station_network_node(b : @view.View, core : Core, address : String, network :
 /// The workspaces it is in (station_workspaces'), for its home's owners and admins once it is in more than one: its
 /// home first, what each has of the machine.
 fn station_workspaces_node(b : @view.View, core : Core, address : String) -> Unit {
-  let m = fn() { (core.topic)("memberships", { "station": str(address) }).get().value }
+  let m = fn() { station_part_read(core, address, station_memberships_ask(address)).value }
   let ws = fn() { items(m(), "workspaces") }
   b.show(fn() { flag(m(), "manages") && ws().length() >= 2 }, fn(p) {
     st_section_node(p, fn() { "Workspace" }, count=fn() { ws().length() }, note=fn() { @sf.t("web-pages.stations.workspacesLead") }, fn(sec) {

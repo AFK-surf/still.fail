@@ -44,6 +44,8 @@
 /// `profile` out of the run's `profiles {scope}`, whose items were whole.
 /// MBUI_HOME_SAME (2026-11-12: Home's own lists kept as they are let go of, as the places' are) off in all 81 as it
 /// came.
+/// MBUI_SWITCH_AHEAD (2026-11-14: a choice that switches what its page reads asks ahead of the switch, sfbase's
+/// switch_answered: 用量's days and split, a station's page's parts) off in all 81 as it came.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 72,
   "MBUI_DEVICES": 73,
@@ -57,6 +59,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_MARKS_ONE": 74,
   "MBUI_PROFILE_ROWS": 81,
   "MBUI_HOME_SAME": 81,
+  "MBUI_SWITCH_AHEAD": 81,
 }
 
 ///|

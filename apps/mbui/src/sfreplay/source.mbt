@@ -652,6 +652,7 @@ pub fn source() -> @sfapp.Source {
     reads_ahead: fn() { @sfcore.trace_switch("MBUI_PLACES_BAR") },
     asks_devices: fn() { @sfcore.trace_switch("MBUI_DEVICES") },
     asks_outline: fn() { @sfcore.trace_switch("MBUI_OUTLINE") },
+    switches_ahead: fn() { @sfcore.trace_switch("MBUI_SWITCH_AHEAD") },
   }
 }
 

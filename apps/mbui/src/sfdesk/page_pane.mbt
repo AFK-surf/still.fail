@@ -314,7 +314,7 @@ fn pane_made(
     // (by its station: another station's another page, not this one become it)
     Setting(Station(address)) =>
       made("station/" + address, fn(a, core, here, stint, frame, width) {
-        @sfpages.station_node(a, core, here, address, on_back=core.pop, frame~, width~, stint~)
+        @sfpages.station_node(a, core, src, here, address, on_back=core.pop, frame~, width~, stint~)
       })
     Setting(Permissions) =>
       made("permissions", fn(a, core, _here, _stint, frame, width) {

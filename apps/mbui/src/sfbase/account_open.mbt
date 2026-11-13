@@ -122,7 +122,8 @@ pub fn switch_answered(
   // wholly as it was, never its words read anew over what is laid out as it was; in a press or between frames, at the
   // end of that event, before the next frame)
   let told = fn() { @ui.after_frame(fn() { @view.answering(switch_to) }) }
-  if asks.is_empty() || src.read_only {
+  // (asking nothing ahead where the source's run did not: a replay of a run from before, switched at the press)
+  if asks.is_empty() || src.read_only || !(src.switches_ahead)() {
     return press_wait(fn() { true }, told)
   }
   let (answered, leases) = asked_now(src, asks)

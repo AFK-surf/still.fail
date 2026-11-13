@@ -45,7 +45,14 @@ fn login_of(core : Core, station : String, id : String) -> Json? {
 ///|
 /// The station's logins as the core says them now (what may be done of them: `canLogin`, `canRelay`).
 fn logins_of(core : Core, station : String) -> Json? {
-  (core.topic)("machineLogins", { "station": Json::string(station) }).get().value
+  let ask = logins_ask(station)
+  (core.topic)(ask.0, ask.1).get().value
+}
+
+///|
+/// What the core is asked for station `station`'s logins (logins_of's, its page's 登录's): its `machineLogins`.
+fn logins_ask(station : String) -> (String, Map[String, Json]) {
+  ("machineLogins", { "station": Json::string(station) })
 }
 
 ///|

@@ -539,6 +539,12 @@ pub let trace_switches : Array[String] = [
   // with MBUI_HAVE_SAME, and asked again with their version: sfbase's `lasting`, home_lasting. A trace without it has
   // them let go of and asked again whole, as its run's app did (src/sfreplay/source.mbt replay_kept))
   "MBUI_HOME_SAME",
+  // (a choice that switches what its page reads (用量's days and split, a station's page's parts: sfbase's
+  // switch_answered) asks ahead what the page will read for it, the page as it was till that is answered, then switched
+  // whole. A trace without it has the choice switch at the press, asking nothing ahead, as its run's app did: its core
+  // answers in the run's order, where what the run read after the switch (the part's own asks) was sent before the
+  // answers to what the press now asks ahead came, so a replay asking ahead would wait on itself)
+  "MBUI_SWITCH_AHEAD",
 ]
 
 ///|

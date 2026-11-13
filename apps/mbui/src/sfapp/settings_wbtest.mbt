@@ -1283,3 +1283,164 @@ test "a station's permissions: each grant's mark across the middle of its title'
     }
   }
 }
+
+///|
+/// The station's page's parts pressed in turn in each mode (sfpages station_node's choice, sfbase's switch_answered),
+/// from the part the mode opens on: each its label, and whether what comes of it is held here. 设置 of a station up is
+/// not: the card of a login under way reads that login (`machineLogin`), whose id only the answer of `machineLogins` says,
+/// so it comes a round after the rest of the part (asked of the owner, not chained here); and its variables' draft is
+/// opened and read by its editor as it is first built, so its words come after the rest too.
+let station_press_modes : Array[(String, Array[(String, Bool)])] = [
+  ("settings-station", [("设置", false), ("进程", true), ("概览", true)]),
+  ("settings-station-offline", [("设置", true), ("进程", true), ("概览", true)]),
+  ("settings-station-updated", [("进程", true), ("设置", false), ("概览", true)]),
+]
+
+///|
+/// The choice's own words (what the pressed control answers with), left out of what is compared.
+let station_press_labels : Array[String] = ["概览", "进程", "设置", "软件与设备"]
+
+///|
+/// Every word drawn now and where (Tester::words, as usage_words_placed), the choice's own left out, none faded out.
+fn station_words_placed(t : @ui.Tester) -> Array[String] {
+  t
+  .words()
+  .filter(fn(w) { w.5 > 0.01 && !station_press_labels.contains(w.0) })
+  .map(fn(w) { "\{w.0}@\{(w.1 * 10.0).round() / 10.0},\{(w.2 * 10.0).round() / 10.0}" })
+}
+
+///|
+/// A frame's words not as in `want`, a short line each (usage_words_told's, said as the station's).
+fn station_words_told(at : String, ms : Double, want : Array[String], now : Array[String]) -> Unit {
+  for w in want.filter(fn(w) { !now.contains(w) }).iter().take(8) {
+    println("STATION_WORD \{at} +\{ms.round()} was \{w}")
+  }
+  for w in now.filter(fn(w) { !want.contains(w) }).iter().take(8) {
+    println("STATION_WORD \{at} +\{ms.round()} now \{w}")
+  }
+}
+
+///|
+/// What the client subscribed to in `heard` from its `from`th, each its topic and params (as sent), and whether it was
+/// let go after.
+fn station_subscribed(heard : Array[String], from : Int) -> Array[(String, Bool)] {
+  let out : Array[(Int, String)] = []
+  let gone : Map[Int, Bool] = Map([])
+  for i in from..<heard.length() {
+    let h = heard[i]
+    guard h.has_prefix("out ") else { continue }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => continue }
+    guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
+    let id = n.to_int()
+    match (m.get("subscribe"), m.get("unsubscribe")) {
+      (Some(Object(_) as s), _) => out.push((id, s.stringify()))
+      (_, Some(_)) => gone[id] = true
+      _ => ()
+    }
+  }
+  out.map(fn(o) { (o.1, gone.contains(o.0)) })
+}
+
+///|
+/// The station's page's parts pressed in turn (概览, 进程, 设置: station_press_modes), 小屏 by touch and 大屏 with a mouse,
+/// the page opened over a core answering at once and each press over one answering 0 to 700 ms late (sfpages
+/// station_node's press, sfbase's switch_answered): from the press till the part comes, in every frame as a host draws
+/// it, every word but the choice's own where it was at the press and no bones drawn; from the frame it comes in, every
+/// word where it is at rest; nothing sets out after the press's own moment; the choice shows what was pressed from the
+/// press; what the press asked asked once and held at rest by the part.
+test "the station's page's parts pressed: the page as it was till the part pressed comes, then whole" {
+  // (each press that was not so, said at the end: every one of them printed first)
+  let failed : Array[String] = []
+  for s in [daily_small, daily_large] {
+    for ms in usage_press_lates {
+      for mode in station_press_modes {
+        let heard : Array[String] = []
+        let pace = Ref(0.0)
+        new_run()
+        let src = round_trip_again(fixture_app(mode.0), 0.0, heard=fn(h) { heard.push(h) }, late=fn(_, _) { pace.val })
+        let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=s.w, h=s.h, platform=s.platform)
+        t.check_looks(false)
+        t.draw()
+        t.run_for(@ui.move_most_ms + 1000.0)
+        t.ways_set_out() |> ignore
+        pace.val = ms
+        for press in mode.1 {
+          let (label, judged) = press
+          let at = "\{s.name}, \{ms} ms, \{mode.0}, \{label}"
+          let (x, y) = usage_choice_shown(t, s, label)
+          let before = station_words_placed(t)
+          let bones_before = t.bones_drawn()
+          let asked_from = heard.length()
+          let from = t.time()
+          t.tap(x, y)
+          let frames : Array[(Double, Array[String])] = []
+          let faults : Array[String] = []
+          let ways : Array[String] = []
+          let n = ((ms * 3.0 + @ui.move_most_ms * 2.0) / @ui.frame_period_default).ceil().to_int()
+          for i in 0..=n {
+            if i > 0 {
+              t.run_for(@ui.frame_period_default)
+            }
+            let now = t.time() - from
+            for w in t.ways_set_out() {
+              if w.at > from + 0.5 {
+                ways.push("\{w.kind} +\{(w.at - from).round()} ms \{w.made} \{w.part}")
+              }
+            }
+            if t.bones_drawn() > bones_before {
+              faults.push("+\{now.round()} ms: \{t.bones_drawn()} bones drawn, \{bones_before} before the press")
+            }
+            if t.query(Radio, label~, checked=On) is None {
+              faults.push("+\{now.round()} ms: \{label} not shown chosen")
+            }
+            frames.push((now, station_words_placed(t)))
+          }
+          let rest = station_words_placed(t)
+          // (as at the press till the part comes, then as at rest from that frame on)
+          let mut came = -1.0
+          for f in frames {
+            if came < 0.0 && f.1 == rest {
+              came = f.0
+            } else if came < 0.0 && f.1 != before {
+              station_words_told(at, f.0, before, f.1)
+              faults.push("+\{f.0.round()} ms: words not where they were at the press")
+            } else if came >= 0.0 && f.1 != rest {
+              station_words_told(at, f.0, rest, f.1)
+              faults.push("+\{f.0.round()} ms: words not where they rest, after it came")
+            }
+          }
+          // (asked once, and held at rest by the part)
+          let asked = station_subscribed(heard, asked_from)
+          for i, a in asked {
+            if a.1 {
+              faults.push("asked and let go: \{a.0}")
+            }
+            if asked.iter().take(i).any(fn(b) { b.0 == a.0 }) {
+              faults.push("asked again: \{a.0}")
+            }
+          }
+          for a in asked {
+            println("STATION_ASK \{at}: \{a.0.unsafe_substring(start=0, end=@cmp.minimum(a.0.length(), 90))}\{if a.1 { " let go" } else { "" }}")
+          }
+          if !judged {
+            for f in faults {
+              println("STATION_UNHELD \{at} \{f}")
+            }
+            continue
+          }
+          for f in faults {
+            println("STATION_FAULT \{at} \{f}")
+          }
+          for w in ways {
+            println("STATION_WAY \{at} \{w}")
+          }
+          println("STATION_PRESS \{at}: came at +\{came.round()} ms, asked \{asked.length()}, ways \{ways.length()}")
+          if faults.length() > 0 || ways.length() > 0 || t.query(Radio, label~, checked=On) is None {
+            failed.push(at)
+          }
+        }
+      }
+    }
+  }
+  assert_eq(failed, [], msg="presses not as at the press till the part came, then whole")
+}
