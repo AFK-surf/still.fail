@@ -376,7 +376,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
         // (a workspace whose chain moved, this station waiting for its root's log or `open`: its chain's stations are
         // answered only the lock's own, which bring it what it lacks: Cloud `rosterOf`)
         const w = envelope.workspace && envelope.workspace !== cloud.home() ? envelope.workspace : null;
-        if (typeof cloud.waiting === "function" && cloud.waiting(w) && !(typeof method === "string" && method.startsWith("lock."))) throw new Error(NOT_GIVEN);
+        if (cloud.waiting(w) && !(typeof method === "string" && method.startsWith("lock."))) throw new Error(NOT_GIVEN);
         result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace, peer)
           // The workspace's ways (mesh/ways.ts), kept level between its stations.
           : typeof method === "string" && method.startsWith("ways.") ? answerWays(waysOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")

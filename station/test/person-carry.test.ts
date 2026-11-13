@@ -128,6 +128,7 @@ test("a chain kept grows: the other stations are brought level, one that could n
     peersCurrent: true,
     memberships: () => [{ workspace: "w1", home: true, peers: [{ id: "a" }, { id: "b" }] }],
     listen: (f: () => void) => (listeners.add(f), () => listeners.delete(f)),
+    home: () => "w1", chain: () => null,
   } as unknown as Cloud;
   const a = new PersonChains(null), b = new PersonChains(null);
   let down = true;
@@ -155,6 +156,8 @@ test("a lock's change is told on the event stream: the workspace's to its member
   const cloud = {
     memberships: () => [{ workspace: "w1", home: true, peers: [] }],
     locked: () => ({ state: head }),
+    chain: () => ({ state: head }),
+    forceWord: () => "",
     listen: (f: () => void) => (listeners.add(f), () => listeners.delete(f)),
   } as unknown as Cloud;
   const chains = new PersonChains(null);

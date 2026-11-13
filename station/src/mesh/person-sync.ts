@@ -112,16 +112,12 @@ export function answerBodies(cloud: Cloud, request: any, ws: string, peer: strin
   throw new Error("unknown lock method");
 }
 
-/// Whether `cloud` keeps bodies (a Cloud of a test's made of a few methods keeps none).
-const keepsBodies = (cloud: Cloud) => typeof cloud.chain === "function" && typeof cloud.bodies === "function";
-
 /// How many bodies one offer brings at most.
 const BODIES_OFFERED = 4096;
 
 /// Brings one peer and this station level in workspace `ws`'s bodies: gives it those it lacks of what this station
 /// gives it, and asks for those it says it has that this station lacks. A station from before answers none.
 export async function bodiesSyncWith(cloud: Cloud, call: PeerCall, peer: string, ws: string): Promise<void> {
-  if (!keepsBodies(cloud)) return;
   const w = ws === cloud.home() ? null : ws;
   if (cloud.chain(w) === null) return;
   let said: any;
@@ -235,7 +231,7 @@ export function followPersons(cloud: Cloud, chains: PersonChains, call: PeerCall
     for (const m of cloud.memberships()) {
       // (and the bodies it keeps there, and what it lacks: a body come or a statement heard brings it again)
       const w = m.home ? null : m.workspace;
-      const heads = `${headsIn(chains, m.workspace)}|${!keepsBodies(cloud) || cloud.chain(w) === null ? "" : `${cloud.bodies(w).all().size}:${cloud.lacking(w).length}:${cloud.forceWord(w)}`}`;
+      const heads = `${headsIn(chains, m.workspace)}|${cloud.chain(w) === null ? "" : `${cloud.bodies(w).all().size}:${cloud.lacking(w).length}:${cloud.forceWord(w)}`}`;
       for (const p of m.peers) if (typeof p?.id === "string" && p.id !== st.station) bring(p.id, m.workspace, heads);
     }
   };
