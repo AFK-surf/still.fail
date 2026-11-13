@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [39aff985b](https://github.com/AFK-surf/monoid/commit/39aff985bb774f458a8cfbe31c1fc0d7f82e7159) mbui app: quote_image's and downloads' tests walk  | 1.96 | 2.63 | 11.31 | 30.82 | 40.62 | 27.46 | 52.5 | 94.14 | 102.09 |
 | [19e4afe56](https://github.com/AFK-surf/monoid/commit/19e4afe562bdcadebb774c6da6c1d003912cdbea) mbui: a Tester reads the passage being picked and  | 1.96 | 2.62 | 11.3 | 30.81 | 40.59 | 27.46 | 52.47 | 94.14 | 109.81 |
 | [fad178a33](https://github.com/AFK-surf/monoid/commit/fad178a33d0e80ee3cd933514f263a09d7a11574) fix(mbui): keep video tile at thumbnail width whil | 1.95 | 2.62 | 11.3 | 30.81 | 40.59 | 27.46 | 52.47 | 94.24 | 99.26 |
 | [2f66e50bd](https://github.com/AFK-surf/monoid/commit/2f66e50bd54fb52dd75ae17d40c2a42a979b6dfc) mbui: a long press a cover hands through lands on  | 1.95 | 2.62 | 11.3 | 30.8 | 40.59 | 27.45 | 52.47 | 94.14 | 98.89 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7ffd403c3](https://github.com/AFK-surf/monoid/commit/7ffd403c3f540c8f52a1752c4a82e798c6920685) mbui: what is let go from outside lands on the nod | 1.93 | 2.59 | 11.15 | 30.55 | 39.98 | 27.21 | 51.98 | 93.31 | 170.61 |
 | [b1784f5b9](https://github.com/AFK-surf/monoid/commit/b1784f5b97ca21f93312e2c5f23bcdb5b11d0f80) lock model, fourth round: a workspace's statements | 1.93 | 2.59 | 11.15 | 30.54 | 39.97 | 27.21 | 51.97 | 93.18 | 153.4 |
 | [d897d90a8](https://github.com/AFK-surf/monoid/commit/d897d90a8641b7486b41a54eb5d2fcaeb881b800) android: show the keyboard in multi-window | 1.93 | 2.59 | 11.14 | 30.53 | 39.94 | 27.2 | 51.95 | 93.28 | 182.01 |
-| [fd464f34f](https://github.com/AFK-surf/monoid/commit/fd464f34fc92d38930aa12fc2921469532caa49f) mbui: a native view as a node of the window's tree | 1.93 | 2.59 | 11.14 | 30.53 | 39.94 | 27.21 | 51.95 | 93.6 | 135.45 |
