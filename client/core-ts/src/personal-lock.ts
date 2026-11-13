@@ -172,6 +172,9 @@ export type PersonalEnv = {
   /// them to the lock begun by `genesis` (views/lock.ts `websIn`): each page's `exp` the latest of those chains', `by`
   /// the key that signed the entry naming it so. What of them `#addWebs` says on the lock.
   webs?: (sub: string, genesis: string) => ChainWeb[];
+  /// The workspaces this device hands over by itself and what each is to say, worked out in the turn (views/lock.ts
+  /// `handOversIn`): said as the seed is in hand for something else (`#addHandOvers`).
+  handOvers?: (sub: string) => { ws: string; make: Statements }[];
   /// The keys said in workspaces' locks by the devices that put this device in there, and those that put them in, up
   /// to the first, each the person's own (views/lock.ts `vouchersIn`, which says what taking them so costs): a chain one
   /// of those keys signed an entry of is its person's lock (`#putOnBy`).
@@ -566,7 +569,7 @@ export class PersonalLock {
   /// the stations would let it in once the lock is bound while it held itself as not let in. One whose id or key was
   /// ever on the lock is not put back this way: taken off, it stays off.
   #addApproved(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
-    return Effect.andThen(this.#putApproved(sub, seed, within), this.#addWebs(sub, seed, within));
+    return Effect.andThen(Effect.andThen(this.#putApproved(sub, seed, within), this.#addWebs(sub, seed, within)), this.#addHandOvers(sub, seed, within));
   }
 
   #putApproved(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
@@ -634,6 +637,24 @@ export class PersonalLock {
         yield* Effect.ignore(Effect.tapError(put, () => Effect.sync(() => void (failed = true))), { log: "Unhandled", message: "personal lock: a web page a workspace's chain names said" });
         if (failed) return;
         n++;
+      }
+    });
+  }
+
+  /// With the seed in hand for something else (as `#addApproved`, after the devices and pages): what each workspace
+  /// this device hands over by itself still lacks (`handOvers`), said as `say` says statements, in a turn of the lock
+  /// each, nothing more asked (the owner, 2026-11-13: a handover rides on the next ask of the person's own lock's key).
+  /// Each worked out in the turn against the log with what is pending, so a handover half said goes on at the next
+  /// ask, saying nothing twice; one that waits or is refused says nothing. The `moved` is signed with no key in hand
+  /// once a station of the workspace took it all (views/lock.ts `movedBySelf`). A failure leaves it for the next time.
+  #addHandOvers(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
+    const handOvers = this.#env.handOvers;
+    if (handOvers === undefined) return Effect.void;
+    return Effect.gen({ self: this }, function* () {
+      for (const { ws, make } of handOvers(sub)) {
+        if ((this.#pending.get(sub) ?? []).filter((x) => x.state === "waiting").length >= PENDING_MOST) return;
+        const said = Effect.flatMap(this.#turn(sub).withPermits(1)(this.#state(sub, seed, ws, make, within)), (rest) => rest);
+        yield* Effect.ignore(said, { log: "Unhandled", message: "personal lock: a workspace's handover said" });
       }
     });
   }

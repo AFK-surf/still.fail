@@ -182,6 +182,7 @@ export class WakingHost<Message = never> implements HostOf<Message> {
   readonly tcp?: HostOf<Message>["tcp"];
   readonly appKeys?: boolean;
   readonly handOverByTests?: boolean;
+  readonly handOverAuto?: boolean;
   readonly openDb?: HostOf<Message>["openDb"];
   readonly memoryDb?: HostOf<Message>["memoryDb"];
   readonly deleteDb?: HostOf<Message>["deleteDb"];
@@ -205,6 +206,7 @@ export class WakingHost<Message = never> implements HostOf<Message> {
     if (inner.tcp) this.tcp = (port) => inner.tcp!(port);
     this.appKeys = inner.appKeys;
     this.handOverByTests = inner.handOverByTests;
+    this.handOverAuto = inner.handOverAuto;
     // The databases are the device's: nothing of them waits on a UI coming back.
     if (inner.openDb) this.openDb = (name) => inner.openDb!(name);
     if (inner.memoryDb) this.memoryDb = () => inner.memoryDb!();
