@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { Context, Effect, Layer, Schedule, Stream, SubscriptionRef } from "effect";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { ClaudeDriver } from "../agents/claude.ts";
+import { readSiteInstructions } from "../agents/instructions.ts";
 import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
@@ -253,8 +254,12 @@ export const AgentsLive = (control: Control) =>
       const connectKinds = new Map<string, ConnectKind>();
       const along: Along[] = [];
       const cold = new ColdRooms(() => hub);
+      // What the deployment adds to every session's instructions (STILLFAIL_SITE_INSTRUCTIONS), read once, as it starts.
+      const siteInstructions = yield* Effect.promise(() => readSiteInstructions());
+      if (siteInstructions !== "") log.info("agents", "the deployment's instructions are told to every session", { path: process.env.STILLFAIL_SITE_INSTRUCTIONS, chars: siteInstructions.length });
       const hub = new Hub({
         config: settings,
+        siteInstructions,
         taking: () => control.taking(),
         store,
         previous,

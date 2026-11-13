@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { brief, claudeProject, readTimeline, rememberCodexRollout, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
-import { linkTranscripts, sessionSkills, unlinkAgentHome, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
+import { linkSiteSkills, linkTranscripts, sessionSkills, siteSkills, unlinkAgentHome, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
 import { hubConfig } from "../src/sessions/config.ts";
@@ -959,6 +959,48 @@ test("the station's own skills are written and kept as the station has them; the
   writeFileSync(join(home, "skills", "stillfail-feedback", "notes.md"), "mine");
   writeBuiltinSkills(home, false);
   assert.ok(existsSync(join(home, "skills", "stillfail-feedback", "notes.md")));
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("the deployment's skills are linked into an agents' home beside the station's own, and reach a session once their SKILL.md is there", async () => {
+  const root = temp();
+  const [site, home, workspace] = [join(root, "site"), join(root, "agent"), join(root, "workspace")];
+  assert.equal(siteSkills({}), null, "none by default");
+  assert.equal(siteSkills({ STILLFAIL_SITE_SKILLS: site }), site);
+  mkdirSync(join(site, "machine"), { recursive: true });
+  mkdirSync(join(site, "later"));
+  mkdirSync(join(home, "skills", "team"), { recursive: true });
+  writeFileSync(join(home, "skills", "team", "SKILL.md"), "ours");
+  // One of the team's with the name of one the deployment brings stays the team's.
+  mkdirSync(join(site, "team"));
+  writeFileSync(join(site, "team", "SKILL.md"), "the deployment's");
+  writeFileSync(join(site, "machine", "SKILL.md"), "---\nname: machine\n---\nfacts");
+  writeBuiltinSkills(home, false, site);
+  writeBuiltinSkills(home, false, site); // idempotent
+  const skills = join(home, "skills");
+  assert.equal(readlinkSync(join(skills, "machine")), join(site, "machine"));
+  assert.equal(readlinkSync(join(skills, "later")), join(site, "later"), "linked before its SKILL.md is written");
+  assert.equal(readFileSync(join(skills, "team", "SKILL.md"), "utf8"), "ours");
+  assert.ok(existsSync(join(skills, "stillfail-jobs", "SKILL.md")), "the station's own beside them");
+  await sessionSkills(workspace, skills);
+  assert.deepEqual(readdirSync(join(workspace, ".claude", "skills")).filter((n) => !n.startsWith("stillfail-")).sort(), ["machine", "team"], "only those with a SKILL.md");
+  // The deployment rewrites one, writes another, takes one away: a session's next opening has them as they are now.
+  writeFileSync(join(site, "machine", "SKILL.md"), "---\nname: machine\n---\nnew facts");
+  writeFileSync(join(site, "later", "SKILL.md"), "---\nname: later\n---\n");
+  rmSync(join(site, "team"), { recursive: true });
+  mkdirSync(join(site, "gone"));
+  linkSiteSkills(skills, site);
+  rmSync(join(site, "gone"), { recursive: true });
+  linkSiteSkills(skills, site);
+  assert.ok(!existsSync(join(skills, "gone")) && lstatSync(join(skills, "gone"), { throwIfNoEntry: false }) === undefined, "a link to one gone is taken away");
+  assert.equal(readFileSync(join(skills, "team", "SKILL.md"), "utf8"), "ours", "the team's own is never taken");
+  await sessionSkills(workspace, skills);
+  assert.equal(readFileSync(join(workspace, ".agents", "skills", "machine", "SKILL.md"), "utf8"), "---\nname: machine\n---\nnew facts");
+  assert.ok(existsSync(join(workspace, ".claude", "skills", "later", "SKILL.md")));
+  // Without a site, nothing of it.
+  const plain = join(root, "plain");
+  writeBuiltinSkills(plain, false, null);
+  assert.deepEqual(readdirSync(join(plain, "skills")).filter((n) => !n.startsWith("stillfail-")), []);
   rmSync(root, { recursive: true, force: true });
 });
 

@@ -140,6 +140,9 @@ export type HubOptions = {
   background?: (work: Promise<void>) => void;
   /// The previous station has released its foreground writes.
   previous?: Promise<void>;
+  /// What the deployment adds to every session's instructions, as the station read it at its start
+  /// (agents/instructions.ts `readSiteInstructions`); none by default.
+  siteInstructions?: string;
 };
 
 /// The handover file, in the data directory.
@@ -1388,6 +1391,7 @@ export class Hub {
       recheck: (profile) => this.accounts.recheck(profile),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       reposDir: () => this.reposDir(),
+      siteInstructions: () => this.options.siteInstructions ?? "",
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,
       untitled: (key) => (this.config().askToName ? untitledChat(this, key) : null),

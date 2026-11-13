@@ -3,11 +3,12 @@
 // skills, which a joined workspace's sessions got too) taken away, at the start and again whenever the config changes
 // (a profile added or moved). At the start and at each change of the config too, every home's transcripts are put in
 // each runtime's one shared place (`linkTranscripts`).
-// stillfail-feedback goes with the feedback_send tool (feedback/module.ts): stable channel, still.fail cloud.
+// stillfail-feedback goes with the feedback_send tool (feedback/module.ts): stable channel, still.fail cloud. The
+// deployment's own skills (STILLFAIL_SITE_SKILLS) are linked beside them (`linkSiteSkills`).
 import { Effect, Layer } from "effect";
 import { log } from "../ops/log.ts";
 import { Agents } from "../sessions/agents.ts";
-import { agentHomes, linkTranscripts, unlinkAgentHome, writeBuiltinSkills } from "../sessions/agent-home.ts";
+import { agentHomes, linkTranscripts, siteSkills, unlinkAgentHome, writeBuiltinSkills } from "../sessions/agent-home.ts";
 import { ControlPlane, StationConfig } from "../services.ts";
 
 export const AgentHomeLive = Layer.effectDiscard(
@@ -33,6 +34,8 @@ export const AgentHomeLive = Layer.effectDiscard(
         log.warn("agent_home", "the shared transcripts not linked", { error: (error as Error).message });
       }
     };
+    const site = siteSkills();
+    if (site !== null) log.info("agent_home", "the deployment's skills are linked into every agents' home", { path: site });
     keep();
     transcripts();
     const unlisten = config.listen(() => {
