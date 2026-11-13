@@ -25,3 +25,18 @@ test "a screen's JSON: its topics by name and params, its calls answered, its pa
   assert_true(got[2] is Err(_))
   assert_true(app.nav.top() is Settings)
 }
+
+///|
+test "a screen's JSON: fallback topics, profile settings key, and mode overlays" {
+  fresh_app()
+  let src = fixture_json((
+    #|{"workspace": "ws1",
+    #| "fallback": true,
+    #| "open": [{"page": "settings", "key": "profile:ws1/st1#dev1"}, {"page": "mode", "key": "newchat-model"}],
+    #| "topics": [{"topic": {"topic": "pick", "station": "ws1/st1", "of": "new"}, "value": {"showRuntime": true}}]}
+    ),
+  )
+  assert_true(src.topic("notify", {}).get().value is Some(_))
+  assert_eq(src.topic("pick", { "station": "ws1/st1", "of": "new" }).get().value, Some({ "showRuntime": true }))
+  assert_true(app.nav.top() is NewChat)
+}

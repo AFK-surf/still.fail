@@ -136,6 +136,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
       }),
     ),
     route("POST", /^\/*profiles\/+([^/]+)\/+check(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.check(segment(id!), r.lang)))),
+    route("GET", /^\/*profiles\/+([^/]+)\/+fusion(?:\/.*)?$/, (_r, [id]) => answer((a) => ok({ fusion: a.fusionView(segment(id!)) }))),
     route("POST", /^\/*profiles\/+([^/]+)\/+reset-quota(?:\/.*)?$/, (r, [id]) =>
       answer(async (a) => {
         const key = idempotencyKey(r);

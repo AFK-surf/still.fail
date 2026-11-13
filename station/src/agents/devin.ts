@@ -77,22 +77,58 @@ export function rulesFolder(home: string, key: string, instructions: string, ski
 export const LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 /// A model and level as Devin names the variant: `swe-2` at `high` is swe-2-high (it takes a family alone at its
-/// default level).
-export const variant = (model: string, effort: string | undefined) => (effort !== undefined && LEVELS.includes(effort) ? `${model}-${effort}` : model);
+/// default level; a Fusion pairing already names both models' levels).
+export const variant = (model: string, effort: string | undefined) =>
+  effort !== undefined && LEVELS.includes(effort) && !model.includes("-sidekick-") ? `${model}-${effort}` : model;
+
+export type DevinFusion = { leads: Record<string, number[]>; sides: string[] };
+
+export function expandDevinFusion(fusion: DevinFusion | undefined): string[] {
+  if (!fusion) return [];
+  const out: string[] = [];
+  for (const [lead, idxs] of Object.entries(fusion.leads)) {
+    for (const i of idxs) {
+      const side = fusion.sides[i];
+      if (typeof side === "string" && side !== "") out.push(`fusion-${lead}-sidekick-${side}`);
+    }
+  }
+  return out;
+}
 
 /// The models `devin models list --format json` lists, as the station offers them: each family a model at its thinking
 /// levels (swe-2: medium, high, max), the name most of its variants are a level of. Not its variants of another kind
-/// (glm-5-2-1m, claude-opus-4-6-thinking), the faster or prioritised ones (-fast, -priority, -lightning: billed apart),
-/// nor Fusion's pairs of a model and a sidekick (fusion-gpt-6-sol-low-sidekick-gpt-5-6-luna-high: hundreds, each at
-/// two levels, not a model at one).
-export function devinCatalog(listed: Json): { models: string[]; efforts: Record<string, string[]> } {
+/// (glm-5-2-1m, claude-opus-4-6-thinking) or the faster or prioritised ones (-fast, -priority, -lightning: billed apart).
+/// Fusion's pairs of a model and a sidekick (fusion-gpt-6-sol-low-sidekick-gpt-5-6-luna-high: hundreds, each at two
+/// levels, not a model at one) are returned apart, factored by lead and sidekick (`fusion`), so an account can tick on
+/// the pairs it wants without flooding the default list or bloating `/overview`.
+export function devinCatalog(listed: Json): { models: string[]; efforts: Record<string, string[]>; fusion: DevinFusion | null } {
   const models: string[] = [];
   const efforts: Record<string, string[]> = {};
+  const sides: string[] = [];
+  const leads: Record<string, number[]> = {};
   for (const family of Array.isArray(listed?.families) ? listed.families : []) {
     const seen: { model: string; level: string | undefined }[] = [];
     for (const v of Array.isArray(family?.variants) ? family.variants : []) {
       const uid = typeof v?.model_uid === "string" ? v.model_uid : "";
-      if (uid === "" || /-(fast|priority|lightning)$/.test(uid) || uid.includes("-sidekick-")) continue;
+      if (uid === "" || /-(fast|priority|lightning)$/.test(uid)) continue;
+      if (uid.startsWith("fusion-") && uid.includes("-sidekick-")) {
+        if (!/-(fast|priority|lightning)-sidekick-/.test(uid)) {
+          const at = uid.indexOf("-sidekick-", 7);
+          const lead = uid.slice(7, at);
+          const side = uid.slice(at + 10);
+          if (lead !== "" && side !== "") {
+            let idx = sides.indexOf(side);
+            if (idx < 0) {
+              idx = sides.length;
+              sides.push(side);
+            }
+            const list = (leads[lead] ??= []);
+            if (!list.includes(idx)) list.push(idx);
+          }
+        }
+        continue;
+      }
+      if (uid.includes("-sidekick-")) continue;
       const level = LEVELS.find((l) => uid.endsWith(`-${l}`));
       seen.push({ model: level === undefined ? uid : uid.slice(0, -level.length - 1), level });
     }
@@ -103,7 +139,7 @@ export function devinCatalog(listed: Json): { models: string[]; efforts: Record<
     const levels = LEVELS.filter((l) => seen.some((s) => s.model === model && s.level === l));
     if (levels.length > 0) efforts[model] = levels;
   }
-  return { models, efforts };
+  return { models, efforts, fusion: sides.length > 0 ? { leads, sides } : null };
 }
 
 /// What failed a turn, from what Devin said of it.
@@ -279,7 +315,9 @@ export class DevinSession extends AcpSession {
     const family = this.families.find((v) => v === model || LEVELS.some((l) => v === `${model}-${l}`));
     if (family === undefined) return false;
     this.send("session/set_config_option", { sessionId: this.sessionId, configId: "model", value: family });
-    if (options.effort !== undefined && LEVELS.includes(options.effort)) this.send("session/set_config_option", { sessionId: this.sessionId, configId: "thought_level", value: options.effort });
+    if (options.effort !== undefined && LEVELS.includes(options.effort) && !model.includes("-sidekick-")) {
+      this.send("session/set_config_option", { sessionId: this.sessionId, configId: "thought_level", value: options.effort });
+    }
     this.model = model;
     return true;
   }

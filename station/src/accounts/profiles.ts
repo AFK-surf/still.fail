@@ -17,7 +17,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeOAuthToken, claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE, RenewRefused } from "./console.ts";
 import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
-import { devinCatalog, devinData } from "../agents/devin.ts";
+import { type DevinFusion, devinCatalog, devinData } from "../agents/devin.ts";
 import { agyHome, agyKeychainSignedIn, agyNotedEmail, agyToken, noteAgyEmail } from "../agents/agy.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
@@ -42,6 +42,8 @@ export type ProfileCheck = {
   detail: string;
   /// Models the account can use, when the provider lists them.
   models: string[] | null;
+  /// Opt-in Devin Fusion pairings (`fusion-*-sidekick-*`), factored by lead and sidekick.
+  fusion?: DevinFusion;
   checkedAt: number;
 };
 
@@ -338,7 +340,10 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
       } catch {}
     }
     const done = check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), catalog !== null && catalog.models.length > 0 ? catalog.models : null);
-    if (catalog !== null) done.modelEfforts = { devin: catalog.efforts };
+    if (catalog !== null) {
+      done.modelEfforts = { devin: catalog.efforts };
+      if (catalog.fusion !== null) done.fusion = catalog.fusion;
+    }
     return done;
   }
   if (o.kind === "subscription" && o.runtime === "agy") {

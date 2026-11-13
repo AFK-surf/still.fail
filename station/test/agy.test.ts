@@ -4,11 +4,12 @@ import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { after, test } from "node:test";
-import { AgyDriver, SESSIONS, agyAccountFile, agyConversations, agyEnv, agyHome, agyToken, classifyFailure, geminiDir } from "../src/agents/agy.ts";
+import { AgyDriver, SESSIONS, agyAccountFile, agyBaseModel, agyCatalog, agyConversations, agyEnv, agyHome, agyToken, agyVariant, classifyFailure, geminiDir } from "../src/agents/agy.ts";
 import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 import { allLeft } from "../src/agents/runner.ts";
 import { profileRuntimes } from "../src/agents/profiles.ts";
 import { Accounts, accountEmail, accountEmailSoon } from "../src/accounts/index.ts";
+import { uncheckOutdated } from "../src/accounts/models.ts";
 import { accessKinds, checkProfile, loginCommand } from "../src/accounts/profiles.ts";
 import { LoginManager, type LoginState } from "../src/accounts/login.ts";
 import { checkQuota } from "../src/accounts/quota.ts";
@@ -154,6 +155,78 @@ test("models are read without a turn, the station's tools or a transcript", asyn
   assert.deepEqual(calls.find((c) => c.method === "session/new").params.mcpServers, []);
   assert.equal(calls.some((c) => c.method === "session/prompt" || c.method === "session/set_model"), false);
   assert.equal(readFileSync(dump, "utf8").includes(options.mcpToken), false);
+});
+
+test("tiered subscription models normalize to base model + thinking levels, map (model, effort) to ACP modelId, and match legacy spellings", async () => {
+  const { options, events, driver, dump } = setup({ FAKE_AGY_SUBSCRIPTION: "1" });
+  const cat = await driver.catalog(options.profile);
+  assert.deepEqual(cat, {
+    models: ["gemini-4-carbon", "claude-opus-5-5", "gpt-oss-120b", "gemini-pro-orchestrator"],
+    efforts: {
+      "gemini-4-carbon": ["low", "medium", "high"],
+      "claude-opus-5-5": ["low", "medium", "high"],
+      "gpt-oss-120b": [],
+      "gemini-pro-orchestrator": [],
+    },
+    defaults: { "gemini-4-carbon": "high", "claude-opus-5-5": "high" },
+  });
+  const medCat = agyCatalog(
+    ["gemini-4-carbon-low", "gemini-4-carbon-medium", "gemini-4-carbon-high", "claude-opus-5-5-low", "claude-opus-5-5-high"],
+    "gemini-4-carbon-medium",
+  );
+  assert.deepEqual(medCat.defaults, { "gemini-4-carbon": "medium", "claude-opus-5-5": "high" });
+  assert.equal(agyVariant("gemini-4-carbon", undefined, ["gemini-4-carbon-low", "gemini-4-carbon-medium", "gemini-4-carbon-high"], "gemini-4-carbon-medium"), "gemini-4-carbon-medium");
+  assert.equal(agyVariant("claude-opus-5-5", undefined, ["claude-opus-5-5-low", "claude-opus-5-5-high"], "gemini-4-carbon-medium"), "claude-opus-5-5-high");
+  assert.deepEqual(agyBaseModel("claude-opus-5-5-medium"), { model: "claude-opus-5-5", effort: "medium" });
+  assert.equal(agyVariant("gpt-oss-120b", undefined, ["gpt-oss-120b-medium"]), "gpt-oss-120b-medium");
+
+  const session = await driver.open({ ...options, model: "gemini-4-carbon", effort: "medium" }, (e) => events.push(e));
+  assert.equal(session.model, "gemini-4-carbon");
+  assert.equal(session.currentModelId, "gemini-4-carbon-medium");
+  assert.equal(session.retune!({ ...options, model: "gemini-4-carbon" }), true, "default effort returns to the CLI's defaultModelId");
+  assert.equal(session.currentModelId, "gemini-4-carbon-high");
+  assert.equal(session.retune!({ ...options, model: "gpt-oss-120b" }), true);
+  await session.prompt("hi");
+  await until(() => ended(events).length === 1);
+  assert.deepEqual(
+    rpc(dump).filter((m) => m.method === "session/set_model").map((m) => m.params.modelId),
+    ["gemini-4-carbon-medium", "gemini-4-carbon-high", "gpt-oss-120b-medium"],
+  );
+  await session.dispose();
+
+  const cfg = hubConfig(
+    { profiles: [{ id: "ag", name: "AGY", runtime: "agy", home: "/h", access: { kind: "subscription" } }] },
+    "/x",
+    () => cat.models,
+  );
+  const p = cfg.profiles[0]!;
+  assert.equal(p.models.includes("gemini-4-carbon"), true);
+  const { spelling } = await import("../src/sessions/config.ts");
+  assert.equal(spelling(p, "gemini-4-carbon-high"), "gemini-4-carbon");
+  const { availableEfforts } = await import("../src/sessions/pool.ts");
+  assert.deepEqual(availableEfforts("agy", "gemini-4-carbon-high", { agy: cat.efforts }), ["low", "medium", "high"]);
+  const legacySessions = new Map<string, any>([
+    ["s-legacy", { key: "s-legacy", runtime: "agy", profile: "ag", profilePinned: false, model: "gemini-4-carbon-high", effort: null }],
+  ]);
+  const legacyPool = new SessionAccounts({
+    config: () => cfg,
+    store: {
+      getSession: (k: string) => legacySessions.get(k),
+      setSessionProfile: () => {},
+      lastTurn: () => ({ endedAt: 1000 }),
+      recentlyCompacted: () => false,
+      compactionsReady: () => false,
+      lastContexts: () => [],
+      compactionPoints: () => new Map(),
+    } as never,
+    running: () => [],
+    clock: { currentTimeMillisUnsafe: () => 2000 } as never,
+  });
+  legacyPool.setHealth(() => ({
+    check: { state: "ok", detail: "ok", models: cat.models, modelEfforts: { agy: cat.efforts }, checkedAt: 1500 },
+  }));
+  const patched = legacyPool.change("s-legacy", { effort: "low" }, "en");
+  assert.equal(patched.effort, "low");
 });
 
 for (const crashed of [false, true]) {
@@ -443,4 +516,24 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
     await accounts.close();
     store.close();
   }
+});
+
+test("uncheckOutdated migrates legacy tiered agy model IDs in config.json to base models", () => {
+  const raw: any = {
+    profiles: [
+      {
+        id: "ag",
+        runtime: "agy",
+        access: { kind: "subscription" },
+        model: "gemini-4-carbon-high",
+        models: ["gemini-4-carbon-high", "claude-opus-5-5-medium"],
+      },
+    ],
+    connects: [{ id: "sl", bind: { runtime: "agy", model: "gemini-4-carbon-high" } }],
+  };
+  const { changes } = uncheckOutdated(raw, () => ["gemini-4-carbon", "claude-opus-5-5", "gpt-oss-120b"], new Set());
+  assert.equal(changes.length, 1);
+  assert.deepEqual(raw.profiles[0].models, ["gemini-4-carbon", "claude-opus-5-5"]);
+  assert.equal(raw.profiles[0].model, "gemini-4-carbon");
+  assert.equal(raw.connects[0].bind.model, "gemini-4-carbon");
 });

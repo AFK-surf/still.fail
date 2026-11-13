@@ -21,6 +21,22 @@ pub fn runtime_label(rt : String) -> String {
 }
 
 ///|
+/// A runtime's short label in capsules and compact pills (RUNTIME_SHORT).
+pub fn runtime_short(rt : String) -> String {
+  match rt {
+    "claude" => "CC"
+    "codex" => "Codex"
+    "dsh" => "DSH"
+    "grok" => "GROK"
+    "cursor" => "Cursor"
+    "devin" => "Devin"
+    "hermes" => "Hermes"
+    "agy" => "AGY"
+    _ => rt
+  }
+}
+
+///|
 /// The online stations of the workspace, as `stations` has them.
 fn online_stations(core : Core, here : Here, only? : String = "") -> Array[Json] {
   match stations_of(core, here).value {

@@ -24,7 +24,11 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
             })
           _ => ()
         }
-        let s = @sfapp.fixture_app(mode)
+        let s = if mode == "json" {
+          @sfapp.fixture_json_app(arg("MBUI_FIXTURE_JSON"))
+        } else {
+          @sfapp.fixture_app(mode)
+        }
         // MBUI_FIX_PACE, MBUI_FIX_CORE: the made-up station's pace (said in the film's record, scripts/media.sh)
         @sffixture.fix_pace_said(arg("MBUI_FIX_PACE"), arg("MBUI_FIX_CORE"))
         if arg("MBUI_WINDOW") != "" { @sfbase.lone_page.val = @sfbase.window_page(arg("MBUI_WINDOW")) }

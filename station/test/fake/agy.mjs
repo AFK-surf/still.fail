@@ -94,7 +94,21 @@ const dir = args[args.indexOf('--gemini-dir') + 1];
 const conversations = join(dir, 'antigravity-cli', 'conversations');
 mkdirSync(conversations, { recursive: true });
 if (dump) appendFileSync(dump, JSON.stringify({ args, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null }) + '\n');
-const models = { currentModelId: 'gemini-3.5-flash', availableModels: [{ modelId: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' }, { modelId: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro' }] };
+const models = process.env.FAKE_AGY_SUBSCRIPTION
+  ? {
+      currentModelId: 'gemini-4-carbon-high',
+      availableModels: [
+        { modelId: 'gemini-4-carbon-low', name: 'Gemini 4 Carbon (Low)' },
+        { modelId: 'gemini-4-carbon-medium', name: 'Gemini 4 Carbon (Medium)' },
+        { modelId: 'gemini-4-carbon-high', name: 'Gemini 4 Carbon (High)' },
+        { modelId: 'claude-opus-5-5-low', name: 'Claude Opus 5.5 (Low)' },
+        { modelId: 'claude-opus-5-5-medium', name: 'Claude Opus 5.5 (Medium)' },
+        { modelId: 'claude-opus-5-5-high', name: 'Claude Opus 5.5 (High)' },
+        { modelId: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' },
+        { modelId: 'gemini-pro-orchestrator', name: 'Gemini Pro Orchestrator' },
+      ],
+    }
+  : { currentModelId: 'gemini-3.5-flash', availableModels: [{ modelId: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' }, { modelId: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro' }] };
 for await (const line of createInterface({ input: process.stdin })) {
   const m = JSON.parse(line);
   if (dump) appendFileSync(dump + '.rpc', line + '\n');

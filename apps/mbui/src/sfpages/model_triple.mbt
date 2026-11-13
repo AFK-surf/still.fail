@@ -411,10 +411,10 @@ pub fn model_triple(
       // runs it by name, then who runs it, then the runtime, then how hard it thinks; the model never: its name cut
       // short once all of them have gone)
       c.text(name, style=if small { triple_name_xs } else { triple_name }, keep=true) |> ignore
-      if !flag(v, "runtimeFixed") && items(vo, "runtimes").length() > 1 {
+      if !flag(v, "runtimeFixed") && (flag(v, "showRuntime") || items(vo, "runtimes").length() > 1) {
         c.box(style=triple_part, drop=triple_drop_runtime, fn() {
           c.text("·", style=muted) |> ignore
-          c.text(@settings.runtime_label(runtime), style=words) |> ignore
+          c.text(@settings.runtime_short(runtime), style=words) |> ignore
         })
         |> ignore
       }
@@ -571,9 +571,9 @@ pub fn model_triple_node(parent : @view.View, src : Source, station : String, of
         // (what may be left out leaving for it first, its name cut short only then: View::fit_whole)
         .fit_whole(Is(true))
         |> ignore
-        part(r, triple_drop_runtime, fn() { !flag(v(), "runtimeFixed") && items(vo(), "runtimes").length() > 1 }, fn(x) {
+        part(r, triple_drop_runtime, fn() { !flag(v(), "runtimeFixed") && (flag(v(), "showRuntime") || items(vo(), "runtimes").length() > 1) }, fn(x) {
           dot(x)
-          @sf.words_node(x, fn() { @settings.runtime_label(runtime()) }, fn() { triple_words }) |> ignore
+          @sf.words_node(x, fn() { @settings.runtime_short(runtime()) }, fn() { triple_words }) |> ignore
         })
         part(r, triple_drop_effort, fn() { text(value(), "effort") != "" || items(v(), "efforts").length() > 0 }, fn(x) {
           dot(x)
@@ -2160,17 +2160,17 @@ let triple_alone : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// The order the control's line leaves its parts out in, short of room: who runs it by name
-/// (in its part), who runs it, the runtime, how hard it thinks and how fast.
+/// (in its part), who runs it, how hard it thinks and how fast, then the runtime.
 let triple_drop_name : Int = 1
 
 ///|
 let triple_drop_account : Int = 2
 
 ///|
-let triple_drop_runtime : Int = 3
+let triple_drop_effort : Int = 3
 
 ///|
-let triple_drop_effort : Int = 4
+let triple_drop_runtime : Int = 4
 
 ///|
 /// The triple as a row's value (28 high at its end, in its middle): a capsule, as the round controls beside it are, its

@@ -1204,10 +1204,10 @@ test("the_model_control_keeps_the_configurations_used_most_near_and_each_model_a
   apply(host, values);
   // the used most first, another workspace's not at all; each said as it runs
   assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "medium", null, null], ["claude-sonnet-5", "claude", null, null, null]]);
-  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.name, c.text]), [["GPT-6 Astra", "中"], ["Sonnet 5", "默认深度"]]);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.name, c.text]), [["GPT-6 Astra", "Codex · 中"], ["Sonnet 5", "CC · 默认深度"]]);
   assert.equal(option(1, "gpt-6-astra").uses, undefined);
   assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", "medium", null]);
-  assert.equal(option(1, "gpt-6-astra").usualText, "中");
+  assert.equal(option(1, "gpt-6-astra").usualText, "Codex · 中");
   // a chat's whose runtime is fixed: of its runtime alone
   assert.deepEqual(v(values, 2).combos.map(combo), [["claude-sonnet-5", "claude", null, null, null]]);
   // the same model run another way: another, counted on its own
@@ -1240,7 +1240,7 @@ test("the_model_control_keeps_the_configurations_used_most_near_and_each_model_a
   await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5" });
   apply(host, values);
   assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", null, null]);
-  assert.equal(option(1, "gpt-6-astra").usualText ?? null, null);
+  assert.equal(option(1, "gpt-6-astra").usualText ?? null, "Codex");
   core.close();
 });
 
@@ -1261,7 +1261,7 @@ test("the_configurations_used_most_keep_their_context_each_on_its_own", async ()
   core.inner.choose.used("ws/st", { ...opus, context: 400_000 });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.model, c.context ?? null, c.text]), [["claude-opus-5-5", 300_000, "高 · 300K"], ["claude-opus-5-5", null, "高"]]);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.model, c.context ?? null, c.text]), [["claude-opus-5-5", 300_000, "CC · 高 · 300K"], ["claude-opus-5-5", null, "CC · 高"]]);
   // pressed: all of it made what it runs on, picked exactly
   await ask(host, core, ui, 2, "pick.save", { station: "ws/st", of: "new", ...opus, fast: null, context: 300_000 });
   apply(host, values);
@@ -1327,9 +1327,9 @@ test("a_model_never_run_here_takes_what_is_set_by_hand_in_its_panel_and_one_that
   const effort = () => (core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).effort;
   assert.equal(effort(), "high");
   assert.equal(option("gpt-6-astra").usual.effort, "medium", "one that ran here keeps its own");
-  assert.equal(option("gpt-6-astra").usualText, "中");
+  assert.equal(option("gpt-6-astra").usualText, "Codex · 中");
   assert.equal(option("claude-sonnet-5").usual.effort, "high", "one that never did takes it");
-  assert.equal(option("claude-sonnet-5").usualText, "高");
+  assert.equal(option("claude-sonnet-5").usualText, "CC · 高");
   // opened again: nothing set by hand in it yet
   await ask(host, core, ui, 5, "pick.set", { station: "ws/st", of: "new", open: true });
   apply(host, values);
@@ -1345,6 +1345,41 @@ test("a_model_never_run_here_takes_what_is_set_by_hand_in_its_panel_and_one_that
   assert.equal(v(values, 3).model.model, "claude-sonnet-5");
   assert.equal(effort(), "high");
   core.close();
+});
+
+test("merged_models_across_devin_and_agy_name_their_available_runtimes_and_single_runtime_models_show_theirs_when_multi_runtime", async () => {
+  const dev = profile("dev", "devin", ["gemini-4-carbon", "swe-2"], true, 10, {
+    check: { state: "ok", detail: "", checkedAt: 2, models: ["gemini-4-carbon", "swe-2"], modelEfforts: { devin: { "gemini-4-carbon": ["low", "medium", "high"], "swe-2": ["medium", "high"] } } },
+  });
+  const agy = profile("agy", "agy", ["gemini-4-carbon", "gpt-oss-120b"], true, 10, {
+    check: { state: "ok", detail: "", checkedAt: 2, models: ["gemini-4-carbon", "gpt-oss-120b"], modelEfforts: { agy: { "gemini-4-carbon": ["low", "medium", "high"], "gpt-oss-120b": [] } } },
+  });
+  const { host, core } = await started({ ...base(), "GET /overview": { ...overview, profiles: [dev, agy] } });
+  try {
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+    subscribe(core, ui, 2, { topic: "newChat", scope: "ws" });
+    await host.settle();
+    const values = new Map();
+    apply(host, values);
+    const opt = (m: string) => v(values, 1).options.find((o: J) => o.model === m);
+    assert.equal(v(values, 1).showRuntime, true);
+    assert.equal(v(values, 2).pick.showRuntime, true);
+    assert.deepEqual(opt("gemini-4-carbon").runtimes, ["devin", "agy"]);
+    assert.equal(opt("gpt-oss-120b").usualText, "AGY");
+    assert.equal(opt("swe-2").usualText, "Devin");
+    // Switch away to swe-2 so gemini-4-carbon is unrun in the list: shows "Devin · AGY"
+    await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "new", model: "swe-2", runtime: "devin", effort: "high" });
+    apply(host, values);
+    assert.equal(opt("gemini-4-carbon").usualText, "Devin · AGY");
+    // Save gemini-4-carbon on agy + high, then view it from swe-2: shows "AGY / Devin · 高"
+    await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gemini-4-carbon", runtime: "agy", effort: "high" });
+    await ask(host, core, ui, 5, "pick.save", { station: "ws/st", of: "new", model: "swe-2", runtime: "devin", effort: "high" });
+    apply(host, values);
+    assert.equal(opt("gemini-4-carbon").usualText, "AGY / Devin · 高");
+  } finally {
+    core.close();
+  }
 });
 
 test("the_model_control_lists_every_starred_model_apart_from_the_configurations_used_most_and_every_model_by_its_maker", async () => {
@@ -3406,5 +3441,90 @@ test("the_spans_a_core_sends_say_which_build_of_its_app_it_is_once_its_ui_has_sa
   assert.equal(sent.length, 1);
   const resource = JSON.parse(new TextDecoder().decode(sent[0].body!)).resourceSpans[0].resource.attributes as J[];
   assert.deepEqual(resource.find((a) => a.key === "service.version")?.value, { stringValue: "0.1.2420" });
+  core.close();
+});
+
+test("profile_fusion_is_asked_on_demand_and_legacy_tiered_agy_picks_resolve_to_base_models", async () => {
+  const agyProfile = profile("ag1", "agy", ["gemini-4-carbon", "claude-opus-5-5", "gpt-oss-120b"], true, 10, {
+    check: {
+      state: "ok",
+      detail: "ok",
+      models: ["gemini-4-carbon", "claude-opus-5-5", "gpt-oss-120b"],
+      modelEfforts: { agy: { "gemini-4-carbon": ["low", "medium", "high"], "claude-opus-5-5": ["low", "medium", "high"], "gpt-oss-120b": [] } },
+      modelEffortDefaults: { agy: { "gemini-4-carbon": "high", "claude-opus-5-5": "high" } },
+      checkedAt: 1,
+    },
+  });
+  const legacySession = { ...session("k1"), runtime: "agy", model: "gemini-4-carbon-high", effort: null, profile: "ag1" };
+  const stationOv = {
+    ...overview,
+    sessionRuntimeChange: true,
+    connectRuntimeChange: true,
+    profiles: [
+      profile("p2", "claude", ["claude-opus-5-5"], true, 80),
+      agyProfile,
+    ],
+  };
+  const { host, core } = await started({
+    ...base(),
+    "GET /overview": stationOv,
+    "GET /sessions": [legacySession],
+    "GET /sessions/k1": { session: legacySession, threads: [], turns: [], jobs: [] },
+    "GET /profiles/dv/fusion": { fusion: { leads: { "gpt-6-sol-max": [0] }, sides: ["swe-2-medium"] } },
+  });
+  const ui = core.connect();
+  const got = (await ask(host, core, ui, 1, "profile.fusion", { station: "ws/st", id: "dv" })) as J;
+  assert.deepEqual(got, {
+    fusion: {
+      leads: [{ id: "gpt-6-sol-max", name: "GPT-6 Sol Max", maker: { id: "openai", name: "OpenAI" }, sides: [0] }],
+      sides: [{ id: "swe-2-medium", name: "SWE-2 Medium", maker: { id: "devin", name: "Cognition" } }],
+    },
+  });
+
+  // Seed legacy tiered agy records (pre-normalization) and subscribe to `pick` for both `new` and legacy session `k1`.
+  core.inner.data.put("choice", "ws:ws:station:st", { runtime: "agy", model: "gemini-4-carbon-medium", effort: "", profile: "", profiles: null, fast: null, context: null }, false);
+  core.inner.data.put(
+    "choice",
+    "ws:ws:frequent",
+    [
+      { model: "gemini-4-carbon-medium", runtime: "agy", effort: null, fast: null, context: null, count: 4, last: 200 },
+      { model: "gpt-oss-120b-medium", runtime: "agy", effort: null, fast: null, context: null, count: 2, last: 100 },
+    ],
+    false,
+  );
+  core.inner.data.put("choice", "ws:ws:liked", ["gemini-4-carbon-high", "gpt-oss-120b-medium"], false);
+
+  const values = new Map();
+  subscribe(core, ui, 2, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(core, ui, 3, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  apply(host, values);
+
+  // New chat pick resolves legacy `gemini-4-carbon-medium` -> `gemini-4-carbon` at `medium`, and retains frequent combos + stars.
+  const newPick = v(values, 2);
+  assert.deepEqual([newPick.value.model, newPick.value.runtime, newPick.value.effort], ["gemini-4-carbon", "agy", "medium"]);
+  assert.deepEqual(newPick.liked, ["gemini-4-carbon", "gpt-oss-120b"]);
+  assert.deepEqual(
+    newPick.combos.map((c: J) => [c.model, c.runtime, c.effort, c.text]),
+    [
+      ["gemini-4-carbon", "agy", "medium", "AGY · 中"],
+      ["gpt-oss-120b", "agy", undefined, "AGY · 默认深度"],
+    ],
+  );
+  // Legacy session `k1` with `model: "gemini-4-carbon-high", effort: null` normalizes to `gemini-4-carbon` at `high`.
+  const sessionPick = v(values, 3);
+  assert.deepEqual([sessionPick.value.model, sessionPick.value.runtime, sessionPick.value.effort], ["gemini-4-carbon", "agy", "high"]);
+
+  // Unstarring normalized `gemini-4-carbon` clears legacy `gemini-4-carbon-high`, and forgetting normalized combo clears legacy history.
+  core.inner.choose.like("ws/st", "gemini-4-carbon", false);
+  core.inner.choose.forget("ws/st", { model: "gemini-4-carbon", runtime: "agy", effort: "medium" });
+  await host.settle();
+  apply(host, values);
+  const afterPick = v(values, 2);
+  assert.deepEqual(afterPick.liked, ["gpt-oss-120b"]);
+  assert.deepEqual(afterPick.combos.map((c: J) => c.model), ["gpt-oss-120b"]);
+
+  const { runnableOn } = await import("../src/views/models.ts");
+  assert.equal(runnableOn(stationOv, { runtime: "agy", model: "gemini-4-carbon-high", profile: "ag1" }, 0).length, 1);
   core.close();
 });

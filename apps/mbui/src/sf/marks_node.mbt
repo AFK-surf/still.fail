@@ -165,7 +165,7 @@ fn maker_of(maker : String, runtime : String) -> String {
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
-      "agy" => "gemini"
+      "agy" => "agy"
       _ => "anthropic"
     }
   }
@@ -320,7 +320,7 @@ pub fn provider_logo_node(
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
-      "agy" => "gemini"
+      "agy" => "agy"
       _ => "openai"
     }
   }

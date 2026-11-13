@@ -55,6 +55,16 @@ export function same(a: string, b: string): boolean {
   return a === b || key(a) === key(b);
 }
 
+const AGY_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/// An Antigravity ACP tiered `modelId` (`gemini-4-carbon-high`, `claude-opus-5-5-medium`, `gpt-oss-120b-medium`) split
+/// into its base model and thinking level; null when `id` carries no trailing level.
+export function splitAgyTier(id: string): { model: string; effort: string } | null {
+  const trimmed = id.trim();
+  const effort = AGY_LEVELS.find((l) => trimmed.endsWith(`-${l}`) && trimmed.length > l.length + 1);
+  return effort === undefined ? null : { model: trimmed.slice(0, -effort.length - 1), effort };
+}
+
 /// A model as people call it: Opus 5.5, GPT-6 Astra, o4 Mini; one whose family is not known here reads as spelled.
 export const name = remembered(nameOf);
 function nameOf(id: string): string {
@@ -125,6 +135,15 @@ function orderKeyOf(id: string): Readonly<{ rank: number; family: string; versio
 }
 
 function namedOf(base: string): string | null {
+  if (base.startsWith("fusion-")) {
+    const mark = "-sidekick-";
+    const at = base.indexOf(mark, 7);
+    if (at > 7 && at + mark.length < base.length) {
+      const lead = base.slice(7, at);
+      const side = base.slice(at + mark.length);
+      return `Fusion · ${namedOf(lead) ?? lead} + ${namedOf(side) ?? side}`;
+    }
+  }
   const words = base.split("-").filter((w) => w !== "");
   const first = words[0];
   if (first === undefined) return null;
@@ -141,7 +160,8 @@ function namedOf(base: string): string | null {
   const parts = joined(words);
   const dashed = ["gpt", "glm", "swe"].includes(first) ? word(first) : null;
   if (dashed !== null && parts[1] !== undefined) {
-    return [`${dashed}-${parts[1]}`, ...parts.slice(2).map(word)].join(" ");
+    const second = parts[1] in BRANDS ? BRANDS[parts[1]]! : parts[1];
+    return [`${dashed}-${second}`, ...parts.slice(2).map(word)].join(" ");
   }
   const o = oSeries(first);
   const known = ["gpt", "glm", "codex", "deepseek", "qwen", "qwq", "gemini", "gemma", "kimi", "moonshot", "minimax", "grok", "mistral", "devstral", "codestral", "llama", "doubao", "hunyuan", "ernie", "nemotron", "muse", "adaptive"];
@@ -169,6 +189,7 @@ const BRANDS: Record<string, string> = {
 
 function word(w: string): string {
   if (w in BRANDS) return BRANDS[w]!;
+  if (/^[0-9]+(?:\.[0-9]+)?[bmk]$/.test(w)) return w.toUpperCase();
   const chars = [...w];
   if (chars.length === 0) return "";
   return chars[0]!.toUpperCase() + chars.slice(1).join("");

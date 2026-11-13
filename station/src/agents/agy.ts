@@ -132,6 +132,71 @@ export function agyUpdate(update: Json): Json {
   return update;
 }
 
+/// The thinking levels Antigravity's ACP models append to a family's name (`gemini-4-carbon-high`, `claude-opus-5-5-medium`).
+export const AGY_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/// A raw ACP `modelId` split into its base model and thinking level (`gemini-4-carbon-high` → `gemini-4-carbon` at `high`,
+/// `gemini-3.5-flash` → `gemini-3.5-flash`).
+export function agyBaseModel(id: string): { model: string; effort?: string } {
+  const trimmed = id.trim();
+  const effort = AGY_LEVELS.find((l) => trimmed.endsWith(`-${l}`) && trimmed.length > l.length + 1);
+  return effort === undefined ? { model: trimmed } : { model: trimmed.slice(0, -effort.length - 1), effort };
+}
+
+export type AgyCatalog = { models: string[]; efforts: Record<string, string[]>; defaults: Record<string, string> };
+
+/// The base models, their thinking levels (`[]` where at most one variant is offered, e.g. `gpt-oss-120b-medium`), and
+/// any default level reported by `currentModelId`.
+export function agyCatalog(availableModels: readonly string[], currentModelId?: string | null): AgyCatalog {
+  const models: string[] = [];
+  const levels = new Map<string, Set<string>>();
+  for (const raw of availableModels) {
+    const { model, effort } = agyBaseModel(raw);
+    if (model === "") continue;
+    if (!models.includes(model)) models.push(model);
+    if (effort !== undefined) {
+      let set = levels.get(model);
+      if (!set) levels.set(model, (set = new Set()));
+      set.add(effort);
+    }
+  }
+  const efforts: Record<string, string[]> = {};
+  const defaults: Record<string, string> = {};
+  const cur = typeof currentModelId === "string" && currentModelId.trim() !== "" ? agyBaseModel(currentModelId) : null;
+  for (const model of models) {
+    const sorted = AGY_LEVELS.filter((l) => levels.get(model)?.has(l) === true);
+    efforts[model] = sorted.length >= 2 ? sorted : [];
+    if (sorted.length >= 2) {
+      defaults[model] =
+        cur !== null && cur.model === model && cur.effort !== undefined && sorted.includes(cur.effort)
+          ? cur.effort
+          : sorted.includes("high")
+            ? "high"
+            : sorted[sorted.length - 1]!;
+    }
+  }
+  return { models, efforts, defaults };
+}
+
+/// The ACP `modelId` for `(model, effort)` among `availableModels`, or `null` when `availableModels` is non-empty and
+/// offers neither `model` nor any level of it.
+export function agyVariant(model: string, effort: string | undefined, availableModels: readonly string[], defaultModelId?: string | null): string | null {
+  const { model: base, effort: inline } = agyBaseModel(model);
+  const wanted = effort !== undefined && AGY_LEVELS.includes(effort) ? effort : inline;
+  if (wanted === undefined && typeof defaultModelId === "string" && defaultModelId !== "" && agyBaseModel(defaultModelId).model === base) {
+    if (availableModels.length === 0 || availableModels.includes(defaultModelId)) return defaultModelId;
+  }
+  if (availableModels.length === 0) {
+    return wanted !== undefined && inline === undefined ? `${base}-${wanted}` : model;
+  }
+  if (wanted !== undefined && availableModels.includes(`${base}-${wanted}`)) return `${base}-${wanted}`;
+  if (effort === undefined && availableModels.includes(model)) return model;
+  if (availableModels.includes(base)) return base;
+  const variants = availableModels.filter((m) => agyBaseModel(m).model === base);
+  if (variants.length === 0) return null;
+  return variants.find((m) => m === `${base}-high`) ?? variants.find((m) => m === `${base}-medium`) ?? variants[0]!;
+}
+
 /// The models session/new or session/load lists (ACP's `models`), the current first.
 export function agyModels(result: Json): string[] {
   const valid = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
@@ -171,14 +236,19 @@ export class AgyDriver extends AcpDriver<AgySession> {
     return "agy";
   }
 
-  /// The models a profile's CLI offers: a session opened only to ask.
-  async models(profile: Profile): Promise<string[]> {
+  /// The models a profile's CLI offers, normalized into base models and their thinking levels: a session opened only to ask.
+  async catalog(profile: Profile): Promise<AgyCatalog> {
     const session = await this.begin({ key: `models-${profile.id}-${uuid()}`, profile, cwd: agyHome(profile.home), instructions: "", mcpToken: "", mcpUrl: "", route: "model-discovery" }, () => {}, true);
     try {
-      return session.availableModels;
+      return agyCatalog(session.availableModels, session.currentModelId);
     } finally {
       await session.dispose();
     }
+  }
+
+  /// The models a profile's CLI offers: a session opened only to ask.
+  async models(profile: Profile): Promise<string[]> {
+    return (await this.catalog(profile)).models;
   }
 
   protected session(options: OpenOptions, events: Events) {
@@ -197,8 +267,11 @@ export class AgyDriver extends AcpDriver<AgySession> {
 
   protected async ready(session: AgySession, options: OpenOptions, probe: boolean) {
     const model = probe ? undefined : (options.model ?? profileModel(options.profile));
-    if (model !== undefined && model !== session.model) await session.request(`model:${uuid()}`, "session/set_model", { sessionId: session.id(), modelId: model });
-    if (model !== undefined) session.model = model;
+    if (model === undefined) return;
+    const target = agyVariant(model, options.effort, session.availableModels, session.defaultModelId) ?? model;
+    if (target !== session.currentModelId) await session.request(`model:${uuid()}`, "session/set_model", { sessionId: session.id(), modelId: target });
+    session.currentModelId = target;
+    session.model = agyBaseModel(model).model;
   }
 }
 
@@ -206,6 +279,10 @@ export class AgySession extends AcpSession {
   protected readonly steersByPrompt = true;
   /// What session/new or session/load said it offers.
   availableModels: string[] = [];
+  /// The raw ACP `modelId` currently active in the process.
+  currentModelId: string | null = null;
+  /// The raw ACP `modelId` the process opened on before any `session/set_model`.
+  defaultModelId: string | null = null;
   /// The context its last call had and the model's window, as usage_update says them.
   private context = { used: 0, size: 0 };
 
@@ -230,15 +307,21 @@ export class AgySession extends AcpSession {
     super.opened(result);
     this.availableModels = agyModels(result);
     const current = result?.models?.currentModelId;
-    if (typeof current === "string" && current !== "") this.model = current;
+    if (typeof current === "string" && current !== "") {
+      this.currentModelId = current;
+      this.defaultModelId = current;
+      this.model = agyBaseModel(current).model;
+    }
   }
 
   protected kept() {
-    return { availableModels: this.availableModels, context: this.context };
+    return { availableModels: this.availableModels, currentModelId: this.currentModelId, defaultModelId: this.defaultModelId, context: this.context };
   }
 
   protected taken(snapshot: Json) {
     this.availableModels = Array.isArray(snapshot.availableModels) ? snapshot.availableModels.filter((m: unknown): m is string => typeof m === "string") : [];
+    this.currentModelId = typeof snapshot.currentModelId === "string" ? snapshot.currentModelId : this.model;
+    this.defaultModelId = typeof snapshot.defaultModelId === "string" ? snapshot.defaultModelId : null;
     const c = snapshot.context;
     if (c && typeof c === "object") this.context = { used: typeof c.used === "number" ? c.used : 0, size: typeof c.size === "number" ? c.size : 0 };
   }
@@ -265,14 +348,16 @@ export class AgySession extends AcpSession {
     return this.promptTakeover(text);
   }
 
-  /// Between turns, another model is set in the running process, read from its next turn on.
+  /// Between turns, another model or thinking level is set in the running process, read from its next turn on.
   retune(options: OpenOptions) {
     if (this.turn.closed || this.turn.busy || this.sessionId === "") return false;
     const model = options.model ?? profileModel(options.profile);
     if (model === undefined) return false;
-    if (this.availableModels.length > 0 && !this.availableModels.includes(model)) return false;
-    if (model !== this.model) this.send("session/set_model", { sessionId: this.sessionId, modelId: model });
-    this.model = model;
+    const target = agyVariant(model, options.effort, this.availableModels, this.defaultModelId);
+    if (target === null) return false;
+    if (target !== this.currentModelId) this.send("session/set_model", { sessionId: this.sessionId, modelId: target });
+    this.currentModelId = target;
+    this.model = agyBaseModel(model).model;
     return true;
   }
 }

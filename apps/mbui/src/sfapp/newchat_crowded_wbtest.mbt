@@ -401,3 +401,17 @@ test "narrow, a short window, many models starred: the one picked in view as the
   let used = t.get(Button, label="GPT-6 Astra · 中").rect
   assert_true(row.1 >= sheet.1 && row.1 + row.3 <= used.1, msg="\{picked} \{Repr(row)}: the sheet \{Repr(sheet)}, those used most from \{Repr(used)}")
 }
+
+///|
+test "closed capsule uses short runtime label and keeps runtime ahead of effort when squeezed" {
+  let roomy = crowded("newchat-crowded", w=520.0)
+  let roomy_model = crowded_controls(roomy)[2]
+  let roomy_texts = runs_in(roomy, (roomy_model.x, roomy_model.y, roomy_model.w, roomy_model.h)).map(fn(r) { r.text })
+  assert_true(roomy_texts.contains("DSH") && roomy_texts.contains("高"), msg="\{Repr(roomy_texts)}")
+  assert_true(!roomy_texts.contains("DeepSeek Harness"), msg="\{Repr(roomy_texts)}")
+  // Narrowed to 420, effort (`高`) drops first while short runtime (`DSH`) stays.
+  let squeezed = crowded("newchat-crowded", w=420.0)
+  let squeezed_model = crowded_controls(squeezed)[2]
+  let squeezed_texts = runs_in(squeezed, (squeezed_model.x, squeezed_model.y, squeezed_model.w, squeezed_model.h)).map(fn(r) { r.text })
+  assert_true(squeezed_texts.contains("DSH") && !squeezed_texts.contains("高"), msg="\{Repr(squeezed_texts)}")
+}

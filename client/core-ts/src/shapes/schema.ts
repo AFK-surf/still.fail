@@ -2662,6 +2662,7 @@ export const SHAPES: Record<string, Shape> = {
     ["efforts", vec("String"), { doc: "How hard it can think there (its account's levels where one is kept to): the control says how hard it\nthinks where it has any, or one is picked." }],
     ["fastText", opt("String"), { doc: "Fast, where it runs so (as set, else as its account does)." }],
     ["account", opt("NewChatPickAccount"), { doc: "The account the control names: the one kept to, or the station's pick running low; none, it names none." }],
+    ["showRuntime", opt("bool"), { doc: "Show the short runtime name even when this model has one runtime, because the station runs more than one runtime." }],
   ], { doc: "A new chat's model control as its page draws it while its panel is closed (the `newChat` topic's `pick`): the\nmodel, its runtime where it runs on more than one, how hard it thinks, Fast, who runs it. Worked out of the station\nit starts on alone (choose.ts `#face`); what its panel shows (every model the workspace could run there, each as it\nruns picked, the configurations used most, the starred, the makers, the accounts, borrowing) is the `pick` topic's,\nasked as the panel opens (the user, 2026-11-11: a page's topic carries what the page draws; what shows only after a\npress is asked at the press)." }),
   NewChatPickModel: struct([
     ["name", "String", { said: true, doc: "As people call it (Opus 5.5)." }],
@@ -2772,6 +2773,7 @@ export const SHAPES: Record<string, Shape> = {
     ["fastText", opt("String")],
     ["options", vec("ModelOption")],
     ["runtimeFixed", "bool"],
+    ["showRuntime", opt("bool"), { doc: "Show the short runtime name even when this model has one runtime, because the station runs more than one runtime." }],
     ["value", "Picked"],
     ["valueOption", opt("ModelOption")],
     ["account", opt("PickAccount"), { doc: "The account the control names; none: it names none (a new chat's, while the station's pick is fine)." }],

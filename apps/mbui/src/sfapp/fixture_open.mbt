@@ -467,6 +467,7 @@ pub fn fixture_json(json : String) -> Source {
     }
   }
   let calls = items(Some(screen), "calls")
+  let fallback = flag(Some(screen), "fallback")
   let base = @sffixture.fixture("")
   let src : Source = {
     ..base,
@@ -478,24 +479,31 @@ pub fn fixture_json(json : String) -> Source {
       let want = Json::object(key)
       match topics.iter().find_first(fn(t) { t.0 == want }) {
         Some((_, v)) => { value: Some(v), error: None, version: 1 }
-        None => { value: None, error: None, version: 0 }
+        None => if fallback { (base.topic_read)(name, params) } else { { value: None, error: None, version: 0 } }
       }
     },
     call: fn(name, params, done) {
-      // answered as the core's answer comes: an event from outside (its ticket ended: a frame for what it changed),
-      // here at once
-      let rt = @ui.runtime()
-      let ticket = rt.outside_start("core: " + name)
-      defer rt.outside_end(ticket)
       let said = match
         calls.iter().find_first(fn(c) { text(Some(c), "call") == name && field(Some(c), "params") == Some(params) }) {
         Some(c) => Some(c)
         None => calls.iter().find_first(fn(c) { text(Some(c), "call") == name })
       }
       match said {
-        Some(c) => done(Ok(field(Some(c), "ok").unwrap_or(Json::null())))
-        None =>
+        Some(c) => {
+          // answered as the core's answer comes: an event from outside (its ticket ended: a frame for what it changed),
+          // here at once
+          let rt = @ui.runtime()
+          let ticket = rt.outside_start("core: " + name)
+          defer rt.outside_end(ticket)
+          done(Ok(field(Some(c), "ok").unwrap_or(Json::null())))
+        }
+        None if fallback => (base.call)(name, params, done)
+        None => {
+          let rt = @ui.runtime()
+          let ticket = rt.outside_start("core: " + name)
+          defer rt.outside_end(ticket)
           done(Err({ "code": "unknown_call", "message": Json::string("the screen's JSON has no " + name) }))
+        }
       }
     },
   }
@@ -506,11 +514,19 @@ pub fn fixture_json(json : String) -> Source {
     match text(Some(p), "page") {
       "chat" => open_chat(r)
       "history" => app.nav.push(History(r, text(Some(p), "key"), None))
-      "settings" => open_setting("home")
+      "settings" => open_setting(match text(Some(p), "key") { "" => "home"; k => k })
+      "mode" => open_mode(text(Some(p), "key"))
       _ => ()
     }
   }
   src
+}
+
+///|
+/// Reset the app and open a JSON screen (`fixture_json`), as `fixture_app` does for named modes.
+pub fn fixture_json_app(json : String) -> Source {
+  reset()
+  fixture_json(json)
 }
 
 ///|

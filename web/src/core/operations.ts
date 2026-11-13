@@ -86,6 +86,7 @@ export interface OperationParams {
   "profile.resetQuota": { id: string; reset?: string | null | undefined };
   "profile.quota": { id: string };
   "profile.check": { id: string };
+  "profile.fusion": { id: string };
   "profile.login": { id: string };
   "profile.cancelLogin": { id: string };
   "profile.loginCode": { id: string; code?: string | null | undefined };
@@ -174,7 +175,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "screen.apps", "screen.chrome", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "profile.fusion", "screen.apps", "screen.chrome", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -266,6 +267,7 @@ export function bindStationOperations(call: Call) {
     profileResetQuota: <T = unknown>(params: OperationParams["profile.resetQuota"]) => call("profile.resetQuota", params) as Promise<T>,
     profileQuota: <T = unknown>(params: OperationParams["profile.quota"]) => call("profile.quota", params) as Promise<T>,
     profileCheck: <T = unknown>(params: OperationParams["profile.check"]) => call("profile.check", params) as Promise<T>,
+    profileFusion: <T = unknown>(params: OperationParams["profile.fusion"]) => call("profile.fusion", params) as Promise<T>,
     profileLogin: <T = unknown>(params: OperationParams["profile.login"]) => call("profile.login", params) as Promise<T>,
     profileCancelLogin: <T = unknown>(params: OperationParams["profile.cancelLogin"]) => call("profile.cancelLogin", params) as Promise<T>,
     profileLoginCode: <T = unknown>(params: OperationParams["profile.loginCode"]) => call("profile.loginCode", params) as Promise<T>,

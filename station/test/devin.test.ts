@@ -64,7 +64,15 @@ const LISTED = {
   ],
 };
 const MODELS = ["swe-2", "claude-opus-5-5", "kimi-k2-6", "glm-5-2"];
-const EFFORTS = { "swe-2": ["medium", "high", "max"], "claude-opus-5-5": ["low", "medium"], "glm-5-2": ["max"] };
+const FUSION = {
+  leads: { "gpt-6-sol-low": [0], "gpt-6-sol-max": [1] },
+  sides: ["gpt-5-6-luna-high", "swe-2-medium"],
+};
+const EFFORTS = {
+  "swe-2": ["medium", "high", "max"],
+  "claude-opus-5-5": ["low", "medium"],
+  "glm-5-2": ["max"],
+};
 
 let n = 0;
 /// A Devin account signed in (its key in the profile's devin/data, as `devin auth login` leaves it), with a workspace's
@@ -499,12 +507,17 @@ describe("what a profile runs Devin on", () => {
     assert.deepEqual(devinArgs("/c.json", undefined, "high"), ["--config", "/c.json", "acp"]);
     assert.deepEqual(devinArgs("/c.json", "glm-5-2", undefined), ["--config", "/c.json", "acp", "--model", "glm-5-2"]);
     assert.deepEqual(devinArgs("/c.json", "swe-2", "max"), ["--config", "/c.json", "acp", "--model", "swe-2-max"]);
+    assert.deepEqual(devinArgs("/c.json", "fusion-gpt-6-sol-max-sidekick-swe-2-medium", "high"), ["--config", "/c.json", "acp", "--model", "fusion-gpt-6-sol-max-sidekick-swe-2-medium"]);
     assert.equal(variant("swe-2", "fast"), "swe-2", "not a level: the family at its own");
   });
 
-  test("the account's models are the families at their levels, not the faster ones; a call's counts its input less the cache's", () => {
-    assert.deepEqual(devinCatalog(LISTED), { models: MODELS, efforts: EFFORTS });
-    assert.deepEqual(devinCatalog({}), { models: [], efforts: {} });
+  test("the account's models are the families at their levels, with Fusion pairings apart for opt-in; a call's counts its input less the cache's", async () => {
+    assert.deepEqual(devinCatalog(LISTED), { models: MODELS, efforts: EFFORTS, fusion: FUSION });
+    assert.deepEqual(devinCatalog({}), { models: [], efforts: {}, fusion: null });
+    const { modelName, makerOf } = await import("../src/ops/model-name.ts");
+    assert.equal(modelName("fusion-gpt-6-sol-max-sidekick-swe-2-medium"), "Fusion · GPT-6 Sol Max + SWE-2 Medium");
+    assert.equal(modelName("gpt-oss-120b"), "GPT-OSS 120B");
+    assert.equal(makerOf("fusion-gemini-4-carbon-high-sidekick-gpt-6-sol-low"), "gemini");
     assert.deepEqual(callOf({ sessionUpdate: "usage_update", used: 11193, size: 262000, _meta: { "cognition.ai/inputTokens": 11125, "cognition.ai/outputTokens": 68, "cognition.ai/cachedReadTokens": 128 } }), {
       inputTokens: 10997, cacheReadTokens: 128, cacheWriteTokens: 0, outputTokens: 68,
     });
@@ -549,7 +562,10 @@ describe("what a profile runs Devin on", () => {
       const signedIn = await check();
       assert.equal(signedIn.state, "ok");
       assert.deepEqual(signedIn.models, MODELS);
-      assert.deepEqual(signedIn.modelEfforts, { devin: EFFORTS });
+      assert.deepEqual(signedIn.fusion, { leads: { "gpt-6-sol-max": [0] }, sides: ["swe-2-medium"] });
+      assert.deepEqual(signedIn.modelEfforts, {
+        devin: { "swe-2": ["medium", "high", "max"], "claude-opus-5-5": ["low", "medium"], "glm-5-2": ["max"] },
+      });
       assert.match(signedIn.detail ?? "", /someone@example\.com/);
       assert.equal(devinEmail(home), "someone@example.com", "noted for naming the account");
       assert.equal(lines(dump).filter((l) => l.argv[0] === "auth" && l.argv[1] === "status").every((l) => l.env.XDG_DATA_HOME === devinData(home)), true);
@@ -569,6 +585,48 @@ describe("what a profile runs Devin on", () => {
     } finally {
       platform.terminal = terminal;
       await logins.close();
+    }
+  });
+
+  test("overview strips unticked Fusion catalogs while GET /profiles/:id/fusion serves them on non-borrowed profiles", async () => {
+    const { mkdirSync } = await import("node:fs");
+    const { Store } = await import("../src/store/store.ts");
+    const { ConfigFile } = await import("../src/ops/config.ts");
+    const { Accounts } = await import("../src/accounts/index.ts");
+    const { routes } = await import("../src/api/routes/accounts.ts");
+    const dir = join(data, "accounts-fusion");
+    mkdirSync(dir, { recursive: true });
+    const store = Store.open(":memory:", null);
+    const config = new ConfigFile(dir);
+    config.update((raw) => {
+      raw.profiles = [
+        { id: "dv", name: "Devin", runtime: "devin", home: join(dir, "dv"), access: { kind: "subscription" }, models: ["fusion-gpt-6-sol-max-sidekick-swe-2-medium"] },
+        { id: "dv-shared", name: "Borrowed", runtime: "devin", home: join(dir, "dvs"), access: { kind: "subscription" }, share: { id: "s1", borrowed: true } },
+      ];
+    });
+    const accounts = new Accounts({
+      data: dir,
+      store,
+      config,
+      machine: null,
+      checkOnStart: false,
+      check: async () => ({ state: "ok", detail: "ok", models: MODELS, fusion: FUSION, modelEfforts: { devin: EFFORTS }, checkedAt: 1000 }),
+    });
+    try {
+      await accounts.check("dv", "en");
+      const views = accounts.profilesView();
+      const dv = views.find((v: any) => v.id === "dv")!;
+      assert.equal(dv.check.fusion, undefined, "overview does not carry raw Fusion catalogs");
+      assert.equal(dv.models.includes("fusion-gpt-6-sol-max-sidekick-swe-2-medium"), true);
+      const list = routes({ accounts, overview: () => ({ profiles: accounts.profilesView() }) });
+      const getFusion = list.find((r) => r.method === "GET" && r.pattern.test("/profiles/dv/fusion"))!;
+      const res = await getFusion.handle({ method: "GET", path: "/profiles/dv/fusion", query: [], headers: {}, body: Buffer.alloc(0), viewer: { role: "owner", email: "a@x.test", name: "A", workspace: "w", home: true } as never, lang: "en" }, ["dv"]);
+      assert.equal(res.status, 200);
+      assert.deepEqual(JSON.parse(res.body.toString("utf8")), { fusion: FUSION });
+      assert.equal(accounts.fusionView("dv-shared"), null, "borrowed profiles omit Fusion opt-in catalog");
+    } finally {
+      await accounts.close();
+      store.close();
     }
   });
 });
