@@ -61,7 +61,10 @@ pub fn Viewer::markable(self : Viewer) -> Bool {
 /// `stage`: how big the room it is laid out in is (the window's, less what the shell keeps clear of the system's bars),
 /// what its picture is fitted to, as it changes.
 pub fn viewer_node(v : @view.View, src : Source, stage : () -> (Double, Double)) -> Unit {
+  // (at once: it comes and goes with the viewer's own flight and fade, so the layer has no way of its own; let go as the
+  // viewer leaving is, it would set out on one long after anything shows of it)
   v.pick(
+    at_once=true,
     fn() {
       match tree_viewer() {
         Some(vw) => vw.serial
@@ -2224,8 +2227,9 @@ pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage :
     }
     None
   }
-  // (made again as another flies from here, given the one that does)
-  slot.pick(fn() { { from: flying() } }, fn(f, which) {
+  // (made again as another flies from here, given the one that does; at once: the flight draws its own way, and the
+  // slot let go of as it lands would otherwise set out on one with nothing to show)
+  slot.pick(at_once=true, fn() { { from: flying() } }, fn(f, which) {
     guard which.from is Some(vw) else { return }
     f.over(Is(true)).presses(Is(false)) |> ignore
     if vw.played() {

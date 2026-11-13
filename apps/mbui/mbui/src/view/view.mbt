@@ -1213,6 +1213,9 @@ pub struct Tree {
   /// what hosts the tree as that ends, where that node still stands (Tree::change_ended, Tree::brought)
   priv images_wanted : Array[(NodeId, String, Double)]
   priv flights : Array[Flying]
+  /// the ways set out as the tree is told (View::comes, a fade a structure's leaving gives), each where what goes was made: kept only where the tree keeps sources (a Tester's), for what it
+  /// reads of them (Tree::ways_set_out)
+  priv ways_set : Array[WaySet]
   priv mut lifting : Bool
   /// how many times its nodes' flex places were worked out (a layout of all of it, one laid out to be read, one laid
   /// out alone, one beside another): what Tree::laid_origin sums changes only with one of them
@@ -1494,6 +1497,7 @@ pub fn Tree::new(
     pairs_asked: false,
     images_wanted: [],
     flights: [],
+    ways_set: [],
     lifting: false,
     laids: 0,
     held_kept: [],
@@ -8535,6 +8539,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   }
   guard v.live() is Some(n) else { return }
   let now = self.tree.cause_now()
+  self.tree.way_set(v.at, "fades", now)
   let p = gone_at(n, now)
   n.span = ms
   n.left_at = now - p * ms
@@ -8620,6 +8625,7 @@ fn View::comes(
   }
   let st = n.flex.style
   let at = tree.cause_now()
+  tree.way_set(v.at, if to <= 0.0 { "closes" } else { "comes" }, at)
   // (along a row its structure said so: its width's way, Style's come_across)
   st.come_across = !tree.in_column(v.at)
   // (set off again on its way: from where that way had it at this moment and as fast, not from rest, stopped dead as

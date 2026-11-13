@@ -24,3 +24,14 @@ pub fn Tester::flight_end(self : Tester, id : String) -> Double? {
     None => None
   }
 }
+
+///|
+/// The ways the window's tree set out since this was last asked (@view's Tree::ways_set_out: what came or went down a
+/// column or along a row, what a structure's leaving faded), each where what goes was made; none kept after.
+pub fn Tester::ways_set_out(self : Tester) -> Array[@view.WaySet] {
+  self.reads_own()
+  match view_tree() {
+    Some(tree) => tree.ways_set_out()
+    None => []
+  }
+}
