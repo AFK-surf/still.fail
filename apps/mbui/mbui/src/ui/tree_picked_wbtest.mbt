@@ -222,3 +222,24 @@ test "words of the tree's that take no press over an old view whose box takes a 
   assert_true(t.text_menu().0)
   assert_eq(pressed.val, 0)
 }
+
+///|
+test "words a finger held still on the space between two words: the word before it picked, as a phone's text picks it; before the first word, the one after it; only space, none" {
+  let took : Array[(String, Array[String])] = []
+  let pill : Ref[@view.NodeId?] = Ref(None)
+  let (t, _, _) = quote_tester(took, pill, platform=2)
+  // (on the space after "hello", just past its "o": the space's own, not the start of "wide")
+  let glyphs = t.drawn_instances().filter(fn(a) { a[5] == 1.0 && a[1] < 70.0 }).map(fn(a) { (a[0], a[2]) })
+  glyphs.sort_by(fn(a, b) { a.0.compare(b.0) })
+  let x = glyphs[4].0 + glyphs[4].1 + 0.5
+  t.press_at(x, 51.0)
+  t.run_for(long_press_ms)
+  t.release(x, 51.0)
+  t.draw()
+  assert_eq(picked_now().map(fn(p) { p.text }), Some("hello"))
+  // (the same rule on its own, in the text's units)
+  assert_eq(finger_word_at("hello wide", 5), (0, 5))
+  assert_eq(finger_word_at("  hi there", 0), (2, 4))
+  assert_eq(finger_word_at("   ", 1), (0, 0))
+  assert_eq(finger_word_at("hello wide", 7), (6, 10))
+}
