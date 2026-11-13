@@ -197,7 +197,7 @@ fn back_where(src : Source) -> (() -> Unit)? {
 ///|
 /// Page `p` opened where the layout has it (the pane table): on the wide frame the page pushed,
 /// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
-/// main_page), on the tape shown in the page pane (sfdesk's show_page: brought over with the side panel in use, also
+/// beside_follow), on the tape shown in the page pane (sfdesk's show_page: brought over with the side panel in use, also
 /// the chat already shown, chosen again); laid out Small on the phone's stack (a new chat risen from the foot).
 fn open_where(src : Source, p : Page) -> Unit {
   if !@sfdesk.is_wide(@ui.current()) {
@@ -1355,7 +1355,7 @@ let window_shown : Ref[Bool] = Ref(false)
 ///|
 /// Whether the core has answered for what the wide frame's pane shows of page `p` (sfdesk's pane_opens, what a
 /// workspace switched waits for the page its pane lands on too): a chat; a new chat; an agent's history, a service and
-/// a file asked as pages are their chat's with them beside it (sfdesk's frame.mbt main_page), the chat shown already,
+/// a file asked as pages are their chat's with them beside it (sfdesk's service_tab.mbt beside_follow), the chat shown already,
 /// what is beside it waited for in its tab; any other page is not waited for.
 fn pane_ready(src : Source, p : Page) -> Bool {
   match workspace_in_view(src).0 {

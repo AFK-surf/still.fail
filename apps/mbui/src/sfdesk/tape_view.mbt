@@ -729,7 +729,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     fn() {
       let chat = match app.nav.top() {
         Chat(r) | History(r, _, _) => chat_key(r)
-        // a chat's detail asked as a page, on its way to its chat's side panel (main_page): still that chat, not another
+        // a chat's detail asked as a page, on its way to its chat's side panel (beside_follow): still that chat, not another
         // come (its panel, opening, comes over)
         p if laid_beside(p) => wide.tape_chat.untracked()
         _ => ""
@@ -750,6 +750,10 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       tape_settle(chat, open, known, v.cause_at())
     },
   )
+  // (a chat's detail asked as a page put beside its chat as it comes on top, before a frame builds it: after the tape's
+  // reaction, so the tape takes the page come and then its chat's panel opened, which comes over, as when the page was
+  // built first and told it; on top as the tape is made too)
+  beside_follow(v, src)
   // back while the wide frame takes it (wide_takes_back), a node of the window's tree's: drawn before the panels, what an old
   // view in one of them says takes back (a page's own stack) taking it before it, what is over them too; whose it is
   // said at the cause that changes it, each step taken at its moment (wide_back_step)

@@ -53,7 +53,15 @@ pub fn side_now(src : Source, r : ChatRef) -> (Array[String], String) {
 /// agent's history after the histories open, any other last), closed (the last left in front, if it was), brought to
 /// the front; all of them closed (`clear`). The panel is told first whether any will be open, to slide as they come.
 pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) -> Unit {
-  let (tabs, front) = side_now(src, r)
+  side_change_from(src, r, action, tab, side_now(src, r))
+}
+
+///|
+/// side_change, chat `r`'s tabs as they are now (side_now's) given, read by the caller where it holds them: what
+/// changes them as a page comes on top (beside_follow) reads them in its reaction's read, held as long as that reads
+/// them, not by the wide frame's node for as long as it lives (Source::owned_by's raw read: the chat held after it left).
+fn side_change_from(src : Source, r : ChatRef, action : String, tab : String?, now : (Array[String], String)) -> Unit {
+  let (tabs, front) = now
   let any = match action {
     "open" | "front" => true
     "close" => tabs.iter().any(fn(t) { Some(t) != tab })
