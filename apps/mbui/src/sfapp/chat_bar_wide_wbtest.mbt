@@ -372,12 +372,11 @@ fn wide_bar_medium(calls : Array[Made]) -> Array[(String, () -> @ui.Tester)] {
 ///|
 /// What the nodes' audit says of the bar (its faults made in chat_bar_wide_node or find_bar_node) in state `name`, the
 /// old bar's own as it was laid out (the old view held them to no rule; reported, pinned, 2026-11-11): its agents but
-/// the first, 20 marks 10 apart, pressed in 33 × 36 (AGENTS, NARROW: two each); a station's screens' count in the page's
-/// ground on the amber of one driven (SCREENS, SCREENS-DRIVEN: one, 2.27:1).
+/// the first, 20 marks 10 apart, pressed in 33 × 36 (AGENTS, NARROW: two each). (A station's screens' count, 2.27:1 on
+/// the amber of one driven, went with the count itself, 2026-11-13.)
 fn wide_bar_known(name : String) -> Array[String] {
   match name {
     "AGENTS" | "NARROW" | "M-AGENTS" | "M-NARROW" => ["has 33×36 to be pressed in, under 36", "has 33×36 to be pressed in, under 36"]
-    "SCREENS" | "SCREENS-DRIVEN" | "M-SCREENS" => ["2.27:1, under 4.5"]
     _ => []
   }
 }
