@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [3b7c1fa43](https://github.com/AFK-surf/monoid/commit/3b7c1fa4361d9cd8e89f804c608588ded9a2799f) mbui: a key coming at a page's list's end is one m | 1.97 | 2.68 | 11.4 | 30.95 | 40.88 | 27.6 | 52.75 | 96.01 | 109.79 |
 | [e99808c93](https://github.com/AFK-surf/monoid/commit/e99808c9330741e71d5bc58380e44eb6e2a287dc) fix(mbui): align connects cards, lead icons, and r | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.01 | 109.79 |
 | [ffa55870f](https://github.com/AFK-surf/monoid/commit/ffa55870f01816f0b3661d6bf6d80ff9b0c72f39) fix(mbui): show the floating outline button on wid | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.01 | 109.79 |
 | [6311979f9](https://github.com/AFK-surf/monoid/commit/6311979f9e1985bcf38250026136912de3ee9c73) cloud: a self-hosted cloud on workerd, its names,  | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 109.79 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9128d4550](https://github.com/AFK-surf/monoid/commit/9128d4550f4d88bf161c1601baf5baed744ed8ed) Point repository references at AFK-surf/monoid (#5 | 1.95 | 2.62 | 11.24 | 30.7 | 40.37 | 27.36 | 52.3 | 93.98 | 100.45 |
 | [09e08a60c](https://github.com/AFK-surf/monoid/commit/09e08a60cb3f59f3d330f63f984bf55ce3b6489c) mbui app: the bars fall to what main d207ee61's ru | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 93.95 | 100.74 |
 | [7bfaa3583](https://github.com/AFK-surf/monoid/commit/7bfaa3583ef3628401acf4740307b0e8f48f40d5) app tests: chat_page_nodes in two runs on the four | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 100.8 |
-| [d207ee613](https://github.com/AFK-surf/monoid/commit/d207ee61367b15b57e665c43629f73f0c6d97bf8) mbui app: center chat top bar title inside touch w | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 98.58 |
