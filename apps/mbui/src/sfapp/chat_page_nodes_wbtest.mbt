@@ -580,11 +580,9 @@ test "a chat's page made with its inside nodes opens where the core says it was 
     let (h, step) = (s.2, ys[1] - ys[0])
     // (said on one line: a runner reads a failure's first line)
     let said = "\{name}: " + ys.map(fn(y) { y.to_string() }).join(" ")
-    // (further down each time, by as much again give or take a row's guess: the list brought to a row an offset under
-    // its top lands it up to 16.5 off where a row over it is still counted as its estimate (大屏, at 120, 240, 360 and 480
-    // pixels: 85.1, 112.1, 172.2, 199.3, the steps 27, 60.1, 27.1 where each is to be 43.6). The list's to mend: held
-    // to a point here once it does)
-    assert_true(step > 10.0 && ys[2] - ys[1] > 10.0 && (ys[2] - ys[1] - step).abs() <= 40.0, msg=said)
+    // (further down each time, by as much again, to a point: the row brought holds where it shows from as the rows
+    // over it are measured, ListPlace::bring)
+    assert_true(step > 10.0 && (ys[2] - ys[1] - step).abs() <= 1.0, msg=said)
     // (none said: its top just under the bar's room, in the upper half of what shows)
     assert_true(ys[3] > 0.0 && ys[3] < h / 2.0, msg=said)
   }
