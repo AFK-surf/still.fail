@@ -567,6 +567,11 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
             b = [[UIBarButtonItem alloc] initWithImage:icon menu:menu];
           }
           b.title = d[@"title"];
+          // (folded into the system's "…", its rows there as they are, not a submenu of them: a submenu opened there
+          // heads its rows with its own "… 更多", the system's "…" opening a "…" (the user, 2026-11-13))
+          if (@available(iOS 16.0, *))
+            b.menuRepresentation = [UIMenu menuWithTitle:@"" image:nil identifier:nil
+                                                 options:UIMenuOptionsDisplayInline children:menu.children];
         } else if (was && !was.menu) {
           b = was;
           b.primaryAction = action;
@@ -591,8 +596,8 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
 #ifdef __IPHONE_27_0
           // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27, more wanted than the
           // workspace's and than any page's action; a page's first, and of a page's one that is itself a menu (a
-          // chat's "…") before the rest: folded, it is a submenu of the system's "…", nothing lost, where its button
-          // left beside the system's would be two "…" in the column: the user 2026-11-03)
+          // chat's "…") before the rest: folded, its rows are in the system's "…" (its menuRepresentation), nothing
+          // lost, where its button left beside the system's would be two "…" in the column: the user 2026-11-03)
           if (@available(iOS 27.0, *)) {
             // (the bell above all: on the outer screen's short column there is room for one of the app's own)
             if ([ident hasSuffix:@"/attention"] || [ident hasSuffix:@"side/close"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
