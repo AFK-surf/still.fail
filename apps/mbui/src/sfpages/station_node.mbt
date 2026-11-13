@@ -138,6 +138,7 @@ fn station_view_node(
         src,
         asks,
         station_shown_at(address),
+        then=station_part_then(address, @signals.untracked(s), to),
         fn() {
           @settings.station_parts[address] = to
           pressed.set(None)
@@ -364,16 +365,16 @@ fn station_env_form_ask(address : String, form : String) -> (String, Map[String,
 
 ///|
 /// What block `key` of station `address`'s page (`s` whole, as it is now) reads as it is first drawn, each by the ask its
-/// read is made by. Not yet what comes of an answer (the card of each login under way, `machineLogin` of the ids only
-/// `machineLogins` says), nor its variables' draft (`agentEnvForm`, opened by its editor's first build): asked and
-/// opened at the press, the login's card that came after was drawn by no frame of its own (settings_wbtest's 设置).
-fn station_block_asks(core : Core, here : Here, address : String, s : Json?, key : String) -> Array[(String, Map[String, Json])] {
+/// read is made by: what comes of an answer is station_part_then's. Its variables' editor's draft opened as the editor's
+/// first build opens it, once (station_env_form).
+fn station_block_asks(core : Core, here : Here, address : String, s : Json?, manager : Bool, key : String) -> Array[(String, Map[String, Json])] {
   match key {
     "resources" => [station_net_ask(address), resources_ask(here, address)]
     "userPages" | "agentPages" | "screens" => [station_screens_ask(address)]
     "devices" => if (core.devices_on)() { [@settings.devices_ask(here)] } else { [] }
     "processes" => if flag(s, "online") { [resources_ask(here, address)] } else { [] }
     "logins" => [logins_ask(address)]
+    "env" => if manager { [station_env_form_ask(address, station_env_form(core, address))] } else { [] }
     // (up, it is the part's last, under its variables' editor: made only as it is scrolled to, which asks it then; away,
     // the part is three short blocks, all of it drawn as it comes)
     "workspaces" => if flag(s, "online") { [] } else { [station_memberships_ask(address)] }
@@ -394,7 +395,7 @@ fn station_part_asks(core : Core, here : Here, address : String, s : Json?, mana
   let out : Array[(String, Map[String, Json])] = []
   let said : Map[String, Bool] = Map([])
   for key in keys {
-    for ask in station_block_asks(core, here, address, s, key) {
+    for ask in station_block_asks(core, here, address, s, manager, key) {
       let k = ask.0 + Json::object(ask.1).stringify()
       if !said.contains(k) {
         said[k] = true
@@ -403,6 +404,31 @@ fn station_part_asks(core : Core, here : Here, address : String, s : Json?, mana
     }
   }
   out
+}
+
+///|
+/// What part `part` of station `address`'s page (`s` whole, as it is now) reads as it is first drawn once what the press
+/// asked is answered (switch_answered's `then`): in its 设置, the card of each login under way (`machineLogin`), whose
+/// ids only its logins' answer says, read by what its 登录 shows them by (station_logins_shown).
+fn station_part_then(address : String, s : Json?, part : String) -> (((String, Map[String, Json])) -> Json?) -> Array[(String, Map[String, Json])] {
+  fn(read) {
+    if part == "settings" {
+      station_logins_shown(read(logins_ask(address)), flag(s, "online")).map(fn(id) { login_ask(address, id) })
+    } else {
+      []
+    }
+  }
+}
+
+///|
+/// The logins under way its 登录 shows a card of (`view` its logins as the core says them): their ids; none while it
+/// is away (it can be neither done nor cancelled until it is back).
+fn station_logins_shown(view : Json?, online : Bool) -> Array[String] {
+  if online {
+    items(view, "logins").filter(fn(l) { flag(Some(l), "active") }).map(fn(l) { text(Some(l), "id") })
+  } else {
+    []
+  }
 }
 
 ///|
@@ -978,14 +1004,14 @@ fn station_processes_node(b : @view.View, core : Core, here : () -> Here, s : ()
 /// one under way: it can be neither done nor cancelled until it is back.
 fn station_logins_node(b : @view.View, core : Core, station : String, online : () -> Bool) -> Unit {
   let view = fn() { station_part_read(core, station, logins_ask(station)).value }
-  let active = fn() { if online() { items(view(), "logins").filter(fn(l) { flag(Some(l), "active") }) } else { [] } }
+  let active = fn() { station_logins_shown(view(), online()) }
   let tools = fn() { items(view(), "tools") }
   b.show(fn() { flag(view(), "supported") && active().length() + tools().length() > 0 }, fn(p) {
     st_section_node(p, fn() { @sf.t("web-main.logins.title") }, note=fn() { @sf.t("web-main.logins.lead") }, fn(sec) {
       sec.show(fn() { active().length() > 0 }, fn(k) {
         k.box(fn(cards) {
           @sf.style_node(cards, fn() { lg_cards })
-          cards.each(fn() { active().map(fn(l) { text(Some(l), "id") }) }, fn(id) { id }, fn(c, id) {
+          cards.each(active, fn(id) { id }, fn(c, id) {
             login_card_node(c, core, station, id.untracked(), place="station")
           })
         })
@@ -1194,7 +1220,8 @@ fn station_env_node(b : @view.View, core : Core, address : String, env : () -> J
 
 ///|
 /// The draft of station `address`'s variables its editor follows (station_env_editor's): the one opened for it here,
-/// else one opened now (the core's `agentEnv.form.open`, by an id of this device's), once, as the editor is first built.
+/// else one opened now (the core's `agentEnv.form.open`, by an id of this device's), once: as the editor is first built,
+/// or as its 设置 is pressed (station_block_asks), whichever is first.
 fn station_env_form(core : Core, address : String) -> String {
   match env_forms.get(address) {
     Some(f) => f

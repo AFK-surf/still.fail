@@ -1286,15 +1286,18 @@ test "a station's permissions: each grant's mark across the middle of its title'
 
 ///|
 /// The station's page's parts pressed in turn in each mode (sfpages station_node's choice, sfbase's switch_answered),
-/// from the part the mode opens on: each its label, and whether what comes of it is held here. 设置 of a station up is
-/// not: the card of a login under way reads that login (`machineLogin`), whose id only the answer of `machineLogins` says,
-/// so it comes a round after the rest of the part (asked of the owner, not chained here); and its variables' draft is
-/// opened and read by its editor as it is first built, so its words come after the rest too.
-let station_press_modes : Array[(String, Array[(String, Bool)])] = [
-  ("settings-station", [("设置", false), ("进程", true), ("概览", true)]),
-  ("settings-station-offline", [("设置", true), ("进程", true), ("概览", true)]),
-  ("settings-station-updated", [("进程", true), ("设置", false), ("概览", true)]),
+/// from the part the mode opens on, each by its label; and in 设置 of a station up, words that come of what follows an
+/// answer (a login under way's card, `machineLogin` of an id its logins' answer says) and of its variables' draft (opened
+/// by the press), there in the frame the part comes.
+let station_press_modes : Array[(String, Array[String])] = [
+  ("settings-station", ["设置", "进程", "概览"]),
+  ("settings-station-offline", ["设置", "进程", "概览"]),
+  ("settings-station-updated", ["进程", "设置", "概览"]),
 ]
+
+///|
+/// Words 设置 of the made-up station up shows once whole: its login under way's card's, its variables' draft's.
+let station_settings_whole : Array[String] = ["在浏览器里登录", "HTTPS_PROXY=http://127.0.0.1:7890"]
 
 ///|
 /// The choice's own words (what the pressed control answers with), left out of what is compared.
@@ -1365,7 +1368,7 @@ test "the station's page's parts pressed: the page as it was till the part press
         t.ways_set_out() |> ignore
         pace.val = ms
         for press in mode.1 {
-          let (label, judged) = press
+          let label = press
           let at = "\{s.name}, \{ms} ms, \{mode.0}, \{label}"
           let (x, y) = usage_choice_shown(t, s, label)
           let before = station_words_placed(t)
@@ -1373,7 +1376,7 @@ test "the station's page's parts pressed: the page as it was till the part press
           let asked_from = heard.length()
           let from = t.time()
           t.tap(x, y)
-          let frames : Array[(Double, Array[String])] = []
+          let frames : Array[(Double, Array[String], Int)] = []
           let faults : Array[String] = []
           let ways : Array[String] = []
           let n = ((ms * 3.0 + @ui.move_most_ms * 2.0) / @ui.frame_period_default).ceil().to_int()
@@ -1393,14 +1396,17 @@ test "the station's page's parts pressed: the page as it was till the part press
             if t.query(Radio, label~, checked=On) is None {
               faults.push("+\{now.round()} ms: \{label} not shown chosen")
             }
-            frames.push((now, station_words_placed(t)))
+            frames.push((now, station_words_placed(t), heard.length()))
           }
           let rest = station_words_placed(t)
           // (as at the press till the part comes, then as at rest from that frame on)
           let mut came = -1.0
-          for f in frames {
+          let mut asked_by = heard.length()
+          for i, f in frames {
             if came < 0.0 && f.1 == rest {
               came = f.0
+              // (what was sent by the frame before it: the press's and what followed its answers)
+              asked_by = if i == 0 { frames[0].2 } else { frames[i - 1].2 }
             } else if came < 0.0 && f.1 != before {
               station_words_told(at, f.0, before, f.1)
               faults.push("+\{f.0.round()} ms: words not where they were at the press")
@@ -1419,14 +1425,20 @@ test "the station's page's parts pressed: the page as it was till the part press
               faults.push("asked again: \{a.0}")
             }
           }
+          // (nothing asked as the part came or after it: all of it was asked ahead)
+          for a in station_subscribed(heard, asked_by) {
+            faults.push("asked as it came or after: \{a.0}")
+          }
+          // (where it is up, its 设置 whole as it comes: the login's card, the draft's words)
+          if label == "设置" && mode.0 != "settings-station-offline" && came >= 0.0 {
+            for w in station_settings_whole {
+              if !rest.iter().any(fn(r) { r.has_prefix(w) }) {
+                faults.push("\{w} not there at rest")
+              }
+            }
+          }
           for a in asked {
             println("STATION_ASK \{at}: \{a.0.unsafe_substring(start=0, end=@cmp.minimum(a.0.length(), 90))}\{if a.1 { " let go" } else { "" }}")
-          }
-          if !judged {
-            for f in faults {
-              println("STATION_UNHELD \{at} \{f}")
-            }
-            continue
           }
           for f in faults {
             println("STATION_FAULT \{at} \{f}")
