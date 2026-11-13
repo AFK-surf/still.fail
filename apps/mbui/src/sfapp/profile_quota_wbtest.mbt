@@ -89,13 +89,18 @@ test "three full allowance windows still fit in the narrowest sidebar" {
     let runs = t.text_runs().filter(fn(r) { r.x0 < 300.0 })
     let shown = runs.map(fn(r) { r.text })
     assert_eq(shown.filter(fn(s) { s == "100%" }).length(), 3, msg="\{platform}, \{digits}: \{Repr(shown)}")
-    for mark in ["5H", "W", "M"] {
+    let marks = ["5H", "W", "M"]
+    for mark in marks {
       assert_true(shown.contains(mark), msg="\{platform}, \{digits}: \{Repr(shown)}")
     }
-    // A short line must not leave one window stranded below the others. In a compact arrangement the marks may be
-    // above the figures, but the figures themselves stay in one aligned row.
+    // Every window keeps its mark beside its figure in a standard capsule, wrapping to a second line when the
+    // narrowest sidebar cannot hold all three on one line.
+    let mks = runs.filter(fn(r) { marks.contains(r.text) })
     let values = runs.filter(fn(r) { r.text == "100%" })
-    assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{Repr(values)}")
+    for i in 0..<3 {
+      assert_eq(mks[i].top, values[i].top, msg="\{platform}, \{digits}: \{Repr(mks)} \{Repr(values)}")
+    }
+    assert_true(values[0].top == values[1].top && values[0].top <= values[2].top, msg="\{platform}, \{digits}: \{Repr(values)}")
     assert_eq(t.squeeze_faults(), [])
   }
 }
@@ -108,12 +113,17 @@ test "a model's own week, marked by the model, still fits beside the account's w
     t.draw()
     let runs = t.text_runs().filter(fn(r) { r.x0 < 300.0 })
     let shown = runs.map(fn(r) { r.text })
-    for mark in ["5H", "W", "Fable"] {
+    let marks = ["5H", "W", "Fable"]
+    for mark in marks {
       assert_eq(shown.filter(fn(s) { s == mark }).length(), 1, msg="\{platform}, \{digits}: \{mark}: \{Repr(shown)}")
     }
+    let mks = runs.filter(fn(r) { marks.contains(r.text) })
     let values = runs.filter(fn(r) { r.text == "100%" })
     assert_eq(values.length(), 3, msg="\{platform}, \{digits}: \{Repr(shown)}")
-    assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{Repr(values)}")
+    for i in 0..<3 {
+      assert_eq(mks[i].top, values[i].top, msg="\{platform}, \{digits}: \{Repr(mks)} \{Repr(values)}")
+    }
+    assert_true(values[0].top == values[1].top && values[0].top < values[2].top, msg="\{platform}, \{digits}: \{Repr(values)}")
     assert_eq(t.squeeze_faults(), [])
   }
 }
@@ -169,8 +179,9 @@ test "a profile's offline state and its three allowance windows each have room t
 
 ///|
 /// The Profile sidebar of settings-profiles-several (five Claude accounts, the report's figures), on 大屏; `row`'s
-/// figures all `left` where given (another account's spent so far, the rest as they were).
-fn several_tester(platform : Int, digits : Double, row? : String = "", left? : Int = 0) -> @ui.Tester {
+/// figures all `left` where given (another account's spent so far, the rest as they were); `agy` adds a four-window
+/// Antigravity CLI account after ChatGPT.
+fn several_tester(platform : Int, digits : Double, row? : String = "", left? : Int = 0, agy? : Bool = false) -> @ui.Tester {
   new_run()
   @settings.fixture_page("settings-profiles-several") |> ignore
   let base = fixture("settings")
@@ -189,30 +200,64 @@ fn several_tester(platform : Int, digits : Double, row? : String = "", left? : I
     let w = put(w, "left", fn(_) { Json::number(left.to_double()) })
     put(w, "usedPercent", fn(_) { Json::number((100 - left).to_double()) })
   }
-  let respent = fn(v : Json) {
+  let agy_item : Json = {
+    "key": "ws1/st1/agy",
+    "group": "agy",
+    "groupTitle": "Antigravity CLI 订阅",
+    "title": "agy@example.com",
+    "station": "ws1/st1",
+    "usable": true,
+    "state": Json::null(),
+    "where": "Willow 可用",
+    "profile": {
+      "id": "agy",
+      "name": "agy@example.com",
+      "runtime": "agy",
+      "quota": {
+        "state": "ok",
+        "windows": [
+          { "mark": "Gemini 5H", "scope": "Gemini", "left": 100.0, "level": "ok" },
+          { "mark": "Gemini W", "scope": "Gemini", "left": 83.0, "level": "ok" },
+          { "mark": "Claude / GPT 5H", "scope": "Claude / GPT", "left": 65.0, "level": "ok" },
+          { "mark": "Claude / GPT W", "scope": "Claude / GPT", "left": 10.0, "level": "red" },
+        ],
+      },
+    },
+  }
+  let reshape = fn(v : Json) {
     put(v, "items", fn(items) {
       guard items is Array(a) else { return items }
-      Json::array(
-        a.map(fn(e) {
-          guard e is Object(m) && m.get("key") == Some(Json::string(row)) else { return e }
-          put(e, "profile", fn(p) {
-            put(p, "quota", fn(q) {
-              put(q, "windows", fn(ws) {
-                guard ws is Array(ws) else { return Json::null() }
-                Json::array(ws.map(figures))
-              })
+      let a = a.map(fn(e) {
+        guard row != "" && e is Object(m) && m.get("key") == Some(Json::string(row)) else { return e }
+        put(e, "profile", fn(p) {
+          put(p, "quota", fn(q) {
+            put(q, "windows", fn(ws) {
+              guard ws is Array(ws) else { return Json::null() }
+              Json::array(ws.map(figures))
             })
           })
-        }),
-      )
+        })
+      })
+      if agy {
+        let out : Array[Json] = []
+        for e in a {
+          if e is Object(m) && m.get("group") == Some(Json::string("key")) {
+            out.push(agy_item)
+          }
+          out.push(e)
+        }
+        Json::array(out)
+      } else {
+        Json::array(a)
+      }
     })
   }
   let src : Source = {
     ..base,
     topic_read: fn(name, params) {
       let read = base.topic(name, params).get().snapshot()
-      if name == "profiles" && row != "" {
-        { ..read, value: read.value.map(respent) }
+      if name == "profiles" && (row != "" || agy) {
+        { ..read, value: read.value.map(reshape) }
       } else {
         read
       }
@@ -363,4 +408,48 @@ test "a list of five accounts' allowances: every row's chips start where its mar
       }
     }
   }
+}
+
+///|
+test "allowance layout is chosen per provider: a four-window vendor does not shrink another vendor's rows" {
+  let t = several_tester(2, 0.3, agy=true)
+  let row_in_line = fn(from_title : String, to_title : String, marks : Array[String]) -> Bool raise {
+    let runs = t.text_runs().filter(fn(r) { r.x0 < @sfdesk.wide.side_w.get() })
+    let find_top = fn(title : String) -> Double? {
+      let found = runs.filter(fn(r) {
+        r.text == title ||
+        (r.text.has_suffix("…") && r.text.length() > 4 && title.has_prefix(r.text[:r.text.length() - 1].to_owned()))
+      })
+      if found.length() == 0 {
+        None
+      } else {
+        Some(found.fold(init=found[0], fn(a, r) { if r.x0 < a.x0 { r } else { a } }).top)
+      }
+    }
+    guard find_top(from_title) is Some(top) else { fail("no \{from_title}") }
+    let next = find_top(to_title).unwrap_or(t.h)
+    let in_row = runs.filter(fn(r) { r.top > top && r.top < next })
+    let figs = in_row.filter(fn(r) { r.text.has_suffix("%") })
+    let mks = in_row.filter(fn(r) { marks.contains(r.text) })
+    guard figs.length() > 0 && mks.length() == marks.length() else {
+      fail("\{from_title}: figs=\{Repr(figs)} mks=\{Repr(mks)}")
+    }
+    mks.iter().all(fn(m) { m.top == figs[0].top })
+  }
+  // At the default sidebar width, an Antigravity CLI row with four wide windows wraps its two model pools onto two
+  // lines, while the five Claude rows (both three-window and two-window) and ChatGPT keep their marks beside their
+  // figures on one line.
+  assert_true(row_in_line("claude1@example.com", "claude2@example.com", ["5H", "W", "Fable"]))
+  assert_true(row_in_line("claude3@example.com", "claude4@example.com", ["W", "Fable"]))
+  assert_true(row_in_line("ChatGPT 团队", "agy@example.com", ["5H", "W"]))
+  assert_false(row_in_line("agy@example.com", "备用 key", ["Gemini 5H", "Gemini W", "Claude / GPT 5H", "Claude / GPT W"]))
+  assert_eq(t.squeeze_faults(), [])
+  // At the narrowest sidebar width, Claude's three-window rows switch all Claude rows (including two-window claude3)
+  // to two lines of standard capsules, while ChatGPT's two-window row still keeps its marks beside its figures on one line.
+  @sfdesk.wide.side_w.set(@sfdesk.side_min)
+  t.draw()
+  assert_false(row_in_line("claude1@example.com", "claude2@example.com", ["5H", "W", "Fable"]))
+  assert_false(row_in_line("claude3@example.com", "claude4@example.com", ["W", "Fable"]))
+  assert_true(row_in_line("ChatGPT 团队", "agy@example.com", ["5H", "W"]))
+  assert_eq(t.squeeze_faults(), [])
 }

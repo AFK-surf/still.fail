@@ -274,15 +274,36 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       let offered = @settings.profiles_offers(src.topic("profiles", { "scope": Json::string(w.id) }).get().value).map(fn(o) {
         (o.0, o.1.filter(fn(l) { flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked" }))
       })
-      // (the room the widest allowance's chips need: one way for every row, a profile's or an offered login's,
-      // nav_quota_chips)
-      let mut chips = 0.0
+      // (the room the widest allowance's chips of each provider need: one way for every row of a vendor's, a profile's
+      // or an offered login's, nav_quota_chips; the user, 2026-11-13: 「按账号类型来搞，不要所有全用同一种」「相同供应商的
+      // 账号用同一种就行」)
+      let kind_of = fn(e : Json?) {
+        let g = text(e, "group")
+        if g != "key" {
+          g
+        } else {
+          let a = field(field(e, "profile"), "access")
+          let pv = text(a, "provider")
+          if pv != "" { pv } else { text(a, "kind") }
+        }
+      }
+      let offer_kind = fn(l : Json?) {
+        let rt = text(l, "runtime")
+        if rt == "codex" { "chatgpt" } else { rt }
+      }
+      let chips : Map[String, Double] = Map([])
       for e in list {
-        chips = dmax(chips, @sf.nav_quota_line(c, field(field(Some(e), "profile"), "quota")))
+        let e = Some(e)
+        let k = kind_of(e)
+        let w = @sf.nav_quota_line(c, field(field(e, "profile"), "quota"))
+        chips[k] = dmax(chips.get(k).unwrap_or(0.0), w)
       }
       for o in offered {
         for l in o.1 {
-          chips = dmax(chips, @sf.nav_quota_line(c, field(Some(l), "quota")))
+          let l = Some(l)
+          let k = offer_kind(l)
+          let w = @sf.nav_quota_line(c, field(l, "quota"))
+          chips[k] = dmax(chips.get(k).unwrap_or(0.0), w)
         }
       }
       for i, e in list {
@@ -355,7 +376,8 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
             more~,
             foot?=if windows {
-              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at(), widest=chips) })
+              let widest = chips.get(kind_of(e)).unwrap_or(0.0)
+              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at(), widest~) })
             } else {
               None
             },
@@ -408,7 +430,12 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 })
               },
               more=j + 1 < offers.length(),
-              foot?=if windows { Some(fn() { @sf.nav_quota_chips(c, quota, key~, at=side_at(), widest=chips) }) } else { None },
+              foot?=if windows {
+                let widest = chips.get(offer_kind(l)).unwrap_or(0.0)
+                Some(fn() { @sf.nav_quota_chips(c, quota, key~, at=side_at(), widest~) })
+              } else {
+                None
+              },
               foot_capsule?=if windows { Some(@sf.fill_chip_small_h) } else { None },
               on_press=fn() {
                 @sfbase.history_push()

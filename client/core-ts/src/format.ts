@@ -227,18 +227,22 @@ export function windowMark(label: string): [string, number] {
 }
 
 /// When two windows share the same group suffix (5 小时 · Gemini and 每周 · Gemini), add the length mark so their chips
-/// do not both read "Gemini".
+/// do not both read "Gemini", and keep each group's windows together in the order the groups appear.
 export function windowMarks(labels: string[]): [string, number][] {
   const raw = labels.map(windowMark);
   const counts = new Map<string, number>();
   for (const [m] of raw) counts.set(m, (counts.get(m) ?? 0) + 1);
+  const groups = new Map<string, number>();
+  for (const [m] of raw) {
+    if ((counts.get(m) ?? 0) > 1 && !groups.has(m)) groups.set(m, groups.size);
+  }
   return labels.map((label, i) => {
     const [m, order] = raw[i]!;
     if ((counts.get(m) ?? 0) <= 1) return [m, order];
     const of = label.indexOf(" · ");
     if (of < 0) return [m, order];
     const [len] = windowMark(label.slice(0, of));
-    return [`${m} ${len}`, order];
+    return [`${m} ${len}`, (groups.get(m) ?? 0) * 10 + order];
   });
 }
 

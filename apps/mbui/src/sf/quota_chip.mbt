@@ -88,33 +88,82 @@ pub fn quota_chips(
 }
 
 ///|
+/// The lines an allowance's windows divide into when one line cannot hold them all: two windows stay together (and
+/// wrap only if the line is narrower than a pair); more than two put the account's own windows on the first line (four
+/// unscoped windows balanced two and two), each multi-window model pool (`scope` shared by more than one window, such as
+/// Gemini 5H / Gemini W and Claude / GPT 5H / Claude / GPT W) on its own line, and single-window model caps (`Fable`,
+/// `Opus`, `Sonnet`) together on theirs.
+fn quota_parts(windows : Array[Json]) -> Array[Array[Json]] {
+  if windows.length() <= 1 {
+    return if windows.length() == 0 { [] } else { [windows] }
+  }
+  let base : Array[Json] = []
+  let counts : Map[String, Int] = Map([])
+  let order : Array[String] = []
+  for w in windows {
+    let s = chip_str(Some(w), "scope")
+    if s == "" {
+      base.push(w)
+    } else {
+      let c = counts.get(s).unwrap_or(0)
+      if c == 0 {
+        order.push(s)
+      }
+      counts[s] = c + 1
+    }
+  }
+  let parts : Array[Array[Json]] = []
+  if base.length() >= 2 && order.length() == 0 {
+    let half = (base.length() + 1) / 2
+    parts.push(base[:half].to_owned())
+    parts.push(base[half:].to_owned())
+  } else if base.length() > 0 {
+    parts.push(base)
+  }
+  let single : Array[Json] = []
+  for s in order {
+    if counts.get(s).unwrap_or(0) > 1 {
+      parts.push(windows.filter(fn(w) { chip_str(Some(w), "scope") == s }))
+    } else {
+      for w in windows {
+        if chip_str(Some(w), "scope") == s {
+          single.push(w)
+        }
+      }
+    }
+  }
+  if single.length() > 0 {
+    parts.push(single)
+  }
+  parts
+}
+
+///|
 /// An allowance's chips where no one line holds them (quota_chips' last way): the account's windows a line, each said
 /// `account`'s way (quota_worded's: 1 its name and what is left, 5 小时 62%; 2 by its mark, where the line before was),
-/// what its models have to themselves (`scope`) a line under it, each by its model (Fable 46%: a model's name says
-/// whose it is, where W says little without a tip); a line going on in lines where even it has not the room, every
-/// chip whole.
+/// each multi-window model pool a line of its own, and what single models have to themselves (`scope`) a line under it,
+/// each by its model (Fable 46%: a model's name says whose it is, where W says little without a tip); a line going on in
+/// lines where even it has not the room, every chip whole.
 fn quota_chips_lines(c : @ui.Ctx, windows : Array[Json], small : Bool, gap : Double, key : String, account : Int) -> Unit {
-  let own = fn(w : Json) { chip_str(Some(w), "scope") != "" }
   c.box(style=quota_chips_parts, fn() {
-    for part in [(windows.filter(fn(w) { !own(w) }), account), (windows.filter(own), 2)] {
-      if part.0.length() > 0 {
-        c.box(style=quota_chips_part.then(@ui.style(gap=room(gap))), flow=true, line_gap=quota_chips_part_lines, fn() {
-          for w in part.0 {
-            let (mark, words) = quota_worded(Some(w), part.1)
-            fill_chip(
-              c,
-              chip_left(Some(w)),
-              chip_str(Some(w), "level"),
-              mark,
-              words,
-              small~,
-              key=key + "/" + chip_str(Some(w), "mark") + "/lines",
-              said=quota_said(Some(w)),
-            )
-          }
-        })
-        |> ignore
-      }
+    for part in quota_parts(windows) {
+      c.box(style=quota_chips_part.then(@ui.style(gap=room(gap))), flow=true, line_gap=quota_chips_part_lines, fn() {
+        for w in part {
+          let form = if chip_str(Some(w), "scope") != "" { 2 } else { account }
+          let (mark, words) = quota_worded(Some(w), form)
+          fill_chip(
+            c,
+            chip_left(Some(w)),
+            chip_str(Some(w), "level"),
+            mark,
+            words,
+            small~,
+            key=key + "/" + chip_str(Some(w), "mark") + "/lines",
+            said=quota_said(Some(w)),
+          )
+        }
+      })
+      |> ignore
     }
   })
   |> ignore
@@ -136,14 +185,13 @@ let quota_chips_part_lines : Double = 6.0
 
 ///|
 /// A sidebar row's allowance starts under the mark, in every row of every list (the user, 2026-11-10: 「全跟 logo
-/// 对齐」, after rows of one list started some at the mark and some at the text). It takes the first way it has the
-/// room for: full chips in a line; each window's mark over its figure, keeping the figures together in one line; more
-/// windows in balanced rows, each still whole. A list's rows take one way: `widest`, the room the list's widest
-/// line of full chips needs (nav_quota_line of each row's, the most), so no row of it is laid out another way than
-/// the rest (the user, 2026-11-10: rows of one list laid out each its own way read as a fault). Every way stands from the start, its chips the same gap apart, never
-/// spread to the row's ends (the user, 2026-11-10: 「怎么一会儿左对齐一会儿两端对齐」). Its nav_item gives it the whole row as `foot` and says
-/// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot. `at`: where its row's list
-/// stands (its words' room: band_pad_in).
+/// 对齐」, after rows of one list started some at the mark and some at the text). It keeps every window as a standard
+/// marked capsule (`[mark %]`): all in one line when the provider's widest row fits, or wrapped into logical lines
+/// (`quota_parts`) when a provider's windows are too wide or numerous for one line (the user, 2026-11-13: 「按账号类型来
+/// 搞，不要所有全用同一种」「相同供应商的账号用同一种就行」「感觉极端情况就应该多行」). Every way stands from the start,
+/// its chips the same gap apart, never spread to the row's ends (the user, 2026-11-10: 「怎么一会儿左对齐一会儿两端对齐」).
+/// Its nav_item gives it the whole row as `foot` and says foot_capsule=fill_chip_small_h so the capsules are at the
+/// same inset from the row's foot. `at`: where its row's list stands (its words' room: band_pad_in).
 pub fn nav_quota_chips(
   c : @ui.Ctx,
   q : Json?,
@@ -160,49 +208,8 @@ pub fn nav_quota_chips(
   let side = band_pad_in(at)
   // A capsule reaches the corner until it is past the outer corner's circle-equivalent radius.
   let clear = dmax(0.0, inset + fill_chip_small_h / 2.0 - side)
-  let columns = fn(first : Int, last : Int, suffix : String) {
-    for i in first..<last {
-      let w = windows[i]
-      c.box(style=nav_quota_column, keep=true, fn() {
-        c.text(chip_str(Some(w), "mark"), style=nav_quota_mark) |> ignore
-        // A capsule stays centred in a metadata line, including when its mark is above it. list_row places that
-        // line's middle by the foot corner; without the line around it the capsule would sit too close to the foot.
-        c.box(style=@ui.style(h=Fixed(theme().chat_list.meta_h), justify=JCenter), fn() {
-          quota_chip(c, Some(w), small=true, compact=true, marked=false, key=key + suffix + "/" + i.to_string())
-        }) |> ignore
-      }) |> ignore
-    }
-  }
-  // Keep the rows balanced: four windows are two and two, five are three and two, never three with one left alone.
-  let grid = fn(limit : Int) {
-    let count = windows.length()
-    let rows = (count + limit - 1) / limit
-    let each = count / rows
-    let extra = count % rows
-    c.box(style=@ui.style(w=Full, mx=room(inset - side), mb=room(clear), gap=S1), keep=true, fn() {
-      for row in 0..<rows {
-        let first = row * each + (if row < extra { row } else { extra })
-        let last = first + each + (if row < extra { 1 } else { 0 })
-        let line = @ui.style(row=true, w=Full, gap=S1)
-        let line = if limit == 2 { line.then(@ui.style(h=Fixed(theme().chat_list.meta_h), align=ACenter)) } else { line }
-        c.box(style=line, keep=true, fn() {
-          let suffix = "/grid/" + limit.to_string()
-          if limit == 2 {
-            // Two full, marked chips per line are shorter than labels over figures and keep each pair together.
-            for i in first..<last {
-              c.box(keep=true, fn() {
-                quota_chip(c, Some(windows[i]), small=true, key=key + suffix + "/" + i.to_string())
-              }) |> ignore
-            }
-          } else {
-            columns(first, last, suffix)
-          }
-        }) |> ignore
-      }
-    }) |> ignore
-  }
   c.box(style=quota_chips_line, one_of=true, fn() {
-    // (as wide as the list's widest needs, so a list's rows take one way, not each its own)
+    // (as wide as its provider's widest needs, so a provider's rows take one way, not each its own)
     let line = dmax(widest, nav_quota_line(c, q)) + clear
     c.box(style=@ui.style(row=true, min_w=Fixed(line), ml=room(inset - side), pr=room(clear), gap=S1), keep=true, fn() {
       for i in 0..<windows.length() {
@@ -211,24 +218,22 @@ pub fn nav_quota_chips(
         }) |> ignore
       }
     }) |> ignore
+    let pad_y = dmax(0.0, (theme().chat_list.meta_h - fill_chip_small_h) / 2.0)
     c.box(
-      // (from the start as the line before, its last capsule anywhere along the row: lifted clear of the row's foot
-      // corner, as the line before keeps clear of its end)
-      style=@ui.style(row=true, w=Full, mx=room(inset - side), mb=room(clear), gap=S0_5),
-      keep=true,
+      // (where one line cannot hold the provider's widest, wrap into logical lines of full marked chips, its first and
+      // last lines at the same inset from the row's edges as a single line)
+      style=@ui.style(w=Full, ml=room(inset - side), mr=room(clear), my=room(pad_y), gap=S1),
       fn() {
-        columns(0, windows.length(), "/wide-columns")
+        for p, part in quota_parts(windows) {
+          c.box(style=quota_chips_part.then(@ui.style(gap=S1)), flow=true, line_gap=@ui.Space::S1.px(), fn() {
+            for i, w in part {
+              quota_chip(c, Some(w), small=true, key=key + "/lines/" + p.to_string() + "/" + i.to_string())
+            }
+          })
+          |> ignore
+        }
       },
     ) |> ignore
-    // Further ways are each narrower than the one before. A row with one window is only used when no pair fits.
-    for limit in [3, 2, 1] {
-      let rows = (windows.length() + limit - 1) / limit
-      let each = windows.length() / rows
-      let widest = each + (if windows.length() % rows > 0 { 1 } else { 0 })
-      if rows > 1 && widest == limit && (each >= 2 || limit == 1) {
-        grid(limit)
-      }
-    }
   }) |> ignore
 }
 
@@ -248,14 +253,6 @@ pub fn nav_quota_line(c : @ui.Ctx, q : Json?) -> Double {
   }
   sum
 }
-
-///|
-// kept across runs: a value (no field of it changes)
-let nav_quota_column : @ui.Style = @ui.css("align=AStart gap=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let nav_quota_mark : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, leading=L4, center=true, wrap=false)
 
 ///|
 /// The ways a worded window says itself, each shorter than the one before: its name and what is left (每周剩 95%), its
