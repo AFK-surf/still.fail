@@ -714,7 +714,12 @@ test("a login not finished in time ends, its command with it; one that cannot ru
     const ran = await m.until(given.id, (l) => l.endedAt !== undefined, "ended");
     assert.equal(ran.state, "done", JSON.stringify(ran));
     assert.equal(ran.name, "fakeenv");
-    assert.ok(m.screen(given.id).includes(`dir=${m.home}/x mode=a b`), m.screen(given.id));
+    // The process can close before xterm has drawn its final output.
+    const output = await upon((wake) => m.logins.follow(given.id, wake), () => {
+      const screen = m.logins.screen(given.id);
+      return screen && screen.cursor.y > 0 ? screen.rows.join("\n") : undefined;
+    }, "final output drawn");
+    assert.ok(output.includes(`dir=${m.home}/x mode=a b`), output);
     const none = await m.logins.start(["no-such-login-command"], m.by);
     const failed = await m.until(none.id, (l) => l.state === "failed", "cannot run");
     assert.ok(failed.error !== undefined && failed.error !== "", JSON.stringify(failed));
