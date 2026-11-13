@@ -25,12 +25,15 @@
 .foot-base {
   display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap;
   margin-top: clamp(56px, 5.6vw, 88px); padding-top: 20px; background: var(--dash-x); background-position: left top;
+  margin-inline: calc(-1 * var(--gi)); padding-inline: var(--gi); /* its rule from guide to guide */
   font-family: var(--mono); font-size: 12px; line-height: 18px; letter-spacing: 0; color: var(--mut);
 }
 /* Language: a pill (globe, the language, a chevron) opening a menu of the pages in other languages, above it (below
    when there is no room), drawn from the trigger's corner. Positioned by CSS anchor positioning; where that is missing,
    main.js places it (data-placed). */
-.footer-prefs { display: flex; align-items: center; }
+/* As far from the guide beside it as from the rule over the row (padding-top: 20), the content's own --gi counted. On a
+   phone it wraps under the copyright, against the other guide. */
+.footer-prefs { display: flex; align-items: center; margin-inline: calc(20px - var(--gi)); }
 .language-trigger {
   position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 7px 0 9px; border: 1px solid var(--hair); border-radius: 6px;
   background: transparent; color: var(--fg); cursor: pointer;

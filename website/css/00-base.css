@@ -44,7 +44,13 @@
   --u: min(calc(100vw / 24), 80px);
   --gl: max(16px, var(--u), env(safe-area-inset-left, 0px));
   --gr: max(16px, var(--u), env(safe-area-inset-right, 0px));
-  --cw: 1200px; /* the content width at most; the dashed guides run on its edges */
+  --cw: 1200px; /* the content width at most, with its insets; the dashed guides run on its edges */
+  /* Nothing sits on a guide: everything stands --gi inside the guides, as far as the bar's mark stands from them and
+     from the rule under the bar (half of what the bar's height leaves of the 26 px mark: 17, 15 on a phone, 11 on its
+     side). --pl and --pr are where the content starts from the page's sides. */
+  --gi: calc((var(--nav) - 26px) / 2);
+  --pl: calc(var(--gl) + var(--gi));
+  --pr: calc(var(--gr) + var(--gi));
 
   /* Type scale. Size, leading and tracking move as a set: the larger the size, the tighter both get (Apple, UI
      typography); small sizes open up a little. Chinese takes more leading than Latin at the same size. */
@@ -184,7 +190,7 @@ h3 { font-size: var(--t-head); line-height: var(--lh-head); font-weight: 600; le
   right: calc(max(0px, (100% - var(--cw) - var(--gl) - var(--gr)) / 2) + var(--gr));
   background: var(--dash-y), var(--dash-y); background-position: left top, right top; }
 .band + .band:not(.end)::after, .foot::after { content: ""; position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: 1px; background: var(--dash-x); pointer-events: none; }
-.w { max-width: calc(var(--cw) + var(--gl) + var(--gr)); margin-inline: auto; padding-left: var(--gl); padding-right: var(--gr); }
+.w { max-width: calc(var(--cw) + var(--gl) + var(--gr)); margin-inline: auto; padding-left: var(--pl); padding-right: var(--pr); }
 .sec { padding-block: clamp(72px, 8.4vw, 128px); }
 /* A panel behind a product picture: warm grey with a faint dot grid. */
 .dots { background: var(--dots), var(--panel); }
