@@ -406,3 +406,107 @@ test "sizes steady: a page's list put elsewhere at once while its bar shows, the
   assert_true(after - before > 1000.0, msg="not put: " + found)
   assert_true(put.is_empty(), msg="the thumb said in the put's frame: " + found)
 }
+
+// A page's list's keys changed by data (keys put in at its head as it is read up: what it holds much longer in one
+// frame) take its bar's thumb shorter and elsewhere along its track in the frame that takes them: where the reader is
+// in what the list holds changes then, as it does in the frame the list is put at once (the coordinator of the
+// migration, 2026-11-13). No jolt of the thumb's. The thumb stepping with nothing put, nothing done by the hand and no
+// keys changed is still one (a plain column's, above).
+
+///|
+/// A page's list 400 by 200 at the top of a window 400 by 300, of the keys `keys` says, each a row 50 tall (counted so)
+/// with these bars, a mouse over it: sizes steady said but not held (steady_faults); its scroll.
+fn steady_list_keys_case(keys : @signals.Signal[Array[Int]]) -> (Tester, @view.Scroll) {
+  let scroll = @view.Scroll::list()
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0, words_over_held=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      col.scrolls_window(scroll, fn() { keys.get() }, est=50.0, bar=tree_scroll_bar(), fn(b, k) {
+        b.width(Is(Some(160.0))).height(Is(Some(50.0))).ground(Is(0x445566FFL)).words(Is("第\{k}行")) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.move_to(80.0, 100.0)
+  (t, scroll)
+}
+
+///|
+test "sizes steady: a page's list read up, its bar showing, keys put in at its head by data, the thumb shorter and elsewhere in that frame: none said of it" {
+  let thumb = fn(faults : Array[String]) { faults.filter(fn(f) { !f.contains("行") }) }
+  let keys = @signals.signal(Array::makei(80, fn(i) { i }), same=fn(a, b) { a == b })
+  let (t, scroll) = steady_list_keys_case(keys)
+  steady_faults(t, 4) |> ignore
+  // (read 1000 down by the wheel: its bar coming in; the hand's frames gone by, the bar out)
+  t.wheel(80.0, 100.0, 1000.0)
+  let came = thumb(steady_faults(t, 20))
+  let shown = thumb_opacity(t, 380.0).unwrap_or(0.0)
+  let before = scroll.at(view_tree().unwrap())
+  // (forty keys put in at its head, nobody's hand on it: 2000 more over what is read, the thumb shorter and further
+  // down its track in one frame)
+  view_event(fn() { keys.set(Array::makei(120, fn(i) { i - 40 })) })
+  let put = thumb(steady_faults(t, 6))
+  let after = scroll.at(view_tree().unwrap())
+  let found = "scrolled \{before} to \{after}; came \{Repr(came)}; shown \{shown}; put \{Repr(put)}"
+  assert_true(came.is_empty(), msg="the thumb coming in said: " + found)
+  assert_true(shown > 0.0, msg="the thumb not shown as the keys come: " + found)
+  assert_true(after - before > 1000.0, msg="what is read not held as the keys come over it: " + found)
+  assert_true(put.is_empty(), msg="the thumb said in the frame the keys came: " + found)
+}
+
+///|
+/// steady_list_keys_case's list, its row 5 250 tall where `tall` says so (50 else), at once.
+fn steady_list_tall_case(keys : @signals.Signal[Array[Int]], tall : @signals.Signal[Bool]) -> (Tester, @view.Scroll) {
+  let scroll = @view.Scroll::list()
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0, words_over_held=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      col.scrolls_window(scroll, fn() { keys.get() }, est=50.0, bar=tree_scroll_bar(), fn(b, k) {
+        b
+        .width(Is(Some(160.0)))
+        .height(By(fn() { Some(if k == 5 && tall.get() { 250.0 } else { 50.0 }) }))
+        .ground(Is(0x445566FFL))
+        .words(Is("第\{k}行"))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.move_to(80.0, 100.0)
+  (t, scroll)
+}
+
+///|
+test "sizes steady: a page's list given the same keys again as another array while its bar shows, the thumb stepping as a row it shows comes to another height at once: a jolt still" {
+  let thumb = fn(faults : Array[String]) { faults.filter(fn(f) { !f.contains("行") }) }
+  // (every array its keys are given told on, the same keys in it or not)
+  let keys = @signals.signal(Array::makei(12, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
+  let tall = @signals.signal(false, same=fn(a, b) { a == b })
+  let (t, scroll) = steady_list_tall_case(keys, tall)
+  steady_faults(t, 4) |> ignore
+  // (twelve rows, 600 in all: read 200 down by the wheel, its bar coming in; the hand's frames gone by, the bar out)
+  t.wheel(80.0, 100.0, 200.0)
+  let came = thumb(steady_faults(t, 20))
+  let shown = thumb_opacity(t, 380.0).unwrap_or(0.0)
+  let before = scroll.at(view_tree().unwrap())
+  // (the same keys given again, and row 5, in what shows, 200 taller at once, nobody's hand on it: 800 in all, the thumb
+  // a quarter shorter and higher up its track in one frame, for nothing of the keys')
+  view_event(fn() {
+    keys.set(Array::makei(12, fn(i) { i }))
+    tall.set(true)
+  })
+  let stepped = thumb(steady_faults(t, 6))
+  let after = scroll.at(view_tree().unwrap())
+  let found = "scrolled \{before} to \{after}; came \{Repr(came)}; shown \{shown}; stepped \{Repr(stepped)}"
+  assert_true(came.is_empty(), msg="the thumb coming in said: " + found)
+  assert_true(shown > 0.0, msg="the thumb not shown as the row grows: " + found)
+  assert_true(stepped.length() > 0, msg="the thumb stepping with the same keys given again: no jolt found: " + found)
+}
