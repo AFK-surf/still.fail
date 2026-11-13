@@ -12,12 +12,14 @@ import { Effect, Fiber, Queue } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import type { Inner } from "../src/core.ts";
 import { CoreError, HostError } from "../src/error.ts";
+import { HEDGE } from "../src/host.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage, t } from "../src/i18n.ts";
-import type { Iroh, IrohConnection } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import type { BindOptions, Iroh, IrohConnection } from "../src/iroh.ts";
+import { ADDRESSES_KEY, clearlyBetter, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, DIRECT, DIRECT_HOLD_MAX_MS, EXPLORE_MS, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { claimBy, lockClaim } from "../src/lock.ts";
-import { LockUnconfirmed, MeshWire, meshEnv, presented, refusedForLock } from "../src/station/mesh-wire.ts";
+import { TRACES } from "../src/route.ts";
+import { ALPN, LockUnconfirmed, MeshWire, STATION_MESH, meshEnv, presented, refusedForLock } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -115,8 +117,10 @@ function grants(prefix: string, count: { n: number }): CredentialSource {
     });
 }
 
+/// What a test's mesh is made with: a station's protocol and the core's names for its traces, as the core's own is
+/// (mesh-wire.ts `meshEnv`, core.ts), but for what it refuses by (a test that names it says so).
 function env(s: Sim) {
-  return { host: s.host, runner: s.runner, tracer: new Tracer(s.host, s.runner, 1), iroh: s.iroh, wakes: s.wakes };
+  return { host: s.host, runner: s.runner, tracer: new Tracer(s.host, s.runner, 1, TRACES), iroh: s.iroh, wakes: s.wakes, ...STATION_MESH };
 }
 
 /// A station of its own and the device's mesh, which knows where it is.
@@ -425,6 +429,101 @@ sim("a_first_line_says_what_came_with_its_credential_after_the_protocol_and_befo
   await close(s, station, mesh);
 });
 
+/// What `tracer` sends from now on says of its program: each batch's resource attributes and scope.
+function saidOf(tracer: Tracer): { resource: Record<string, unknown>; scope: string }[] {
+  const seen: { resource: Record<string, unknown>; scope: string }[] = [];
+  tracer.setExport((body) =>
+    Effect.sync(() => {
+      for (const r of JSON.parse(Buffer.from(body).toString()).resourceSpans)
+        for (const sc of r.scopeSpans) seen.push({ resource: Object.fromEntries(r.resource.attributes.map((a: { key: string; value: Record<string, unknown> }) => [a.key, Object.values(a.value)[0]])), scope: sc.scope.name });
+    }),
+  );
+  return seen;
+}
+
+/// The run's iroh, each endpoint it is asked to bind noted.
+const noting = (s: Sim, binds: BindOptions[]): Iroh => ({ bind: (o) => (binds.push(o), s.iroh.bind(o)) });
+
+/// What a mesh to stations is made with is the core's to say (mesh-wire.ts `STATION_MESH`, route.ts `TRACES`), and is
+/// what the mesh said itself before it was given them: a station's protocol, `protocol` after the credential, its
+/// peers looked up, the key the stations' addresses are kept under, the names of its traces, and what its host is
+/// called where no entry said (none runs here: a core made with no host's entry before it).
+sim("a_mesh_to_stations_is_given_what_the_mesh_said_itself", async (s) => {
+  assert.deepEqual({ ...STATION_MESH, alpn: text(STATION_MESH.alpn) }, { alpn: "stillfail/admin/1", says: { protocol: 2 }, lookup: true, addressesKey: "station-addresses" });
+  assert.deepEqual(TRACES, { scope: "stillfail-core", own: "stillfail.", service: { name: "stillfail-native", os: "macos" } });
+  const binds: BindOptions[] = [];
+  const relay = s.relay("https://a.relay.test/");
+  const station = await s.station();
+  station.lan = ["10.1.2.3:4567"];
+  const e = { ...env(s), iroh: noting(s, binds) };
+  const said = saidOf(e.tracer);
+  const mesh = await s.run(Mesh.make(e, [relay]));
+  mesh.addAddr(station.addr());
+  const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  await s.run(link.admitted());
+  assert.equal(text(new Uint8Array(station.conns[0].alpn())), "stillfail/admin/1");
+  assert.deepEqual(binds.map((o) => [o.lookup, o.relayOnly]), [[true, false]]);
+  await s.until(() => s.host.storage.has("station-addresses"));
+  assert.equal(text(s.host.storage.get("station-addresses")!), JSON.stringify({ [station.id()]: { lan: ["10.1.2.3:4567"], tailnet: [] } }));
+  await s.until(() => (e.tracer.flush(), said.length > 0));
+  assert.deepEqual(said[0], { resource: { "service.name": "stillfail-native", "os.type": "macos" }, scope: "stillfail-core" });
+  await close(s, station, mesh);
+});
+
+/// Another program's mesh, no station's: the protocol it names is dialled; a line of the control stream says its
+/// credential and what the program says in each (nothing: the credential alone); no peer is looked up; what its peers
+/// say of their addresses is kept under the mesh's own key. Its peer's answer to the hello is on the link whole,
+/// waited for by `admitted`, which fails with a refusal. Through relays alone where it says so: every endpoint it
+/// binds on relays only, none at an address a peer said, though its ways are otherwise those at addresses. One whose
+/// lines would say a field that is the mesh's own to write (the credential, the dial's trace) is not made. Its traces,
+/// named by nothing, say an unknown service and no still.fail's.
+sim("another_programs_mesh_dials_says_and_reads_its_own", async (s) => {
+  const alpn = new TextEncoder().encode("another/1");
+  const binds: BindOptions[] = [];
+  const relay = s.relay("https://a.relay.test/");
+  const station = await s.stationBound({ alpns: [Buffer.from(alpn)], relayUrls: [relay], discovery: false, bindAddr: "127.0.0.1:0" });
+  await s.settle(station.endpoint.online());
+  station.lan = station.addr().ips;
+  const own = { host: s.host, runner: s.runner, tracer: new Tracer(s.host, s.runner, 1), iroh: noting(s, binds), wakes: s.wakes, alpn };
+  const said = saidOf(own.tracer);
+  assert.throws(() => Mesh.make({ ...own, says: { hello: "another", credential: "mine" } }, [relay]), /MeshEnv\.says names credential/);
+  assert.throws(() => Mesh.make({ ...own, says: { traceparent: undefined, credential: undefined } }, [relay]), /MeshEnv\.says names credential and traceparent/);
+  assert.equal(binds.length, 0);
+  const mesh = await s.run(Mesh.make({ ...own, says: { hello: "another" } }, [relay]));
+  const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  const answer = { ok: true, station: "测试", lan: station.lan };
+  assert.deepEqual(await s.run(link.admitted()), answer);
+  assert.deepEqual(link.answer, answer);
+  assert.equal(text(new Uint8Array(station.conns[0].alpn())), "another/1");
+  const hello = station.helloLines[0]!;
+  assert.equal(hello, JSON.stringify({ credential: "ok-1", hello: "another", traceparent: JSON.parse(hello).traceparent }));
+  assert.deepEqual(binds.map((o) => [o.lookup, o.relayOnly]), [[false, false]]);
+  await s.until(() => s.host.storage.has(ADDRESSES_KEY));
+  assert.ok(!s.host.storage.has(STATION_MESH.addressesKey));
+  station.refuses = { error: "no member of this" };
+  mesh.dropLink(station.id());
+  const refused = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  const why = await s.run(Effect.result(refused.admitted()));
+  assert.equal(why._tag === "Failure" && why.failure.code, "credential_refused");
+  assert.equal(refused.answer, null);
+  station.refuses = null;
+  await s.run(mesh.close());
+  // Through relays alone, its ways on the main endpoint turned off: the relay's own endpoint, and no other.
+  binds.length = 0;
+  const only = await s.run(Mesh.make({ ...own, relayOnly: true, lookup: true }, [relay]));
+  const through = await s.run(only.link(station.id(), grants("ok", { n: 0 }), [], [DIRECT]));
+  await s.run(through.admitted());
+  const pings = station.grants.length;
+  await s.until(() => station.grants.length >= pings + 3);
+  assert.ok(binds.length > 1 && binds.every((o) => o.relayOnly && !o.lookup && o.relayUrls.length === 1), JSON.stringify(binds.map((o) => [o.relayUrls, o.lookup, o.relayOnly])));
+  assert.equal(through.path(), "relay");
+  const last = station.helloLines.at(-1)!;
+  assert.equal(last, JSON.stringify({ credential: "ok-1", traceparent: JSON.parse(last).traceparent }));
+  await s.until(() => (own.tracer.flush(), said.length > 0));
+  assert.deepEqual(said[0], { resource: { "service.name": "unknown_service" }, scope: "" });
+  await close(s, station, only);
+});
+
 /// The device's claim for a workspace's lock as the mesh's key signs it (`Mesh.sign`, lock.ts `claimBy`) is the claim
 /// lock.ts makes of that key (`lockClaim`): by the host where it signs, else here.
 sim("the_mesh_signs_a_lock_claim_as_its_device_key_does", async (s) => {
@@ -488,7 +587,7 @@ sim("a_refusal_the_mesh_is_given_a_name_for_is_said_so_and_asks_no_new_credentia
 /// the cloud for another credential at each try.
 sim("the_mesh_the_core_makes_names_a_locks_refusals_and_asks_no_new_credential_after_them", async (s) => {
   const station = await s.station();
-  const inner = { host: s.host, runner: s.runner, tracer: new Tracer(s.host, s.runner, 1), wakes: s.wakes } as unknown as Inner;
+  const inner = { host: s.host, runner: s.runner, tracer: new Tracer(s.host, s.runner, 1, TRACES), wakes: s.wakes } as unknown as Inner;
   const mesh = await s.run(Mesh.make(meshEnv(inner, s.iroh), []));
   mesh.addAddr(station.addr());
   const fresh: boolean[] = [];
@@ -1892,7 +1991,7 @@ sim("a_phone_with_its_own_adb_session_carries_the_station_on_it_and_pairs_itself
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
   // Core.make gives the adb part a WakingHost, not the native host itself.
-  const adb = new Adb({ ...personalStub(), host: new WakingHost(s.host, s.wakes), runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", also: null }), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: new WakingHost(s.host, s.wakes, HEDGE), runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", also: null }), relays: () => [], lends: () => true });
   takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: 37115, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
@@ -2010,7 +2109,7 @@ test("over_the_addon_opens_requests_and_streams_the_reply", { skip: noAddon }, a
   const station = await Station.start();
   const host = new FakeHost();
   const runner = new Runner();
-  const mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes: new Wakes() }, []));
+  const mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1, TRACES), iroh: nodeIroh()!, wakes: new Wakes(), ...STATION_MESH }, []));
   mesh.addAddr(station.addr());
   const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   const reply = await runner.run(link.request(head("/admin/api/sessions"), new TextEncoder().encode('{"a":1}')));

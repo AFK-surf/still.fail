@@ -86,8 +86,36 @@ export function sqlError(e: unknown): SqlError {
   return new SqlError(message, "other");
 }
 
-/// The host of a program whose UIs are sent `Message`s (the still.fail core's: host.ts `Host`).
-export interface HostOf<Message> {
+/// What the mesh and the traces ask of a host, and no more: a program built on them gives these alone, whatever else
+/// its host is. The compiler holds it where a `BaseHost` is what is taken: mesh.ts (`MeshEnv.host`), trace.ts
+/// (`Tracer`, `Span.host`, and so error.ts's `failedIn`), wake.ts's `hedged` and `quietEnds` (its `nowMs` alone);
+/// record.ts takes less, a type of its own (`Recording`: the `recorder`, with `nowMs` for the DHT's lines). Not
+/// wake.ts's `WakingHost`: it wraps a program's whole host (`HostOf`, still.fail's as it is declared below), for a
+/// program that has one and chooses it; the mesh needs none.
+export interface BaseHost {
+  /// Small persistent values by key: the device key, what the mesh keeps of its ways.
+  storageGet(key: string): Effect.Effect<Uint8Array | null, HostError>;
+  storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
+  /// Whole milliseconds since the Unix epoch.
+  nowMs(): number;
+  /// Milliseconds on a clock that only moves forward, for timing spans.
+  monotonicMs(): number;
+  /// The viewer's time zone at that moment: minutes to add to UTC to get local time.
+  utcOffsetMin(atMs: number): number;
+  randomBytes(buf: Uint8Array): void;
+  /// An Ed25519 seed's public key and its signature of `message`, where the host has a way of its own (a native app's
+  /// shell). None, or null for a host that cannot: the base's own, noble's, in JS, which in Hermes (no JIT) took ~8 ms
+  /// a signature and longer the first time, a lock claim's for each workspace and endpoint as the core connects
+  /// (lock.ts lockClaim), all of it on the core's thread ahead of what the UI asked for.
+  ed25519Sign?(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null;
+  /// The app's performance record, where the host keeps one: what the connections do written into it while it is on
+  /// (record.ts).
+  readonly recorder?: Recorder | undefined;
+}
+
+/// The host of a program whose UIs are sent `Message`s (the still.fail core's: host.ts `Host`): what the base asks
+/// (`BaseHost`), and the rest of what differs per platform.
+export interface HostOf<Message> extends BaseHost {
   /// Where still.fail cloud is: the page's origin on the web, https://app.still.fail natively.
   cloudOrigin(): string;
   /// A beta app: its calls to still.fail cloud say so.
@@ -108,12 +136,6 @@ export interface HostOf<Message> {
   /// what the system cannot: the core orders them by hand (drive-browse.ts).
   collate?(names: readonly string[]): number[] | null;
 
-  /// An Ed25519 seed's public key and its signature of `message`, where the host has a way of its own (a native app's
-  /// shell). None, or null for a host that cannot: the core's own, noble's, in JS, which in Hermes (no JIT) took ~8 ms
-  /// a signature and longer the first time, a lock claim's for each workspace and endpoint as the core connects
-  /// (lock.ts lockClaim), all of it on the core's thread ahead of what the UI asked for.
-  ed25519Sign?(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null;
-
   /// Whether `signature` is `key`'s over `message`: Ed25519, or ECDSA P-256 over SHA-256 (`ES256` r‖s, `ES256-der`),
   /// where the host checks it by a formally verified implementation of its own (a native app's shell: libcrux, HACL*'s
   /// proved in F*). None, or null for a host that cannot: the core's own, noble's (vault/verified.ts).
@@ -123,9 +145,7 @@ export interface HostOf<Message> {
   /// shell: libzstd). None: the core's own, fzstd, in JS. Host decompression keeps this work off the core's thread.
   unzstd?(): Effect.Effect<Unzstd, HostError, Scope.Scope>;
 
-  /// Small persistent values by key: accounts, the device key, preferences.
-  storageGet(key: string): Effect.Effect<Uint8Array | null, HostError>;
-  storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
+  /// A small persistent value let go (`BaseHost.storageGet`: accounts and preferences are kept so too).
   storageDelete(key: string): Effect.Effect<void, HostError>;
   /// Where the value kept under `key` is, as a file of this device's: for what the app reads there itself (a face's
   /// file given to the system by its path, not carried whole). Null while none is kept; none on a host whose values are
@@ -176,19 +196,9 @@ export interface HostOf<Message> {
   /// is, so an older core still finds it.
   legacyRead?(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError>;
 
-  /// The app's performance record, where the host keeps one: what the connections do written into it while it is on
-  /// (record.ts).
-  readonly recorder?: Recorder | undefined;
-  /// Whole milliseconds since the Unix epoch.
-  nowMs(): number;
-  /// Milliseconds on a clock that only moves forward, for timing spans.
-  monotonicMs(): number;
-  /// The viewer's time zone at that moment: minutes to add to UTC to get local time.
-  utcOffsetMin(atMs: number): number;
   /// The connections kept for requests are taken for gone: what is asked next goes on new ones.
   resetConnections(): void;
 
-  randomBytes(buf: Uint8Array): void;
   /// Whether what this host keeps is out of reach of still.fail cloud's code: an app's (desktop, Android), not a web
   /// page's, whose code the cloud serves. Only such a host keeps a key that signs for the workspace lock (lock.ts).
   appKeys?: boolean;
@@ -196,8 +206,9 @@ export interface HostOf<Message> {
   /// e2e device's, apps/mbui/e2e/device.ts), no other; nothing a person sets and nothing read of the environment.
   handOverByTests?: boolean;
 
-  /// Delivers a message to one connected UI.
-  emit(client: ClientId, message: Message): void;
+  /// Delivers a message to one connected UI. A property, not a method: a method's parameter is compared both ways, and
+  /// a host of UIs sent something else (or nothing: `HostOf<never>`) would pass for this one.
+  emit: (client: ClientId, message: Message) => void;
 
   /// A TCP connection to this machine's `port` (adbd, for the adb share: adb.ts), open while the scope is; only a
   /// native host has one.
@@ -234,6 +245,3 @@ export type LoopbackRequest = {
 
 /// A TCP connection: what comes in, as it comes; what goes out; `end`, no more goes out.
 export type TcpConnection = { read: Pull<Uint8Array>; write(bytes: Uint8Array): Effect.Effect<void, HostError>; end(): void };
-
-/// A host whatever its UIs are sent: for what sends them nothing (the mesh, the traces, a wake's requests).
-export type AnyHost = HostOf<never>;

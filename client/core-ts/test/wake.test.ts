@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Clock, Effect, Exit, Queue, type Fiber } from "effect";
 import { HostError } from "../src/error.ts";
-import type { Host, HttpRequest, HttpResponse, Pull } from "../src/host.ts";
+import { HEDGE, type Host, type HttpRequest, type HttpResponse, type Pull } from "../src/host.ts";
 import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
-import { DROPPED, GONE, HEDGE, NETWORK, QUIET_MS, STREAM_AWAY_MS, Wake, WakingHost, Wakes, hedgeable, hedged, quietEnds, unlessDropped } from "../src/wake.ts";
+import { DROPPED, GONE, NETWORK, QUIET_MS, STREAM_AWAY_MS, Wake, WakingHost, Wakes, hedgeable, hedged, quietEnds, resendable, unlessDropped } from "../src/wake.ts";
 
 // Optional host capabilities must also be considered by the wrapper used by a running core.
 type Assert<T extends true> = T;
@@ -92,7 +92,12 @@ test("only_reads_and_what_says_so_are_asked_twice", () => {
   const request = (method: string, headers: [string, string][]): HttpRequest => ({ method, url: "", headers, body: null });
   assert.ok(hedgeable(request("GET", [])));
   assert.ok(!hedgeable(request("POST", [])));
-  assert.ok(hedgeable(request("POST", [[HEDGE, "1"]])));
+  // (by the header the program names, the core's host.ts `HEDGE`; a host given none asks reads alone twice)
+  assert.equal(HEDGE, "x-stillfail-hedge");
+  assert.ok(hedgeable(request("POST", [[HEDGE, "1"]]), HEDGE));
+  assert.ok(!hedgeable(request("POST", [[HEDGE, "1"]])));
+  assert.ok(!resendable(request("PUT", [[HEDGE, "1"]]), HEDGE));
+  assert.ok(resendable(request("PUT", [[HEDGE, "1"]])));
 });
 
 test("the_network_changing_fails_every_request_under_way", async () => {
@@ -184,7 +189,7 @@ function failingFirst(fails: number) {
     return jsonResponse(200, "ok");
   });
   const wakes = new Wakes();
-  const waking = new WakingHost(host, wakes);
+  const waking = new WakingHost(host, wakes, HEDGE);
   const send = (method: string) => watch(waking.fetch({ method, url: "https://x/y", headers: [], body: null }).pipe(Effect.provideService(Clock.Clock, host.time.clock)));
   return { host, wakes, send };
 }

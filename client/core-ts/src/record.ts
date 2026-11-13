@@ -59,7 +59,7 @@ export function dialLine(d: {
 /// Per host: whether the DHT's lines are being kept, and when they were last taken (`recordDht`).
 const dhtTakes = new WeakMap<object, { kept: boolean; at: number }>();
 
-/// The DHT lookup's lines since the last take (the shell's `dht.said`: vendor/n0-mainline's `stillfail`), as `dht:` lines
+/// The DHT lookup's lines since the last take (the shell's `dht.said`: what vendor/n0-mainline was patched to say), as `dht:` lines
 /// each saying how long before it was. While the record is on the shell keeps them however long until the next take
 /// (an app back after minutes away says what its socket did then); once off it is told, once, to keep none. `every`:
 /// not taken again within that many ms (a station's tick, each station's: one take a tick between them); a dial and a

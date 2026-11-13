@@ -18,6 +18,7 @@ import { nodeTcp } from "../src/hosts/node.ts";
 import { nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh } from "../src/mesh.ts";
+import { STATION_MESH } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -148,7 +149,7 @@ async function phone(alice: Account, ws: string, stationId: string) {
   const host = new FakeHost();
   (host as J).tcp = nodeTcp;
   const runner = new Runner();
-  const env = { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes: new Wakes() };
+  const env = { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes: new Wakes(), ...STATION_MESH };
   const mesh = await runner.run(Mesh.make(env, [RELAY]));
   mesh.addAddr({ id: stationId, relays: [RELAY] });
   const credentials = () => (device: string) =>

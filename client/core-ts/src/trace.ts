@@ -3,7 +3,7 @@
 // a context across awaits on every host (the Rust core sets it around each poll), so here the context is current
 // around synchronous calls (`enter`) and is handed on explicitly to what runs later (`ctx` parameters).
 import { Effect } from "effect";
-import type { AnyHost } from "./host-of.ts";
+import type { BaseHost } from "./host-of.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
 import { hex, toJsonBytes } from "./util.ts";
 
@@ -48,11 +48,20 @@ export type Kind = (typeof Kind)[keyof typeof Kind];
 /// Sends a batch; failing, it is kept to be sent again (one the cloud will never take is to succeed instead).
 export type Export = (body: Uint8Array) => Effect.Effect<void, unknown>;
 
-/// What a host is, for the traces' `service.name` and `os.type` (set by the host's entry).
-export const service = { name: "stillfail-native", os: "macos" };
+/// What a host is, for the traces' `service.name` and `os.type`: set by the host's entry, each empty until one says
+/// it (then what the tracer's names say, `TraceNames.service`).
+export const service = { name: "", os: "" };
+
+/// What a program's traces are named by: `scope`, what its spans are said to be made by; `own`, what the name of an
+/// attribute the base sets for it begins with (`Span.own`: the dial's `station` is `<own>station`); and `service`,
+/// what its host is called where no entry said (a core made with no host's entry before it: a bench, a test). The
+/// still.fail core's are route.ts `TRACES`. A program that names none is `unknown_service`, as OpenTelemetry calls
+/// one, with no `os.type`: never an empty name.
+export type TraceNames = { scope: string; own: string; service?: { name: string; os: string } };
 
 export class Tracer {
-  readonly #host: AnyHost;
+  readonly names: TraceNames;
+  readonly #host: BaseHost;
   readonly #runner: Runner;
   readonly #sample: number;
   #current: SpanContext | null = null;
@@ -65,7 +74,8 @@ export class Tracer {
   /// update changed from what older builds still running do.
   #version = "";
 
-  constructor(host: AnyHost, runner: Runner, sample: number) {
+  constructor(host: BaseHost, runner: Runner, sample: number, names: TraceNames = { scope: "", own: "" }) {
+    this.names = names;
     this.#host = host;
     this.#runner = runner;
     this.#sample = sample;
@@ -167,11 +177,13 @@ export class Tracer {
     const spans = this.#buffer;
     this.#buffer = [];
     if (spans.length === 0) return;
+    const name = service.name || this.names.service?.name || "unknown_service";
+    const os = service.os || this.names.service?.os || "";
     const body = {
       resourceSpans: [
         {
-          resource: { attributes: [attribute("service.name", service.name), attribute("os.type", service.os), ...(this.#version ? [attribute("service.version", this.#version)] : [])] },
-          scopeSpans: [{ scope: { name: "stillfail-core" }, spans }],
+          resource: { attributes: [attribute("service.name", name), ...(os !== "" ? [attribute("os.type", os)] : []), ...(this.#version ? [attribute("service.version", this.#version)] : [])] },
+          scopeSpans: [{ scope: { name: this.names.scope }, spans }],
         },
       ],
     };
@@ -190,7 +202,7 @@ export class Tracer {
 export class Span {
   context: SpanContext;
   readonly #tracer: Tracer;
-  readonly host: AnyHost;
+  readonly host: BaseHost;
   readonly #parent: Uint8Array | null;
   readonly #name: string;
   readonly #kind: Kind;
@@ -200,7 +212,7 @@ export class Span {
   #ended = false;
   #quiet = false;
 
-  constructor(tracer: Tracer, host: AnyHost, context: SpanContext, parent: Uint8Array | null, name: string, kind: Kind, startMs: number) {
+  constructor(tracer: Tracer, host: BaseHost, context: SpanContext, parent: Uint8Array | null, name: string, kind: Kind, startMs: number) {
     this.#tracer = tracer;
     this.host = host;
     this.context = context;
@@ -213,6 +225,11 @@ export class Span {
   /// An attribute: a string, number or bool. Never message content, titles or emails.
   set(key: string, value: string | number | boolean): void {
     if (this.context.sampled) this.#attributes.push(attribute(key, value));
+  }
+
+  /// An attribute the base sets, named as the program's own (`TraceNames.own` before `key`).
+  own(key: string, value: string | number | boolean): void {
+    this.set(this.#tracer.names.own + key, value);
   }
 
   fail(): void {
@@ -253,7 +270,7 @@ export class Span {
   /// Given up before it ended (its task stopped): recorded as cancelled.
   cancel(): void {
     if (this.#ended) return;
-    this.set("stillfail.cancelled", true);
+    this.own("cancelled", true);
     this.end();
   }
 }

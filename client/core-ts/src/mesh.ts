@@ -2,9 +2,10 @@
 // per core, its key the device key (storage `device`). A link is to a station's address, `<workspace>/<station>`: a
 // station in several workspaces has a link in each, dialled to the same station id. A link is
 // opened with this device's member credential for its address's workspace and presents it again every RENEW_MS on its
-// control stream; a closed link is opened again on the next request. Wire format (station/src/mesh/serve.ts): ALPN `stillfail/admin/1`; the first bi-stream
-// carries `{"credential": …}` lines, each further bi-stream one request: a JSON head line `{method, path, headers}`
-// then the body; the reply a JSON head line `{status, headers}` then the body, streamed.
+// control stream; a closed link is opened again on the next request. Wire format (a station's door: station/src/mesh/door.ts,
+// wire.ts): the protocol its user names (`MeshEnv.alpn`); the first bi-stream carries `{"credential": …}` lines, each
+// with what its user says in every one (`MeshEnv.says`), each further bi-stream one request: a JSON head line
+// `{method, path, headers}` then the body; the reply a JSON head line `{status, headers}` then the body, streamed.
 //
 // All of it runs as fibers (rule 1): an opening is a Deferred everyone asking for the same address meanwhile waits on, a
 // link's renewal and its first answer are fibers in the core's scope, a race and a hedge are fibers started as the UI
@@ -13,13 +14,14 @@
 // Only the mesh is here: the endpoints, the ways to a peer and the choice among them, the links, the streams' framing.
 // What the still.fail core does with it is station/mesh-wire.ts (a station's requests on their links, asked again and
 // on another way; the cloud's credentials and the lock's claim said with them; a lock's refusals; what an app's
-// endpoint takes), given here as `MeshEnv` and a `CredentialSource`. This file imports none of that, so that another
-// program is built on it (scripts/base.ts holds it so).
+// endpoint takes; a station's protocol and what its hello says, its peers looked up, the name its stations' addresses
+// are kept under), given here as `MeshEnv` and a `CredentialSource`. This file imports none of that and says none of
+// its names, so that another program is built on it (scripts/base.ts holds it so).
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { dialLine, record, recordDht, recording, said, stationTag } from "./record.ts";
 import { Cause, Clock, Deferred, Effect, Exit, Fiber, Semaphore } from "effect";
 import { CoreError, asCoreError, failedIn } from "./error.ts";
-import type { AnyHost, Pull } from "./host-of.ts";
+import type { BaseHost, Pull } from "./host-of.ts";
 import { t } from "./lang.ts";
 import type { CloseReason, Iroh, IrohConnection, IrohEndpoint, IrohStream } from "./iroh.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
@@ -31,7 +33,6 @@ import type { Wakes } from "./wake.ts";
 type J = any;
 
 export const DEVICE_KEY = "device";
-export const ALPN = utf8("stillfail/admin/1");
 export const RENEW_MS = 5 * 60_000;
 export const CONNECT_TIMEOUT_MS = 10_000;
 /// How long a dial waits for its endpoint to get onto a relay before its CONNECT_TIMEOUT_MS counts all the same
@@ -80,8 +81,9 @@ export type AtAddresses = (typeof AT_ADDRESSES)[number];
 /// What a workspace turns off (its `ways_off`) to keep its devices off a path iroh punches through: the main endpoint's.
 export const DIRECT = "direct";
 /// Where each station said a device dials it straight (by address: `{lan, tailnet}`), kept: a run dials them at once,
-/// before any relay brought the station's answer (one whose relays cannot be reached is reached on them alone).
-export const SAID_KEY = "station-addresses";
+/// before any relay brought the station's answer (one whose relays cannot be reached is reached on them alone). Under
+/// the key its user names (`MeshEnv.addressesKey`), else this one.
+export const ADDRESSES_KEY = "peer-addresses";
 /// A way direct (on the LAN endpoint, or the main endpoint's punched path) lost within MIN_STAY_MS of the requests moving
 /// to it, FLAKY_LOSSES times in a row: no way direct is moved to for DIRECT_HOLD_MS, twice as long each time it happens
 /// again, up to DIRECT_HOLD_MAX_MS, unless no other way is up. This avoids repeatedly moving requests to a flaky way and
@@ -139,7 +141,8 @@ const unreached = transportError("core-logic.mesh.unreached");
 const cut = transportError("core-logic.mesh.cut");
 
 /// What a credential source gives: the credential, and `also`, what else is said with it in a link's first line (each
-/// key a field of that line, after `protocol`; none in the lines that present it again), null where nothing is. Said
+/// key a field of that line, after what every line says, `MeshEnv.says`; none in the lines that present it again), null
+/// where nothing is. Said
 /// each time, so that what a source was given by another (the still.fail cloud's credential, which has a `credential`
 /// too) is not taken for it with what goes with it left unsaid.
 export type Presented = { credential: string; also: Record<string, unknown> | null };
@@ -376,6 +379,9 @@ export class Lines {
   }
 }
 
+/// The fields of a control line that are the mesh's own to write: what `MeshEnv.says` may not name.
+const OWN_FIELDS = ["credential", "traceparent"];
+
 /// The refusals `MeshEnv.refusal` named: the credential was fine, and another would be refused the same (`Mesh.link`).
 const named = new WeakSet<CoreError>();
 
@@ -384,18 +390,21 @@ class Control {
   readonly stream: IrohStream;
   readonly lines: Lines;
   readonly #refusal: MeshEnv["refusal"];
-  constructor(stream: IrohStream, refusal?: MeshEnv["refusal"]) {
+  readonly #says: MeshEnv["says"];
+  constructor(stream: IrohStream, env: Pick<MeshEnv, "refusal" | "says">) {
     this.stream = stream;
     this.lines = new Lines(stream);
-    this.#refusal = refusal;
+    this.#refusal = env.refusal;
+    this.#says = env.says;
   }
 
-  /// `also`: what its source says with the credential (`Presented`), in the first line: the still.fail core's, the
-  /// device's claim for this endpoint, for a station with a workspace lock (station/mesh-wire.ts).
+  /// A line: the credential, then what every line says (`MeshEnv.says`), then `also`: what its source says with the
+  /// credential (`Presented`), in the first line: the still.fail core's, the device's claim for this endpoint, for a
+  /// station with a workspace lock (station/mesh-wire.ts).
   /// `traceparent`: the dial's (`mesh.connect`), which the station says with the connection on its log, so the two
   /// records of one connection are found together.
   send(credential: string, also?: Record<string, unknown> | null, traceparent?: string): Effect.Effect<void, CoreError> {
-    const line = utf8(`${JSON.stringify({ credential, protocol: 2, ...(also ?? {}), ...(traceparent ? { traceparent } : {}) })}\n`);
+    const line = utf8(`${JSON.stringify({ credential, ...(this.#says ?? {}), ...(also ?? {}), ...(traceparent ? { traceparent } : {}) })}\n`);
     return Effect.mapError(this.stream.write(line), cut);
   }
 
@@ -462,8 +471,11 @@ export class Link {
   counted: [number, number] = [0, 0];
   /// The bytes its replies have brought so far, their heads and bodies (`Way.brought`).
   came = 0;
+  /// The station's answer to the first credential, whole, as its line was parsed: its user's to read (who it let in,
+  /// what it says of itself); null until it answered, and where it refused (`admitted` waits for it).
+  answer: unknown = null;
   /// Where the station said a device on its LAN, on its tailnet, dials it (`ip:port`), in its answer to the first
-  /// credential.
+  /// credential: the answer's `lan` and `tailnet`, which are the mesh's own to read (it dials them).
   lan: string[] = [];
   tailnet: string[] = [];
   /// Done once the station answered the first credential (refused or not).
@@ -478,6 +490,13 @@ export class Link {
     this.credential = credential;
     this.credentials = credentials;
     this.pinned = pinned;
+  }
+
+  /// Once the station answered the first credential: its answer (`answer`), or failing with its refusal (`refused`).
+  /// A link is handed out as its credential is sent, its requests going already: what must know it was let in first
+  /// (who it is there, whether to go on) waits here.
+  admitted(): Effect.Effect<unknown, CoreError> {
+    return Effect.flatMap(Deferred.await(this.answered), () => (this.refused !== null ? Effect.fail(this.refused) : Effect.succeed(this.answer)));
   }
 
   /// What its control stream is asked, one exchange at a time.
@@ -688,12 +707,38 @@ type Opening = { done: Deferred.Deferred<Link, CoreError>; result: { ok: Link } 
 /// A link tried beside an opening still under way (`hedge`).
 type Hedge = { serial: number; credentials: CredentialSource; tx: Deferred.Deferred<Link, CoreError> | null };
 
-/// `takes`: the protocols the main endpoint takes connections on, and `incoming` what is done with each (an app, as a
-/// trusted device a new one meets face to face: views/pair.ts).
-/// `refusal`: what a peer's refusal of a link's first line is, by its answer as parsed (an object with `error`) and
-/// the reason it gave, where it refuses for something else than the credential (the still.fail core's: a workspace's
-/// lock, station/mesh-wire.ts); none, or null: the credential refused (`credential_refused`).
-export type MeshEnv = { host: AnyHost; runner: Runner; tracer: Tracer; iroh: Iroh; wakes: Wakes; takes?: Uint8Array[]; incoming?: (connection: IrohConnection, alpn: Uint8Array) => void; refusal?: (answer: J, reason: string) => CoreError | null };
+/// What a mesh is made with: where it runs (`host`, `runner`, `tracer`, `iroh`, `wakes`) and what its user's protocol
+/// is, none of which it says itself (the still.fail core's: station/mesh-wire.ts `STATION_MESH` and `meshEnv`).
+export type MeshEnv = {
+  host: BaseHost;
+  runner: Runner;
+  tracer: Tracer;
+  iroh: Iroh;
+  wakes: Wakes;
+  /// The protocol its links are dialled on (what the peer's endpoint takes).
+  alpn: Uint8Array;
+  /// What every line of a link's control stream says after its credential, the first and those that present it again
+  /// (its fields, in their order); none: the credential alone. Never `credential` nor `traceparent`, a line's own
+  /// (`OWN_FIELDS`): a mesh is not made with one that names them, which would send something else in their place.
+  says?: Record<string, unknown>;
+  /// Whether the main endpoint looks its peers up (the host's lookup, as its iroh was built: on the LAN and in the
+  /// DHT), while it has a relay and is not `relayOnly`; without it a peer is reached by the relays and addresses it is
+  /// dialled with alone.
+  lookup?: boolean;
+  /// Through relays alone: the main endpoint has no IP transports (and looks nothing up), and no peer is dialled at
+  /// the addresses it said (its LAN's, its tailnet's).
+  relayOnly?: boolean;
+  /// The key what its peers said of where they are dialled straight is kept under (`ADDRESSES_KEY` without).
+  addressesKey?: string;
+  /// The protocols the main endpoint takes connections on, and `incoming` what is done with each (an app, as a trusted
+  /// device a new one meets face to face: views/pair.ts).
+  takes?: Uint8Array[];
+  incoming?: (connection: IrohConnection, alpn: Uint8Array) => void;
+  /// What a peer's refusal of a link's first line is, by its answer as parsed (an object with `error`) and the reason
+  /// it gave, where it refuses for something else than the credential (the still.fail core's: a workspace's lock,
+  /// station/mesh-wire.ts); none, or null: the credential refused (`credential_refused`).
+  refusal?: (answer: J, reason: string) => CoreError | null;
+};
 
 /// The links are kept by station address (`"<workspace>/<station>"`, `endpointId`; a bare station id stands for
 /// itself): a station in two workspaces has a link in each, opened with that workspace's credential, renewed, dropped and
@@ -730,7 +775,7 @@ export class Mesh {
   /// By address: when a way to it was last seen going direct, and when the main endpoint last dialled it again.
   readonly #directAt = new Map<string, number>();
   readonly #mainDialledAt = new Map<string, number>();
-  /// By address: where the station last said a device dials it straight (kept: SAID_KEY). By kind and address
+  /// By address: where the station last said a device dials it straight (kept: `MeshEnv.addressesKey`). By kind and address
   /// (`atKey`): the addresses last dialled on that kind's endpoint, when, and whether a dial is under way.
   readonly #said: Record<string, Said>;
   readonly #tried = new Map<string, string>();
@@ -789,6 +834,9 @@ export class Mesh {
 
   /// Binds the endpoint with the stored device key (made and stored the first time). No relays binds without one.
   static make(env: MeshEnv, relays: string[], entries: string[] = [], targets: Record<string, string> = {}): Effect.Effect<Mesh, CoreError> {
+    // (its user's mistake, thrown as it is made: no link would say what it means)
+    const own = OWN_FIELDS.filter((field) => env.says !== undefined && field in env.says);
+    if (own.length > 0) throw new Error(`MeshEnv.says names ${own.join(" and ")}: a control line's own, which the mesh writes`);
     return Effect.gen(function* () {
       const host = env.host;
       const stored = yield* Effect.mapError(host.storageGet(DEVICE_KEY), asCoreError);
@@ -803,9 +851,9 @@ export class Mesh {
       const days: Record<string, Day> = daysRaw !== null && typeof daysRaw === "object" && !Array.isArray(daysRaw) ? daysRaw : {};
       const speedsRaw = parseJson(yield* Effect.orElseSucceed(host.storageGet(SPEED_KEY), () => null)) as J;
       const speeds: Record<string, Record<string, Speed>> = speedsRaw !== null && typeof speedsRaw === "object" && !Array.isArray(speedsRaw) ? speedsRaw : {};
-      const said = saidOf(parseJson(yield* Effect.orElseSucceed(host.storageGet(SAID_KEY), () => null)));
+      const said = saidOf(parseJson(yield* Effect.orElseSucceed(host.storageGet(env.addressesKey ?? ADDRESSES_KEY), () => null)));
       const fresh = entries.filter((e) => !relays.some((r) => sameRelay(r, e)));
-      const endpoint = yield* Mesh.#bind(env.iroh, secret, relays, false, env.takes, entryRoutes(relays, fresh, targets));
+      const endpoint = yield* Mesh.#bindMain(env, secret, relays, entryRoutes(relays, fresh, targets));
       const mesh = new Mesh(env, relays, fresh, targets, endpoint, secret, days, speeds, said);
       env.runner.fork(mesh.#accepting(endpoint));
       env.runner.fork(mesh.#watch());
@@ -814,8 +862,15 @@ export class Mesh {
     });
   }
 
-  static #bind(iroh: Iroh, secret: Uint8Array, relays: string[], relayOnly = false, alpns: Uint8Array[] = [], relayEntries: { entry: string; relay: string }[] = []): Effect.Effect<IrohEndpoint, CoreError> {
-    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: !relayOnly && relays.length > 0, relayOnly, ...(alpns.length > 0 ? { alpns } : {}), ...(relayEntries.length > 0 ? { relayEntries } : {}) }), (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.bind_failed")));
+  /// The main endpoint, bound as its user says (`MeshEnv`: what it takes, `relayOnly`, `lookup`).
+  static #bindMain(env: MeshEnv, secret: Uint8Array, relays: string[], relayEntries: { entry: string; relay: string }[]): Effect.Effect<IrohEndpoint, CoreError> {
+    return Mesh.#bind(env.iroh, secret, relays, env.relayOnly === true, env.lookup === true, env.takes, relayEntries);
+  }
+
+  /// An endpoint: one at an address or on one relay alone looks nothing up (`lookup` only with a relay, and IP
+  /// transports to go where what it found is).
+  static #bind(iroh: Iroh, secret: Uint8Array, relays: string[], relayOnly = false, lookup = false, alpns: Uint8Array[] = [], relayEntries: { entry: string; relay: string }[] = []): Effect.Effect<IrohEndpoint, CoreError> {
+    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: lookup && !relayOnly && relays.length > 0, relayOnly, ...(alpns.length > 0 ? { alpns } : {}), ...(relayEntries.length > 0 ? { relayEntries } : {}) }), (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.bind_failed")));
   }
 
   /// The connections the main endpoint takes (`MeshEnv.takes`), each handed on, until it is closed (bound anew).
@@ -919,14 +974,14 @@ export class Mesh {
     this.#speedSaid.set(said, now);
     const way = this.#live(addr).find((w) => w.key() === relayKey(relay));
     const span = this.#env.tracer.span("mesh.speed", Kind.Internal);
-    span.set("stillfail.station", endpointId(addr));
-    span.set("stillfail.via", relayHost(relay));
-    span.set("stillfail.bytes", bytes);
-    span.set("stillfail.ms", Math.round(ms));
-    span.set("stillfail.bps", Math.round((bytes / ms) * 1000));
+    span.own("station", endpointId(addr));
+    span.own("via", relayHost(relay));
+    span.own("bytes", bytes);
+    span.own("ms", Math.round(ms));
+    span.own("bps", Math.round((bytes / ms) * 1000));
     if (way !== undefined) {
-      span.set("stillfail.current", way.link === this.current(addr));
-      span.set("stillfail.paths", way.link.paths());
+      span.own("current", way.link === this.current(addr));
+      span.own("paths", way.link.paths());
     }
     span.end();
   }
@@ -1063,7 +1118,7 @@ export class Mesh {
         return this.#endpoint;
       }
       this.#reboundAt = now;
-      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, this.#secret, this.relays, false, this.#env.takes, entryRoutes(this.relays, this.entries, this.entryTargets)));
+      const bound = yield* Effect.result(Mesh.#bindMain(this.#env, this.#secret, this.relays, entryRoutes(this.relays, this.entries, this.entryTargets)));
       record(this.#env.host, "conn rebind", () => `${always ? "relays retold" : "a dial unanswered, nothing open"} -> ${bound._tag === "Failure" ? `failed: ${said(bound.failure.message)}` : "bound"}`);
       if (bound._tag === "Failure") return this.#endpoint;
       const endpoint = bound.success;
@@ -1117,8 +1172,10 @@ export class Mesh {
     return [...relays, ...this.entries.filter((e) => !relays.some((r) => sameRelay(r, e)))];
   }
 
-  /// Whether the station's workspace turned `way` off (a relay, or a kind of way: LAN, TAILNET, DIRECT).
+  /// Whether the station's workspace turned `way` off (a relay, or a kind of way: LAN, TAILNET, DIRECT). A mesh through
+  /// relays alone (`MeshEnv.relayOnly`) has the ways at an address off for every station.
   #isOff(addr: string, way: string): boolean {
+    if (this.#env.relayOnly === true && (way === LAN || way === TAILNET)) return true;
     return (this.#off.get(addr) ?? []).some((o) => o === way || sameRelay(o, way));
   }
 
@@ -1192,14 +1249,14 @@ export class Mesh {
         }
       }
       const span = this.#env.tracer.span("mesh.connect", Kind.Internal);
-      span.set("stillfail.station", endpointId(addr));
-      if (asker !== undefined) span.set("stillfail.asker", asker);
+      span.own("station", endpointId(addr));
+      if (asker !== undefined) span.own("asker", asker);
       let endpoint = this.#endpoint;
       if (this.#stuck && !this.#anyOpen()) {
-        span.set("stillfail.rebound", true);
+        span.own("rebound", true);
         endpoint = yield* this.#rebind();
       } else if (this.#stuck) record(this.#env.host, "conn stuck", () => `${stationTag(addr)} not rebound: ${this.#openLinks().length} link(s) open`);
-      span.set("stillfail.relay", relayStatus(endpoint));
+      span.own("relay", relayStatus(endpoint));
       const serial = ++this.#serials;
       const hedged = Deferred.makeUnsafe<Link, CoreError>();
       this.#hedges.set(addr, { serial, credentials, tx: hedged });
@@ -1228,7 +1285,7 @@ export class Mesh {
             } else link = raced.first;
           }
         } else if (raced.hedged._tag === "Success") {
-          span.set("stillfail.hedged", true);
+          span.own("hedged", true);
           link = raced.hedged;
         } else link = yield* Effect.result(first);
         if (self.#hedges.get(addr)?.serial === serial) self.#hedges.delete(addr);
@@ -1238,31 +1295,31 @@ export class Mesh {
         if (link._tag === "Success") {
           self.#stuck = false;
           const path = link.success.path();
-          if (path !== null) span.set("stillfail.path", path);
+          if (path !== null) span.own("path", path);
           const via = link.success.via();
-          if (via !== null) span.set("stillfail.via", relayHost(via));
+          if (via !== null) span.own("via", relayHost(via));
           // Where its time went: getting onto a relay, the handshake, the credential; and each way's round trip and
           // packets sent and lost by then (a handshake many round trips long, or lost and sent again).
           const opened = link.success.opened;
           if (opened !== null) {
-            span.set("stillfail.onto_ms", opened.onto);
-            span.set("stillfail.dialled_ms", opened.dialled);
-            span.set("stillfail.credential_ms", opened.credential);
+            span.own("onto_ms", opened.onto);
+            span.own("dialled_ms", opened.dialled);
+            span.own("credential_ms", opened.credential);
           }
-          span.set("stillfail.paths", link.success.paths());
+          span.own("paths", link.success.paths());
         } else {
           if (timeout !== null && !timeout.connected) self.#stuck = true;
           failedIn(span, link.failure);
-          span.set("stillfail.relay", relayStatus(endpoint));
+          span.own("relay", relayStatus(endpoint));
           // What a dial that failed was given and had beside it: the addresses it was told the station is reached straight
           // at, and the ways of this device's other links to the same station (in another workspace), open on the same
           // endpoint. 2026-10-29: a Mac's dials to its station failed for half an hour, both workspaces' at once, the
           // spans saying nothing of either.
           const straight = self.#straightAt(addr);
-          if (straight.length > 0) span.set("stillfail.ips", straight.join(", "));
+          if (straight.length > 0) span.own("ips", straight.join(", "));
           if (unanswered && straight.length > 0 && self.#mainOn(addr)) self.#unansweredAt.set(addr, straight.join(" "));
           const beside = self.#besideOf(addr);
-          if (beside !== "") span.set("stillfail.beside", beside);
+          if (beside !== "") span.own("beside", beside);
         }
         span.end();
         opening.result = link._tag === "Success" ? { ok: link.success } : { err: link.failure, unanswered };
@@ -1299,7 +1356,7 @@ export class Mesh {
       if (secret.length !== 32) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_device_key")));
       const stored = yield* Effect.mapError(this.#env.host.storageGet(DEVICE_KEY), asCoreError);
       if (stored !== null && hex(stored) === hex(secret)) return;
-      const endpoint = yield* Mesh.#bind(this.#env.iroh, secret, this.relays, false, this.#env.takes, entryRoutes(this.relays, this.entries, this.entryTargets));
+      const endpoint = yield* Mesh.#bindMain(this.#env, secret, this.relays, entryRoutes(this.relays, this.entries, this.entryTargets));
       this.#env.runner.fork(this.#accepting(endpoint));
       yield* Effect.mapError(this.#env.host.storageSet(DEVICE_KEY, secret), asCoreError);
       this.#secret = secret;
@@ -1462,7 +1519,7 @@ export class Mesh {
       for (const kind of AT_ADDRESSES) if (!same(kind)) this.#tried.delete(atKey(kind, addr));
       if (said.lan.length > 0 || said.tailnet.length > 0) this.#said[addr] = said;
       else delete this.#said[addr];
-      this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SAID_KEY, toJsonBytes(this.#said)), { log: "Unhandled", message: "said kept" }));
+      this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(this.#env.addressesKey ?? ADDRESSES_KEY, toJsonBytes(this.#said)), { log: "Unhandled", message: "said kept" }));
     }
     // On the main endpoint the addresses are iroh's to try on the connection open (paths of it), not dialled apart.
     if (this.#mainOn(addr)) {
@@ -1545,21 +1602,21 @@ export class Mesh {
     const before = this.current(addr);
     if (before === way.link) return;
     const span = this.#env.tracer.span("mesh.route", Kind.Internal);
-    span.set("stillfail.station", endpointId(addr));
-    span.set("stillfail.why", why);
+    span.own("station", endpointId(addr));
+    span.own("why", why);
     const was = before !== null ? this.#live(addr).find((w) => w.link === before) : undefined;
     if (was !== undefined) {
-      span.set("stillfail.from", was.key());
-      span.set("stillfail.from.score", Math.round(this.#score(addr, was).score));
-      span.set("stillfail.from.missed", was.missed);
-      span.set("stillfail.from.paths", was.link.paths());
+      span.own("from", was.key());
+      span.own("from.score", Math.round(this.#score(addr, was).score));
+      span.own("from.missed", was.missed);
+      span.own("from.paths", was.link.paths());
     }
-    span.set("stillfail.to", way.key());
-    span.set("stillfail.to.score", Math.round(this.#score(addr, way).score));
-    span.set("stillfail.to.paths", way.link.paths());
+    span.own("to", way.key());
+    span.own("to.score", Math.round(this.#score(addr, way).score));
+    span.own("to.paths", way.link.paths());
     if (why === "lost" && this.#movedDirect.get(addr) === true) {
       const held = this.#lostDirect(addr, this.now() - (this.#movedAt.get(addr) ?? -Infinity));
-      if (held !== null) span.set("stillfail.direct_held_ms", held);
+      if (held !== null) span.own("direct_held_ms", held);
     }
     span.end();
     this.#movedDirect.set(addr, this.#isDirect(way));
@@ -1909,12 +1966,12 @@ export class Mesh {
     const missed = w.missed === 1;
     if (changed || missed) {
       const span = this.#env.tracer.span("mesh.path", Kind.Internal);
-      span.set("stillfail.station", endpointId(addr));
-      span.set("stillfail.way", w.key());
-      span.set("stillfail.why", changed && missed ? "paths missed" : changed ? "paths" : "missed");
-      span.set("stillfail.current", w.link === this.current(addr));
-      span.set("stillfail.paths", paths);
-      if (w.saw !== null) span.set("stillfail.before.paths", w.saw);
+      span.own("station", endpointId(addr));
+      span.own("way", w.key());
+      span.own("why", changed && missed ? "paths missed" : changed ? "paths" : "missed");
+      span.own("current", w.link === this.current(addr));
+      span.own("paths", paths);
+      if (w.saw !== null) span.own("before.paths", w.saw);
       span.end();
     }
     w.shape = shape;
@@ -2061,8 +2118,8 @@ export class Mesh {
     return Effect.gen({ self: this }, function* () {
       const endpoint = this.#anyOpen() ? this.#endpoint : yield* this.#rebind();
       const span = this.#env.tracer.span("mesh.hedge", Kind.Internal);
-      span.set("stillfail.station", endpointId(addr));
-      span.set("stillfail.relay", relayStatus(endpoint));
+      span.own("station", endpointId(addr));
+      span.own("relay", relayStatus(endpoint));
       const opened = yield* Effect.result(this.#dialAll(addr, endpoint, credentials, false, span.context));
       if (opened._tag === "Failure") span.fail();
       span.end();
@@ -2094,7 +2151,7 @@ export class Mesh {
     return Effect.gen({ self: this }, function* () {
       const rx = old.conn.stats().rxBytes;
       const span = this.#env.tracer.span("mesh.race", Kind.Internal);
-      span.set("stillfail.station", endpointId(addr));
+      span.own("station", endpointId(addr));
       const fresh = Effect.result(this.#dialAll(addr, this.#endpoint, old.credentials, false, span.context));
       // (the core's, not this race's: a link it opens after the race is over is still had, to be let go)
       const freshFiber = this.#env.runner.fork(fresh);
@@ -2118,7 +2175,7 @@ export class Mesh {
       // it, and a link opened already left open).
       if (won === "old") this.#env.runner.fork(Effect.map(Fiber.join(freshFiber), (r) => (r._tag === "Success" ? r.success.close() : undefined)));
       this.#racing.delete(addr);
-      span.set("stillfail.race", won === "old" ? "old" : won === "neither" ? "neither" : "new");
+      span.own("race", won === "old" ? "old" : won === "neither" ? "neither" : "new");
       span.end();
       if (won === "neither") this.#dropIf(addr, old);
       else if (won !== "old") this.#switch(addr, old, won);
@@ -2144,7 +2201,7 @@ export class Mesh {
   }
 }
 
-/// What was kept of where stations said they are reached straight (SAID_KEY), each kind's addresses as strings.
+/// What was kept of where stations said they are reached straight (`MeshEnv.addressesKey`), each kind's addresses as strings.
 function saidOf(kept: J): Record<string, Said> {
   if (kept === null || typeof kept !== "object" || Array.isArray(kept)) return {};
   const strings = (v: J) => (Array.isArray(v) ? v.filter((a): a is string => typeof a === "string") : []);
@@ -2207,7 +2264,7 @@ function open(
       const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
       env.runner.fork(
         Effect.gen(function* () {
-          const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [], Deferred.await(givenUp)));
+          const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, env.alpn, [], Deferred.await(givenUp)));
           opened.dialled = since();
           stages.dialled = opened.dialled;
           if (r._tag === "Success") {
@@ -2230,7 +2287,7 @@ function open(
       const [credential, conn] = yield* Effect.all([had, Deferred.await(dialled)], { concurrency: "unbounded" });
       const stream = yield* Effect.mapError(conn.openBi(), unreached);
       stages.openBi = since();
-      const control = new Control(stream, env.refusal);
+      const control = new Control(stream, env);
       yield* control.send(credential.credential, credential.also, ctx?.traceparent());
       stages.sent = since();
       const link = new Link(conn, control, credential.credential, credentials, pinned);
@@ -2244,6 +2301,7 @@ function open(
             link.refused = answer.failure;
             conn.close(0, "credential refused");
           } else {
+            link.answer = answer.success;
             const addrs = (said: J) => (Array.isArray(said) ? said.filter((a): a is string => typeof a === "string" && /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(a)).slice(0, 8) : []);
             link.lan = addrs((answer.success as J)?.lan);
             link.tailnet = addrs((answer.success as J)?.tailnet);
