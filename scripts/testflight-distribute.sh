@@ -67,6 +67,20 @@ done
 
 group_id() {
   asc_get "betaGroups?filter[app]=$APP&filter[name]=$(jq -rn --arg n "$1" '$n | @uri')&limit=2" > "$T/group.json"
+  # A newly released app may have only its internal group. Create the named external group for this app alone;
+  # an existing group of the wrong kind, duplicate names or a malformed answer still fail before adding a build.
+  if [ "$2" = false ] && jq -e '.data | type == "array" and length == 0' "$T/group.json" >/dev/null; then
+    if ! jq -cn --arg app "$APP" --arg name "$1" \
+      '{data:{type:"betaGroups",attributes:{name:$name,isInternalGroup:false},relationships:{app:{data:{type:"apps",id:$app}}}}}' |
+      asc_post betaGroups > "$T/created-group.json" 2>&1; then
+      cat "$T/created-group.json" >&2
+      fail 'Apple refused to create the external group'
+    fi
+    jq -e --arg name "$1" '.data.type == "betaGroups" and .data.attributes.name == $name and .data.attributes.isInternalGroup == false and (.data.id | type == "string" and length > 0)' "$T/created-group.json" >/dev/null ||
+      fail 'Apple did not return the external group requested'
+    jq -r '.data.id' "$T/created-group.json"
+    return
+  fi
   jq -e --argjson internal "$2" '(.data | length) == 1 and .data[0].attributes.isInternalGroup == $internal' "$T/group.json" >/dev/null ||
     fail "no single $([ "$2" = true ] && echo internal || echo external) group named \"$1\""
   jq -r '.data[0].id' "$T/group.json"

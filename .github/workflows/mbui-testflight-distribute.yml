@@ -27,6 +27,10 @@ on:
         description: Which run of its wait this is
         default: "1"
         type: string
+# Serialize each app's rounds, including first-time creation of its external group.
+concurrency:
+  group: mbui-testflight-distribute-${{ inputs.product || 'stillfail' }}
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:

@@ -26,6 +26,10 @@ case $url in
     esac ;;
   *betaGroups\?*Internal*) cat "$FAKE/internal" ;;
   *betaGroups\?*external*) cat "$FAKE/external" ;;
+  */betaGroups)
+    cat > "$FAKE/created"
+    [ -z "${CREATE_REFUSE:-}" ] || { echo '{"errors":[{"detail":"creation refused"}]}'; exit 22; }
+    jq --argjson internal "${CREATE_INTERNAL:-false}" '.data.id = "ge-new" | .data.attributes.isInternalGroup = $internal' "$FAKE/created" ;;
   *) [ ! -e "$FAKE/refuse" ] || { echo '{"errors":[{"detail":"refused"}]}'; exit 22; }; cat > /dev/null ;;
 esac
 C
@@ -72,15 +76,30 @@ refuses INVALID; expect_posts ''
 refuses FAILED; expect_posts ''
 ROUND=10 refuses PROCESSING; expect_posts ''
 refuses DOWN; expect_posts ''
-# A group named so that is the other kind, or not found: never added to.
+# A group of the wrong kind or duplicate name is never used; missing internal groups are not created.
 INTERNAL_ANSWER=$good_external refuses VALID; expect_posts ''
+INTERNAL_ANSWER='{"data":[]}' refuses VALID; expect_posts ''
 EXTERNAL_ANSWER=$good_internal refuses VALID true; expect_posts 'POST betaGroups/gi/relationships/builds'
-EXTERNAL_ANSWER='{"data":[]}' refuses VALID true; expect_posts 'POST betaGroups/gi/relationships/builds'
+EXTERNAL_ANSWER='{"data":[{"id":"a"},{"id":"b"}]}' refuses VALID true; expect_posts 'POST betaGroups/gi/relationships/builds'
 # Apple refusing the addition fails the job.
 REFUSE=1 refuses VALID
 grep -q refused "$W/out"
 # monoid's build lookup and subsequent wait rounds stay on monoid; another app's record refuses before any write.
 export RELEASE_PRODUCT=monoid
+# The first external release creates its app's group, then adds the build and submits review.
+EXTERNAL_ANSWER='{"data":[]}' run VALID true
+expect_posts 'POST betaGroups/gi/relationships/builds
+POST betaGroups
+POST betaGroups/ge-new/relationships/builds
+POST betaAppReviewSubmissions'
+jq -e '.data.attributes == {name:"external default",isInternalGroup:false} and .data.relationships.app.data == {type:"apps",id:"6832495462"}' "$FAKE/created" >/dev/null
+creation_refuses() {
+  EXTERNAL_ANSWER='{"data":[]}' refuses VALID true
+  expect_posts 'POST betaGroups/gi/relationships/builds
+POST betaGroups'
+}
+CREATE_REFUSE=1 creation_refuses
+CREATE_INTERNAL=true creation_refuses
 run VALID true
 grep -qF 'GET builds?filter[app]=6832495462&filter[version]=5' "$FAKE/calls"
 expect_posts 'POST betaGroups/gi/relationships/builds
