@@ -157,16 +157,18 @@ if (process.argv[2] === "device") {
   const kept = new Map<string, Uint8Array>(existsSync(sealedAt) ? Object.entries(JSON.parse(readFileSync(sealedAt, "utf8")) as Record<string, string>).map(([k, v]) => [k, Buffer.from(v, "hex")]) : []);
   const save = () => writeFileSync(sealedAt, JSON.stringify(Object.fromEntries([...kept].map(([k, v]) => [k, Buffer.from(v).toString("hex")]))));
   // Each time the person would have been asked (a value sealed for their presence read, or they asked to say yes),
-  // a line, written as it happens: it outlives the process, as the driver reads it after a restart.
-  const noteAsked = (what: string) => appendFileSync(askedFile(data), `${what}\n`);
+  // a line, written as it happens: it outlives the process, as the driver reads it after a restart. Its time and the
+  // reason the core gave, so a check that finds someone asked says what asked (the side run of 2026-11-13: "asked the
+  // person 7 times" and nothing of why).
+  const noteAsked = (what: string, reason: string) => appendFileSync(askedFile(data), `${new Date().toISOString()} ${what} ${reason.replace(/\s+/g, " ")}\n`);
   const sealer = {
-    get: async (key: string, user: boolean, _reason: string) => {
-      if (user) noteAsked(`get ${key}`);
+    get: async (key: string, user: boolean, reason: string) => {
+      if (user) noteAsked(`get ${key}`, reason);
       return kept.get(key) ?? null;
     },
     set: async (key: string, value: Uint8Array, _user: boolean) => void (kept.set(key, value), save()),
     delete: async (key: string) => void (kept.delete(key), save()),
-    ask: async (_reason: string) => noteAsked("ask"),
+    ask: async (reason: string) => noteAsked("ask", reason),
   };
   // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`; `page`: a web page's
   // host, no app's keys and nothing sealed)
@@ -274,8 +276,13 @@ export class Device {
   /// How many times its sealer was asked with the person present since the device was new: a value sealed for their
   /// presence read (`get` with `user`), or the person asked to say yes (`ask`). None while it had no sealer.
   asked(): number {
+    return this.askedWhat().length;
+  }
+  /// What its sealer was asked from the `from`th time on (`asked`), a line each: when, what (`get <key>`, `ask`), the
+  /// reason the core gave.
+  askedWhat(from = 0): string[] {
     const at = askedFile(join(dir, this.name));
-    return existsSync(at) ? readFileSync(at, "utf8").split("\n").filter((l) => l !== "").length : 0;
+    return (existsSync(at) ? readFileSync(at, "utf8").split("\n").filter((l) => l !== "") : []).slice(from);
   }
   #send(m: J) {
     // (a device closed while a wait on it was still counting, one of two a step raced: nothing is there to be told
