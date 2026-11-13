@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [3c1dde380](https://github.com/AFK-surf/monoid/commit/3c1dde38007643b1ddd306a846b566392dd70bd2) fix(mbui): an agent's history's 详情 unfolds whole,  | 1.98 | 2.7 | 11.52 | 31.12 | 41.46 | 27.74 | 53.19 | 96.91 | 107.21 |
 | [49a1b3e8a](https://github.com/AFK-surf/monoid/commit/49a1b3e8a66ca5ad2e529586dc666f8cb43f4884) app tests: the third's other runs at 60 reckoned a | 1.98 | 2.7 | 11.52 | 31.12 | 41.45 | 27.74 | 53.19 | 97.44 | 112.7 |
 | [8c6ec8f5d](https://github.com/AFK-surf/monoid/commit/8c6ec8f5d9d27621f82f9676b2aa39e1c4c42074) station: the mesh's base takes the connections, ca | 1.98 | 2.7 | 11.52 | 31.12 | 41.44 | 27.74 | 53.19 | 97.16 | 108.57 |
 | [dd8703938](https://github.com/AFK-surf/monoid/commit/dd87039384c912b79eced0ecf04443f593e28be6) test(mbui app): 添加账号 with three stations, and a ke | 1.98 | 2.7 | 11.52 | 31.12 | 41.44 | 27.73 | 53.19 | 97.4 | 110 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6f3ad0d55](https://github.com/AFK-surf/monoid/commit/6f3ad0d554e20c2cbb76d39e88c8a94424dbaa85) mbui app: bring notified pages into view on tape s | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.7 | 95.41 | 109.01 |
 | [def675d85](https://github.com/AFK-surf/monoid/commit/def675d852b1184ebd1872f9ab858203dd0b1bb7) feat(history): refine group summaries, coalesce ed | 1.97 | 2.64 | 11.38 | 30.95 | 40.87 | 27.58 | 52.7 | 95.59 | 109.52 |
 | [85e118c8d](https://github.com/AFK-surf/monoid/commit/85e118c8df152588655f5e1ebb29b27b30d73c56) mbui app: no flight on a chat's page made as nodes | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 95.57 | 108.35 |
-| [456c7fc15](https://github.com/AFK-surf/monoid/commit/456c7fc157392ed62e6305d554e5f7ca5dfa9943) mbui: what covers a list's top said once; a pictur | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.55 | 101.4 |
