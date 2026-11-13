@@ -2338,6 +2338,21 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     let center_in = if c.words_center { c.w } else { -1.0 }
     // (its grounds under its words (code's, a label's), the lines through or under them over them: as an old view's
     // paragraph's, Ctx::paint_rich's)
+    // (what of it is marked, under all of it and under what is picked of it: View::runs_marks, each part its ground and
+    // where it says so a line at its foot, each line of it where that line is drawn)
+    for m in c.runs_marks {
+      if m.from < m.to {
+        for rect in lay.rects(m.from, m.to) {
+          let dx = rich_shift_at(lay, rect.1 + rect.3 / 2.0, center_in)
+          if (m.ground & 0xFFL) != 0L {
+            self.emit_rect(rect.0 + dx, rect.1, rect.2, rect.3, 0.0, m.ground, 0.0, 0L, 1.0)
+          }
+          if (m.line & 0xFFL) != 0L && m.line_w > 0.0 {
+            self.emit_rect(rect.0 + dx, rect.1 + rect.3 - m.line_w, rect.2, m.line_w, 0.0, m.line, 0.0, 0L, 1.0)
+          }
+        }
+      }
+    }
     // (what of it is picked with the pointer, under all of it: View::runs_picked, as an old view's paragraph's)
     let (pa, pb) = c.runs_picked
     if pa < pb {
