@@ -172,12 +172,28 @@ another; the accounts' list's merge across stations and its refills.
   would not do what it means is refused. The body goes only to the stations of its workspace that its list names,
   asked on that workspace's address, never to the cloud nor a station of another workspace (which get the chain);
   taken once one of those took entry and body, else pending, waiting for those. Said so now: a role, a member out, a
-  station in (`joinStation`) or out, off and on again (the root's person alone, `lock_root_only`). Adding a member,
-  approving a device or a web page, renewing one, `addStation` and `admit` need another device's part and still answer
-  `lock_moved`. One that lost its place is signed again as the model's `resign` does (`again=batch`), only with the
-  seed in hand, never asking for it: judged with the others lost with it in the order made by what its body is about
-  (`src/personal-lock.ts` `#how`), the same body where its `prev` still stands before it, else one made anew
-  (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,
+  station in (`joinStation`, `addStation` once its code is confirmed) or out, off and on again (the root's person
+  alone, `lock_root_only`). What lets someone in there (2026-11-13): a web page is `web {id, label, exp}` on its own
+  person's log (personal-lock.ts `web`), approved face to face only by a device of that person's on the log that binds
+  them (views/pair.ts `movedPlace`), one entry and one ask for every moved workspace it asked in, renewed by a later
+  `web`, taken off by `web.remove`; someone's first device is `member {sub, email, lock, role}` said by an owner's or
+  admin's device once the code is proved, `lock` the log of their own its hello brought (checked as the credential's
+  person's, the asking device on it; `admitOf`), and the removal of an older binding first where their lock was begun
+  anew; a person's own new device goes on their log alone. Its role is never the workspace's view's word (the lead,
+  2026-11-13: a cloud calling a newcomer an owner would have an owner's device sign them in as one, the ask not showing
+  the role): what the person chose as they added them on this same device (views/lock.ts `notedRole`, kept here alone,
+  used once, else a member), lowered to the view's where that is lower; one this signer may not give, the note's or the
+  view's, shows no code. So someone added as an admin on one device and approved from another comes in a member, and an
+  owner makes them an admin by changing their role. Adding a member is the cloud's part alone there (`added`: nothing
+  signed, the role noted), and so is changing the role of one not let in yet (`rosterMoved`: the note the new role, an
+  owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`); but the
+  vaults go by the chain held (vault.ts `lockOf`, which a moved chain leaves as it was at the move), so none is keyed
+  anew for someone a statement took out, at the asking or after (not built). A device taken out
+  takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
+  `outOf` says who took it out and when (no words for the page yet). One that lost its
+  place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:
+  judged with the others lost with it in the order made by what its body is about (`src/personal-lock.ts` `#how`), the
+  same body where its `prev` still stands before it, else one made anew (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,
   as `lockAsked` is), told as not in effect. One pending whose act's cloud write then fails is dropped and its bodies
   let go of, as a pending chain entry is (`dropStated`); one taken stays. Its row is on its own workspace's lock topic
   alone. Turning a moved workspace off asks twice (2026-11-13, the lead's: two asks taken over secrets left sealed

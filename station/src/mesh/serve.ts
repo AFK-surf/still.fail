@@ -214,11 +214,54 @@ export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, 
       if (bytes > REFUSAL_ENTRIES_BYTES) break;
       tail.unshift(entry);
     }
-    return { error: e.message, code: e.code, lock: lockHead(cloud, ws), ...person, ...(tail.length > 0 ? { entries: tail } : {}) };
+    const out = sub === null ? null : toldOut(cloud, ws, device, hello);
+    return { error: e.message, code: e.code, lock: lockHead(cloud, ws), ...person, ...(tail.length > 0 ? { entries: tail } : {}), ...(out !== null ? { out } : {}) };
   }
   const left = leftOutFor(cloud, hello, device, accepted);
   if (left !== null) return { error: LEFT_OUT[left], code: "lock_station", why: left };
   return { error: (e as Error).message };
+}
+
+/// How much of what took a device out a refusal tells at most.
+const REFUSAL_OUT_BYTES = 32 * 1024;
+
+/// What a device refused where `ws`'s chain moved is told of what took it out (the model's `admitsBefore`, as
+/// `Cloud.givenTo` gives it to a station): the removals whose subject's removals left out make the list name it again,
+/// with each one's `prev` chain, and the entries of the person logs that commit to them (each its log from the genesis),
+/// so that it can work out who took it out and when by the rules alone; nothing else of the workspace. By its endpoint,
+/// the base key its hello proves for it and the keys the logs kept put on with those; none where the list never named
+/// it, or names it now (refused for another reason), or where it would not fit a line.
+function toldOut(cloud: Cloud, ws: string | null, device: string, hello: any): { bodies: unknown[]; logs: { genesis: string; entries: Entry[] }[] } | null {
+  if (cloud.chain(ws)?.state?.moved === undefined) return null;
+  const proof = lockProof(hello?.lock);
+  const ids = new Set([device, ...(proof && endpointProof(ws ?? cloud.home() ?? "", proof.base, device, proof.proof) ? [proof.base] : [])]);
+  // (a removal took out the keys of its subject's log: those the logs kept here put on with these ids)
+  const keys = new Set(ids);
+  for (const [, entries] of personChainsOf(cloud).every()) {
+    for (const e of entries) {
+      const d = (e.kind === "genesis" ? (e.body as any)?.device : e.kind === "device" ? e.body : null) as { id?: unknown; key?: unknown } | null;
+      if (typeof d?.id === "string" && ids.has(d.id) && typeof d.key === "string") keys.add(d.key);
+    }
+  }
+  const hashes = new Set<string>();
+  for (const k of keys) {
+    const given = cloud.givenTo(ws, k);
+    if (given === "all") return null;
+    for (const h of given) hashes.add(h);
+  }
+  if (hashes.size === 0) return null;
+  const kept = cloud.bodies(ws).all();
+  const bodies = [...hashes].flatMap((h) => (kept.has(h) ? [kept.get(h)] : []));
+  const logs: { genesis: string; entries: Entry[] }[] = [];
+  for (const [genesis, entries] of personChainsOf(cloud).every()) {
+    let last = -1;
+    entries.forEach((e, i) => {
+      if (e.kind === "ws" && hashes.has(String((e.body as { h?: unknown } | null)?.h))) last = i;
+    });
+    if (last >= 0) logs.push({ genesis, entries: entries.slice(0, last + 1) });
+  }
+  const out = { bodies, logs };
+  return JSON.stringify(out).length <= REFUSAL_OUT_BYTES ? out : null;
 }
 
 /// Whether a device's connection is given `ws`'s bodies and logs: let in by its lock (while on); while its people's

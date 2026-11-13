@@ -138,8 +138,10 @@
   its workspace, by the list its bodies make, on or off (`Cloud.givenTo`): to a station or device it names
   (`lock.bodies.*`, `person-sync.ts`; `GET /lock/bodies`, with `lacking`: while off, only to a connection that proves
   itself a device the list names), and to one a removal took out, that removal and its `prev` chain alone (the rules'
-  list `without` it, the model's `admitsBefore`). A device taken out is told so by its hello's refusal as before; its
-  removal's body reaches it in the core's step. `test/lock-moved-model.test.ts` holds all of it to the model.
+  list `without` it, the model's `admitsBefore`). A device taken out is told so by its hello's refusal, which carries
+  that removal, its `prev` chain and the log entries that commit to them (`src/mesh/serve.ts` `toldOut`, by the
+  device's ids and the keys its log put on with them), nothing else of the workspace; one taken off its own log hears
+  it of that log (the refusal's `person`, as before). `test/lock-moved-model.test.ts` holds all of it to the model.
 
 ## Screens
 

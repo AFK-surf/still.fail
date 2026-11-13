@@ -310,7 +310,7 @@ test("waiting with the root's log here and its `open`'s body lacking: nobody and
   assert.equal((await w.who()).members, bobs(w, true));
 });
 
-test("each writer by its own call on a moved chain answers lock_moved: nothing signed, nothing pending, nobody asked", async () => {
+test("each writer by its own call on a moved chain, this device on no log of its person's, answers lock_moved but adding a member and an enrollment: nothing signed, nothing pending, nobody asked", async () => {
   const w = await setUp();
   await w.run(read(w.inner, "ws"));
   const members = [{ sub: "s1", email: "a@x.com", role: "owner" }, { sub: "s2", email: "b@x.com", role: "member" }];
@@ -354,7 +354,10 @@ test("each writer by its own call on a moved chain answers lock_moved: nothing s
     await w.run(Effect.match(e as Effect.Effect<unknown, CoreError>, { onSuccess: () => {}, onFailure: (err) => void (code = err.code) }));
     codes.push(`${name} ${code}`);
   }
-  assert.deepEqual(codes, [...calls.map(([name]) => `${name} lock_moved`), "admit lock_moved", "approve lock_moved"]);
+  // (adding a member is the cloud's part alone there and an enrollment's commands pin the chain held: both answer,
+  // signing nothing, test/lock-admits.test.ts; the rest need this device on its person's own log, which it is not)
+  const answers = new Set(["workspace.addMembers", "workspace.enroll"]);
+  assert.deepEqual(codes, [...calls.map(([name]) => `${name} ${answers.has(name) ? "answered" : "lock_moved"}`), "admit lock_moved", "approve lock_moved"]);
   assert.equal(held(w.inner, "ws")!.entries.length, before.held, "nothing signed on the chain");
   assert.equal(pendingHeld(w.inner, "ws").length, 0, "nothing pending");
   assert.deepEqual(w.st.posted.filter((p) => p.startsWith("POST /lock") && p !== "POST /lock/bodies"), [], "nothing brought to the station");

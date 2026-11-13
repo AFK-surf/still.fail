@@ -1101,11 +1101,12 @@ export function refusedAgain(inner: Inner, ws: string): void {
 
 /// A station refused this device for the lock: noted, not asked again until the lock moves on. What the refusal says
 /// then: which workspace, and where to approve it.
-function refused(inner: Inner, ws: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }): CoreError | null {
+function refused(inner: Inner, ws: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown; out?: unknown }): CoreError | null {
   if (inner.provider.kind !== "stillfail") return null;
   const p = part(inner, ws);
   heardRefused(inner, ws, told?.person);
   heardTail(inner, ws, told?.entries);
+  heardOut(inner, ws, told?.out);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
   const f = stateOf(inner, ws, h?.entries ?? []);
@@ -1141,6 +1142,35 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   p.refused.set(station, h?.head?.hash ?? null);
   touch(inner, ws);
   return unconfirmed(inner, ws);
+}
+
+/// What took this device out of a moved workspace, as a station's refusal tells it (station/src/mesh/serve.ts
+/// `toldOut`): the logs and the bodies kept as any given are (`keepLogs`, then `keepBodies`: each body only against an
+/// entry kept that commits to it), so the state made here says it as the stations do (`outOf`).
+function heardOut(inner: Inner, ws: string, raw: unknown): void {
+  if (!isObject(raw) || !movedHere(inner, ws)) return;
+  const logs = keepLogs(inner, ws, arr(raw.logs));
+  const bodies = keepBodies(inner, ws, arr(raw.bodies));
+  if (logs || bodies) touch(inner, ws);
+}
+
+/// Who took this device's person out of moved workspace `ws`, and when (unix seconds), by what is kept here: of the
+/// removals of them (`member.remove {sub}`) whose entry is on a log kept, the latest, its signer the person whose log
+/// it is. Null where none is kept, or the list in force names them.
+export function outOf(inner: Inner, ws: string): { by: string; at: number } | null {
+  const sub = inner.workspaces.owner(ws);
+  if (sub === null || !movedHere(inner, ws) || stateOf(inner, ws).members.has(sub)) return null;
+  const removals = new Map<string, unknown>();
+  for (const b of bodiesHeld(inner, ws)) if (get(b, "kind") === "member.remove" && get(b, "sub") === sub) removals.set(bodyHash(b) ?? "", b);
+  let out: { by: string; at: number } | null = null;
+  for (const [, entries] of logsOf(inner, ws, false)) {
+    const by = str(get(entries[0]?.body, "sub"));
+    for (const e of entries) {
+      if (by === null || e.kind !== "ws" || !removals.has(String(get(e.body, "h")))) continue;
+      if (out === null || e.at > out.at) out = { by, at: e.at };
+    }
+  }
+  return out;
 }
 
 /// Why a station is not asked now: it refused this device and the lock has not moved on since.
@@ -1240,9 +1270,13 @@ export function offOwnLock(inner: Inner, ws: string): boolean {
 
 /// What a hello brings of the person's own lock: its chain, wherever its member bound it here, this device in the
 /// workspace's lock as well or not: a station that goes by the person's own lock alone for them lets it in on that.
+/// Where the chain moved, the one this device is on whether or not the state said here binds it: a device not let in yet
+/// is given no bodies to read that by, and a station takes the log of a member the list names only as their device's
+/// hello brings it (station/src/mesh/serve.ts `onPersonalLock`: someone's first device, named with it by an owner's).
 function carriedPerson(inner: Inner, ws: string): Entry[] | null {
   const sub = inner.workspaces.owner(ws);
-  if (sub === null || !onBoundPerson(inner, ws)) return null;
+  const moved = sub !== null && movedHere(inner, ws) && inner.host.appKeys === true && inner.adb.personal().standing(sub) === "member";
+  if (sub === null || (!moved && !onBoundPerson(inner, ws))) return null;
   const chain = inner.adb.personal().entries(sub);
   return JSON.stringify(chain).length <= CARRY_BYTES ? chain : null;
 }
@@ -2504,7 +2538,9 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // Its person bound a lock of their own here that this device is not on: approved into this one it would still be
         // refused (the stations let their app devices in on that lock alone), so it asks to join that one instead, the
         // same code shown on a device on it (2026-11-10: a new phone approved here went on being refused, 「已经批过了啊」).
-        if (offOwnLock(inner, c.workspace)) {
+        // (where the chain moved, its person having a log of their own this device is not on: so too, `waitingIn`)
+        const standing = inner.adb.personal().standing(sub);
+        if (offOwnLock(inner, c.workspace) || (movedHere(inner, c.workspace) && inner.host.appKeys === true && standing !== "none" && standing !== "member")) {
           const sub = inner.workspaces.owner(c.workspace);
           if (sub !== null) return yield* inner.adb.run({ kind: "personalJoin", sub });
         }
@@ -2536,7 +2572,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
           // (pending on their own lock alone: its row as this workspace's topic shows it, `ownPendingRows`)
           return off === null ? null : { pending: { ...off.pending, id: `${OWN_PENDING}${off.pending.id}` } };
         }
-        result = yield* lock.append("device.remove", { id: param("device") });
+        // (where the chain moved, a web page of the person's is taken off their own log, `web.remove`)
+        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* lock.append("device.remove", { id: param("device") });
         break;
       }
       case "disable": {
@@ -2612,9 +2649,10 @@ export function enrolled(inner: Inner, _sub: string, ws: string, made: unknown):
   return Effect.gen(function* () {
     if (inner.provider.kind !== "stillfail" || !lockToRead(inner, ws)) return made;
     yield* asked(inner).wait(Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read for an enrollment" }));
-    if (movedHere(inner, ws)) return yield* Effect.fail(lockMoved());
     const h = held(inner, ws);
-    const on = !!h?.head && !fold(h.entries).disabled;
+    // (where the chain moved its head is pinned all the same, on or off: the station pins the chain, which says where
+    // its state is said, and lets in only what that state names; taken into the list by `addStation` after)
+    const on = !!h?.head && (movedHere(inner, ws) || !fold(h.entries).disabled);
     // None held on here (a device that has not read it yet, and did not just now) and the workspace's view saying it is
     // locked: its head as the view says it, the cloud's word as where no station answered. Never the commands without
     // it there: they would enroll a station the lock does not protect (#5540).
@@ -2623,7 +2661,7 @@ export function enrolled(inner: Inner, _sub: string, ws: string, made: unknown):
     if (head === null || !isObject(made)) return made;
     // Held: as a station of the lock last said it this run (part(inner, ws).heads, which the read just made sets for
     // each that answered), where that is on the chain held.
-    for (const id of on ? fold(h!.entries).stations.keys() : []) {
+    for (const id of on ? stateOf(inner, ws, h!.entries).stations.keys() : []) {
       const theirs = part(inner, ws).heads.get(id);
       if (theirs != null && onChain(h, theirs)) {
         head = theirs;
@@ -2762,6 +2800,25 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
   });
 }
 
+/// Whether `meant` said here by `sub`'s device would do what it means in moved workspace `ws` (`plan`, nothing signed,
+/// nobody asked): views/pair.ts asks it before a newcomer's code is shown.
+export function movedWorks(inner: Inner, ws: string, sub: string, meant: Said[]): boolean {
+  const personal = inner.adb.personal();
+  const own = personal.root(sub), key = personal.keyId();
+  const root = inForceOf(inner, ws).root;
+  if (own === null || key === null || root === null || personal.standing(sub) !== "member") return false;
+  const chains = new Map(logsOf(inner, ws, false));
+  chains.set(own, personal.entries(sub));
+  return !("why" in plan(ws, root, chains, bodiesHeld(inner, ws), { genesis: own, sub, key }, meant, now(inner)));
+}
+
+/// Someone's first device let in where the chain moved (views/pair.ts `approve`): `meant` (their `member`, after the
+/// removal of what bound them before) said as any change of the list is (`sayMoved`), shown and asked as adding them.
+export function sayAdmit(inner: Inner, sub: string, ws: string, meant: Said[], name: string): Effect.Effect<unknown, CoreError> {
+  const shown = { act: "addMember" as const, name };
+  return sayMoved(inner, sub, ws, meant, shown, actText(shown));
+}
+
 const rootOnly = () => new CoreError("lock_root_only", "only the person who turned safe mode on turns it off or on again");
 
 /// Whether a moved workspace may be turned off here, before anyone is asked (its secrets opened, `sayMoved`): this
@@ -2783,8 +2840,8 @@ function saysHere(inner: Inner, sub: string): boolean {
 
 /// `roster`'s change where the chain moved: a member out (`member.remove`), a member's role (`member.remove`, then
 /// `member` with the log that binds them now: the highest admit in force binds, so a lower role given later changes
-/// nothing without the removal; raising too), a station out (`station.remove`). Someone the list has not heard of is
-/// added only with their device (the next step): `lock_moved` still.
+/// nothing without the removal; raising too), a station out (`station.remove`). Someone the list has not heard of (added,
+/// their first device not let in yet) has nothing said: the role chosen is noted here for that admission (`note`).
 function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
   return Effect.suspend(() => {
     if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
@@ -2799,11 +2856,40 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
     const m = f.members.get(what.member);
     const lock = f.persons.get(what.member);
     const n = as("member", { sub: what.member });
+    // (what this person noted as they added them goes with them: `unnote`)
+    if ("gone" in what) unnote(inner, ws, what.member, m?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email")));
     if ("gone" in what) return m === undefined ? Effect.succeed(null) : sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n }));
     if (m?.role === what.role) return Effect.succeed(null);
-    if (m === undefined || lock === undefined) return Effect.fail(lockMoved());
+    // (someone added whose first device has not come: nothing in the lock to change, the cloud's part alone; the role
+    // chosen here now is what their admission here says, `note`, an owner's only by an owner)
+    if (m === undefined) {
+      if (what.role !== "owner" || f.members.get(sub)?.role === "owner") note(inner, ws, sub, what.member, what.role);
+      return Effect.succeed(null);
+    }
+    if (lock === undefined) return Effect.fail(lockMoved());
     const shown = { act: "setRole" as const, name: n, role: roleText(what.role) };
     return sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }, { kind: "member", sub: what.member, email: m.email, lock, role: what.role }], shown, actText(shown));
+  });
+}
+
+/// A web page of this person's renewed (`web`, its id with `exp` WEB_DEVICE_SECS from now) or taken off (`web.remove`)
+/// where the chain moved: on their own log, which lets it into every moved workspace of theirs, the person asked once
+/// (personal-lock.ts `web`). Only theirs, by a device on the log that binds them there: an owner or admin renews or
+/// takes off no one else's page (a person's devices are theirs alone, the root AGENTS.md); one not listed there, or
+/// another's, is refused in the words of a change not allowed, nobody asked. An app device is not one of these: it is
+/// taken off its person's own log (`onOwnLock`), else `lock_moved` as before.
+function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web" | "web.remove"): Effect.Effect<unknown, CoreError> {
+  return Effect.suspend(() => {
+    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    const f = stateOf(inner, ws);
+    const d = f.devices.get(id);
+    if (d === undefined) return Effect.fail(CoreError.invalid("no such device in the lock"));
+    if (d.kind !== "web") return Effect.fail(lockMoved());
+    if (d.sub !== sub || f.persons.get(sub) !== inner.adb.personal().root(sub)) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
+    const name = deviceText({ kind: "web", label: str(d.label) ?? "" });
+    const reason = actText({ act: kind === "web" ? "renew" : "removeDevice", name });
+    const body = kind === "web" ? { id, label: str(d.label) ?? "", exp: now(inner) + WEB_DEVICE_SECS } : { id };
+    return Effect.tap(inner.adb.personal().web(sub, kind, body, reason), () => Effect.sync(() => touch(inner, ws)));
   });
 }
 
@@ -2836,6 +2922,37 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
   });
 }
 
+/// Whom the person on this device added to a moved workspace and as what (`added`): their own choice, made here, kept
+/// on this device alone beside the lock (`lockAdded`, a record of its own in the workspace's) and never read from the
+/// workspace's view, which is the control plane's word. Where the chain moved adding someone signs nothing, so this is
+/// what their first admission said here gives them (views/pair.ts `admitOf`): the view's role never raises one (a cloud
+/// calling a newcomer an owner would have an owner's device sign them in as one, the ask not showing the role). `who`
+/// their sub, or `pendingOf` their email until they have an account; `by` the account that added them. Each person's
+/// last only, at most ADDED_KEPT, the oldest let go; one goes once used or as the member is taken out (`unnote`).
+type Noted = { by: string; who: string; role: string };
+const ADDED_KEPT = 64;
+const notesHeld = (inner: Inner, ws: string): Noted[] => {
+  const r = inner.data.record("lockAdded", ws);
+  const notes = isObject(r) && Array.isArray(r.notes) ? r.notes : [];
+  return notes.filter((n): n is Noted => isObject(n) && typeof n.by === "string" && typeof n.who === "string" && typeof n.role === "string");
+};
+function note(inner: Inner, ws: string, by: string, who: string, role: string): void {
+  const notes = notesHeld(inner, ws).filter((n) => n.who !== who);
+  inner.data.put("lockAdded", ws, { notes: [...notes, { by, who, role }].slice(-ADDED_KEPT) });
+}
+/// The role the person of account `by` gave `sub` (or their email's pending name) as they added them on this device.
+export function notedRole(inner: Inner, ws: string, by: string, sub: string, email: string): string | null {
+  const name = pendingOf(email);
+  const notes = notesHeld(inner, ws).filter((n) => n.by === by);
+  return (notes.find((n) => n.who === sub) ?? notes.find((n) => name !== null && n.who === name))?.role ?? null;
+}
+export function unnote(inner: Inner, ws: string, sub: string, email: string | null): void {
+  const name = email === null ? null : pendingOf(email);
+  const notes = notesHeld(inner, ws);
+  const left = notes.filter((n) => n.who !== sub && n.who !== name);
+  if (left.length !== notes.length) inner.data.put("lockAdded", ws, { notes: left });
+}
+
 /// People added to a locked workspace (`workspace.addMembers`, `role`; `answer` the cloud's): in its lock as well, with
 /// that role, by this device's signature where it signs there for an owner or an admin. One with an account under their
 /// sub, as the answer's view names them; one who has not signed in yet under `pendingOf` their email. One the cloud
@@ -2844,8 +2961,22 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
 /// asked too past it (see `ASKED_MS`).
 export function added(inner: Inner, sub: string, ws: string, role: string, answer: unknown): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
-    // (where the chain moved, as `roster` answers; the cloud has added them by now, as an enrollment it made, `enrolled`)
-    if (movedHere(inner, ws)) return yield* Effect.fail(lockMoved());
+    // (where the chain moved: the cloud's word alone, nothing said in the lock until their first device is let in,
+    // which an owner's or admin's device names with the log of their own it brings; a credential lets nobody in. The
+    // role chosen here is noted here alone, `note`, for that admission: as on a chain, an owner's only by an owner)
+    if (movedHere(inner, ws)) {
+      if (role === "owner" && stateOf(inner, ws).members.get(sub)?.role !== "owner") return null;
+      const listed = stateOf(inner, ws).members;
+      const members = arr(get(get(answer, "view"), "members"));
+      for (const k of ["joined", "already", "added"]) {
+        for (const email of arr(get(answer, k)).flatMap((e) => (typeof e === "string" ? [e.toLowerCase()] : []))) {
+          const subs = k === "added" ? [] : members.filter((x) => typeof x?.sub === "string" && str(x.email)?.toLowerCase() === email).map((x) => x.sub as string);
+          const name = pendingOf(email);
+          for (const who of k === "added" ? (name === null ? [] : [name]) : subs) if (!listed.has(who)) note(inner, ws, sub, who, role);
+        }
+      }
+      return null;
+    }
     const within = asked(inner);
     const m = yield* managed(inner, sub, ws, within);
     if (m === null || (role === "owner" && m.role !== "owner")) return null;
@@ -3142,8 +3273,8 @@ export class Lock {
   renew(device: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
-      // (where the chain moved its devices are not the chain's: nothing signed there, whichever is named)
-      if (movedHere(self.#inner, self.ws)) return yield* Effect.fail(lockMoved());
+      // (where the chain moved its web pages are its people's own logs': a later `web` of the same id there)
+      if (movedHere(self.#inner, self.ws)) return yield* webMoved(self.#inner, self.sub, self.ws, device, "web");
       const d = fold(held(self.#inner, self.ws)?.entries ?? []).devices.get(device);
       if (!d) return yield* Effect.fail(CoreError.invalid("no such device in the lock"));
       return yield* self.append("device", { ...d, exp: now(self.#inner) + WEB_DEVICE_SECS });
@@ -3155,6 +3286,8 @@ export class Lock {
     const self = this;
     return Effect.gen(function* () {
       if (shortCode(station) !== code.trim().toUpperCase()) return yield* Effect.fail(CoreError.invalid("the code does not match that station's"));
+      // (where the chain moved: `station {key}` said in this person's own log, as `joinStation` says it there)
+      if (movedHere(self.#inner, self.ws)) return yield* stationMoved(self.#inner, self.sub, self.ws, station);
       const s = arr(get(view(self.#inner, self.ws), "stations")).find((x) => x.id === station);
       return yield* self.append("station", { key: station, name: s?.name ?? "" }, [station]);
     });
