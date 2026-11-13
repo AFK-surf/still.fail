@@ -23,8 +23,10 @@ pub fn group_rows_reset() -> Unit {
 ///|
 /// Group `key`'s rows, each by its key and what draws it (in a group's body: @sf.group): a row new to it comes where it
 /// is, one gone goes where it was, its room opening and closing on a row's way (@ui.row_size_ms), what is in it in the
-/// middle of its room. As they are the first time.
+/// middle of its room. As they are the first time, and the first time again once it was not drawn (its page left, its
+/// panel gone, another level of it shown), what changed meanwhile not one of its rows' coming or going.
 pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)]) -> Unit {
+  ignore(c.on_unbuilt(c.id("\u{1}group-rows\u{1}" + key), fn() { group_rows_of.remove(key) }))
   let first = !group_rows_of.contains(key)
   let st = match group_rows_of.get(key) {
     Some(s) => s

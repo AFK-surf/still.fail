@@ -723,7 +723,7 @@ test "panel, 大屏 keyboard and mouse: at a point, what it holds told whether i
 }
 
 ///|
-test "panel, 大屏 keyboard and mouse: at a point, open as the window is made too short for it below what opened it and tall again: what it holds told it stands above it the frame it goes there, below it again the frame it comes back: as main has it" {
+test "panel, 大屏 keyboard and mouse: at a point, open as the window is made too short for it below what opened it and tall again: what it holds told it stands above it the frame it goes there, and there it stays as the window is tall again (it has the room where it is: no side changed without need)" {
   let t = menu_tester(1280.0, 800.0, 0)
   let up : Array[Bool] = []
   @sf.panel(
@@ -745,12 +745,12 @@ test "panel, 大屏 keyboard and mouse: at a point, open as the window is made t
     t.run_for(@ui.move_most_ms)
     out.push(said(t, h))
   }
-  // (as main has it, a4c845604)
+  // (above from the frame the window is too short below; above still as it is tall again: View::beside's holds_side)
   assert_eq(out, [
     (800.0, Some(false), Some(false)),
     (560.0, Some(true), Some(true)),
     (560.0, Some(true), Some(true)),
-    (800.0, Some(false), Some(false)),
-    (800.0, Some(false), Some(false)),
+    (800.0, Some(true), Some(true)),
+    (800.0, Some(true), Some(true)),
   ])
 }

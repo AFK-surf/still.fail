@@ -137,7 +137,9 @@ fn panel_node(
       layer.box(fn(p) {
         presented_popovers[keyed.serial] = p
         p
-        .beside(at.id(), side=x.side, along=x.along, offset=x.offset, padding=8.0)
+        // (on the side it is on for as long as it has the room there: what it holds shrinking moves its far edge
+        // alone, never the panel across its control; View::beside's `holds_side`)
+        .beside(at.id(), side=x.side, along=x.along, offset=x.offset, padding=8.0, holds_side=true)
         // (`fits`: as wide as what it holds, `w` at most, never narrower than it has been: its parts each told how wide
         // what they hold is laid out, out to its sides, none narrower than it is, small_panel's min_w and max_w)
         .width(if x.fits { By(fn() { Some(dmin(x.w, wide.iter().fold(init=0.0, fn(m, s) { dmax(m, s.get().unwrap_or(0.0)) }))) }) } else { Is(Some(x.w)) })
