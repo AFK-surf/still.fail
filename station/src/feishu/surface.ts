@@ -292,7 +292,7 @@ export class FeishuSurface extends ConnectedSurface {
     }
     const event: ChatEvent = {
       type: "message",
-      message: { channel: m.chat, threadTs, ts: m.id, user: m.user, text: m.text, addressed: m.addressed, ...(m.files.length > 0 ? { files: m.files } : {}) },
+      message: { channel: m.chat, threadTs, ts: m.id, user: m.user, text: m.text, addressed: m.addressed, ...(m.files.length > 0 ? { files: m.files } : {}), ...(m.parent !== null ? { quoted: m.parent } : {}) },
     };
     await handler(event);
   }
@@ -555,6 +555,20 @@ export class FeishuSurface extends ConnectedSurface {
       }
       return all.slice(Math.max(0, all.length - limit));
     })();
+  }
+
+  /// The message a reply quotes (`GET /im/v1/messages/:id`), read as `history` reads one; null for an app's (the
+  /// agent's own answers it has already) and where it cannot be read (deleted, the app not in its chat).
+  async quoted(_thread: ThreadRef, ts: string): Promise<ChatMessage | null> {
+    try {
+      const item = (await this.client.api("GET", `/open-apis/im/v1/messages/${encodeURIComponent(ts)}`))?.data?.items?.[0];
+      if (item === undefined || text(item?.sender?.sender_type) === "app") return null;
+      const m = messageOf(listedAsEvent(item), this.botUserId());
+      return m === null ? null : { ts: m.id, user: m.user, text: m.text, fromBot: false, ...(m.files.length > 0 ? { files: m.files } : {}) };
+    } catch (error) {
+      log.warn("feishu", "quoted message not read", { connect: this.connect, message: ts, error: (error as Error).message });
+      return null;
+    }
   }
 
   /// An OpenAPI call as the bot, for feishu_api: `method` is "GET /open-apis/…"; a GET's params go in the address,
