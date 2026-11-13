@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [26c9014f3](https://github.com/AFK-surf/monoid/commit/26c9014f361e4e65d434bbcc9974c803c2e172d8) fix(mbui, ios): prevent stuck iOS keyboard when IM | 1.97 | 2.64 | 11.37 | 30.92 | 40.86 | 27.55 | 52.68 | 94.39 | 110.13 |
 | [6dddb0cf7](https://github.com/AFK-surf/monoid/commit/6dddb0cf7894cb05eeaae72645f54b624b64e021) core: a workspace's chain handed over to its peopl | 1.97 | 2.64 | 11.37 | 30.92 | 40.86 | 27.55 | 52.68 | 94.24 | 103.71 |
 | [6a279f62a](https://github.com/AFK-surf/monoid/commit/6a279f62ab2d8f457de9de08491dce356b7af0a2) station: count what processes use on Linux, from / | 1.96 | 2.63 | 11.35 | 30.88 | 40.76 | 27.51 | 52.6 | 94.18 | 102.84 |
 | [2ae5c3d8b](https://github.com/AFK-surf/monoid/commit/2ae5c3d8b5adee4697800e28db127d3d8bd65bdb) mbui app: an Android device's video in a screen's  | 1.96 | 2.63 | 11.35 | 30.88 | 40.76 | 27.51 | 52.6 | 94.44 | 98.23 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [cde2e1750](https://github.com/AFK-surf/monoid/commit/cde2e175002aa4c42aac7af733bcd4b1036e0feb) mbui app: a passage picked in a message quoted in  | 1.94 | 2.6 | 11.19 | 30.61 | 40.16 | 27.27 | 52.13 | 93.28 | 183.1 |
 | [960fc3979](https://github.com/AFK-surf/monoid/commit/960fc3979c00be98f8a9e56fac7bd31064bdf18c) station, shell: raise RLIMIT_NOFILE and release ha | 1.94 | 2.6 | 11.19 | 30.6 | 40.13 | 27.27 | 52.12 | 93.36 | 134.35 |
 | [575f2825c](https://github.com/AFK-surf/monoid/commit/575f2825c1ddc0ab53784b3f3aa414415b2f028a) mbui app: ⌘F finds in a chat's page made as nodes  | 1.94 | 2.6 | 11.19 | 30.6 | 40.13 | 27.26 | 52.1 | 93.18 | 191.58 |
-| [6c24acc3b](https://github.com/AFK-surf/monoid/commit/6c24acc3bc659f48458a0cbc15d32ca96e937420) mbui: words a finger picked of the tree's offer th | 1.94 | 2.6 | 11.19 | 30.6 | 40.12 | 27.26 | 52.1 | 93.31 | 181.32 |
