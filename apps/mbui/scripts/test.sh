@@ -376,7 +376,7 @@ for t in $targets; do
           # (send_steady's three beside the fourth's pages were 114, 137 and 149 s, with real_size's half 78 and its
           # pages 211, app 4/4 222-237 s of its 5 minutes on main c54dc28b 43348134004 and branches after: reckoned 300,
           # by the table some 95 s of its pages go to the other three)
-          *) specs="4,4,350,1 2,4,210,1 1,4,500,1 4,4,420,1" ;;
+          *) specs="4,4,350,1 2,4,430,1 1,4,500,1 4,4,420,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
@@ -483,8 +483,11 @@ for t in $targets; do
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
       # (send_steady's three on the fourth, beside its pages on its four cores: the deal reckons them there)
       "src/sfapp/send_steady_wbtest.mbt "*) echo 4 ;;
-      # (chat_page_nodes' two on the fourth, the one with the most programs; reckoned there at each rate)
-      "src/sfapp/chat_page_nodes_wbtest.mbt "*) echo 4 ;;
+      # (chat_page_nodes' two on the fourth, the one with the most programs; reckoned there at each rate. At the
+      # default rate on the second, whose pages are on two programs beside its sweeps: on the fourth beside
+      # send_steady's three, real_size's half and its pages, ten processes on its four cores, app 4/4 was 238-249 s
+      # of its 5 minutes on 2026-11-13's pushes after #5906, the second's 158)
+      "src/sfapp/chat_page_nodes_wbtest.mbt "*) [ -z "${MBUI_TEST_FPS:-}" ] && echo 2 || echo 4 ;;
       "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
