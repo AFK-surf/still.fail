@@ -415,3 +415,48 @@ test "wide: how much context at the foot after who runs it, as how fast is; its 
   assert_true(t.query(Button, label="300K") is Some(_), msg="the foot says the step picked")
 }
 
+///|
+test "wide: Devin's sidekick at the foot beside who runs it; its choices in a pick, one picked made what it runs on at once" {
+  let base = fixture_app("newchat-model")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      @settings.fixture_followed()
+      let snap = base.topic(name, params).get().snapshot()
+      if name == "pick" {
+        match snap.value {
+          Some(Object(o)) => {
+            let m = o.copy()
+            m["sidekicks"] = [
+              { "id": "", "text": "无", "model": "claude-opus-5-5" },
+              { "id": "swe-2-medium", "text": "SWE-2 · 中", "model": "fusion-claude-opus-5-5-sidekick-swe-2-medium" },
+              { "id": "swe-2-high", "text": "SWE-2 · 高", "model": "fusion-claude-opus-5-5-sidekick-swe-2-high" },
+            ]
+            m["sidekickNow"] = Json::string(if new_fix.model == "fusion-claude-opus-5-5-sidekick-swe-2-medium" { "swe-2-medium" } else { "" })
+            { ..snap, value: Some(Json::object(m)) }
+          }
+          _ => snap
+        }
+      } else {
+        snap
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(squeeze_opening)
+  let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
+  let high = t.get(Radio, label="高").rect
+  let sidekick = t.get(Button, label="无").rect
+  assert_true(sidekick.1 > high.1 + high.3 && sidekick.1 + sidekick.3 <= py + ph && sidekick.0 + sidekick.2 <= px + pw, msg="\{Repr(sidekick)}, the panel \{Repr((px, py, pw, ph))}")
+  assert_true(t.words().iter().any(fn(w) { w.0 == "副模型" }), msg="no name before it")
+  t.click(Button, label="无")
+  t.run_for(@ui.move_most_ms)
+  let steps = t.all(MenuItemRadio).map(fn(s) { (s.label, s.check) })
+  assert_eq(steps, [("无", Some(On)), ("SWE-2 · 中", Some(Off)), ("SWE-2 · 高", Some(Off))])
+  t.click(MenuItemRadio, label="SWE-2 · 中")
+  t.run_for(squeeze_opening)
+  assert_eq((new_fix.model, new_fix.runtime), ("fusion-claude-opus-5-5-sidekick-swe-2-medium", "devin"))
+  assert_true(t.query(Button, label="SWE-2 · 中") is Some(_), msg="the foot says the sidekick picked")
+}
+
+

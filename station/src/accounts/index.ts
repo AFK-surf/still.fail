@@ -1055,11 +1055,16 @@ export class Accounts {
 
   private keepCheck(id: string, check: ProfileCheck) {
     check.checkedAt = this.background.now();
-    const before = this.checks.get(id)?.models ?? null;
+    const before = this.checks.get(id);
     this.checks.set(id, check);
     this.deps.store.setProfileCheck(id, check);
     // Other models found: one may now replace one the profile names.
-    if (JSON.stringify(before) !== JSON.stringify(check.models)) this.uncheckOutdated();
+    if (
+      JSON.stringify(before?.models ?? null) !== JSON.stringify(check.models) ||
+      JSON.stringify(before?.fusion ?? null) !== JSON.stringify(check.fusion ?? null)
+    ) {
+      this.uncheckOutdated();
+    }
     this.changed();
   }
 

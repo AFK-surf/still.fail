@@ -772,6 +772,7 @@
   "web-main.model.pick": "选择模型",
   "web-main.model.borrowed": "已借用，同步到此 station 后即可使用",
   "web-main.model.runtime": "运行时",
+  "web-main.model.sidekick": "副模型",
   "web-main.model.search": "搜索模型",
   "web-main.model.speed": "速度",
   "web-main.model.standard": "标准",

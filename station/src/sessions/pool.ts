@@ -12,6 +12,7 @@
 // runtime has just compacted its context, or is about to (`cheapToLeave`).
 // Also the reasoning levels a model offers, which the pool's accounts decide.
 import { agyBaseModel } from "../agents/agy.ts";
+import { splitDevinFusion } from "../agents/devin.ts";
 import { type Profile, runs, sameModel } from "./config.ts";
 import { billedPerUse } from "../agents/profiles.ts";
 import { COMPACTED_FROM } from "../store/rows.ts";
@@ -168,17 +169,21 @@ export function fallbackEfforts(runtime: string): string[] {
 export function reportedEfforts(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] | null {
   const models = catalog?.[runtime];
   if (model === null || model === undefined || !models) return null;
-  const base = runtime === "agy" ? agyBaseModel(model).model : model;
+  const base =
+    runtime === "agy"
+      ? agyBaseModel(model).model
+      : runtime === "devin"
+        ? (splitDevinFusion(model)?.lead ?? model)
+        : model;
   const levels =
     models[model] ??
     models[base] ??
-    Object.entries(models).find(([id]) => sameModel(id, model) || (runtime === "agy" && sameModel(id, base)))?.[1];
+    Object.entries(models).find(([id]) => sameModel(id, model) || (base !== model && sameModel(id, base)))?.[1];
   return levels ? [...levels] : null;
 }
 
 /// The levels a model offers: as its runtime reported them, else the runtime's usual ones.
 export function availableEfforts(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {
-  if (runtime === "devin" && model?.includes("-sidekick-")) return [];
   return reportedEfforts(runtime, model, catalog) ?? fallbackEfforts(runtime);
 }
 

@@ -790,6 +790,7 @@
   "web-main.model.pick": "Choose model",
   "web-main.model.borrowed": "Borrowed; usable here once it reaches this station",
   "web-main.model.runtime": "Runtime",
+  "web-main.model.sidekick": "Sidekick",
   "web-main.model.search": "Search models",
   "web-main.model.speed": "Speed",
   "web-main.model.standard": "Standard",

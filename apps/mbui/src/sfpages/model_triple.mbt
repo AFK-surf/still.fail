@@ -732,7 +732,21 @@ fn triple_body(
   let searching = words != ""
   let model_of = fn(id : Json) -> Json? {
     guard id is String(id) else { return None }
-    options.search_by(fn(o) { text(Some(o), "model") == id }).map(fn(i) { options[i] })
+    match options.search_by(fn(o) { text(Some(o), "model") == id }) {
+      Some(i) => Some(options[i])
+      None =>
+        if id.has_prefix("fusion-") {
+          match id.find("-sidekick-") {
+            Some(at) if at > 7 => {
+              let lead = id.exact_view(start=7, end=at).to_owned()
+              options.search_by(fn(o) { text(Some(o), "model") == lead }).map(fn(i) { options[i] })
+            }
+            _ => None
+          }
+        } else {
+          None
+        }
+    }
   }
   // (as the core says them now: one taken out (`pick.forget`) leaves the panel as it is taken out, not as the panel
   // opens again, the user, 2026-11-13: 「删掉常用模型，只有 x 会消失，然后关掉重新打开才能刷新」)
@@ -1429,6 +1443,39 @@ fn triple_runtime(c : @ui.Ctx, src : Source, station : String, of : String, v : 
 }
 
 ///|
+/// What sidekick goes with the model on Devin Fusion, at the foot beside its runtime: its name and the sidekick picked
+/// (无 where none is); pressed, the sidekicks Devin offers for this lead model in a pick.
+fn triple_sidekick(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
+  let head = @sf.t("web-main.model.sidekick")
+  let now = text(v, "sidekickNow")
+  let sidekicks = items(v, "sidekicks")
+  let choices = sidekicks.map(fn(o) { @sf.choice(text(Some(o), "id"), text(Some(o), "text")) })
+  let id = c.id("triple/sidekick")
+  c.on_press(id, fn() {
+    @sf.pick(
+      head,
+      choices,
+      now,
+      fn(k) {
+        match sidekicks.search_by(fn(o) { text(Some(o), "id") == k }) {
+          Some(i) => {
+            let m = text(Some(sidekicks[i]), "model")
+            if m != "" {
+              pick_save(src, station, of, { "model": Json::string(m), "runtime": Json::string("devin") })
+            }
+          }
+          None => ()
+        }
+      },
+      from=Of(id),
+      search=false,
+    )
+  })
+  let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
+  triple_chip(c, id, head, words)
+}
+
+///|
 /// How fast it runs, at the foot beside who runs it (2026-11-02 用户「速度放在面板下面，跟账号差不多的位置」): its name
 /// and how fast it runs; pressed, the two ways in a pick. None picked, how fast its account runs it, said as that
 /// (`fastPlan`; 2026-11-02 用户「谁知道订阅是什么，应该直接显示具体值」).
@@ -1503,6 +1550,9 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
     triple_runs_who(c, src, station, of, v, panel_serial)
     if !flag(v, "runtimeFixed") && items(v, "runtimes").length() > 1 {
       triple_runtime(c, src, station, of, v)
+    }
+    if !items(v, "sidekicks").is_empty() {
+      triple_sidekick(c, src, station, of, v)
     }
     if flag(v, "fastAvailable") {
       triple_speed(c, src, station, of, v)
@@ -1617,7 +1667,7 @@ fn triple_model_row(
       // made what it runs on at once, as it last ran here, and the panel closed: nothing of it left to confirm
       triple.open = ""
       close()
-      if !picked || text(field(v, "value"), "model") != model {
+      if !picked || text(field(v, "value"), "model") != text(field(v, "draft"), "model") {
         let p : Map[String, Json] = { "model": Json::string(model) }
         match field(o, "usual") {
           Some(Object(u)) =>

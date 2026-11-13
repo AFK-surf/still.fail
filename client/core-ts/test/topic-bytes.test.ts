@@ -175,8 +175,8 @@ const EMPTY: Record<string, Record<string, string>> = {
   "connect": { "connect.bind.profiles": STATE, "sessions[].profiles": STATE, "bound.profiles": STATE, "bound.efforts": STATE, "bound.time": STATE, "bound.watch.names": STATE },
   "newChat": { "pick.value.profiles": STATE },
   // (a new chat's pick names no account's allowance, choose.ts `#now` quiet; the model it takes with nothing chosen,
-  // Fable, runs on one runtime; borrow: a model only another station has, picked)
-  "pick": { "value.profiles": STATE, "draft.profiles": STATE, "account.profile.quota.windows": ASKED_SO, runtimes: STATE, "borrow.lines": STATE },
+  // Fable, runs on one runtime and takes no Devin sidekick; borrow: a model only another station has, picked)
+  "pick": { "value.profiles": STATE, "draft.profiles": STATE, "account.profile.quota.windows": ASKED_SO, runtimes: STATE, sidekicks: STATE, "borrow.lines": STATE },
   "chat": chatEmpty(true, false),
   "chat compact": chatEmpty(true, true),
   "chat six pages": chatEmpty(false, false),
