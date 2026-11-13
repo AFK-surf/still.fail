@@ -339,13 +339,16 @@ fn open_notice(src : Source, opens : String) -> Unit {
     let name = opens.exact_view(start=9).to_owned()
     @hostapi.log("notice tapped settings:\{name}")
     match @settings.route_of(name) {
-      Some(route) if app.nav.top() != Setting(route) => {
-        (shell.val.close_overlays)()
-        (shell.val.home)()
-        if app.nav.top() != Home {
-          app.nav.replace(Home)
+      Some(route) => {
+        if app.nav.top() != Setting(route) {
+          (shell.val.close_overlays)()
+          (shell.val.home)()
+          if app.nav.top() != Home {
+            app.nav.replace(Home)
+          }
+          open_page(Setting(route))
         }
-        open_page(Setting(route))
+        bring_chosen()
       }
       _ => ()
     }

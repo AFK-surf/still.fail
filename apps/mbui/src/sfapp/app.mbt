@@ -167,6 +167,11 @@ fn pages_shell(src : Source, wide : Bool) -> Shell {
         @sfdesk.show_page()
       }
     },
+    bring: fn() {
+      if @sfdesk.wide.tape.get() && @sfdesk.shown_in_page(app.nav.top()) {
+        @sfdesk.bring_page()
+      }
+    },
     edit_rail: fn() { @sfdesk.wide.editing.set(true) },
   }
 }
