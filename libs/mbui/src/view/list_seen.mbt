@@ -1,5 +1,5 @@
-// How a row coming or going where it is is seen by how much of it is open: what an old list's row (ui's row_held_look)
-// and a page's list's block on its way (View::scrolls_window) are both drawn by, one curve.
+// How a row coming or going where it is is drawn by how much of it is open: what an old list's row (ui's row_held_look)
+// and a page's list's block on its way (View::scrolls_window) are both drawn by, one curve and one size.
 
 ///|
 /// How far open a row coming or going where it is has what it holds out of sight: gone by the time it is half its size,
@@ -17,4 +17,12 @@ pub fn row_seen_at(p : Double) -> Double {
   } else {
     (p - row_gone_at) / (1.0 - row_gone_at)
   }
+}
+
+///|
+/// What a row coming or going where it is holds is drawn at, `p` of it open (0 to 1): how opaque (row_seen_at) and how
+/// big, as big as it is open, so that drawn within what is open of it nothing of it is cut.
+pub fn row_held_at(p : Double) -> (Double, Double) {
+  let p = if p > 1.0 { 1.0 } else if p < 0.0 { 0.0 } else { p }
+  (row_seen_at(p), p)
 }

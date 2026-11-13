@@ -2608,7 +2608,7 @@ fn Tree::drawn_stale_from(self : Tree, at : Int) -> Unit {
   let mut i = at
   while i >= 0 {
     let n = self.nodes[i]
-    if n.look.pivot is Drawn && !n.drawn_stale {
+    if n.look.pivot.drawn() && !n.drawn_stale {
       n.drawn_stale = true
       self.place_marked_at(i)
     }
@@ -4820,19 +4820,24 @@ pub fn Tree::fades_of(self : Tree, id : NodeId) -> (Double, Double, Double, Doub
 
 ///|
 /// Where node `at` is drawn bigger or smaller about, laid out `w` by `h` (View::scale's pivot): the middle of what it
-/// and what it holds draw where it says `Drawn`, as laid out now.
+/// and what it holds draw where it says `Drawn`, across only where `DrawnAcross`, as laid out now.
 fn Tree::pivot_of(self : Tree, at : Int, w : Double, h : Double) -> (Double, Double) {
   let n = self.nodes[at]
-  guard n.look.pivot is Drawn else { return n.pivot_at(w, h) }
+  guard n.look.pivot.drawn() else { return n.pivot_at(w, h) }
   if n.drawn_stale {
     n.drawn_box = self.drawn_box_of(at)
     n.drawn_stale = false
   }
   let (x0, y0, x1, y1) = n.drawn_box
+  // (DrawnAcross: down, its share of its height, whatever is drawn)
+  let down = match n.look.pivot {
+    DrawnAcross(fy) => Some(fy * h)
+    _ => None
+  }
   if x1 < x0 {
-    (w / 2.0, h / 2.0)
+    (w / 2.0, down.unwrap_or(h / 2.0))
   } else {
-    ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+    ((x0 + x1) / 2.0, down.unwrap_or((y0 + y1) / 2.0))
   }
 }
 
@@ -10475,7 +10480,7 @@ fn Tree::walk(self : Tree, at : Int, gen : Int, holder_laid : Bool) -> Unit {
   if laid {
     self.work.laid = self.work.laid + 1
     // (laid out anew: what it holds may be laid out otherwise, the middle of what it draws with it)
-    if n.look.pivot is Drawn {
+    if n.look.pivot.drawn() {
       n.drawn_stale = true
     }
   }

@@ -103,7 +103,8 @@ pub let row_gone_at : Double = @view.row_gone_at
 /// What a row coming or going where it is holds, its room `p` open (0 to 1): as big as it is open, faded in from
 /// row_gone_at on.
 pub fn row_held_look(p : Double, ox? : Double = 0.5, oy? : Double = 0.5) -> Look {
-  look(alpha=@view.row_seen_at(p), scale=p, ox~, oy~)
+  let (alpha, scale) = @view.row_held_at(p)
+  look(alpha~, scale~, ox~, oy~)
 }
 
 ///|

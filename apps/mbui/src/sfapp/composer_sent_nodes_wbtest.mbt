@@ -11,6 +11,11 @@
 // (with rows off it, which no device runs, a pixel what is over fell for ~40 ms of a three-line send went unseen). How far
 // the list goes up is held to less than one device pixel of the sent key less what the composer gave back: the
 // composer's room is laid on the grid before and after, each up by less than a pixel.
+// The sent message's foot is read as a person sees where it ends: the foot of its bubble's ground as drawn, once it is
+// drawn at all opaque; before that, the foot of what shows of its block (the last of the list's rows). On its way what
+// its block holds is drawn as big and as opaque as that block shows (none under half of it: mbui's
+// View::scrolls_window), so its words are not drawn at first, and once drawn they and their ground are drawn at a share
+// of themselves, as much of themselves as their block shows, so the bubble's foot goes as its row's does.
 
 ///|
 /// The draft of the fixture's chat s-c1.
@@ -53,6 +58,29 @@ fn sent_nodes_last_block(t : @ui.Tester, at : String) -> Double {
 }
 
 ///|
+/// Where the sent message (its words starting `w`) ends as it is seen: its ground's foot as drawn, where it is drawn at
+/// all opaque; else where what shows of the page's list's last block ends (its last row as the list lays it out).
+fn sent_nodes_foot(t : @ui.Tester, w : String, at : String) -> Double {
+  let held = @ui.view_tree().unwrap().drawn_held()
+  for i, e in held {
+    let (d, _, _) = e
+    guard d.words.has_prefix(w) && d.alpha > 0.0 else { continue }
+    let mut k = held[i].1
+    while k >= 0 {
+      let (c, up, _) = held[k]
+      if (c.ground & 0xFFL) != 0L {
+        return c.y + c.h
+      }
+      k = up
+    }
+  }
+  match t.list_row_boxes() {
+    [.., [.., (_, y, _, h)]] => y + h
+    _ => @halt.saying("\{at}: no list's rows seen")
+  }
+}
+
+///|
 /// The composer's room under the list (what the list leaves it at its foot).
 fn sent_nodes_room(t : @ui.Tester, draft : String) -> Double {
   @sfpages.composer_room(t.ctx(), draft)
@@ -60,13 +88,13 @@ fn sent_nodes_room(t : @ui.Tester, draft : String) -> Double {
 
 ///|
 /// From the press of send: every 10 ms till move_most_ms, the composer's height, the room from the sent message's foot
-/// to the composer's hint, and where words `over` are drawn (0 where none are named).
+/// (sent_nodes_foot) to the composer's hint, where words `over` are drawn (0 where none are named).
 fn sent_nodes_frames(t : @ui.Tester, over : String?) -> Array[(Double, Double, Double, Double)] {
   let press = t.time()
   let seen : Array[(Double, Double, Double, Double)] = []
   while true {
     let ms = t.time() - press
-    let gap = sent_nodes_words(t, "发消息").0 - sent_nodes_words(t, "第一行").1
+    let gap = sent_nodes_words(t, "发消息").0 - sent_nodes_foot(t, "第一行", "\{ms} ms after the press")
     let y = match over {
       Some(s) => sent_nodes_words(t, s).0
       None => 0.0
