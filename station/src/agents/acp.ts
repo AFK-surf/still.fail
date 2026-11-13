@@ -197,6 +197,8 @@ export abstract class AcpSession extends OwnProcessSession {
   protected updated(_update: Json): void {}
   /// The turn ends as `answer` says, before what is open of it ends.
   protected ending(_id: string, _answer: Json): void {}
+  /// A steering or superseded prompt's answer was ignored while the turn continues.
+  protected ignored(_id: string, _answer: Json): void {}
   /// What a message of the person's is given to it as.
   protected promptText(text: string): string {
     return text;
@@ -246,9 +248,13 @@ export abstract class AcpSession extends OwnProcessSession {
       return;
     }
     if (this.endsTurn(id)) {
-      // One put in the turn is answered with the turn (before or after its prompt's answer); one whose turn this station
-      // did not see the end of (taken up after a crash) ends the turn running now.
-      if (this.steering.delete(id)) return;
+      // One put in the turn is answered with the turn (before or after its prompt's answer), or replaced by a newer
+      // steering prompt (Antigravity CLI); one whose turn this station did not see the end of (taken up after a crash)
+      // ends the turn running now.
+      if (this.steering.delete(id)) {
+        this.ignored(id, message);
+        return;
+      }
       if (this.owner !== null && id !== this.owner) return;
       this.end(id, message);
       return;
@@ -361,15 +367,30 @@ export abstract class AcpSession extends OwnProcessSession {
     return false;
   }
 
-  /// Into the running turn as a prompt of its own, read at the turn's next step and answered with it. Not when nothing
-  /// runs: it would be a turn of its own, which the station starts itself.
-  protected promptInto(text: string): boolean {
+  private injectPrompt(text: string, takeOver: boolean): boolean {
     if (this.turn.closed || !this.turn.busy || this.turn.aborting) return false;
     const id = `${STEER}${uuid()}`;
-    this.steering.add(id);
+    if (takeOver) {
+      if (this.owner !== null) this.steering.add(this.owner);
+      this.owner = id;
+    } else {
+      this.steering.add(id);
+    }
     this.transcript?.user(this.sessionId, text, true);
     this.proc.write(rpc(id, "session/prompt", { sessionId: this.sessionId, prompt: [{ type: "text", text: this.promptText(text) }] }));
     return true;
+  }
+
+  /// Into the running turn as a prompt of its own, read at the turn's next step and answered with it. Not when nothing
+  /// runs: it would be a turn of its own, which the station starts itself.
+  protected promptInto(text: string): boolean {
+    return this.injectPrompt(text, false);
+  }
+
+  /// Into the running turn as a prompt that takes ownership of it from the current prompt (the runtime answers the
+  /// superseded prompt immediately and answers this one when the turn finishes). Not when nothing runs.
+  protected promptTakeover(text: string): boolean {
+    return this.injectPrompt(text, true);
   }
 
   async abort() {

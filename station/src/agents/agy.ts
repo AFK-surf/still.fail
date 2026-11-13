@@ -4,7 +4,7 @@
 // - the station's instructions are appended to its system prompt (`_meta.antigravity.systemPrompt.append` of
 //   session/new and session/load, which initialize says it takes);
 // - it runs without approvals (`--dangerously-skip-permissions`), with no telemetry and no updating itself;
-// - a message for the running turn waits for the next; its model is session/set_model;
+// - a message for the running turn steers it (`promptTakeover`); its model is session/set_model;
 // - the station keeps the transcript (acp.ts KeptTranscript), with each turn's usage: the prompt's answer says it.
 import { existsSync, mkdirSync } from "node:fs";
 import { lstat, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -106,9 +106,11 @@ export const classifyFailure = (text: string): FailureReason =>
 /// The process's arguments: the profile's files, no approvals, no telemetry.
 export const agyArgs = (home: string) => ["acp", "--gemini-dir", geminiDir(home), "--dangerously-skip-permissions", "--disable-telemetry"];
 
-/// Its environment: the profile's key or variables; none of the machine's Google accounts or projects.
+/// Environment of an Antigravity CLI process: the station's scrubbed environment, the profile's own variables (which
+/// win), its `--gemini-dir` (`ANTIGRAVITY_GEMINI_DIR`, for sandbox sync too), updates off, and the peer HTTP endpoint.
 export function agyEnv(options: OpenOptions): Record<string, string> {
   const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "agy"), options.route) };
+  env.ANTIGRAVITY_GEMINI_DIR = geminiDir(options.profile.home);
   env.AGY_CLI_DISABLE_AUTO_UPDATE = "1";
   env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
   return env;
@@ -201,6 +203,7 @@ export class AgyDriver extends AcpDriver<AgySession> {
 }
 
 export class AgySession extends AcpSession {
+  protected readonly steersByPrompt = true;
   /// What session/new or session/load said it offers.
   availableModels: string[] = [];
   /// The context its last call had and the model's window, as usage_update says them.
@@ -251,6 +254,15 @@ export class AgySession extends AcpSession {
   protected ending(id: string, answer: Json) {
     const usage = turnUsage(answer);
     if (usage !== null) this.transcript?.keep(this.sessionId, { type: "usage", run: id.slice(id.indexOf(":") + 1), model: this.model, usage, calls: 1, context: this.context.used, window: this.context.size });
+  }
+
+  protected ignored(id: string, answer: Json) {
+    this.ending(id, answer);
+  }
+
+  /// Into the running turn: Antigravity CLI immediately resolves the superseded prompt and finishes on the new one.
+  async steer(text: string) {
+    return this.promptTakeover(text);
   }
 
   /// Between turns, another model is set in the running process, read from its next turn on.

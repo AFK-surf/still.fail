@@ -109,11 +109,13 @@ test("another model between turns is set in the running process; one it does not
 test("cancel, a signed-out account, an expired sign-in and a spent quota", async () => {
   const { options, events, driver } = setup();
   const s = await driver.open(options, (e) => events.push(e));
+  assert.equal(await s.steer("idle"), false);
   await s.prompt("hold");
-  assert.equal(await s.steer("later"), false);
+  assert.equal(await s.steer("hold-steer"), true);
   await s.abort();
   await until(() => ended(events).length === 1);
   assert.deepEqual(ended(events)[0], { type: "turnEnded", outcome: { kind: "aborted" } });
+  assert.equal(await s.steer("idle"), false);
   await s.prompt("expired");
   await until(() => ended(events).length === 2);
   assert.equal((ended(events)[1] as any).outcome.reason, "auth");
@@ -124,6 +126,25 @@ test("cancel, a signed-out account, an expired sign-in and a spent quota", async
   const signedOut = setup({ FAKE_AGY_SIGNED_OUT: "1" });
   await assert.rejects(signedOut.driver.open(signedOut.options, () => {}), /Authentication required/);
   assert.equal(classifyFailure("Authentication required"), "auth");
+});
+
+test("steering mid-turn injects a prompt, completes once on the steered prompt, and keeps both prompts' usage", async () => {
+  const { options, events, driver } = setup();
+  const s = await driver.open({ ...options, model: "gemini-3.1-pro" }, (e) => events.push(e));
+  await s.prompt("hold");
+  await until(() => events.some((e) => e.type === "live" && e.event.kind === "delta" && e.event.text === "first "));
+  assert.equal(await s.steer("follow up"), true);
+  await until(() => ended(events).length === 1);
+  assert.deepEqual(ended(events)[0], { type: "turnEnded", outcome: { kind: "completed" } });
+  const path = transcriptPath("agy", options.profile.home, s.id())!;
+  const entries = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(entries.filter((e) => e.type === "assistant").at(-1)?.text, "first follow up");
+  assert.equal(entries.some((e) => e.type === "user" && e.text === "follow up"), true);
+  const calls = callsOf("agy", readFileSync(path, "utf8"), false, { model: null, codexId: null });
+  assert.equal(calls.length, 2);
+  assert.deepEqual([calls[0]!.input, calls[0]!.output, calls[0]!.model], [500, 10, "gemini-3.1-pro"]);
+  assert.deepEqual([calls[1]!.input, calls[1]!.cacheRead, calls[1]!.output, calls[1]!.model], [1000, 200, 400, "gemini-3.1-pro"]);
+  await s.dispose();
 });
 
 test("models are read without a turn, the station's tools or a transcript", async () => {
@@ -178,6 +199,7 @@ test("which profiles run it, and none of the machine's Google accounts", (t) => 
   });
   const env = agyEnv(options);
   assert.equal(env.GEMINI_API_KEY, "gemini-key");
+  assert.equal(env.ANTIGRAVITY_GEMINI_DIR, geminiDir(options.profile.home));
   assert.equal(env.GOOGLE_APPLICATION_CREDENTIALS, undefined);
   const own = agyEnv({ ...options, profile: { ...options.profile, access: { kind: "env" }, env: {} } });
   assert.equal(own.GEMINI_API_KEY, undefined);

@@ -118,12 +118,17 @@ for await (const line of createInterface({ input: process.stdin })) {
     if (held) reply(held, { stopReason: 'cancelled' }); held = null;
   } else if (m.method === 'session/prompt') {
     const text = p.prompt[0].text;
+    const prev = held;
     held = m.id;
+    if (prev) {
+      reply(prev, { stopReason: 'end_turn', usage: { totalTokens: 510, inputTokens: 500, outputTokens: 10, thoughtTokens: 0, cachedReadTokens: 0 } });
+      update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text } });
+    }
     if (text === 'expired') { say({ id: m.id, error: { code: -32603, message: 'Authentication expired. Please log back in.' } }); held = null; continue; }
     if (text === 'quota') { say({ id: m.id, error: { code: -32603, message: 'RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 4h.' } }); held = null; continue; }
     update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'thinking' } });
     update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'first ' } });
-    if (text === 'hold') continue;
+    if (text === 'hold' || text === 'hold-steer') continue;
     update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
     update({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'view_file', kind: 'read', status: 'in_progress', rawInput: { AbsolutePath: '/a.txt' } });
     update({ sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'file contents' } }] });
