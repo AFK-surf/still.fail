@@ -48,17 +48,65 @@ pub fn route_asks(ws : String, r : @settings.Route) -> Array[(String, Map[String
 ///|
 /// `asks` asked of `src` now and held by what is returned till what opens has read them: whether each is answered (a
 /// value, or an error the page says), and what holds them. A press that waits by press_wait itself takes them so (an
-/// agent's history's 详情: what it opens keeps its own way, sfpages' history_details_open).
-pub fn asked_now(src : Source, asks : Array[(String, Map[String, Json])]) -> (() -> Bool, Array[TopicLease]) {
+/// agent's history's 详情: what it opens keeps its own way, sfpages' history_details_open). With `then`, each time all
+/// asked so far is answered, what it
+/// gives that is not asked yet is asked and held with the rest (the array returned grows), and all is answered once it
+/// gives nothing new: `then` is given how to read what was asked (by its ask: its value as the lease holding it has it,
+/// None where it is not asked or not answered) and gives the asks that follow from it (a list's rows each reading a
+/// topic of its own, their ids said only by the list's answer), worked out by the same code the page reads the answer
+/// by, those asked already among them or not. What `then` reads it reads through the leases (`follow`, read where the
+/// wait reads it), so no subscription is made but theirs; what it asks is made outside what reads now, owned by nothing
+/// (as press_wait's wait is), so the wait reading again does not let it go.
+pub fn asked_now(
+  src : Source,
+  asks : Array[(String, Map[String, Json])],
+  then? : (((String, Map[String, Json])) -> Json?) -> Array[(String, Map[String, Json])],
+) -> (() -> Bool, Array[TopicLease]) {
+  let key = fn(a : (String, Map[String, Json])) { a.0 + "\u{1}" + Json::object(a.1).stringify() }
   let leases = asks.map(fn(a) { src.lease_topic(a.0, a.1) })
+  let keys = asks.map(key)
+  let told = fn(l : TopicLease) {
+    match l.follow() {
+      Some(t) => t.value is Some(_) || t.error is Some(_)
+      // (let go of: nothing to wait for)
+      None => true
+    }
+  }
+  let read = fn(a : (String, Map[String, Json])) -> Json? {
+    match keys.search(key(a)) {
+      Some(i) =>
+        match leases[i].follow() {
+          Some(t) => t.value
+          None => None
+        }
+      None => None
+    }
+  }
   let answered = fn() {
-    leases.iter().all(fn(l) {
-      match l.follow() {
-        Some(t) => t.value is Some(_) || t.error is Some(_)
-        // (let go of: nothing to wait for)
-        None => true
+    while true {
+      if !leases.iter().all(told) {
+        return false
       }
-    })
+      let more = match then {
+        Some(after) => after(read).filter(fn(a) { !keys.contains(key(a)) })
+        None => []
+      }
+      if more.is_empty() {
+        return true
+      }
+      // (asked outside what reads now: held by its lease alone, not by the wait's reading)
+      let owner = @signals.set_owner(None)
+      @signals.untracked(fn() {
+        for a in more {
+          if !keys.contains(key(a)) {
+            keys.push(key(a))
+            leases.push(src.lease_topic(a.0, a.1))
+          }
+        }
+      })
+      @signals.set_owner(owner) |> ignore
+    }
+    true
   }
   (answered, leases)
 }
@@ -75,11 +123,12 @@ pub fn open_answered(
   asks : Array[(String, Map[String, Json])],
   open : () -> Unit,
   let_go? : () -> Unit = fn() {  },
+  then? : (((String, Map[String, Json])) -> Json?) -> Array[(String, Map[String, Json])],
 ) -> PressWait {
   if asks.is_empty() || src.read_only {
     return press_wait(fn() { true }, open)
   }
-  let (answered, leases) = asked_now(src, asks)
+  let (answered, leases) = asked_now(src, asks, then?)
   press_wait(answered, fn() { hand_over(leases, open) }, let_go=fn() {
     leases.each(fn(l) { l.cancel() })
     let_go()
@@ -90,12 +139,18 @@ pub fn open_answered(
 /// `show` (what shows an account's page in a pane in place of the one there, no entry put on top: a place's side
 /// list's pick) done once each of `asks` is answered, as open_answered; what they ask handed to the page shown for
 /// `at`, taken as it is first built and let go at that frame's end (pages.mbt hand_over_shown, shown_read).
-pub fn show_answered(src : Source, asks : Array[(String, Map[String, Json])], at : String, show : () -> Unit) -> Unit {
+pub fn show_answered(
+  src : Source,
+  asks : Array[(String, Map[String, Json])],
+  at : String,
+  show : () -> Unit,
+  then? : (((String, Map[String, Json])) -> Json?) -> Array[(String, Map[String, Json])],
+) -> Unit {
   if asks.is_empty() || src.read_only {
     show()
     return
   }
-  let (answered, leases) = asked_now(src, asks)
+  let (answered, leases) = asked_now(src, asks, then?)
   press_wait(answered, fn() { hand_over_shown(at, leases, show) }, let_go=fn() { leases.each(fn(l) { l.cancel() }) })
   |> ignore
 }
@@ -118,6 +173,7 @@ pub fn switch_answered(
   at : String,
   switch_to : () -> Unit,
   let_go? : () -> Unit = fn() {  },
+  then? : (((String, Map[String, Json])) -> Json?) -> Array[(String, Map[String, Json])],
 ) -> PressWait {
   // (told while a frame is drawn, after it brought the window's tree: at that frame's end, so the frame shows the page
   // wholly as it was, never its words read anew over what is laid out as it was; in a press or between frames, at the
@@ -127,7 +183,7 @@ pub fn switch_answered(
   if asks.is_empty() || src.read_only || !(src.switches_ahead)() {
     return press_wait(fn() { true }, told)
   }
-  let (answered, leases) = asked_now(src, asks)
+  let (answered, leases) = asked_now(src, asks, then?)
   // (what was asked handed over with the switch, so the frame its readers read it anew in is the one after it)
   let go = fn() { @ui.after_frame(fn() { hand_over_shown(at, leases, fn() { @view.answering(switch_to) }) }) }
   press_wait(answered, go, let_go=fn() {
