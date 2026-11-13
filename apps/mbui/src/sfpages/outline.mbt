@@ -323,11 +323,12 @@ fn outline_body(
       _ => []
     }
     close()
-    @sfbase.go_to(r, seq)
-    // (one found: the words marked in it, as a search's are, nothing flashing)
+    // (one found: the words marked in it, as a search's are, nothing flashing; said before the go-to, which a page
+    // made as nodes takes as it is said)
     if words.length() > 0 {
       @sfbase.go_to_words[r.station + "\u{1}" + r.session] = words
     }
+    @sfbase.go_to(r, seq)
   }
   let go_key = fn(k : String) {
     match @signals.untracked(fn() { table.get().1.get(k) }) {

@@ -236,6 +236,20 @@ fn outline_reading() -> @sfbase.Reading {
 }
 
 ///|
+/// The first words of what people said in the long chat that the tests go to, by seq (outline_fixture's outline_said:
+/// seq i + 1 its ith): Ana's 09:40 the first day, 林's 09:02 昨天, Ana's 09:40 (the reader's), 林's 10:35 after it.
+let said_3 : String = "签名证书下周三过期"
+
+///|
+let said_20 : String = "早，昨晚的构建用新证书签名成功了吗"
+
+///|
+let said_22 : String = "截图初稿我看了，iPad 那几张字还是小"
+
+///|
+let said_23 : String = "引导页第二屏的插画可以换成新的那版了"
+
+///|
 test "对话目录: the reader's message, and the one before and after it, among what people said" {
   let said = [2.0, 5.0, 9.0, 14.0]
   // (at the chat's end: the last; else the last at or before the top of what shows, the first where none is)
@@ -345,7 +359,7 @@ test "对话目录: on a phone a sheet from the foot titled 对话目录, from t
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(outline_panel(t) is None)
-  assert_eq(outline_reading().flash, "ts18")
+  assert_true(gone_lit(t, "设计说头图周一给"), msg="ts18 flashing")
   assert_true(t.find(row) is Some(_))
 }
 
@@ -384,8 +398,7 @@ test "对话目录: words typed find in all of the chat (chat.outline.find, 120 
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(outline_panel(t) is None)
-  assert_eq(outline_reading().found_at, "ts3")
-  assert_eq(outline_reading().found_words, ["签名"])
+  assert_true(search_stroke_under(t, said_3, @sf.theme().p.accent, @sf.message_stroke.width), msg="ts3 marked")
 }
 
 ///|
@@ -416,7 +429,7 @@ test "对话目录: ↓ ↑ from its field move the row the keys are at, one lit
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(outline_panel(t) is None)
-  assert_eq(outline_reading().flash, "ts23")
+  assert_true(gone_lit(t, said_23), msg="ts23 flashing")
   t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   assert_true(outline_panel(t) is Some(_))
@@ -448,7 +461,7 @@ test "对话目录: the pointer moved onto a row takes the keys there, one groun
   t.key(@ui.key_code_enter)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_eq(outline_reading().flash, "ts23")
+  assert_true(gone_lit(t, said_23), msg="ts23 flashing")
 }
 
 ///|
@@ -458,11 +471,11 @@ test "对话目录: ⌥⇧↑ and ⌥⇧↓ go to the message a person said befo
   // (the reader's: Ana's, seq 22; before it 林's 09:02, seq 20; after it 林's 10:35, seq 23)
   t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
   t.run_for(@ui.move_most_ms)
-  assert_eq(outline_reading().flash, "ts20")
+  assert_true(gone_lit(t, said_20), msg="ts20 flashing")
   t.run_for(@ui.move_most_ms)
   t.key(@ui.key_code_down, mods=@ui.mod_alt | @ui.mod_shift_key)
   t.run_for(@ui.move_most_ms)
-  assert_eq(outline_reading().flash, "ts22")
+  assert_true(gone_lit(t, said_22), msg="ts22 flashing")
 }
 
 ///|
@@ -480,14 +493,13 @@ test "对话目录: a go-to in the chat far from its end keeps where the reader 
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(back(), msg="\{Repr(t.semantics().filter(fn(s) { s.role == Button }).map(fn(s) { s.label }))}")
-  assert_eq(outline_reading().flash, "ts20")
+  assert_true(gone_lit(t, said_20), msg="ts20 flashing")
   // ↓: back at 22, its top as it was, nothing flashing anew
-  let n = outline_reading().flash_n
   t.click(Button, label="回到刚才的位置")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_eq(outline_reading().top_seq, 22.0)
-  assert_eq(outline_reading().flash_n, n)
+  assert_false(gone_lit(t, said_22), msg="ts22 flashing")
   assert_false(back())
   // (↓ pressed again, gliding to the end, and sending: chat_wbtest.mbt's, where the glide is that file's motion)
 }
@@ -642,8 +654,9 @@ test "对话目录: on a page too narrow for the rail (a 1200 wide window) the r
   let t = outline_tester(calls, w=1200.0, h=800.0)
   let floats = outline_buttons(t)
   assert_eq(floats.length(), 1, msg="\{Repr(floats)}")
-  let (fx, fy, _, fh) = floats[0]
-  assert_true(fh < 40.0, msg="\{Repr(floats)}")
+  let (fx, fy, fw, fh) = floats[0]
+  // (the round button over the way to the newest, not the rail at the list's right, 20 in from the window's at most)
+  assert_true(fx + fw < 1200.0 - 20.0, msg="\{Repr(floats)}")
   t.click(Button, label="对话目录")
   t.run_for(@ui.move_most_ms)
   let (px, py, pw, ph) = outline_panel(t).unwrap()
@@ -704,7 +717,8 @@ test "对话目录: within a list's height of the chat's end a go-to keeps no pl
   t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(outline_reading().flash != "")
+  // (to what 林 said before: 21:40 昨天, seq 30)
+  assert_true(gone_lit(t, "查看器的关闭按钮我今晚修好"), msg="ts30 flashing")
   assert_false(back(t))
   // the same with the window an older page of the chat (newer after it): kept
   let t = outline_tester(calls, top=32.0, newer=true)
@@ -723,13 +737,11 @@ test "对话目录: a found row gone to marks its words in its message, nothing 
   t.type_text("签名")
   t.run_for(@sfpages.find_typing_ms)
   t.run_for(@ui.move_most_ms)
-  let n = outline_reading().flash_n
   t.tap_text("签名证书下周三过期，我建议这次发布前就换新证书，不然商店那边会拒…")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_eq(outline_reading().found_at, "ts3")
-  assert_eq(outline_reading().found_words, ["签名"])
-  assert_eq(outline_reading().flash_n, n)
+  assert_true(search_stroke_under(t, said_3, @sf.theme().p.accent, @sf.message_stroke.width), msg="ts3 marked")
+  assert_false(gone_lit(t, said_3), msg="ts3 flashing")
   assert_true(t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" }))
   assert_eq(outline_faults(t), [])
 }
@@ -779,7 +791,7 @@ test "对话目录: the rail and the steps from the outline's index alone: no ro
   assert_eq(outline_buttons(t).length(), 1)
   t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
   t.run_for(@ui.move_most_ms)
-  assert_eq(outline_reading().flash, "ts20")
+  assert_true(gone_lit(t, said_20), msg="ts20 flashing")
   assert_eq(named(calls, "chat.outline.rows").length(), 0)
 }
 
@@ -964,7 +976,7 @@ test "对话目录: a go-to on a wide page as the bell's runs, with the outline 
     t.run_for(@ui.move_most_ms)
     t.run_for(@ui.move_most_ms)
     // (what waits to be decided first: the post at seq 8, not laid out from 22)
-    assert_eq(outline_reading().flash, "ts8", msg="asks \{asks}")
+    assert_true(gone_lit(t, "复现了，是图片还没量好高度就当成了锚点"), msg="ts8 flashing, asks \{asks}")
     let back = t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" })
     assert_eq(back, asks)
     if asks {
@@ -995,7 +1007,7 @@ test "对话目录: a go-to to a message of an older page, read first: the longe
   // (the page before asked for (chat.older, or round it: chat.around), then gone to: flashing, the panel closed)
   assert_true(named(calls, "chat.older").length() + named(calls, "chat.around").length() >= 1, msg="\{Repr(calls.map(fn(m) { m.name }))}")
   assert_true(outline_panel(t) is None)
-  assert_eq(outline_reading().flash, "ts1")
+  assert_true(gone_lit(t, "早，今天想把发布清单从头到尾过一遍"), msg="ts1 flashing")
 }
 
 ///|
@@ -1046,9 +1058,8 @@ test "对话目录: the longer chat's rail a steady map, its ticks where they we
   t.run_for(@ui.move_most_ms)
   let p = outline_tick_places(t)
   assert_eq(ys(p), ys(first))
-  let went = (try Some(@json.parse(outline_reading().flash.exact_view(start=2).to_owned())) catch { _ => None })
-    .bind(fn(j) { (if j is Number(n, ..) { Some(n) } else { None }) })
-    .unwrap_or(-1.0)
+  // (the next said after 283: 284, 林's and Ana's in turn, Claude's every fifth after the first of a day)
+  let went = @sffixture.outline_long_away_seq + 1.0
   assert_eq(long(p), [outline_long_tick(m, went)])
   // scrolled up through some messages by the hand: one long, all where they were
   t.wheel(800.0, 400.0, -600.0)

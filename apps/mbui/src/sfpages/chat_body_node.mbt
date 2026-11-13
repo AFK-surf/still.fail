@@ -502,7 +502,8 @@ fn chat_body_row(
   let entry = fn() { row().entry }
   let top = fn() { chat_body_gap_room(row().gap, (here.width)()) }
   // (the words ⌘F found while its bar is open in this chat, bold in a message's words, each coloured in and the time
-  // the reader is at stroked: find_words_in, find_at_in; else a search's in the message it opened the chat at, bold)
+  // the reader is at stroked: find_words_in, find_at_in; else a search's in the message it opened the chat at, bold,
+  // each stroked: found_all)
   let chat = here.station + "\u{1}" + here.session
   let found = fn() {
     if find_chat() == chat {
@@ -514,7 +515,9 @@ fn chat_body_row(
     }
   }
   let found_at = fn() -> Int? {
-    guard find_chat() == chat else { return None }
+    guard find_chat() == chat else {
+      return if jump.found.get().0 == k { Some(@sf.found_all) } else { None }
+    }
     match entry() {
       Said(m) => Some(find_at_in(chat, m.seq))
       _ => Some(-1)

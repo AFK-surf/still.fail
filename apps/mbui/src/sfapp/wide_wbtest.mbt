@@ -2905,6 +2905,20 @@ fn with_row(v : Json, id : String, more : Map[String, Json]) -> Json {
 }
 
 ///|
+/// Whether the message with `words` flashes as a message gone to does: the accent's ground drawn under all of its words'
+/// first line, as either page lights a row gone to (what is drawn, not which row a list says it lit).
+fn gone_lit(t : @ui.Tester, words : String) -> Bool {
+  let accent = @ui.tree_theme().color(AccentBg)
+  match t.run_rects(words) {
+    [(wx, wy, ww, wh), ..] =>
+      t.drawn_rects().iter().any(fn(r) {
+        (r.4 >> 8) == (accent >> 8) && (r.4 & 0xFFL) > 0L && r.0 <= wx && r.0 + r.2 >= wx + ww && r.1 <= wy && r.1 + r.3 >= wy + wh
+      })
+    _ => false
+  }
+}
+
+///|
 test "wide: a row pressed on its state line while the core says which message that is about opens its chat there, flashing it (ChatMark.tsx jumpFromLine); on its title, where it opens" {
   new_run()
   let base = fixture("chat")
@@ -2933,17 +2947,8 @@ test "wide: a row pressed on its state line while the core says which message th
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.draw()
-  // (message ts8 lit: the accent's ground drawn under all of its words' line, as either page lights a row gone to)
-  let accent = @ui.tree_theme().color(AccentBg)
-  let lit = fn() {
-    match t.run_rects("量过一次就记住") {
-      [(wx, wy, ww, wh), ..] =>
-        t.drawn_rects().iter().any(fn(r) {
-          (r.4 >> 8) == (accent >> 8) && (r.4 & 0xFFL) > 0L && r.0 <= wx && r.0 + r.2 >= wx + ww && r.1 <= wy && r.1 + r.3 >= wy + wh
-        })
-      _ => false
-    }
-  }
+  // (message ts8 lit)
+  let lit = fn() { gone_lit(t, "量过一次就记住") }
   // its title: the chat as it is
   let (tx, ty) = t.find("整理发布清单").unwrap()
   t.tap(tx, ty)

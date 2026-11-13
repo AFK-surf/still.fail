@@ -640,10 +640,11 @@ fn md_words_node(
   let words = p.box(made_for=loc, fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
     // (what a find marks of them, as what it found and where it is change: found_marks, the one it is at counted
-    // through all the words)
+    // through all the words; a search's, every one)
     w.runs_marks(By(fn() {
       match (md.found_at)() {
-        Some(at) => found_marks(runs(), (md.found)(), if at < 0 { -1 } else { at - (md.before)() })
+        Some(at) =>
+          found_marks(runs(), (md.found)(), if at == found_all { at } else if at < 0 { -1 } else { at - (md.before)() })
         None => []
       }
     }))
