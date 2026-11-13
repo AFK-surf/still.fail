@@ -1197,3 +1197,18 @@ impl @hostapi.Host for Native with st_hevc(_, id, hvcc, w, h) { st_hevc(id, hvcc
 impl @hostapi.Host for Native with rows_on_pixels(_) {
   true
 }
+
+///|
+impl @hostapi.Host for Native with st_frame_shown(_, id, data, key, ts, show) { st_frame_shown(id, data, key, ts, show) }
+
+///|
+impl @hostapi.Host for Native with st_flush(_, id, drain) { st_flush(id, drain) }
+
+///|
+impl @hostapi.Host for Native with st_audio_played(_, id) { st_audio_played(id) }
+
+///|
+impl @hostapi.Host for Native with st_audio_queued(_, id) { st_audio_queued(id) }
+
+///|
+impl @hostapi.Host for Native with st_audio_volume(_, id, v) { st_audio_volume(id, v) }

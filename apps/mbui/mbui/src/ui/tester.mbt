@@ -515,6 +515,8 @@ pub fn Tester::new(
     stream_ids: 0,
     streams_fed: {},
     stream_said: {},
+    stream_hides: true,
+    stream_audio_clock: {},
     dev: FakeDevice::new(copy_shown),
     pixels_of_src: {},
     pixels_of: {},

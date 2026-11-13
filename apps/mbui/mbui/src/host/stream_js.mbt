@@ -63,3 +63,24 @@ fn st_pointer_at(_id : Int, _x : Double, _y : Double, _shown : Int) -> Unit { ()
 
 ///|
 fn st_direct(_id : Int, _route : Double, _after : Double, _what : Int) -> Unit { () }
+
+///|
+/// (the browser's host has nothing for a frame decoded unseen: taken as any, below)
+fn st_frame_shown(id : Int, data : Bytes, key : Int, ts : Double, show : Int) -> Int {
+  // (no frame decoded unseen here: decoded and shown as any, its "f" taken as "d" by @ui.Stream)
+  ignore(show)
+  st_frame(id, data, key, ts)
+  1
+}
+
+///|
+fn st_flush(_id : Int, _drain : Int) -> Unit { () }
+
+///|
+fn st_audio_played(_id : Int) -> Double { 0.0 }
+
+///|
+fn st_audio_queued(_id : Int) -> Double { 0.0 }
+
+///|
+fn st_audio_volume(_id : Int, _v : Double) -> Unit { () }

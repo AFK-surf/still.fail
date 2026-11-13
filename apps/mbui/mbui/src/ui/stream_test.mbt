@@ -300,3 +300,105 @@ test "driven from here: a decoder that fails before its frame arrived, the frame
   let fed = v.t.stream_fed(id)
   assert_eq(fed[fed.length() - 3:].to_owned(), ["do drop 1", "do release 2 0 200", "do latch 200 1 640 360"])
 }
+
+///|
+test "a frame not to be shown is handed over as such, its fate said shown, never latched; a host with nothing for it lets it go here" {
+  let v = screen()
+  v.s.h264(avcc, 640, 360)
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+  let id = v.s.id()
+  v.t.stream_shows(id, 1.0, 640, 360)
+  v.t.draw()
+  assert_eq(v.s.shown_at(), Some(1.0))
+  v.s.frame(b"\x00\x00\x00\x01\x41", false, 2.0, show=false)
+  v.s.frame(b"\x00\x00\x00\x01\x41", false, 3.0, show=false)
+  assert_eq(v.t.stream_fed(id).filter(fn(l) { l.has_prefix("frame") }), [
+    "frame key=true ts=1 bytes=5", "frame key=false ts=2 bytes=5 hidden", "frame key=false ts=3 bytes=5 hidden",
+  ])
+  // the host's until its event: let go ("d"), or even said decoded ("f": a host that does), it is never shown
+  v.t.draw()
+  assert_false(v.t.at_rest())
+  assert_true(v.t.rest_why().contains("stream 1 frame 2"), msg=v.t.rest_why())
+  v.t.stream_drops(id, 2.0)
+  v.t.stream_shows(id, 3.0, 640, 360)
+  v.t.draw()
+  assert_eq(v.acks, [1.0, 2.0, 3.0])
+  assert_eq(v.s.shown_at(), Some(1.0))
+  assert_false(v.t.stream_fed(id).contains("show ts=3"))
+  assert_true(v.t.at_rest(), msg=v.t.rest_why())
+  assert_true(v.t.drawlist().contains("\"stream 640x360 ts=1\""), msg=v.t.drawlist())
+  // a frame shown after them shows as ever
+  v.s.frame(b"\x00\x00\x00\x01\x41", false, 4.0)
+  v.t.stream_shows(id, 4.0, 640, 360)
+  v.t.draw()
+  assert_eq(v.s.shown_at(), Some(4.0))
+  // a host with nothing for one: not handed over, let go here, said shown at the next frame
+  v.t.set_stream_hides(false)
+  v.s.frame(b"\x00\x00\x00\x01\x41", false, 5.0, show=false)
+  assert_false(v.t.stream_fed(id).any(fn(l) { l.contains("ts=5") }))
+  v.t.draw()
+  assert_eq(v.acks, [1.0, 2.0, 3.0, 4.0, 5.0])
+  assert_eq(v.s.shown_at(), Some(4.0))
+  v.s.close()
+}
+
+///|
+test "a flush is handed over in its place among the frames; after it a frame not key is let go here till a key frame" {
+  let v = screen()
+  v.s.h264(avcc, 640, 360)
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+  let id = v.s.id()
+  v.t.stream_shows(id, 1.0, 640, 360)
+  v.t.draw()
+  v.s.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
+  v.s.flush()
+  v.s.frame(b"\x00\x00\x00\x01\x41", false, 3.0)
+  assert_eq(v.t.stream_fed(id)[1:].to_owned(), [
+    "frame key=true ts=1 bytes=5", "show ts=1", "frame key=false ts=2 bytes=5", "flush drain=false",
+  ])
+  // what was in the decoder let go by the host; the one after it by the app; the picture shown stays
+  v.t.stream_drops(id, 2.0)
+  v.t.draw()
+  assert_eq(v.acks, [1.0, 3.0, 2.0])
+  assert_eq(v.s.shown_at(), Some(1.0))
+  assert_true(v.t.at_rest(), msg=v.t.rest_why())
+  // from a key frame on, as ever; drained, the same
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 4.0)
+  v.s.flush(drain=true)
+  let fed = v.t.stream_fed(id)
+  assert_eq(fed[fed.length() - 2:].to_owned(), ["frame key=true ts=4 bytes=5", "flush drain=true"])
+  v.s.close()
+}
+
+///|
+test "its sound's clock is the host's: samples played and milliseconds queued, 0 before it opens and once closed" {
+  let v = screen()
+  v.t.set_stream_audio(true)
+  assert_eq(v.s.audio_played(), 0.0)
+  assert_eq(v.s.audio_queued(), 0.0)
+  v.s.audio(Bytes::make(3840, b'\x00'))
+  let id = v.s.id()
+  assert_eq(v.s.audio_played(), 0.0)
+  v.t.set_stream_audio_clock(id, 96000.0, 60.0)
+  assert_eq(v.s.audio_played(), 96000.0)
+  assert_eq(v.s.audio_queued(), 60.0)
+  v.s.close()
+  assert_eq(v.s.audio_played(), 0.0)
+  assert_eq(v.s.audio_queued(), 0.0)
+}
+
+///|
+test "its sound's volume told the host: one asked before it opened as it opens, then as asked" {
+  let v = screen()
+  v.t.set_stream_audio(true)
+  v.s.audio_volume(0.5)
+  assert_eq(v.s.id(), 0)
+  v.s.audio(Bytes::make(3840, b'\x00'))
+  let id = v.s.id()
+  assert_eq(v.t.stream_fed(id), ["volume 0.5", "audio bytes=3840"])
+  v.s.audio_volume(0.0)
+  assert_eq(v.t.stream_fed(id).last(), Some("volume 0"))
+  v.s.close()
+  v.s.audio_volume(1.0)
+  assert_eq(v.t.stream_fed(id).last(), Some("close"))
+}

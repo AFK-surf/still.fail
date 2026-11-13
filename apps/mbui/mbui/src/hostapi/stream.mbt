@@ -19,6 +19,12 @@
 // JPEG by ImageIO), the browser (web/host.js: WebCodecs' VideoDecoder where there is one; JPEG by createImageBitmap),
 // Windows (win_stream.cpp: H.264 by Media Foundation's decoder, where the system has it; JPEG by WIC), Linux (linux_stream.c: H.264 by GStreamer's
 // decodebin, live, where it has a decoder of it; JPEG by gdk-pixbuf).
+//
+// A frame decoded and not shown (`stream_frame_shown`: what a seek decodes up to its picture) and a decoder emptied
+// (`stream_flush`) are Windows' alone so far, as are its sound's clock and volume (`stream_audio_played`, `_queued`,
+// `_volume`). The other hosts that decode take a frame not to be shown as any (decoded, so what comes after it has
+// what it refers to; said "f", which ui's Stream takes as "d" and never shows) and have nothing for the rest; a host
+// with no decoder at all (Host's defaults) does not take one.
 
 ///|
 /// What an instance's image (scene.mbt's slot 20) is when it draws a stream: this plus the stream's id (images' own ids
@@ -42,6 +48,25 @@ pub fn stream_h264(id : Int, avcc : Bytes, w : Int, h : Int) -> Unit {
 /// An H.264 access unit (AVCC), a key frame or not.
 pub fn stream_frame(id : Int, data : Bytes, key : Bool, ts : Double) -> Unit {
   st_frame(id, data, if key { 1 } else { 0 }, ts)
+}
+
+///|
+/// An access unit as `stream_frame`'s, `show` false one decoded for the frames after it (what they refer to) and never
+/// shown: once out of the decoder it is not copied, kept or shown, and is said "d TS" with no frame asked for it (the app
+/// takes it as its next frame begins). Windows' alone decodes one unseen; the other hosts that decode take it as any
+/// frame (said "f": ui's Stream lets it go and never shows it). Whether the host took it: false only where it decodes
+/// nothing (the app lets it go itself then).
+pub fn stream_frame_shown(id : Int, data : Bytes, key : Bool, ts : Double, show : Bool) -> Bool {
+  st_frame_shown(id, data, if key { 1 } else { 0 }, ts, if show { 1 } else { 0 }) != 0
+}
+
+///|
+/// Stream `id`'s decoder emptied, in its place among the frames handed over (a seek). `drain` false: what is in it let
+/// go, each said "d" and none shown. `drain` true: what is in it decoded out first, each said as it would have been
+/// ("f", or "d" for one not to be shown), then emptied. Either way the decoder is kept, the frame shown stays, and the
+/// next frame it takes is a key frame (one that is not, let go: "d"). Windows' alone; elsewhere nothing.
+pub fn stream_flush(id : Int, drain : Bool) -> Unit {
+  st_flush(id, if drain { 1 } else { 0 })
 }
 
 ///|
@@ -104,6 +129,22 @@ pub fn stream_audio_here() -> Bool { st_audio_here() != 0 }
 /// One 20 ms packet (3840 bytes, interleaved little-endian PCM16). Empty: stop and discard queued sound.
 /// Hosts bound queued audio and drop stale sound; closing the stream releases its player too.
 pub fn stream_audio(id : Int, data : Bytes) -> Unit { st_audio(id, data) }
+
+///|
+/// Samples (48 kHz frames) of stream `id`'s sound played since its sound began: counted on across its sound stopped
+/// and started again (an empty packet), set back only as the stream closes, so an app keeps its own base where it wants
+/// another start. 0 where the host plays none (Windows' alone counts it).
+pub fn stream_audio_played(id : Int) -> Double { st_audio_played(id) }
+
+///|
+/// Milliseconds of stream `id`'s sound queued and not played yet (20 a packet). 0 where there is none, or the host
+/// says none (Windows' alone says it).
+pub fn stream_audio_queued(id : Int) -> Double { st_audio_queued(id) }
+
+///|
+/// Stream `id`'s sound played at volume `v` (1 as it came, 0 silent), from now and for its sound started later too.
+/// Windows' alone; elsewhere nothing.
+pub fn stream_audio_volume(id : Int, v : Double) -> Unit { st_audio_volume(id, v) }
 
 ///|
 /// Whether a stream's H.264 frames may be shown by a system video layer of the host's own (a native view of kind 4,

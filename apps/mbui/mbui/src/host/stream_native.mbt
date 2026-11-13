@@ -61,3 +61,19 @@ extern "C" fn st_pointer_at(id : Int, x : Double, y : Double, shown : Int) -> Un
 
 ///|
 extern "C" fn st_direct(id : Int, route : Double, after : Double, what : Int) -> Unit = "mb_host_stream_direct"
+
+///|
+#borrow(data)
+extern "C" fn st_frame_shown(id : Int, data : Bytes, key : Int, ts : Double, show : Int) -> Int = "mb_host_stream_frame_shown"
+
+///|
+extern "C" fn st_flush(id : Int, drain : Int) -> Unit = "mb_host_stream_flush"
+
+///|
+extern "C" fn st_audio_played(id : Int) -> Double = "mb_host_stream_audio_played"
+
+///|
+extern "C" fn st_audio_queued(id : Int) -> Double = "mb_host_stream_audio_queued"
+
+///|
+extern "C" fn st_audio_volume(id : Int, v : Double) -> Unit = "mb_host_stream_audio_volume"
