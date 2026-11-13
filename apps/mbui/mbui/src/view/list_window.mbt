@@ -430,7 +430,8 @@ fn[K] Places::first_past(self : Places[K], y : Double) -> Int {
 /// does, as tall in the column meanwhile as it was last measured (`est` where it never was). What shows is made and
 /// measured as the column is laid out, in that layout (its fill, below: made by what was measured, measured in turn,
 /// none of it told after the layout). How tall each that does not show was is forgotten as the column is given another
-/// width or all words are measured anew. `bar_clear`: the bar's ends kept clear (View::scrolls'). `head`: a place the
+/// width or all words are measured anew. `top_covered`: how tall what lies over its top is (View::scrolls'; its head is
+/// none of it). `bar_clear`: the bar's ends kept clear (View::scrolls'). `head`: a place the
 /// list holds over its keys' blocks in what scrolls, the page building into it (a chat's bar's room): never the anchor
 /// nor a stand-in for it (what is read is held by the keys' blocks alone), its height, as the fill measures it in the
 /// layout, where its keys start (Column's `start`: what shows by where they are, a block brought, near_top, all count
@@ -494,7 +495,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   est? : Double = 80.0,
   slop? : Double,
   bar? : ScrollBar,
-  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  top_covered? : () -> Double = fn() { 0.0 },
+  bar_clear? : () -> (Double, Double),
   holds? : (K) -> Bool = fn(_) { true },
   follows? : () -> Bool = fn() { false },
   from_end? : Bool = false,
@@ -2526,7 +2528,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     ok
   }
-  let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
+  let out = self.scrolls(s, slop?=slop, bar?=bar, top_covered~, bar_clear?, fn(held) {
     held.padding(By(fn() { (0.0, 0.0, 0.0, room_under() + s.tuck_room.get() + foot_room.get()) })) |> ignore
     // (what its blocks hold that comes or goes down a column in them: kept, how long a press there set off goes, and in
     // its one way unless it is said at once)

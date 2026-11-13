@@ -10750,9 +10750,10 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
 /// `holder` in it.
 fn Tree::ordered(self : Tree, at : Int, holder : Int, top : Int) -> Unit {
   let n = self.nodes[at]
-  // (on a flight's way: drawn over the rest of its layer, put there as that ends, Tree::ordered_lifted)
+  // (on a flight's way: drawn over the rest of its layer, put there as that ends, Tree::ordered_lifted; the one that
+  // moves of a flight with an end that stays drawn where it is held, what is drawn after it over it: Tree::lifted_over)
   match n.lift {
-    Some(l) if !self.lifting && l.top != at => {
+    Some(l) if !self.lifting && l.top != at && self.lifted_over(n, l) => {
       self.tops[at] = top
       return
     }

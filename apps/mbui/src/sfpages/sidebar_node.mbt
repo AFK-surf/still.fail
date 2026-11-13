@@ -283,6 +283,7 @@ fn chats_pane_node(
     keys,
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
+    top_covered=frame.top,
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },
     // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
     at_once=true,

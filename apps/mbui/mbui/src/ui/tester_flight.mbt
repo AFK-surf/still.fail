@@ -14,3 +14,13 @@ pub fn Tester::flight_of(
     None => None
   }
 }
+
+///|
+/// When the flight of the one of id `id` under way ends (ms, the Tester's clock); none where none of it flies.
+pub fn Tester::flight_end(self : Tester, id : String) -> Double? {
+  self.reads_own()
+  match view_tree() {
+    Some(tree) => tree.flight_ends_at(id)
+    None => None
+  }
+}
