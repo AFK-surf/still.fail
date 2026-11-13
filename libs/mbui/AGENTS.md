@@ -214,6 +214,11 @@ yet and you can add one, add it.
   on how what moves goes (`Tester::motion_unjudged`) left out. Either fails that job on main (once the tables were
   clean: the coordinator of the migration, 2026-11-12), each line saying the one line of a table to change: the change
   that mended a fault brings its bar down, or takes its file off the list, itself.
+  What an answer changed at once (`@view.answering`) is no step: sizes_steady takes the frame that shows it, in the
+  column of what it changed (what scrolls round it, else the page), as that answer's change; a structure's part and a
+  binding's property alike. Only what is on a way not at its end then (its own, what holds it, a way in or out beside
+  it in its column: `Tree::on_way_at`) is judged as ever: a step in the middle of a way (`src/view/answer_marked.mbt`;
+  the coordinator of the migration, 2026-11-14).
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set

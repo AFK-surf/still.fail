@@ -38,6 +38,8 @@ priv struct SizesSteady {
   /// the width each node of the tree's that says it lays what it holds out at (View::lays_anew) as the last frame was
   /// judged, by its node: another now is this frame's step of what it holds, laid out anew at it at once
   laids : Map[Int, Double]
+  /// the moment of the last frame judged: what an answer changed at once since is this frame's (Tree::answered_between)
+  mut judged : Double
 }
 
 ///|
@@ -53,6 +55,7 @@ let sizes_steady : SizesSteady = {
   hand: -1.0e9,
   puts: {},
   laids: {},
+  judged: -1.0e9,
 }
 
 ///|
@@ -81,6 +84,7 @@ fn sizes_steady_begin(loc : String, held : Bool) -> Unit {
   sizes_steady.hand = -1.0e9
   sizes_steady.puts.clear()
   sizes_steady.laids.clear()
+  sizes_steady.judged = -1.0e9
   sizes_steady.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -452,6 +456,77 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     }
     puts_now.each(fn(by, at) { sizes_steady.puts[by] = at })
     laids_now.each(fn(at, w) { sizes_steady.laids[at] = w })
+    // (what an answer changed at once since the frame before (the window's tree's answer_marked.mbt): the column it is in
+    // (what scrolls round it, else what holds the page) changed with it in this frame, as it must, no jolt of its own,
+    // but for what is on a way not at its end then, its own or what carries it: a step of that is in the middle of a way,
+    // said as ever (the coordinator of the migration, 2026-11-14))
+    let answered_in = Array::make(k, -1)
+    match tree {
+      Some(tr) => {
+        let marked = tr.answered_between(sizes_steady.judged, now)
+        if marked.length() > 0 {
+          let of : Map[Int, Int] = Map([])
+          for i in 0..<k {
+            match tree_frame_ids.get(i) {
+              Some(id) => if !of.contains(id.at) { of[id.at] = i }
+              None => ()
+            }
+          }
+          let roots : Set[Int] = Set([])
+          for at in marked {
+            guard of.get(at) is Some(i) else { continue }
+            // (up to what scrolls round it, else the outermost but one: the page it is on, never all of the window)
+            let mut q = i
+            let mut root = -1
+            while q >= 0 && q < k {
+              let p = self.nodes[q].parent
+              if p < 0 || p >= k {
+                break
+              }
+              let pn = self.nodes[p]
+              if pn.tree_rows || pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 ||
+                tree_scroll_held_at.contains(q) {
+                root = p
+                break
+              }
+              if self.nodes[p].parent < 0 {
+                root = q
+                break
+              }
+              q = p
+            }
+            if root >= 0 {
+              roots.add(root)
+            }
+          }
+          for i in order {
+            let p = self.nodes[i].parent
+            answered_in[i] = if roots.contains(i) {
+              i
+            } else if p >= 0 && p < k {
+              answered_in[p]
+            } else {
+              -1
+            }
+          }
+          // (what is on a way not at its end, its own or what carries it (Tree::on_way_at): its step a jolt as ever)
+          let tid = Array::make(k, -1)
+          for i in order {
+            let p = self.nodes[i].parent
+            tid[i] = match tree_frame_ids.get(i) {
+              Some(id) => id.at
+              None => if p >= 0 && p < k { tid[p] } else { -1 }
+            }
+          }
+          for i in 0..<k {
+            if answered_in[i] >= 0 && !(tid[i] >= 0 && tr.on_way_at(tid[i], now)) {
+              put_now[i] = true
+            }
+          }
+        }
+      }
+      None => ()
+    }
     for i in 0..<k {
       let n = self.nodes[i]
       if count.get(n.ident).unwrap_or(0) != 1 || !n.draws_own() {
@@ -570,6 +645,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       }
     }
   })
+  sizes_steady.judged = now
   let gone : Array[(Int, Int, Int64, Bool)] = []
   sizes_steady.seen.each(fn(k, _) { if !here.contains(k) { gone.push(k) } })
   for k in gone {

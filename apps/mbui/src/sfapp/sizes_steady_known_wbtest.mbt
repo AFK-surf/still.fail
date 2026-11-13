@@ -11,10 +11,6 @@ fn init {
     // (小屏, a new chat's first words, the core answering a frame or more after: 预设's column comes 52 in a frame, at 60
     // and 120)
     ("src/sfapp/core_pace_presets_wbtest.mbt", 1),
-    // (小屏, a single-session connect's page opened, at 60 and 120: 模型's column -18 in height in a frame as the
-    // choice of a session's answer comes; at once since the framework's change for answers, where it made its way
-    // before)
-    ("src/sfapp/connect_asks_wbtest.mbt", 1),
     // (小屏, a new chat's long first words sent, at both sizes of words: the composer's field steps 31 points in a frame
     // at 2157 ms, between -13 and 26 round it; at 60 and 120 a frame it stops dead from 40 a frame as well, and 预设's
     // column comes 52 in a frame at 1583)
@@ -29,9 +25,6 @@ fn init {
     ("src/sfapp/settings_wbtest.mbt", 4),
     ("src/sfapp/squeeze_wbtest.mbt", 281),
     ("src/sfapp/stack_over_wbtest.mbt", 1),
-    // (小屏, a station's page opened, at 60 and 120: its column still.fail 占用 comes 52 in height in a frame as the
-    // station's answer comes; at once since the framework's change for answers, where it made its way before)
-    ("src/sfapp/station_asks_wbtest.mbt", 1),
     ("src/sfapp/tape.mbt", 1),
     ("src/sfapp/viewer_media_over_wbtest.mbt", 1),
     // (the old list's row growing to the 5000 its page says, 中屏 on the tape, at 60: the words and the picture under
@@ -41,10 +34,9 @@ fn init {
     // begins now, a frame sooner, so its end is among the frames judged. Taken away with the old chat's page: the row
     // made as nodes goes there by the list's own way)
     ("src/sfapp/viz_wbtest.mbt", 2),
-    // (大屏 over a core answering late, at 60 and 120: a column's place goes 24 in a frame, 用量's card -5 in height,
-    // 「3 个对话正在运行」 +45 in height (since the framework's change for answers: at once, where it made its way in
-    // before), as their answers come; the steadiness exemption's change, then the pages')
-    ("src/sfapp/ways_told_wbtest.mbt", 2),
+    // (大屏 over a core answering late, at 60 and 120: a column's place goes 21 to 28 in a frame as answers come, left
+    // after the steadiness exemption (answer_marked.mbt) took the rest: the pages')
+    ("src/sfapp/ways_told_wbtest.mbt", 1),
     ("src/sfapp/wide_rail_wbtest.mbt", 4),
     ("src/sfapp/wide_wbtest.mbt", 5),
   ])
