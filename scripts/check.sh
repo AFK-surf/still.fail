@@ -460,8 +460,8 @@ if [ $full = 1 ]; then
       remembered "tests: station, a Mac's alone" "station scripts/native.ts" after station sh -c 'cd station && node ../scripts/native.ts run mesh runner archive-rs reader -- node --import ./test/setup-env.mjs --test --test-timeout=600000 test/cold-compat.test.ts'
     fi
   fi
-  # The station's tests (station/test): every file, or one slice of them (STILLFAIL_STATION_SHARD="<i>/<n>": the files
-  # in order, every n-th from the i-th). CI runs them in slices on Linux runners of their own (pipeline.yml,
+  # The station's tests (station/test): every file, or one slice of them (STILLFAIL_STATION_SHARD="<i>/<n>": the
+  # longest files one to a slice first, then the rest in order, every n-th: scripts/station-slice.sh). CI runs them in slices on Linux runners of their own (pipeline.yml,
   # check-station), not on macos-ci: four runners share that Mac, the tests took 2.3 to 4.1 minutes there by what else
   # ran, and three checks at once went past the job's five (6 of some 18 in half a day, 2026-11-09; the files doubled
   # in the five days before). A machine to itself, a slice takes the same every run.
@@ -470,7 +470,7 @@ if [ $full = 1 ]; then
     slice=${STILLFAIL_STATION_SHARD:-}
     # (STILLFAIL_NODE_TEST_JOBS: that many files at a time rather than Node's own count)
     # shellcheck disable=SC2016 # the command's own variables, expanded by its shell
-    remembered "tests: station${slice:+ $slice}" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts" after station env STATION_SLICE="$slice" STATION_NATIVES="$station_natives" sh -c 'cd station && files=$(ls test/*.test.ts | awk -v s="${STATION_SLICE:-0/1}" '"'"'BEGIN { split(s, a, "/") } NR % a[2] == a[1]'"'"') && [ -n "$files" ] && node ../scripts/native.ts run $STATION_NATIVES -- node --import ./test/setup-env.mjs --test ${STILLFAIL_NODE_TEST_JOBS:+--test-concurrency="$STILLFAIL_NODE_TEST_JOBS"} --test-timeout=600000 $files'
+    remembered "tests: station${slice:+ $slice}" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts scripts/station-slice.sh" after station env STATION_SLICE="$slice" STATION_NATIVES="$station_natives" sh -c 'cd station && files=$(sh ../scripts/station-slice.sh "${STATION_SLICE:-0/1}") && [ -n "$files" ] && node ../scripts/native.ts run $STATION_NATIVES -- node --import ./test/setup-env.mjs --test ${STILLFAIL_NODE_TEST_JOBS:+--test-concurrency="$STILLFAIL_NODE_TEST_JOBS"} --test-timeout=600000 $files'
   fi
   # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
   # typecheck and prepare both sides before checking and running it, including on a fresh checkout.
