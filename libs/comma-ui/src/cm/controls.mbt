@@ -353,10 +353,8 @@ pub fn collapse_node(
         |> ignore
       })
       |> ignore
-      h.box(fn(k) {
-        chevron(k, 20.0, fn() { colors().fg_quaternary })
-        k.turn(By(fn() { 3.141592653589793 * turn.shown(h) })) |> ignore
-      })
+      icon_node(h, icon_chevron_down_small, 20.0, fn() { colors().fg_quaternary })
+      .turn(By(fn() { 3.141592653589793 * turn.shown(h) }))
       |> ignore
       ring_node(h, fn() { radius_sm }, ink=focus_gray.1)
     })
@@ -414,8 +412,8 @@ pub fn indicator_node(
 }
 
 ///|
-/// Comma's scroll area in `parent`: `height` high, what `body` makes scrolling in it, what goes on past its top and
-/// foot fading out over 24 there (its `edgeEffect: mask`). Read out a scroll area named `label`. The node.
+/// Comma's scroll area in `parent`: `height` high, what `body` makes scrolling in it, faded out at its top and its foot
+/// only where what it holds goes on past them, over as much as goes on there, 24 at most (its `edgeEffect: mask`). Read out a scroll area named `label`. The node.
 #callsite(autofill(loc))
 pub fn scroll_area_node(
   parent : @view.View,
@@ -426,7 +424,23 @@ pub fn scroll_area_node(
 ) -> @view.View {
   parent.box(made_for=loc, fn(a) {
     a.height(Is(Some(height))).clips(Is(true)).says(Is(Some(@view.said(ScrollArea, label~)))) |> ignore
-    a.fades(Is((0.0, space_3xl, 0.0, space_3xl))) |> ignore
-    a.scrolls(@view.Scroll::new(), body) |> ignore
+    let scroll = @view.Scroll::new()
+    // (faded only where more goes on past it: over its top once scrolled down, under its foot till scrolled to it,
+    // each fade as deep as what goes on there, 24 at most)
+    a
+    .fades(By(fn() {
+      let at = scroll.drawn(a.tree)
+      let (top, foot) = edge_fades(at, scroll.reach())
+      (0.0, top, 0.0, foot)
+    }))
+    |> ignore
+    a.scrolls(scroll, body) |> ignore
   })
+}
+
+///|
+/// How deep a scroll area fades over its top and under its foot, scrolled `at` of the `reach` it can go: as deep as what
+/// goes on past each, 24 at most; none where nothing does.
+fn edge_fades(at : Double, reach : Double) -> (Double, Double) {
+  (at.max(0.0).min(space_3xl), (reach - at).max(0.0).min(space_3xl))
 }

@@ -77,31 +77,3 @@ fn escape_closes(h : @view.View, open : () -> Bool, close : () -> Unit) -> Unit 
   })
   |> ignore
 }
-
-///|
-/// A chevron pointing down, `side` across, in `ink` (Comma's chevron-down-small, two strokes): drawn in `b`.
-fn chevron(b : @view.View, side : Double, ink : () -> Int64) -> Unit {
-  b
-  .width(Is(Some(side)))
-  .height(Is(Some(side)))
-  .shrink(Is(0.0))
-  .lines(By(fn() {
-    let k = side / 20.0
-    [@ui.line([(6.5 * k, 8.5 * k), (10.0 * k, 12.0 * k), (13.5 * k, 8.5 * k)], width=1.67, color=ink())]
-  }))
-  |> ignore
-}
-
-///|
-/// A tick, `side` across, in `ink` (Comma's check, in a menu's row and a dropdown's chosen one).
-fn tick(b : @view.View, side : Double, ink : () -> Int64) -> Unit {
-  b
-  .width(Is(Some(side)))
-  .height(Is(Some(side)))
-  .shrink(Is(0.0))
-  .lines(By(fn() {
-    let k = side / 20.0
-    [@ui.line([(4.5 * k, 10.5 * k), (8.0 * k, 14.0 * k), (15.5 * k, 6.5 * k)], width=1.67, color=ink())]
-  }))
-  |> ignore
-}

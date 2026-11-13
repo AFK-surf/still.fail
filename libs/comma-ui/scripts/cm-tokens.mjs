@@ -159,6 +159,13 @@ say("  size : Double");
 say("  line : Double");
 say("  tracking : Double");
 say("}");
+// (palette steps a part names by its own, outside the semantic and component sets: the status indicator's needs-review
+// yellow-500 and cancelled error-500)
+for (const [family, step] of [["yellow", 500], ["error", 500]]) {
+  say();
+  say("///|");
+  say(`pub let ${family}_${step} : Int64 = ${rgba(colors.palettes[family][step])}`);
+}
 for (const [k, v] of Object.entries(type.compactTypeScale)) {
   say();
   say("///|");

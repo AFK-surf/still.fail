@@ -175,6 +175,13 @@ fn more_page(root : @view.View, layer : @cm.Layer, open : String) -> Unit {
         })
         |> ignore
       })
+      section(right, "Status indicator", fn(s) {
+        row(s, fn(r) {
+          for st in @cm.task_statuses {
+            @cm.status_node(r, @signals.signal(st)) |> ignore
+          }
+        })
+      })
       section(right, "Indicator", fn(s) {
         row(s, fn(r) {
           for size in [0, 1, 2] {

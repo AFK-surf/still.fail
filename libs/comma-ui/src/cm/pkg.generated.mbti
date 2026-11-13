@@ -74,11 +74,42 @@ pub let ease_surface_smooth_out : (Double, Double, Double, Double)
 
 pub fn eased_by(@view.View, () -> Bool, Double, (Double, Double, Double, Double)) -> Eased
 
+pub let error_500 : Int64
+
 pub let focus_brand : (Double, Int64)
 
 pub let focus_error : (Double, Int64)
 
 pub let focus_gray : (Double, Int64)
+
+pub let icon_bubble_alert : Array[IconLayer]
+
+pub let icon_check : Array[IconLayer]
+
+pub let icon_chevron_down_small : Array[IconLayer]
+
+pub let icon_circle_check : Array[IconLayer]
+
+pub let icon_circle_check_filled : Array[IconLayer]
+
+pub let icon_circle_info_filled : Array[IconLayer]
+
+pub let icon_circle_x : Array[IconLayer]
+
+pub let icon_circle_x_filled : Array[IconLayer]
+
+pub let icon_cross : Array[IconLayer]
+
+pub let icon_exclamation_circle_filled : Array[IconLayer]
+
+pub let icon_loader : Array[IconLayer]
+
+pub let icon_minus : Array[IconLayer]
+
+#callsite(autofill(loc))
+pub fn icon_node(@view.View, Array[IconLayer], Double, () -> Int64, ground? : () -> Int64, label? : String, stroke? : Double, loc~ : SourceLoc) -> @view.View
+
+pub let icon_stroke : Double
 
 #callsite(autofill(loc))
 pub fn indicator_node(@view.View, Signal, String, size? : Int32, loc~ : SourceLoc) -> @view.View
@@ -334,7 +365,12 @@ pub let space_xs : Double
 pub let space_xxs : Double
 
 #callsite(autofill(loc))
+pub fn status_node(@view.View, @signals.Signal[TaskStatus], label? : String, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
 pub fn tag_node(@view.View, () -> String, tone? : Tone, size? : BadgeSize, remove? : () -> Unit, loc~ : SourceLoc) -> @view.View
+
+pub let task_statuses : Array[TaskStatus]
 
 pub let toast_stays : Double
 
@@ -372,6 +408,8 @@ pub let weight_regular : Int32
 pub let weight_semibold : Int32
 
 pub fn words_in(TypeRole, weight? : Int32, wrap? : Bool) -> @view.WordsLook
+
+pub let yellow_500 : Int64
 
 // Errors
 
@@ -646,6 +684,13 @@ pub(all) enum Hierarchy {
   Destructive
 }
 
+pub(all) struct IconLayer {
+  d : String
+  fill : Bool
+  width : Double
+  cut : Bool
+}
+
 #derive(Eq, @debug.Debug)
 pub(all) enum Intent {
   Neutral
@@ -684,6 +729,15 @@ pub(all) enum Size {
   Lg
 }
 pub fn Size::height(Self) -> Double
+
+#derive(Eq, @debug.Debug)
+pub(all) enum TaskStatus {
+  InProgress
+  NeedsReview
+  Done
+  Cancelled
+}
+pub fn TaskStatus::label(Self) -> String
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ToastSaid {

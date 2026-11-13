@@ -164,20 +164,10 @@ pub fn tag_node(
           .says(By(fn() { Some(@view.said(Button, label="移除 " + label())) }))
           |> ignore
           presses_node(x, remove)
-          // (Comma's XIcon, 12 across: two strokes corner to corner)
-          x.box(fn(g) {
-            g
-            .width(Is(Some(12.0)))
-            .height(Is(Some(12.0)))
-            .lines(By(fn() {
-              let c = colors()
-              let ink = mix(c.text_tertiary, hand.shown(x), c.text_disabled)
-              [
-                @ui.line([(3.0, 3.0), (9.0, 9.0)], width=1.5, color=ink),
-                @ui.line([(9.0, 3.0), (3.0, 9.0)], width=1.5, color=ink),
-              ]
-            }))
-            |> ignore
+          // (Comma's XIcon: Central's cross-small, 12 across)
+          icon_node(x, icon_cross, 12.0, fn() {
+            let c = colors()
+            mix(c.text_tertiary, hand.shown(x), c.text_disabled)
           })
           |> ignore
           ring_node(x, fn() { radius_xs }, ink=focus_gray.1)

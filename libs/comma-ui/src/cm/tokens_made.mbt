@@ -683,6 +683,12 @@ pub(all) struct TypeRole {
 }
 
 ///|
+pub let yellow_500 : Int64 = 0xEAAA08FFL
+
+///|
+pub let error_500 : Int64 = 0xF04438FFL
+
+///|
 pub let type_micro : TypeRole = { size: 11.0, line: 16.0, tracking: 0.0 }
 
 ///|

@@ -4,6 +4,8 @@ import {
   "mbui/signals",
   "mbui/motion",
   "mbui/halt",
+  "mbui/paint",
+  "mbui/pixels",
 }
 
 import {

@@ -166,7 +166,7 @@ fn menu_rows(
           })
           |> ignore
           if item.checked {
-            r.box(fn(k) { tick(k, 20.0, fn() { colors().fg_brand_primary }) }) |> ignore
+            icon_node(r, icon_check, 20.0, fn() { colors().fg_brand_primary }) |> ignore
           }
         })
         |> ignore
@@ -295,10 +295,13 @@ pub fn dropdown_node(
       |> ignore
     })
     |> ignore
-    t.box(fn(k) {
-      chevron(k, 20.0, fn() { colors().fg_quaternary })
-      k.turn(By(fn() { if open.get() { 3.141592653589793 } else { 0.0 } })) |> ignore
-    })
+    icon_node(t, icon_chevron_down_small, 20.0, fn() { colors().fg_quaternary }).turn(By(fn() {
+      if open.get() {
+        3.141592653589793
+      } else {
+        0.0
+      }
+    }))
     |> ignore
     ring_node(t, fn() { radius_md })
   })

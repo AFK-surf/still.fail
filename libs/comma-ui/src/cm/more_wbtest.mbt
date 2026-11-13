@@ -254,3 +254,21 @@ test "a dialog open, light and dark, holds to mbui's audit but for Comma's own d
   }
   assert_eq((faults, known), ([], [false]))
 }
+
+///|
+test "a status indicator shows the chosen status, read out as the checked one of four radios, and chooses another as it is activated" {
+  let chosen = @signals.signal(InProgress)
+  let t = floating_case(fn(p, _) { status_node(p, chosen) |> ignore })
+  let before = t.all(Radio).filter(fn(r) { r.check == Some(On) }).map(fn(r) { r.label })
+  t.act(Radio, Activate, label="Done")
+  t.run_for(floating_ms)
+  assert_eq((before, chosen.get(), t.get(Radio, label="Done").check, t.all(Radio).length()), (["In progress"], Done, Some(On), 4))
+}
+
+///|
+test "a scroll area fades only where what it holds goes on: under its foot at its top, over both between, over its top at its foot" {
+  assert_eq(
+    (edge_fades(0.0, 300.0), edge_fades(10.0, 300.0), edge_fades(150.0, 300.0), edge_fades(300.0, 300.0), edge_fades(0.0, 0.0)),
+    ((0.0, 24.0), (10.0, 24.0), (24.0, 24.0), (24.0, 0.0), (0.0, 0.0)),
+  )
+}

@@ -22,7 +22,8 @@
   "style": {
     "tokens": [
       "src/cm/tokens.mbt",
-      "src/cm/tokens_made.mbt"
+      "src/cm/tokens_made.mbt",
+      "src/cm/icons_made.mbt"
     ],
     "outside": []
   },

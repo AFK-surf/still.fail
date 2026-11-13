@@ -54,16 +54,20 @@ pub fn check_node(
     .says(By(fn() { Some(@view.said(Checkbox, label=label(), check=if on() { On } else { Off })) }))
     |> ignore
     presses_node(b, fn() { turn(!@signals.untracked(on)) }, on=fn() { !disabled() })
-    // (the tick: Comma's check-large in the box's middle, 12.5% in from its sides, at the design's 1.67 stroke)
+    // (the tick: Comma's check-large (Central's checkmark-1) in the box's middle, 12.5% in from its sides (15% at Md),
+    // at the design's 1.67 stroke)
     b.box(fn(t) {
-      let k = side / 16.0
-      t
-      .over(Is(true))
-      .lines(By(fn() {
-        let c = colors()
-        let ink = if disabled() { c.fg_disabled } else { c.fg_white }
-        [@ui.line([(4.5 * k, 8.2 * k), (6.8 * k, 10.5 * k), (11.5 * k, 5.5 * k)], width=1.67, color=alpha(ink, fill.shown(b)))]
-      }))
+      t.over(Is(true)).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
+      icon_node(
+        t,
+        icon_check,
+        side * (if size == ControlSm { 0.75 } else { 0.7 }),
+        fn() {
+          let c = colors()
+          alpha(if disabled() { c.fg_disabled } else { c.fg_white }, fill.shown(b))
+        },
+        stroke=1.67,
+      )
       |> ignore
     })
     |> ignore

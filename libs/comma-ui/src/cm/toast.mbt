@@ -112,28 +112,26 @@ fn toast_card(
     |> ignore
     card.box(fn(r) {
       r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(space_md)) |> ignore
-      // (its intent's mark in the 20 its glyph would take)
-      r.box(fn(m) {
-        m.width(Is(Some(space_2xl))).height(Is(Some(space_2xl))).shrink(Is(0.0)).lines_up(Is(Some(Middle))).lies_along(Is(Middle))
-        |> ignore
-        m.box(fn(d) {
-          d
-          .width(Is(Some(space_md)))
-          .height(Is(Some(space_md)))
-          .radius(Is(space_xs))
-          .ground(By(fn() {
-            let c = colors()
-            match said.get().intent {
-              Neutral => c.toast_icon_primary
-              Success => c.fg_success_primary
-              Warning => c.fg_warning_primary
-              Error => c.fg_error_primary
-            }
-          }))
-          |> ignore
-        })
-        |> ignore
-      })
+      // (its intent's glyph, 20 across: Central's filled circle-info, -check, exclamation-circle and -x)
+      icon_node(
+        r,
+        match @signals.untracked(fn() { said.get().intent }) {
+          Neutral => icon_circle_info_filled
+          Success => icon_circle_check_filled
+          Warning => icon_exclamation_circle_filled
+          Error => icon_circle_x_filled
+        },
+        space_2xl,
+        fn() {
+          let c = colors()
+          match said.get().intent {
+            Neutral => c.toast_icon_primary
+            Success => c.fg_success_primary
+            Warning => c.fg_warning_primary
+            Error => c.fg_error_primary
+          }
+        },
+      )
       |> ignore
       r.box(fn(w) {
         w
@@ -152,20 +150,7 @@ fn toast_card(
         .says(Is(Some(@view.said(Button, label="Dismiss"))))
         |> ignore
         presses_node(x, dismiss)
-        x.box(fn(g) {
-          g
-          .width(Is(Some(16.0)))
-          .height(Is(Some(16.0)))
-          .lines(By(fn() {
-            let ink = colors().toast_icon_primary
-            [
-              @ui.line([(4.0, 4.0), (12.0, 12.0)], width=1.67, color=ink),
-              @ui.line([(12.0, 4.0), (4.0, 12.0)], width=1.67, color=ink),
-            ]
-          }))
-          |> ignore
-        })
-        |> ignore
+        icon_node(x, icon_cross, 16.0, fn() { colors().toast_icon_primary }) |> ignore
       })
       |> ignore
     })

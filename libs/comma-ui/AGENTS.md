@@ -10,7 +10,7 @@ a sample of what mbui needs to carry a second design (the user, 2026-11-13: å…ˆå
   check, CI's `check-comma-ui`.
 - The numbers are Comma's, never typed here: `src/cm/tokens_made.mbt` is written by `scripts/cm-tokens.mjs` from Cue's
   token modules (`node scripts/cm-tokens.mjs <Cue checkout>`), and a part reads them by name (`colors()`, `space_*`,
-  `radius_*`, `type_*`, `ms_*`, `ease_*`). A value Comma's tokens lack is added there first, in Cue.
+  `radius_*`, `type_*`, `ms_*`, `ease_*`). A value Comma's tokens lack is added there first, in Cue. Its icons are Central Icons as Comma has them: `src/cm/icons_made.mbt`, written by `scripts/cm-icons.mjs` from a Cue checkout with its packages installed (Central's are licensed npm packages), drawn by `src/cm/icon.mbt` at Comma's one on-screen stroke.
 - A part takes its look from the Comma component of the same name (its `styles.ts`, its classes), and is read out as
   that component's role (react-aria's). Every part is a node of mbui's window's tree (`libs/mbui/src/view`), never an old view.
 - What each part does with the hand (`src/cm/presses.mbt`) and how a look moves (`src/cm/eased.mbt`) are the same as
