@@ -1134,13 +1134,15 @@ export class Cloud {
   /// Why a workspace this station joined is none it takes members of now (`memberships` leaves it out): the lock joining
   /// named not brought by the control plane yet (`pending`); locked, with no lock named to pin (`unpinned`: joined before
   /// it was locked); or this station's home locked and it not (`home`). Null when it is in, or is none it joined.
+  /// The plane's `locked` counts only where no chain is pinned here: one pinned goes by its own state, a moved one's
+  /// off as its root's log says, which the plane never reads (its chain ends in `moved` for good, so it says locked).
   leftOut(ws: string): "pending" | "unpinned" | "home" | null {
     const s = this.state;
     if (s === null || !s.workspace || this.removed() || ws === s.workspace) return null;
     const j = (s.joined ?? []).find((x) => x.workspace === ws);
     if (j === undefined || this.locked(ws) !== null) return null;
     if (this.pendingLock(ws) !== null) return "pending";
-    if (j.locked === true) return "unpinned";
+    if (j.locked === true && this.chain(ws) === null) return "unpinned";
     return this.locked() !== null ? "home" : null;
   }
 

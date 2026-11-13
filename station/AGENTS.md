@@ -160,6 +160,10 @@
   Before a chain moves, `GET /lock/logs` gives a device it lets in the logs it binds its members by, as kept here
   (`Cloud.logsOf`): what an owner's device reads before handing it over, so a member's device is not dropped.
   `test/lock-moved-model.test.ts` holds all of it to the model, `test/lock-left-out.test.ts` the refusal's `left`.
+  The control plane's `locked` never says whether such a workspace is on (its chain ends in `moved` for good, so it says
+  locked, off or on): a station that pinned the chain goes by the state in force (`leftOut`: never `unpinned`; its home
+  off, a joined unlocked one's members taken), and so does `enroll --join` on the machine (`src/cli.ts`
+  `joinWorkspace`), which the cloud no longer refuses for a moved home (2026-11-14, `test/lock-moved-joined.test.ts`).
 
 ## Screens
 
