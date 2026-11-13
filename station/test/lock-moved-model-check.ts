@@ -134,6 +134,7 @@ function d4Of(c: Cloud): D4 | string {
 }
 
 const stood = new WeakMap<World4, Map<string, Stood>>();
+const words = new WeakMap<World4, Map<string, string>>();
 
 /// Every keeper of `w` that goes by a root, compared at `at`: each station, and each device too, stood for by a station
 /// given what it keeps (a device keeps a workspace as a station does: the model's keepers are both); `extra`, bodies
@@ -146,6 +147,11 @@ export function stations4(o: Out, w: World4, at: string, r: Rng, extra: Body[] =
     const pins = w.pinsOf(h);
     for (const [ws, root] of pins) {
       if (!root) continue;
+      // (a keeper nothing came to since it was last compared, by the same clock: compared already)
+      const word = `${h.ver}|${root}|${w.clock(h)}|${w.x.order.length}|${extra.length}|${w.x.old.get(h)?.active.length ?? -1}`;
+      const seen = words.get(w) ?? words.set(w, new Map()).get(w)!;
+      if (!last && seen.get(`${h.name}|${ws}`) === word) continue;
+      seen.set(`${h.name}|${ws}`, word);
       o.stations++;
       o.moved++;
       const where = `${at}, ${h.name}, ${ws === WS ? "W1" : "W2"}`;
@@ -269,7 +275,8 @@ export function drawnWorlds(v: V3v, family: Family, from: number, to: number, st
 export function scriptedWorlds(from: number, to: number): Out {
   const o = fresh();
   const r = new Rng(from ^ 0x5a7f);
-  look4.at = (w, where, offered) => stations4(o, w, where, r, offered ?? [], true);
+  // (each look of a scripted world in the order bodies came; another order is the drawn worlds' end's)
+  look4.at = (w, where, offered) => stations4(o, w, where, r, offered ?? []);
   try {
     for (let seed = from; seed <= to; seed++) {
       m2(seed);
