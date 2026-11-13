@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [89ca87552](https://github.com/AFK-surf/still.fail/commit/89ca87552673e44bc44a0d13fa4ef991320d3fd4) rules: a person's log takes web devices and a work | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.52 | 181.81 |
 | [de090a12f](https://github.com/AFK-surf/still.fail/commit/de090a12f616c06e10a31e0e4e0435a3345f1433) mbui, app: open and sink touch sheets at the scree | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.65 | 149.69 |
 | [ff43bba2a](https://github.com/AFK-surf/still.fail/commit/ff43bba2a4749541fecaeb70856a92354a7c04e3) core: a device's entries that lost their place tog | 1.93 | 2.59 | 11.15 | 30.55 | 39.98 | 27.22 | 51.98 | 93.32 | 134.14 |
 | [7ffd403c3](https://github.com/AFK-surf/still.fail/commit/7ffd403c3f540c8f52a1752c4a82e798c6920685) mbui: what is let go from outside lands on the nod | 1.93 | 2.59 | 11.15 | 30.55 | 39.98 | 27.21 | 51.98 | 93.31 | 170.61 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c447d3c8f](https://github.com/AFK-surf/still.fail/commit/c447d3c8f9f76ca9027e30d8acb148cc80a177ea) mbui: what comes down a column in a group set off  | 1.92 | 2.58 | 11.09 | 30.15 | 39.77 | 26.83 | 51.09 | 94.88 | 158.25 |
 | [d1960a64d](https://github.com/AFK-surf/still.fail/commit/d1960a64d14e7f3350aeaaa7989a5c40653b162a) station: a local status socket, what its agents do | 1.93 | 2.58 | 11.09 | 30.15 | 39.77 | 26.82 | 51.09 | 94.54 | 147.47 |
 | [4124b8b5f](https://github.com/AFK-surf/still.fail/commit/4124b8b5ffbaef4dd62163041ed550c74a4f710e) app: the window resized moves nothing in a chat or | 1.92 | 2.58 | 11.09 | 30.14 | 39.75 | 26.81 | 51.08 | 94.59 | 167.1 |
-| [7a1131cc8](https://github.com/AFK-surf/still.fail/commit/7a1131cc8bdb3d250d60e2dcd4b9d725c1119250) app: a chat's row's gap kept by its kind, its heig | 1.92 | 2.58 | 11.09 | 30.14 | 39.75 | 26.81 | 51.08 | 94.49 | 154.08 |
