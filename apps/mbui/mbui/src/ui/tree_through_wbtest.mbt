@@ -268,3 +268,83 @@ test "a cover dragged only once held, its press called off taking the node under
 test "a cover dragged only once held, its press called off opening a modal layer over what is under it: nothing under it handed the finger" {
   assert_eq(tree_moved_through(3), ["cover press", "cover drag Off"])
 }
+
+///|
+/// Words of the window's tree that are picked with the pointer (words_picked) 300 wide 40 down a window 400 by 300, a
+/// cover 300 by 60 over them whose hold goes through (a page's strip beside 中屏's sidebar), a finger held still on the
+/// cover over "wide" past a long press and let go, on a phone; `moved`: moved past the slop first (40 down), then held
+/// still there as long. What the cover was told, in order; what is picked then; how many times it was felt.
+fn words_through(moved? : Bool = false) -> (Array[String], String, Int) raise {
+  let said : Array[String] = []
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=2)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.width(Is(Some(400.0))).height(Is(Some(300.0))) |> ignore
+      b.box(fn(page) {
+        page.over(Is(true)).padding(Is((0.0, 40.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
+        words_picked(page)
+        page.box(fn(n) {
+          n
+          .width(Is(Some(300.0)))
+          .words_runs(Is(picked_runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      b.box(fn(cv) {
+        cv
+        .over(Is(true))
+        .offset(Is((0.0, 20.0)))
+        .width(Is(Some(300.0)))
+        .height(Is(Some(60.0)))
+        .gesture(
+          touch_slop(),
+          press=fn(_) { said.push("cover press") },
+          tap=fn(_) { said.push("cover tap") },
+          drag=fn(d) { said.push("cover drag \{d.kind}") },
+          through=long_press_ms,
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  // (on "wide", 60 in from where the words start: "hello " is narrower than that, as finger_select_test has it)
+  guard t.rect_of("hello wide world") is Some((rx, ry, _, rh)) else { fail("no words drawn") }
+  let (x, y) = (rx + 60.0, ry + rh / 2.0)
+  t.touch(0, x, y)
+  let ly = if moved {
+    t.touch(1, x, y + 40.0)
+    y + 40.0
+  } else {
+    y
+  }
+  t.run_for(long_press_ms + through_later_ms)
+  t.touch(2, x, ly)
+  t.draw()
+  let text = match picked_now() {
+    Some(p) => p.text
+    None => ""
+  }
+  (said, text, t.haptics().length())
+}
+
+///|
+test "a cover whose hold goes through over words of the tree's that are picked, a finger held still on it past a long press: its own hold called off (Off, no tap), the word under it picked, felt once" {
+  let (said, text, felt) = words_through()
+  assert_eq(said, ["cover press", "cover drag Off"])
+  assert_eq(text, "wide")
+  assert_eq(felt, 1)
+}
+
+///|
+test "a cover whose hold goes through over words of the tree's that are picked, a finger moved past the slop on it and then held still past a long press: the cover's drag, nothing picked, nothing felt" {
+  let (said, text, felt) = words_through(moved=true)
+  assert_eq(said, ["cover press", "cover drag Down", "cover drag Up"])
+  assert_eq(text, "")
+  assert_eq(felt, 0)
+}

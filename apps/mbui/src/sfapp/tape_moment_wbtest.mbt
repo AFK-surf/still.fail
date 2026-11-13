@@ -169,17 +169,19 @@ test "on the tape a page waiting as the tape is made again (大屏 and back) wai
 
 ///|
 /// What shows of the page at the right pulled across to `x1` by a finger, let go `held` finger's moves' time after it
-/// went down: moved there in `steps` moves (none: down, then let go there, no move told between).
+/// went down: moved there in `steps` moves (none: down, then let go there, no move told between). Down at the strip's
+/// middle 300 down the window, on no words either page made of the chat picks (held still past a long press on words,
+/// they are picked and the page brought over: tape_wbtest's held passage).
 fn tape_pulled_over(steps : Int, x1 : Double, held : Int) -> @sfdesk.TapePane raise {
   let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   let x0 = 720.0 - @sfdesk.tape_shows / 2.0
   if steps == 0 {
-    t.press_at(x0, 400.0)
+    t.press_at(x0, 300.0)
     t.advance(@ui.input_step_ms * held.to_double())
-    t.release(x1, 400.0)
+    t.release(x1, 300.0)
   } else {
-    t.drag(x0, 400.0, x1, 400.0, steps~)
+    t.drag(x0, 300.0, x1, 300.0, steps~)
   }
   t.run_for(@ui.move_most_ms)
   @sfdesk.wide.tape_at.get()
