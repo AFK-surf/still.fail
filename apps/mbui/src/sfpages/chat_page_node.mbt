@@ -87,6 +87,16 @@ pub fn chat_page_body_node(
       }
     },
   )
+  // its pictures that could not be had for want of its station asked again as the chat comes into view (made, or shown
+  // again from under what covered it), and as its station is reached again (ChatImages::seen, as its view says it
+  // offline or not), as the old page's list asks them (chat_list's)
+  v.reacts(shows, fn(now) { if now { src.images.again(r.station) } })
+  v.reacts(fn() { read.get().map(fn(x) { !x.0.offline }) }, fn(reached) {
+    match reached {
+      Some(b) => src.images.seen(r.station, b)
+      None => ()
+    }
+  })
   // (its rows by the width it is given, never one worked out of the shell's state)
   v.by_room(fn(b, room) {
     b.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore

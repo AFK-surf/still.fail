@@ -9,7 +9,6 @@
 // Not here yet, each where it comes in:
 // - a Mermaid chart: as its code till then; `code` takes viz_mermaid_node once it is in main (#5525).
 // - a vault item's card asking for a file to be picked (message_card_node's NotYet): nothing drawn for it yet.
-// - its pictures placed side by side in its words: once its pictures are nodes (#5552, #5553); each its box till then.
 // - its picture held under the pane's top as a long one scrolls past (c.stick), and its coming out of its agent's picture
 //   (emit): the list's, as the list is made of nodes.
 
@@ -189,7 +188,7 @@ fn agent_prose_node(
       chat_title=fn(h) { chat_title_of(m())(h) },
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
       paths=@signals.untracked(m).by.agent != "",
-      // (a file it places: its card where it places it; a picture's its box, not yet side by side with another)
+      // (a file it places: its card where it places it; a picture's its box, side by side with others, in a table's cell)
       files=fn(name) {
         let card = fn(a) {
           fn(d) { message_files_node(d, src, here.tips, place, fn() { [a] }, fn() { false }, by, at) }
@@ -204,8 +203,23 @@ fn agent_prose_node(
               },
               image: None,
             })
+          // (a picture: its width over its height and its box as wide as it is given there, side by side with others or
+          // in a table's cell; made again only for another size, as message_files_node's)
           Some(a) =>
-            Some({ draw: card(a), image: None })
+            Some({
+              draw: card(a),
+              image: image_ratio(a).map(fn(r) {
+                (
+                  r,
+                  fn(d : @view.View, width : () -> Double) {
+                    d.pick(at_once=true, fn() { width() }, fn(q, w) {
+                      message_image_node(q, src, place, fn() { a }, by, at, w, w / r)
+                    })
+                    |> ignore
+                  },
+                )
+              }),
+            })
           None => None
         }
       },

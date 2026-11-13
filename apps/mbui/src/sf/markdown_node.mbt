@@ -41,7 +41,7 @@ pub fn markdown_node(
   one_line? : Bool = false,
   chat_title? : (String) -> String? = fn(_) { None },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
-  files? : (String) -> PlacedNode? = fn(_) { None },
+  files? : (String) -> PlacedNode?,
   screens? : ScreensNode,
   loc~ : SourceLoc,
 ) -> @view.View {
@@ -82,7 +82,8 @@ pub fn markdown_node(
       link_cards,
       chat_title,
       code,
-      files,
+      files: files.unwrap_or(fn(_) { None }),
+      places: files is Some(_),
       screens,
     }
     let blocks = fn() { md_node_blocks(text(), tree()) }
@@ -115,6 +116,9 @@ priv struct MdNode {
   chat_title : (String) -> String?
   code : (String) -> ((@view.View, () -> String) -> Unit)?
   files : (String) -> PlacedNode?
+  /// whether it was told its files at all (markdown_node's `files`): where not, none is placed and no cell of a table
+  /// is images, so nothing is made to choose between them (md_cell_images)
+  places : Bool
   screens : ScreensNode?
 }
 
@@ -447,6 +451,7 @@ fn md_block_node(
           md.on_link,
           md.on_link_hold,
           fit=md.fit,
+          cell_images?=if md.places { Some(fn(cell) { md_cell_images(md, cell) }) } else { None },
         )
       })
       |> ignore
@@ -1003,6 +1008,31 @@ let md_task_check : Double = 11.0
 /// system's size of words applied first, as old text's with none said: style_words' share of their size).
 fn md_plain_look(size : Double, line : Double) -> @view.WordsLook {
   { size, weight: 400, line: if line > 0.0 { line } else { -@ui.tree_theme().text_line }, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
+}
+
+///|
+/// A table's cell of only the message's images (Md::cell_images'): each one's width over its height (no wider than 4
+/// to 1 nor taller than 1 to 4) and its drawing (its file's, PlacedNode's `image`); None for any other cell, drawn as
+/// words.
+fn md_cell_images(md : MdNode, cell : Array[MdInline]) -> Array[(Double, (@view.View, () -> Double) -> Unit)]? {
+  let out = []
+  for x in cell {
+    match x {
+      Text(t) if t.trim(chars=" \n\t").to_owned() == "" => ()
+      HardBreak => ()
+      Image(src, _) =>
+        match (md.files)(file_name_of(src)) {
+          Some({ image: Some((r, draw)), .. }) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
+          _ => return None
+        }
+      _ => return None
+    }
+  }
+  if out.length() == 0 {
+    None
+  } else {
+    Some(out)
+  }
 }
 
 ///|

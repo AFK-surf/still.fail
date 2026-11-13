@@ -66,6 +66,21 @@ fn view_rect(t : @ui.Tester, id : Int) -> (Double, Double, Double, Double)? {
 }
 
 ///|
+/// Where the 全屏 under the page of the view `id` is (its middle), by what a screen reader is told of it: the button so
+/// named whose middle lies under that page, within its width; None where none is (the page not on the screen).
+fn viz_full_at(t : @ui.Tester, id : Int) -> (Double, Double)? {
+  guard view_rect(t, id) is Some((x, y, w, h)) else { return None }
+  for b in t.all(Button, label=@sfbase.viz_tr("android-misc.viz.fullscreen")) {
+    let (bx, by, bw, bh) = b.rect
+    let (mx, my) = (bx + bw / 2.0, by + bh / 2.0)
+    if mx >= x && mx <= x + w && my >= y + h && my <= y + h + 44.0 {
+      return Some((mx, my))
+    }
+  }
+  None
+}
+
+///|
 test "two scoped copies of a visualization each own their native view" {
   new_run()
   let t = @ui.Tester::new(fn(c) {
@@ -233,9 +248,9 @@ test "under the page: the whole screen, its name and a close over it; back close
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  let (x, y, w, h) = view_rect(t, page).unwrap()
-  // the two 22 boxes under it, at its right: the whole screen, then beside
-  t.tap(x + w - 22.0 - 2.0 - 11.0, y + h + 2.0 + 11.0)
+  // the whole screen, under it (the first of the ways there: the whole screen, then beside)
+  let (fx, fy) = viz_full_at(t, page).unwrap()
+  t.tap(fx, fy)
   t.frame()
   assert_true(t.find("release.html") is Some(_))
   let full = opened_views(t, 2)
