@@ -10,7 +10,6 @@
 let ways_told_known : Array[(String, String, Int)] = [
   // (chat_bar_wide_node.mbt:225, the chat's bar as the chat's answer comes; the history's own blocks come at once since
   // #5986's at_once in sfdesk/history.mbt)
-  ("history opened beside the chat", "B", 2),
   ("history beside, another chat", "B", 3),
   ("history beside both, to s-c1", "B", 2),
   ("history beside both, to s-c2", "B", 2),
