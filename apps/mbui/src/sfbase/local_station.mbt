@@ -52,7 +52,7 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
         match text(Some(v), "token") {
           "" => failed(tr("web-pages.settings.thisMac.noAnswer"))
           token =>
-            @ui.local_station_act("install " + local_install_ask(token, lock=text(Some(v), "lock")))
+            @hostapi.app_tell("local_station_act", "install " + local_install_ask(token, lock=text(Some(v), "lock")))
         }
       // refused (not its owner or admin, the workspace's stations full): said, not passed over
       Err(e) => failed(@settings.error_text(e))
@@ -94,7 +94,7 @@ pub fn local_machine_name() -> String {
 ///|
 /// 更新到最新版: the station here brought up to the latest release and run as a service, as it is.
 fn local_station_update() -> Unit {
-  @ui.local_station_act("update " + local_install_ask(""))
+  @hostapi.app_tell("local_station_act", "update " + local_install_ask(""))
 }
 
 ///|
@@ -109,7 +109,7 @@ pub fn local_station_carry_on() -> Unit {
   if @ui.env("MBUI_OWN") != "1" {
     return
   }
-  let s = match @ui.local_station() {
+  let s = match @hostapi.app_said("local_station") {
     "" => return
     j => try Some(@json.parse(j)) catch { _ => None }
   }

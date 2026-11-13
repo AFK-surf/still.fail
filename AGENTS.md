@@ -15,7 +15,7 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
   on the device, the views. The UIs only render it. `client/shell` (Rust) is its IO in the native apps,
   `client/iroh-wasm` iroh for the browser, `client/i18n/catalog` the words of every part (zh and en, the same keys).
 - `apps/mbui/`: the app on every platform (Android, iOS, macOS, Windows, Linux, and the web), in MoonBit on mbui, the
-  UI framework at `apps/mbui/mbui`.
+  UI framework at `libs/mbui`.
 - `web/`: the web's host of that app, a few pages of its own (Preact) and the design system `web/ui`.
 - `website/`: the official site. `rules/`: rules shared by the station, cloud and core, in MoonBit, built to JS.
 - `scripts/`: checks, releases, the CI plan. `vendor/`: patched upstream code (its README says each patch).

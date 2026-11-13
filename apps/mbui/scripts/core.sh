@@ -287,7 +287,7 @@ print(" ".join(out))' $OUT/shell-$1.libs
 core_program() {
   local target=aarch64-apple-darwin fw=$(hermes_fw aarch64-apple-darwin)
   apple $target || return 1
-  clang -fobjc-arc -O2 -Wall -Isrc/host core/$1.m mbui/src/host/apple_listen.m $OUT/$target/libmbui_core.a \
+  clang -fobjc-arc -O2 -Wall -Isrc/host core/$1.m "$MBUI_DIR/src/host/apple_listen.m" $OUT/$target/libmbui_core.a \
     $OUT/$target/libstillfail_shell.a $(libs $target) -F$fw -framework hermes -Wl,-rpath,$fw -lc++ \
     -framework LocalAuthentication -framework Foundation -Wl,-dead_strip -o $OUT/$1
 }
@@ -475,7 +475,7 @@ fairness_test() {
     "$ROOT/engine/engine.cpp" "$ROOT/engine/tests/fairness.cpp" -F"$fw" -framework hermes -Wl,-rpath,"$fw" \
     -o "$OUT/fairness-engine" || return 1
   "$OUT/fairness-engine" "$OUT/fairness-test.hbc" || return 1
-  clang -fobjc-arc -O2 -Isrc/host -c mbui/src/host/apple_listen.m -o "$OUT/fairness-listen.o" || return 1
+  clang -fobjc-arc -O2 -Isrc/host -c "$MBUI_DIR/src/host/apple_listen.m" -o "$OUT/fairness-listen.o" || return 1
   clang++ -std=c++20 -O2 -DTEST_APPLE_HOST -Isrc/host "$ROOT/engine/tests/fairness.cpp" "$OUT/fairness-listen.o" \
     "$OUT/$target/libmbui_core.a" "$OUT/$target/libstillfail_shell.a" $(libs $target) -F"$fw" -framework hermes \
     -Wl,-rpath,"$fw" -framework LocalAuthentication -framework Foundation -o "$OUT/fairness-apple" || return 1

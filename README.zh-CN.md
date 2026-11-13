@@ -76,7 +76,7 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 | `client/` | 共用的客户端 core（`core-ts`）、它的原生外壳（`shell`，Rust）、浏览器用的 iroh（`iroh-wasm`）和翻译（`i18n`） |
 | `web/` | 网页上运行 app 的宿主，以及登录、分享和管理后台页面 |
 | `website/` | 官网 |
-| `apps/mbui/` | 各端 app（安卓、iOS、macOS、Windows、Linux），用 mbui（`apps/mbui/mbui`）写 |
+| `apps/mbui/` | 各端 app（安卓、iOS、macOS、Windows、Linux），用 mbui（`libs/mbui`）写 |
 | `cloud/` | Cloudflare 上的账号、workspace、中继和发布 |
 | `rules/` | station、cloud 和 core 共用的规则，MoonBit 写、编译成 JavaScript |
 | `scripts/` | 检查、发布和 CI 计划 |

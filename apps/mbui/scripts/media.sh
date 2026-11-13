@@ -93,6 +93,11 @@ if [ "$portable" = 0 ]; then
   fi
 fi
 [ -x "$exe" ] || { echo "media: no executable for $app" >&2; exit 1; }
+# this machine's station as the app's own native call says it (MBUI_LOCAL_STATION), as mbui's film takes such calls
+if [ -n "${MBUI_LOCAL_STATION:-}" ]; then
+  MBUI_APP_SAID=$(jq -cn --arg s "$MBUI_LOCAL_STATION" '{local_station: $s}')
+  export MBUI_APP_SAID
+fi
 if [ "$kind" = picture ]; then
   env MBUI_FILM= MBUI_PICTURE="$work/result.png" MBUI_FILM_DRIVE="$work/drive" \
     MBUI_FILM_PREPARE="${prepare:+$work/prepare}" MBUI_FILM_LAST= MBUI_FILM_COPIED= "$exe"

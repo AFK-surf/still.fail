@@ -86,13 +86,13 @@ fn station_view_node(
   // (what the host says of the station here, as it said it last: a signal of that input, read again every few seconds
   // from when it is made, while this page is this machine's station's: it starts, stops and updates on its own time)
   let host : @signals.Signal[String] = @signals.signal(
-    if address == this_machine() { @ui.local_station() } else { "" },
+    if address == this_machine() { @hostapi.app_said("local_station") } else { "" },
     same=fn(a, b) { a == b },
   )
   if bones is None && address == this_machine() {
     fn again(at : Double) -> Unit {
       p.at_moment(at + @settings.local_read_ms, later=true, fn() {
-        host.set(@ui.local_station())
+        host.set(@hostapi.app_said("local_station"))
         again(at + @settings.local_read_ms)
       })
       |> ignore

@@ -548,7 +548,8 @@
     "empty-on-done": {},
     "panic-test": {},
     "read-before-run": {},
-    "reset-by-hand": {}
+    "reset-by-hand": {},
+    "app-word": {}
   },
   "excused": {
     "frame-request": {},
@@ -633,6 +634,7 @@
     "empty-on-done": {},
     "panic-test": {},
     "read-before-run": {},
-    "reset-by-hand": {}
+    "reset-by-hand": {},
+    "app-word": {}
   }
 }

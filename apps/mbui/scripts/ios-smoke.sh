@@ -179,14 +179,14 @@ case "${1:-}" in
     e2e_env
     up=1
     if [ -f "$STATE/prepare.pid" ]; then
-      "$A/mbui/scripts/chk" logwait --pid "$(cat "$STATE/prepare.pid")" --deadline 600 >/dev/null || true
+      "$MBUI_DIR/scripts/chk" logwait --pid "$(cat "$STATE/prepare.pid")" --deadline 600 >/dev/null || true
       rm -f "$STATE/prepare.pid"
       cat "$STATE/prepare.log"
       [ -f "$STATE/prepare.ok" ] || { tail -30 "$E2E_WORK/run/"*.log 2>/dev/null; bash "$D/e2e-local.sh" down; echo "ios-smoke: the local still.fail did not start"; exit 1; }
       up=
     fi
     if [ -f "$STATE/boot.pid" ]; then
-      "$A/mbui/scripts/chk" logwait --pid "$(cat "$STATE/boot.pid")" --deadline 600 >/dev/null || true
+      "$MBUI_DIR/scripts/chk" logwait --pid "$(cat "$STATE/boot.pid")" --deadline 600 >/dev/null || true
       rm -f "$STATE/boot.pid"
       cat "$STATE/boot.log"
     fi

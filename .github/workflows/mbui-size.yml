@@ -80,7 +80,7 @@ jobs:
         with:
           sparse-checkout: |
             apps/mbui/scripts
-            apps/mbui/mbui/scripts
+            libs/mbui/scripts
       - if: needs.find.outputs.apk == 'true'
         uses: actions/download-artifact@v4
         with: { name: "mbui-apk-${{ needs.find.outputs.sha }}", path: in/apk, run-id: "${{ env.RUN }}", github-token: "${{ github.token }}" }

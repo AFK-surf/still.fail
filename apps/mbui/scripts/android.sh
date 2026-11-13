@@ -18,4 +18,6 @@ case "${VARIANT:-debug}" in
   *) export MBUI_APP_ID=${MBUI_APP_ID:-fail.still.android.dev} ;;
 esac
 case $APP in coredemo | stillfail) export MBUI_ANDROID_HOOK=$D/android-core.sh ;; esac
+# (`log`: the core's own lines beside mbui's, src/host/android_core.c)
+export MBUI_LOG_TAGS=${MBUI_LOG_TAGS:-StillFailCore:*}
 exec bash "$MBUI_DIR/scripts/android.sh" "$@"

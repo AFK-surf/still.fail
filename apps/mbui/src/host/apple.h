@@ -1,2 +1,2 @@
-// mbui's apple.h (apps/mbui/mbui), for the files beside this one
-#include "../../mbui/src/host/apple.h"
+// mbui's apple.h (libs/mbui), for the files beside this one
+#include "../../../../libs/mbui/src/host/apple.h"

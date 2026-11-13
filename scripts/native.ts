@@ -242,11 +242,12 @@ function mbuiRenderer(app: string, launcher: string): Part {
     publish: [],
     rust: false,
     // Generated interface summaries are not compiler inputs; `moon check` can rewrite them without changing a scene.
-    inputs: ["apps/mbui/src", "apps/mbui/mbui/src", "apps/mbui/mbui/tools", "apps/mbui/mbui/scripts",
-      "apps/mbui/moon.mod", "apps/mbui/moon.work", "apps/mbui/mbui/moon.mod",
+    inputs: ["apps/mbui/src", "libs/mbui/src", "libs/mbui/tools", "libs/mbui/scripts",
+      "apps/mbui/moon.mod", "apps/mbui/moon.work", "libs/mbui/moon.mod",
       "apps/mbui/scripts/env.sh", "apps/mbui/scripts/mbui.sh", "apps/mbui/scripts/mac.sh", `apps/mbui/scripts/${launcher}`,
       ":(exclude,glob)apps/mbui/**/*_test.mbt", ":(exclude,glob)apps/mbui/**/*_wbtest.mbt",
-      ":(exclude,glob)apps/mbui/**/pkg.generated.mbti"],
+      ":(exclude,glob)apps/mbui/**/pkg.generated.mbti", ":(exclude,glob)libs/mbui/**/*_test.mbt",
+      ":(exclude,glob)libs/mbui/**/*_wbtest.mbt", ":(exclude,glob)libs/mbui/**/pkg.generated.mbti"],
     recipe: () => ({ app, target: "native", mode: "release", host: "macOS", scene: 1 }),
     build(t, out) {
       if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") {
@@ -349,7 +350,7 @@ const PARTS: Record<string, Part> = {
     env: "STILLFAIL_MB_READER",
     rust: false,
     inputs: ["station/mb/src", "station/mb/moon.mod", "station/mb/moon.work", "station/mb/build.sh",
-      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/src/halt", "apps/mbui/mbui/moon.mod",
+      "libs/mbui/src/effect", "libs/mbui/src/halt", "libs/mbui/moon.mod",
       ":(exclude,glob)**/*_test.mbt", ":(exclude,glob)**/*_wbtest.mbt", ":(exclude,glob)**/pkg.generated.mbti"],
     recipe: (t) => ({ moon: "native release", shell: t === "darwin-arm64" ? key("shell-apple", t) : key("shell-station", t), mac: key("shell-apple", "darwin-arm64") }),
     build(t, out) {

@@ -262,7 +262,7 @@ test "添加 station: 添加这台 Mac pressed, closed as it showed, the station
     let t = sa_open(calls, platform=0, wide~)
     t.run_for(@ui.move_most_ms)
     sa_leaving(t, at, fn() raise { t.click(Button, label="添加这台 Mac") }, seen=["也可以直接添加这台 Mac：在这里下载 station 并加入这个 workspace，不用到终端里执行命令。", "station 是一台运行 still.fail 的机器。为它命名，然后在该机器的终端中执行生成的命令，它会安装 still.fail 并加入。", "名称"], unseen=[])
-    assert_eq(t.local_acts().length(), 1, msg=at)
-    assert_true(t.local_acts()[0].has_prefix("install"), msg=at)
+    assert_eq(t.app_told("local_station_act").length(), 1, msg=at)
+    assert_true(t.app_told("local_station_act")[0].has_prefix("install"), msg=at)
   }
 }

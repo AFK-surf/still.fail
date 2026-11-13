@@ -76,7 +76,7 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 | `client/` | Shared client core (`core-ts`), its native shell (`shell`, Rust), the browser's iroh (`iroh-wasm`) and translations (`i18n`) |
 | `web/` | The web's host of the app, and its sign-in, share and admin pages |
 | `website/` | The official site |
-| `apps/mbui/` | The apps (Android, iOS, macOS, Windows, Linux), written in mbui (`apps/mbui/mbui`) |
+| `apps/mbui/` | The apps (Android, iOS, macOS, Windows, Linux), written in mbui (`libs/mbui`) |
 | `cloud/` | Accounts, workspaces, relays and releases on Cloudflare |
 | `rules/` | Rules shared by the station, the cloud and the core, in MoonBit built to JavaScript |
 | `scripts/` | Checks, releases and the CI plan |

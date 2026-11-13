@@ -1,11 +1,15 @@
 // core_engine.m's Windows twin, put in its place by mbui's scripts/win.sh for APP=stillfail (moon.pkg cannot pick stubs
 // per OS): the core in Hermes on the Rust shell (src/sfcore/win_engine.c).
 #include "../sfcore/win_engine.c"
+// this machine's station, the app's own native call (src/host/station_calls.h)
+#include "../host/win_station.c"
+#include "../host/station_calls.h"
 
 // main.mbt asks it before it starts the core (core_engine.m has the same on Apple's systems): what keeps this file in the
 // link, and, here, where the engine is handed over.
 int32_t mb_stillfail_core_linked(void) {
   use_hermes_engine();
+  sf_app_calls_use();
   return 1;
 }
 

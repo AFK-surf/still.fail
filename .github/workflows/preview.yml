@@ -21,6 +21,7 @@ on:
     branches: ["**"]
     paths:
       - "apps/mbui/**"
+      - "libs/mbui/**"
       - "client/**"
       - "vendor/**"
       - "scripts/native.ts"
@@ -92,7 +93,7 @@ jobs:
             base=${{ github.event.before }}
             [ -n "$branch" ] && base=$(git merge-base origin/main HEAD)
             if git cat-file -e "$base^{commit}" 2>/dev/null && git diff --name-only "$base" HEAD |
-              grep -qE '^(apps/mbui/windows/|apps/mbui/e2e/win/handoff\.sh$|apps/mbui/scripts/win\.sh$|apps/mbui/src/host/win_core\.c$|apps/mbui/src/host/win_electron_sealed\.h$|apps/mbui/mbui/src/host/win_(life|update)\.h$|scripts/(win-feeds|release)\.sh$|scripts/release-sign\.ts$|station/src/updates/)'; then v=yes; fi
+              grep -qE '^(apps/mbui/windows/|apps/mbui/e2e/win/handoff\.sh$|apps/mbui/scripts/win\.sh$|apps/mbui/src/host/win_core\.c$|apps/mbui/src/host/win_electron_sealed\.h$|libs/mbui/src/host/win_(life|update)\.h$|scripts/(win-feeds|release)\.sh$|scripts/release-sign\.ts$|station/src/updates/)'; then v=yes; fi
           fi
           echo "handoff=$v" >> "$GITHUB_OUTPUT"
           echo "handoff: $v"
@@ -104,7 +105,7 @@ jobs:
           else
             base=$(git merge-base origin/main HEAD)
             if git cat-file -e "$base^{commit}" 2>/dev/null && git diff --name-only "$base" HEAD |
-              grep -qE '^(apps/mbui/scripts/(win|win-compiler|beta|env)\.sh$|apps/mbui/mbui/scripts/(win\.sh|mbc|env\.sh)$|apps/mbui/mbui/tools/mbc/|\.github/workflows/(preview|pipeline|stable)\.yml$|\.github/actions/(msvc|mbui-moonbit)/|scripts/release\.sh$)'; then v=yes; fi
+              grep -qE '^(apps/mbui/scripts/(win|win-compiler|beta|env)\.sh$|libs/mbui/scripts/(win\.sh|mbc|env\.sh)$|libs/mbui/tools/mbc/|\.github/workflows/(preview|pipeline|stable)\.yml$|\.github/actions/(msvc|mbui-moonbit)/|scripts/release\.sh$)'; then v=yes; fi
           fi
           echo "win_build=$v" >> "$GITHUB_OUTPUT"
           echo "win_build: $v"
@@ -250,7 +251,9 @@ jobs:
     needs: [what, ios-shell]
     if: github.repository_owner == 'AFK-surf' && needs.what.outputs.ios == 'yes' && needs.ios-shell.outputs.have == 'yes'
     runs-on: xcode-27
-    timeout-minutes: 5
+    # (a run by hand, or the day's, compiles what main's store has none of whole: once the units' commands named mbui at
+    # libs/mbui, 2026-11-13, none of the store's were theirs, and a push's 5 minutes saw 3 of it go)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
     env:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
@@ -468,7 +471,7 @@ jobs:
         run: |
           node scripts/native.ts fetch shell win32-x64
           node scripts/native.ts fetch engine win32-x64
-      # The app's build as the last run on main left it (mbui's in apps/mbui/mbui: moon's _build, the split C and its objects, the .exe): of main's pushes that run this job, three in four leave the app's C
+      # The app's build as the last run on main left it (mbui's in libs/mbui: moon's _build, the split C and its objects, the .exe): of main's pushes that run this job, three in four leave the app's C
       # as it was (tests, docs, client/, media/; 96 of 129, 2026-10-18 to 20), and then moonc writes the same C again,
       # scripts/mbc finds every unit's object made of the same inputs (by content) and the same link made already:
       # nothing is compiled (with an mbui whose win.sh mirrors its copies and makes cl, link and lib reproducible, mbui#49:
@@ -478,10 +481,26 @@ jobs:
         id: build-cache
         with:
           path: |
+            libs/mbui/_build
+            libs/mbui/out
+          key: mbui-win-build-mono-${{ github.sha }}
+          restore-keys: mbui-win-build-mono-
+      # (main's build from before mbui moved to libs/mbui, at its paths then, moved into place, while main has saved
+      # none at libs/mbui: the objects found by content there all the same. Goes once one is saved there.)
+      - uses: actions/cache/restore@v4
+        id: build-cache-before
+        if: steps.build-cache.outputs.cache-matched-key == ''
+        with:
+          path: |
             apps/mbui/mbui/_build
             apps/mbui/mbui/out
           key: mbui-win-build-mono-${{ github.sha }}
           restore-keys: mbui-win-build-mono-
+      - if: steps.build-cache-before.outputs.cache-matched-key != ''
+        run: |
+          mkdir -p libs/mbui
+          for d in _build out; do [ ! -d "apps/mbui/mbui/$d" ] || mv "apps/mbui/mbui/$d" "libs/mbui/$d"; done
+          rm -rf apps/mbui/mbui
       # A branch's own units over main's build (MBC_STORE: those of its last push, by content, which main's build has
       # not): without, each push of a branch compiled all it changed against main again, presets' 277 of 480 units on
       # every push, ~55 s (2026-11-01, 41291664812). Its objects alone (some tens of MB), not the build's 160; main's
@@ -666,8 +685,8 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
+            libs/mbui/_build
+            libs/mbui/out
           key: ${{ env.BUILD_KEY }}
       - name: The branch's units, by what they hold
         if: github.ref != 'refs/heads/main'

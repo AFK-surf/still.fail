@@ -26,6 +26,6 @@
 - The Mac's beta never holds back the others' (`put` runs whatever `desktop` came to): its signing waits on Apple's
   notary service, which can take a job's five minutes (2026-11-12, four runs in a row). A failed or cancelled
   `desktop` leaves the Mac's feed as it was; it is main's red, and `done` waits for it, so the next run plans it again.
-- The Android delta's deflater is part of the format: JZlib's version (`apps/mbui/mbui/android/jzlib`) and the level and settings
+- The Android delta's deflater is part of the format: JZlib's version (`libs/mbui/android/jzlib`) and the level and settings
   `Delta.java` deflates with must be what every installed app carries, or what it makes no longer is the release's APK
   (each delta is checked by the Java applier before it is published, so such a change only stops Android's deltas).

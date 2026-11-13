@@ -31,7 +31,7 @@ open home 351x805 2 finger
 switch-ws switch-real:25 390x844 2 finger
 switch-ws-close switch-real:25 390x844 2 finger"
 built=$(APP=sfbench MODE=release bash scripts/mac.sh build 2>&1) || { echo "$built" | grep -E "Error|error" -A6 | head -60; echo "appbench: sfbench not built"; exit 1; }
-[ "${QUIET:-1}" = 0 ] || QUIET_MAX=${QUIET_MAX:-300} bash mbui/scripts/bench_quiet.sh
+[ "${QUIET:-1}" = 0 ] || QUIET_MAX=${QUIET_MAX:-300} bash "$MBUI_DIR/scripts/bench_quiet.sh"
 exe=./_build/native/release/build/stillfail/sfbench/sfbench.exe
 commit=${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null)}
 rows=()

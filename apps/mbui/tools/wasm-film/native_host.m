@@ -3,9 +3,9 @@
 #include <node_api.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../mbui/src/host/apple_text.m"
-#include "../../mbui/src/host/apple_image.m"
-#include "../../mbui/src/host/apple_film.m"
+#include "../../../../libs/mbui/src/host/apple_text.m"
+#include "../../../../libs/mbui/src/host/apple_image.m"
+#include "../../../../libs/mbui/src/host/apple_film.m"
 
 void mb_host_outside(int32_t kind, int32_t image, int32_t state) { (void)kind; (void)image; (void)state; }
 void mb_host_request_frame(void) { }

@@ -215,7 +215,7 @@ for platform in $platforms; do
       zip="$product${beta:+-beta}-0.1.$build-arm64-mac.zip"
       put "$app_zip" "desktop/$zip" application/zip
       if [ -z "${RELEASE_DIR:-}" ]; then
-        work=${WORK:-"$mbui_cache/work"}
+        work=${WORK:-"$mbui_cache/tree/apps/mbui"}
         if [ "${MBUI_FRESH:-}" = 1 ]; then work="$root/apps/mbui"; fi
         sh "$root/scripts/release-put.sh" --clean-uploaded "desktop/$zip" "$work/out/mac/$product${beta:+-beta}-$build-arm64-mac.zip"
       fi

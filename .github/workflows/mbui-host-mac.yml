@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# mbui (libs/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The host's and the text's contracts on macOS ("What is compared, and where"; scripts/
 # host_contract.sh), on macos-ci (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
 # scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape macos-ci kept
@@ -7,31 +7,31 @@ name: mbui-host-mac
 on:
   pull_request:
     paths: &paths
-      - "apps/mbui/mbui/src/ui/native.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
-      - "apps/mbui/mbui/src/host/apple_*"
-      - "apps/mbui/mbui/src/host/apple.h"
-      - "apps/mbui/mbui/src/host/mac_app.m"
-      - "apps/mbui/mbui/src/host/station_install.h"
-      - "apps/mbui/mbui/src/host/mini_json.h"
-      - "apps/mbui/mbui/scripts/station_install_test.c"
-      - "apps/mbui/mbui/src/host/done_watch.h"
-      - "apps/mbui/mbui/src/ui/drive.mbt"
-      - "apps/mbui/mbui/scripts/done_runner.py"
-      - "apps/mbui/mbui/scripts/mac.sh"
-      - "apps/mbui/mbui/scripts/host_contract.sh"
-      - "apps/mbui/mbui/tools/chk/textrec.mbt"
-      - "apps/mbui/mbui/test/host/**"
-      - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/textrec_mac_capture_*"
+      - "libs/mbui/src/ui/native.mbt"
+      - "libs/mbui/src/kitdemo/gallery/viewcheck.mbt"
+      - "libs/mbui/src/host/apple_*"
+      - "libs/mbui/src/host/apple.h"
+      - "libs/mbui/src/host/mac_app.m"
+      - "libs/mbui/src/host/mini_json.h"
+      - "apps/mbui/src/host/station_install.h"
+      - "apps/mbui/scripts/station_install_test.c"
+      - "libs/mbui/src/host/done_watch.h"
+      - "libs/mbui/src/ui/drive.mbt"
+      - "libs/mbui/scripts/done_runner.py"
+      - "libs/mbui/scripts/mac.sh"
+      - "libs/mbui/scripts/host_contract.sh"
+      - "libs/mbui/tools/chk/textrec.mbt"
+      - "libs/mbui/test/host/**"
+      - "libs/mbui/src/kitdemo/gallery/textcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/textrec_mac_capture_*"
       - ".github/workflows/mbui-host-mac.yml"
-      - "apps/mbui/mbui/src/host/marks.mbt"
-      - "apps/mbui/mbui/src/host/host_native.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/markscheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/main.mbt"
-      - "apps/mbui/mbui/test/marks/**"
-      - "apps/mbui/mbui/goldens/marks/mac*"
-      - "apps/mbui/mbui/src/host/moon.pkg"
+      - "libs/mbui/src/host/marks.mbt"
+      - "libs/mbui/src/host/host_native.mbt"
+      - "libs/mbui/src/kitdemo/gallery/markscheck.mbt"
+      - "libs/mbui/src/kitdemo/main.mbt"
+      - "libs/mbui/test/marks/**"
+      - "libs/mbui/goldens/marks/mac*"
+      - "libs/mbui/src/host/moon.pkg"
   push:
     branches: [main]
     paths: *paths
@@ -46,7 +46,7 @@ jobs:
   contracts:
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     # (a machine of ours: never a fork's pull request)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, mbui-render]
@@ -66,7 +66,6 @@ jobs:
               - "src/host/apple_*"
               - "src/host/apple.h"
               - "src/host/mac_app.m"
-              - "src/host/station_install.h"
               - "src/host/mini_json.h"
               - "src/host/done_watch.h"
               - "src/ui/drive.mbt"
@@ -107,10 +106,11 @@ jobs:
               - "scripts/host_contract.sh"
               - ".github/workflows/mbui-host-mac.yml"
         run: python3 scripts/ci_paths.py
-      - name: "What the host hands the station's installer: the token, the workspace lock's hash, nothing refused dropped (src/host/station_install.h)"
+      - name: "What the app hands this machine's station's installer: the token, the workspace lock's hash, nothing refused dropped (apps/mbui/src/host/station_install.h)"
+        working-directory: apps/mbui
         run: |
           mkdir -p out
-          cc -Wall -Werror -Isrc/host scripts/station_install_test.c -o out/station_install_test
+          cc -Wall -Werror -Isrc/host -I../../libs/mbui/src/host scripts/station_install_test.c -o out/station_install_test
           out/station_install_test
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
@@ -149,5 +149,5 @@ jobs:
         continue-on-error: true
         with:
           name: host-mac
-          path: apps/mbui/mbui/out/host/
+          path: libs/mbui/out/host/
           if-no-files-found: ignore

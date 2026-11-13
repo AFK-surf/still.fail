@@ -536,10 +536,10 @@ class Run {
   private javaClasses(): string | null {
     if (this.classes !== undefined) return this.classes;
     const root = fileURLToPath(new URL("..", import.meta.url));
-    const jz = join(root, "apps/mbui/mbui/android/jzlib/src/com/jcraft/jzlib");
+    const jz = join(root, "libs/mbui/android/jzlib/src/com/jcraft/jzlib");
     const out = join(this.work, "classes");
     try {
-      const srcs = [join(root, "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Delta.java"), ...readdirSync(jz).filter((f) => f.endsWith(".java")).map((f) => join(jz, f))];
+      const srcs = [join(root, "libs/mbui/android/app/src/main/java/dev/mbui/Delta.java"), ...readdirSync(jz).filter((f) => f.endsWith(".java")).map((f) => join(jz, f))];
       const r = spawnSync("javac", ["-nowarn", "-encoding", "UTF-8", "-d", out, ...srcs], { encoding: "utf8" });
       if (r.status !== 0) throw new Error(r.error ? r.error.message : r.stderr.trim().split("\n").at(-1));
       return (this.classes = out);
