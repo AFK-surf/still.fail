@@ -5,7 +5,7 @@ A component library of its own beside mbui (`libs/mbui`), which it alone imports
 library like this one holds the looks; an app uses a library (the user, 2026-11-13: mbui 和组件库应该分开). It started as
 a sample of what mbui needs to carry a second design (the user, 2026-11-13: 先在 monoid 做样板).
 
-- `src/cm` is the library, `src/gallery` every part on two pages (`MBUI_CM_PAGE=more` the second; `MBUI_CM_OPEN` a floating part open at start; `APP=gallery MBUI_APP_MOD=libs/comma-ui
+- `src/cm` is the library; `src/pages` the gallery's two pages, shown by `src/gallery` in a window and drawn by `src/shots` offscreen at 3× (`MBUI_CM_SHOTS=<dir>`: each page light and dark and each floating part open, mbui's `@film.picture`), the pictures to look at; `src/gallery` (`MBUI_CM_PAGE=more` the second; `MBUI_CM_OPEN` a floating part open at start; `APP=gallery MBUI_APP_MOD=libs/comma-ui
   libs/mbui/scripts/mac.sh run`; `MBUI_DARK=1`; `MBUI_CM_FONT`: Inter's variable file). `scripts/check.sh` is its
   check, CI's `check-comma-ui`.
 - The numbers are Comma's, never typed here: `src/cm/tokens_made.mbt` is written by `scripts/cm-tokens.mjs` from Cue's

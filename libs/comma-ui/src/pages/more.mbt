@@ -1,10 +1,9 @@
-// The gallery's second page (MBUI_CM_PAGE=more): Comma's floating parts (Tooltip, Menu, Dropdown, Popup, Dialog, Toast)
+// The gallery's second page (`page`'s `more`): Comma's floating parts (Tooltip, Menu, Dropdown, Popup, Dialog, Toast)
 // and the rest of its base parts (Button group, Radio and Checkbox groups, Slider, Collapse, Indicator, ScrollArea),
-// in two columns. MBUI_CM_OPEN names a floating part to open as the page starts, for its picture: tooltip, menu,
-// dropdown, popup, dialog or toast.
+// in two columns; `open` names a floating part to open as the page starts, for its picture.
 
 ///|
-fn more(root : @view.View, layer : @cm.Layer, open : String) -> Unit {
+fn more_page(root : @view.View, layer : @cm.Layer, open : String) -> Unit {
   let toaster = @cm.Toaster::new()
   root.box(fn(page) {
     page

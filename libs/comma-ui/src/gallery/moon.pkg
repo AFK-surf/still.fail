@@ -2,9 +2,8 @@ import {
   "mbui/host",
   "mbui/hostapi",
   "mbui/ui",
-  "mbui/view",
-  "mbui/signals",
   "comma-ui/cm",
+  "comma-ui/pages",
 }
 
 options(
