@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ac936000a](https://github.com/AFK-surf/monoid/commit/ac936000aa4759c093e22d31daa3811a3e03f3c4) fix(mbui): jump to the clicked tick's message on t | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.18 | 110.82 |
 | [a2045f270](https://github.com/AFK-surf/monoid/commit/a2045f270895fefe9f6726aee7854c989e72d62c) Keep the Windows renderer's compiled shaders on di | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.91 | 109.63 |
 | [4f7321711](https://github.com/AFK-surf/monoid/commit/4f732171142ecbd00650e2944a8322db69c55d8c) Fix LAN direct RTT inflation and front replacement | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 112.88 |
 | [ea62d0c05](https://github.com/AFK-surf/monoid/commit/ea62d0c05a38c28e9fce8c16eb9cc279bd87bf04) perf(mbui): enable Metal framebufferOnly, opaque l | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.7 | 95.86 | 107.28 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [bcb03cad9](https://github.com/AFK-surf/monoid/commit/bcb03cad986d199c7981d46cf880f8aac08c9dbc) cloud: send traces and logs to Google Cloud instea | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.29 | 52.22 | 94 | 97.25 |
 | [0adf038a4](https://github.com/AFK-surf/monoid/commit/0adf038a4f2d428eb86a4883f562fed61b2c1500) mbui: a page's list's ask is taken only by a fill  | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.29 | 52.22 | 94 | 106.12 |
 | [4470962ed](https://github.com/AFK-surf/monoid/commit/4470962edfe02fdfcdaf1926123076a6ec5846ef) mbui: unify interactive chips, links, and 4px stat | 1.95 | 2.61 | 11.24 | 30.69 | 40.34 | 27.29 | 52.22 | 94 | 98.75 |
-| [0451c1a9a](https://github.com/AFK-surf/monoid/commit/0451c1a9ab3968a3863af0bebfdaa3a911601136) mbui: what a Tester reads of a list and of words d | 1.95 | 2.61 | 11.22 | 30.67 | 40.28 | 27.29 | 52.22 | 94 | 98.44 |
