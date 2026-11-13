@@ -160,7 +160,10 @@ export const PARAMS: Record<string, string> = {
   "job.get": "id:string",
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
+  "screen.openBrowser": "url:string",
   "screen.close": "screen:string",
+  "screen.sleep": "screen:string",
+  "screen.reload": "screen:string",
   "screen.endView": "screen:string view:string",
   "screen.watchOnly": "screen:string view:string",
   "screen.endViews": "screen:string",
@@ -600,10 +603,17 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => `/jobs/${p.at("id")}/log?lines=${p.u64("lines")}`, null, NONE);
     case "job.stop":
       return op("POST", () => `/jobs/${p.at("id")}/stop`, null, { kind: "job" });
+    // A page opened in the station's persistent browser profile (`{screen}`), kept across idle sleeps until closed.
+    case "screen.openBrowser":
+      return op("POST", () => "/screens/browser", p.pick(["url"]), NONE);
     // A screen closed for good (a tab of the station's browser): it leaves the station's list as
     // the station tells it (`screens` on its stream).
     case "screen.close":
       return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
+    case "screen.sleep":
+      return op("POST", () => `/screens/${p.at("screen")}/sleep`, null, NONE);
+    case "screen.reload":
+      return op("POST", () => `/screens/${p.at("screen")}/reload`, null, NONE);
     // A person's view of a screen, wherever it is, ended or made to only look ( "Who is on a
     // screen"); it changes on the station's list as the station tells it.
     case "screen.endView":

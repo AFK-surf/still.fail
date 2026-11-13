@@ -6,7 +6,7 @@ import type { Clock } from "effect";
 import { open, readFile, rename, unlink } from "node:fs/promises";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import type { Screens } from "../screens/source.ts";
+import type { ScreenBrowser, Screens } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 import { type ChromeHost, type Running, readState, writeState } from "./chrome.ts";
 import { Owners } from "./owners.ts";
@@ -14,6 +14,9 @@ import { Authenticators } from "./passkeys.ts";
 import { BEHIND } from "./gate.ts";
 import { allCookies, keptOf, stateOf } from "./signins.ts";
 import { type TabInfo, Tabs } from "./tabs.ts";
+import { USER_TAB_IDLE_MS, UserTabs } from "./user-tabs.ts";
+
+export { USER_TAB_IDLE_MS };
 
 /// Unused this long (no agent asking for it, no tab coming, going or navigated, no one watching), it is closed.
 export const IDLE_MS = 60 * 60_000;
@@ -48,6 +51,7 @@ export type BrowserOptions = {
   screens?: Screens & { changed?(): void };
   clock?: Clock.Clock;
   idleMs?: number;
+  userTabIdleMs?: number;
   /// Chrome's time for the tabs (tabs.ts `later`): the machine's unless given.
   later?: (ms: number, f: () => void) => () => void;
   /// The session whose chat's context a browser context is (browsers.ts): a tab in it is that session's.
@@ -116,11 +120,14 @@ async function writeLoginState(resolvePath: () => string | null, content: string
   }
 }
 
-export class StationBrowser {
+export class StationBrowser implements ScreenBrowser {
   readonly #o: BrowserOptions;
   readonly #fibers: Fibers;
   readonly #idleMs: number;
   readonly #flushing = new Set<Promise<void>>();
+  readonly #userTabs: UserTabs;
+  #defaultCreateQueue: Promise<void> = Promise.resolve();
+  #activeLoginContexts: Set<string> | null = null;
   #up: Up | null = null;
   /// A start under way: whoever asks meanwhile waits for it.
   #starting: Promise<Up> | null = null;
@@ -143,10 +150,20 @@ export class StationBrowser {
     this.#fibers = new Fibers("browser", o.clock);
     this.#idleMs = o.idleMs ?? IDLE_MS;
     this.#lastUse = readState(o.dir).lastUse ?? 0;
+    this.#userTabs = new UserTabs({
+      dir: o.dir,
+      screens: o.screens,
+      clock: o.clock,
+      idleMs: o.userTabIdleMs,
+      isIsolatedContext: (ctx) => Boolean(ctx && (o.contextOwner?.(ctx) !== undefined || this.#activeLoginContexts?.has(ctx))),
+      createTarget: (url, claim, claimed) => this.#createDefaultTarget(url, claim, claimed),
+    });
+    o.screens?.setBrowser?.(this);
   }
 
   /// Takes up the Chrome an earlier station process left running, if there is one (its tabs become screens again).
   async resume(): Promise<void> {
+    await this.#userTabs.ready();
     if (this.#closed || this.#up || this.#starting) return;
     const found = await this.#o.chrome.find().catch(() => null);
     if (found === null || this.#closed || this.#up || this.#starting) return;
@@ -179,19 +196,45 @@ export class StationBrowser {
     return this.#installed.is;
   }
 
+  /// Opens a persistent user page (`browser:u_<id>`) in Chrome's default profile, recycled to sleep when idle.
+  openUserTab(url: string): Promise<string> {
+    return this.#userTabs.openNew(url);
+  }
+
+  async #createDefaultTarget(
+    url: string,
+    claim?: () => void,
+    claimed?: (targetId: string, tabs: Tabs) => void,
+  ): Promise<{ targetId: string; tabs: Tabs }> {
+    this.used();
+    const up = await this.#ensure();
+    let release!: () => void;
+    const prev = this.#defaultCreateQueue;
+    this.#defaultCreateQueue = new Promise<void>((r) => (release = r));
+    await prev;
+    try {
+      claim?.();
+      const { targetId } = await up.cdp.send("Target.createTarget", { url, ...BEHIND });
+      if (typeof targetId !== "string" || targetId === "") throw new Error("Chrome opened no tab.");
+      claimed?.(targetId, up.tabs);
+      return { targetId, tabs: up.tabs };
+    } finally {
+      release();
+    }
+  }
+
   /// A tab of the station's own (no session's) at `url`, in a window of its own opened behind the others (as a
   /// session's: proxy.ts), the browser started if it is not running: its target id, once it is among the screens.
   /// With `options.stateFile`, opened in a browser context of its own whose cookies and passkeys are read from and
   /// saved back to that file (and disposed when the tab closes).
   async openTab(url: string, options?: OpenTabOptions): Promise<string> {
     this.used();
-    const up = await this.#ensure();
     if (!options?.stateFile) {
-      const { targetId } = await up.cdp.send("Target.createTarget", { url, ...BEHIND });
-      if (typeof targetId !== "string" || targetId === "") throw new Error("Chrome opened no tab.");
-      await up.tabs.arrived(targetId);
+      const { targetId, tabs } = await this.#createDefaultTarget(url);
+      await tabs.arrived(targetId);
       return targetId;
     }
+    const up = await this.#ensure();
     const { browserContextId } = await up.cdp.send("Target.createBrowserContext", { disposeOnDetach: false });
     if (typeof browserContextId !== "string" || browserContextId === "") throw new Error("Chrome made no browser context.");
     up.loginContexts.add(browserContextId);
@@ -216,7 +259,12 @@ export class StationBrowser {
       const created = await up.cdp.send("Target.createTarget", { url, browserContextId, ...BEHIND });
       targetId = typeof created?.targetId === "string" ? created.targetId : "";
       if (targetId === "") throw new Error("Chrome opened no tab.");
-      up.loginTabs.set(targetId, { ctx: browserContextId, stateFile: options.stateFile, ending: null, saving: Promise.resolve() });
+      up.loginTabs.set(targetId, {
+        ctx: browserContextId,
+        stateFile: options.stateFile,
+        ending: null,
+        saving: Promise.resolve(),
+      });
       await up.tabs.arrived(targetId);
       return targetId;
     } catch (e) {
@@ -280,9 +328,10 @@ export class StationBrowser {
     await up.tabs.closeTab(targetId).catch(() => {});
   }
 
-  /// Waits for any in-flight login-context saves and disposals to finish.
+  /// Waits for any in-flight login-context and user-tab saves and disposals to finish.
   async flushed(): Promise<void> {
     while (this.#flushing.size > 0) await Promise.all([...this.#flushing]);
+    await this.#userTabs.written();
   }
 
   /// Tab `targetId` was opened by `session` (on its own connection, proxy.ts).
@@ -325,19 +374,23 @@ export class StationBrowser {
     this.#leaving = true;
     this.#idle();
     this.#restart();
+    this.#o.screens?.setBrowser?.(null);
     const up = this.#up;
     this.#up = null;
+    this.#activeLoginContexts = null;
     if (up) {
       for (const tab of up.loginTabs.values()) {
         if (tab.ending === null) this.#trackFlush(this.#saveLoginTab(up, tab));
       }
       await this.flushed();
+      await this.#userTabs.close();
       up.unlisten();
       up.tabs.close();
       up.keys.close();
       up.cdp.close();
     } else {
       await this.flushed();
+      await this.#userTabs.close();
     }
     this.#note();
     await this.#fibers.close();
@@ -363,6 +416,7 @@ export class StationBrowser {
     if (this.#starting) return this.#starting;
     this.#restart();
     const starting = (async () => {
+      await this.#userTabs.ready();
       // One left running by an earlier station process, else a new one.
       const found = await this.#o.chrome.find().catch(() => null);
       return this.#take(found ?? (await this.#o.chrome.launch()));
@@ -383,26 +437,32 @@ export class StationBrowser {
     const owner = this.#o.contextOwner;
     const loginContexts = new Set<string>();
     const loginTabs = new Map<string, LoginTab>();
+    this.#activeLoginContexts = loginContexts;
     let current: Up | null = null;
     const keys = new Authenticators(
       cdp,
       (ctx) => owner?.(ctx) !== undefined || loginContexts.has(ctx),
       (ctx) => this.#loginContextChanged(current, ctx),
     );
-    const tabs = new Tabs({
+    const tabs: Tabs = new Tabs({
       cdp, screens, connect: () => chrome.connect(running.ws), now: () => this.#fibers.now(), activity: () => this.used(), later: this.#o.later,
       owners: this.#owners, ...(owner ? { contextOwner: owner } : {}),
-      ownPasskey: (targetId, rpId) => {
+      ownPasskey: (targetId: string, rpId: string): boolean => {
         const ctx = tabs.contextOf(targetId);
         return ctx !== undefined && keys.has(ctx, rpId);
       },
       usedTab: (session, targetId) => this.#o.usedTab?.(session, targetId),
+      userTabs: this.#userTabs,
     });
+    this.#userTabs.attaching(tabs);
     const unlisten = cdp.on((e) => this.#heardLogin(current, e));
     try {
       await keys.start();
       await tabs.start();
+      this.#userTabs.attached(tabs);
     } catch (e) {
+      this.#activeLoginContexts = null;
+      this.#userTabs.browserStopped();
       unlisten();
       keys.close();
       tabs.close();
@@ -410,6 +470,7 @@ export class StationBrowser {
       throw e;
     }
     if (this.#closed) {
+      this.#activeLoginContexts = null;
       unlisten();
       keys.close();
       tabs.close();
@@ -429,8 +490,10 @@ export class StationBrowser {
   #lost(up: Up) {
     if (this.#up !== up) return;
     this.#up = null;
+    this.#activeLoginContexts = null;
     up.unlisten();
     up.tabs.close();
+    this.#userTabs.browserStopped();
     up.keys.close();
     this.#idle();
     if (this.#leaving || this.#closed) return;
@@ -479,10 +542,14 @@ export class StationBrowser {
     await this.flushed();
     up.unlisten();
     up.tabs.close();
+    this.#userTabs.browserStopped();
     up.keys.close();
     await up.cdp.send("Browser.close").catch(() => {});
     up.cdp.close();
-    if (this.#up === up) this.#up = null;
+    if (this.#up === up) {
+      this.#up = null;
+      this.#activeLoginContexts = null;
+    }
     await this.#o.chrome.kill(up.running);
     this.#pause = 0;
     this.#note();

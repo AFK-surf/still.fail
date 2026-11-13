@@ -144,6 +144,8 @@ priv struct ScreenSess {
   mut passkey_run : @hostapi.PasskeyRun?
   mut passkey_note : String
   mut passkey_id : String
+  /// a child browser popup opened from this tab while driving (`childOpened` / `childScreen`), to open over it once built
+  mut child_screen : String?
 }
 
 ///|
@@ -223,6 +225,7 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         passkey_run: None,
         passkey_note: "",
         passkey_id: "",
+        child_screen: None,
       }
       screens_open[key] = s
       s
@@ -453,6 +456,18 @@ fn ScreenSess::clip_types(self : ScreenSess) -> Array[String] {
 /// The device's clipboard is pasted into the screen (`screen.clipboard`): driving it, and the station carries some.
 fn ScreenSess::pastes(self : ScreenSess) -> Bool {
   self.clip_types().iter().any(fn(t) { t == "text" || t == "png" })
+}
+
+///|
+/// Whether this viewer drives a browser screen whose station supports URL navigation (`screen.openUrl` / `screen.reload`).
+fn ScreenSess::opens_url(self : ScreenSess) -> Bool {
+  self.driving() && flag(self.state, "openUrl")
+}
+
+///|
+/// Whether this screen is one of the station's user-opened browser pages (`browser:u_<id>`).
+fn ScreenSess::user_tab(self : ScreenSess) -> Bool {
+  flag(self.state, "userTab") || self.screen.has_prefix("browser:u_")
 }
 
 ///|
@@ -1005,6 +1020,12 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       }
       if number(Some(s), "took") > number(self.state, "took") {
         toast_later(@sf.t("android-misc.screen.took", args=[("names", names("tookFrom"))]))
+      }
+      if number(Some(s), "childOpened") > number(self.state, "childOpened") {
+        let next = text(Some(s), "childScreen")
+        if next != "" && next != self.screen {
+          self.child_screen = Some(next)
+        }
       }
       self.state = Some(s)
       self.heard = true

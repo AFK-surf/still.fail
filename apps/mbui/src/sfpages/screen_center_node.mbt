@@ -35,6 +35,10 @@ fn center_node(
     if s.open_now() {
       ts.push("full")
     }
+    if s.opens_url() {
+      ts.push("go")
+      ts.push("reload")
+    }
     if s.pastes() {
       ts.push("paste")
     }
@@ -69,6 +73,16 @@ fn center_node(
                   done()
                 },
               )
+            "go" =>
+              quick_tile_node(row, fn() { @sf.t("web-pages.screen.goUrlShort") }, fn() { "link" }, fn() { false }, fn() {
+                done()
+                go_url_asked(c, s, from)
+              })
+            "reload" =>
+              quick_tile_node(row, fn() { @sf.t("web-pages.screen.reloadShort") }, fn() { "refresh" }, fn() { false }, fn() {
+                reload_asked(c, s)
+                done()
+              })
             "paste" =>
               quick_tile_node(row, fn() { @sf.t("web-pages.screen.paste") }, fn() { "paste" }, fn() { false }, fn() {
                 paste_asked(c, s, u)
@@ -262,6 +276,18 @@ fn center_node(
     })
   })
   @sf.panel_group_node(v, fn() { "" }, fn(g) {
+    g.show(fn() { state() |> ignore; pages_shown(s) }, fn(p) {
+      @sf.panel_row_node(
+        p,
+        fn() { @sf.t("web-pages.screen.pages") },
+        fn() {
+          done()
+          pages_open(c, s, u, from, close, stepped=true)
+        },
+        icon=fn() { "view-columns" },
+        end="chevron-right",
+      )
+    })
     // how the view goes: live, its round trip and how long it has been seen; pressed, its figures a step further in;
     // who else is on it, as the core says it, its note
     g.show(fn() { state() |> ignore; s.phase() == "live" }, fn(l) {

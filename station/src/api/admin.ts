@@ -185,8 +185,12 @@ export class Admin {
       ...(deps.screens
         ? [
             { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
+            { method: "POST", pattern: /^\/screens\/browser$/, handle: async (r: Request) => openBrowserScreen(deps.screens!, r) },
             // A person closes one (a tab of the browser): it leaves the list as it goes (`screens` on the event stream).
             { method: "POST", pattern: /^\/screens\/([^/]+)\/close$/, handle: async (r: Request, [raw]: string[]) => closeScreen(deps.screens!, r, raw!) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/open-url$/, handle: async (r: Request, [raw]: string[]) => openScreenUrl(deps.screens!, r, raw!) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/reload$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.reloadScreen(id)) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/sleep$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.sleepScreen(id)) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/end$/, handle: async (r: Request, [raw]: string[]) => screenViews(r, raw!, (id) => ({ ended: deps.screens!.endViews(id, byOf(r)) })) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/end$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.endView(id, decodeURIComponent(view!), byOf(r)), {})) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/watch$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.watchOnly(id, decodeURIComponent(view!)), {})) },
@@ -398,9 +402,6 @@ function simActions(screens: ScreenHub) {
       }),
   });
   return [
-    route("open-url", async (d, { url }) => {
-      if (typeof url !== "string" || !(await d.openUrl(url))) throw new ScreenRefused(400, "station.screen.badUrl");
-    }),
     route("location", async (d, { at }) => {
       if ((at !== undefined && typeof at !== "string") || !(await d.location((at as string | undefined) ?? null))) throw new ScreenRefused(400, "station.screen.badPlace");
     }),
@@ -469,6 +470,10 @@ async function screenViews(r: Request, raw: string, act: (id: string) => unknown
 
 /// POST /screens/<id>/close: 404 no such screen, 405 one not closed from here (the desktop), 502 the browser refused.
 async function closeScreen(screens: ScreenHub, r: Request, raw: string): Promise<Answer> {
+  return actScreen(screens, r, raw, (id) => screens.closeScreen(id));
+}
+
+async function actScreen(screens: ScreenHub, r: Request, raw: string, act: (id: string) => Promise<void>): Promise<Answer> {
   let id: string;
   try {
     id = decodeURIComponent(raw);
@@ -476,10 +481,60 @@ async function closeScreen(screens: ScreenHub, r: Request, raw: string): Promise
     return error(404, tr(r.lang, "station.screen.notFound"));
   }
   try {
-    await screens.closeScreen(id);
+    await act(id);
     return json(200, "{}");
   } catch (e) {
     if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+  }
+}
+
+async function openBrowserScreen(screens: ScreenHub, r: Request): Promise<Answer> {
+  let url: unknown;
+  try {
+    url = (JSON.parse(r.body.toString("utf8") || "{}") as { url?: unknown }).url;
+  } catch {
+    return error(400, tr(r.lang, "station.screen.badUrl"));
+  }
+  if (typeof url !== "string") return error(400, tr(r.lang, "station.screen.badUrl"));
+  try {
+    const screen = await screens.openBrowser(url);
+    return json(200, JSON.stringify({ screen }));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+  }
+}
+
+async function openScreenUrl(screens: ScreenHub, r: Request, raw: string): Promise<Answer> {
+  if (readOnly(r.viewer)) return error(403, "a read-only member does not open a link on a screen");
+  let id: string;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return error(404, tr(r.lang, "station.screen.notFound"));
+  }
+  let url: unknown;
+  try {
+    url = (JSON.parse(r.body.toString("utf8") || "{}") as { url?: unknown }).url;
+  } catch {
+    return error(400, tr(r.lang, "station.screen.badUrl"));
+  }
+  const source = screens.get(id);
+  try {
+    if (typeof url !== "string") {
+      if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+      if (source.openUrl === undefined && source.debug === undefined) throw new ScreenRefused(405, "station.screen.noDebug");
+      throw new ScreenRefused(400, "station.screen.badUrl");
+    }
+    await screens.openUrl(id, url);
+    return json(200, "{}");
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    if (source?.debug !== undefined) {
+      const said = (e as Error).message.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
+      return error(502, tr(r.lang, "station.screen.debugFailed", { said }));
+    }
     return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
   }
 }

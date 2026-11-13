@@ -594,3 +594,320 @@ fn prefs_set(c : @ui.Ctx, s : ScreenSess, name : String, value : String, v : Jso
     (s.src.call)("prefs.set", Json::object(p), screen_act(c, @sf.t("web-pages.screen.panel")))
   })
 }
+
+// ── 页面切换与网址导航 ───────────────────────────────────────────────────
+
+///|
+/// Whether the viewer offers the station's 页面 switcher: the station supports browser pages, lists more than one
+/// reachable screen, or the open view itself is a user tab or supports URL navigation.
+fn pages_shown(s : ScreenSess) -> Bool {
+  if !s.open_now() {
+    return false
+  }
+  if flag(s.state, "openUrl") || s.user_tab() {
+    return true
+  }
+  if s.phase() != "live" {
+    return false
+  }
+  let sc = s.src.topic("screens", { "station": Json::string(s.station) }).get().value
+  let list = items(sc, "screens").filter(fn(item) { !own_screen(s.station, text(Some(item), "id")) })
+  flag(sc, "browser") || list.length() > 1
+}
+
+///|
+/// Switches the viewer from `s` to another screen `next` on the same station: in place on the stack, in its standalone
+/// window if popped out, or beside the chat when shown in a side-panel tab.
+fn switch_screen_to(s : ScreenSess, u : ScreenUi, next : String, title : String, until_gone : Bool) -> Unit {
+  screen_panels_close(u)
+  if next == "" || next == s.screen {
+    return
+  }
+  let next_at : ScreenAt = { station: s.station, screen: next, title, until_gone }
+  match @sfbase.lone_page.val {
+    Some(Screen(prev)) => {
+      screen_left(s.src, prev.station, prev.screen)
+      @sfbase.lone_page.val = Some(Screen({ ..next_at, until_gone: false }))
+    }
+    _ =>
+      if !u.in_tab && @sfbase.app.nav.top() is Screen(_) {
+        @sfbase.open_in_place(Screen(next_at))
+      } else {
+        @sfbase.open_page(Screen(next_at))
+      }
+  }
+}
+
+///|
+/// Asks for a URL, bare domain, or pasted text containing an `https://` link and navigates the current browser tab to it
+/// (`screen.openUrl`).
+fn go_url_asked(c : @ui.Ctx, s : ScreenSess, from : @sf.Anchor) -> Unit {
+  let site = text(s.state, "site")
+  @sf.ask(
+    @sf.t("web-pages.screen.goUrl"),
+    @sf.t("web-pages.screen.goUrlAction"),
+    fn(url) {
+      let p : Map[String, Json] = {
+        "station": Json::string(s.station),
+        "screen": Json::string(s.screen),
+        "url": Json::string(url),
+      }
+      (s.src.call)("screen.openUrl", Json::object(p), screen_act(c, @sf.t("web-pages.screen.goUrlWhat")))
+    },
+    placeholder=if site != "" { site } else { "mail.proton.me" },
+    hint=@sf.t("web-pages.screen.urlHint"),
+    from~,
+  )
+}
+
+///|
+/// Reloads the current browser tab (`screen.reload`).
+fn reload_asked(c : @ui.Ctx, s : ScreenSess) -> Unit {
+  c.tell("screen-reload/" + s.view + "/\{s.said.untracked()}", fn() {
+    let p : Map[String, Json] = {
+      "station": Json::string(s.station),
+      "screen": Json::string(s.screen),
+    }
+    (s.src.call)("screen.reload", Json::object(p), screen_act(c, @sf.t("web-pages.screen.reloadWhat")))
+  })
+}
+
+///|
+/// Opens a new persistent user tab on this station (`screen.openBrowser`) and switches the viewer to it.
+fn open_browser_from_viewer(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
+  @sf.ask(
+    @sf.t("web-pages.screen.openBrowserTitle"),
+    @sf.t("web-pages.screen.openBrowserAction"),
+    fn(url) {
+      let p : Map[String, Json] = {
+        "station": Json::string(s.station),
+        "url": Json::string(url),
+      }
+      (s.src.call)("screen.openBrowser", Json::object(p), fn(r) {
+        match r {
+          Ok(v) => {
+            let next = text(Some(v), "screen")
+            if next != "" {
+              switch_screen_to(s, u, next, "", false)
+            }
+          }
+          Err(_) => (screen_act(c, @sf.t("web-pages.screen.openBrowserWhat")))(r)
+        }
+      })
+    },
+    placeholder="mail.proton.me",
+    hint=@sf.t("web-pages.screen.urlHint"),
+    from~,
+  )
+}
+
+///|
+/// Opens the station's 页面 switcher (`pages_node`) beside `from`, or as a step further in from 控制中心 (`stepped`).
+fn pages_open(
+  c : @ui.Ctx,
+  s : ScreenSess,
+  u : ScreenUi,
+  from : @sf.Anchor,
+  close : () -> Unit,
+  stepped? : Bool = false,
+) -> Unit {
+  let open = fn() {
+    @sf.panel_nodes(
+      @sf.t("web-pages.screen.pages"),
+      fn(v, done) { pages_node(c, v, s, u, from, close, done) },
+      from~,
+      side=screen_panel_side(),
+      focus=false,
+    )
+  }
+  if stepped {
+    open()
+  } else {
+    screen_panel_toggle(u, "pages", open)
+  }
+}
+
+///|
+/// What the 页面 switcher holds in `v`: URL navigation (`前往网址…`, `刷新页面`) while driving a browser tab, then
+/// `用户页面` (live and sleeping user tabs in the persistent profile, `+ 打开网页…`, and `休眠此页面` / `关闭此页面` when on a
+/// user tab), `Agent 页面` (isolated agent/login tabs), and `屏幕` (physical displays and simulators).
+fn pages_node(
+  c : @ui.Ctx,
+  v : @view.View,
+  s : ScreenSess,
+  u : ScreenUi,
+  from : @sf.Anchor,
+  close : () -> Unit,
+  done : () -> Unit,
+) -> Unit {
+  let st = fn() {
+    s.said.get() |> ignore
+    s.state
+  }
+  let sc_topic = s.src.topic("screens", { "station": Json::string(s.station) })
+  let sc = fn() { sc_topic.get().value }
+  let all = fn() { items(sc(), "screens").filter(fn(item) { !own_screen(s.station, text(Some(item), "id")) }) }
+  let user_tabs = fn() { all().filter(fn(item) { is_user_screen(Some(item)) }) }
+  let agent_tabs = fn() { all().filter(fn(item) { is_agent_screen(Some(item)) }) }
+  let other_screens = fn() { all().filter(fn(item) { !is_browser_screen(Some(item)) }) }
+  let can_open = fn() { flag(sc(), "browser") && (flag(sc(), "control") || s.controlling()) }
+  v.show(fn() { st() |> ignore; s.opens_url() }, fn(nav) {
+    @sf.panel_group_node(nav, fn() { "" }, fn(g) {
+      @sf.panel_row_node(
+        g,
+        fn() { @sf.t("web-pages.screen.goUrl") },
+        fn() {
+          done()
+          go_url_asked(c, s, from)
+        },
+        icon=fn() { "link" },
+        note=fn() { text(st(), "site") },
+      )
+      @sf.panel_row_node(
+        g,
+        fn() { @sf.t("web-pages.screen.reload") },
+        fn() {
+          done()
+          reload_asked(c, s)
+        },
+        icon=fn() { "refresh" },
+      )
+    })
+  })
+  v.show(fn() { !user_tabs().is_empty() || can_open() || { st() |> ignore; s.user_tab() } }, fn(ug) {
+    @sf.panel_group_node(ug, fn() { @sf.t("web-pages.screen.userPages") }, fn(g) {
+      g.each(user_tabs, fn(item) { text(Some(item), "id") }, fn(row, item) {
+        let sv = fn() { Some(item.get()) }
+        let id = text(@signals.untracked(sv), "id")
+        let current = id == s.screen
+        @sf.panel_row_node(
+          row,
+          fn() { text(sv(), "title") },
+          fn() {
+            done()
+            if !current {
+              switch_screen_to(s, u, id, text(@signals.untracked(sv), "title"), false)
+            }
+          },
+          icon=fn() { if flag(sv(), "sleeping") { "moon" } else { "web" } },
+          note=fn() { if flag(sv(), "sleeping") { @sf.t("core-views.screen.sleeping") } else { text(sv(), "site") } },
+          end=if current { "check" } else { "" },
+        )
+      })
+      g.show(can_open, fn(add) {
+        @sf.panel_row_node(
+          add,
+          fn() { @sf.t("web-pages.screen.openBrowser") },
+          fn() {
+            done()
+            open_browser_from_viewer(c, s, u, from)
+          },
+          icon=fn() { "plus" },
+        )
+      })
+      g.show(fn() { st() |> ignore; s.user_tab() && s.controlling() }, fn(cur) {
+        @sf.panel_rule_node(cur)
+        @sf.panel_row_node(
+          cur,
+          fn() { @sf.t("web-pages.screen.sleepAndLeave") },
+          fn() {
+            let p : Map[String, Json] = {
+              "station": Json::string(s.station),
+              "screen": Json::string(s.screen),
+            }
+            done()
+            close()
+            (s.src.call)("screen.sleep", Json::object(p), screen_act(c, @sf.t("web-pages.screen.sleepWhat")))
+          },
+          icon=fn() { "moon" },
+        )
+        @sf.panel_row_node(
+          cur,
+          fn() { @sf.t("web-pages.screen.closeTabFull") },
+          fn() {
+            let p : Map[String, Json] = {
+              "station": Json::string(s.station),
+              "screen": Json::string(s.screen),
+            }
+            done()
+            close()
+            (s.src.call)("screen.close", Json::object(p), screen_act(c, @sf.t("web-pages.screen.closeTabWhat")))
+          },
+          icon=fn() { "close" },
+          danger=true,
+        )
+      })
+    })
+  })
+  v.show(fn() { !agent_tabs().is_empty() }, fn(ag) {
+    @sf.panel_group_node(ag, fn() { @sf.t("web-pages.screen.agentPages") }, fn(g) {
+      g.each(agent_tabs, fn(item) { text(Some(item), "id") }, fn(row, item) {
+        let sv = fn() { Some(item.get()) }
+        let id = text(@signals.untracked(sv), "id")
+        let current = id == s.screen
+        @sf.panel_row_node(
+          row,
+          fn() { text(sv(), "title") },
+          fn() {
+            done()
+            if !current {
+              switch_screen_to(s, u, id, text(@signals.untracked(sv), "title"), true)
+            }
+          },
+          icon=fn() { "web" },
+          note=fn() { text(sv(), "site") },
+          end=if current { "check" } else { "" },
+        )
+      })
+    })
+  })
+  v.show(fn() { !other_screens().is_empty() }, fn(sg) {
+    @sf.panel_group_node(sg, fn() { @sf.t("web-pages.screen.section") }, fn(g) {
+      g.each(other_screens, fn(item) { text(Some(item), "id") }, fn(row, item) {
+        let sv = fn() { Some(item.get()) }
+        let id = text(@signals.untracked(sv), "id")
+        let current = id == s.screen
+        @sf.panel_row_node(
+          row,
+          fn() { text(sv(), "title") },
+          fn() {
+            done()
+            if !current {
+              switch_screen_to(s, u, id, text(@signals.untracked(sv), "title"), false)
+            }
+          },
+          icon=fn() { if text(sv(), "kind") == "simulator" { "phone" } else { "monitor" } },
+          end=if current { "check" } else { "" },
+        )
+      })
+    })
+  })
+}
+
+///|
+/// 页面 as a round button (the bar's, the rail's, the folded tools'): pressed, the station's pages and browser navigation.
+fn pages_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
+  let key = "screen-pages"
+  let id = c.id(key)
+  round_button(c, key, "view-columns", @sf.t("web-pages.screen.pages"), on=screen_panel_on(u, "pages"), on_press=fn() {
+    pages_open(c, s, u, Of(id), close)
+  })
+  if u.asked_panel == "pages" {
+    u.asked_panel = ""
+    pages_open(c, s, u, Of(id), close)
+  }
+}
+
+///|
+/// 页面 in the viewer's bar (with keyboard and mouse): pressed, the station's pages and browser navigation under it.
+fn pages_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
+  let key = "screen-pages"
+  let id = c.id(key)
+  @sf.viewer_tool(c, key, "view-columns", @sf.t("web-pages.screen.pages"), @sf.page_viewer_ink(), on_press=fn() {
+    pages_open(c, s, u, Of(id), close)
+  })
+  if u.asked_panel == "pages" {
+    u.asked_panel = ""
+    pages_open(c, s, u, Of(id), close)
+  }
+}

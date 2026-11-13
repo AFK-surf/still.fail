@@ -122,6 +122,8 @@ fn station_view_node(
     match key {
       "parts" => station_parts_node(b, address)
       "resources" => station_resources_node(b, core, here, s)
+      "userPages" => station_user_pages_node(b, core, here, s)
+      "agentPages" => station_agent_pages_node(b, core, here, s)
       "screens" => station_screens_node(b, core, here, s)
       "profiles" => station_profiles_node(b, core, here, s)
       "connects" => station_connects_node(b, core, s)
@@ -193,7 +195,18 @@ fn station_overview_keys(core : Core, s : Json?) -> Array[String] {
     out.push("resources")
   }
   match (core.topic)("screens", { "station": str(address) }).get().value {
-    Some(Object(_)) as v if items(v, "screens").length() > 0 || text(v, "note") != "" => out.push("screens")
+    Some(Object(_)) as v => {
+      let all = items(v, "screens")
+      if all.iter().any(fn(sc) { is_user_screen(Some(sc)) }) || (flag(v, "browser") && flag(v, "control")) {
+        out.push("userPages")
+      }
+      if all.iter().any(fn(sc) { is_agent_screen(Some(sc)) }) {
+        out.push("agentPages")
+      }
+      if all.iter().any(fn(sc) { !is_browser_screen(Some(sc)) }) || (all.is_empty() && text(v, "note") != "") {
+        out.push("screens")
+      }
+    }
     _ => ()
   }
   if items(s, "profileGroups").length() > 0 {
@@ -481,12 +494,153 @@ fn station_resources_node(b : @view.View, core : Core, here : () -> Here, s : ()
 }
 
 ///|
+fn is_user_screen(sv : Json?) -> Bool {
+  flag(sv, "userTab") || text(sv, "id").has_prefix("browser:u_")
+}
+
+///|
+fn is_browser_screen(sv : Json?) -> Bool {
+  text(sv, "kind") == "browser" || text(sv, "id").has_prefix("browser:")
+}
+
+///|
+fn is_agent_screen(sv : Json?) -> Bool {
+  is_browser_screen(sv) && !is_user_screen(sv)
+}
+
+///|
+fn screen_row_icon(sv : Json?) -> String {
+  if flag(sv, "sleeping") {
+    "moon"
+  } else if is_browser_screen(sv) {
+    "web"
+  } else if text(sv, "kind") == "simulator" {
+    "phone"
+  } else {
+    "monitor"
+  }
+}
+
+///|
+/// User-opened browser pages on this station (`station_overview`'s 用户页面): live and recycled (sleeping) tabs in the
+/// persistent user profile, plus 打开网页… at the section's end.
+fn station_user_pages_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?) -> Unit {
+  let address = text(@signals.untracked(s), "station")
+  let v = fn() { (core.topic)("screens", { "station": str(address) }).get().value }
+  let tabs = fn() { items(v(), "screens").filter(fn(sc) { is_user_screen(Some(sc)) }) }
+  st_section_node(
+    b,
+    fn() { @sf.t("web-pages.screen.userPages") },
+    count=fn() { tabs().length() },
+    ends=(
+      fn() { flag(v(), "browser") && flag(v(), "control") },
+      fn(e) {
+        @sf.action_node(
+          e,
+          fn() { @sf.t("web-pages.screen.openBrowser") },
+          fn() { @settings.open_station_browser(core, address, from=Node(e)) },
+          icon="plus",
+          busy=fn() { is_doing(core, ["screen.openBrowser"], [("station", address)]) },
+        )
+      },
+    ),
+    fn(sec) {
+      @sf.group_node(sec, fn(g) {
+        g.each(tabs, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
+          station_browser_row_node(row, core, here, address, fn() { Some(sc.get()) }, true)
+        })
+        g.show(fn() { tabs().is_empty() }, fn(n) {
+          said_row_node(n, fn() { @sf.t("web-pages.screen.noUserPages") }, lead=LeadLine(fn(l) { st_mark_node(l, fn() { "web" }) }))
+        })
+      })
+    },
+  )
+}
+
+///|
+/// Agent-opened and login browser pages on this station (`station_overview`'s Agent 页面), kept apart from user pages.
+fn station_agent_pages_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?) -> Unit {
+  let address = text(@signals.untracked(s), "station")
+  let v = fn() { (core.topic)("screens", { "station": str(address) }).get().value }
+  let tabs = fn() { items(v(), "screens").filter(fn(sc) { is_agent_screen(Some(sc)) }) }
+  st_section_node(b, fn() { @sf.t("web-pages.screen.agentPages") }, count=fn() { tabs().length() }, fn(sec) {
+    @sf.group_node(sec, fn(g) {
+      g.each(tabs, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
+        station_browser_row_node(row, core, here, address, fn() { Some(sc.get()) }, false)
+      })
+    })
+  })
+}
+
+///|
+/// One browser tab row (`station_browser_row`'s node counterpart): opens the tab, with 休眠 (while an idle live user tab)
+/// and 关闭 at its end, and any active viewer rows under it.
+fn station_browser_row_node(
+  row : @view.View,
+  core : Core,
+  here : () -> Here,
+  address : String,
+  sv : () -> Json?,
+  user_tab : Bool,
+) -> Unit {
+  let id = text(@signals.untracked(sv), "id")
+  let can_sleep = fn() { user_tab && flag(sv(), "closable") && !flag(sv(), "sleeping") && items(sv(), "views").is_empty() }
+  let can_close = fn() { flag(sv(), "closable") }
+  row.pick(fn() { (can_sleep(), can_close()) }, fn(p, k) {
+    let (sleep_on, close_on) = k
+    @sf.group_rows_node(p, fn(r) {
+      @sf.link_row_node(
+        r,
+        fn() { text(sv(), "title") },
+        fn() {
+          @sfbase.open_page(Screen({ station: address, screen: id, title: text(@signals.untracked(sv), "title"), until_gone: !user_tab }))
+        },
+        note=fn() { text(sv(), "line") },
+        lead=LeadLine(fn(l) { st_mark_node(l, fn() { screen_row_icon(sv()) }) }),
+        control?=if sleep_on || close_on {
+          Some(fn(e) {
+            let on = [("station", address), ("screen", id)]
+            e.box(fn(c) {
+              c.row(Is(true)).gap(Is(ws_tail_gap)).lines_up(Is(Some(Middle))) |> ignore
+              if sleep_on {
+                let what = @sf.t("web-pages.screen.sleepWhat")
+                let press = fn() { @settings.act(core, what, "screen.sleep", obj([("station", str(address)), ("screen", str(id))])) }
+                let busy = fn() { is_doing(core, ["screen.sleep"], on) }
+                if close_on {
+                  @sf.button_node(c, fn() { @sf.t("web-pages.screen.sleep") }, press, tone=Ghost, busy~) |> ignore
+                } else {
+                  @sf.row_end_button_node(c, fn() { @sf.t("web-pages.screen.sleep") }, press, busy~) |> ignore
+                }
+              }
+              if close_on {
+                let what = @sf.t("web-pages.screen.closeTabWhat")
+                @sf.row_end_button_node(
+                  c,
+                  fn() { @sf.t("web-pages.screen.closeTab") },
+                  fn() { @settings.act(core, what, "screen.close", obj([("station", str(address)), ("screen", str(id))])) },
+                  busy=fn() { is_doing(core, ["screen.close"], on) },
+                )
+                |> ignore
+              }
+            })
+            |> ignore
+          })
+        } else {
+          None
+        },
+      )
+      screen_views_node(r, core, here, address, sv)
+    })
+  })
+}
+
+///|
 /// Its screens (station_overview's): a row each opening it (this machine's own display said so, not opened), what it
 /// lacks in amber, who is on it under it; one from before them says so quietly.
 fn station_screens_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?) -> Unit {
   let address = text(@signals.untracked(s), "station")
   let v = fn() { (core.topic)("screens", { "station": str(address) }).get().value }
-  let screens = fn() { items(v(), "screens") }
+  let screens = fn() { items(v(), "screens").filter(fn(sc) { !is_browser_screen(Some(sc)) }) }
   st_section_node(b, fn() { @sf.t("web-pages.screen.section") }, count=fn() { screens().length() }, fn(sec) {
     @sf.group_node(sec, fn(g) {
       g.each(screens, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
@@ -514,13 +668,13 @@ fn station_screens_node(b : @view.View, core : Core, here : () -> Here, s : () -
             lacks=!own && lacks,
             goes=!own,
             // (its mark the page's own row mark, st_row_mark's 16 in the muted ink, by its first line, as the old page's)
-            lead=LeadLine(fn(l) { st_mark_node(l, fn() { if text(sv(), "kind") == "browser" { "web" } else { "monitor" } }) }),
+            lead=LeadLine(fn(l) { st_mark_node(l, fn() { screen_row_icon(sv()) }) }),
           )
           screen_views_node(r, core, here, address, sv)
           })
         })
       })
-      g.show(fn() { screens().length() == 0 }, fn(n) {
+      g.show(fn() { screens().length() == 0 && items(v(), "screens").is_empty() && text(v(), "note") != "" }, fn(n) {
         said_row_node(n, fn() { text(v(), "note") }, lead=LeadLine(fn(l) { st_mark_node(l, fn() { "monitor" }) }))
       })
     })

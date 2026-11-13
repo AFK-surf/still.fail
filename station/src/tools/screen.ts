@@ -24,9 +24,12 @@ export const SCREEN = {
 /// What the agent is told: the screens (one, with `id`), and how to hand one to a person. `base`: this station's place
 /// in its control plane's pages (`<cloud>/w/<workspace>/s/<station>`), none when it has no pages.
 export function described(hub: ScreenHub, base: string | null, id?: string): string {
-  const all = hub.listed("en").screens;
+  const all = hub.listed("en").screens.filter((s) => !s.userTab);
   const shown = id === undefined ? all : all.filter((s) => s.id === id);
-  if (id !== undefined && shown.length === 0) throw new Error(`no screen ${id} on this station (it has: ${all.map((s) => s.id).join(", ") || "none"})`);
+  if (id !== undefined && shown.length === 0) {
+    if (hub.get(id)?.userTab) throw new Error(tr("en", "station.screen.userOnly"));
+    throw new Error(`no screen ${id} on this station (it has: ${all.map((s) => s.id).join(", ") || "none"})`);
+  }
   const screens = shown.map(({ access, views, ...s }: any) => ({
     ...s,
     on: (views as ViewShown[]).map((v) => ({ view: v.id, who: v.name, ...(v.agent ? {} : { where: viewOn(v) }), controlling: v.control })),
@@ -45,6 +48,7 @@ export function described(hub: ScreenHub, base: string | null, id?: string): str
 /// A person's request carried out: `action` of the views of `id`, `by` the agent (as they are told who ended their view).
 export function letGo(hub: ScreenHub, by: string, id: unknown, action: string, view: unknown): string {
   if (typeof id !== "string" || id === "") throw new Error(`${action} needs id, the screen`);
+  if (hub.get(id)?.userTab) throw new Error(tr("en", "station.screen.userOnly"));
   const one = () => {
     if (typeof view !== "string" || view === "") throw new Error(`${action} needs view, a view's id from the list`);
     return view;

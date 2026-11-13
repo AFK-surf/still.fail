@@ -1276,3 +1276,71 @@ each("a_views_sound_switched_off_is_told_the_station_and_each_stream_after_it", 
   await host.settle();
   core.close();
 });
+
+test("user_browser_pages_keep_site_and_sleep_state_and_follow_child_tabs", async () => {
+  const answers = {
+    ...base(),
+    "GET /screens": {
+      browser: true,
+      screens: [
+        { id: "browser:u_mail", kind: "browser", title: "收件箱 - Proton Mail", width: 0, height: 0, viewers: [], controlledBy: [], userTab: true, sleeping: true, site: "mail.proton.me", closable: true, openUrl: true },
+        { id: "browser:T1", kind: "browser", title: "Sign in · Anthropic", width: 1280, height: 800, viewers: [], controlledBy: [], site: "claude.ai", peek: true, closable: true, openUrl: true, openedBy: "k1" },
+      ],
+    },
+    "POST /screens/browser": { screen: "browser:u_new" },
+    "POST /screens/browser%3Au_mail/reload": {},
+    "POST /screens/browser%3Au_mail/sleep": {},
+  };
+  const { host, core, ui, views, push } = await viewing(1, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  subscribe(core, ui, 2, { topic: "screenCard", station: "ws/st", screen: "browser:u_mail" });
+  await host.settle();
+  apply(host, values);
+  const v = values.get(1) as J;
+  assert.equal(v.browser, true);
+  assert.equal(v.screens[0].userTab, true);
+  assert.equal(v.screens[0].sleeping, true);
+  assert.equal(v.screens[0].site, "mail.proton.me");
+  assert.equal(v.screens[0].openUrl, true);
+  assert.equal(v.screens[0].line, "mail.proton.me · 已休眠");
+  assert.equal(v.screens[1].line, "浏览器标签页 · claude.ai · 由「部署」打开");
+  assert.equal((values.get(2) as J).peek, false, "sleeping tabs are never woken by a card preview");
+
+  const log: J[] = [];
+  call(core, ui, 10, "screen.view", { station: "ws/st", screen: "browser:u_mail", view: "peek", codecs: ["jpeg"], peek: true });
+  await host.settle();
+  said(host, log);
+  assert.equal(views.length, 0, "preview refused locally without opening a station stream");
+  assert.equal(lastState(log, 10).phase, "denied");
+
+  call(core, ui, 11, "screen.openBrowser", { station: "ws/st", url: "mail.proton.me" });
+  call(core, ui, 12, "screen.reload", { station: "ws/st", screen: "browser:u_mail" });
+  call(core, ui, 13, "screen.sleep", { station: "ws/st", screen: "browser:u_mail" });
+  await host.settle();
+  assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/browser")));
+  assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/browser%3Au_mail/reload")));
+  assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/browser%3Au_mail/sleep")));
+
+  call(core, ui, 14, "screen.view", { station: "ws/st", screen: "browser:u_mail", view: "live", codecs: ["jpeg"] });
+  await host.settle();
+  assert.equal(views.length, 1);
+  views[0]!.send(stateFrame({ control: true, title: "验证登录 - Proton Mail", site: "account.proton.me", userTab: true, openUrl: true, childScreen: "browser:u_verify" }));
+  await host.settle();
+  said(host, log);
+  const live = lastState(log, 14);
+  assert.equal(live.site, "account.proton.me");
+  assert.equal(live.userTab, true);
+  assert.equal(live.openUrl, true);
+  assert.equal(live.childOpened, 1);
+  assert.equal(live.childScreen, "browser:u_verify");
+
+  push("screens", { browser: true, screens: [{ ...answers["GET /screens"].screens[0], sleeping: false, width: 1280, height: 800, viewers: ["Bob"] }] });
+  await host.settle();
+  apply(host, values);
+  assert.equal((values.get(1) as J).screens[0].line, "mail.proton.me · Bob 正在查看");
+
+  core.receive(ui, { kind: "cancel", id: 14, cancel: true });
+  await host.settle();
+  core.close();
+});

@@ -38,6 +38,7 @@ fn screen_rig(
   here? : String = "",
   h264? : Bool = false,
   os? : String = "",
+  screens? : Json,
 ) -> ScreenRig {
   @sfbase.reset()
   // this machine's station, as its host says (`here`); none by default
@@ -50,7 +51,15 @@ fn screen_rig(
   @sf.set_dark(Some(dark))
   // the core as this page reads it: the device's prefs, and what is told it (screen_page alone over it, no app)
   let base = @sfbase.made_source(
-    topic=fn(name, _) { if name == "prefs" { Some(Json::object({})) } else { None } },
+    topic=fn(name, _) {
+      if name == "prefs" {
+        Some(Json::object({}))
+      } else if name == "screens" {
+        screens
+      } else {
+        None
+      }
+    },
     call=fn(_, _, done) { done(Ok(Json::null())) },
   )
   let calls : Array[(String, Json, Bytes?)] = []

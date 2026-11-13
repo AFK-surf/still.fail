@@ -1518,3 +1518,121 @@ test "an account kind's panel on a wide window by the keyboard: the row with the
   }
   assert_eq(sp_added(t, before), [])
 }
+
+///|
+test "a station's overview separates user pages (live, sleeping and open new) from agent pages and physical screens" {
+  for (w, platform) in page_cases {
+    let at = "\{w} platform \{platform}"
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let calls : Array[(String, Json)] = []
+    let screens_topic : Json = {
+      "browser": true,
+      "control": true,
+      "known": true,
+      "outdated": false,
+      "screens": [
+        {
+          "id": "desktop",
+          "kind": "desktop",
+          "title": "Willow 的屏幕",
+          "width": 3024.0,
+          "height": 1964.0,
+          "line": "3024 × 1964 · 无人在看",
+          "link": "",
+        },
+        {
+          "id": "browser:u_mail",
+          "kind": "browser",
+          "userTab": true,
+          "sleeping": false,
+          "closable": true,
+          "title": "收件箱 - Proton Mail",
+          "width": 1280.0,
+          "height": 800.0,
+          "line": "mail.proton.me · 1280 × 800",
+          "link": "",
+        },
+        {
+          "id": "browser:u_gh",
+          "kind": "browser",
+          "userTab": true,
+          "sleeping": true,
+          "closable": true,
+          "title": "GitHub",
+          "width": 0.0,
+          "height": 0.0,
+          "line": "已休眠 · github.com",
+          "link": "",
+        },
+        {
+          "id": "browser:t1",
+          "kind": "browser",
+          "closable": true,
+          "title": "Sign in · Anthropic",
+          "width": 1280.0,
+          "height": 800.0,
+          "line": "浏览器标签页 · 1280 × 800",
+          "link": "",
+        },
+      ],
+    }
+    let base = @sffixture.fixture("settings")
+    let src : Source = {
+      ..base,
+      topic_read: fn(name, params) {
+        let tp = base.topic(name, params).get().snapshot()
+        if name == "screens" {
+          { ..tp, value: Some(screens_topic) }
+        } else {
+          tp
+        }
+      },
+      call: fn(name, params, done) {
+        if name.has_prefix("screen.") { calls.push((name, params)) }
+        done(Ok(Json::null()))
+      },
+    }
+    let core = @sfbase.settings_core(src, rig_workspace)
+    let here = fn() { @settings.here_of(core, rig_workspace.id, rig_workspace.name) }
+    let s = fn() { @settings.station_of(core, here(), "ws1/st1") }
+    let keys = station_overview_keys(core, s())
+    assert_true(keys.contains("userPages"), msg="userPages key: \{at}")
+    assert_true(keys.contains("agentPages"), msg="agentPages key: \{at}")
+    assert_true(keys.contains("screens"), msg="screens key: \{at}")
+    let t = station_part_tester(fn(p) {
+      p.gap(Is(20.0)) |> ignore
+      station_user_pages_node(p, core, here, s)
+      station_agent_pages_node(p, core, here, s)
+      station_screens_node(p, core, here, s)
+    }, w~, h=900.0, platform~)
+    assert_true(t.find("用户页面") is Some(_), msg=at)
+    assert_true(t.find("收件箱 - Proton Mail") is Some(_), msg=at)
+    assert_true(t.find("GitHub") is Some(_), msg=at)
+    assert_true(t.find("已休眠 · github.com") is Some(_), msg=at)
+    assert_true(t.find("打开网页…") is Some(_), msg=at)
+    assert_true(t.find("Agent 页面") is Some(_), msg=at)
+    assert_true(t.find("Sign in · Anthropic") is Some(_), msg=at)
+    assert_true(t.find("Willow 的屏幕") is Some(_), msg=at)
+    let (_, user_y) = t.find("用户页面").unwrap()
+    let (_, mail_y) = t.find("收件箱 - Proton Mail").unwrap()
+    let (_, agent_y) = t.find("Agent 页面").unwrap()
+    let (_, anthropic_y) = t.find("Sign in · Anthropic").unwrap()
+    let (_, screen_y) = t.find("Willow 的屏幕").unwrap()
+    assert_true(user_y < mail_y && mail_y < agent_y && agent_y < anthropic_y && anthropic_y < screen_y, msg=at)
+    let said = fn(word : String) { t.words().filter(fn(x) { x.0 == word }).length() }
+    // only the live user tab offers 休眠; the two user tabs + the agent tab offer 关闭
+    assert_eq(said("休眠"), 1, msg=at)
+    assert_eq(said("关闭"), 3, msg=at)
+    assert_eq(t.squeeze_faults(), [], msg=at)
+    t.click(Button, label="休眠")
+    t.draw()
+    assert_eq(calls.length(), 1, msg=at)
+    assert_eq(calls[0].0, "screen.sleep", msg=at)
+    assert_eq(text(Some(calls[0].1), "screen"), "browser:u_mail", msg=at)
+  }
+}

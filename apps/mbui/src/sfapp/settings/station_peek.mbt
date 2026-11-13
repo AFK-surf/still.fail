@@ -255,16 +255,109 @@ fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -
 }
 
 ///|
-/// Its screens as its card's 屏幕 offers them (`screens`, the core's for it): each, pressed, opened (the card closed
-/// first); none, why (the core's note) or that it has none, not to be chosen.
+/// Asks for a URL or domain and opens a persistent user tab in `address`'s browser (`screen.openBrowser`), then opens
+/// the tab in the viewer.
+pub fn open_station_browser(core : Core, address : String, from? : @sf.Anchor = Unanchored) -> Unit {
+  @sf.ask(
+    tr("web-pages.screen.openBrowserTitle"),
+    tr("web-pages.screen.openBrowserAction"),
+    fn(url) {
+      act(
+        core,
+        tr("web-pages.screen.openBrowserWhat"),
+        "screen.openBrowser",
+        obj([("station", str(address)), ("url", str(url))]),
+        then=fn(v) {
+          let next = text(Some(v), "screen")
+          if next != "" {
+            (core.open_screen)(address, next)
+          }
+        },
+      )
+    },
+    placeholder="mail.proton.me",
+    hint=tr("web-pages.screen.urlHint"),
+    from~,
+  )
+}
+
+///|
+/// Its screens as its card's 屏幕 offers them (`screens`, the core's for it): user pages (with 打开网页…), agent pages,
+/// and physical/simulator screens; none, why (the core's note) or that it has none, not to be chosen.
 fn peek_screen_items(core : Core, address : String, screens : Json?, close : () -> Unit) -> Array[@sf.MenuItem?] {
   let screen_items : Array[@sf.MenuItem?] = []
+  let user_tabs : Array[Json] = []
+  let agent_tabs : Array[Json] = []
+  let other_screens : Array[Json] = []
   for screen in items(screens, "screens") {
     let sc = Some(screen)
-    screen_items.push(Some(@sf.menu_item_of(text(sc, "title"), icon=if text(sc, "kind") == "browser" { "web" } else { "monitor" }, fn() {
-      close()
-      (core.open_screen)(address, text(sc, "id"))
-    })))
+    if flag(sc, "userTab") || text(sc, "id").has_prefix("browser:u_") {
+      user_tabs.push(screen)
+    } else if text(sc, "kind") == "browser" {
+      agent_tabs.push(screen)
+    } else {
+      other_screens.push(screen)
+    }
+  }
+  let can_open = flag(screens, "browser") && flag(screens, "control")
+  let has_user = !user_tabs.is_empty() || can_open
+  let groups = (if has_user { 1 } else { 0 }) +
+    (if !agent_tabs.is_empty() { 1 } else { 0 }) +
+    (if !other_screens.is_empty() { 1 } else { 0 })
+  if !other_screens.is_empty() {
+    if groups > 1 {
+      screen_items.push(Some(@sf.menu_item_of(tr("android-misc.screen.section"), heading=true, fn() { })))
+    }
+    for screen in other_screens {
+      let sc = Some(screen)
+      let icon = if text(sc, "kind") == "simulator" { "phone" } else { "monitor" }
+      screen_items.push(Some(@sf.menu_item_of(text(sc, "title"), icon~, fn() {
+        close()
+        (core.open_screen)(address, text(sc, "id"))
+      })))
+    }
+  }
+  if has_user {
+    if !screen_items.is_empty() {
+      screen_items.push(None)
+    }
+    if groups > 1 {
+      screen_items.push(Some(@sf.menu_item_of(tr("web-pages.screen.userPages"), heading=true, fn() { })))
+    }
+    for screen in user_tabs {
+      let sc = Some(screen)
+      let sleeping = flag(sc, "sleeping")
+      let label = if sleeping {
+        text(sc, "title") + " · " + tr("core-views.screen.sleeping")
+      } else {
+        text(sc, "title")
+      }
+      screen_items.push(Some(@sf.menu_item_of(label, icon=if sleeping { "moon" } else { "web" }, fn() {
+        close()
+        (core.open_screen)(address, text(sc, "id"))
+      })))
+    }
+    if can_open {
+      screen_items.push(Some(@sf.menu_item_of(tr("web-pages.screen.openBrowser"), icon="plus", fn() {
+        close()
+        open_station_browser(core, address)
+      })))
+    }
+  }
+  if !agent_tabs.is_empty() {
+    if !screen_items.is_empty() {
+      screen_items.push(None)
+    }
+    if groups > 1 {
+      screen_items.push(Some(@sf.menu_item_of(tr("web-pages.screen.agentPages"), heading=true, fn() { })))
+    }
+    for screen in agent_tabs {
+      let sc = Some(screen)
+      screen_items.push(Some(@sf.menu_item_of(text(sc, "title"), icon="web", fn() {
+        close()
+        (core.open_screen)(address, text(sc, "id"))
+      })))
+    }
   }
   if screen_items.is_empty() {
     let note = text(screens, "note")
