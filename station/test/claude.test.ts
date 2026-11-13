@@ -10,7 +10,9 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
+import { ClaudeDriver, type ClaudeDriverOptions, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
+import { RenewRefused } from "../src/accounts/console.ts";
+import { Said } from "../src/ops/i18n.ts";
 import { REPO_RULES_HOOK } from "../src/agents/repo-rules.ts";
 import { claudeProject } from "../src/read/transcript.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
@@ -42,8 +44,11 @@ after(async () => {
   rmSync(data, { recursive: true, force: true });
 });
 
-function driver(machineToken?: (env?: unknown, rejected?: string) => Promise<{ token: string; expiresAt: number }>) {
-  const d = new ClaudeDriver({ data, machineToken });
+function driver(
+  machineToken?: (env?: unknown, rejected?: string) => Promise<{ token: string; expiresAt: number }>,
+  subscriptionToken?: ClaudeDriverOptions["subscriptionToken"],
+) {
+  const d = new ClaudeDriver({ data, machineToken, subscriptionToken });
   drivers.push(d);
   return d;
 }
@@ -540,6 +545,78 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal((outcome(events, 1) as { reason?: string }).reason, "auth");
     assert.equal(stdin(o.dump).filter((m) => m.type === "control_response").at(-1).response.response.reason, "refresh_failed");
     await session.dispose();
+  });
+
+  test("a local subscription runs on a token renewed by the station, and falls back to its kept token without touching .credentials.json when renewal fails", async () => {
+    const subOptions = () => {
+      const base = options();
+      const creds = JSON.stringify({ claudeAiOauth: { accessToken: "kept-tok", refreshToken: "rt" } });
+      writeFileSync(join(base.profile.home, ".credentials.json"), creds);
+      return { ...base, creds, profile: { ...base.profile, id: "sub", access: { kind: "subscription" as const } } };
+    };
+
+    // 1. Central renewal at open() and in-place renewal on 401 via oauth_token_refresh.
+    const asked: [string, string | undefined][] = [];
+    let next = 1;
+    const d1 = driver(undefined, async (p, rejected) => {
+      asked.push([p.id, rejected]);
+      return { token: `sub-${next}`, expiresAt: Date.now() + 3600_000 };
+    });
+    const o1 = subOptions();
+    const l1 = listen();
+    const s1 = await d1.open(o1, l1.push);
+    next = 2;
+    await s1.prompt("expired");
+    await l1.until(ended(1));
+    const env1 = JSON.parse(readFileSync(o1.dump, "utf8").trim()).env;
+    assert.equal(env1.CLAUDE_CODE_OAUTH_TOKEN, "sub-1");
+    assert.equal(env1.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, "1");
+    assert.equal(env1.CLAUDE_CODE_ENTRYPOINT, "claude-desktop");
+    if (process.platform === "darwin") assert.match(env1.PATH.split(":")[0], /stillfail-no-keychain-\d+$/);
+    assert.deepEqual(outcome(l1.events), { kind: "completed" });
+    assert.deepEqual(deltas(l1.events), ["token:sub-2"]);
+    assert.deepEqual(asked, [["sub", undefined], ["sub", "sub-1"]]);
+    assert.equal(readFileSync(join(o1.profile.home, ".credentials.json"), "utf8"), o1.creds);
+    await s1.dispose();
+
+    // 2. Transient failure in open() hands over the kept token with RENEWED so oauth_token_refresh retries in-place.
+    let transient = true;
+    const d2 = driver(undefined, async (_p, rejected) => {
+      if (transient) {
+        transient = false;
+        throw new Said("network down");
+      }
+      assert.equal(rejected, "kept-tok");
+      return { token: "sub-3", expiresAt: Date.now() + 3600_000 };
+    });
+    const o2 = subOptions();
+    const l2 = listen();
+    const s2 = await d2.open(o2, l2.push);
+    await s2.prompt("expired");
+    await l2.until(ended(1));
+    const env2 = JSON.parse(readFileSync(o2.dump, "utf8").trim()).env;
+    assert.equal(env2.CLAUDE_CODE_OAUTH_TOKEN, "kept-tok");
+    assert.equal(env2.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, "1");
+    assert.deepEqual(outcome(l2.events), { kind: "completed" });
+    assert.deepEqual(deltas(l2.events), ["token:sub-3"]);
+    await s2.dispose();
+
+    // 3. Permanent refusal (RenewRefused) in open() hands over the kept token without RENEWED so a 401 fails on auth
+    //    (triggering recheck/failover) instead of throwing in open() or letting Claude Code delete .credentials.json.
+    const d3 = driver(undefined, async () => {
+      throw new RenewRefused(400, "revoked");
+    });
+    const o3 = subOptions();
+    const l3 = listen();
+    const s3 = await d3.open(o3, l3.push);
+    await s3.prompt("expired");
+    await l3.until(ended(1));
+    const env3 = JSON.parse(readFileSync(o3.dump, "utf8").trim()).env;
+    assert.equal(env3.CLAUDE_CODE_OAUTH_TOKEN, "kept-tok");
+    assert.equal(env3.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, undefined);
+    assert.equal((outcome(l3.events) as { reason?: string }).reason, "auth");
+    assert.equal(readFileSync(join(o3.profile.home, ".credentials.json"), "utf8"), o3.creds);
+    await s3.dispose();
   });
 
   for (const crashed of [false, true]) {

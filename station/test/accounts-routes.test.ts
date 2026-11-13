@@ -7,7 +7,7 @@ import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
+import { Accounts, LOGIN_BROWSER_FILE, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
 import { learn } from "../src/accounts/catalog.ts";
@@ -21,7 +21,7 @@ import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
 import { SessionChatPreparation, sessionChatReady } from "../src/store/session-chat-index.ts";
-import { approval, exe, fakeLogin, machine as fakeMachine, provider, script, temp, until, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeBrowser, fakeLogin, machine as fakeMachine, provider, script, temp, until, upon } from "./accounts-fakes.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
@@ -349,6 +349,74 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("DELETE", `/logins/${made.id}`))[0], 404);
     assert.deepEqual(await t.call("POST", "/logins", { runtime: "nope" }), [400, { error: "unknown runtime nope" }]);
     await t.close();
+  });
+
+  test("Claude sign-ins prefill --email when known and bind their browser state file across profile creation and cancellation", async () => {
+    const dir = temp("claude-login-email-state");
+    const argsLog = join(dir, "args.log");
+    const t = await rig({ data: dir });
+    script(
+      join(dir, "fake-login"),
+      `#!/bin/sh\necho "$*" >> '${argsLog}'\n` + fakeLogin().replace("#!/bin/sh\n", ""),
+    );
+    const b = fakeBrowser();
+    t.accounts.logins.attach(b.pages);
+    try {
+      // 1. Email read from .claude.json in the profile's home, and browser state file in homes/<id>.
+      await t.call("PUT", "/profiles/sub1", { name: "Claude 1", runtime: "claude", access: { kind: "subscription" } });
+      mkdirSync(join(dir, "homes/sub1"), { recursive: true });
+      writeFileSync(join(dir, "homes/sub1/.claude.json"), JSON.stringify({ oauthAccount: { emailAddress: "cuesurf1@proton.me" } }));
+      await t.call("POST", "/profiles/sub1/login");
+      await waitFor(t, "sub1", "needs_code");
+      assert.equal(await t.accounts.logins.openPage("sub1", "zh"), "browser:T1");
+      assert.equal(b.options.get("T1")?.stateFile?.(), join(dir, "homes/sub1", LOGIN_BROWSER_FILE));
+      await t.call("DELETE", "/profiles/sub1/login");
+      assert.equal(b.options.get("T1")?.stateFile?.(), join(dir, "homes/sub1", LOGIN_BROWSER_FILE), "an existing profile keeps its browser state across restarted sign-ins");
+
+      // 2. Fallback to email-shaped profile name when .claude.json has none.
+      await t.call("PUT", "/profiles/sub2", { name: "cuesurf2@proton.me", runtime: "claude", access: { kind: "subscription" } });
+      await t.call("POST", "/profiles/sub2/login");
+      await waitFor(t, "sub2", "needs_code");
+      await t.call("DELETE", "/profiles/sub2/login");
+
+      // 3. Non-email name without .claude.json omits --email.
+      await t.call("PUT", "/profiles/sub3", { name: "Claude 主账号", runtime: "claude", access: { kind: "subscription" } });
+      await t.call("POST", "/profiles/sub3/login");
+      await waitFor(t, "sub3", "needs_code");
+      await t.call("DELETE", "/profiles/sub3/login");
+
+      const lines = readFileSync(argsLog, "utf8").trim().split("\n");
+      assert.deepEqual(lines, [
+        "auth login --claudeai --email cuesurf1@proton.me",
+        "auth login --claudeai --email cuesurf2@proton.me",
+        "auth login --claudeai",
+      ]);
+
+      // 4. New subscription login: stateFile follows homes/login-<hex> -> homes/<created> once finished, and becomes null when dropped.
+      const [, started] = await t.call("POST", "/logins", { runtime: "claude" });
+      await upon((wake) => t.accounts.onChange(wake), () => t.accounts.logins.get(started.id)?.state === "needs_code", "newLogin needs_code");
+      assert.equal(await t.accounts.logins.openPage(started.id, "zh"), "browser:T2");
+      const stateForNew = b.options.get("T2")!.stateFile!;
+      assert.equal(stateForNew(), join(dir, "homes", started.id, LOGIN_BROWSER_FILE));
+      await t.call("POST", `/logins/${started.id}/code`, { code: "good-code" });
+      const created = await upon(
+        (wake) => t.accounts.onChange(wake),
+        () => t.accounts.loginsView().find((l) => l.id === started.id)?.created as string | undefined,
+        "newLogin created profile",
+      );
+      assert.equal(stateForNew(), join(dir, "homes", created, LOGIN_BROWSER_FILE));
+
+      const [, dropped] = await t.call("POST", "/logins", { runtime: "claude" });
+      await upon((wake) => t.accounts.onChange(wake), () => t.accounts.logins.get(dropped.id)?.state === "needs_code", "dropped needs_code");
+      assert.equal(await t.accounts.logins.openPage(dropped.id, "zh"), "browser:T3");
+      const stateForDropped = b.options.get("T3")!.stateFile!;
+      assert.equal(stateForDropped(), join(dir, "homes", dropped.id, LOGIN_BROWSER_FILE));
+      await t.call("DELETE", `/logins/${dropped.id}`);
+      assert.equal(stateForDropped(), null);
+      assert.equal(existsSync(join(dir, "homes", dropped.id)), false);
+    } finally {
+      await t.close();
+    }
   });
 
   test("a profile runs every model its check found, besides those config.json names, and names none of them there", async () => {

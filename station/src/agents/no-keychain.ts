@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { writePrivateSoon } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
 
@@ -85,6 +86,29 @@ export async function takeBack(home: string) {
   }
   await security(["delete-generic-password", "-s", item]);
   log.info("agents::no_keychain", "a profile's login moved back from the keychain to its file", { home });
+}
+
+/// As `takeBack`, off the station's thread once `.credentials.json` was already found missing (`ENOENT`).
+export async function takeBackMissing(home: string): Promise<boolean> {
+  if (!platform.hasKeychain) return false;
+  const item = keychainItem(home);
+  const found = await security(["find-generic-password", "-w", "-s", item]);
+  if (!found.ok) return false;
+  const text = found.stdout.trim();
+  let isLogin = false;
+  try {
+    isLogin = JSON.parse(text)?.claudeAiOauth !== undefined;
+  } catch {}
+  if (!isLogin) return false;
+  try {
+    await writePrivateSoon(join(home, ".credentials.json"), text);
+  } catch (error) {
+    log.warn("agents::no_keychain", "could not move a profile's login out of the keychain", { home, error: String(error) });
+    return false;
+  }
+  await security(["delete-generic-password", "-s", item]);
+  log.info("agents::no_keychain", "a profile's login moved back from the keychain to its file", { home });
+  return true;
 }
 
 /// Written aside (readable by its owner only) and moved in.

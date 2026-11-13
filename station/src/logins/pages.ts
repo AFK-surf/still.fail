@@ -5,12 +5,14 @@
 // back to the command on this machine, with nothing to relay or paste. The tab is the login's, by a key of its own
 // (`machine:<id>`, `profile:<id>`): kept while the login goes on (a person who went back finds it again), closed as it
 // ends; a person closing it themselves is heard, and the login told again.
+import type { OpenTabOptions } from "../browser/browser.ts";
+export type { OpenTabOptions };
 import { log } from "../ops/log.ts";
 
 /// What of the station's browser the logins use (browser/browser.ts StationBrowser).
 export type PagesBrowser = {
   available(): boolean;
-  openTab(url: string): Promise<string>;
+  openTab(url: string, options?: OpenTabOptions): Promise<string>;
   hasTab(targetId: string): boolean;
   closeTab(targetId: string): Promise<void>;
 };
@@ -57,13 +59,13 @@ export class LoginPages {
 
   /// The tab for `key`: the one open (in a window of its own, so seen as it is: browser.ts openTab), else a new one at
   /// `url`. Its screen.
-  async open(key: string, url: string): Promise<string> {
+  async open(key: string, url: string, options?: OpenTabOptions): Promise<string> {
     const had = this.#tabs.get(key);
     if (had !== undefined && this.#browser.hasTab(had)) return tabScreen(had);
     const pending = this.#opening.get(key);
     if (pending) return pending;
     const opening = (async () => {
-      const id = await this.#browser.openTab(url);
+      const id = options ? await this.#browser.openTab(url, options) : await this.#browser.openTab(url);
       this.#tabs.set(key, id);
       log.info("logins", "a login's page opened in the station's browser", { login: key });
       this.#tell(key);

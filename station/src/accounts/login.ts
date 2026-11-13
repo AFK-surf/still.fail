@@ -81,8 +81,12 @@ export type LoginCommands = { claude: string; codex: string; grok?: string; devi
 const AGY_POLL_MS = 500;
 const AGY_WAIT_MS = 90_000;
 
-/// What a sign-in is for: a profile's id, the runtime it signs in to, and its home.
-export type LoginProfile = { id: string; runtime: Runtime; home: string };
+/// Where a profile keeps the cookies and passkeys of its sign-in tab in the station's browser, inside its own home.
+export const LOGIN_BROWSER_FILE = ".stillfail-login-state.json";
+
+/// What a sign-in is for: a profile's id, the runtime it signs in to, its home, and (for Claude) the account email to
+/// pre-populate on the authorize page when known.
+export type LoginProfile = { id: string; runtime: Runtime; home: string; email?: string | null };
 
 /// A sign-in under way: its command (none for OpenCode's, which `stop` ends), and the file its stand-in browser writes
 /// the pages it opens to.
@@ -108,6 +112,8 @@ export class LoginManager {
   private keyName: () => string;
   /// Where a sign-in's page opens in the station's browser (none until the browser's part attaches it).
   private pages: LoginPages | null = null;
+  /// Where each profile's isolated sign-in browser context keeps its cookies and passkeys across re-logins.
+  private stateFile: (profile: string) => string | null;
 
   constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv([]), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail", kimi = KIMI_AUTH) {
     this.console = console;
@@ -118,6 +124,16 @@ export class LoginManager {
     this.noBrowserDir = join(data, "run", "no-browser");
     this.commands = commands;
     this.env = env;
+    this.stateFile = (profile) => {
+      const home = this.jobs.get(profile)?.home;
+      return home ? join(home, LOGIN_BROWSER_FILE) : null;
+    };
+  }
+
+  /// Overrides how a profile's sign-in browser state file is located (accounts/index.ts: follows a new profile's home
+  /// once `newLogin` renames it).
+  setStateFile(resolve: (profile: string) => string | null) {
+    this.stateFile = resolve;
   }
 
   /// Hears the profile id of each login job that changes; gives the function that stops it.
@@ -176,7 +192,7 @@ export class LoginManager {
     if (url === null && this.pages.screenOf(pageKey(profile)) === null) throw new Error(tr(lang, "station.loginPage.nothing"));
     let screen: string;
     try {
-      screen = await this.pages.open(pageKey(profile), url ?? "about:blank");
+      screen = await this.pages.open(pageKey(profile), url ?? "about:blank", { stateFile: () => this.stateFile(profile) });
     } catch (error) {
       throw new Error(tr(lang, "station.loginPage.failed", { error: (error as Error).message }));
     }
@@ -208,7 +224,8 @@ export class LoginManager {
     if (profile.runtime === "claude") {
       env.CLAUDE_CONFIG_DIR = profile.home;
       fileCredentials(env);
-      [command, args] = [this.commands.claude, ["auth", "login", "--claudeai"]];
+      const email = typeof profile.email === "string" && profile.email.trim() !== "" ? profile.email.trim() : null;
+      [command, args] = [this.commands.claude, ["auth", "login", "--claudeai", ...(email ? ["--email", email] : [])]];
     } else if (profile.runtime === "grok") {
       env.GROK_HOME = join(profile.home, "grok");
       env.GROK_DISABLE_AUTOUPDATER = "1";
@@ -324,7 +341,7 @@ export class LoginManager {
     const now = this.background.now();
     const job: LoginJob = { profile: id, runtime: "claude", provider, state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
-    const running: Running = { run, job, child: null, raw: "", output: "", exited: true, lang, cancelTimer: () => {} };
+    const running: Running = { run, job, child: null, raw: "", output: "", exited: true, lang, home: profile.home, cancelTimer: () => {} };
     this.jobs.set(id, running);
     this.emit(id);
     const current = () => this.jobs.get(id)?.run === run;
@@ -387,7 +404,7 @@ export class LoginManager {
     const handshake = cursorHandshake(this.cursor);
     const job: LoginJob = { profile: id, runtime: "cursor", state: "needs_approval", url: handshake.url, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
-    const running: Running = { run, job, child: null, raw: "", output: "", exited: true, lang, cancelTimer: () => {} };
+    const running: Running = { run, job, child: null, raw: "", output: "", exited: true, lang, home: profile.home, cancelTimer: () => {} };
     this.jobs.set(id, running);
     running.cancelTimer = this.background.after(TIMEOUT_MS, () => this.failRun(id, run, tr(lang, "station.login.timedOut")));
     const current = () => this.jobs.get(id)?.run === run;

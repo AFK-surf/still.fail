@@ -16,13 +16,13 @@ export function ofSites(domain: string, sites: string[]): boolean {
   return sites.some((s) => d === s || d.endsWith(`.${s}`));
 }
 
-/// The cookies of `sites` among those DevTools read, as they are set again: a session cookie without its expiry.
-export function siteCookies(read: unknown, sites: string[]): CookieParam[] {
+/// The cookies among those DevTools read, as they are set again: a session cookie without its expiry.
+function cookiesIn(read: unknown, keep?: (domain: string) => boolean): CookieParam[] {
   if (!Array.isArray(read)) return [];
   const out: CookieParam[] = [];
   for (const c of read) {
     if (c === null || typeof c !== "object" || typeof c.name !== "string" || typeof c.value !== "string" || typeof c.domain !== "string") continue;
-    if (!ofSites(c.domain, sites)) continue;
+    if (keep && !keep(c.domain)) continue;
     out.push({
       name: c.name, value: c.value, domain: c.domain, path: typeof c.path === "string" ? c.path : "/",
       ...(typeof c.secure === "boolean" ? { secure: c.secure } : {}), ...(typeof c.httpOnly === "boolean" ? { httpOnly: c.httpOnly } : {}),
@@ -33,6 +33,16 @@ export function siteCookies(read: unknown, sites: string[]): CookieParam[] {
     });
   }
   return out;
+}
+
+/// All cookies among those DevTools read, as they are set again (a profile sign-in's isolated context: browser.ts).
+export function allCookies(read: unknown): CookieParam[] {
+  return cookiesIn(read);
+}
+
+/// The cookies of `sites` among those DevTools read, as they are set again: a session cookie without its expiry.
+export function siteCookies(read: unknown, sites: string[]): CookieParam[] {
+  return cookiesIn(read, (domain) => ofSites(domain, sites));
 }
 
 /// A sign-in as the vault keeps it (the item's `cookies` field): its cookies, as JSON; with its sites' passkeys too

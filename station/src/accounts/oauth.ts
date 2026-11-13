@@ -1,12 +1,14 @@
 // Renewing a Claude login without sending a prompt: under Claude Code's own locks (its
 // current one in the config directory and its legacy one beside it), read again once locked, and saved back where it
 // was (the keychain for the machine's login on macOS, else the file), never as a copy. Used for the machine profile's
-// token (the Claude driver's `machineToken`), for checking a profile and for reading a subscription's allowance. A login
-// that can no longer be renewed (none to renew it with, or its refresh token refused) is over: RenewRefused.
+// and a local subscription profile's token (the Claude driver's `machineToken` and `subscriptionToken`), for checking a
+// profile and for reading a subscription's allowance. A login that can no longer be renewed (none to renew it with, or
+// its refresh token refused) is over: RenewRefused.
 import { execFile, spawn } from "node:child_process";
 import { type FileHandle, mkdir, open, readFile, realpath, rmdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { type Env, readClaudeKeychain } from "../agents/machine-logins.ts";
+import { takeBackMissing } from "../agents/no-keychain.ts";
 import { writePrivateSoon } from "../ops/files.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, Said, stationLang, tr } from "../ops/i18n.ts";
@@ -78,12 +80,21 @@ async function read(env: Env, home: string, machine: boolean, lang: Lang): Promi
       }
     }
   }
+  const file = join(home, ".credentials.json");
   let text: string;
   try {
     // Off the station's thread: six of these at once held it 1 s on a station short of memory (2026-11-03).
-    text = await readFile(join(home, ".credentials.json"), "utf8");
-  } catch {
-    throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
+    text = await readFile(file, "utf8");
+  } catch (error) {
+    if (!machine && (error as NodeJS.ErrnoException).code === "ENOENT" && (await takeBackMissing(home))) {
+      try {
+        text = await readFile(file, "utf8");
+      } catch {
+        throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
+      }
+    } else {
+      throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
+    }
   }
   try {
     return { data: JSON.parse(text), keychain: false };

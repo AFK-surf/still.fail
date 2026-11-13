@@ -35,14 +35,30 @@ test "wide: Anthropic authorization in either browser waits for confirmation" {
   assert_true(t.opened().is_empty())
   t.back()
   sheet_rested(t, "sf-present")
-  t.click(Button, label="其他方式")
-  sheet_rested(t, "sf-present")
-  t.tap_text("在 Willow 的浏览器中打开")
+  t.click(Button, label="在 Willow 的浏览器中打开")
   sheet_rested(t, "sf-present")
   assert_true(t.find("打开 Claude 授权页面？") is Some(_))
   assert_true(named(calls, "login.browser").is_empty())
   t.tap_text("继续打开")
   assert_eq(named(calls, "login.browser").length(), 1)
+}
+
+///|
+test "station browser button sits beside 打开授权页面 and wraps cleanly at default and 1.3x words" {
+  for mode in ["settings-profile-login-station", "settings-new-profile-login-station"] {
+    for lang in ["zh", "en"] {
+      let label = if lang == "zh" { "在 Willow 的浏览器中打开" } else { "Open in Willow's browser" }
+      for win in corner_windows {
+        let t = screen_in(mode, win, lang, motion_judged=false)
+        assert_true(t.query(Button, label~) is Some(_), msg="\{win.0}-\{lang} \{mode}")
+        assert_eq(t.squeeze_faults() + t.words_over_now() + t.fixed_outgrown(), [], msg="\{win.0}-\{lang} \{mode}")
+      }
+      guard corner_windows.search_by(w => w.0 == "phone") is Some(i) else { fail("no phone window") }
+      let t_large = screen_in(mode, corner_windows[i], lang, font_scale=words_large_scale, motion_judged=false)
+      assert_true(t_large.query(Button, label~) is Some(_), msg="phone-\{lang}-1.3 \{mode}")
+      assert_eq(t_large.squeeze_faults() + t_large.words_over_now() + t_large.fixed_outgrown(), [], msg="phone-\{lang}-1.3 \{mode}")
+    }
+  }
 }
 
 ///|

@@ -666,8 +666,8 @@ fn profile_sign_in_node(
 /// OpenCode, Kimi, Cursor's page alone: copied as it is opened, `copied` saying so); while it is checked or added, said
 /// so. `send`: a code pasted back sent, then `sent` (its field emptied); `sending` while it is. Where its job says the
 /// station has a browser of its own (`browser`), the same page there (`in_station`: the station's name, whether it is
-/// being opened, and what opens it given what it is called), seldom used: in a ⋯ after the page's button (sf/align.mbt:
-/// what is used least goes into the row's ⋯).
+/// being opened, and what opens it given what it is called) is a button beside the page's button; copying the link
+/// stays in the ⋯ after them.
 pub fn login_steps_node(
   v : @view.View,
   core : Core,
@@ -690,8 +690,37 @@ pub fn login_steps_node(
       _ => 5
     }
   }
-  // in a ⋯ after the page's button: its address copied (for a browser elsewhere), and where the station has one, the
-  // same page in the station's browser (回到 … while its tab is open)
+  // beside the page's button where the station has a browser of its own (回到 … while its tab is open); in the ⋯ after
+  // them, its address copied (for a browser elsewhere)
+  let station_browser = fn(r : @view.View) {
+    match in_station {
+      Some((name, busy, go)) =>
+        r.show(fn() { flag(job(), "browser") }, fn(x) {
+          @sf.button_node(
+            x,
+            fn() {
+              @sf.t(
+                if text(job(), "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" },
+                args=[("station", name())],
+              )
+            },
+            fn() {
+              let j = @signals.untracked(job)
+              let label = @sf.t(
+                if text(j, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" },
+                args=[("station", @signals.untracked(name))],
+              )
+              let claude = @signals.untracked(provider) == "Claude" && text(j, "screen") == ""
+              @settings.confirm_claude_auth(claude, fn() { go(label) })
+            },
+            tone=Plain,
+            busy~,
+          )
+          |> ignore
+        })
+      None => ()
+    }
+  }
   let page_more = fn(r : @view.View) {
     // (beside the box that holds it, as it is pressed)
     r.box(fn(k) {
@@ -699,16 +728,6 @@ pub fn login_steps_node(
         let j = @signals.untracked(job)
         let link = text(j, "url")
         let items = [Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { @sfbase.copy_out(link, said=@sf.t("common.link.copied")) }))]
-        match in_station {
-          Some((name, busy, go)) if flag(j, "browser") => {
-            let label = @sf.t(if text(j, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[
-              ("station", @signals.untracked(name)),
-            ])
-            let claude = @signals.untracked(provider) == "Claude" && text(j, "screen") == ""
-            items.push(Some(@sf.menu_item_of(label, disabled=@signals.untracked(busy), fn() { @settings.confirm_claude_auth(claude, fn() { go(label) }) })))
-          }
-          _ => ()
-        }
         let (x, y, w, h) = k.placed_window_now()
         @sf.menu(items, from=At(x, y, w, h))
       })
@@ -740,11 +759,13 @@ pub fn login_steps_node(
           |> ignore
           st.box(fn(r) {
             @sf.style_node(r, fn() { pf_step_buttons })
+            r.width_share(Is(1.0)).wraps(Is(Some(pf_step_buttons_gap))) |> ignore
             @sf.button_node(r, fn() { @sf.t("web-pages.profiles.openAuth") }, fn() {
               let link = @signals.untracked(url)
               @settings.confirm_claude_auth(@signals.untracked(provider) == "Claude", fn() { (core.open_link)(link) })
             }, tone=Primary, icon="external")
             |> ignore
+            station_browser(r)
             page_more(r)
           })
           |> ignore
@@ -806,6 +827,7 @@ pub fn login_steps_node(
           })
           d.box(fn(r) {
             @sf.style_node(r, fn() { pf_step_buttons })
+            r.width_share(Is(1.0)).wraps(Is(Some(pf_step_buttons_gap))) |> ignore
             @sf.button_node(
               r,
               fn() {
@@ -833,6 +855,7 @@ pub fn login_steps_node(
               icon="external",
             )
             |> ignore
+            station_browser(r)
             page_more(r)
           })
           |> ignore
@@ -2044,9 +2067,13 @@ let pf_card_gap : Double = 14.0
 let pf_step : @ui.Style = @ui.css("w=Full gap=S2 align=AStart")
 
 ///|
-/// A step's page button, and the ⋯ after it of the other way of opening it (the station's browser).
+/// A step's page buttons (its own and, where the station has a browser, the station's) and the ⋯ after them (copying
+/// the link for a browser elsewhere): wrapped across lines on a narrow card or large words.
+let pf_step_buttons_gap : Double = 8.0
+
+///|
 // kept across runs: a value (no field of it changes)
-let pf_step_buttons : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+let pf_step_buttons : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
