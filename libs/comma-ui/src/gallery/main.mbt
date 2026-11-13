@@ -1,5 +1,5 @@
 // Comma's parts in mbui (src/cm), on one page: each in its hierarchies, sizes and states, as Comma's Storybook shows
-// them, to set beside it. MBUI_DARK=1: the dark look. MBUI_CM_FONT: Inter's variable file (Comma's face; Cue's
+// them, to set beside it (MBUI_CM_PAGE=more: the floating parts and the rest, more.mbt). MBUI_DARK=1: the dark look. MBUI_CM_FONT: Inter's variable file (Comma's face; Cue's
 // clients/apps/android/app/src/main/res/font/inter_variable.ttf), else the system's.
 
 ///|
@@ -13,9 +13,20 @@ fn main {
   if font != "" {
     ignore(@hostapi.face_add(@hostapi.face_ui, font, 0))
   }
+  let open = @ui.env("MBUI_CM_OPEN")
   @ui.run("Comma 组件", fn(_c) {  }, tree=fn(root) {
     @ui.set_tree_theme(@cm.ui_theme)
-    gallery(root)
+    let layer = @cm.Layer::new()
+    @cm.layer_node(root, layer)
+    root.box(fn(w) {
+      w.grow(Is(1.0)) |> ignore
+      if @ui.env("MBUI_CM_PAGE") == "more" {
+        more(w, layer, open)
+      } else {
+        gallery(w)
+      }
+    })
+    |> ignore
   })
 }
 

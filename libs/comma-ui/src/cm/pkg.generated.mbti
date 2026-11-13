@@ -2,9 +2,11 @@
 package "comma-ui/cm"
 
 import {
+  "mbui/signals",
   "mbui/ui",
   "mbui/view",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -17,16 +19,30 @@ pub fn avatar_node(@view.View, () -> String, size? : AvatarSize, online? : () ->
 pub fn badge_node(@view.View, () -> String, tone? : Tone, kind? : BadgeKind, size? : BadgeSize, dot? : Bool, loc~ : SourceLoc) -> @view.View
 
 #callsite(autofill(loc))
+pub fn button_group_node(@view.View, Array[String], @signals.Signal[Int32], dot? : Int32, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
 pub fn button_node(@view.View, () -> String, () -> Unit, hierarchy? : Hierarchy, size? : Size, dot? : Bool, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
 
 #callsite(autofill(loc))
+pub fn check_group_node(@view.View, Array[(String, String)], @signals.Signal[Array[Bool]], label? : String, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
 pub fn check_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String, size? : ControlSize, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn collapse_node(@view.View, () -> String, @signals.Signal[Bool], (@view.View) -> Unit, loc~ : SourceLoc) -> @view.View
 
 pub fn colors() -> Colors
 
 pub fn curve((Double, Double, Double, Double)) -> (Double) -> Double
 
 pub let dark : Colors
+
+pub fn dialog_node(Layer, @signals.Signal[Bool], () -> String, description? : () -> String, body? : (@view.View) -> Unit, actions? : (@view.View) -> Unit, width? : Double) -> Unit
+
+#callsite(autofill(loc))
+pub fn dropdown_node(@view.View, Layer, Array[String], @signals.Signal[Int32], label? : String, placeholder? : String, open? : @signals.Signal[Bool], disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
 
 pub let ease_calm_in_out : (Double, Double, Double, Double)
 
@@ -64,6 +80,9 @@ pub let focus_error : (Double, Int64)
 
 pub let focus_gray : (Double, Int64)
 
+#callsite(autofill(loc))
+pub fn indicator_node(@view.View, Signal, String, size? : Int32, loc~ : SourceLoc) -> @view.View
+
 pub fn initials(String) -> String
 
 #callsite(autofill(loc))
@@ -71,9 +90,16 @@ pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String,
 
 pub fn is_dark() -> Bool
 
+#callsite(autofill(loc))
+pub fn layer_node(@view.View, Layer, loc~ : SourceLoc) -> Unit
+
 pub let light : Colors
 
 pub fn lit(@view.View, () -> Bool) -> Bool
+
+pub fn menu_item(String, () -> Unit, danger? : Bool, checked? : Bool, divided? : Bool) -> MenuRow
+
+pub fn menu_node(Layer, @view.View, @signals.Signal[Bool], () -> Array[MenuRow], label? : String, width? : Double, side? : @view.Side) -> Unit
 
 pub fn mix(Int64, Double, Int64) -> Int64
 
@@ -201,7 +227,15 @@ pub let ms_tooltip_exit : Double
 
 pub let ms_tooltip_handoff : Double
 
+pub fn popup_node(Layer, @view.View, @signals.Signal[Bool], (@view.View) -> Unit, label? : String, width? : Double) -> Unit
+
 pub fn presses_node(@view.View, () -> Unit, on? : () -> Bool) -> Unit
+
+#callsite(autofill(loc))
+pub fn radio_group_node(@view.View, Array[(String, String)], @signals.Signal[Int32], label? : String, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn radio_node(@view.View, () -> Bool, () -> Unit, () -> String, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
 
 pub let radius_2xl : Double
 
@@ -228,6 +262,9 @@ pub let radius_xxs : Double
 pub fn ring_node(@view.View, () -> Double, ink? : Int64) -> Unit
 
 pub let ring_w : Double
+
+#callsite(autofill(loc))
+pub fn scroll_area_node(@view.View, Double, (@view.View) -> Unit, label? : String, loc~ : SourceLoc) -> @view.View
 
 pub fn set_dark(Bool?) -> Unit
 
@@ -258,6 +295,9 @@ pub let shadow_sm : (Double, Double, Int64)
 pub let shadow_xl : (Double, Double, Int64)
 
 pub let shadow_xs : (Double, Double, Int64)
+
+#callsite(autofill(loc))
+pub fn slider_node(@view.View, @signals.Signal[Double], () -> String, least? : Double, most? : Double, step? : Double, width? : Double, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
 
 pub let space_10xl : Double
 
@@ -296,8 +336,14 @@ pub let space_xxs : Double
 #callsite(autofill(loc))
 pub fn tag_node(@view.View, () -> String, tone? : Tone, size? : BadgeSize, remove? : () -> Unit, loc~ : SourceLoc) -> @view.View
 
+pub let toast_stays : Double
+
+pub fn toaster_node(Layer, Toaster) -> Unit
+
 #callsite(autofill(loc))
 pub fn toggle_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String, size? : ControlSize, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+pub fn tooltip_node(Layer, @view.View, () -> String, side? : @view.Side, delay? : Double, shown? : () -> Bool) -> Unit
 
 pub let type_large : TypeRole
 
@@ -601,6 +647,36 @@ pub(all) enum Hierarchy {
 }
 
 #derive(Eq, @debug.Debug)
+pub(all) enum Intent {
+  Neutral
+  Success
+  Warning
+  Error
+}
+
+pub struct Layer {
+  at : @ref.Ref[@view.View?]
+}
+pub fn Layer::new() -> Self
+
+pub(all) struct MenuRow {
+  label : String
+  press : () -> Unit
+  danger : Bool
+  checked : Bool
+  divided : Bool
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Signal {
+  Idle
+  Info
+  Good
+  Caution
+  Bad
+}
+
+#derive(Eq, @debug.Debug)
 pub(all) enum Size {
   Xs
   Sm
@@ -608,6 +684,23 @@ pub(all) enum Size {
   Lg
 }
 pub fn Size::height(Self) -> Double
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ToastSaid {
+  id : Int32
+  title : String
+  description : String
+  intent : Intent
+}
+
+pub struct Toaster {
+  shown : @signals.Signal[Array[ToastSaid]]
+  mut next : Int32
+  at : @ref.Ref[@view.View?]
+}
+pub fn Toaster::dismiss(Self, Int32) -> Unit
+pub fn Toaster::new() -> Self
+pub fn Toaster::show(Self, String, description? : String, intent? : Intent, stays? : Double) -> Unit
 
 #derive(Eq, @debug.Debug)
 pub(all) enum Tone {
