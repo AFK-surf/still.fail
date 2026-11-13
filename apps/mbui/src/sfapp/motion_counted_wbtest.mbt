@@ -21,7 +21,6 @@ fn init {
     "src/sfapp/emit_wbtest.mbt",
     "src/sfapp/files_places_wbtest.mbt",
     "src/sfapp/flight_under_bar_wbtest.mbt",
-    "src/sfapp/hand_layout_wbtest.mbt",
     "src/sfapp/home_wbtest.mbt",
     "src/sfapp/kept_rows_kinds_wbtest.mbt",
     "src/sfapp/menu_node_wbtest.mbt",
