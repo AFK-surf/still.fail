@@ -61,6 +61,18 @@ priv struct PanelRowAt {
 }
 
 ///|
+/// The corner of a row of a panel's body (not a small panel's) reaching `out` past its column: row_corner where it still
+/// stands in from the panel's sides (PanelIn's `sides`), never a square patch there (the corner rule's lit square,
+/// 2026-11-13); square where it reaches them, a sheet's row across it.
+fn panel_row_corner(at : PanelIn, out : Double) -> Double {
+  if at.sides - out > 0.5 {
+    row_corner
+  } else {
+    0.0
+  }
+}
+
+///|
 /// Where a row of a panel's body laid out `at` stands across, row_line's, its ground's corner left to the row (each
 /// kind's ground its own): its ground out across the room the panel leaves at its sides (rows_out), no further than its
 /// own words are in from its ground (`own`, none said: all of it); its words in a small panel a row's padding in

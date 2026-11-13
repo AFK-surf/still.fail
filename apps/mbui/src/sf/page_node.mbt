@@ -969,8 +969,9 @@ fn link_row_made(
     )
     return
   }
-  // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; square there, as the old one's
-  // ground is, a small panel's inner corner in one; elsewhere a card's row, as ever)
+  // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; round there as the old one's
+  // ground is where it stands in from the panel's sides (panel_row_corner), a small panel's inner corner in one;
+  // elsewhere a card's row, as ever)
   let at = panel_in_of(parent)
   let in_panel = panel_row_at(at, own=card_pad - corner_inset, card=on_card_node(parent))
   let (out, side) = match in_panel {
@@ -982,7 +983,7 @@ fn link_row_made(
   } else if at.small {
     small_panel_inner(r_menu)
   } else {
-    0.0
+    panel_row_corner(at, out)
   }
   parent.box(made_for=loc, fn(r) {
     r

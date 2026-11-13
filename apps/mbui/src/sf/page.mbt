@@ -1888,9 +1888,9 @@ fn row_line(narrow : Bool) -> @ui.Style {
   } else if in_small_panel() {
     panel_row_in()
   } else if in_card.val == 0 && words_in_now.val > 0.0 {
-    panel_words_in()
+    panel_words_in().then(panel_row_rounds(0.0))
   } else if reach > 0.0 {
-    @ui.style(mx=room(-reach), px=room(reach))
+    @ui.style(mx=room(-reach), px=room(reach)).then(panel_row_rounds(reach))
   } else {
     no_reach
   }

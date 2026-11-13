@@ -1292,11 +1292,18 @@ pub fn panel_words_out_by(by : Double) -> @ui.Style {
 /// rule's lit square, 2026-11-13: the agent 往来's chats in a dialog).
 pub fn panel_row_reach() -> @ui.Style {
   let out = rows_out.val
-  let reach = @ui.style(mx=room(-out), px=room(out + words_in_now.val))
+  @ui.style(mx=room(-out), px=room(out + words_in_now.val)).then(panel_row_rounds(out))
+}
+
+///|
+/// What a row of a panel's body reaching `out` past its column takes of a corner: row_corner where it still stands in
+/// from the panel's sides (panel_sides_in), never a square patch there (the corner rule's lit square, 2026-11-13);
+/// nothing where it reaches them, or outside a panel.
+fn panel_row_rounds(out : Double) -> @ui.Style {
   if panel_sides_in.val - out > 0.5 {
-    reach.then(panel_row_round)
+    panel_row_round
   } else {
-    reach
+    no_reach
   }
 }
 
