@@ -1,9 +1,10 @@
 // The base of the core: the files of src/ that stand apart from what still.fail does with them (its workspaces and
 // stations' API, its locks, pairing, the cloud's credentials, the chats): the device's mesh (its iroh endpoints, the
 // ways to a peer and the choice among them, links, the streams' framing) and what runs a client (the host, the runtime,
-// errors, words in a person's language, traces, wakes, the scheduler). Another program is built on these without the
-// rest (the owner, 2026-11-14), so a base file imports only base files, npm packages and Node's own: as a value or as
-// a type, `import("…")` in a type too; and the JSON of the base's own words (WORDS), no other. The set is closed:
+// errors, words in a person's language, traces, wakes, the scheduler, the reader of an event stream). Another program
+// is built on these without the rest (the owner, 2026-11-14), so a base file imports only base files, npm packages and
+// Node's own: as a value or as a type, `import("…")` in a type too; and the JSON of the base's own words (WORDS), no
+// other. The set is closed:
 // through any number of imports, nothing of it reaches a file that is not of it. Nor does it say still.fail's names:
 // what is named so is given it. What still.fail gives it: the mesh its use, a station's protocol and what its hello
 // says (src/station/mesh-wire.ts), the words its catalog and product (src/i18n.ts), the host its UIs' messages and
@@ -48,6 +49,7 @@ const BASE = [
   "src/clock.ts",
   "src/reactive.ts",
   "src/sync/scheduler.ts",
+  "src/sse.ts",
 ];
 
 /// The catalog still.fail's words are in, a directory a language.

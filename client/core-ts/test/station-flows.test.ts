@@ -12,7 +12,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { encode, request } from "../src/ops.ts";
 import { topicKey } from "../src/protocol.ts";
 import { StationAddr } from "../src/station/addr.ts";
-import { SseParser } from "../src/station/sse.ts";
+import { SseParser } from "../src/sse.ts";
 import { run } from "./run.ts";
 import { Raw, base, chatsOf, entries, entry, overview, session, started, status, stationLater, stationReplies, threadView } from "./station-fixture.ts";
 import { merge } from "../src/entries.ts";

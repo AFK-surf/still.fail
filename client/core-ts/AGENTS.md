@@ -279,7 +279,8 @@ another; the accounts' list's merge across stations and its refills.
 ## The base stands apart
 
 The device's mesh (`src/mesh.ts`: its iroh endpoints, the ways to a peer and the choice among them, links, the streams'
-framing) and what runs a client (the host, the runtime, errors, words, traces, wakes, the scheduler) are the core's
+framing) and what runs a client (the host, the runtime, errors, words, traces, wakes, the scheduler, the reader of an
+event stream, `src/sse.ts`) are the core's
 base: another program is built on it without still.fail's business (the owner, 2026-11-14), so a base file imports
 only base files and packages, as types too. `scripts/base.ts` holds it: its `BASE` names the files, and the set is
 closed: nothing of it reaches, through any number of imports, a file that is not of it (its `STILL` is empty and stays

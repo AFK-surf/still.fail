@@ -20,7 +20,7 @@ import { StationAddr } from "./addr.ts";
 import { Cursor } from "./cursor.ts";
 import { type Keeper, Memory } from "./memory.ts";
 import { RESUMED, type Requests } from "./requests.ts";
-import { SseParser } from "./sse.ts";
+import { SseParser } from "../sse.ts";
 import { replyHeader } from "./wire.ts";
 
 /// How long a failed or ended stream waits before it is opened again; a station not reached is tried again at
