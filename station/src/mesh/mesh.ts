@@ -19,6 +19,7 @@ import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, serve } from "./serve.ts";
+import { accept } from "./accept.ts";
 import { congestionOf } from "./settings.ts";
 import { bindStation, type Endpoint } from "./native.ts";
 import { lanAddrs, tailnetAddrs } from "./lan.ts";
@@ -187,27 +188,24 @@ export const MeshLive = Layer.effectDiscard(
         }),
         ({ fibers }) => Effect.promise(() => fibers.close()),
       );
-      for (;;) {
-        const conn = yield* Effect.promise(() => endpoint.accept());
-        if (!conn) return;
-        storms.watch(conn);
-        if (conn.alpn().equals(ALPN)) void superseded.arrived(conn);
-        yield* FiberSet.run(
-          connections,
-          Effect.tryPromise(() =>
-            conn.alpn().equals(PEER_BYTES_ALPN) || conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
-            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, {
-                forwarded: (port) => side.forwarded(port),
-                device: (peer, workspace, session, device, probe) => side.device == null ? Promise.reject(new DeviceRefused(404, "no devices here yet")) : side.device(peer, workspace, session, device, probe),
-              })
-            : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
-            : serve(members, conn),
-          ).pipe(
-            Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
-            Effect.ensuring(Effect.sync(() => conn.close(0, "station stopping"))),
-          ),
-        );
-      }
+      // Its connections (accept.ts), each served by its protocol's own. Their fibers are of the set made above, before
+      // the traces, the device tools and the storms' watch: as the station stops they end after those have.
+      yield* accept(endpoint, {
+        connections,
+        arrived: (conn) => {
+          storms.watch(conn);
+          if (conn.alpn().equals(ALPN)) void superseded.arrived(conn);
+        },
+        serve: (conn) =>
+          conn.alpn().equals(PEER_BYTES_ALPN) || conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
+          : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, {
+              forwarded: (port) => side.forwarded(port),
+              device: (peer, workspace, session, device, probe) => side.device == null ? Promise.reject(new DeviceRefused(404, "no devices here yet")) : side.device(peer, workspace, session, device, probe),
+            })
+          : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
+          : serve(members, conn),
+        closing: "station stopping",
+      });
     });
     yield* Effect.forkScoped(Effect.scoped(run).pipe(Effect.tapCause((cause) => Effect.sync(() => {
       if (!Cause.hasInterruptsOnly(cause)) log.error("mesh", "mesh stopped", { error: Cause.pretty(cause) });

@@ -2,7 +2,7 @@
 // be taken in (`slowly`). Of the connection alone: what was asked is said by who answers it.
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import type { Connection, Stream } from "./native.ts";
+import type { Connection, Stream } from "./endpoint.ts";
 
 /// A reply this long or longer whose bytes took more than SLOW_REPLY_MS to be taken in whole is said on the log (slowly).
 export const SLOW_REPLY_BYTES = 256 * 1024;

@@ -3,7 +3,7 @@
 // `{status, headers}` then the body. Who may open a stream and what a request is answered are not here (door.ts is
 // given them; the station's own are mesh/serve.ts's): scripts/mesh-base.ts keeps this file from importing them.
 import { wall } from "../ops/fibers.ts";
-import type { Stream } from "./native.ts";
+import type { Stream } from "./endpoint.ts";
 
 export const MAX_HEAD = 16 * 1024;
 // Files sent to a session go through here: in parts of 16 MB at most, or whole up to 50 MB (clients before parts).

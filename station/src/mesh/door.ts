@@ -6,15 +6,34 @@
 // scripts/mesh-base.ts keeps it so.
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import type { Connection } from "./native.ts";
+import type { Connection } from "./endpoint.ts";
 import { type Asked, Reader, request, writeLine } from "./wire.ts";
 
-/// How long after a refusal's line the connection is closed: the line is to reach the other end first.
+/// How long after a refusal the door closes the connection itself: the refusal's line is to reach the other end first.
 const REFUSED_CLOSE_MS = 200;
 
-/// A hello refused: the line it is answered, the code and reason the connection is closed with after it, and what
-/// serving the connection fails with.
+/// A hello refused: the line it is answered, the code and reason the door closes the connection with REFUSED_CLOSE_MS
+/// after that line is written, and what serving the connection fails with, which it does as soon as the line is
+/// written, not waiting for that close. So the door's close is the one the other end sees only where nothing closes
+/// the connection as its serving fails: accept.ts does (as the station's loop did before it), with code 0 and its
+/// own reason, at once, and through it neither this code and reason nor the wait reach the other end.
 export type Refusal = { line: unknown; code: number; reason: string; error: unknown };
+
+/// Thrown by `renew` (or what its promise fails with) where the renewal's refusal ends the connection: the line it is
+/// answered (`{error}`, its message, where none is given), and the code and reason the door closes the connection
+/// with, REFUSED_CLOSE_MS after it was thrown. Unlike a refused hello's, serving the connection fails only once it is
+/// closed, so that close is the one the other end sees, through accept.ts too.
+export class Ending extends Error {
+  readonly code: number;
+  readonly reason: string;
+  readonly line: unknown;
+  constructor(message: string, code: number, reason: string, line: unknown = { error: message }) {
+    super(message);
+    this.code = code;
+    this.reason = reason;
+    this.line = line;
+  }
+}
 
 /// A connection let in.
 export type In = {
@@ -23,8 +42,12 @@ export type In = {
   /// Called once that line is written, before anything more is read of the connection: what is said of it, and where
   /// what may end it later starts (a timer, a listener: each closes the connection itself, with its code and reason).
   opened?(): void;
-  /// A later line on the control stream: the line it is answered. What it throws is answered `{error}`, its message,
-  /// and closes nothing.
+  /// A later line on the control stream: the line it is answered, or a promise of it (the next line is read once it
+  /// is answered; a line given, not promised, is written in the turn it came). What it throws, or its promise fails
+  /// with, is answered `{error}`, its message, and closes nothing; but an `Ending`, which is answered its line and ends
+  /// the connection: no later line is read, no stream accepted from then on is served (each is reset; those accepted
+  /// before go on until the close), and the connection is closed REFUSED_CLOSE_MS after it was thrown, with its code
+  /// and reason, whether or not the other end has taken its line in by then. Serving the connection fails with it then.
   renew(line: any): unknown;
   /// Called as each request stream is accepted, before its head is read: what answers it; null where the connection is
   /// let in no longer (who says so has closed it), and nothing more is served on it.
@@ -57,22 +80,37 @@ export async function door(conn: Connection, admit: Admit): Promise<void> {
   }
   await writeLine(first, said.line);
   said.opened?.();
-  // Later lines on the control stream.
+  // Later lines on the control stream, until one ends the connection (`ending`).
+  let ending: Ending | null = null;
   (async () => {
     for (let line = await control.line().catch(() => null); line !== null; line = await control.line().catch(() => null)) {
       let reply;
       try {
         reply = said.renew(line);
+        // (Waited for only where it is a promise: a line given is written in the turn it came.)
+        if (typeof (reply as PromiseLike<unknown> | null)?.then === "function") reply = await reply;
       } catch (e) {
-        reply = { error: (e as Error).message };
+        if (e instanceof Ending) {
+          // Its close is set now, not once its line is written: the other end may take in nothing of its control
+          // stream, and that write, and the connection with it, would wait on it for good.
+          ending = e;
+          const { code, reason } = e;
+          wall.after(REFUSED_CLOSE_MS, () => conn.close(code, reason));
+          reply = e.line;
+        } else reply = { error: (e as Error).message };
       }
       await writeLine(first, reply).catch(() => {});
+      if (ending !== null) break;
     }
     await first.finish().catch(() => {});
   })();
 
   try {
     for (let stream = await conn.acceptBi(); stream; stream = await conn.acceptBi()) {
+      if (ending !== null) {
+        void stream.reset(0).catch(() => {});
+        continue;
+      }
       const answer = said.stream();
       if (answer === null) return;
       const failed = (e: unknown) => {
@@ -86,4 +124,5 @@ export async function door(conn: Connection, admit: Admit): Promise<void> {
   } finally {
     said.ended?.();
   }
+  if (ending !== null) throw ending;
 }
