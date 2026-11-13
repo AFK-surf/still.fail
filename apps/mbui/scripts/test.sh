@@ -354,7 +354,11 @@ for t in $targets; do
           # third's kept_rows five runs some 250 s of its cores at each rate, not 450, its job 130-139 s. So the
           # second is reckoned 150, as at 60 for what runs beside its pages, and the third 500: by the table some 70 s
           # of the second's pages at each rate go to the third's program and the fourth's)
-          24 | 7) specs="4,4,300,2 4,4,150,2 1,4,500,2 4,4,120,1" ;;
+          # (the first's pages beside its packages' programs at 24 and 7 139 and 114 s where the table said 338 at
+          # each over four programs, the packages' 91 and 80, app 1/4 at 24 7 fps 250-267 s of its 5 minutes on main
+          # 559256a0, ecd82606, 2026-11-13, the second's 147: the first reckoned 450, the second 100. By the table
+          # the first's pages go from 338 s to 262 at each rate, the second's from 387 to 450)
+          24 | 7) specs="4,4,450,2 4,4,100,2 1,4,500,2 4,4,120,1" ;;
           # (at the default rate each group's other runs reckoned as they now run, branch pushes of 2026-11-13
           # (mbui-chat-made-always 43343545286): the first's real_size half 190 s and preview_tree's halves 61 and 97
           # beside its pages, some 350 s of its cores where they were reckoned 80, its pages 215-229 s, app 1/4 209-242 s
