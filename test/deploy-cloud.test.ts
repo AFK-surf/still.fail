@@ -24,5 +24,5 @@ print(json.dumps({"original": original["vars"], "monoid": monoid["vars"]}))
   const { original, monoid } = JSON.parse(result.stdout);
   assert.equal(monoid.PUBLIC_ORIGIN, "https://app.monoid.build");
   assert.equal(monoid.BETA_ORIGIN, "https://app.monoid.zone");
-  assert.equal(monoid.STATUS_REPO, original.STATUS_REPO);
+  assert.equal(monoid.STATUS_REPO_ID, original.STATUS_REPO_ID);
 });

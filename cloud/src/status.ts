@@ -118,14 +118,26 @@ const githubKeys = createRemoteJWKSet(new URL(`${GITHUB_ACTIONS}/.well-known/jwk
 const MAX_ISSUES = 2 * 1024 * 1024;
 
 /**
+ * The claims of the OIDC token GitHub gave a workflow of STATUS_REPO_ID's repository, or null for any other's or none;
+ * undefined where no repository is set. The repository is known by its id, which its renaming leaves as it was (the
+ * name in `repository` and `workflow_ref` is then the new one).
+ */
+async function repositoryClaims(request: Request, env: Env): Promise<{ repository: string; workflow_ref: unknown } | null | undefined> {
+  if (!env.STATUS_REPO_ID) return undefined;
+  const token = bearerToken(request);
+  const claims = token ? await jwtVerify(token, githubKeys, { issuer: GITHUB_ACTIONS, audience: env.PUBLIC_ORIGIN }).then((v) => v.payload, () => null) : null;
+  if (!claims || claims.repository_id !== env.STATUS_REPO_ID || typeof claims.repository !== "string") return null;
+  return { repository: claims.repository, workflow_ref: claims.workflow_ref };
+}
+
+/**
  * POST /v1/status/incidents: the repository's issues labelled `incident`, as GitHub lists them, from its workflow
  * (.github/workflows/status-incidents.yml), believed by the OIDC token GitHub gives that workflow on the default branch.
  */
 export async function receiveIncidents(request: Request, env: Env): Promise<Response> {
-  if (!env.STATUS_REPO) return reply({ error: "not_found" }, 404);
-  const token = bearerToken(request);
-  const claims = token ? await jwtVerify(token, githubKeys, { issuer: GITHUB_ACTIONS, audience: env.PUBLIC_ORIGIN }).then((v) => v.payload, () => null) : null;
-  if (!claims || claims.repository !== env.STATUS_REPO || claims.workflow_ref !== `${env.STATUS_REPO}/.github/workflows/status-incidents.yml@refs/heads/main`) return denied();
+  const claims = await repositoryClaims(request, env);
+  if (claims === undefined) return reply({ error: "not_found" }, 404);
+  if (!claims || claims.workflow_ref !== `${claims.repository}/.github/workflows/status-incidents.yml@refs/heads/main`) return denied();
   if (Number(request.headers.get("content-length") ?? 0) > MAX_ISSUES) return reply({ error: "too_large" }, 413);
   const issues: unknown = await request.json().catch(() => null);
   if (!Array.isArray(issues)) return reply({ error: "invalid_request" }, 400);
@@ -141,11 +153,9 @@ const RELEASING = ["pipeline.yml", "stable.yml"];
  * GitHub gives it on the default branch); every device and station connected is told, to read its feed again.
  */
 export async function receiveReleased(request: Request, env: Env): Promise<Response> {
-  if (!env.STATUS_REPO) return reply({ error: "not_found" }, 404);
-  const token = bearerToken(request);
-  const claims = token ? await jwtVerify(token, githubKeys, { issuer: GITHUB_ACTIONS, audience: env.PUBLIC_ORIGIN }).then((v) => v.payload, () => null) : null;
-  const refs = RELEASING.map((file) => `${env.STATUS_REPO}/.github/workflows/${file}@refs/heads/main`);
-  if (!claims || claims.repository !== env.STATUS_REPO || !refs.includes(String(claims.workflow_ref))) return denied();
+  const claims = await repositoryClaims(request, env);
+  if (claims === undefined) return reply({ error: "not_found" }, 404);
+  if (!claims || !RELEASING.some((file) => claims.workflow_ref === `${claims.repository}/.github/workflows/${file}@refs/heads/main`)) return denied();
   await env.DIRECTORY.getByName("primary").tellAll({ type: "release" }, { type: "release" });
   return reply({ ok: true });
 }

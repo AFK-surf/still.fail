@@ -4,7 +4,7 @@ set -euo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
 export RELEASE_VERSION=0.1.0 RELEASE_BUILD=5 RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 export GITHUB_RUN_ATTEMPT=1
-export GITHUB_SHA=$RELEASE_SHA GITHUB_REF=refs/heads/main GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REPOSITORY=AFK-surf/still.fail
+export GITHUB_SHA=$RELEASE_SHA GITHUB_REF=refs/heads/main GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REPOSITORY_OWNER=AFK-surf
 pass() { bash "$D/testflight-guard.sh" inputs; }
 reject() { if env "$@" bash "$D/testflight-guard.sh" inputs >/dev/null 2>&1; then echo "unexpected acceptance: $*" >&2; exit 1; fi; }
 pass
@@ -16,7 +16,7 @@ reject GITHUB_RUN_ATTEMPT=2
 reject GITHUB_RUN_ATTEMPT=0
 reject GITHUB_RUN_ATTEMPT=''
 reject GITHUB_EVENT_NAME=pull_request
-reject GITHUB_REPOSITORY=someone/fork
+reject GITHUB_REPOSITORY_OWNER=someone
 reject RELEASE_SHA=aaaaaaa
 reject RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 reject GITHUB_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

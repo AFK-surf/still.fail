@@ -39,7 +39,7 @@ jobs:
   plan:
     # Trusted repository pushes only. Never add pull_request or pull_request_target here:
     # deployment jobs use production secrets; local signing stays isolated.
-    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.repository_owner == 'AFK-surf' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:

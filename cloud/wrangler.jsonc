@@ -73,8 +73,9 @@
     "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://47.79.40.84": "东京", "https://relay.pvg.office.afk.surf:8445": "上海", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
     // The pages still.fail/status checks (src/status.ts).
     "STATUS_PAGES": { "site": "https://still.fail/", "web": "https://app.still.fail/" },
-    // Whose issues labelled `incident` it shows.
-    "STATUS_REPO": "AFK-surf/still.fail",
+    // Whose issues labelled `incident` it shows, and whose workflows say a release is out: the id of AFK-surf's
+    // repository of still.fail, which renaming it leaves as it is (`gh api repos/<owner>/<name> --jq .id`).
+    "STATUS_REPO_ID": "1391814537",
     "GOOGLE_CLIENT_ID": "",
     // Where the sign-in codes come from (src/mail.ts).
     "EMAIL_FROM": "noreply@still.fail",

@@ -14,7 +14,7 @@ permissions:
   contents: read
 jobs:
   relay:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     # production's bucket token, on main only
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
@@ -56,7 +56,7 @@ jobs:
   # The DHT node beside the relay on those machines (cloud/dht-node, put on one by cloud/dht-node-update.sh), named by its
   # source's tree.
   dht-node:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 5

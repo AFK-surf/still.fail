@@ -56,8 +56,8 @@ export async function harness(
     relayNames?: Record<string, string>;
     /** STATUS_PAGES: the pages the cron checks for still.fail/status; answered by `push` (they are outside). */
     statusPages?: Record<string, string>;
-    /** STATUS_REPO: whose issues labelled `incident` it shows; answered by `push`. */
-    statusRepo?: string;
+    /** STATUS_REPO_ID: the id of the repository whose issues labelled `incident` it shows; answered by `push`. */
+    statusRepoId?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
@@ -188,7 +188,7 @@ export async function harness(
         ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
         ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
         ...(options.statusPages ? { STATUS_PAGES: options.statusPages } : {}),
-        ...(options.statusRepo ? { STATUS_REPO: options.statusRepo } : {}),
+        ...(options.statusRepoId ? { STATUS_REPO_ID: options.statusRepoId } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.fcmMore ? { FCM_SERVICE_ACCOUNT_MORE: options.fcmMore } : {}),

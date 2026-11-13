@@ -21,7 +21,7 @@ permissions:
   contents: read
 jobs:
   linux:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     strategy:
       fail-fast: false
       matrix:
@@ -94,7 +94,7 @@ jobs:
           key: ${{ env.STORE_KEY }}
 
   windows:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: windows-2025
     timeout-minutes: 5
     defaults:

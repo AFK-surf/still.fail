@@ -404,22 +404,25 @@ test("a workspace's own relays: set by its managers, told to its stations and me
 test("a release out, as the repository's releasing workflows say, is told to every device; nobody else can say it", async () => {
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const jwk = { ...(await exportJWK(publicKey)), kid: "actions", alg: "RS256", use: "sig" };
-  const h = await harness({ statusRepo: "o/r", push: () => ({ status: 200, body: JSON.stringify({ keys: [jwk] }) }) });
+  const h = await harness({ statusRepoId: "42", push: () => ({ status: 200, body: JSON.stringify({ keys: [jwk] }) }) });
   try {
-    const token = (claims: Record<string, unknown>, audience = h.origin) => new SignJWT({ repository: "o/r", workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/main", ...claims })
+    const token = (claims: Record<string, unknown>, audience = h.origin) => new SignJWT({ repository: "o/r", repository_id: "42", workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/main", ...claims })
       .setProtectedHeader({ alg: "RS256", kid: "actions" }).setIssuer("https://token.actions.githubusercontent.com").setAudience(audience).setIssuedAt().setExpirationTime("10 years").sign(privateKey);
     const send = async (bearer: string | null) => (await h.fetch("/v1/releases/out", { method: "POST", headers: bearer ? { authorization: `Bearer ${bearer}` } : {} })).status;
     const on = { alice: await listen(h, (await h.login("alice")).access_token), bob: await listen(h, (await h.login("bob")).access_token) };
     await expect(on, {}, "signed in");
     assert.equal(await send(null), 401);
-    assert.equal(await send(await token({ repository: "fork/r" })), 401);
+    assert.equal(await send(await token({ repository: "fork/r", repository_id: "43", workflow_ref: "fork/r/.github/workflows/pipeline.yml@refs/heads/main" })), 401);
     assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/status-incidents.yml@refs/heads/main" })), 401);
     assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/mine" })), 401);
     assert.equal(await send(await token({}, "https://elsewhere.example")), 401);
     await expect(on, {}, "refused");
     assert.equal(await send(await token({})), 200);
     assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/stable.yml@refs/heads/main" })), 200);
-    await expect(on, { alice: [{ type: "release" }, { type: "release" }], bob: [{ type: "release" }, { type: "release" }] }, "told");
+    // The repository renamed: known by its id, its workflows under the new name.
+    assert.equal(await send(await token({ workflow_ref: "elsewhere/r/.github/workflows/pipeline.yml@refs/heads/main" })), 401);
+    assert.equal(await send(await token({ repository: "o/renamed", workflow_ref: "o/renamed/.github/workflows/pipeline.yml@refs/heads/main" })), 200);
+    await expect(on, { alice: [{ type: "release" }, { type: "release" }, { type: "release" }], bob: [{ type: "release" }, { type: "release" }, { type: "release" }] }, "told");
   } finally {
     await h.close();
   }

@@ -133,7 +133,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          repository: AFK-surf/still.fail
+          repository: ${{ github.repository }}
           ref: ${{ inputs.stillfail_ref }}
           path: apps/mbui/mbui/sf
           sparse-checkout: apps/mbui

@@ -31,7 +31,7 @@ permissions:
   contents: read
 jobs:
   distribute:
-    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: ios-testflight

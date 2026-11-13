@@ -33,7 +33,7 @@ jobs:
   # pipeline's check waited 6-20 minutes for one (2026-11-03, as asked: "分支只在改到渲染器时跑"). Main runs them on
   # every change above, and publishes what it built.
   what:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:

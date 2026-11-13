@@ -16,7 +16,7 @@ permissions:
   actions: read # an arch/next pipeline may have built its shell as a run artifact rather than publishing it
 jobs:
   mac:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: macos-26
     timeout-minutes: 5
     env:
