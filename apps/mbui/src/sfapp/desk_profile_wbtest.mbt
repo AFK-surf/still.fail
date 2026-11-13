@@ -173,3 +173,123 @@ test "wide: a machine's login not made a profile yet shows its allowance in the 
   }
   assert_eq(t.squeeze_faults(), [])
 }
+
+///|
+/// How late the made-up core answers each call and every subscription as another station is pressed on the add page
+/// (ms): at once, a frame late, and on to well past the 300 ms nothing may look like loading in.
+let station_press_lates : Array[Double] = [0.0, 16.0, 120.0, 250.0, 400.0, 700.0]
+
+///|
+/// The add page's hint (the core's `hint`, its lead under its title), the same for each station in the fixture.
+let station_press_hint : String = "订阅和 API key 都在这里添加"
+
+///|
+/// How long after the press the page is at rest, over a core answering `ms` late: its answer, the page come, and a
+/// motion's most after it, twice.
+fn station_press_rest_ms(ms : Double) -> Double {
+  ms * 4.0 + @ui.move_most_ms * 2.0
+}
+
+///|
+/// The add page on Willow (ws1/st1) in screen `s`, three stations online, over the settings' fixture whose core answers
+/// each call and every subscription as late as `pace` says when it is asked (the page opened at once, the test's own
+/// setup), as a device's host draws it (check_looks off), at rest: what it was asked told to `heard`, the calls made to
+/// `calls`.
+fn station_press_tester(s : Screen, pace : Ref[Double], heard : Array[String], calls : Array[(String, Json)]) -> @ui.Tester {
+  new_run()
+  let base = fixture_app("settings-new-profile-stations")
+  let counted : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let src = round_trip_again(round_trip_by(counted, fn() { pace.val }), 0.0, heard=fn(h) { heard.push(h) }, late=fn(_, _) {
+    pace.val
+  })
+  if !(app.nav.top() is Setting(NewProfile("ws1/st1"))) {
+    app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=s.w, h=s.h, platform=s.platform)
+  t.check_looks(false)
+  t.draw()
+  t.run_for(@ui.move_most_ms + 1000.0)
+  t.ways_set_out() |> ignore
+  t
+}
+
+///|
+/// Station `name` shown chosen on the page's choice now.
+fn station_chosen(t : @ui.Tester, name : String) -> Bool {
+  t.query(Radio, label=name, checked=On) is Some(_)
+}
+
+///|
+/// Another station pressed on the add page (大屏 with a mouse, 小屏 by touch), the page opened over a core answering at
+/// once and the press over one answering 0 to 700 ms late: from the press till the page is at rest, in every frame as a
+/// host draws it (each frame held steady too: sizes_steady.mbt), nothing sets out after the press's own
+/// moment (no hint squeezed shut and opened, no section going up and down), the hint drawn (Willow's page's or Maple's,
+/// never neither), no frame on the providers' bones, the choice on Maple from the press; at rest the page is Maple's,
+/// its draft opened once and its flow asked once and held (what the press asked handed to it: sfbase's open_answered).
+test "the add page's station choice opens the other station's page whole, the page as it was meanwhile" {
+  for s in [daily_large, daily_small] {
+    for ms in station_press_lates {
+      let at = "\{s.name}, \{ms} ms"
+      let heard : Array[String] = []
+      let calls : Array[(String, Json)] = []
+      let pace = Ref(0.0)
+      let t = station_press_tester(s, pace, heard, calls)
+      pace.val = ms
+      assert_true(station_chosen(t, "Willow"), msg="\{at}: Willow chosen at first")
+      assert_true(t.find(station_press_hint) is Some(_), msg="\{at}: the hint at first")
+      let bones_before = t.bones_drawn()
+      let maple = match t.query(Radio, label="Maple") {
+        Some(r) => r
+        None => @halt.saying("\{at}: no Maple to press")
+      }
+      let from = t.time()
+      t.tap(maple.rect.0 + maple.rect.2 / 2.0, maple.rect.1 + maple.rect.3 / 2.0)
+      let faults : Array[String] = []
+      let ways : Array[String] = []
+      let mut came = -1.0
+      let frames = (station_press_rest_ms(ms) / @ui.frame_period_default).ceil().to_int()
+      for i in 0..=frames {
+        if i > 0 {
+          t.run_for(@ui.frame_period_default)
+        }
+        let now = t.time() - from
+        for w in t.ways_set_out() {
+          if w.at > from + 0.5 {
+            ways.push("\{w.kind} +\{(w.at - from).round()} ms \{w.made} \{w.part}")
+          }
+        }
+        let waiting = app.nav.top() is Setting(NewProfile("ws1/st1"))
+        if !waiting && came < 0.0 {
+          came = now
+        }
+        if t.find(station_press_hint) is None {
+          faults.push("+\{now.round()} ms: no hint drawn (\{if waiting { "waiting" } else { "Maple's page" }})")
+        }
+        if t.bones_drawn() > bones_before {
+          faults.push("+\{now.round()} ms: \{t.bones_drawn()} bones drawn, \{bones_before} before the press")
+        }
+        if !station_chosen(t, "Maple") {
+          faults.push("+\{now.round()} ms: Maple not shown chosen")
+        }
+      }
+      println("STATION_PRESS \{at}: Maple's page at +\{came.round()} ms, ways after the press \{Repr(ways)}")
+      assert_eq(faults, [], msg="\{at}: every frame from the press")
+      assert_eq(ways, [], msg="\{at}: ways set out after the press")
+      assert_true(app.nav.top() is Setting(NewProfile("ws1/st2")), msg="\{at}: Maple's page at rest")
+      let opened = calls.filter(fn(c) { c.0 == "profile.flow.open" && text(Some(c.1), "station") == "ws1/st2" })
+      assert_eq(opened.length(), 1, msg="\{at}: Maple's draft opened: \{Repr(opened.map(fn(c) { c.1.stringify() }))}")
+      let form = text(Some(opened[0].1), "form")
+      assert_eq(
+        asked_held(heard, "profileFlow", { "station": Json::string("ws1/st2"), "form": Json::string(form) }),
+        (1, 0),
+        msg="\{at}: Maple's flow asked and let go",
+      )
+    }
+  }
+}

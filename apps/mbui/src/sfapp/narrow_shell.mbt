@@ -695,7 +695,7 @@ fn narrow_made_as(
       })
     Setting(NewProfile(address)) =>
       made("new-profile/" + address, fn(p, core, here, frame, _stint, _acts) {
-        @sfpages.new_profile_node(p, core, here, address, on_back=core.pop, frame~)
+        @sfpages.new_profile_node(p, core, src, here, address, on_back=core.pop, frame~)
       })
     _ => None
   }

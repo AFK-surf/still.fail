@@ -53,7 +53,7 @@ fn settings_core_of(
       match r {
         @settings.Route::Home => open_page(Settings)
         // (an account's page once what it shows is answered, the screen as it was meanwhile: account_open.mbt)
-        _ => open_answered(src, route_asks(w.id, r), fn() { open_page(Setting(r)) })
+        _ => open_answered(src, route_asks(w.id, r), fn() { open_page(Setting(r)) }) |> ignore
       }
     },
     pop: fn() { go_back() |> ignore },

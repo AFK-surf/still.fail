@@ -438,7 +438,7 @@ fn tape_made(
     Setting(NewProfile(address)) =>
       made("new-profile/" + address, fn(p, core, here, _stint, told, _acts) {
         context_node(p)
-        @sfpages.new_profile_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+        @sfpages.new_profile_node(p, core, src, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
       })
     Setting(LocalStation) if pane_makes.val =>
       made("local-station", fn(p, core, _here, _stint, told, _acts) {

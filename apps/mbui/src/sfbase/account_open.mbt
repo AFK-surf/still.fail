@@ -66,14 +66,23 @@ fn asked_now(src : Source, asks : Array[(String, Map[String, Json])]) -> (() -> 
 /// `open` (what puts an account's page on top: the settings' push) done once each of `asks` is answered, asked of `src`
 /// now; at once where they are answered already. What they ask is handed to the entry `open` puts on top, which takes
 /// it as its view is made and lets it go at the end of the frame of its first build (pages.mbt hand_over); let go at
-/// once where nothing was put on top, and where the press waits no more. Made in a press's handler, as press_wait is.
-pub fn open_answered(src : Source, asks : Array[(String, Map[String, Json])], open : () -> Unit) -> Unit {
+/// once where nothing was put on top, and where the press waits no more, with what else the press opened for it
+/// (`let_go`: a draft the page was to show). Made in a press's handler, as press_wait is. What waits is returned: given
+/// up by the press's control where a press after it asks for another.
+pub fn open_answered(
+  src : Source,
+  asks : Array[(String, Map[String, Json])],
+  open : () -> Unit,
+  let_go? : () -> Unit = fn() {  },
+) -> PressWait {
   if asks.is_empty() || src.read_only {
-    open()
-    return
+    return press_wait(fn() { true }, open)
   }
   let (answered, leases) = asked_now(src, asks)
-  press_wait(answered, fn() { hand_over(leases, open) }, let_go=fn() { leases.each(fn(l) { l.cancel() }) }) |> ignore
+  press_wait(answered, fn() { hand_over(leases, open) }, let_go=fn() {
+    leases.each(fn(l) { l.cancel() })
+    let_go()
+  })
 }
 
 ///|

@@ -305,7 +305,7 @@ fn pane_made(
       })
     Setting(NewProfile(address)) =>
       made("new-profile/" + address, fn(a, core, here, _stint, frame, width) {
-        @sfpages.new_profile_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+        @sfpages.new_profile_node(a, core, src, here, address, on_back=core.pop, frame~, width~, tips~)
       })
     Setting(LocalStation) =>
       made("local-station", fn(a, core, _here, _stint, frame, width) {
