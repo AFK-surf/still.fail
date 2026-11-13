@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7487337a0](https://github.com/AFK-surf/monoid/commit/7487337a007fdd4ab164e5e9e32f67781fbc88a4) test(mbui): what the core's answers set moving, he | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.93 | 112.36 |
 | [26e2cffa0](https://github.com/AFK-surf/monoid/commit/26e2cffa0f7303317690ee26d7fcd3e73cc872ed) Windows: no more than 120 frames a second by defau | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.77 | 95.19 |
 | [26e2cffa0](https://github.com/AFK-surf/monoid/commit/26e2cffa0f7303317690ee26d7fcd3e73cc872ed) Windows: no more than 120 frames a second by defau | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.95 | 104.62 |
 | [f1011412c](https://github.com/AFK-surf/monoid/commit/f1011412cbd55a950c83f2a62464226f94753938) fix(mbui): a viewer closed sets out no way after i | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.83 | 104.33 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d3881a70c](https://github.com/AFK-surf/monoid/commit/d3881a70c15c55ae0b814fd6e520213d2c43b04f) mbui: a Tester reads the main list of the page in  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 94.03 | 99.98 |
 | [442464dd8](https://github.com/AFK-surf/monoid/commit/442464dd8bc2577494da0d64dd1612692ed7a790) fix(mbui,core-ts): align profile quota layout per  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 93.91 | 98.75 |
 | [b3c2b2bae](https://github.com/AFK-surf/monoid/commit/b3c2b2bae4e12ffd6295fc0904429be99449462c) ci: the station's longest test files one to a slic | 1.95 | 2.62 | 11.29 | 30.78 | 40.53 | 27.42 | 52.42 | 94.13 | 109.53 |
-| [bb2b49a24](https://github.com/AFK-surf/monoid/commit/bb2b49a240c764e8bc5fd48e8dac06f1b744ea94) mbui: a key a page's list's page marks goes leavin | 1.95 | 2.62 | 11.29 | 30.77 | 40.51 | 27.42 | 52.42 | 94.09 | 104.7 |
