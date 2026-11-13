@@ -26,6 +26,14 @@ fn agent_card_kind(m : Message) -> String {
 }
 
 ///|
+/// A station's screens' cards in what message `m` says (screen_links_node), each one's preview by the message and its
+/// link, as the old view's (message.mbt's screen_links).
+fn agent_screens(src : Source, here : MessageNodeHere, m : () -> Message) -> @sf.ScreensNode {
+  let ts = @signals.untracked(m).ts
+  @sfbase.screen_links_node(src, message=here.station + "/" + here.session + "/" + ts)
+}
+
+///|
 /// What an agent or still.fail said (others_message's with prose_with_files) in its row's room (message_row_frame_node:
 /// `key`, its list's Entry::id; `side`, `top`; `over`), as `m` says it as it changes: its picture out in the margin
 /// (inline: over the head's start), its name (one of the chat's agents' opens its history), its time; its words as
@@ -86,7 +94,7 @@ fn agent_said_node(
             // (its words and its files one piece, none apart, as the old list holds them to be picked: pickable's
             // pick_fill; a letter's, drawn by the old view alone, has them 4 apart)
             @sf.style_node(p, fn() { agent_prose_piece })
-            agent_prose_node(p, src, here, m, found~, found_at~, code~, screens=screens.unwrap_or(@sfbase.screen_links_node(src)), shown?)
+            agent_prose_node(p, src, here, m, found~, found_at~, code~, screens=screens.unwrap_or(agent_screens(src, here, m)), shown?)
           } else {
             message_card_node(p, here, core, m)
           }

@@ -2,7 +2,7 @@
 // view's (screen_links.mbt, through @sf.markdown's `screens`) on the same words (chat_fixture.mbt's screens_answer: a
 // web service's card, the desktop's, a tab's with the link's own words, a tab gone, 共享调试 bare and alone, a link to
 // anywhere else), the core said or not yet, a service down, none previewed; wide and narrow, at 1.3; a card tapped; a
-// previewed tab's card not drawn yet.
+// previewed tab's card where the old view's is.
 
 ///|
 /// The fixture's source of chat-screens: the core has said each card (`said`, else none yet), its service up or
@@ -153,14 +153,21 @@ test "a card tapped opens where its link leads, as the old view's does: the desk
 }
 
 ///|
-test "a tab its station previews: its card not drawn by the nodes yet, the rest as they were" {
+test "a tab its station previews: its card drawn by the nodes as the old view draws it, its preview over its words, the rest as they were" {
   let old = sl_old(760.0, sl_src(peek=true), @sffixture.screens_answer)
   old.run_for(@ui.move_most_ms)
-  assert_true(old.find("林 正在查看") is Some(_), msg="the old view's card with its preview")
+  // (each to a hundredth, as sl_drawn's)
+  let r = fn(v : Double) { (v * 100.0).round() / 100.0 }
+  let at = fn(t : @ui.Tester) {
+    ["林 正在查看", "发布清单预览", "Ana 正在查看"].map(fn(w) {
+      t.rect_of(w).map(fn(q) { "\{r(q.0)},\{r(q.1)} \{r(q.2)}x\{r(q.3)}" }).unwrap_or("none")
+    })
+  }
+  let was = at(old)
+  assert_true(was[0] != "none", msg="the old view's card with its preview")
   let t = sl_new(760.0, sl_src(peek=true), @sffixture.screens_answer)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("林 正在查看") is None, msg="not drawn yet")
-  assert_true(t.find("Ana 正在查看") is Some(_))
+  assert_eq(at(t), was)
   let faults = t.audit()
   assert_true(faults.is_empty(), msg=faults.join(" | "))
 }

@@ -378,6 +378,20 @@ pub(all) struct Peek {
   mut video : Bool
   /// ended long enough: asked for again where its card shows (peeks_frame, peeks_settle)
   mut again : Bool
+  /// held by a card made as nodes of the window's tree (screen_links_node.mbt's screen_peek_node), which starts and
+  /// stops it itself: not the old view's frames' to settle (peeks_frame, peeks_settle pass it by)
+  mut made : Bool
+  /// how many times what a node draws of it changed (its pictures, its run, its frames waiting), told as it does: what
+  /// its node binds reads it first, then the fields as they are
+  mut changes : Int
+  told : @signals.Signal[Int]
+}
+
+///|
+/// What its node draws of it changed (Peek's `told`).
+fn Peek::tell(self : Peek) -> Unit {
+  self.changes += 1
+  self.told.set(self.changes)
 }
 
 ///|
@@ -425,6 +439,9 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         stream: None,
         video: false,
         again: false,
+        made: false,
+        changes: 0,
+        told: @signals.signal(0),
       }
       peeks[key] = p
       p
@@ -515,6 +532,13 @@ pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : By
   if p.view != view {
     return
   }
+  peek_took_now(src, p, view, value, bytes)
+  p.tell()
+}
+
+///|
+/// peek_took's, of its own view's value.
+fn peek_took_now(src : Source, p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
   match field(Some(value), "config") {
     Some(Object(_) as cfg) => {
       let codec = text(Some(cfg), "codec")
@@ -589,7 +613,9 @@ pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : By
 
 ///|
 /// The preview of `p` asked for (`screen.view` with `peek`, small: JPEG, and H.264 where the host decodes it).
-pub fn peek_start(src : Source, p : Peek) -> Unit {
+/// `video`: H.264 asked too where the host decodes it (not by a card made as nodes: the window's tree has no node that
+/// draws a Stream yet).
+pub fn peek_start(src : Source, p : Peek, video? : Bool = true) -> Unit {
   peek_views.val += 1
   let view = "mbui-peek-\{peek_views.val}"
   p.view = view
@@ -599,7 +625,7 @@ pub fn peek_start(src : Source, p : Peek) -> Unit {
   p.again = false
   p.codec = "jpeg"
   p.waiting.clear()
-  let codecs : Array[Json] = if @ui.h264_here() { ["jpeg", "h264"] } else { ["jpeg"] }
+  let codecs : Array[Json] = if video && @ui.h264_here() { ["jpeg", "h264"] } else { ["jpeg"] }
   let params : Map[String, Json] = {
     "station": Json::string(p.station),
     "screen": Json::string(p.screen),
@@ -619,6 +645,7 @@ pub fn peek_start(src : Source, p : Peek) -> Unit {
   if p.view == view && p.run == PeekOn {
     p.call = id
   }
+  p.tell()
 }
 
 ///|
@@ -647,6 +674,7 @@ fn peek_end(src : Source, p : Peek) -> Unit {
   p.run = PeekEnded
   p.waiting.clear()
   peek_drop_video(p)
+  p.tell()
 }
 
 ///|
@@ -661,6 +689,7 @@ pub fn peek_stop(src : Source, p : Peek) -> Unit {
   p.again = false
   p.waiting.clear()
   peek_drop_video(p)
+  p.tell()
 }
 
 ///|
@@ -680,6 +709,9 @@ pub fn peeks_stop_all(src : Source) -> Unit {
 pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
   peeks_built.clear()
   for key, p in peeks {
+    if p.made {
+      continue
+    }
     if p.run == PeekEnded &&
       @kit.after(c, "peek-again/\{key}/\{p.view}", true, peek_again_ms, later=true) {
       p.again = true
@@ -719,6 +751,9 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let shown = @ui.app_visible()
   let gone = []
   for key, p in peeks {
+    if p.made {
+      continue
+    }
     let held = peeks_built.contains(key)
     // (a card whose target changed in this frame shows where the one it had showed in the last: its row built at
     // another place is the same card, its preview going on, nothing asked of the station again nor handed to the host

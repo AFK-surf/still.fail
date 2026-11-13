@@ -91,6 +91,8 @@ pub fn chat_page_body_node(
   // again from under what covered it), and as its station is reached again (ChatImages::seen, as its view says it
   // offline or not), as the old page's list asks them (chat_list's)
   v.reacts(shows, fn(now) { if now { src.images.again(r.station) } })
+  // (whether it shows, lent to what its rows make: a screen's card previews it only while it does, screen_links_node's)
+  v.lends(@sfbase.page_shows_lent, shows) |> ignore
   v.reacts(fn() { read.get().map(fn(x) { !x.0.offline }) }, fn(reached) {
     match reached {
       Some(b) => src.images.seen(r.station, b)

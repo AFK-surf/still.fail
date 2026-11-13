@@ -526,6 +526,15 @@ fn body_held_picture(o : BodyRow, n : BodyRow, lo : Double, hi : Double) -> Bool
 }
 
 ///|
+/// At the system's words set larger, a screen's card with its preview (chat-screens' m:ts12, the one such row): its
+/// title's line and its line under it each as high as their words (23.6 and 20.2 at 1.3, where the old card keeps them
+/// 20 and 16 and its words overlap), so the card and its row 8 higher (7.8, laid to the half). Meant, as
+/// body_grown_capsule's: every box holds its words. At the system's own size the row is the old one's, compared whole.
+fn body_grown_card(c : BodyCase, o : BodyRow, n : BodyRow) -> Bool {
+  c.mode == "chat-screens" && o.key == "m:ts12" && body_r(n.h - o.h) == body_r(8.0)
+}
+
+///|
 /// At the system's words set larger, a picture's pill of how far and a video's capsule as high as their words' line
 /// (message_media_node's coming_pill_high, the library's video_capsule_node by box_at), each still concentric with its
 /// corner: what differs in the row is only those, each the old one's ground (18 high, its words over its foot) as high
@@ -580,9 +589,6 @@ fn body_unmade(c : BodyCase, key : String) -> String? {
     Some(Said(m)) if m.placed.iter().any(fn(n) { is_viz(n) }) =>
       // (its page drawn in its row as the old one's, as high: what is drawn over its view as it comes is not compared)
       Some("an HTML page it places, as high, not compared (P12)")
-    Some(Said(_)) if body_unmade_dh(c.mode, key) is Some(_) =>
-      // (a screen's card with its preview: not made as nodes yet, P13)
-      Some("a screen's card with its preview, as its link (P13)")
     _ => None
   }
 }
@@ -593,7 +599,6 @@ fn body_unmade(c : BodyCase, key : String) -> String? {
 fn body_unmade_dh(mode : String, key : String) -> Double? {
   match (mode, key) {
     ("chat-viz", "m:ts12") => Some(0.0)
-    ("chat-screens", "m:ts12") => Some(-237.0)
     _ => None
   }
 }
@@ -680,6 +685,8 @@ fn body_cmp(c : BodyCase, known : Map[String, Int], said : Array[String]) -> Uni
       tally("its picture held under the list's top (c.stick)", 1)
     } else if body_grown_capsule(o, n, lo, hi) {
       tally("a pill or a capsule as high as its words at a larger size (meant)", 1)
+    } else if body_grown_card(c, o, n) {
+      tally("a screen's card's lines as high as their words at a larger size (meant)", 1)
     } else {
       let (a, b) = body_apart(body_row_lines(o, lo~, hi~), body_row_lines(n, lo~, hi~))
       said.push(
@@ -797,23 +804,20 @@ priv enum BodyHeld {
 ///|
 /// The counts held for `which`, a line each as body_known_said says them. Each kind is one of body_cmp's, its reason
 /// where it is decided; each goes as what it waits for comes (the page's shell over the list made of nodes: floats; the
-/// list holding a picture under its top: c.stick; holding what is read as a page comes in over it; P12, P13), only
+/// list holding a picture under its top: c.stick; holding what is read as a page comes in over it; P12), only
 /// to fall.
 fn body_held(which : BodyHeld) -> String {
   let lines = match which {
     HeldMain => [
     "a code block pressed in 42 (markdown_node's): 1",
-    "a row one shows at the window's edge, the rows' heights between apart: 5",
-    "a screen's card with its preview, as its link (P13): 6",
     "an HTML page it places, as high, not compared (P12): 6",
     "its head's time pressed short (message_head_node's): 33",
-    "its picture held under the list's top (c.stick): 41",
+    "its picture held under the list's top (c.stick): 43",
     "where it went, narrow, route_line_down further down (meant): 7",
   ]
     HeldLarge => [
     "a pill or a capsule as high as its words at a larger size (meant): 2",
-    "a row one shows at the window's edge, the rows' heights between apart: 2",
-    "a screen's card with its preview, as its link (P13): 1",
+    "a screen's card's lines as high as their words at a larger size (meant): 1",
     "an HTML page it places, as high, not compared (P12): 1",
     "where it went, narrow, route_line_down further down (meant): 1",
   ]
