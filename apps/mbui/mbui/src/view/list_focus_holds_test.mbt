@@ -1,9 +1,10 @@
 // What the focus is on in a page's list (a field in a block, given it by the app) is kept in sight by the list as the
 // room it shows in changes (a keyboard coming up a step at a time, and going): whole between what floats over its top
 // and its pinned foot at every step, the list at its foot for as long as that leaves it so, and at its foot again once
-// the room is back; never pulled back where the hand scrolled it away, nor held where rows come with the room the same
-// (at its foot the list follows it, the field going up with its rows). list_foot_focus_test's case; in one jump and at
-// 60, 120, 24 and 7 a second.
+// the room is back; never pulled back where the hand scrolled it away; held where rows come with the room the same (a
+// field in a row holding what shows, ui's list_row_field_wbtest: the coordinator of the migration's ruling, 2026-11-13;
+// till then #5836's reading was the other, the list following its foot there, the field going up with its rows).
+// list_foot_focus_test's case; in one jump and at 60, 120, 24 and 7 a second.
 
 ///|
 /// What floats over the list's top, the block whose field is given the focus (five over the last), and the room each of
@@ -104,7 +105,7 @@ test "a page's list at its foot, a field in a block given the focus, the hand sc
 }
 
 ///|
-test "a page's list at its foot, a field in a block given the focus, rows come with the room the same: at its foot, the field gone up with them, not held, at every rate" {
+test "a page's list at its foot, a field in a block given the focus, rows come with the room the same: the field held where it was, the rows under what shows, at every rate" {
   for rate in rc_rates {
     let c = ff_case(block_field=fh_block, top_cover=fh_cover)
     let id = match c.field.val {
@@ -117,10 +118,11 @@ test "a page's list at its foot, a field in a block given the focus, rows come w
       (at + 100.0, fn() { c.count.set(36) }),
     ]
     let looks = rc_looks(at + 100.0 + @flex.move_most_ms + 100.0)
-    let seen = rc_walk(c.tree, events, looks, rate, fn() { ff_gap(c) })
-    let last = seen[seen.length() - 1]
-    assert_true(last.abs() < 0.5, msg="at \{rate} a second: the last block \{last} over the foot")
-    let (top, _) = fh_block_at(c, fh_block)
-    assert_true(top < fh_cover, msg="at \{rate} a second: the field at \{top}, held")
+    let seen = rc_walk(c.tree, events, looks, rate, fn() { fh_block_at(c, fh_block).0 })
+    for i, top in seen {
+      assert_true((top - seen[0]).abs() < 0.5, msg="at \{rate} a second, look \{i}: the field at \{top}, \{seen[0]} first")
+    }
+    let gap = ff_gap(c)
+    assert_true(gap > 0.5, msg="at \{rate} a second: the last block \{gap} over the foot, followed")
   }
 }
