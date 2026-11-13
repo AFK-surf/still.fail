@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [6311979f9](https://github.com/AFK-surf/monoid/commit/6311979f9e1985bcf38250026136912de3ee9c73) cloud: a self-hosted cloud on workerd, its names,  | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 109.79 |
 | [9084bcb13](https://github.com/AFK-surf/monoid/commit/9084bcb13b397c98270d3b79612c6e4c53a90091) app tests: a chat's picture flying into its viewer | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 108.95 |
 | [ac936000a](https://github.com/AFK-surf/monoid/commit/ac936000aa4759c093e22d31daa3811a3e03f3c4) fix(mbui): jump to the clicked tick's message on t | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.18 | 110.82 |
 | [a2045f270](https://github.com/AFK-surf/monoid/commit/a2045f270895fefe9f6726aee7854c989e72d62c) Keep the Windows renderer's compiled shaders on di | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.91 | 109.63 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d207ee613](https://github.com/AFK-surf/monoid/commit/d207ee61367b15b57e665c43629f73f0c6d97bf8) mbui app: center chat top bar title inside touch w | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 98.58 |
 | [5a3a0d1b8](https://github.com/AFK-surf/monoid/commit/5a3a0d1b87de00ead534de221c99feb119c23916) app: the chat's composer made beside a sliding pan | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 104.52 |
 | [bcb03cad9](https://github.com/AFK-surf/monoid/commit/bcb03cad986d199c7981d46cf880f8aac08c9dbc) cloud: send traces and logs to Google Cloud instea | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.29 | 52.22 | 94 | 97.25 |
-| [0adf038a4](https://github.com/AFK-surf/monoid/commit/0adf038a4f2d428eb86a4883f562fed61b2c1500) mbui: a page's list's ask is taken only by a fill  | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.29 | 52.22 | 94 | 106.12 |
