@@ -155,6 +155,14 @@ another; the accounts' list's merge across stations and its refills.
   decision against a later one (`againOf`'s `before`).
   One a person asked for that is then not signed again (someone else decided otherwise since, `AGAIN_MOST`, a refusal)
   is told them as a pending one that failed (`#letBe`), never undone unsaid (2026-11-13).
+- Where the chain held holds `moved {root}` (2026-11-13, nothing signs one yet), what is in force is the rules' state of
+  its people's logs and the statements' bodies its stations gave (`src/lock-moved.ts`; kept beside the lock, `lockLogs`
+  and `lockBodies`, the person's own log the one personal-lock.ts pins), by this device's clock: every reader of who and
+  what is in the lock reads `views/lock.ts` `stateOf`, what reads the chain itself (its own `disable`, its stations
+  keeping it, `chosen`, `carry`) reads `fold`. Without the root's log or its `open` it waits (nobody listed, nothing
+  asked of the device). Nothing is signed on a moved chain: `Lock.append` and `roster`/`enrolled` answer `lock_moved`,
+  the background writers do nothing, until the next step makes each a statement. `test/lock-moved-state.test.ts` holds
+  it to the model.
 - The cloud's taking an entry never counts (2026-11-12): what no station took nor refused by the call's wait
   (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
   held and never on it, shown on the lock's topic as not in effect, and brought to the stations as one is next read
