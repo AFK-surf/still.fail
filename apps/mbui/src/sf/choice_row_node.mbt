@@ -39,9 +39,15 @@ pub fn choice_row_node(
   // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; elsewhere a page's row's; on a
   // page's list in a panel's card its ground reaching past it over and under: link_reach)
   let in_panel = panel_row_at(at, own=if narrow { card_pad - corner_inset } else { desk_list_out }, card~)
-  let out = match in_panel {
-    Some(p) => p.out
-    None => 0.0
+  let (out, panel_side_shift) = match in_panel {
+    Some(p) =>
+      if narrow && !at.small && at.words > 0.0 && at.sides < panel_card_in {
+        let inset = panel_card_in - at.sides
+        (-inset, -inset)
+      } else {
+        (p.out, 0.0)
+      }
+    None => (0.0, 0.0)
   }
   let reach = !narrow && part.list && in_pane_node(parent) && at.words == 0.0
   parent.box(made_for=loc, fn(o) {
@@ -55,12 +61,12 @@ pub fn choice_row_node(
     o.box(fn(r) {
       let (side, over) = if compact {
         let side = match in_panel {
-          Some(p) => p.side
+          Some(p) => dmax(0.0, p.side + panel_side_shift)
           None => if narrow && !card { pg_room_in } else { text_in }
         }
         (side, if narrow { @ui.Space::S2_5.px() } else { menu_row_over })
       } else if in_panel is Some(p) {
-        (p.side, if narrow { text_in } else { wide_row_over })
+        (dmax(0.0, p.side + panel_side_shift), if narrow { text_in } else { wide_row_over })
       } else if narrow {
         (if card { text_in } else { pg_room_in }, text_in)
       } else {
@@ -69,7 +75,7 @@ pub fn choice_row_node(
       let corner = if at.small {
         small_panel_inner(r_menu)
       } else if narrow {
-        if card { row_corner } else { 0.0 }
+        if card || in_panel is Some(_) { row_corner } else { 0.0 }
       } else if reach {
         0.0
       } else if part.list {

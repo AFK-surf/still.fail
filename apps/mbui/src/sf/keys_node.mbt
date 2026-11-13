@@ -10,7 +10,8 @@
 pub fn text_toggle_node(parent : @view.View, words : () -> String, press : () -> Unit, loc~ : SourceLoc) -> Unit {
   parent.box(made_for=loc, fn(b) {
     b.padding(Is((text_toggle_x, text_toggle_y, text_toggle_x, text_toggle_y))) |> ignore
-    pressed_node(b, press, Is(0.0), Button, words)
+    b.radius(Is(tap_corner)) |> ignore
+    pressed_node(b, press, Is(tap_corner), Button, words)
     words_node(b, words, fn() { if lit_node(b) { text_toggle_hot } else { text_toggle_words } }) |> ignore
   })
   |> ignore

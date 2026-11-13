@@ -998,7 +998,7 @@ fn size_option_node(
     })
     o.ground(By(fn() { if @sf.lit_node(o) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
     // (read out by its name and its size, as the old row was)
-    @sf.rippled_node(o, press, @sf.row_corner, fn() { name() + " " + note() })
+    @sf.rippled_node(o, press, @sf.panel_row_corner_node(o), fn() { name() + " " + note() })
     // (its check's column, the check in its middle while chosen: along the row, at once)
     o.box(fn(k) {
       k.width(By(fn() { Some(@sf.theme().rows.check) })).row(Is(true)).lies_along(Is(Middle)) |> ignore

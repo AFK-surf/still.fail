@@ -479,7 +479,11 @@ pub fn chat_row(
         // a chat a search found, or in the latest chats: rippled where it is pressed (a finger's)
         after=fn() {
           if found {
-            @motion.ripple(c, id, 0.0)
+            let corner = match at {
+              Whole => 0.0
+              Side | Tape => if @sf.in_small_panel() { @sf.small_panel_inner(@sf.r_menu) } else { @sf.row_corner }
+            }
+            @motion.ripple(c, id, corner)
           }
         },
       )

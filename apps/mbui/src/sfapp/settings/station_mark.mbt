@@ -490,8 +490,8 @@ fn mark_row_node(
             mark_color(st.color.get()).unwrap_or(if on { t.p.accent_text } else { t.p.text })
           }, fn() { 0 })
         }
-        // (a finger's press rippling over it, as an old row's: square outside a card)
-        @sf.rippled_node(cell, press, 0.0, fn() { key })
+        // (a finger's press rippling over it, matching mark_cell's Xl2 corner)
+        @sf.rippled_node(cell, press, @ui.tree_theme().corner(Xl2), fn() { key })
         cell.says(By(fn() { Some(@view.said(Button, label=key, selected=on)) })) |> ignore
       })
       |> ignore

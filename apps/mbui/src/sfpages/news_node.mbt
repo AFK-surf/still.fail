@@ -28,7 +28,7 @@ pub fn changelog_news_node(parent : @view.View, src : Source, tips : @sf.TipLaye
         @sf.style_node(words, fn() { news_words })
         // PageParts.kt ChangelogNews: clickable, cut to the card's corners
         // (read out as the old frame's box was: all it says)
-        @sf.rippled_node(words, fn() { open_page(Setting(@settings.Route::Changelog)) }, 0.0, fn() {
+        @sf.rippled_node(words, fn() { open_page(Setting(@settings.Route::Changelog)) }, @sf.card_corner, fn() {
           let said = [news_title_now(news())]
           said.append(lines()[:@cmp.minimum(news_lines_most, lines().length())].to_owned())
           if lines().length() > news_lines_most {
@@ -99,7 +99,7 @@ pub fn update_card_node(parent : @view.View, src : Source) -> Unit {
       @sf.style_node(card, fn() { news_card })
       card.box(fn(words) {
         @sf.style_node(words, fn() { update_card_words })
-        @sf.rippled_node(words, fn() { @sfbase.update_go(src) }, 0.0, fn() { @sf.t("android-misc.updates.allow") })
+        @sf.rippled_node(words, fn() { @sfbase.update_go(src) }, @sf.card_corner, fn() { @sf.t("android-misc.updates.allow") })
         words.box(fn(head) {
           @sf.style_node(head, fn() { news_head })
           @sf.icon_node(head, "download", 16.0, By(fn() { @sf.theme().p.text })) |> ignore

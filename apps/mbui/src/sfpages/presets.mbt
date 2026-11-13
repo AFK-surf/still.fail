@@ -561,9 +561,8 @@ fn preset_row(
       Some(p) => {
         r
         .ground(By(fn() { if @sf.lit_node(r) { @sf.theme().p.hover } else { 0L } }))
-        .says(By(fn() { Some(@view.said(Button, label=title())) }))
         |> ignore
-        @sf.presses_node(r, p)
+        @sf.rippled_node(r, p, @sf.panel_row_corner_node(r), title)
         if opens {
           @sf.panel_opens_on_node(r)
         }
@@ -1037,9 +1036,9 @@ fn repo_mark(c : @ui.Ctx, name : String, repo : String, icon : String, size : Do
 }
 
 ///|
-/// A folder's mark in the preset's dialog: about as high as its two lines, its corner the small block's (the ladder's
-/// 10).
-let preset_dir_mark : Double = 34.0
+/// A folder's mark in the preset's dialog: as high as its two lines (`L6 + L5`), its corner the small block's (the
+/// ladder's 10).
+let preset_dir_mark : Double = 38.0
 
 ///|
 /// The icon in a neutral tile of a row that does something (浏览文件夹…, 从 Git 克隆…, 添加目录).

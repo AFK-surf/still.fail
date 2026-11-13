@@ -130,11 +130,15 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       // (the squeeze's on the screen at rest, before what shows only under the hand is shown)
       let squeeze = if squeezed { squeeze_wrong(at, t.squeeze_faults()) } else { None }
       // and what it shows only under the hand (Ctx::lit_shown, hand_shown: a row's 归档), all of it at once, each fault
-      // once
-      for f in t.lit_all_faults() {
+      // once, plus any square press ripple or lit ground outside full-bleed window-edge rows
+      let (lit_faults, press_faults) = t.lit_all_press_faults()
+      for f in lit_faults {
         if !faults.contains(f) {
           faults.push(f)
         }
+      }
+      if press_faults.length() > 0 {
+        wrong.push("\{at}: \{press_faults.length()} press-corner faults\n  " + press_faults.join("\n  "))
       }
       // and with every thing the hand lights lit at once, and all it shows shown: none another size, none moved, no
       // words otherwise (the hand changes a thing's ground and ink alone: Tester::hand_moves)

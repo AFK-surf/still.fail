@@ -44,6 +44,7 @@ fn press_look(
   ink? : () -> Int64 = fn() { @motion.ripple_ink },
   loc~ : SourceLoc,
 ) -> PressLook {
+  v.note_ripple(corner)
   // (the ripples going, by their numbers, in the order they began)
   let ripples : @signals.Signal[Array[Int]] = @signals.signal([], same=fn(a, b) { a == b })
   let made : Map[Int, PressRipple] = Map([])

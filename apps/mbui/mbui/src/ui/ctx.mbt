@@ -624,6 +624,8 @@ pub struct Ctx {
   // the ids whose look asked this frame whether the hand is on them (Ctx::lit) or were drawn selected: what lights
   // up, and how far apart such things stand (Theme::lit_apart): the spacing rules' (gaps.mbt)
   lit_asked : Set[Int]
+  // press ripples registered this build (id -> (corner, has_out)): read by Tester::press_corner_faults
+  ripples : Map[Int, (Double, Bool)]
   // the ids whose choice the hand moves this frame (Ctx::hand_on: the one chosen follows the pointer), so chosen is not
   // kept lit while the hand is on another (gaps.mbt)
   hand_chooses : Set[Int]
@@ -904,6 +906,7 @@ fn Ctx::new() -> Ctx {
     corner_ladder: [],
     corner_fit: None,
     lit_asked: Set([]),
+    ripples: Map([]),
     hand_chooses: Set([]),
     hand_was: (-1.0, -1.0),
     hand_moved: false,
@@ -1083,6 +1086,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.inner_faults.clear()
   self.inner_faults.shrink_to_fit()
   self.lit_asked.clear()
+  self.ripples.clear()
   self.hand_chooses.clear()
   self.sems.clear()
   self.sems.shrink_to_fit()
@@ -1155,6 +1159,15 @@ pub fn stands_alone(ground : Int64, glass? : Bool = false, edge? : Double = 0.0)
 /// The box whose body is being built now (what a part called in a box's body is in: a press's ripple's box); -1 none.
 pub fn Ctx::building(self : Ctx) -> Int {
   self.cur
+}
+
+///|
+/// Record a press ripple on box `id` with `corner` (`out`: expands outside box bounds) for automated corner checks.
+pub fn Ctx::note_ripple(self : Ctx, id : Int, corner : Double, out? : Bool = false) -> Unit {
+  if id != 0 {
+    self.ripples[id] = (corner, out)
+    built_used(fn() { g().ripples[id] = (corner, out) })
+  }
 }
 
 ///|

@@ -101,6 +101,7 @@ pub fn ripple(
   let bottom = out_bottom.unwrap_or(out_y)
   // (the box it is called in: what sinks)
   let holder = c.building()
+  c.note_ripple(id, corner, out=out_x > 0.0 || top > 0.0 || bottom > 0.0)
   let list = match ripples.get(id) {
     Some(l) => l
     None => []

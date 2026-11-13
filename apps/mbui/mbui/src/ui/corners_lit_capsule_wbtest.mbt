@@ -74,3 +74,73 @@ test "a capsule whose ground shows under the hand, in a card's bottom right corn
     "23/12: old 1, tree at rest 1, tree all lit 1 | 11/12: old 1, tree at rest 1, tree all lit 1",
   )
 }
+
+///|
+test "press_corner_faults catches square lit grounds and 0.0 ripples inside rounded containers" {
+  let bad_old = Tester::new(
+    fn(c) {
+      c.box(w=Px(320.0), h=Px(180.0), radius=26.0, bg=0x333333FFL, padx=20.0, pady=20.0, fn() {
+        let a = c.id("sq-ground")
+        c.on_press(a, fn() {  })
+        c.box(id=a, style=css("hovered{bg=Hover}"), w=Px(200.0), h=Px(44.0), fn() {  }) |> ignore
+        let b = c.id("sq-ripple")
+        c.on_press(b, fn() {  })
+        c.box(id=b, w=Px(200.0), h=Px(44.0), fn() { c.note_ripple(b, 0.0) }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  bad_old.draw()
+  assert_eq(bad_old.press_corner_faults().length(), 2)
+  assert_eq(bad_old.lit_all_press_faults().1.length(), 2)
+
+  let ok_old = Tester::new(
+    fn(c) {
+      c.box(w=Px(320.0), h=Px(180.0), radius=26.0, bg=0x333333FFL, padx=20.0, pady=20.0, fn() {
+        let a = c.id("round-ground")
+        c.on_press(a, fn() {  })
+        c.box(id=a, style=css("hovered{bg=Hover}"), w=Px(200.0), h=Px(44.0), radius=12.0, fn() {  }) |> ignore
+        let b = c.id("round-ripple")
+        c.on_press(b, fn() {  })
+        c.box(id=b, w=Px(200.0), h=Px(44.0), radius=12.0, fn() { c.note_ripple(b, 12.0) }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  ok_old.draw()
+  assert_eq(ok_old.press_corner_faults(), [])
+
+  let bad_tree = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0, corners_held=false)
+  set_view_app(fn(root) {
+    root.box(fn(card) {
+      card.width(Is(Some(320.0))).height(Is(Some(180.0))).pad(Is(20.0)).ground(Is(0x333333FFL)).radius(Is(26.0))
+      |> ignore
+      card.box(fn(row) {
+        row
+        .width(Is(Some(200.0)))
+        .height(Is(Some(44.0)))
+        .ground(By(fn() { if row.pointed() { 0xEEEEEEFFL } else { 0L } }))
+        .presses(Is(true))
+        .on_press(fn() {  })
+        |> ignore
+      })
+      |> ignore
+      card.box(fn(row2) {
+        row2.width(Is(Some(200.0))).height(Is(Some(44.0))).presses(Is(true)).on_press(fn() {  }) |> ignore
+        row2.note_ripple(Is(0.0))
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  bad_tree.draw()
+  assert_eq(bad_tree.lit_all_press_faults().1.length(), 2)
+}

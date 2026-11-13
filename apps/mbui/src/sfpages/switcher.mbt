@@ -752,7 +752,14 @@ fn found_line(
       }
       Head(_) | Note(_) | Wait(_, _) | Said(_) => ()
     }
-    @sf.row_ripple(c, id)
+    @sf.press_ripple(
+      c,
+      id,
+      match list_at {
+        Whole => 0.0
+        Side | Tape => if @sf.in_small_panel() { @sf.small_panel_inner(@sf.r_menu) } else { @sf.row_corner }
+      },
+    )
   })
   |> ignore
 }
