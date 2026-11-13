@@ -463,6 +463,8 @@ fn view_forget() -> Unit {
   }
   // (the native views of the tree's the run before's: what opened them closes them, a new run's host none of theirs)
   tree_natives.clear()
+  tree_streams.clear()
+  tree_streams_rev.val = tree_streams_rev.val + 1
   tree_natives_rev.val = tree_natives_rev.val + 1
   c.back = None
   c.back_node = -1
@@ -1727,7 +1729,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       rings.push((c.id, held, by))
     }
     false
-  }, draws=view_draws, offsets~, draws_rev=tree_fields_rev.val + tree_natives_rev.val)
+  }, draws=view_draws, offsets~, draws_rev=tree_fields_rev.val + tree_natives_rev.val + tree_streams_rev.val)
   while riding_now() is Some(r) {
     close_down(r.clips0, r.rings0)
     self.ride_end()
@@ -1790,7 +1792,8 @@ fn Ctx::view_drawn(
       !c.lines.is_empty() ||
       c.hosted ||
       (!tree_fields.is_empty() && tree_fields.contains(c.id)) ||
-      (!tree_natives.is_empty() && tree_natives.contains(c.id))
+      (!tree_natives.is_empty() && tree_natives.contains(c.id)) ||
+      (!tree_streams.is_empty() && tree_streams.contains(c.id))
     )
   let block = match view_blocks.get(c.id) {
     // (made as glass was drawn then: solid or not; a picture for the pixels it is drawn at now; its edge where it was)
@@ -1847,6 +1850,17 @@ fn Ctx::view_drawn(
       ride_spoil()
       list_drawn_anew()
       self.paint_tree_native(c.id, tn, x, y, c.w * s, c.h * s, s)
+    }
+    _ => ()
+  }
+  // (a stream in it (ui's stream): the picture it shows where it is drawn and as big, each frame it is drawn, over what
+  // its block draws, under what is drawn after it; drawn anew each time, as a picture is (no row it is in kept, nor the
+  // list drawn whole as one it is in): the frame shown then. In its bones, none)
+  match (if tree_streams.is_empty() { None } else { tree_streams.get(c.id) }) {
+    Some(ts) if c.bones == 0L => {
+      ride_spoil()
+      list_drawn_anew()
+      self.paint_tree_stream(ts, x, y, c.w * s, c.h * s, c.radius * s, a)
     }
     _ => ()
   }
@@ -6610,7 +6624,8 @@ fn Ctx::view_unseen(self : Ctx, c : @view.Content, s : Double) -> Unit {
 fn view_draws(c : @view.Content) -> Bool {
   c.draws_any ||
   (!tree_fields.is_empty() && tree_fields.contains(c.id)) ||
-  (!tree_natives.is_empty() && tree_natives.contains(c.id))
+  (!tree_natives.is_empty() && tree_natives.contains(c.id)) ||
+  (!tree_streams.is_empty() && tree_streams.contains(c.id))
 }
 
 ///|

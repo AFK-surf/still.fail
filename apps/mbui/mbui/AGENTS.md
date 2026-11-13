@@ -115,7 +115,9 @@ yet and you can add one, add it.
 - A native view (a page, a player) in the window's tree is a node of its own (ui's `native`, `src/ui/tree_native.mbt`),
   never an old view hosted for it: the host is told where it stands and what clips it from where the tree draws the
   node, each frame that moves it; hidden, not closed, while the node is not drawn; closed as the node is let go, unless
-  the app keeps the view past it (`kept`).
+  the app keeps the view past it (`kept`). So is a stream the host decodes (ui's `stream`, `src/ui/tree_stream.mbt`):
+  its picture drawn where the tree draws the node, each frame the one shown then, closed as the node is let go unless
+  what holds it closes it (`closes`).
 - What a still pointer is over (the hand: `View::pointed`, a tip, a hover card) is worked out at an input, in a change
   at its moment, and at the end of a way that may move something under it (`Tree::hand_at_end`: a Move, a way in or
   out, a glide; one that changes only how a thing looks, a fade, a bar's hiding, is none: `Prop::moves_hits`), never on a frame as something goes (the coordinator of the migration, 2026-11-11: no highlight jumping
