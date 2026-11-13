@@ -9,7 +9,7 @@
 
 ///|
 /// The outer boxes of small panels drawn beside what opened them (panel_node), by their serial: what a sub-panel
-/// standing flush with one (`match_panel`) goes beside and matches in width.
+/// aligned with one (`match_panel`) goes beside while keeping its own width.
 // kept across runs: put back by presenters_reset; each let go as its layer is
 let presented_popovers : Map[Int, @view.View] = Map([])
 
@@ -137,23 +137,10 @@ fn panel_node(
       layer.box(fn(p) {
         presented_popovers[keyed.serial] = p
         p
-        .beside(
-          at.id(),
-          side=x.side,
-          along=x.along,
-          offset=x.offset,
-          padding=8.0,
-          width=if matched is Some(_) { Anchor } else { Own },
-        )
-        |> ignore
+        .beside(at.id(), side=x.side, along=x.along, offset=x.offset, padding=8.0)
         // (`fits`: as wide as what it holds, `w` at most, never narrower than it has been: its parts each told how wide
-        // what they hold is laid out, out to its sides, none narrower than it is, small_panel's min_w and max_w;
-        // `match_panel` (`matched` Some): View::beside's `Anchor` sets its width alone)
-        if matched is None {
-          p.width(if x.fits { By(fn() { Some(dmin(x.w, wide.iter().fold(init=0.0, fn(m, s) { dmax(m, s.get().unwrap_or(0.0)) }))) }) } else { Is(Some(x.w)) })
-          |> ignore
-        }
-        p
+        // what they hold is laid out, out to its sides, none narrower than it is, small_panel's min_w and max_w)
+        .width(if x.fits { By(fn() { Some(dmin(x.w, wide.iter().fold(init=0.0, fn(m, s) { dmax(m, s.get().unwrap_or(0.0)) }))) }) } else { Is(Some(x.w)) })
         .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
         // (`tall`: a share of the window, no taller than the room beside what opened it, small_panel's `h`)
         .height(By(fn() { if x.tall > 0.0 { Some(dmin(x.tall * layer.window().1, dmax(0.0, layer.window().1 - 16.0))) } else { None } }))

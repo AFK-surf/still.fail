@@ -635,7 +635,7 @@ pub fn panel(
 /// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `live`, `gone`, `tall`, `focus`, `ruled`, `form`,
 /// `grows`, `side`, `along`, `offset` as there; `hugs`: one `tall` as tall as what it holds up to that share, as a sheet
 /// and a dialog in the middle of the window draw it, not that share whatever it holds; `match_panel`: serial of a small
-/// panel it stands flush with in width and edges), what it holds (`body`) and what
+/// panel whose outer box it goes beside while keeping its own width `w`), what it holds (`body`) and what
 /// is at its foot (`foot`) made once as nodes of the window's tree, each in the node the panel gives it, laid out there
 /// as the old frame's body and foot are (beside what opened it: panel_node; in the middle of the window, opened by
 /// nothing or a form: panel_centred_node), given what closes it.
