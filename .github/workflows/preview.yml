@@ -125,7 +125,9 @@ jobs:
     name: linux (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 5
+    # (a run by hand, or the day's, compiles what main's store has none of whole: once the units' commands named mbui at
+    # libs/mbui, 2026-11-13, none of the store's were theirs, and a push's 5 minutes did not see it through)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
