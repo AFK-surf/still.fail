@@ -136,6 +136,31 @@ pub fn View::runs_picked(self : View, span : Live[(Int, Int)], loc~ : SourceLoc)
 }
 
 ///|
+/// A part of a node's words in pieces marked under them (View::runs_marks): from, until (in their text's terms, as what
+/// is picked is), a ground in `ground`, and where `line` is not 0 a line under it in that colour, `line_w` thick at its
+/// foot (what is found: each a ground; the one gone to a line under it too).
+#derive(Eq, Debug)
+pub(all) struct RunsMark {
+  from : Int
+  to : Int
+  ground : Int64
+  line : Int64
+  line_w : Double
+}
+
+///|
+/// What of its words in pieces is marked under them as it changes, each part its own way (RunsMark): drawn under them
+/// and under what is picked of them, laid out with them (as they wrap, as big as they are drawn, where they scroll),
+/// taking no press, picking and copying them as ever.
+#callsite(autofill(loc))
+pub fn View::runs_marks(self : View, marks : Live[Array[RunsMark]], loc~ : SourceLoc) -> View {
+  let tree = self.tree
+  let at = self.at
+  self.bind(loc~, RunsMarks, marks, Paint, fn(m) { tree.nodes[at].look.runs_marks = m })
+  self
+}
+
+///|
 /// What lends what holds it how what of a node's words in pieces is picked with the pointer is said (given the node, as
 /// View::words_runs makes it, now or later: its View::runs_picked), as what picks them has it (mbui/ui's selection).
 // kept across runs: what each node lends (View::lends), let go with it

@@ -225,3 +225,28 @@ pub fn runs_link_piece(
     box.map(fn(b) { (b.0, b.1, b.2 - b.0, b.3 - b.1) })
   }
 }
+
+///|
+/// The part of node `v`'s words in pieces (View::words_runs) from `from` until `to` (in their text's terms, as
+/// View::runs_marks says them), as a piece of `v` (View::beside's `piece`, ListPlace::bring_piece's): the box round all
+/// its pieces of line, laid out as wide as `v` is laid out as it is asked, in its own terms. None where its words hold
+/// no such part now (none, or said again shorter). Its words laid out once each time it is asked.
+pub fn runs_piece(v : @view.View, from : Int, to : Int) -> (Double, Double) -> (Double, Double, Double, Double)? {
+  fn(w, _h) {
+    let (rs, look, set) = v.runs_set_now()
+    guard !rs.is_empty() && from < to else { return None }
+    let (_, lay, _) = view_runs_laid(rs, look, set, w, v.tree.words_scale_of(v.id()), kept=v.words_breaks_now())
+    guard to <= lay.text.length() else { return None }
+    let center = if v.words_centered_now() { w } else { -1.0 }
+    let mut box : (Double, Double, Double, Double)? = None
+    for r in lay.rects(from, to) {
+      let dx = rich_shift_at(lay, r.1 + r.3 / 2.0, center)
+      let (x0, y0, x1, y1) = (r.0 + dx, r.1, r.0 + dx + r.2, r.1 + r.3)
+      box = match box {
+        None => Some((x0, y0, x1, y1))
+        Some((a, b, c, d)) => Some((dmin(a, x0), dmin(b, y0), dmax(c, x1), dmax(d, y1)))
+      }
+    }
+    box.map(fn(b) { (b.0, b.1, b.2 - b.0, b.3 - b.1) })
+  }
+}
