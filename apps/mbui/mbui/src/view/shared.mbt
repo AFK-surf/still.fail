@@ -18,6 +18,19 @@
 // Two of an id let go of or made in one change, or one made while another of its id lives, is a fault (Tree::fault: a
 // test fails), and none of them flies. A pair made again on its way (opened, then closed before it is there) sets out
 // from where it is drawn then, its old copy let go of at once.
+// One end may stay where it is (View::shared's `stays`: a picture's thumbnail, the other end the picture opened over
+// everything): it is never let go of for a flight nor made for one, and pairs with no other that stays. While one of its
+// id that moves lives, it keeps its room and is drawn nowhere, whatever holds it says (the tree's say, by the id, never
+// what holds it). One that moves made in a change while it lives flies from where it was drawn as the change came, as
+// it looked; one that moves let go of in a change while it lives is drawn there no more, and it flies from where that
+// one was drawn back to its own place, drawn again as it sets out. Neither fades: one picture moves. Its room cut by
+// what holds it as it set out (under a bar) is what is drawn of it, on its way, as far as it is there (the cut opens to
+// the window as it leaves, closes to it as it comes back); a picture in it drawn on the way as the end that stays draws
+// it (covering, contained) in the box the way has, so it is as that end draws it at that end and as the other draws it
+// at the other. One that stays that is drawn nowhere (no layout placed it, scrolled out of the window, cut to nothing)
+// pairs with nothing: the other comes or goes as it would have. A change of the id of one that moves pairs nothing:
+// what stays of its old id is drawn again at once, what stays of its new one drawn nowhere; nor does one that moves let
+// go of and another made in one change by other ids (a picture stepped to the one beside it, one in the other's place).
 // Not yet: what the new one holds laid out again at each size on its way (it is drawn grown as it is laid out at its
 // end), its words morphing glyph by glyph, its scale and turn mixed, a way going on as fast as it went.
 
@@ -51,6 +64,22 @@ priv struct Lift {
   mut k : Double
   mut a : Double
   from : FromLook
+  /// a flight with an end that stays (View::shared's `stays`): how that end draws its picture (covering, along; contained),
+  /// drawn so on the way; and its room as cut by what held it, what is drawn of it at that end (`at_start`: the end it
+  /// sets out from)
+  stays : StaysEnd?
+}
+
+///|
+/// The end of a flight that stays where it is (Lift's `stays`): how it draws its picture (View::image_covers,
+/// image_covers_at, image_contains), its room in the window cut by what holds it, and whether it is where the flight
+/// sets out (else where it comes to).
+priv struct StaysEnd {
+  cover : Bool
+  cover_at : Double?
+  contain : Bool
+  cut : (Double, Double, Double, Double)
+  at_start : Bool
 }
 
 ///|
@@ -72,6 +101,8 @@ priv struct Departure {
 priv struct Flying {
   node : NodeId
   mut ghost : NodeId?
+  /// faded in as it comes (false: one with an end that stays, one picture moving)
+  fades : Bool
   start : Double
   dur : Double
   along : (Double) -> Double
@@ -83,10 +114,17 @@ priv struct Flying {
 /// One with id `id`, flying as `flight` says from the one with its id let go of in the change it is made in (or that
 /// sets it this id): see the head of this file. The id said By follows what it reads; a change of it pairs nothing.
 #callsite(autofill(loc))
-pub fn View::shared(self : View, id : Live[String], flight : Flight, loc~ : SourceLoc) -> View {
+pub fn View::shared(
+  self : View,
+  id : Live[String],
+  flight : Flight,
+  stays? : Bool = false,
+  loc~ : SourceLoc,
+) -> View {
   guard self.live() is Some(n) else { return self }
   ignore(loc)
   n.share_flight = Some(flight)
+  n.share_stays = stays
   let tree = self.tree
   let at = self.at
   let gen = self.gen
@@ -96,13 +134,13 @@ pub fn View::shared(self : View, id : Live[String], flight : Flight, loc~ : Sour
     guard n.live && n.gen == gen else { return }
     match n.share {
       Some(was) if was == s => return
-      Some(was) => tree.share_count(was, -1)
+      Some(was) => tree.share_counted(at, was, -1)
       None => ()
     }
     n.share = Some(s)
-    tree.share_count(s, 1)
-    // (made in a change: one that may pair with one let go of in it, as it is committed whole)
-    if first.val && tree.in_change() {
+    tree.share_counted(at, s, 1)
+    // (made in a change: one that may pair with one let go of in it, as it is committed whole; one that stays never)
+    if first.val && tree.in_change() && !n.share_stays {
       tree.arrivals.push({ at, gen })
       tree.pairs_due()
     }
@@ -126,6 +164,38 @@ pub fn View::shared_id(self : View) -> String? {
 }
 
 ///|
+/// Where the one of id `id` on a flight's way is drawn in the window now (x, y, w, h) and its corners as drawn there
+/// (top left, then round it), the one that comes (not an old copy); none where none of it flies.
+pub fn Tree::flight_drawn(
+  self : Tree,
+  id : String,
+) -> ((Double, Double, Double, Double), (Double, Double, Double, Double))? {
+  for f in self.flights {
+    guard self.alive_id(f.node) else { continue }
+    let n = self.nodes[f.node.at]
+    guard n.share == Some(id) && n.lift is Some(l) else { continue }
+    return Some((self.lift_rect(l), self.look_from(f.node.at, 1.0).corners))
+  }
+  None
+}
+
+///|
+/// What of the window node `id` is drawn within on a flight with an end that stays (View::shared's `stays`): that end's
+/// room as cut by what held it, opening to its layer's as it leaves it, closing to it as it comes back (x0, y0, x1, y1);
+/// none, on any other flight or none.
+pub fn Tree::lift_cut(self : Tree, id : NodeId) -> (Double, Double, Double, Double)? {
+  guard self.alive_id(id) && self.nodes[id.at].lift is Some(l) && l.stays is Some(e) else { return None }
+  let (wx, wy, ww, wh) = self.placed_window(l.top)
+  let (x0, y0, x1, y1) = (wx, wy, wx + ww, wy + wh)
+  let (c0, c1, c2, c3) = e.cut
+  let (c0, c1, c2, c3) = (dmax(c0, x0), dmax(c1, y0), dmin(c2, x1), dmin(c3, y1))
+  // (how far it is from that end: 0 there, 1 at the other)
+  let p = 1.0 - l.k
+  let t = if e.at_start { p } else { 1.0 - p }
+  Some((c0 + (x0 - c0) * t, c1 + (y0 - c1) * t, c2 + (x1 - c2) * t, c3 + (y1 - c3) * t))
+}
+
+///|
 /// Whether it is drawn on a flight's way now (View::shared): the new one or the old one's copy.
 pub fn View::flies(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
@@ -142,6 +212,102 @@ fn Tree::share_count(self : Tree, id : String, by : Int) -> Unit {
     self.shared_live[id] = k
   }
   self.shared_n = self.shared_n + by
+}
+
+///|
+/// Node `at`'s id `id` counted `by` more (View::shared): all of them, and those that move or those that stay apart; where
+/// one that moves comes to be or no longer is, what stays of its id drawn again (Tree::stays_marked).
+fn Tree::share_counted(self : Tree, at : Int, id : String, by : Int) -> Unit {
+  self.share_count(id, by)
+  if self.nodes[at].share_stays {
+    let all = self.shared_stays.get(id).unwrap_or([])
+    if by > 0 {
+      if !all.contains(at) {
+        all.push(at)
+      }
+      self.shared_stays[id] = all
+    } else {
+      all.retain(fn(i) { i != at })
+      if all.is_empty() {
+        self.shared_stays.remove(id)
+      } else {
+        self.shared_stays[id] = all
+      }
+    }
+    // (one that stays come or gone as one that moves lives: drawn nowhere, or there again)
+    self.lift_marked(at)
+    return
+  }
+  let was = self.shared_moving.get(id).unwrap_or(0)
+  let k = was + by
+  if k <= 0 {
+    self.shared_moving.remove(id)
+  } else {
+    self.shared_moving[id] = k
+  }
+  if (was > 0) != (k > 0) {
+    self.stays_marked(id)
+  }
+}
+
+///|
+/// Whether node `n` (one that stays: View::shared's `stays`) is drawn nowhere now: one of its id that moves lives.
+fn Tree::stays_hidden(self : Tree, n : Node) -> Bool {
+  match n.share {
+    Some(id) => self.shared_moving.get(id).unwrap_or(0) > 0
+    None => false
+  }
+}
+
+///|
+/// What stays of id `id` drawn again as it is drawn nowhere or there once more.
+fn Tree::stays_marked(self : Tree, id : String) -> Unit {
+  match self.shared_stays.get(id) {
+    Some(all) =>
+      for at in all {
+        if self.nodes[at].live {
+          self.lift_marked(at)
+        }
+      }
+    None => ()
+  }
+}
+
+///|
+/// The one that stays of id `id` a flight may come from or go to now: living, held in the window's tree, placed by a
+/// layout, and some of it seen in its layer as what holds it cuts it (Tree::seen_bounds); none, none.
+fn Tree::stays_end(self : Tree, id : String) -> Int? {
+  guard self.shared_stays.get(id) is Some(all) else { return None }
+  for at in all {
+    let n = self.nodes[at]
+    guard n.live && n.placed && self.attached(at) else { continue }
+    let (x, y, _, s) = self.projected(at)
+    let (w, h) = (n.lw * s, n.lh * s)
+    let (bx0, by0, bx1, by1) = self.seen_bounds({ at, gen: n.gen })
+    // (and within its layer, the window's part it is drawn in)
+    let (lx, ly, lw, lh) = self.placed_window(self.top_node_of(at))
+    let (x0, y0) = (dmax(dmax(x, bx0), lx), dmax(dmax(y, by0), ly))
+    let (x1, y1) = (dmin(dmin(x + w, bx1), lx + lw), dmin(dmin(y + h, by1), ly + lh))
+    if x1 > x0 && y1 > y0 && w > 0.0 && h > 0.0 {
+      return Some(at)
+    }
+  }
+  None
+}
+
+///|
+/// The end that stays at node `at` as a flight takes it (Lift's `stays`): how it draws its picture, its room cut by what
+/// holds it, which end it is.
+fn Tree::stays_of(self : Tree, at : Int, at_start : Bool) -> StaysEnd {
+  let n = self.nodes[at]
+  let (bx0, by0, bx1, by1) = self.seen_bounds({ at, gen: n.gen })
+  {
+    cover: n.look.image_cover,
+    cover_at: n.look.image_cover_at,
+    contain: n.look.image_contain,
+    cut: (bx0, by0, bx1, by1),
+    at_start,
+  }
 }
 
 ///|
@@ -306,6 +472,20 @@ fn Tree::lifted_content(self : Tree, n : Node, l : Lift, c : Content) -> Content
     corners: Some((a / s, b / s, cc / s, d / s)),
     radius: a / s,
     ink: colour_mix(l.from.ink, to.ink, p),
+    // (a picture drawn on the way as the end that stays draws it, in the box the way has: as that end at it, as the
+    // other at its end, where the box is the picture's own)
+    image_cover: match l.stays {
+      Some(e) => e.cover
+      None => c.image_cover
+    },
+    image_cover_at: match l.stays {
+      Some(e) => e.cover_at
+      None => c.image_cover_at
+    },
+    image_contain: match l.stays {
+      Some(e) => e.contain
+      None => c.image_contain
+    },
   }
 }
 
@@ -438,10 +618,16 @@ fn Tree::pairs_now(self : Tree) -> Unit {
   }
   // (what was let go of with what flies from it: kept as its old copy, the rest let go of already)
   let flown : Array[NodeId] = []
+  // (those that move made or let go of alone of their ids, where one of the id stays)
+  let from_stays : Array[(Int, NodeId)] = []
+  let to_stays : Array[(Departure, Int)] = []
+  let came_alone = Ref(false)
+  let went_alone = Ref(false)
   for id in ids {
     let gone = deps.filter(fn(d) { d.id == id })
     let come = made.filter(fn(a) { self.nodes[a.at].share == Some(id) })
-    let living = self.shared_live.get(id).unwrap_or(0) - gone.length()
+    // (those that move: one that stays is none of them, View::shared's `stays`)
+    let living = self.shared_moving.get(id).unwrap_or(0) - gone.length()
     if gone.length() > 1 || come.length() > 1 {
       // (the node it is told under: one made, else one let go of; never both looked up, as `unwrap_or(gone[0]…)`
       // did, which with none let go stopped the run on an index out of bounds before the fault was told)
@@ -455,6 +641,34 @@ fn Tree::pairs_now(self : Tree) -> Unit {
     } else if gone.length() == 1 && come.length() == 1 {
       if self.paired(gone[0], come[0]) is Some(_) {
         flown.push(gone[0].held)
+      }
+    } else if come.length() == 1 && gone.length() == 0 {
+      came_alone.val = true
+      // (one that moves made where one of its id stays: from that one, below)
+      match self.stays_end(id) {
+        Some(st) => from_stays.push((st, come[0]))
+        None => ()
+      }
+    } else if gone.length() == 1 && come.length() == 0 && living == 0 {
+      went_alone.val = true
+      // (the last that moves let go of where one of its id stays: back to that one, below)
+      match self.stays_end(id) {
+        Some(st) => to_stays.push((gone[0], st))
+        None => ()
+      }
+    }
+  }
+  // (one that moves let go of and another made in the same change, by other ids, is one in the other's place (a
+  // picture stepped to the one beside it): neither flies to or from what stays, what stays of either id drawn again or
+  // nowhere at once, as where the id of one changes; else each flies)
+  let swapped = came_alone.val && went_alone.val
+  if !swapped {
+    for e in from_stays {
+      self.from_stays(e.0, e.1)
+    }
+    for e in to_stays {
+      if self.to_stays(e.0, e.1) {
+        flown.push(e.0.held)
       }
     }
   }
@@ -541,7 +755,7 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
   g.said_hidden = true
   match g.share {
     Some(id) => {
-      self.share_count(id, -1)
+      self.share_counted(ghost, id, -1)
       g.share = None
     }
     None => ()
@@ -565,6 +779,7 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
   let f : Flying = {
     node: to,
     ghost: Some({ at: ghost, gen: g.gen }),
+    fades: true,
     start: at,
     dur: ms,
     along,
@@ -572,8 +787,8 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
     stop: fn() {  },
   }
   self.flights.push(f)
-  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 0.0, from: d.look })
-  g.lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: d.look })
+  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 0.0, from: d.look, stays: None })
+  g.lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: d.look, stays: None })
   self.lifted_order()
   // (drawn as of each frame's moment while it goes; over at its end, a moment of its own)
   let stop_way = self.queued(fn() { self.drawn_at() }, fn(t) { self.flight_at(f, t) })
@@ -585,6 +800,89 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
     unkeep()
   }
   Some({ at: ghost, gen: g.gen })
+}
+
+///|
+/// Node `to` (one that moves) made where node `st` of its id stays: set flying from where `st` is drawn as the change
+/// came, as it looks, its picture as `st` draws it, its room as cut where `st` is (the file's head). `st` drawn nowhere
+/// meanwhile, as one of its id that moves lives.
+fn Tree::from_stays(self : Tree, st : Int, to : NodeId) -> Unit {
+  let n = self.nodes[st]
+  let (x, y, _, s) = self.projected(st)
+  self.fly_stays(to, (x, y, n.lw * s, n.lh * s), self.look_from(st, s), self.stays_of(st, true)) |> ignore
+}
+
+///|
+/// Departure `d` (the last of its id that moves) let go of where node `st` of its id stays: `st` set flying from where
+/// `d`'s was drawn, as it looked, back to its own place, its picture as it draws it, its room as cut where it is; what
+/// `d`'s was let go of with let go of as it would have been, its node drawn no more. Whether it flies.
+fn Tree::to_stays(self : Tree, d : Departure, st : Int) -> Bool {
+  guard self.alive_id(d.node) && self.alive_id(d.held) else { return false }
+  let to : NodeId = { at: st, gen: self.nodes[st].gen }
+  if !self.fly_stays(to, d.from, d.look, self.stays_of(st, false)) {
+    return false
+  }
+  // (what moved drawn no more: taken out of what it was let go of with and let go of, the rest as it would have gone)
+  let at = d.node.at
+  if at != d.held.at {
+    let g = self.nodes[at]
+    let p = g.parent
+    if p >= 0 {
+      match self.nodes[p].kids.search(at) {
+        Some(i) => self.nodes[p].kids.remove(i) |> ignore
+        None => ()
+      }
+    }
+    g.parent = -1
+    self.handle(at).let_go()
+    false
+  } else {
+    // (it alone let go of: let go of now, nothing left of it to go)
+    self.handle(at).let_go()
+    true
+  }
+}
+
+///|
+/// Node `to` set flying from `from` (where it sets out, how it looks there) to its place, one picture moving: not faded,
+/// no old copy, `stays` its end that stays. Whether it flies (not, at once: as with motion reduced, or as far as nothing).
+fn Tree::fly_stays(
+  self : Tree,
+  to : NodeId,
+  from : (Double, Double, Double, Double),
+  look : FromLook,
+  stays : StaysEnd,
+) -> Bool {
+  guard self.alive_id(to) && self.nodes[to.at].share_flight is Some(flight) else { return false }
+  let to_v = self.handle(to.at)
+  let (tx, ty, tw, th) = to_v.laid_window_now()
+  let (fx, fy, fw, fh) = from
+  let dd = (fx - tx, fy - ty, fw - tw, fh - th)
+  let far = dmax(dmax((dd.0 * dd.0 + dd.1 * dd.1).sqrt(), dd.2.abs()), dd.3.abs())
+  let (ms, along) = (flight.way)(far)
+  if ms <= 0.0 || far <= 0.5 {
+    return false
+  }
+  // (one already on its way: over, this one from where it was)
+  match self.flying_of(to.at) {
+    Some(f) => self.flight_over(f)
+    None => ()
+  }
+  let at = self.cause_now()
+  let top = self.top_node_of(to.at)
+  let f : Flying = { node: to, ghost: None, fades: false, start: at, dur: ms, along, top, stop: fn() {  } }
+  self.flights.push(f)
+  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: look, stays: Some(stays) })
+  self.lifted_order()
+  let stop_way = self.queued(fn() { self.drawn_said() }, fn(t) { self.flight_at(f, t) })
+  let stop_end = to_v.at_moment(at + ms, fn() { self.flight_over(f) })
+  let unkeep = to_v.owns_while(fn() { self.flight_over(f) })
+  f.stop = fn() {
+    stop_way()
+    stop_end()
+    unkeep()
+  }
+  true
 }
 
 ///|
@@ -606,7 +904,7 @@ fn Tree::flight_at(self : Tree, f : Flying, t : Double) -> Unit {
     match self.nodes[f.node.at].lift {
       Some(l) => {
         l.k = k
-        l.a = a_in
+        l.a = if f.fades { a_in } else { 1.0 }
         self.lift_marked(f.node.at)
       }
       None => ()
@@ -714,11 +1012,12 @@ fn Tree::share_let_go(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   match n.share {
     Some(id) => {
-      self.share_count(id, -1)
+      self.share_counted(at, id, -1)
       n.share = None
     }
     None => ()
   }
+  n.share_stays = false
   n.share_flight = None
   if n.lift is Some(_) {
     match self.flying_of(at) {

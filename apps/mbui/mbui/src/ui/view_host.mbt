@@ -1585,6 +1585,15 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
       clipping.push(c.id)
     }
+    // (on a flight with an end that stays (View::shared's `stays`): cut to that end's room as what held it cut it,
+    // opening as it leaves it, for what it holds too: a picture under a bar flies out from under it)
+    match tree.lift_cut(c.id) {
+      Some((x0, y0, x1, y1)) => {
+        push_box_clip(x0, y0, dmax(0.0, x1 - x0), dmax(0.0, y1 - y0), 0.0, 0.0, 0.0, 0.0)
+        clipping.push(c.id)
+      }
+      None => ()
+    }
     let k0 = self.ninst
     let k = clip_top()
     // (what it draws itself, and where its edge was composed among the frame's instances (-1: none), drawn after what it
