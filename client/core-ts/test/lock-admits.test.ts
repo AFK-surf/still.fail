@@ -19,13 +19,15 @@ import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, s
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
 import { added, enrolled, held, inForceOf, outOf, read, roster } from "../src/views/lock.ts";
 import { hooks } from "../src/core/execute.ts";
-import { ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
+import { dialer, ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
 import { ME, genesis, grant, pipe, rig } from "./lock-rig.ts";
 
 const A = "aa".repeat(32);
 const B = "bb".repeat(32);
 const C = "cc".repeat(32);
 const D = "dd".repeat(32);
+/// The signing key alice's app (her own log's genesis device) signs workspaces' locks with: it may let a newcomer in.
+const ALICE_SIGNS = "ed25519:" + "a1".repeat(32);
 /// The web page asking: its base key.
 const WEB = "ee".repeat(32);
 const T = Date.UTC(2026, 9, 6, 9, 0, 0) / 1000;
@@ -37,9 +39,9 @@ const seedOf = (n: number) => {
 };
 
 type Log = { sub: string; k: ReturnType<typeof key>; chain: StationEntry[]; said: string | null; said2: string | null; n: number };
-function person(sub: string, n: number, id: string): Log {
+function person(sub: string, n: number, id: string, signKey?: string): Log {
   const k = key(n);
-  const g = signed({ v: 1, ws: `person:${sub}`, seq: 0, prev: null, at: T, kind: "genesis", body: { sub, device: { key: k.id, id, label: `${sub}'s app` } } } as Omit<StationEntry, "sig">, k);
+  const g = signed({ v: 1, ws: `person:${sub}`, seq: 0, prev: null, at: T, kind: "genesis", body: { sub, device: { key: k.id, id, label: `${sub}'s app`, ...(signKey !== undefined ? { sign_key: signKey } : {}) } } } as Omit<StationEntry, "sig">, k);
   return { sub, k, chain: [g], said: null, said2: null, n: 0 };
 }
 const gOf = (l: Log) => stationHash(l.chain[0]!);
@@ -55,19 +57,21 @@ function say(l: Log, kind: string, more: Record<string, unknown>, ws: "ws" | "w2
 type Brought = { at: string; length: number; bodies: unknown[] | null };
 type Asked = { at: string; method: string; path: string; body: string };
 
-/// `root: "alice"`: alice's log (r1) is the root and says those, and s1 as `mine`. `view`: the workspace's view's members
-/// (the control plane's word of each one's role).
-async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: "owner" | "admin" | "member"; view?: { sub: string; email: string; role: string }[] } = {}) {
+/// `root: "alice"`: alice's log (r1) is the root and says those, and s1 as `mine` (`none`: not at all). `view`: the
+/// workspace's view's members (the control plane's word of each one's role). `own`: s1's own log, this device on it
+/// (`on`), none at all (`none`), or one of another device of theirs this device is not on (`other`).
+async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: "owner" | "admin" | "member" | "none"; view?: { sub: string; email: string; role: string }[]; own?: "on" | "none" | "other" } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const me = person("s1", MINE, ME);
   const bob = person("r2", 6002, key(6102).hex);
   const xena = person("r3", 6004, key(6104).hex);
-  const alice = person("r1", 6001, key(6101).hex);
+  const alice = person("r1", 6001, key(6101).hex, ALICE_SIGNS);
+  const elsewhere = person("s1", 6111, key(6112).hex);
   const root = o.root === "alice" ? alice : me;
   const bodies: unknown[] = [];
   bodies.push(say(root, "open", { ...settings, email: "a@x.com" }));
-  if (o.root === "alice") bodies.push(say(alice, "member", { sub: "s1", email: "s1@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
+  if (o.root === "alice" && o.mine !== "none") bodies.push(say(alice, "member", { sub: "s1", email: "s1@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
   bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
   bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
@@ -78,6 +82,7 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
     ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME),
     ...(o.w2 === "moved" ? { w2: genesis("w2", signer, true, [{ key: B, name: "b" }], g.keys, ME) } : o.w2 === "chain" ? { w2: genesis("w2", signer, true, [], g.keys, ME) } : {}),
   }), (host) => {
+    if (o.own !== undefined && o.own !== "on") return;
     host.storage.set(`personal-lock-${Buffer.from("s1").toString("hex")}`, new TextEncoder().encode(JSON.stringify(me.chain)));
     host.storage.set("personal-signer-id", new TextEncoder().encode(me.k.id));
     host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
@@ -86,7 +91,7 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
   const signer = mine! as Signer;
   const headOf = (c: Entry[]): Head => ({ seq: c.length - 1, hash: entryHash(c[c.length - 1]!), genesis: entryHash(c[0]!) });
   const g0 = r.cloud.chains.get("ws")![0]!;
-  const st = { chain: [g0, signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(root) }))] as Entry[], logs: o.root === "alice" ? [alice, bob, xena] : [bob, xena], bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[] };
+  const st = { chain: [g0, signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(root) }))] as Entry[], logs: o.root === "alice" ? [alice, bob, xena] : [bob, xena], bodies, brought: [] as Brought[], silent: false, own: (o.own === "none" ? [] : o.own === "other" ? elsewhere.chain : me.chain) as unknown as Entry[], asked: [] as Asked[] };
   const g2 = o.w2 === "moved" ? r.cloud.chains.get("w2")![0]! : null;
   const st2 = { chain: g2 === null ? [] : [g2, signer.sign(next("w2", headOf([g2]), 1001, "moved", { root: gOf(me) }))] as Entry[], logs: [] as Log[], bodies: bodies2, brought: [] as Brought[], silent: false };
   const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked"> = st): Effect.Effect<unknown, CoreError> => {
@@ -96,7 +101,7 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
     if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: x.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) });
     if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: x.bodies, lacking: [] });
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
-    if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [{ genesis: entryHash(st.own[0]!), entries: st.own }] });
+    if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: st.own.length === 0 ? [] : [{ genesis: entryHash(st.own[0]!), entries: st.own }] });
     if (x.silent && method === "POST") return Effect.never;
     if (method === "POST" && path === "/lock/person") {
       const b = body as { chain?: Entry[]; bodies?: unknown[] };
@@ -130,7 +135,7 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
   assert.equal(held(inner, "ws")?.entries.at(-1)?.kind, "moved", "the chain held moved");
   if (o.w2 !== undefined) await run(read(inner, "w2"));
   if (o.w2 === "moved") assert.equal(held(inner, "w2")?.entries.at(-1)?.kind, "moved", "w2's chain held moved");
-  assert.equal(inner.adb.personal().standing("s1"), "member", "this device on its own lock");
+  assert.equal(inner.adb.personal().standing("s1"), o.own === "none" ? "none" : o.own === "other" ? "outside" : "member", "this device's standing on its own lock");
   const prompts = await r.watch({ topic: "lockPrompts" });
   /// What this device's own log says now, past what it said before: each entry's kind and, for a web page's, its id's
   /// first four. (this device said again on it with the key it signs workspaces' locks with, as any act with the seed
@@ -174,7 +179,7 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
     return b === undefined ? "(no body)" : [b.kind, b.sub ?? "", b.role ?? "", typeof b.lock === "string" ? b.lock.slice(0, 6) : ""].join(" ").trim();
   });
   const members = () => [...inForceOf(inner, "ws").f.members].map(([sub, m]) => `${sub} ${m.role}`).sort().join(", ");
-  return { r, inner, st, st2, run, ask, said, own, asked, hello, prove, lets, me, prompts, helloApp, proveApp, stated, members, xena, alice, bodies };
+  return { r, inner, st, st2, run, ask, said, own, asked, hello, prove, lets, me, prompts, helloApp, proveApp, stated, members, xena, alice, bodies, elsewhere, g };
 }
 
 test("a web page approved face to face where the chain moved: a `web` entry of the person's own log, the person asked once, let in until its `exp`", async () => {
@@ -466,4 +471,88 @@ test("a device whose person was taken out where the chain moved: the refusal's r
   hooks.lockRefused?.(other.inner, "ws", A, null, { out: { bodies: [removal], logs: [] } });
   assert.equal(inForceOf(other.inner, "ws").f.members.has("s1"), true, "a body no log kept commits to is not taken");
   assert.equal(outOf(other.inner, "ws"), null);
+});
+
+/// The new device's side: s1's device (ME) waiting in `ws`, whose list (alice's log the root) does not name s1. It asks
+/// with `lock.pair`; alice's app (it signs workspaces' locks, an owner) is dialled, and what it is sent is kept (it
+/// answers no: only the hello is looked at here).
+async function asking(own: "on" | "none" | "other") {
+  const w = await setUp({ root: "alice", mine: "none", own });
+  const ALICE_APP = key(6101).hex;
+  w.inner.mesh = () => Effect.succeed({ deviceId: () => ME, lockClaim: () => null, link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
+  w.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
+  const hellos: { workspaces?: { ws: string }[]; log?: Entry[]; personal?: unknown }[] = [];
+  const dialled: string[] = [];
+  dialer.open = (_inner, id) => Effect.flatMap(Effect.promise(() => pipe()), ([here, there]) => Effect.sync(() => {
+    dialled.push(id);
+    w.inner.runner.fork(Effect.gen(function* () {
+      hellos.push((yield* there.next()) as never);
+      yield* there.send({ t: "no", error: "not_here" });
+    }));
+    return here;
+  }));
+  /// `lock.pair` asked: its error, if any, once the first hello went or it ended.
+  const pair = async () => {
+    const was = hellos.length;
+    const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.pair", { workspace: "ws" }), catch: (e) => e as CoreError }));
+    await w.r.host.time.passUntil(20_000, () => hellos.length > was);
+    return { error: out.error, hello: hellos.length > was ? hellos.at(-1)! : null };
+  };
+  return { ...w, pair, dialled, ALICE_APP };
+}
+
+test("the new device whose person has no log of their own: it begins one as it asks, the person asked once for that and not again for the asking, and its hello carries it", async () => {
+  const w = await asking("none");
+  const before = w.asked();
+  const { error, hello } = await w.pair();
+  assert.equal(error, undefined, error?.message);
+  const personal = w.inner.adb.personal();
+  assert.equal(personal.standing("s1"), "member", "a log of s1's own begun, this device on it");
+  assert.equal(w.asked() - before, 1, "the person asked once");
+  assert.ok(hello !== null, `alice's app dialled (${w.dialled.join(", ")})`);
+  assert.deepEqual(hello.workspaces?.map((x) => x.ws), ["ws"], "asking in ws");
+  assert.equal(hello.personal, undefined, "not the personal exchange");
+  const log = hello.log ?? [];
+  assert.equal(log.length > 0 && entryHash(log[0]!), entryHash(personal.entries("s1")[0]!), "its hello carries the log begun");
+  assert.equal((log[0]?.body as { sub?: string; device?: { key?: string } } | undefined)?.device?.key, personal.keyId(), "this device's key its genesis's");
+});
+
+test("the new device whose person has a log it is not on: nothing asked in the moved workspace, no log begun; once on that log (the personal exchange) it asks there with it, nobody asked", async () => {
+  const w = await asking("other");
+  const before = w.asked();
+  const first = await w.pair();
+  assert.ok(first.hello === null || !(first.hello.workspaces ?? []).some((x) => x.ws === "ws"), "not asking in ws");
+  const personal = w.inner.adb.personal();
+  assert.equal(personal.standing("s1"), "outside", "no log begun");
+  assert.equal(w.asked(), before, "nobody asked");
+  // (put on the log by a device of theirs on it: the personal exchange, from that device's side)
+  const mine = (await w.run(personal.makeKey())).ok!;
+  const last = w.elsewhere.chain.at(-1)!;
+  // (a new array: a chain once folded is read as it was, personal-lock.ts `checkChain`)
+  w.elsewhere.chain = [...w.elsewhere.chain, signed({ v: 1, ws: "person:s1", seq: w.elsewhere.chain.length, prev: stationHash(last), at: T, kind: "device", body: { key: mine, id: ME, label: "this" } } as Omit<StationEntry, "sig">, w.elsewhere.k)];
+  w.st.own = w.elsewhere.chain as unknown as Entry[];
+  // (as the personal exchange's answer is taken: views/pair.ts `personalProve`)
+  const joined = await w.run(personal.joined("s1", w.elsewhere.chain as unknown as Entry[]));
+  assert.equal(joined.error, undefined, joined.error?.message);
+  assert.equal(personal.standing("s1"), "member", "on the log");
+  const asked = w.asked();
+  const again = await w.pair();
+  assert.equal(again.error, undefined, again.error?.message);
+  assert.ok(again.hello !== null, "alice's app dialled");
+  assert.deepEqual(again.hello.workspaces?.map((x) => x.ws), ["ws"], "asking in ws now");
+  assert.equal(entryHash((again.hello.log ?? [])[0]!), stationHash(w.elsewhere.chain[0]!), "with the log it is on, as it is");
+  assert.equal(w.asked(), asked, "nobody asked");
+});
+
+test("the new device already on its person's log: no log begun, nobody asked, its hello carries that log", async () => {
+  const w = await asking("on");
+  const before = w.asked();
+  const length = w.inner.adb.personal().entries("s1").length;
+  const { error, hello } = await w.pair();
+  assert.equal(error, undefined, error?.message);
+  assert.ok(hello !== null, "alice's app dialled");
+  assert.deepEqual(hello.workspaces?.map((x) => x.ws), ["ws"]);
+  assert.equal(entryHash((hello.log ?? [])[0]!), stationHash(w.me.chain[0]!), "the log it is on");
+  assert.equal(w.inner.adb.personal().entries("s1").length, length, "nothing signed on it");
+  assert.equal(w.asked(), before, "nobody asked");
 });
