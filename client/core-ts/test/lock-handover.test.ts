@@ -31,7 +31,8 @@ import { bodyHash } from "../src/lock-moved.ts";
 import { httpError } from "../src/station/requests.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { handOver, held, inForceOf, notedRole, pendingHeld, read } from "../src/views/lock.ts";
-import { grant, rig, withoutMesh } from "./lock-rig.ts";
+import { serveTrusted, tryOne } from "../src/views/pair.ts";
+import { grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
 
 /// The stations' clock: the core's (each test's rig sets it).
 let clock = () => 0;
@@ -56,6 +57,8 @@ type Opts = {
   mine?: "admin" | "otherKey" | "unpinned";
   /// The host offers `lock.handOver` (by default).
   flag?: boolean;
+  /// The workspace's members as the cloud's view says them (none by default).
+  view?: { sub: string; email: string; role: string }[];
 };
 
 async function setUp(o: Opts = {}) {
@@ -89,7 +92,7 @@ async function setUp(o: Opts = {}) {
     host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(myLog)));
     host.storage.set("personal-signer-id", utf8(k.id));
     host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
-  }, [A, B], [A, B], undefined, [D]);
+  }, [A, B], [A, B], undefined, [D], o.view === undefined ? {} : { members: o.view });
   clock = () => r.host.nowMs();
   const inner = r.core.inner;
   inner.mesh = () => withoutMesh(base.hex);
@@ -173,7 +176,20 @@ async function setUp(o: Opts = {}) {
   const hand = () => run(handOver(inner, "s1", "ws"));
   /// The chain's list as the model's D4 has it, by the station's own fold, rooted in s1's log.
   const d4Chain = (es: readonly Entry[]) => d4Old(stationFold(es as unknown as StationEntry[], null), gMe, Math.floor(r.host.nowMs() / 1000));
-  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer };
+  /// Someone's first app device (`d`, with the log of their own `log`) asking this device as `sub`, the code shown here
+  /// typed on it: the hello's answer and the proof's.
+  const firstApp = async (sub: string, log: Log) => {
+    const prompts = await r.watch({ topic: "lockPrompts" });
+    const [trusted, phone] = await pipe();
+    const id = log.app.base.hex;
+    inner.runner.fork(serveTrusted(inner, id, base.hex, trusted));
+    const first = await run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", id, sub) }], kind: "app", label: `${sub}'s app`, sign_key: log.app.signer.id, log: log.entries }), phone.next()));
+    const answer = first.ok as { t: string };
+    if (answer.t !== "code") return { answer, done: null };
+    const code = ((await prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
+    return { answer, done: await run(tryOne(inner, { id: base.hex, d: phone, workspaces: ["ws"] }, id, code)) };
+  };
+  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer, firstApp };
 }
 
 /// The core's state in force as the model's D4 has one (test/lock-moved-check.ts's reading).
@@ -343,4 +359,30 @@ test("without the host's flag: lock.handOver is no call", async () => {
   const ok = await on.run(Effect.tryPromise({ try: () => on.r.ask("lock.handOver", { workspace: "ws" }), catch: (e) => e as CoreError }));
   assert.equal(ok.error, undefined, ok.error?.message);
   assert.equal(on.stations.A.chain(null)?.state?.moved, on.gMe, "with it: handed over");
+});
+
+test("the one with only a web page, not said at the move: their first app device after it asks, this owner's device shows the code, and they come in with the chain's role, the note used once; their old web page stays out", async () => {
+  const view = [{ sub: "s1", email: "a@x.com", role: "owner" }, { sub: "r2", email: "b@x.com", role: "admin" }, { sub: "r3", email: "c@x.com", role: "member" }, { sub: "r5", email: "e@x.com", role: "admin" }];
+  const w = await setUp({ more: ["web"], view });
+  assert.equal((await w.hand()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.equal(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
+  assert.equal(notedRole(w.inner, "ws", "s1", "r5", "e@x.com"), "admin", "noted with the chain's role");
+  const before = w.asked();
+  const r5 = new Log("r5");
+  for (const c of Object.values(w.stations)) personChainsOf(c).keep(r5.genesis, r5.entries, "ws");
+  const { answer, done } = await w.firstApp("r5", r5);
+  assert.deepEqual(answer, { t: "code", workspaces: ["ws"] }, "a code shown");
+  assert.equal(done?.error, undefined, done?.error?.message);
+  assert.equal(w.asked() - before, 1, "the person asked once");
+  assert.deepEqual(w.said().slice(5).map((x) => x.what), ["member r5 admin"], "said with the chain's role");
+  assert.equal(notedRole(w.inner, "ws", "s1", "r5", "e@x.com"), null, "the note used once");
+  await w.run(read(w.inner, "ws"));
+  const f = inForceOf(w.inner, "ws").f;
+  assert.equal(f.members.get("r5")?.role, "admin", "r5 an admin in force here");
+  assert.equal(f.persons.get("r5"), r5.genesis, "bound to the log their app brought");
+  const app = admitted("r5", r5.app, "admin");
+  assert.equal(inLock(w.stations.A, app as never, "admin", app.viewer.device).viewer.role, "admin", "their app let in by A as an admin");
+  const page = admitted("r5", { base: w.WEB5 }, "admin");
+  assert.throws(() => inLock(w.stations.A, page as never, "admin", page.viewer.device), "their old web page out until their own app approves it");
 });
