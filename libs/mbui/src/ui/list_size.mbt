@@ -96,15 +96,14 @@ pub let row_size_ms : Double = 300.0
 ///|
 /// How far open a row coming or going where it is has what it holds out of sight (ListRows::enter, leave): it shrinks
 /// with its room all the while, as tall as the room is open, and is gone by the time it is half its size, not seen
-/// small (2026-10-31 the user, of 96%: 「感觉缩到 90% 不太够」「试试高度压缩过程中持续缩小」; of it seen down to nothing:
-/// 「感觉缩太多也不行，或者尽量在缩到 50% 左右的时候就变成完全看不见了」).
-pub let row_gone_at : Double = 0.5
+/// small: view's row_gone_at, the one a page's list's block on its way is seen by too.
+pub let row_gone_at : Double = @view.row_gone_at
 
 ///|
 /// What a row coming or going where it is holds, its room `p` open (0 to 1): as big as it is open, faded in from
 /// row_gone_at on.
 pub fn row_held_look(p : Double, ox? : Double = 0.5, oy? : Double = 0.5) -> Look {
-  look(alpha=dmax(0.0, (p - row_gone_at) / (1.0 - row_gone_at)), scale=p, ox~, oy~)
+  look(alpha=@view.row_seen_at(p), scale=p, ox~, oy~)
 }
 
 ///|

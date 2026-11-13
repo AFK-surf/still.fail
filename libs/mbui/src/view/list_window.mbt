@@ -2468,10 +2468,71 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       st.come_at + @flex.move_most_ms
     }
   }
+  // (a key coming or going by data on its way seen by how much of its block shows, as an old list's row coming or going
+  // where it is (ui's row_held_look): none at half its size or less, whole at its size, the room's cut of it soft
+  // (View::cuts_softly, as the old row's row_soft); one set out from all its height whole at once, from part of it seen
+  // by that part from the first frame. Its block's own, while it is on its way alone: as it ends, seen whole and cut hard
+  // again, nothing of it kept at rest (the user, 2026-10-31 and 2026-11-08: 缩到 50% 左右的时候就变成完全看不见了). Its
+  // way read where it is drawn (View::drawn_while), how far it goes as its column's layout said it (`laid`, read so that
+  // it is worked out again once the change's layout has measured it))
+  let seen_on_way : Map[Int, View] = Map([])
+  let seen_from = fn(v : View) {
+    // (the same view already seen so: nothing to do; another made at its index since, or one let go, replaced)
+    match seen_on_way.get(v.at) {
+      Some(o) if o.alive() && o.id() == v.id() => return
+      _ => ()
+    }
+    seen_on_way[v.at] = v
+    v.cuts_softly(Is(true)) |> ignore
+    v.alpha(
+      By(fn() {
+        laid.get() |> ignore
+        guard v.live() is Some(m) && m.coming else { return 1.0 }
+        let st = m.flex.style
+        let ends = st.come_ends
+        let whole = dmax(st.come_from, if st.come_goal == st.come_goal { st.come_goal } else { 0.0 })
+        guard ends == ends && whole > 0.0 else {
+          // (not measured yet: as far as it set out from, whole where it set out from some of itself)
+          return if st.come_from > 0.0 { 1.0 } else { 0.0 }
+        }
+        let t = v.drawn_while(fn(now) { now < ends })
+        let shown = match @flex.come_state(st, if t == @double.infinity { ends } else { t }) {
+          Some((h, _)) => h
+          None => whole
+        }
+        row_seen_at(shown / whole)
+      }),
+    )
+    |> ignore
+  }
+  let seen_whole = fn(at : Int) {
+    match seen_on_way.get(at) {
+      Some(v) => {
+        seen_on_way.remove(at)
+        if v.alive() {
+          v.alpha(Is(1.0)).cuts_softly(Is(false)) |> ignore
+        }
+      }
+      None => ()
+    }
+  }
   let ways_due : Ref[() -> Unit] = Ref(fn() {  })
   ways_due.val = fn() {
     let t = self.tree.logic_said()
     let left = ways.filter(fn(w) { w.0.live() is Some(n) && way_ends(n) > t })
+    for w in ways {
+      if !left.iter().any(fn(l) { l.0.at == w.0.at }) {
+        seen_whole(w.0.at)
+      }
+    }
+    // (one let go on its way: its entry with it)
+    let gone = seen_on_way.keys().filter(fn(at) { !(seen_on_way.get(at) is Some(o) && o.alive()) }).collect()
+    for at in gone {
+      seen_on_way.remove(at)
+    }
+    for w in left {
+      seen_from(w.0)
+    }
     if left.length() != ways.length() {
       ways.clear()
       ways.append(left)
