@@ -199,11 +199,7 @@ def for_cloud(config: dict, cloud: str = CLOUD) -> dict:
     """A part's config as `cloud` has it: still.fail's own as it is."""
     if not cloud:
         return config
-    original_vars = config.get("vars", {})
     config = json.loads(rehost(json.dumps(config), cloud))
-    # This names the GitHub repository, not a host: both clouds verify the same workflows' OIDC tokens.
-    if "STATUS_REPO" in original_vars:
-        config["vars"]["STATUS_REPO"] = original_vars["STATUS_REPO"]
     if "routes" in config:
         config["routes"] = [r for r in config["routes"] if not dropped(json.dumps(r), cloud)]
     # (the vars that list hosts, comma-separated: PUBLIC_ORIGIN_ALIASES, ADMIN_ORIGIN_ALIASES, of the old ones alone)

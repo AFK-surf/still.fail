@@ -16,7 +16,7 @@ permissions:
   contents: read
 jobs:
   built:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -32,7 +32,7 @@ jobs:
   # needed no Why3 since MoonBit 0.10.9; building it here with opam took 166 s for each release, and this step sat silent
   # until the job's limit on one, 42150487931, so the download has a limit of its own.)
   tools:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -101,7 +101,7 @@ jobs:
   # The lock, face-to-face approval and the vault's key as messages over a network the adversary holds (rules/protocol,
   # Tamarin): each lemma verified, each mistake planted in a copy caught. Tamarin and Maude as released, cached.
   protocol:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

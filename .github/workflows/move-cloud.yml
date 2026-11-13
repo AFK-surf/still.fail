@@ -21,7 +21,7 @@ permissions:
   contents: read
 jobs:
   still-fail:
-    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && contains(fromJSON('["freeze","open","back"]'), inputs.step)
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && contains(fromJSON('["freeze","open","back"]'), inputs.step)
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -51,7 +51,7 @@ jobs:
 
   monoid:
     needs: [still-fail]
-    if: ${{ !cancelled() && github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && contains(fromJSON('["freeze","open","back"]'), inputs.step) && needs.still-fail.result == 'success' }}
+    if: ${{ !cancelled() && github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && contains(fromJSON('["freeze","open","back"]'), inputs.step) && needs.still-fail.result == 'success' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -81,7 +81,7 @@ jobs:
         run: sh .github/deploy.sh api
 
   copy:
-    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && inputs.step == 'copy'
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && inputs.step == 'copy'
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5

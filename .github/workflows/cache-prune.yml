@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   prune:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

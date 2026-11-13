@@ -55,7 +55,7 @@ jobs:
   # a branch's push only Windows and Linux: its iOS build puts nothing and took one of the organization's 5 macOS
   # jobs for each push (2026-10-21).
   what:
-    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+    if: github.repository_owner == 'AFK-surf' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -114,7 +114,7 @@ jobs:
   # it; on main tarred with its installer and put, each on its machine's feed (beta.sh linux: the part linux, linux-arm64).
   linux:
     needs: what
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.linux == 'yes'
+    if: github.repository_owner == 'AFK-surf' && needs.what.outputs.linux == 'yes'
     strategy:
       fail-fast: false
       matrix:
@@ -218,7 +218,7 @@ jobs:
   # the shell as it finds it, built there when not prebuilt, as before.
   ios-shell:
     needs: what
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
+    if: github.repository_owner == 'AFK-surf' && needs.what.outputs.ios == 'yes'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -248,7 +248,7 @@ jobs:
   # GitHub's xcode-27 image has Xcode 27.1 beside its default 27.0 (2026-10-23); the SDK is checked, not trusted.
   ios:
     needs: [what, ios-shell]
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes' && needs.ios-shell.outputs.have == 'yes'
+    if: github.repository_owner == 'AFK-surf' && needs.what.outputs.ios == 'yes' && needs.ios-shell.outputs.have == 'yes'
     runs-on: xcode-27
     timeout-minutes: 5
     env:
@@ -377,7 +377,7 @@ jobs:
 
   windows:
     needs: what
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.win == 'yes'
+    if: github.repository_owner == 'AFK-surf' && needs.what.outputs.win == 'yes'
     runs-on: windows-2025
     environment: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'production' || '' }}
     # (a push's 5 minutes; the day's run, end to end and moved over from the desktop app, 10)
