@@ -122,6 +122,41 @@ test "an account's windows and its models' own, five: where no line holds them t
 }
 
 ///|
+test "multi-window model pools group each pool on its own line when one line cannot hold all windows" {
+  let q = Json::object({
+    "state": "ok",
+    "windows": [
+      { "label": "5 小时 · Gemini", "mark": "Gemini 5H", "scope": "Gemini", "left": 90.0, "level": "ok" },
+      { "label": "每周 · Gemini", "mark": "Gemini W", "scope": "Gemini", "left": 68.0, "level": "ok" },
+      { "label": "5 小时 · Claude / GPT", "mark": "Claude / GPT 5H", "scope": "Claude / GPT", "left": 58.0, "level": "ok" },
+      { "label": "每周 · Claude / GPT", "mark": "Claude / GPT W", "scope": "Claude / GPT", "left": 79.0, "level": "ok" },
+    ],
+  })
+  let t = @ui.Tester::new(
+    fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() {
+        c.box(w=Px(260.0), fn() { quota_chips(c, Some(q), lines=true, small=true) }) |> ignore
+      })
+    },
+    w=640.0,
+    h=200.0,
+    platform=2,
+  )
+  t.draw()
+  let shown = t.words().filter(fn(w) { w.5 > 0.5 })
+  let find = fn(mark : String) { shown.filter(fn(w) { w.0 == mark })[0] }
+  let g5h = find("Gemini 5H")
+  let gw = find("Gemini W")
+  let c5h = find("Claude / GPT 5H")
+  let cw = find("Claude / GPT W")
+  assert_eq(g5h.2, gw.2)
+  assert_eq(c5h.2, cw.2)
+  assert_true(c5h.2 > g5h.2)
+  assert_eq(t.squeeze_faults(), [])
+}
+
+///|
 test "fill_chip_wide is the width a fill chip is laid out at: small and marked, small and compact, normal, joined" {
   let chips : Array[(String, String, Bool, Bool)] = [
     ("Fable", "52%", true, false),

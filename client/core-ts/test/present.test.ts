@@ -677,11 +677,11 @@ test("what_the_clients_show_is_put_in_here", () => {
   }, c);
   assert.deepEqual(agy.quota.windows.map((w: J) => [w.label, w.mark, w.left]), [
     ["5 小时 · Gemini", "Gemini 5H", 90],
-    ["5 小时 · Claude / GPT", "Claude / GPT 5H", 0],
     ["每周 · Gemini", "Gemini W", 75],
+    ["5 小时 · Claude / GPT", "Claude / GPT 5H", 0],
     ["每周 · Claude / GPT", "Claude / GPT W", 40],
   ]);
-  assert.deepEqual((p.times(agy, c) as J).quota.windows.map((w: J) => w.mark), ["Gemini 5H", "Claude / GPT 5H", "Gemini W", "Claude / GPT W"]);
+  assert.deepEqual((p.times(agy, c) as J).quota.windows.map((w: J) => w.mark), ["Gemini 5H", "Gemini W", "Claude / GPT 5H", "Claude / GPT W"]);
   const members = [{ email: "a@x.com", name: "阿一", picture: "https://p/a" }];
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"]], members), "@ds-ember 和 @U9 看下");
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"], ["U9", "Mia"]], members), "@ds-ember 和 @Mia 看下");
