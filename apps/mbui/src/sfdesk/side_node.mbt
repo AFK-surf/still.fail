@@ -25,7 +25,7 @@ fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideA
       .height(By(fn() { Some(at().box.3) }))
       .offset(By(fn() { (at().box.0 - at().block.0, at().box.1 - at().block.1) }))
       |> ignore
-      side.pick(fn() { side_place() }, fn(s, place) {
+      side.pick(at_once=true, fn() { if side_place() == "archive" { "chats" } else { side_place() } }, fn(s, place) {
         match place {
           // (the chats' lists: a place of the rail's of theirs, or what the frame shows by default)
           _ => lists_side_node(s, src, tips, at)
@@ -222,7 +222,7 @@ fn lists_band_node(
       })
       |> ignore
       // catching up on what changed while away
-      line.show(fn() { view().map(fn(v) { v.syncing is Some(_) }).unwrap_or(false) }, fn(k) {
+      line.show(at_once=true, fn() { view().map(fn(v) { v.syncing is Some(_) }).unwrap_or(false) }, fn(k) {
         @sf.sync_key_node(k, tips, update_key_side, update_key_mark, fn() {
           match view() {
             Some({ syncing: Some(y), .. }) => Some(y)
@@ -231,7 +231,7 @@ fn lists_band_node(
         })
       })
       // 更新 before the filter where one is offered (brand.mbt update_in_row)
-      line.show(update_shown, fn(k) {
+      line.show(at_once=true, update_shown, fn(k) {
         @sf.update_key_node(
           k,
           tips,
@@ -256,7 +256,7 @@ fn lists_band_node(
         )
       })
       // the filter: its menu (sfpages' filter_menu), a filter its list, 已归档 the archive's list
-      line.show(fn() { view().map(fn(v) { v.stations > 0 }).unwrap_or(false) }, fn(k) {
+      line.show(at_once=true, fn() { view().map(fn(v) { v.stations > 0 }).unwrap_or(false) }, fn(k) {
         k.box(fn(f) {
           let shown = fn() {
             match workspace() {
@@ -305,7 +305,7 @@ fn lists_band_node(
     })
     |> ignore
     // 待处理 under 新建对话 where the rail has no bell
-    band.show(fn() { workspace().map(fn(w) { todo_shown(src, w) }).unwrap_or(false) }, fn(k) {
+    band.show(at_once=true, fn() { workspace().map(fn(w) { todo_shown(src, w) }).unwrap_or(false) }, fn(k) {
       k.box(fn(t) {
         @sf.style_node(t, fn() { todo_box })
         let n = fn() { workspace().map(fn(w) { todo_all(src, w) }).unwrap_or(0) }
@@ -316,7 +316,7 @@ fn lists_band_node(
           @sf.nav_words_node(r, fn() { @sf.t("web-main.attention.entry") })
           r.box(fn(slot) {
             @sf.style_node(slot, fn() { todo_slot })
-            slot.show(fn() { n() > 0 }, fn(c) {
+            slot.show(at_once=true, fn() { n() > 0 }, fn(c) {
               c.box(fn(count) {
                 @sf.style_node(count, fn() { todo_count })
                 @sf.words_node(count, fn() { n().to_string() }, fn() { todo_count_words }) |> ignore

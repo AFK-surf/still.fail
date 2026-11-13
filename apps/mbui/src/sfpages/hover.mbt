@@ -1037,14 +1037,14 @@ pub fn usage_tiles_node(
   }
   // (each tile's share of the row: what shows it takes it)
   let across = fn(t : @view.View) { t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore }
-  parent.show(fn() { cost() != "" || cache() is Some(_) || ctx() is Some(_) }, fn(o) {
+  parent.show(at_once=true, fn() { cost() != "" || cache() is Some(_) || ctx() is Some(_) }, fn(o) {
     o.box(fn(r) {
       @sf.style_node(r, fn() { agent_card_tiles_row })
-      r.show(fn() { cost() != "" }, fn(t) {
+      r.show(at_once=true, fn() { cost() != "" }, fn(t) {
         across(t)
         plain(t, cost, fn() { @sf.t("web-main.chat.agentCard.cost") }, fn() { "" }) |> ignore
       })
-      r.show(fn() { cache() is Some(Object(_)) }, fn(t) {
+      r.show(at_once=true, fn() { cache() is Some(Object(_)) }, fn(t) {
         across(t)
         plain(t, fn() { text(cache(), "text") }, fn() { @sf.t("web-main.chat.agentCard.cache") }, fn() { "" }) |> ignore
       })
@@ -1057,7 +1057,7 @@ pub fn usage_tiles_node(
         }
       }
       let level = fn() { if unknown() { "" } else { text(ctx(), "level") } }
-      r.show(fn() { ctx() is Some(Object(_)) }, fn(t) {
+      r.show(at_once=true, fn() { ctx() is Some(Object(_)) }, fn(t) {
         across(t)
         match context {
           Some(open) =>
@@ -1081,7 +1081,7 @@ pub fn usage_tiles_node(
                   }
                 }, fn() { agent_card_tile_name })
                 |> ignore
-                m.pick(busy, fn(i, now) {
+                m.pick(at_once=true, busy, fn(i, now) {
                   if now {
                     @sf.spinner_node(i, size=11.0) |> ignore
                   } else {
@@ -1093,7 +1093,7 @@ pub fn usage_tiles_node(
             })
             |> ignore
           None =>
-            t.pick(unknown, fn(k, unknown_now) {
+            t.pick(at_once=true, unknown, fn(k, unknown_now) {
               let tile = plain(k, figure, fn() { @sf.t("web-main.chat.agentCard.context") }, level)
               if !unknown_now {
                 @sf.tip_node(tips, tile, fn() { text(ctx(), "text") }) |> ignore

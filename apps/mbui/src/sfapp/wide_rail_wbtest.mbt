@@ -1114,3 +1114,29 @@ test "wide: the update's three stages in the sidebar, the same key in the same p
   assert_eq(t.query(Button, label="重启更新").unwrap().rect, at)
   update_reset()
 }
+
+///|
+test "wide: switching rail places with same-width sidebars starts no fold motion, and returning to chats lands on the frame" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  assert_true(app.nav.top() != Home)
+  // switch to files, profiles, and archive on the rail: same sidebar width, no fold way started
+  @sfbase.go_place("files") |> ignore
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() == Files)
+  @sfbase.go_place("profiles") |> ignore
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() == Place("profiles"))
+  @sfbase.go_place("archive") |> ignore
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() == Place("archive"))
+  // switch back to chats on the rail: no fold way started, landed on the frame
+  let (cx, cy, cw, ch) = t.query(Button, label="对话").unwrap().rect
+  t.tap(cx + cw / 2.0, cy + ch / 2.0)
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() != Home)
+}

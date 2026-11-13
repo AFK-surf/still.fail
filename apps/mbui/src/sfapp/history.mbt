@@ -29,7 +29,7 @@ fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
 /// running out, its chip with what it says and more in its tip, in `tips`; the disk filling up, amber; an account that
 /// cannot run, red), as `a` says it; 8 of room while there is none.
 fn history_summary_node(v : @view.View, a : () -> Json?, tips : @sf.TipLayer) -> Unit {
-  v.pick(fn() { items(a(), "attention").length() > 0 }, fn(p, any) {
+  v.pick(at_once=true, fn() { items(a(), "attention").length() > 0 }, fn(p, any) {
     if !any {
       p.height(Is(Some(8.0))) |> ignore
       return
@@ -121,12 +121,12 @@ fn history_details_node(v : @view.View, src : Source, r : ChatRef, key : String,
     })
     rows(held, 12.0, fn(b) {
       detail(b, fn() { tr("android-chat.history.detail.runtime") }, said(fn() { text(s(), "runtimeText") }))
-      b.show(fn() { text(s(), "processText") != "" }, fn(x) {
+      b.show(at_once=true, fn() { text(s(), "processText") != "" }, fn(x) {
         detail(x, fn() { tr("android-chat.history.detail.process") }, said(fn() { text(s(), "processText") }))
       })
       // (and after it what it has going in the background and its checklist, a mark that opens them from the foot:
       // the first to give way)
-      b.show(fn() { text(card(), "work") != "" }, fn(x) {
+      b.show(at_once=true, fn() { text(card(), "work") != "" }, fn(x) {
         detail(x, fn() { tr("android-chat.agent.turns") }, fn(w) {
           w.box(fn(t) {
             @sf.style_node(t, fn() { details_turns }, in_row=true)
@@ -142,7 +142,7 @@ fn history_details_node(v : @view.View, src : Source, r : ChatRef, key : String,
         })
       })
     })
-    held.show(fn() { usage().length() > 0 }, fn(u) {
+    held.show(at_once=true, fn() { usage().length() > 0 }, fn(u) {
       group(u, fn() { tr("android-chat.agent.usage") })
       rows(u, 6.0, fn(b) {
         b.each(fn() { Array::makei(usage().length(), fn(i) { i }) }, fn(i) { i }, fn(x, i) {
@@ -155,7 +155,7 @@ fn history_details_node(v : @view.View, src : Source, r : ChatRef, key : String,
     group(held, fn() { "Station" })
     rows(held, 6.0, fn(b) {
       detail(b, fn() { tr("android-chat.history.detail.name") }, said(fn() { station_name_of(src, r) }))
-      b.show(fn() { host() is Some(Object(_)) }, fn(x) {
+      b.show(at_once=true, fn() { host() is Some(Object(_)) }, fn(x) {
         detail(x, fn() { tr("android-chat.history.detail.machine") }, said(fn() { text(host(), "identity") }))
       })
     })
@@ -180,7 +180,7 @@ fn agent_status_node(v : @view.View, src : Source, a : () -> Json?) -> Unit {
     })
     |> ignore
     // (its clock made again as what it counts from changes)
-    row.pick(fn() { since_from(src, a()) }, fn(w, from) {
+    row.pick(at_once=true, fn() { since_from(src, a()) }, fn(w, from) {
       w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
       let tick = match from {
         Some((at, till)) => @sfpages.steps_seconds(w, src, at, till?=till)
@@ -260,7 +260,7 @@ fn since_words(src : Source, a : Json?) -> String {
 /// the cache's hit rate, how full its context is, each large over its name, side by side; a context worth a look in its
 /// level's colour. None while none is known.
 fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
-  v.show(fn() { agent_tiles_known(card()) }, fn(o) {
+  v.show(at_once=true, fn() { agent_tiles_known(card()) }, fn(o) {
     o.box(fn(r) {
       @sf.style_node(r, fn() { tiles_row })
       r.padding(Is((0.0, top, 0.0, 0.0))) |> ignore
@@ -302,15 +302,15 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
       let context = fn() { field(card(), "context") }
       // (each tile's share of the row: what shows it takes it)
       let across = fn(p : @view.View) { p.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore }
-      r.show(fn() { cost() != "" }, fn(p) {
+      r.show(at_once=true, fn() { cost() != "" }, fn(p) {
         across(p)
         tile(p, cost, fn() { tr("android-chat.agent.cost") }, fn() { "" })
       })
-      r.show(fn() { cache() is Some(Object(_)) }, fn(p) {
+      r.show(at_once=true, fn() { cache() is Some(Object(_)) }, fn(p) {
         across(p)
         tile(p, fn() { text(cache(), "text") }, fn() { tr("android-chat.agent.cache") }, fn() { "" })
       })
-      r.show(fn() { context() is Some(Object(_)) }, fn(p) {
+      r.show(at_once=true, fn() { context() is Some(Object(_)) }, fn(p) {
         across(p)
         tile(
           p,
@@ -355,7 +355,7 @@ let tiles_row : @ui.Style = @ui.css("row w=Full gap=S2")
 /// colour. Nothing while nothing is.
 fn agent_notes_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
   let notes = fn() { items(card(), "attention") }
-  v.show(fn() { notes().length() > 0 }, fn(o) {
+  v.show(at_once=true, fn() { notes().length() > 0 }, fn(o) {
     o.box(fn(b) {
       b.padding(Is((@sf.text_in, top, @sf.text_in, 8.0))).gap(Is(2.0)) |> ignore
       b.each(fn() { Array::makei(notes().length(), fn(i) { i }) }, fn(i) { i }, fn(x, i) {
@@ -448,7 +448,7 @@ fn run_row_node(v : @view.View, a : () -> Json?, press : (@sf.Anchor) -> Unit) -
         press(At(x, y, w, h))
       })
       b.says(By(fn() { Some(@view.said(Button, label=model() + rest())) })) |> ignore
-      b.pick(fn() { (text(field(s(), "maker"), "id"), text(s(), "runtime")) }, fn(m, k) {
+      b.pick(at_once=true, fn() { (text(field(s(), "maker"), "id"), text(s(), "runtime")) }, fn(m, k) {
         @sf.maker_mark_node(m, k.0, k.1, 15.0) |> ignore
       })
       // how it runs on its line, its account's allowance under it, a line of its own
@@ -456,7 +456,7 @@ fn run_row_node(v : @view.View, a : () -> Json?, press : (@sf.Anchor) -> Unit) -
         w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
         // (the model's name whole, what follows it giving way first: cut short itself only beside the least of that)
         @sf.name_line_node(w, model, fn() { run_model }, rest, fn() { run_rest }) |> ignore
-        w.show(fn() { @sf.has_quota(quota()) }, fn(q) {
+        w.show(at_once=true, fn() { @sf.has_quota(quota()) }, fn(q) {
           q.row(Is(true)).padding(Is((0.0, 4.0, 0.0, 0.0))) |> ignore
           @sf.quota_chips_node(q, quota)
         })

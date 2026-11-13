@@ -433,33 +433,46 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
 /// second, in a window wide enough for the list to be held at its width on the way (sfpages' laid_w), the next kept the
 /// page as on its way, parting from it built anew: view_beside_wbtest, wide_panel_wbtest.)
 pub fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, chat : () -> Unit) -> Unit {
-  let key = chat_key(r)
-  match panel_own.goes.get(key) {
-    Some(way) if !@sf.in_pane() && way.goes_at(c.moment()) => {
-      c.shows_until(way.ends_at())
-      let (id, to, ends) = (@sfbase.page_way.id, @sfbase.page_way.to, @sfbase.page_way.ends)
-      // (the pane as wide as the block's column leaves it at rest; on the block's own way, where that goes)
-      let pane = if id != "" {
-        to
-      } else {
-        let ww = c.window_size().0
-        ww - fold_target(src, w, ww).1.col
-      }
-      // (over a page too narrow for both, the page as wide as it is)
-      if pane < side_both_least {
-        chat()
-        return
-      }
-      @sfbase.page_way_said(
-        id + "/--side-panel/" + key + "/" + (way.target() > 0.0).to_string(),
-        pane - way.target(),
-        ends=dmax(if id != "" { ends } else { 0.0 }, way.ends_at()),
-      )
-      chat()
-      @sfbase.page_way_said(id, to, ends~)
-    }
-    _ => chat()
+  if @sf.in_pane() {
+    chat()
+    return
   }
+  let key = chat_key(r)
+  let (id, to, ends) = (@sfbase.page_way.id, @sfbase.page_way.to, @sfbase.page_way.ends)
+  let open = side_now(src, r).0.length() > 0
+  let way_opt = panel_own.goes.get(key)
+  let way_goes = match way_opt {
+    Some(way) => way.goes_at(c.moment())
+    None => false
+  }
+  if !way_goes && !(id != "" && open) {
+    chat()
+    return
+  }
+  let pane = if id != "" {
+    to
+  } else {
+    let ww = c.window_size().0
+    ww - fold_target(src, w, ww).1.col
+  }
+  if pane < side_both_least {
+    chat()
+    return
+  }
+  let (side_to, side_ends, side_tag) = match way_opt {
+    Some(way) if way_goes => {
+      c.shows_until(way.ends_at())
+      (way.target(), way.ends_at(), (way.target() > 0.0).to_string())
+    }
+    _ => (side_width(pane), 0.0, "true")
+  }
+  @sfbase.page_way_said(
+    id + "/--side-panel/" + key + "/" + side_tag,
+    pane - side_to,
+    ends=dmax(if id != "" { ends } else { 0.0 }, side_ends),
+  )
+  chat()
+  @sfbase.page_way_said(id, to, ends~)
 }
 
 ///|

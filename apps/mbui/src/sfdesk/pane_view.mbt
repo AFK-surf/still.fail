@@ -395,6 +395,10 @@ fn fold_moves_from(at : Double, to : FoldLook, was_look? : FoldLook) -> Unit {
       }
     _ => was_look.unwrap_or(to)
   }
+  if fold_far(from, to) <= 0.5 && from.ground == to.ground && from.corner == to.corner {
+    fold_put(to, at)
+    return
+  }
   fold_goes.from = Some(from)
   fold_goes.to = Some(to)
   fold_goes.way.put(0.0)
