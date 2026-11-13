@@ -2164,26 +2164,33 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~, now=(src.now)())
   // its words take off from the field as they are (before it is emptied), the composer held as it is laid out for them
   // till they let go of it (theirs: composer_held_lines); on its way to another shape (a line more just typed), it
-  // slows to rest from as fast as it went as they are sent (composer_view's @motion.stop_for), its room with it
-  let room = composer_room(c, w.key)
-  // its quotes fly too, each from its card, and its files that are up, each from its tile
-  let flying = flying_quotes(c, src, w, r.station) + flying_files(c, src, w)
-  @sfbase.flight_start(
-    c,
-    w.key,
-    rk,
-    row,
-    words,
-    room,
-    flying,
-    field=w.field,
-    shaped=composer_shapes_sent(c, src, w, r.station),
-    // (the list's foot drawn over where it comes to stand: the composer's ground on its way, its room at its target)
-    foot_lift=fn(c) { composer_room(c, w.key) - composer_room(c, w.key, settled=true) },
-    desk=true,
-    marks~,
-    runs~,
-  )
+  // slows to rest from as fast as it went as they are sent (composer_view's @motion.stop_for), its room with it.
+  // On a chat's page made as nodes no flight is started, till the flights' step: nothing there lets one go (its list is
+  // no old list: flight_placed, flight_frame), so the composer was held as tall as the words took in it for good; with
+  // none, it is back at its one line in the press's frame, which its list takes as its foot giving back room in the
+  // change its sent key comes. The flights' step starts the flight on nodes again, and must then either let go in the
+  // sent key's change or have the list keep the room till it lets go.
+  if !@signals.untracked(fn() { @sfbase.chat_page_nodes.get() }) {
+    let room = composer_room(c, w.key)
+    // its quotes fly too, each from its card, and its files that are up, each from its tile
+    let flying = flying_quotes(c, src, w, r.station) + flying_files(c, src, w)
+    @sfbase.flight_start(
+      c,
+      w.key,
+      rk,
+      row,
+      words,
+      room,
+      flying,
+      field=w.field,
+      shaped=composer_shapes_sent(c, src, w, r.station),
+      // (the list's foot drawn over where it comes to stand: the composer's ground on its way, its room at its target)
+      foot_lift=fn(c) { composer_room(c, w.key) - composer_room(c, w.key, settled=true) },
+      desk=true,
+      marks~,
+      runs~,
+    )
+  }
   // At the end, the new row and its neighbours move together with the flight. When reading above it, glide there
   // instead of putting the list at the end in a single frame.
   let list = "chat/" + r.station + "/" + r.session
