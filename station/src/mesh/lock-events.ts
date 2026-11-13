@@ -21,7 +21,7 @@ export function tellLocks(cloud: Cloud, chains: PersonChains, tell: Tell): () =>
     for (const m of cloud.memberships()) {
       const ws = m.home ? null : m.workspace;
       const head = lockHead(cloud, ws);
-      const now = head === null ? "" : `${head.seq}:${head.hash}:${cloud.forceWord(ws)}`;
+      const now = head === null ? "" : `${head.seq}:${head.hash}:${typeof cloud.forceWord === "function" ? cloud.forceWord(ws) : ""}`;
       const was = last.get(m.workspace);
       last.set(m.workspace, now);
       if (was !== undefined && was !== now) tell("lock", { workspace: m.workspace, head }, `lock\0${m.workspace}`, { workspace: m.workspace });

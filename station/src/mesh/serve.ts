@@ -252,8 +252,8 @@ function claimed(hello: any): string {
 /// How far this station's lock goes in `ws` (the home workspace when null), for the device to bring it what it has
 /// more (null: no lock pinned there).
 export function lockHead(cloud: Cloud, ws: string | null = null): { seq: number; hash: string; genesis: string } | null {
-  // (the chain's own, moved or not: what a device brings it more of)
-  const s = cloud.chain(ws)?.state;
+  // (the chain's own, moved or not: what a device brings it more of; a Cloud of a test's that knows only `locked`, its)
+  const s = (typeof cloud.chain === "function" ? cloud.chain(ws) : cloud.locked(ws))?.state;
   return s ? { seq: s.seq, hash: s.head, genesis: s.genesis } : null;
 }
 
@@ -398,7 +398,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
       return [409, { error: (e as Error).message }];
     }
   }
-  const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
+  const ws = (part === "bodies" || part === "logs") && viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
   if (part === "bodies") {
     // (to a connection let in in this workspace alone: it is in its state, or, before its chain moved, in its chain)
     if (method === "GET") {

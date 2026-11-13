@@ -605,7 +605,7 @@ export class Cloud {
     try {
       t = this.bodies(ws).take(this.idOf(ws), bodies, (h) => chains.commitsTo(h));
     } finally {
-      wall.after(100, () => (this.writing = false));
+      wall.after(100, () => (this.writing = false)); // timer: a debounce of a burst (its own write, which the watch of locks/ sees a moment later)
     }
     if (t.taken > 0) this.forceChanged();
     return t;
