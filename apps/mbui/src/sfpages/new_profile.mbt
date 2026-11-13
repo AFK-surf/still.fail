@@ -92,7 +92,10 @@ fn new_profile_flow_node(
   add_profile_start.remove(station)
   let form = n.form
   let s = fn() { @settings.station_of(core, here(), station) }
-  let topic = fn() { (core.topic)("profileFlow", { "station": str(station), "form": str(form) }).get() }
+  let topic = fn() {
+    let (name, params) = new_profile_flow_ask(station, form)
+    (core.topic)(name, params).get()
+  }
   let d = fn() { topic().value }
   let step = fn() { text(d(), "step") }
   let edit = fn(input : Array[(String, Json)]) {
@@ -184,7 +187,7 @@ fn new_profile_flow_node(
               None => ""
             }
           })
-        "stations" => new_profile_stations_node(b, core, src, station, online)
+        "stations" => new_profile_stations_node(b, core, src, here, station, online)
         "machine" =>
           machine_offers_node(
             b,
@@ -215,13 +218,35 @@ fn new_profile_flow_node(
 }
 
 ///|
+/// The flow of draft `form` on station `station` (`profileFlow`), as the page reads it: its topic and its arguments.
+fn new_profile_flow_ask(station : String, form : String) -> (String, Map[String, Json]) {
+  ("profileFlow", { "station": str(station), "form": str(form) })
+}
+
+///|
+/// What the add page on station `station`, its draft `form`, reads of the core as it is first made, for a press that
+/// opens it to ask ahead of it (sfbase's open_answered): the draft's flow (its title, hint and step) and the station
+/// whole (its machine's own logins offered over the providers, `overview.machineLogins`: settings' station_read). The
+/// stations' list it chooses from is the page's it is pressed in, held already.
+fn new_profile_asks(here : Here, station : String, form : String) -> Array[(String, Map[String, Json])] {
+  [new_profile_flow_ask(station, form), @settings.station_ask(here, station)]
+}
+
+///|
 /// Which station it is added on (its online ones, a choice each) in node `b`: another is another draft, its page in
 /// this one's place. Pressed, that station's draft is opened and its flow asked (`src`), this page as it is meanwhile;
 /// its page comes in this one's place once the flow is answered, whole in the frame it comes, what was asked handed to
 /// it (sfbase's open_answered, press_wait: no page on its bones, no title, hint or providers coming in after it). The
 /// choice shows the station pressed from the press's frame; back to this one where the wait is given up (this page
 /// left, another pressed), that draft let go with it.
-fn new_profile_stations_node(b : @view.View, core : Core, src : Source, station : String, online : () -> Array[Json]?) -> Unit {
+fn new_profile_stations_node(
+  b : @view.View,
+  core : Core,
+  src : Source,
+  here : () -> Here,
+  station : String,
+  online : () -> Array[Json]?,
+) -> Unit {
   let list = fn() { online().unwrap_or([]) }
   // (the station pressed whose page is waited for, "" none; and what waits for it)
   let pressed : @signals.Signal[String] = @signals.signal("")
@@ -259,7 +284,7 @@ fn new_profile_stations_node(b : @view.View, core : Core, src : Source, station 
           let n = @settings.new_profile_opened(core, other, add_profile_start.get(other))
           let w = @sfbase.open_answered(
             src,
-            [("profileFlow", { "station": str(other), "form": str(n.form) })],
+            new_profile_asks(@signals.untracked(here), other, n.form),
             fn() { app.nav.replace(Setting(NewProfile(other))) },
             let_go=fn() {
               @settings.left(NewProfile(other))
