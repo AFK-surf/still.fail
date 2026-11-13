@@ -20,6 +20,8 @@ fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
   (src.leave)("history", history_params(r, key), @sfbase.TopicLeave::Legacy)
   // the station's figures its details read
   @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
+  // (what 详情 pressed handed its details and they did not read: let go)
+  @sfbase.shown_read(@sfpages.history_details_at(r.station, key))
   history_placed.remove("history/" + r.station + "/" + key)
   history_short.remove("history/" + r.station + "/" + key)
 }
@@ -67,10 +69,17 @@ let history_short : Map[String, Bool] = Map([])
 /// on and has done, what it used, the station.
 fn history_details_node(v : @view.View, src : Source, r : ChatRef, key : String, a : () -> Json?, tips : @sf.TipLayer) -> Unit {
   let s = fn() { field(a(), "session") }
-  let params : Map[String, Json] = { "station": Json::string(r.station), "key": Json::string(key) }
-  let card = fn() { src.topic("agentCard", params).get().value }
+  let (card_topic, card_params) = @sfpages.agent_card_ask(r.station, key)
+  // (what 详情 pressed asked, handed to it till it has read it: sfbase's shown_read)
+  let at = @sfpages.history_details_at(r.station, key)
+  let card = fn() {
+    let c = src.topic(card_topic, card_params).get().value
+    @sfbase.shown_read(at)
+    c
+  }
   let usage = fn() { @sfpages.history_usage(src, r.station, key) }
-  let host_held = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) })
+  let (host_topic, host_params) = @sfpages.history_host_ask(r.station)
+  let host_held = @sfbase.hold(src, @sfbase.history_scope(r.station, key), host_topic, host_params)
   let host = fn() { host_held.get().value }
   // a line of it: its name in a 76 column, what it says beside it
   let detail = fn(p : @view.View, label : () -> String, value : (@view.View) -> Unit) {
@@ -390,13 +399,31 @@ let details_value : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg)
 let details_group : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// A station's name, from the stations the app knows (its address's workspace's), else as the chat's row said it.
-fn station_name_of(src : Source, r : ChatRef) -> String {
-  let scope = match r.station.find("/") {
+/// What the history's details read as they are first drawn (all but the chat's agent, the head's), each as it is read
+/// by: its card, its figures, its station's machine, the stations' rows its station is named from. What 详情 pressed
+/// asks first (history_node's head).
+fn history_details_asks(r : ChatRef, key : String) -> Array[(String, Map[String, Json])] {
+  [
+    @sfpages.agent_card_ask(r.station, key),
+    @sfpages.history_ask(r.station, key),
+    @sfpages.history_host_ask(r.station),
+    @sfbase.station_rows_ask(station_scope_of(r)),
+  ]
+}
+
+///|
+/// The workspace chat `r`'s station is of: its address's.
+fn station_scope_of(r : ChatRef) -> String {
+  match r.station.find("/") {
     Some(i) => r.station.exact_view(end=i).to_owned()
     None => r.station
   }
-  match station_marks(src, scope).iter().find_first(fn(
+}
+
+///|
+/// A station's name, from the stations the app knows (its address's workspace's), else as the chat's row said it.
+fn station_name_of(src : Source, r : ChatRef) -> String {
+  match station_marks(src, station_scope_of(r)).iter().find_first(fn(
     s,
   ) {
     s.address == r.station

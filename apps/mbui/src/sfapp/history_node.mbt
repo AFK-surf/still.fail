@@ -63,7 +63,7 @@ fn history_node(
     },
   )
   // its head, once the chat says what the agent is
-  v.show(at_once=true, fn() { agent() is Some(_) }, fn(h) { history_head_node(h, src, r, agent) })
+  v.show(at_once=true, fn() { agent() is Some(_) }, fn(h) { history_head_node(h, src, r, key, agent) })
   // the agent's history followed from then on as long as the page is, whichever tab reads it (each made as its tab is
   // shown): not let go and asked again as the tabs change
   let held : Ref[@sfbase.TopicLease?] = Ref(None)
@@ -117,9 +117,45 @@ fn history_node(
 
 ///|
 /// The history's head: the agent's model's mark with its state's badge, its name (cut short where what it does and
-/// its tabs leave it less), what can be done to it now, its tabs at the end.
-fn history_head_node(v : @view.View, src : Source, r : ChatRef, agent : () -> Json?) -> Unit {
+/// its tabs leave it less), what can be done to it now, its tabs at the end. 详情 pressed, what its details read is asked
+/// first and the page stays as it is, the tab shown pressed, till it is answered (in the press's frame where it is
+/// already): then they open as they did at the press (sfpages' history_details_open). 步骤 pressed meanwhile gives that
+/// up; 步骤 itself asks nothing.
+fn history_head_node(v : @view.View, src : Source, r : ChatRef, key : String, agent : () -> Json?) -> Unit {
   let s = fn() { field(agent(), "session") }
+  // (the tab pressed while what it shows is asked, and what waits for it)
+  let pressed : @signals.Signal[Int?] = @signals.signal(None)
+  let waiting : Ref[@sfbase.PressWait?] = Ref(None)
+  let choose = fn(i : Int) {
+    @signals.untracked(fn() {
+      guard pressed.get() != Some(i) else { return }
+      match waiting.val {
+        Some(w) => {
+          waiting.val = None
+          w.give_up()
+        }
+        None => ()
+      }
+      pressed.set(None)
+      guard i == 1 && history_tab.get() != 1 else {
+        history_tab.set(i)
+        return
+      }
+      pressed.set(Some(i))
+      waiting.val = Some(
+        @sfpages.history_details_open(
+          src,
+          history_details_asks(r, key),
+          @sfpages.history_details_at(r.station, key),
+          fn() {
+            history_tab.set(i)
+            pressed.set(None)
+          },
+          let_go=fn() { pressed.set(None) },
+        ),
+      )
+    })
+  }
   v.box(fn(h) {
     h.row(Is(true)).padding(Is((18.0, 4.0, 18.0, 0.0))).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
     model_mark_big_node(
@@ -140,8 +176,8 @@ fn history_head_node(v : @view.View, src : Source, r : ChatRef, agent : () -> Js
       @sf.seg_node(
         e,
         fn() { [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")] },
-        fn() { history_tab.get() },
-        fn(i) { history_tab.set(i) },
+        fn() { pressed.get().unwrap_or(history_tab.get()) },
+        choose,
       )
       |> ignore
     })

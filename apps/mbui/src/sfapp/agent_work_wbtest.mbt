@@ -447,8 +447,8 @@ fn aw_audited(t : @ui.Tester, before : Array[String], at : String, open? : Bool 
 fn aw_crowded(faults : Array[String], at : String, history : Int, work : Int) -> Unit raise {
   let room = faults.filter(fn(f) { f.has_prefix("room: ") })
   let of = fn(place : String) { room.filter(fn(f) { f.contains(place) }) }
-  let h = of("sfdesk/history.mbt:160")
-  let w = of("sfpages/agent_work.mbt:353")
+  let h = of("sfdesk/history.mbt:215")
+  let w = of("sfpages/agent_work.mbt:361")
   assert_eq(h.length(), history, msg="\{at}: \{Repr(h)}")
   assert_eq(w.length(), work, msg="\{at}: \{Repr(w)}")
 }

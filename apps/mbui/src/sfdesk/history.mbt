@@ -61,12 +61,45 @@ fn history_head_node(v : @view.View, src : Source, r : ChatRef, key : String, ti
           icon="filter",
         )
         @sf.tip_node(tips, io, fn() { @sf.t("web-main.history.onlyIoTip") }) |> ignore
-        // 详情, folded or not
+        // 详情, folded or not: pressed to unfold, what they read asked first, the head as it is and the chip shown
+        // pressed till it is answered (in the press's frame where it is already), then they unfold by their way as at
+        // the press before (sfpages' history_details_open); pressed again meanwhile, that given up. Folding asks
+        // nothing.
+        let pressed = @signals.signal(false, same=fn(a, b) { a == b })
+        let waiting : Ref[@sfbase.PressWait?] = Ref(None)
         @sf.toggle_chip_node(
           k,
           fn() { @sf.t("web-main.history.details") },
-          fn() { !history_own.shut.get() },
-          fn() { history_own.shut.set(!history_own.shut.get()) },
+          fn() { pressed.get() || !history_own.shut.get() },
+          fn() {
+            @signals.untracked(fn() {
+              match waiting.val {
+                Some(w) if w.waiting() => {
+                  waiting.val = None
+                  w.give_up()
+                  return
+                }
+                _ => waiting.val = None
+              }
+              if !history_own.shut.get() {
+                history_own.shut.set(true)
+                return
+              }
+              pressed.set(true)
+              waiting.val = Some(
+                @sfpages.history_details_open(
+                  src,
+                  wh_details_asks(station, key),
+                  @sfpages.history_details_at(station, key),
+                  fn() {
+                    history_own.shut.set(false)
+                    pressed.set(false)
+                  },
+                  let_go=fn() { pressed.set(false) },
+                ),
+              )
+            })
+          },
           chevron=true,
         )
         |> ignore
@@ -96,6 +129,21 @@ fn wh_summary_node(v : @view.View, a : () -> Json?, tips : @sf.TipLayer) -> Unit
 }
 
 ///|
+/// What 详情 reads as it is first drawn (all but the chat's agent, the head's), each as it is read by: its card, its
+/// station's machine, its figures (the quiet line's where the card has none), the stations' rows its station is named
+/// and marked from, what the core has under way. What its chip pressed asks first. (Where its runtime keeps the
+/// transcript is a call, asked once a run as the details are first made: wh_transcript_node.)
+fn wh_details_asks(station : String, key : String) -> Array[(String, Map[String, Json])] {
+  [
+    @sfpages.agent_card_ask(station, key),
+    @sfpages.history_host_ask(station),
+    @sfpages.history_ask(station, key),
+    @sfbase.station_rows_ask(scope_of(station)),
+    @sfbase.doing_ask(),
+  ]
+}
+
+///|
 /// 详情 (SessionDetails) made once in `v`, as agent `a` and its card say it now: what it has used (the large figures,
 /// its context's opening 管理's menu, and a quiet line, the mark of its work past its turns at its end: work_mark_node;
 /// a station older than the card's figures, its history's line), then a line each: what runs it (ending it while it is
@@ -110,9 +158,16 @@ fn wh_details_node(
 ) -> Unit {
   let s = fn() { field(a(), "session") }
   let on = [("station", station), ("key", key)]
-  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let card = fn() { src.topic("agentCard", params).get().value }
-  let host_held = @sfbase.hold(src, @sfbase.history_scope(station, key), "host", { "station": Json::string(station) })
+  let (card_topic, card_params) = @sfpages.agent_card_ask(station, key)
+  // (what 详情 pressed asked, handed to them till they have read it: sfbase's shown_read)
+  let at = @sfpages.history_details_at(station, key)
+  let card = fn() {
+    let c = src.topic(card_topic, card_params).get().value
+    @sfbase.shown_read(at)
+    c
+  }
+  let (host_topic, host_params) = @sfpages.history_host_ask(station)
+  let host_held = @sfbase.hold(src, @sfbase.history_scope(station, key), host_topic, host_params)
   let host = fn() { host_held.get().value }
   let compacts = fn() { flag(s(), "canCompact") }
   let clears = fn() { flag(s(), "canClear") }

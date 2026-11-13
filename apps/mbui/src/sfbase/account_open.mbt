@@ -47,8 +47,9 @@ pub fn route_asks(ws : String, r : @settings.Route) -> Array[(String, Map[String
 
 ///|
 /// `asks` asked of `src` now and held by what is returned till what opens has read them: whether each is answered (a
-/// value, or an error the page says), and what holds them.
-fn asked_now(src : Source, asks : Array[(String, Map[String, Json])]) -> (() -> Bool, Array[TopicLease]) {
+/// value, or an error the page says), and what holds them. A press that waits by press_wait itself takes them so (an
+/// agent's history's 详情: what it opens keeps its own way, sfpages' history_details_open).
+pub fn asked_now(src : Source, asks : Array[(String, Map[String, Json])]) -> (() -> Bool, Array[TopicLease]) {
   let leases = asks.map(fn(a) { src.lease_topic(a.0, a.1) })
   let answered = fn() {
     leases.iter().all(fn(l) {
