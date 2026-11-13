@@ -184,16 +184,45 @@ test "narrow, crowded: the configuration used most wholly in view nearest how ha
 }
 
 ///|
-test "narrow, crowded: a configuration taken out of those used most leaves the sheet at once, the sheet open, the rest there" {
+test "narrow, crowded: a configuration taken out of those used most leaves the sheet where it was as the next comes in its place, the sheet open, the rest moving to theirs" {
+  // (the user, 2026-11-13: 「去掉后要有补位（如果有的话），还要有动效」)
   let t = crowded("newchat-crowded-model-liked")
   t.run_for(@ui.move_most_ms)
   for l in ["GPT-6 Astra · 中", "DeepSeek V4.1 Flash · DSH · 高", "GPT-6 Astra · 高", "Kimi For Coding · 高"] {
     assert_true(t.query(Button, label="从常用搭配移除 " + l) is Some(_), msg="\{l} can not be taken out")
   }
+  assert_true(t.query(Button, label="Sonnet 5 · 中") is None, msg="a fifth used most shown")
+  let (rx, ry, rw, rh) = t.get(Button, label="GPT-6 Astra · 高").rect
+  let kimi = t.get(Button, label="Kimi For Coding · 高").rect
   t.click(Button, label="从常用搭配移除 GPT-6 Astra · 高")
+  // (leaving: still drawn where it was, nothing to press there; the next not come yet, the rest where they were)
+  t.run_for(@sf.leave_ms / 2.0)
+  assert_true(
+    t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "GPT-6 Astra" && b.opacity > 0.0 && b.y >= ry - 1.0 && b.y < ry + rh && b.x >= rx && b.x < rx + rw }),
+    msg="gone at once from where it was",
+  )
+  assert_true(t.query(Button, label="Sonnet 5 · 中") is None, msg="the next come before it has gone")
+  // (nothing to press where it leaves: what is under it, the panel's own ground)
+  t.tap(rx + rw / 2.0, ry + rh / 2.0)
+  assert_true(t.query(@ui.Role::Dialog) is Some(_) && new_fix.model == "deepseek-v4-1-flash", msg="it was pressed as it left")
+  assert_eq(t.get(Button, label="Kimi For Coding · 高").rect, kimi)
+  // (gone: what was over it on its way down into its room)
+  // (where its words are drawn: the configuration's, under the starred Kimi For Coding's)
+  let kimi_drawn = fn() {
+    t.boxes().filter(fn(b) { b.kind == "text" && b.text == "Kimi For Coding" && b.y >= kimi.1 - 1.0 }).fold(init=1.0e9, fn(m, b) {
+      if b.y < m { b.y } else { m }
+    })
+  }
+  let kimi_was = kimi_drawn()
+  t.run_for(@sf.leave_ms / 2.0 + 60.0)
+  let kimi_on_way = kimi_drawn()
   t.run_for(@ui.move_most_ms)
+  let kimi_there = kimi_drawn()
+  assert_true(kimi_on_way > kimi_was + 0.5 && kimi_on_way < kimi_there - 0.5, msg="\{kimi_was} \{kimi_on_way} \{kimi_there}: not on its way")
+  // (at rest: gone, the next used most in its place, the sheet open)
   assert_true(t.query(@ui.Role::Dialog) is Some(_) && t.query(Button, label="从常用搭配移除 GPT-6 Astra · 高") is None)
   assert_true(t.query(Button, label="GPT-6 Astra · 高") is None, msg="still in the sheet")
+  assert_true(t.query(Button, label="Sonnet 5 · 中") is Some(_), msg="none in its place")
   assert_true(t.query(Button, label="GPT-6 Astra · 中") is Some(_) && t.query(Button, label="Kimi For Coding") is Some(_))
   assert_eq(new_fix.model, "deepseek-v4-1-flash", msg="a configuration picked")
 }

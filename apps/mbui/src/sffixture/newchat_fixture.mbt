@@ -450,7 +450,7 @@ fn fix_combo_key(model : String, runtime : String, effort : String, context : St
 /// The configurations new chats here started on most, most first, as the core's `combos` has them: one model run two
 /// ways (Opus 5.5 at its whole window and kept to 300K; GPT-6 Astra 中 and 高), and one of a model the `-liked` modes
 /// and the tests star (Sonnet 5, Kimi For Coding), whichever is starred; those taken out (`pick.forget`:
-/// fix_forgotten) left out. Each `selected` while it is exactly what is drafted.
+/// fix_forgotten) left out, at most four of them, a fifth coming in the place of one taken out. Each `selected` while it is exactly what is drafted.
 fn fix_combos() -> Json {
   let n = new_fix
   let effort_word = fn(e : String) {
@@ -468,6 +468,7 @@ fn fix_combos() -> Json {
       ("deepseek-v4-1-flash", "dsh", "high", 0),
       ("gpt-6-astra", "codex", "high", 0),
       ("kimi-for-coding", "claude", "high", 0),
+      ("claude-sonnet-5", "claude", "medium", 0),
     ]
   } else {
     [
@@ -475,11 +476,13 @@ fn fix_combos() -> Json {
       ("gpt-6", "codex", "medium", 0),
       ("claude-opus-5-5", "claude", "high", 300),
       ("claude-sonnet-5", "claude", "low", 0),
+      ("gpt-6", "codex", "high", 0),
     ]
   }
+  // (at most four, as the core's: one taken out, the next of them in its place)
+  let kept = all.filter(fn(c) { !fix_forgotten.contains(fix_combo_key(c.0, c.1, c.2, if c.3 > 0 { "\{c.3 * 1000}" } else { "" })) })
   Json::array(
-    all
-    .filter(fn(c) { !fix_forgotten.contains(fix_combo_key(c.0, c.1, c.2, if c.3 > 0 { "\{c.3 * 1000}" } else { "" })) })
+    (if kept.length() > 4 { kept[:4].to_owned() } else { kept })
     .map(fn(c) {
       let (model, runtime, effort, context) = c
       let o = Some(fix_model(model))

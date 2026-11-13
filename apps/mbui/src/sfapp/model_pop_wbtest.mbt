@@ -249,7 +249,7 @@ test "wide, few models: the configurations used most under 常用搭配, one mod
 }
 
 ///|
-test "wide, few models: each configuration used most has what takes it out where a star would be; pressed, that one is taken out and leaves the panel at once, the panel open, the rest there; all taken out, 常用搭配 gone with them" {
+test "wide, few models: each configuration used most has what takes it out where a star would be; pressed, that one is taken out and leaves the panel, the next used most in its place, the panel open, the rest there; all taken out, 常用搭配 gone with them" {
   // (the user, 2026-11-10: 「常用模型应该是一种特定配置，并且可以删掉，跟模型没有关系」; 2026-11-13: 「删掉常用模型，只有 x
   // 会消失，然后关掉重新打开才能刷新」)
   let held = page_faults("newchat")
@@ -274,9 +274,9 @@ test "wide, few models: each configuration used most has what takes it out where
   assert_eq((text(p, "model"), text(p, "runtime"), text(p, "effort")), ("gpt-6", "codex", "medium"))
   assert_eq((field(p, "fast"), field(p, "context")), (Some(Json::null()), Some(Json::null())))
   assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="the panel closed")
-  // (taken out: gone from the panel, its words too, the rest there)
+  // (taken out: gone from the panel, its words too, the next used most come in its place, the rest there)
   assert_true(t.query(Button, label="从常用搭配移除 GPT-6 · 中") is None && t.query(Button, label="GPT-6 · 中") is None)
-  assert_true(words_in(t, rects[1], "中") is None, msg="its words still where it stood")
+  assert_true(t.query(Button, label="GPT-6 · 高") is Some(_), msg="none in its place")
   for i, l in combos {
     if i != 1 {
       assert_true(t.query(Button, label=l) is Some(_), msg="\{l} gone")
@@ -285,13 +285,13 @@ test "wide, few models: each configuration used most has what takes it out where
   assert_true(t.query(Button, label="喜欢 Sonnet 5") is Some(_))
   assert_eq(t.audit().filter(fn(f) { !held.contains(f) }), [])
   // the rest taken out: no configuration, nor their name, the panel still open; the starred and the rest there
-  for l in ["Opus 5.5 · 高", "Opus 5.5 · 高 · 300K", "Sonnet 5 · 低"] {
+  for l in ["Opus 5.5 · 高", "Opus 5.5 · 高 · 300K", "Sonnet 5 · 低", "GPT-6 · 高"] {
     t.click(Button, label="从常用搭配移除 " + l)
     t.run_for(@ui.move_most_ms)
   }
   assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="the panel closed")
   assert_true(t.find("常用搭配") is None, msg="常用搭配 with none under it")
-  for l in combos {
+  for l in [..combos, "GPT-6 · 高"] {
     assert_true(t.query(Button, label=l) is None, msg="\{l} still there")
   }
   assert_true(t.query(Button, label="Sonnet 5") is Some(_) && t.query(Button, label="喜欢 Sonnet 5") is Some(_))
