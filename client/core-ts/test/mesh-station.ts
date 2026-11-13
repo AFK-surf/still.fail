@@ -18,8 +18,11 @@ export class Station {
   grants: string[] = [];
   /// Each connection's first credential, in the order they came.
   firsts: string[] = [];
-  /// Each connection's first line, whole (its credential, protocol, lock, the dial's traceparent).
+  /// Each connection's first line, whole (its credential, protocol, lock, the dial's traceparent), and as its text came.
   hellos: J[] = [];
+  helloLines: string[] = [];
+  /// What it answers every credential while a test says so: a refusal as a station gives one (`error`, a `code`).
+  refuses: J | null = null;
   conns: J[] = [];
   /// Connections before this one answer nothing more.
   deadBelow = 0;
@@ -114,6 +117,7 @@ export class Station {
   #answer(line: string): J {
     const grant = JSON.parse(line).credential as string;
     this.grants.push(grant);
+    if (this.refuses !== null) return this.refuses;
     return grant.startsWith("ok") ? { ok: true, station: "测试", ...(this.lan.length > 0 ? { lan: this.lan } : {}), ...(this.tailnet.length > 0 ? { tailnet: this.tailnet } : {}) } : { error: "grant signature invalid" };
   }
 
@@ -125,6 +129,7 @@ export class Station {
     if (first === null) return;
     this.firsts.push(JSON.parse(first).credential);
     this.hellos.push(JSON.parse(first));
+    this.helloLines.push(first);
     const reply = this.#answer(first);
     await control.write(Buffer.from(`${JSON.stringify(reply)}\n`));
     if (reply.error) {

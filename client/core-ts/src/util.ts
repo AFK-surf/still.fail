@@ -14,6 +14,11 @@ export function fromUtf8(bytes: Uint8Array): string {
   return decoder.decode(bytes);
 }
 
+/// The day a moment falls on where the clock is `offsetMin` east of UTC, in days since 1970.
+export function localDay(ms: number, offsetMin: number): number {
+  return Math.floor((ms + offsetMin * 60_000) / 86_400_000);
+}
+
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 

@@ -36,7 +36,7 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
       { id: PHONE_APP, sub: "s1", kind: "app", label: "still.fail Android · Pixel 8", sign_key: owner.id },
     ]) } : {}),
   }));
-  r.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME, lockClaim: () => null, link: () => Effect.fail(CoreError.plainly("mesh", "this fixture has no station link")) } as never);
+  r.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME, sign: () => ({ publicKey: new Uint8Array(32), signature: new Uint8Array(64) }), link: () => Effect.fail(CoreError.plainly("mesh", "this fixture has no station link")) } as never);
   r.core.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   const dials: Record<string, number> = {};
   const hellos: unknown[] = [];

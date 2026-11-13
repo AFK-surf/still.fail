@@ -5,7 +5,9 @@ import { current, tr, type Lang } from "./i18n.ts";
 import * as model from "./shapes/model.ts";
 import * as reasoning from "./shapes/reasoning.ts";
 import * as titles from "./titles.ts";
-import { get, str } from "./util.ts";
+import { get, localDay, str } from "./util.ts";
+
+export { localDay };
 
 const MINUTE = 60_000;
 const DAY = 86_400_000;
@@ -91,10 +93,6 @@ export function local(ms: number, offsetMin: number): [number, number, number, n
   const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
   const weekday = remEuclid(days + 4, 7);
   return [y, m, d, weekday, Math.trunc(inDay / 60), inDay % 60];
-}
-
-export function localDay(ms: number, offsetMin: number): number {
-  return Math.floor((ms + offsetMin * MINUTE) / DAY);
 }
 
 const two = (n: number) => String(n).padStart(2, "0");

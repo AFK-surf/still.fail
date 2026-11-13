@@ -1,13 +1,15 @@
 // How requests reach a station, and a preview socket's framing (station/wire.rs), as Effects. The mesh wire (mesh
-// links) is in mesh.ts; tests' stations answer over the host's fetch (`HostWire` below).
+// links) is in mesh-wire.ts; tests' stations answer over the host's fetch (`HostWire` below).
 import { Effect, Scope } from "effect";
 import { CoreError, asCoreError } from "../error.ts";
 import type { Host, Pull } from "../host.ts";
 import { t } from "../i18n.ts";
+import type { LinkNet, RequestHead, SocketOut } from "../mesh.ts";
 import type { StationAddr } from "./addr.ts";
 
-/// A request's head as it goes to a station: `path` includes `/admin/api`.
-export type RequestHead = { method: string; path: string; headers: [string, string][] };
+/// A request's head as it goes to a station, how a link to one runs and the client's half of a socket stream: the
+/// mesh's own (mesh.ts), said here for what asks a station.
+export type { LinkNet, RequestHead, SocketOut };
 
 /// A station's answer: status, headers, and the body as it arrives (open while the request's scope is); how it came
 /// (`relay`, `direct`), when known.
@@ -43,27 +45,6 @@ export function readAll(body: Pull<Uint8Array>, each?: (chunk: Uint8Array) => vo
     }
     return concat(parts);
   });
-}
-
-/// How a link to a station runs (mesh.ts `Link.net`).
-export type LinkNet = {
-  path: string | null;
-  relay: string | null;
-  rttMs: number | null;
-  measured: { measuring: boolean; relays: [string, number | null][]; moved: string | null } | null;
-  today: [number, number] | null;
-  rxBytes: number;
-  txBytes: number;
-  /// Packets sent and lost on the way in use (`path` its id) since it opened.
-  packets: { path: string; sent: number; lost: number } | null;
-  /// Where the station said it is on its LAN (`ip:port`); none from a station that said none.
-  lan?: string[];
-};
-
-/// The client's half of a socket stream.
-export interface SocketOut {
-  write(bytes: Uint8Array): Effect.Effect<void, CoreError>;
-  finish(): void;
 }
 
 /// A socket stream as it opened: the station's reply (101 once the service took it), and where the client's frames go;

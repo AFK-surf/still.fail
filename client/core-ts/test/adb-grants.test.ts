@@ -14,7 +14,7 @@ test("taking back a chat takes back every grant behind its one row", async () =>
   const store = new Store(host, runner);
   const requests: string[] = [];
   const link = {
-    adb: (_head: unknown, ask: { op: string; request: string }) => Effect.sync(() => {
+    ask: (_head: unknown, { adb: ask }: { adb: { op: string; request: string } }) => Effect.sync(() => {
       assert.equal(ask.op, "revoke");
       requests.push(ask.request);
       let sent = false;
@@ -53,7 +53,7 @@ test("a station's refusal keeps the code it gives (the app goes by it), its word
   const store = new Store(host, runner);
   let body: unknown = null;
   const link = {
-    adb: () => Effect.sync(() => {
+    ask: () => Effect.sync(() => {
       let sent = false;
       const bytes = new TextEncoder().encode(JSON.stringify(body));
       return { status: 422, body: { take: Effect.sync(() => { if (sent) return null; sent = true; return bytes; }) } };
@@ -84,7 +84,7 @@ test("a late whole read does not bring back a grant already taken back", async (
   const asked = new Promise<void>((resolve) => { started = resolve; });
   let answer!: (value: unknown) => void;
   const waiting = new Promise<unknown>((resolve) => { answer = resolve; });
-  const link = { adb: () => Effect.promise(() => { started(); return waiting; }) };
+  const link = { ask: () => Effect.promise(() => { started(); return waiting; }) };
   const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
   const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => false });
   takeAll(adb);

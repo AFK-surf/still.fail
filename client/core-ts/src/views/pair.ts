@@ -2,7 +2,7 @@
 // cloud between them: the new device dials its person's trusted devices straight (iroh, PAIR_ALPN, the ids its lock
 // names), each that answers shows a fresh code, and the code typed on the new device lets the one showing it sign it in.
 //
-// A trusted device (an app whose key the lock names): takes the connection on its main endpoint (mesh.ts `takes`),
+// A trusted device (an app whose key the lock names): takes the connection on its main endpoint (mesh-wire.ts `takes`),
 // checks what it is asked (each workspace's member credential, with the cloud keys of the lock as checked here; that
 // this device approves there, for that person), shows the code (`lockPrompts` `pairing`, wherever the person is) and
 // signs a `device` entry in each of those workspaces once the new device proves it typed it; turned away (`lockPrompt.
@@ -39,7 +39,7 @@ import { hooks } from "../core/execute.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import type { IrohConnection, IrohStream } from "../iroh.ts";
-import { CARRY_BYTES, Signer, WEB_DEVICE_SECS } from "../lock.ts";
+import { CARRY_BYTES, Signer, WEB_DEVICE_SECS, claimBy } from "../lock.ts";
 import { Lines } from "../mesh.ts";
 import { type Entry, entryHash } from "../lock.ts";
 import { checkChain, isPerson, personOf } from "../personal-lock.ts";
@@ -768,7 +768,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
           // A request can connect yet never answer. Bound each attempt to the existing retry interval and fetch the
           // workspaces together, so one slow account cannot indefinitely prevent the others from asking for a code.
           const fetched = yield* Effect.forEach(workspaces, (ws) => Effect.map(
-            Effect.result(Effect.timeoutOption(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)), PAIR_REDIAL_MS)),
+            Effect.result(Effect.timeoutOption(inner.cloudSync.credential(ws, base, false, base, claimBy(mesh, ws, base)), PAIR_REDIAL_MS)),
             (result) => ({ ws, result }),
           ), { concurrency: "unbounded" });
           if (!looking(inner, y)) break;

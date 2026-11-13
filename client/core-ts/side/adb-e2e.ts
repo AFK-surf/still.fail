@@ -14,7 +14,6 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { Adb } from "../src/adb.ts";
-import type { Credential } from "../src/cloud.ts";
 import { nodeTcp } from "../src/hosts/node.ts";
 import { nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
@@ -155,7 +154,7 @@ async function phone(alice: Account, ws: string, stationId: string) {
   const credentials = () => (device: string) =>
     Effect.promise(async () => {
       const c = await api(alice, "POST", `/v1/workspaces/${ws}/credential`, { device });
-      return { credential: c.credential, issued_at: c.issued_at ?? 0, expires_at: c.expires_at ?? 0, relay_url: c.relay_url ?? RELAY } as Credential;
+      return { credential: c.credential, also: null };
     });
   const store = new Store(host, runner);
   // THEIRS: a relay of the workspace's own (the same relay under another URL will do): two ways to choose between, so

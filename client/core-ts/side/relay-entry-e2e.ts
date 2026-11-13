@@ -7,7 +7,6 @@ import { mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, wr
 import { createServer, connect as tcpConnect, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { Effect } from "effect";
-import type { Credential } from "../src/cloud.ts";
 import { nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh } from "../src/mesh.ts";
@@ -131,7 +130,7 @@ try {
   mesh.addAddr({ id: stationId, relays: [direct] });
   const credentials = (device: string) => Effect.promise(async () => {
     const c = await api("POST", `/v1/workspaces/${ws}/credential`, { device });
-    return { credential: c.credential, issued_at: c.issued_at ?? 0, expires_at: c.expires_at ?? 0, relay_url: c.relay_url ?? direct } as Credential;
+    return { credential: c.credential, also: null };
   });
   const link = await runner.run(mesh.link(stationId, credentials));
   const request = async () => {

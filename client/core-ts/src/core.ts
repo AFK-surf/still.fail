@@ -44,7 +44,8 @@ import { Composers, install as installComposer } from "./composer.ts";
 import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
 import type { StationWire } from "./station/wire.ts";
-import { meshWire, type Mesh } from "./mesh.ts";
+import type { Mesh } from "./mesh.ts";
+import { credentialsFor, meshWire } from "./station/mesh-wire.ts";
 import type { Iroh } from "./iroh.ts";
 import { ViewCalls } from "./views/calls.ts";
 import { Attend } from "./attend.ts";
@@ -299,7 +300,7 @@ export class Core {
         runner: inner.runner,
         store: inner.store,
         mesh: () => inner.mesh(),
-        credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null, inner.meshNow()?.lockClaim(workspace, device) ?? null),
+        credentials: credentialsFor(inner, () => inner.meshNow()),
         relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
         off: (workspace) => inner.cloudSync.workspaceOff(workspace),
         part: (station, key, name, offset, length) => inner.stations.requests.filePart(station, key, name, offset, length, null, undefined, undefined, undefined, true),
