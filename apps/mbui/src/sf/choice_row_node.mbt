@@ -69,7 +69,8 @@ pub fn choice_row_node(
       let corner = if at.small {
         small_panel_inner(r_menu)
       } else if narrow {
-        if card { row_corner } else { 0.0 }
+        // (a page's row across it square; in a panel, round where it stands in from its sides: panel_row_corner)
+        if card { row_corner } else if in_panel is Some(_) { panel_row_corner(at, out) } else { 0.0 }
       } else if reach {
         0.0
       } else if part.list {

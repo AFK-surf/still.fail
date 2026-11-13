@@ -396,13 +396,19 @@ fn picker_row_node(v : @view.View, e : PickerEntry, name : () -> String, note : 
 }
 
 ///|
-/// A row's mark in node `v`: a repository its letter's tile (its colour by its path), a disk the disk's, a folder the
-/// folder's; each as large as the others.
+/// A row's mark in node `v`: a repository its letter's tile (its colour by its path), as high as a press's row less a
+/// corner's inset over and under it so it stands concentric in the row's round ground (panel_row_in_node); a disk the
+/// disk's, a folder the folder's, in the middle of as much room.
 fn picker_mark_node(v : @view.View, e : PickerEntry) -> Unit {
   if e.git {
-    @sf.tile_avatar_node(v, fn() { e.path }, fn() { e.name }, fn() { "" }, picker_mark, corner=picker_tile_corner)
+    @sf.tile_avatar_node(v, fn() { e.path }, fn() { e.name }, fn() { "" }, picker_tile, corner=@sf.small_corner)
   } else {
-    @sf.icon_node(v, if e.disk { "disk" } else { "folder" }, picker_mark, By(fn() { @sf.theme().p.muted })) |> ignore
+    v.box(fn(b) {
+      b.width(Is(Some(picker_tile))).height(Is(Some(picker_tile))).row(Is(true)).lines_up(Is(Some(Middle))).lies_along(Is(Middle))
+      |> ignore
+      @sf.icon_node(b, if e.disk { "disk" } else { "folder" }, picker_mark, By(fn() { @sf.theme().p.muted })) |> ignore
+    })
+    |> ignore
   }
 }
 
@@ -592,7 +598,8 @@ let shut_icon : Double = 32.0
 let picker_mark : Double = 20.0
 
 ///|
-let picker_tile_corner : Double = 5.0
+/// A repository's tile in the folder picker: a press's row (44) less a corner's inset (8) over and under it.
+let picker_tile : Double = 28.0
 
 ///|
 let picker_row_est : Double = 48.0

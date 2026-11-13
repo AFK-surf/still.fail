@@ -574,3 +574,22 @@ fn preset_dialog_known(f : String) -> Bool {
   f.contains("made at stillfail/src/sf/panel_centred_node.mbt:") &&
   f.has_suffix(") are drawn over each other by 58×1")
 }
+
+///|
+test "wide, the dialog's 添加目录 under a mouse is lit round, out past its tile by a corner's inset, the tile concentric in it" {
+  new_run()
+  let t = preset_mode("newchat-preset-new", wide=true)
+  t.host_says_finger(Some(false))
+  let rows = t.semantics().filter(fn(n) { n.role == @ui.Role::Button && n.label == "添加目录" && !n.hidden })
+  guard rows.length() == 1 else { fail("no 添加目录") }
+  let (x, y, w, h) = rows[0].rect
+  t.move_to(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  let lit = t.boxes_held().filter(fn(b) { (b.x - x).abs() < 0.5 && (b.y - y).abs() < 0.5 && (b.w - w).abs() < 0.5 && b.bg != 0L })
+  assert_true(lit.length() == 1 && (lit[0].radius - @sf.row_corner).abs() < 0.5, msg="\{lit.length()} lit")
+  // (its tile a corner's inset in from its ground's every side)
+  let preset_dir_mark_seen = h - 2.0 * @sf.corner_inset
+  let tiles = t.boxes_held().filter(fn(b) { (b.w - preset_dir_mark_seen).abs() < 0.5 && (b.h - preset_dir_mark_seen).abs() < 0.5 && b.y > y && b.y + b.h < y + h })
+  assert_true(tiles.length() >= 1 && (tiles[0].x - x - @sf.corner_inset).abs() < 0.5, msg="\{tiles.length()} tiles")
+}

@@ -1287,10 +1287,24 @@ pub fn panel_words_out_by(by : Double) -> @ui.Style {
 
 ///|
 /// A row to press that a page lays out itself in a panel's body: its ground out across the room the panel leaves at its
-/// sides (rows_out: a dialog's column), its words on the panel's words' line (as row_line has the library's rows).
+/// sides (rows_out: a dialog's column), its words on the panel's words' line (as row_line has the library's rows); round
+/// (row_corner) where it still stands in from the panel's sides (panel_sides_in), never a square patch there (the corner
+/// rule's lit square, 2026-11-13: the agent 往来's chats in a dialog).
 pub fn panel_row_reach() -> @ui.Style {
   let out = rows_out.val
-  @ui.style(mx=room(-out), px=room(out + words_in_now.val))
+  @ui.style(mx=room(-out), px=room(out + words_in_now.val)).then(panel_row_rounds(out))
+}
+
+///|
+/// What a row of a panel's body reaching `out` past its column takes of a corner: row_corner where it still stands in
+/// from the panel's sides (panel_sides_in), never a square patch there (the corner rule's lit square, 2026-11-13);
+/// nothing where it reaches them, or outside a panel.
+fn panel_row_rounds(out : Double) -> @ui.Style {
+  if panel_sides_in.val - out > 0.5 {
+    panel_row_round
+  } else {
+    no_reach
+  }
 }
 
 ///|

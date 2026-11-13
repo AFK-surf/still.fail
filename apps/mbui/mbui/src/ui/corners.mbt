@@ -562,6 +562,18 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       None => continue
     }
     let p = ct.node
+    // a row pressed whole whose ground shows only under the hand or the focus, drawn square, standing in from both
+    // sides of the rounded container it is in: a square patch in a round thing, though far from its corners (the
+    // user, 2026-11-13: 「怎么还有方形 hover」, a preset dialog's 添加目录 lit square inside its column, after #5764
+    // rounded only the small panels' rows). One across its container, flush with its sides (a sheet's row, a card's),
+    // takes its shape from it and is none.
+    if !ct.window && b.pressed_row() && b.lit_ground() && b.corner() < 0.5 {
+      let a = c.nodes[p]
+      if b.x - a.x > 0.5 && a.x + a.fw - (b.x + b.fw) > 0.5 {
+        out.push("\{c.named(i)} lit square under the hand, standing in from the sides of \{c.named(p)} (corner \{a.corner()}): round it")
+        continue
+      }
+    }
     if c.corner_exempt(i, p, c.container_most(ct), ct.ground, pictures) {
       // (what scrolls up and down in it, a list's card or row, scrolls past its top and foot, but not past its sides:
       // as wide as most of it, standing in from both alike, it passes its corners as it scrolls, concentric with them
