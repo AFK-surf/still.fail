@@ -232,11 +232,12 @@ for t in $targets; do
     # (answers_still's in three, a Home and a chat each: every screen walked at six paces of the core's answers, new in
     # #5996 and not in page-seconds.txt, so dealt as one page of the column's ninetieth percentile; one process of it was
     # 256 s of app 4/4 at 120 fps part 2/3 and 117 s of app 1/4 at 24 7 fps, which its 7 then cut at its 5 minutes,
-    # main 0d56014c 43468965521, 2026-11-13)
+    # main 0d56014c 43468965521, 2026-11-13) (in five since, its 中屏 and 大屏 a run each: in three, beside the first's
+    # pages and packages at 120, its 小屏 pair was 118 s and the others 218 and 224, main af1435b8 43476543010)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2 src/sfapp/send_steady_wbtest.mbt:@1@2
-      src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:3)
+      src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:@2@3@4@5)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -356,7 +357,7 @@ for t in $targets; do
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
           # says why): by the table every runner's pages 180 s a program where they were 246)
-          120) specs="4,4,760,1 12,12,26,1 2,8,370,1 12,12,400,1" ;;
+          120) specs="4,4,500,1 12,12,26,1 2,8,930,1 12,12,400,1" ;;
           # (the first's other runs at 24 and 7, the packages' programs, 105-133 s and 85-106 beside its pages, not the
           # 46 and 43 they were reckoned at: its job 235-266 s of its 5 minutes on main's runs of 2026-11-12, a3e59ea9
           # 43157398527, 36b56f21 43159426488, c9f8f144 43159891701; reckoned 300 of its cores, the third's 900 so that
@@ -370,7 +371,11 @@ for t in $targets; do
           # each over four programs, the packages' 91 and 80, app 1/4 at 24 7 fps 250-267 s of its 5 minutes on main
           # 559256a0, ecd82606, 2026-11-13, the second's 147: the first reckoned 450, the second 100. By the table
           # the first's pages go from 338 s to 262 at each rate, the second's from 387 to 450)
-          24 | 7) specs="4,4,450,2 4,4,100,2 1,4,500,2 4,4,290,1" ;;
+          # (the first's and the second's at 24 and at 7 a runner a rate since, as the fourth's: running both in turn they
+          # were 4.2 and 4.7 min of their 5 on main af1435b8 43476543010, the fourth's at 24 4.6 beside other runs of 600 s
+          # of its cores (preview_tree's halves, chat_page_nodes' two, answers_still's) where it was reckoned 290. Each
+          # reckoned for one rate: the first's packages' programs 75-87 s, the second's kept_rows run 12)
+          24 | 7) specs="4,4,225,1 4,4,50,1 1,4,500,2 4,4,600,1" ;;
           # (at the default rate each group's other runs reckoned as they now run, branch pushes of 2026-11-13
           # (mbui-chat-made-always 43343545286): the first's real_size half 190 s and preview_tree's halves 61 and 97
           # beside its pages, some 350 s of its cores where they were reckoned 80, its pages 215-229 s, app 1/4 209-242 s
@@ -497,7 +502,9 @@ for t in $targets; do
       # (answers_still's three where each rate's jobs had the most room on main 0d56014c 43468965521 without it: the
       # first at the default rate (162 s) and at 120 (122 s), the third at 60 (150 s), the fourth at 24 and at 7, a
       # runner each; reckoned in specs below: 31, 256, 91 and some 120 s of its cores)
-      "src/sfapp/answers_still_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "") echo 1 ;; 60) echo 3 ;; 120) echo 1 ;; *) echo 4 ;; esac ;;
+      # (at 120 on the third since: on the first beside its pages and the packages' programs its runs were 560 s of its
+      # cores, its job 4.2 min where it had been 2.5, the third's two 2.0 and 2.5, main af1435b8 43476543010)
+      "src/sfapp/answers_still_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "") echo 1 ;; 60 | 120) echo 3 ;; *) echo 4 ;; esac ;;
       "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
