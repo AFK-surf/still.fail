@@ -3,8 +3,10 @@
 // carries credentials, one JSON line each, answered with one JSON line (a later line renews); every other stream is
 // one request: a JSON head line `{method, path, headers}`, then the body until the stream finishes, answered by a
 // JSON head line `{status, headers}` and the response body.
+// The lines and the streams themselves are the mesh's wire and door (wire.ts, door.ts), which know nothing of what is
+// here: who is let in (the credentials still.fail cloud signs, the locks) and what a request is answered (the routes).
 import type { Admin } from "../api/admin.ts";
-import { type Answer, langOfCore, queryPairs } from "../api/request.ts";
+import { langOfCore, queryPairs } from "../api/request.ts";
 import { coreTooOld } from "../api/oldest.ts";
 import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -29,79 +31,16 @@ import type { MemberAsk } from "../parts.ts";
 import { compressed } from "./compress.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
+import { type Admit, door } from "./door.ts";
+import { SLOW_REPLY_BYTES, pathsOf, slowly } from "./reply-watch.ts";
+import { type Asked, HOP, Reader, send, writeLine } from "./wire.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
 // Keep old clients admitted until protocol-2 clients have reached the stable channel.
 const MIN_CLIENT_PROTOCOL = 1;
-const MAX_HEAD = 16 * 1024;
-// Files sent to a session go through here: in parts of 16 MB at most, or whole up to 50 MB (clients before parts).
-const MAX_BODY = 64 * 1024 * 1024;
-/// A reply this long or longer whose bytes took more than SLOW_REPLY_MS to be taken in whole is said on the log (slowly).
-const SLOW_REPLY_BYTES = 256 * 1024;
-const SLOW_REPLY_MS = 5_000;
-/// Headers of one hop, not of what is relayed.
-const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "content-length"];
 
-/// One JSON line at a time from a stream, then the rest of it.
-export class Reader {
-  carry: Buffer = Buffer.alloc(0);
-  stream: Stream;
-  /// How long a line may be: the admin API's heads are small; the device tools' carry their bodies in it.
-  private maxLine: number;
-  constructor(stream: Stream, maxLine = MAX_HEAD) {
-    this.stream = stream;
-    this.maxLine = maxLine;
-  }
-
-  async line(): Promise<any | null> {
-    // A long line (the device tools') comes in many pieces: kept as they come, each looked through once.
-    let at = this.carry.indexOf(10);
-    if (at < 0) {
-      const parts = [this.carry];
-      let size = this.carry.length;
-      while (at < 0) {
-        if (size > this.maxLine) throw new Error("head too large");
-        const more = await this.stream.read();
-        if (more === null) {
-          if (size === 0) return null;
-          throw new Error("stream ended mid-line");
-        }
-        const found = more.indexOf(10);
-        if (found >= 0) at = size + found;
-        parts.push(more);
-        size += more.length;
-      }
-      this.carry = Buffer.concat(parts, size);
-    }
-    if (at > this.maxLine) throw new Error("head too large");
-    const line = this.carry.subarray(0, at);
-    this.carry = this.carry.subarray(at + 1);
-    return JSON.parse(line.toString());
-  }
-
-  async rest(): Promise<Buffer> {
-    const parts = [this.carry];
-    let size = this.carry.length;
-    for (let more = await this.stream.read(); more; more = await this.stream.read()) {
-      parts.push(more);
-      size += more.length;
-      if (size > MAX_BODY) throw new Error("request body too large");
-    }
-    return Buffer.concat(parts);
-  }
-
-  /// The rest as it comes, however long (a request passed on as it is: a module's).
-  async *chunks(): AsyncGenerator<Buffer> {
-    if (this.carry.length > 0) {
-      const first = this.carry;
-      this.carry = Buffer.alloc(0);
-      yield first;
-    }
-    for (let more = await this.stream.read(); more; more = await this.stream.read()) yield more;
-  }
-}
-
-export const writeLine = (stream: Stream, value: unknown) => stream.write(Buffer.from(JSON.stringify(value) + "\n"));
+/// The streams' framing (wire.ts), as those that speak this protocol have it of here.
+export { Reader, send, writeLine };
 
 /// A hello's `lock: {device, proof}`: the device's base key, and its signature saying this endpoint is its own.
 function lockProof(v: any): { base: string; proof: string } | undefined {
@@ -672,155 +611,139 @@ export type Members = {
   connected?: () => void;
 };
 
-/// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
-export async function serve(m: Members, conn: Connection) {
+/// One member's connection: the credential first, nothing served before it checks out; then a request a stream. The
+/// streams are the door's (door.ts); who is let in and what is answered, `admission`'s.
+export function serve(m: Members, conn: Connection): Promise<void> {
   if (m.cloud.removed()) {
     conn.close(2, "station_removed");
-    throw new Error("station removed");
+    return Promise.reject(new Error("station removed"));
   }
   const device = conn.remoteId();
-  const first = await conn.acceptBi();
-  if (!first) return;
-  const credentials = new Reader(first);
-  const state = () => m.cloud.state!;
-  const hello = await credentials.line();
-  if (hello === null) {
-    await first.reset(0).catch(() => {});
-    throw new Error("no credential");
-  }
-  // Which device this is in the workspace's lock: its base key's proof for this endpoint, said once (cloud/lock.ts).
-  const proof = lockProof(hello?.lock);
-  // The role the credential names: the control plane's word, which the lock may lower but not raise.
-  let named = "";
-  // Whose credential checked out (refused then for the lock alone).
-  let whose: string | null = null;
-  const check = (line: any) => {
-    // Of any workspace the station is in: the viewer's is the one its requests are answered for.
-    const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
-    named = admitted.viewer.role;
-    whose = admitted.viewer.sub;
-    if (proof) admitted.viewer.lockDevice = proof;
-    // Which devices came, for a lock's owner to name (seen-devices.ts): what it says of itself with its lock proof
-    // (`lock.kind`, `lock.label`), its base key.
-    // Its base key only as its proof for this endpoint holds (as the cloud checked it).
-    const base = proof && endpointProof(admitted.viewer.workspace, proof.base, device, proof.proof) ? proof.base : null;
-    seenDevicesOf(m.cloud).saw(nowSecs(), admitted.viewer, device, base, line?.lock ?? null);
-    return inLockBringing(m.cloud, admitted, named, device, line);
-  };
-  let current: Admitted;
-  try {
-    current = check(hello);
-  } catch (e) {
-    await writeLine(first, refusalOf(m.cloud, hello, device, e, m.accepted?.(), whose)).catch(() => {});
-    await first.finish().catch(() => {});
-    wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
-    throw e;
-  }
-  // How far its lock goes, when it has one (a device that has more brings it).
-  const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
-  const lan = m.lan?.() ?? [];
-  const tailnet = m.tailnet?.() ?? [];
-  await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}), ...(tailnet.length > 0 ? { tailnet } : {}) });
-  // The dial's trace (the device's `mesh.connect`), said on both lines of the connection so the device's record of it
-  // and the station's are found together; and the way it came, then the ways it had when it ended (2026-10-30: a
-  // phone's handshake with dev-prod went through and nothing came after, and nothing here said what the station saw).
-  const trace = parseParent(typeof hello?.traceparent === "string" ? hello.traceparent : undefined)?.trace;
-  const opened = wall.now();
-  log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12), trace, via: conn.via() ?? "direct", ways: waysOf(conn) });
-  m.connected?.();
-  let lastWays = waysOf(conn);
-  void conn.closed().then((why) => {
-    const ways = waysOf(conn);
-    const traffic = conn.stats?.();
-    log.info("mesh", "a device's connection ended", {
-      device: device.slice(0, 12),
-      trace,
-      why,
-      lasted: wall.now() - opened,
-      ways: ways === "" ? lastWays : ways,
-      ...(traffic ? { rx: traffic.rxBytes, tx: traffic.txBytes } : {}),
-    });
-  }, () => {});
+  return door(conn, admission(m, device));
+}
 
-  // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on
-  // every change of the cloud's state, and when the credential runs out.
-  // Or the lock takes the device away (or lowers its member's role: the next request goes with the role it has now).
-  const gone = () => {
-    const of = m.cloud.membership(current.viewer.workspace);
-    if (m.cloud.removed() || of === null) conn.close(2, "station_removed");
-    else if (revoked(current, of.revocations)) conn.close(3, "credential_revoked");
-    else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
-    else {
-      try {
-        current = stillIn(m.cloud, current, named, device);
-        return false;
-      } catch {
-        conn.close(3, "lock_unconfirmed");
-      }
+/// Who the door lets in here (door.ts `Admit`): a member's device, by the credential its hello brings and the lock; with
+/// what its later lines (renewals) and its requests are answered, and what ends the connection meanwhile.
+function admission(m: Members, device: string): Admit {
+  return (hello, conn) => {
+    const state = () => m.cloud.state!;
+    // Which device this is in the workspace's lock: its base key's proof for this endpoint, said once (cloud/lock.ts).
+    const proof = lockProof(hello?.lock);
+    // The role the credential names: the control plane's word, which the lock may lower but not raise.
+    let named = "";
+    // Whose credential checked out (refused then for the lock alone).
+    let whose: string | null = null;
+    const check = (line: any) => {
+      // Of any workspace the station is in: the viewer's is the one its requests are answered for.
+      const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
+      named = admitted.viewer.role;
+      whose = admitted.viewer.sub;
+      if (proof) admitted.viewer.lockDevice = proof;
+      // Which devices came, for a lock's owner to name (seen-devices.ts): what it says of itself with its lock proof
+      // (`lock.kind`, `lock.label`), its base key.
+      // Its base key only as its proof for this endpoint holds (as the cloud checked it).
+      const base = proof && endpointProof(admitted.viewer.workspace, proof.base, device, proof.proof) ? proof.base : null;
+      seenDevicesOf(m.cloud).saw(nowSecs(), admitted.viewer, device, base, line?.lock ?? null);
+      return inLockBringing(m.cloud, admitted, named, device, line);
+    };
+    let current: Admitted;
+    try {
+      current = check(hello);
+    } catch (e) {
+      return { refused: { line: refusalOf(m.cloud, hello, device, e, m.accepted?.(), whose), code: 1, reason: e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused", error: e } };
     }
-    return true;
-  };
-  // A credential's expiry is the cloud's word, in the machine's time.
-  let expiry: (() => void) | undefined;
-  const watchExpiry = () => {
-    expiry?.();
-    expiry = wall.after(Math.max(0, current.exp * 1000 - wall.now()) + 50, () => void (gone() || watchExpiry()));
-  };
-  watchExpiry();
-  const unlistenCloud = m.cloud.listen(gone);
-  const unlistenPersons = personChainsOf(m.cloud).listen(gone);
-  const unlisten = () => {
-    unlistenCloud();
-    unlistenPersons();
-  };
-  // Renewals on the credential stream.
-  (async () => {
-    for (let line = await credentials.line().catch(() => null); line !== null; line = await credentials.line().catch(() => null)) {
-      let reply;
-      try {
+    // How far its lock goes, when it has one (a device that has more brings it).
+    const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
+    const lan = m.lan?.() ?? [];
+    const tailnet = m.tailnet?.() ?? [];
+    const line = { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}), ...(tailnet.length > 0 ? { tailnet } : {}) };
+    // The ways it had as its last request came (said when it ends, where it has none left then).
+    let lastWays = "";
+
+    // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on
+    // every change of the cloud's state, and when the credential runs out.
+    // Or the lock takes the device away (or lowers its member's role: the next request goes with the role it has now).
+    const gone = () => {
+      const of = m.cloud.membership(current.viewer.workspace);
+      if (m.cloud.removed() || of === null) conn.close(2, "station_removed");
+      else if (revoked(current, of.revocations)) conn.close(3, "credential_revoked");
+      else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
+      else {
+        try {
+          current = stillIn(m.cloud, current, named, device);
+          return false;
+        } catch {
+          conn.close(3, "lock_unconfirmed");
+        }
+      }
+      return true;
+    };
+    // A credential's expiry is the cloud's word, in the machine's time.
+    let expiry: (() => void) | undefined;
+    const watchExpiry = () => {
+      expiry?.();
+      expiry = wall.after(Math.max(0, current.exp * 1000 - wall.now()) + 50, () => void (gone() || watchExpiry()));
+    };
+    let unlisten = () => {};
+    return {
+      line,
+      opened: () => {
+        // The dial's trace (the device's `mesh.connect`), said on both lines of the connection so the device's record of it
+        // and the station's are found together; and the way it came, then the ways it had when it ended (2026-10-30: a
+        // phone's handshake with dev-prod went through and nothing came after, and nothing here said what the station saw).
+        const trace = parseParent(typeof hello?.traceparent === "string" ? hello.traceparent : undefined)?.trace;
+        const opened = wall.now();
+        log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12), trace, via: conn.via() ?? "direct", ways: pathsOf(conn) });
+        m.connected?.();
+        lastWays = pathsOf(conn);
+        void conn.closed().then((why) => {
+          const ways = pathsOf(conn);
+          const traffic = conn.stats?.();
+          log.info("mesh", "a device's connection ended", {
+            device: device.slice(0, 12),
+            trace,
+            why,
+            lasted: wall.now() - opened,
+            ways: ways === "" ? lastWays : ways,
+            ...(traffic ? { rx: traffic.rxBytes, tx: traffic.txBytes } : {}),
+          });
+        }, () => {});
+        watchExpiry();
+        const unlistenCloud = m.cloud.listen(gone);
+        const unlistenPersons = personChainsOf(m.cloud).listen(gone);
+        unlisten = () => {
+          unlistenCloud();
+          unlistenPersons();
+        };
+      },
+      // Renewals on the credential stream (one that fails is answered why, by the door, and ends nothing).
+      renew: (line) => {
         current = check(line);
         watchExpiry();
-        reply = { ok: true, expires_at: current.exp };
-      } catch (e) {
-        reply = { error: (e as Error).message };
-      }
-      await writeLine(first, reply).catch(() => {});
-    }
-    await first.finish().catch(() => {});
-  })();
-
-  try {
-    for (let stream = await conn.acceptBi(); stream; stream = await conn.acceptBi()) {
-      if (gone()) return;
-      lastWays = waysOf(conn);
-      const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
-      request(m, stream, viewer, conn).catch((e) => {
-        log.info("mesh", "request failed", { error: (e as Error).message });
-        void stream.reset(0).catch(() => {});
-      });
-    }
-  } finally {
-    expiry?.();
-    unlisten();
-  }
+        return { ok: true, expires_at: current.exp };
+      },
+      stream: () => {
+        if (gone()) return null;
+        lastWays = pathsOf(conn);
+        const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
+        return (asked) => answerAsked(m, asked, viewer, conn);
+      },
+      ended: () => {
+        expiry?.();
+        unlisten();
+      },
+    };
+  };
 }
 
 /// One request: to the admin API in this process.
-async function request(m: Members, raw: Stream, viewer: Admitted["viewer"], conn: Connection) {
-  const accepted = { wall: wall.now(), at: process.hrtime.bigint() };
-  const firstReader = new Reader(raw);
-  const head = await firstReader.line();
-  if (head === null) {
-    await raw.finish().catch(() => {});
-    return;
-  }
+async function answerAsked(m: Members, { head, reader, stream: raw, accepted }: Asked, viewer: Admitted["viewer"], conn: Connection) {
   const method: string = typeof head.method === "string" ? head.method.toUpperCase() : "GET";
   const path: string = typeof head.path === "string" ? head.path : "";
   // A span of the caller's trace when it records one: from the stream's acceptance to its answer's last byte (an
   // event stream's, a socket's, a screen's view or a phone's offer: to its head). The admin API's goes under ours.
-  const traced = tracing(m.traces, head, method, path, conn.via(), accepted, raw, firstReader.carry.length);
+  const traced = tracing(m.traces, head, method, path, conn.via(), accepted, raw, reader.carry.length);
   const stream = traced.stream;
-  const reader = firstReader;
   reader.stream = stream;
   try {
     await answerRequest(m, stream, reader, head, method, path, viewer, conn);
@@ -964,95 +887,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   const ready = wall.now();
   await send(stream, sent);
   await stream.finish();
-  if (Buffer.isBuffer(sent.body) && sent.body.length >= SLOW_REPLY_BYTES) slowly(stream, conn, method, rest, sent.body.length, ready - asked, ready);
-}
-
-/// A large reply's bytes, once the device has taken them all in (acknowledged): said on the log when that took over
-/// SLOW_REPLY_MS, with how long it was made in (`made`) and the way it went (a relay or an address, its round trip, the
-/// packets sent and lost on it, and how much the station may send on it unacknowledged now and how often that was cut
-/// for loss), so a part of a video slow to come is seen here, the station's time apart from the way's. (Its stream told
-/// nothing as it was acknowledged until 2026-10-28, which this took for the device having stopped it: nothing was ever
-/// said, and a desktop app's images coming at 30 KB/s from a station for an hour left no word of how.) `ways` says every
-/// way the connection has, `*` the chosen one, with the packets sent on each while the reply went: a connection has a
-/// way through every relay (#2580), and with none chosen noq sends on all of them (2026-10-30: attachments at 11–50
-/// KB/s on a way of 70 ms, `way=?` on half of them, the chosen way alone not saying where the bytes went).
-function slowly(stream: Stream, conn: Connection, method: string, path: string, bytes: number, made: number, from: number) {
-  const before = sentOn(conn);
-  void stream.stopped().then((code) => {
-    const ms = wall.now() - from;
-    if (typeof code === "number" || ms < SLOW_REPLY_MS) return;
-    const paths = conn.paths?.() ?? [];
-    const way = paths.find((p) => p.selected);
-    const after = sentOn(conn);
-    const ways = paths.map((p, i) => {
-      const [key, sent] = after[i]!;
-      const was = before.find(([k]) => k === key)?.[1] ?? 0;
-      return `${p.selected ? "*" : ""}${key} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`} +${sent - was}/${p.lostPackets} cwnd=${p.cwnd ?? "?"}`;
-    });
-    log.info("mesh", "a reply went slowly", {
-      route: `${method} ${route(path.split("?")[0] ?? path)}`,
-      bytes,
-      made,
-      ms,
-      bytesPerSecond: Math.round((bytes / ms) * 1000),
-      device: conn.remoteId(),
-      way: way ? (way.relay ?? way.ip ?? "?") : "?",
-      rtt: way?.rttMs != null ? Math.round(way.rttMs) : null,
-      sent: way?.txPackets ?? null,
-      lost: way?.lostPackets ?? null,
-      cwnd: way?.cwnd ?? null,
-      cuts: way?.congestionEvents ?? null,
-      ways: ways.join(", "),
-    });
-  }, () => {});
-}
-
-/// Every way a connection has now, as a reply that went slowly says them: `*` the chosen one, its relay or address, round
-/// trip, packets sent and lost.
-function waysOf(conn: Connection): string {
-  return (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`} ${p.txPackets}/${p.lostPackets}`).join(", ");
-}
-
-/// The packets sent so far on each of a connection's ways, by a key unique among them (its relay or address, `#n` for
-/// its n-th way there).
-function sentOn(conn: Connection): [string, number][] {
-  const seen = new Map<string, number>();
-  return (conn.paths?.() ?? []).map((p) => {
-    const at = p.relay ?? p.ip ?? "?";
-    const n = seen.get(at) ?? 0;
-    seen.set(at, n + 1);
-    return [n ? `${at}#${n}` : at, p.txPackets];
-  });
-}
-
-/// An answer onto its stream: its head line, then its body. A body that is a stream (GET /events) ends when the caller
-/// stops reading or goes, even while nothing is being written to it, and is let go of however the writing ends: one
-/// whose head could not be written (the caller gone while its answer was being made) stayed a follower of the events
-/// for good, told everything into a queue nobody read. A whole body says its length, unless compressed (compress.ts: a
-/// client counts what it has read once decompressed): a chat's picture shows how far it has come by it
-/// (pengxiao, 2026-10-28: without it, one under the core's step for an unknown length showed 0 B until it was here).
-export async function send(stream: Stream, response: Answer) {
-  const head = { status: response.status, headers: response.headers };
-  if (Buffer.isBuffer(response.body)) {
-    const said = Object.keys(response.headers).some((k) => ["content-length", "content-encoding"].includes(k.toLowerCase()));
-    if (!said) head.headers = { ...response.headers, "content-length": String(response.body.length) };
-    await writeLine(stream, head);
-    await stream.write(response.body);
-    return;
-  }
-  const chunks = response.body[Symbol.asyncIterator]();
-  const end = () => void chunks.return?.();
-  stream.stopped().then(end, end);
-  try {
-    await writeLine(stream, head);
-    for (;;) {
-      const next = await chunks.next();
-      if (next.done) break;
-      await stream.write(next.value);
-    }
-  } finally {
-    end();
-  }
+  if (Buffer.isBuffer(sent.body) && sent.body.length >= SLOW_REPLY_BYTES) slowly(stream, conn, () => `${method} ${route(rest.split("?")[0] ?? rest)}`, sent.body.length, ready - asked, ready);
 }
 
 /// A WebSocket of a web service on this machine, for a preview's page (preview.ts `openSocket`): answered 101 once the

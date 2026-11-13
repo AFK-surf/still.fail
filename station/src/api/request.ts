@@ -1,5 +1,6 @@
 // A request to the admin API as the station takes it from the mesh (or another door), and its answer.
 import type { Viewer } from "../mesh/credential.ts";
+import type { Answer } from "../mesh/wire.ts";
 import { type Lang, langOf } from "../ops/i18n.ts";
 
 export type Request = {
@@ -20,12 +21,8 @@ export type Request = {
   signal?: AbortSignal;
 };
 
-export type Answer = {
-  status: number;
-  headers: Record<string, string>;
-  /// Whole, or as it comes (an event stream).
-  body: Buffer | AsyncIterable<Buffer>;
-};
+/// Its answer, as the mesh's wire writes it (mesh/wire.ts `send`).
+export type { Answer };
 
 /// The language a core asks in: its `stillfail-lang`; Chinese for a core from before languages.
 export function langOfCore(headers: Record<string, string>): Lang {
