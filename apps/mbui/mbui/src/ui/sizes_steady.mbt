@@ -194,6 +194,11 @@ let stop_jerk : Double = 1.5
 /// rest, going on as fast or slowing) is none: an eased way out sets out so (sf/motion.mbt). In a list's row whose way
 /// set out at `set_out` between them, as rows_steady_fault has a row's place: the speed it takes up then, from where it
 /// was, is the way's (a row joining the rows' way under way goes on its share of it as they do: list_size.mbt).
+/// Not said, known (the coordinator of the migration, 2026-11-13: taken up once the chat's page is switched, by a round
+/// that only prints first): a step is said only as the middle of three frames, so one whose next frame no longer judges
+/// its node (it shows no more, a hand's frame, a gap, the window resized: its samples cleared) is never said. A bar's
+/// thumb stepping as its list was put at once passed at 60 judged where 120 failed for it, the thumb showing no more a
+/// frame of 60 later (chat_page_nodes_wbtest, #5854).
 fn sizes_steady_fault(
   all : Array[(Double, Double, Double)],
   period : Double,
