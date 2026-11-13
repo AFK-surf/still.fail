@@ -6,8 +6,9 @@
 //   scripts/release-sign.ts: a feed that does not is no newer release). Switched back from the beta, the older stable
 //   release is offered as going back (`downgrade`), only then. It is updated as `stillfail update` does (release.ts):
 //   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
-//   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
-//   station has been quiet a while (never back from the beta, and a version it already went for, not again).
+//   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the
+//   clone). With `autoUpdate: true` it does so by itself (never back from the beta). A failed attempt gets one delayed
+//   retry, then waits for a newer release; vault work still holds both attempts back.
 //   With a delta from the build it runs (release.ts takeDelta), the station downloads it and applies it first (the
 //   applying in a process apart, release.ts applyApart), shown as the installer's download step is, and hands the
 //   installer what it made (STILLFAIL_ARCHIVE in a temporary stillfail-handed directory); the update is answered as
@@ -112,6 +113,9 @@ export const TIMING: Timing = {
   followLook: 5_000,
   deltaLimit: 10 * 60_000,
 };
+
+/// A transient handover failure can clear; try once more without repeatedly starting a broken release.
+const STATION_RETRY_MS = 60_000;
 
 export type UpdatesOptions = {
   /// The release this station runs from (`--app`).
@@ -251,8 +255,11 @@ export class Updates {
   private codexRecovery: Promise<void> | null = null;
   private codexUpdateSerial = 0;
   private listeners = new Set<() => void>();
-  /// The version the station's last update in this process went for: updating by itself, not tried again.
+  /// The version the station's last update in this process went for.
   tried: string | null = null;
+  /// A failed version whose retry is due, and the version whose retry was attempted in this process.
+  private retryDue: string | null = null;
+  private retried: string | null = null;
   private lastCheck: number | null = null;
   private running: () => number;
   private runtimeChanged: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
@@ -640,20 +647,25 @@ export class Updates {
 
   /// The version the station updates itself to now, when it does: it updates itself, can be updated from here, is not
   /// updating, and its channel's latest is newer (not an older stable one back from the beta) and not one it already
-  /// went for. Running turns are not waited for: the update hands them over (or, restarting, to the next start). What
-  /// is not handed over is (holds.ts: a command run with a vault grant, whose proxy would go with this process).
+  /// went for, unless that failure's retry is due. Running turns are not waited for: the update hands them over (or,
+  /// restarting, to the next start). What is not handed over is (holds.ts: a command run with a vault grant, whose
+  /// proxy would go with this process).
   toUpdateTo(): string | null {
     if (!this.auto() || holding() > 0) return null;
     const item = this.items.station;
     if (item.note !== null || item.updating !== null || item.channel !== this.channel() || this.runtimeUpdating() !== null) return null;
     if (item.latest === null) return null;
     const [isNewer] = offer(item.version, item.latest, this.channel(), this.installed);
-    return isNewer && this.tried !== item.latest ? item.latest : null;
+    return isNewer && (this.tried !== item.latest || this.retryDue === item.latest) ? item.latest : null;
   }
 
   private autoUpdate(why: string) {
     const to = this.toUpdateTo();
     if (to === null) return;
+    if (this.retryDue === to) {
+      this.retryDue = null;
+      this.retried = to;
+    }
     log.info("updates", `${why}: the station updates itself`, { to });
     this.updateStation(stationLang()).catch((e) => log.warn("updates", "the station not updated by itself", { error: (e as Error).message }));
   }
@@ -1259,6 +1271,14 @@ export class Updates {
         i.failed = failed;
         i.done = done;
       });
+      if (failed !== null && this.tried !== null && this.retried !== this.tried) {
+        const version = this.tried;
+        this.later(STATION_RETRY_MS, () => { // timer: one retry after a failed update
+          if (this.tried !== version || this.retried === version) return;
+          this.retryDue = version;
+          this.autoUpdate("retrying a failed update");
+        });
+      }
       this.spawn(() => this.check());
       if (done !== null) {
         const shown = done;
