@@ -19,6 +19,8 @@
 #                                   pass/fail per step
 #   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks); locks failed, what the run
 #                                   wrote is kept before down (`kept locks`)
+#   scripts/e2e-local.sh locks-moved-all  up, e2e/locks-moved.ts (a workspace's chain handed over to its people's own
+#                                   logs, and its acts after), down (scripts/side.sh locks-moved); kept as locks-all's
 #   scripts/e2e-local.sh rigs       a rig end to end against what `up` started (e2e/rigs.ts: a machine enrolled as
 #                                   alice's rig beside the test station, asked for, granted, used, taken back)
 #   scripts/e2e-local.sh rigs-all   up, rigs, down (the side run's, scripts/side.sh rigs); rigs failed, kept the same
@@ -329,11 +331,11 @@ stop() {
 down() {
   # (the station's directory another run's: only what this run started, by its own pids)
   if held_by_other; then
-    stop second; stop third; stop fourth; stop fifth; stop sixth; stop rig; stop station; stop cloud; stop relay
+    stop second; stop third; stop fourth; stop rig; stop station; stop cloud; stop relay
     say "down ($STATION left to the run of $(readlink "$HELD"))"
     return 0
   fi
-  for n in second third fourth fifth sixth rig; do second_down $n >/dev/null 2>&1 || true; done
+  for n in second third fourth rig; do second_down $n >/dev/null 2>&1 || true; done
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
@@ -373,6 +375,13 @@ locks() {
    E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
      E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks.ts </dev/null)
 }
+# e2e/locks-moved.ts the same way (a workspace's chain handed over to its people's own logs, and what is done in it
+# after), a run of its own on a fresh cloud and stations, its devices' data under $WORK/locks-moved
+locks_moved() {
+  (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/locks-moved-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks-moved E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
+     E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks-moved.ts </dev/null)
+}
 # e2e/rigs.ts the same way (a rig enrolled beside the test station, asked for, granted, used, taken back), its devices'
 # data under $WORK/rigs
 rigs() {
@@ -399,7 +408,7 @@ kept() {
   rm -rf $KEPT && mkdir -p $KEPT || return 0
   keep $RUN/cloud.log cloud.log
   keep $RUN/relay.log relay.log
-  for n in station second third fourth fifth sixth rig; do
+  for n in station second third fourth rig; do
     if [ $n = station ]; then d=$STATION; f=enroll; else d=$(more_dir $n); f=$n-enroll; fi
     keep $RUN/$n.log $n/launcher.log
     keep $RUN/$f.log $n/enroll.log
@@ -485,6 +494,7 @@ for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' +
 console.log('STATIONS ' + s.stations.size);
 console.log('HEAD ' + s.head);
 console.log('PERSONS ' + s.persons.size);
+for (const [sub, m] of s.members) console.log('MEMBER ' + sub + ' ' + (m?.role ?? m));
 for (const [sub, person] of s.persons) console.log('PERSON ' + sub + ' ' + String(person).slice(0, 12));
 const said = new Map();
 for (const e of (j.entries ?? j)) if (e?.kind === 'device' && typeof e.body?.id === 'string') said.set(e.body.id, typeof e.body.person_key === 'string');
@@ -894,12 +904,17 @@ case "${1:-all}" in
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;
   locks) locks ;;
+  locks-moved) locks_moved ;;
   kept) shift; kept "$@" ;;
   # (locks failed: what it leaves kept before the trap's down, and its status the run's)
   locks-all)
     trap down EXIT
     up
     locks || { rc=$?; kept locks || true; exit $rc; } ;;
+  locks-moved-all)
+    trap down EXIT
+    up
+    locks_moved || { rc=$?; kept locks-moved || true; exit $rc; } ;;
   rigs) rigs ;;
   rigs-all)
     trap down EXIT
