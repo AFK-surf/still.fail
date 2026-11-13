@@ -119,10 +119,17 @@ async function setUp(o: Opts = {}) {
     return c;
   };
   const stations = { A: station(A), B: station(B) };
-  const st = { silent: false, asked: [] as Asked[], hook: null as null | (() => void) };
+  const st = { silent: false, asked: [] as Asked[], hook: null as null | (() => void), early: [] as string[] };
   const viewer = viewerOf("s1", { base }, "owner", "ws");
   const route = (c: Cloud, method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (st.silent && method === "POST") return Effect.never;
+    // (a `moved` brought to a station that does not hold every statement and body this device's log commits to: the
+    // stations would wait, letting nobody in; noted, every test holds there are none)
+    if (method === "POST" && path === "/lock" && ((body as { entries?: Entry[] })?.entries ?? []).some((e) => e.kind === "moved")) {
+      const commits = inner.adb.personal().entries("s1").filter((e) => e.kind === "ws").map((e) => (e.body as { h: string }).h);
+      const kept = c.bodies(null).all();
+      if (commits.length === 0 || commits.some((h) => !kept.has(h))) st.early.push(`${c === stations.A ? "A" : "B"}: a moved with ${commits.filter((h) => kept.has(h)).length} of ${commits.length} bodies`);
+    }
     const [p, q] = path.split("?") as [string, string | undefined];
     const buf = Buffer.from(body === null || body === undefined ? "" : JSON.stringify(body));
     const [status, out] = p === "/lock" ? lockRoute(c, method, q ? [...new URLSearchParams(q)] : [], buf, viewer as never) : lockPartRoute(c, p.slice("/lock/".length), method, buf, viewer as never);
@@ -214,6 +221,7 @@ test("an owner, an admin, a member, two stations: asked once, said in order, the
   const again = await w.hand();
   assert.equal(again.error, undefined);
   assert.equal(w.asked(), 1, "nothing more asked");
+  assert.deepEqual(w.st.early, [], "no moved before a station held every body");
 });
 
 test("a member with a device that signs and no log of their own: lock_not_ready, nothing said, nobody asked; once their log is bound, handed over", async () => {
@@ -267,7 +275,7 @@ test("no station reachable: the statements pending, no moved; a station back and
   const out = await w.hand();
   assert.equal(out.error, undefined, out.error?.message);
   assert.ok((out.ok as { pending?: unknown } | null)?.pending, `pending: ${JSON.stringify(out.ok)}`);
-  assert.equal(w.stations.A.chain(null)?.state?.moved, undefined, "no moved");
+  for (const c of Object.values(w.stations)) assert.equal(c.chain(null)?.state?.moved, undefined, "no moved at a station");
   assert.notEqual(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
   assert.ok(!pendingHeld(w.inner, "ws").some((x) => x.entry.kind === "moved"), "no moved signed while a statement waits");
   assert.equal(w.asked(), 1);
@@ -278,6 +286,7 @@ test("no station reachable: the statements pending, no moved; a station back and
   assert.equal(w.asked(), 1, "nobody asked again");
   assert.deepEqual(w.said().map((x) => x.what), ["open", "member r2 admin", "member r3 member", "station A", "station B"], "nothing said twice");
   assert.equal(w.stations.A.chain(null)?.state?.moved, w.gMe, "moved");
+  assert.deepEqual(w.st.early, [], "no moved before a station held every body");
 });
 
 test("the chain changed between the statements and the moved: bob's own new device, nothing more said; an admin's new member with a log, said first, one more ask", async () => {
