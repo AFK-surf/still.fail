@@ -981,6 +981,12 @@ pub struct Tree {
   mut backing : (NodeId, Int)?
   mut focused : NodeId?
   mut focus_visible : Bool
+  /// the page's list (View::scrolls_window) one of whose rows holds the node with the focus (none: in no row, a list's
+  /// head or foot being in none), found as the focus is set (Tree::focus_set), and how many times the focus has come
+  /// into a row so: what a list's fill holds what shows by while it is noted, a list with none noted paying a comparison
+  /// (Tree::row_focus_holds)
+  mut focus_row_list : NodeId?
+  mut focus_row_n : Int
   /// the node that had the focus as it was laid out nowhere (and whether it showed), given it back as it is laid out again
   /// where nothing has taken it meanwhile (Tree::outs_told), as an old view's focus waits for its node
   mut focus_parked : (NodeId, Bool)?
@@ -1374,6 +1380,8 @@ pub fn Tree::new(
     bars_due: false,
     backing: None,
     focused: None,
+    focus_row_list: None,
+    focus_row_n: 0,
     focus_parked: None,
     focus_visible: false,
     on_focus_lost: fn(_) {  },

@@ -749,6 +749,27 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let ks = @signals.untracked(keys)
     held_with.val = (ks.length(), ks.last())
   }
+  // (held where it is at its foot while a field in one of its rows has the focus (Tree::row_focus_holds; the
+  // coordinator of the migration's ruling, 2026-11-13), as by Scroll::holds_here, but not let go by blocks coming:
+  // let go by the focus leaving its rows, which moves nothing (still at its foot, it follows it from the next block on;
+  // put off it by what came under meanwhile, it is off it as one read up), or by the hand bringing it to its foot, or
+  // the page asking its end (`row_let`: the focus's coming into a row it was so let go of, held again only as the focus
+  // next comes into one). `row_hand_moved`: the hand moved it while so held: brought back to its foot, let go; brought
+  // back to it otherwise (what came under it taken away again, the room grown), put at its foot and held from there.
+  // Its pinned foot grown is counted as what it holds grown under it, held so too: known, not tested)
+  let row_let = Ref(-1)
+  let row_hand_moved = Ref(false)
+  // (how tall what it shows was as it was last laid out: the room it shows in changed since (a keyboard's), what shows
+  // held from the foot of that room where a field in a row holds it at its foot, at its foot still, Tree::holds_now's)
+  let row_vh = Ref(0.0)
+  let row_let_go = fn(hand : Bool) {
+    if row_hand_moved.val || hand {
+      row_hand_moved.val = false
+      if self.tree.row_focus_holds(self.id()) is Some(n) {
+        row_let.val = n
+      }
+    }
+  }
   // (room kept under its foot for what was pressed to stay where it was as what is round it shrinks (press_stays.mbt):
   // as much as that asks while it is held, then no more than still shows of it, going as it is scrolled off)
   let press_room : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
@@ -961,8 +982,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   s.foot_covered = fn() { foot_h.get() }
   self.reacts(fn() { at_most.get() }, fn(foot) {
     if foot && @signals.untracked(follows) && !s.at_foot() {
-      // (back at its foot, having left it: followed again, whatever held it where it was, Scroll::holds_here)
+      // (back at its foot, having left it: followed again, whatever held it where it was, Scroll::holds_here, a
+      // field in a row)
       s.held = false
+      // (the hand's: the scroll moved off where its last fill put it, before a fill has seen it)
+      row_let_go(anchor_x.val is Some(was) && (@signals.untracked(at) - was).abs() > 0.000001)
       s.to_foot()
     }
   })
@@ -1594,7 +1618,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         s.held = false
       }
     }
-    let mut held = s.held && s.at_foot()
+    let row = self.tree.row_focus_holds(self.id())
+    let row_holds = row is Some(n) && n != row_let.val
+    if !row_holds {
+      row_hand_moved.val = false
+    }
+    let mut held = (s.held || row_holds) && s.at_foot()
     let mut follows_foot = @signals.untracked(follows) && s.at_foot() && !held
     // (the anchor as the scroll moved it since; none yet, where the scroll is)
     let start = {
@@ -1620,8 +1649,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // before what comes to show is measured; not moved, the one it had, whatever came or went over it)
     match anchor_x.val {
       Some(was) if !held && (x - was).abs() > 0.000001 => {
-        // (moved by the hand: held where it was no more, nor by what was pressed)
+        // (moved by the hand: held where it was no more, nor by what was pressed; held by a field in a row, let go
+        // of as the hand brings it back to its foot)
         s.held = false
+        if row_holds {
+          row_hand_moved.val = true
+        }
         if (x - pin_x.val).abs() > 0.000001 {
           pin.val = None
           (unpin.val)()
@@ -1665,6 +1698,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           Some(ToEnd) => {
             p.asked = None
             taken = Some(ToEnd)
+            if row is Some(n) {
+              row_let.val = n
+              row_hand_moved.val = false
+            }
             to_end = true
             asked = true
           }
@@ -1711,8 +1748,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         pin.val = None
         (unpin.val)()
         s.to_foot()
-        follows_foot = true
-        held = false
+        // (held by a field in a row: held where it is at its foot from now, not followed)
+        follows_foot = !row_holds
+        held = row_holds
       }
     }
     // (held by what was pressed in a block: neither following its foot nor held at it meanwhile)
@@ -1722,6 +1760,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     // (its foot followed no further than a block's top `margin` under where it shows from: held there, off its foot,
     // once it would go further, and followed no further after)
+    // (held at its foot by a field in a row, the room it shows in another than as it was last so held: what shows held
+    // from that room's foot, at its foot still)
+    if held && row_holds && !s.held {
+      let vh_now = shows().unwrap_or(0.0)
+      if row_vh.val > 0.0 && vh_now > 0.0 {
+        aoff = aoff + (row_vh.val - vh_now)
+      }
+    }
     let from = match place {
       Some(p) => p.from.bind(fn(f) { laid_at.get(f.0).map(fn(i) { (i, f.1) }) })
       None => None
@@ -1910,6 +1956,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let all = places(laid.untracked())
     // (the anchor from now, where the scroll is put: anchor_put)
     anchor_put(all, top, vh, top)
+    row_vh.val = vh
     // (what is made, the stretch it covers)
     made_now(all)
     // (the scroll put where the anchor says: moved by as much, a fling under way with it; at its foot where it follows
@@ -1940,6 +1987,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       s.rest_now() is None &&
       s.glides_till() is None {
       s.held = false
+      row_let_go(false)
       s.to_foot()
     }
     seen_rows.clear()
