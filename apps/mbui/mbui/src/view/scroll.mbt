@@ -117,6 +117,10 @@ pub struct Scroll {
   /// app's put), for the Tester's judges: what it moves by its offset alone (its bar's thumb) goes there with it in the
   /// frame that takes it (Tree::scroll_put_at)
   priv mut put_at : Double
+  /// the logic's moment the keys of the page's list it scrolls last changed by data (Scroll::keys_changed), for the
+  /// Tester's judges: its bar's thumb, where the reader is in what the list holds, changes with them in that frame
+  /// (Tree::scroll_keys_at)
+  priv mut keys_at : Double
 }
 
 ///|
@@ -180,6 +184,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     at_foot_said: None,
     foot_covered: fn() { 0.0 },
     put_at: -1.0e9,
+    keys_at: -1.0e9,
   }
 }
 
@@ -1465,6 +1470,29 @@ pub fn Tree::scroll_put_at(self : Tree, at : Int) -> Double {
   guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return -1.0e9 }
   match self.scrolls_at.get(at) {
     Some(s) => s.put_at
+    None => -1.0e9
+  }
+}
+
+///|
+/// The keys of the page's list it scrolls changed by data (View::scrolls_window, as it takes them), at the logic's
+/// moment of the tree it scrolls in: what it holds another length, its bar's thumb another length and elsewhere along
+/// its track in the frame that takes it, where the reader is in what it holds (Tree::scroll_keys_at).
+pub fn Scroll::keys_changed(self : Scroll) -> Unit {
+  match self.host {
+    Some(v) if v.alive() => self.keys_at = v.tree.logic_said()
+    _ => ()
+  }
+}
+
+///|
+/// The logic's moment the keys of the page's list column `at` scrolls last changed by data (Scroll::keys_changed): what
+/// its bar's thumb, moved by its offset alone, does in the frame that takes it is the change's (the Tester's judges:
+/// ui's sizes_steady.mbt, as Tree::scroll_put_at); -1e9 where they never did, or it scrolls nothing.
+pub fn Tree::scroll_keys_at(self : Tree, at : Int) -> Double {
+  guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return -1.0e9 }
+  match self.scrolls_at.get(at) {
+    Some(s) => s.keys_at
     None => -1.0e9
   }
 }

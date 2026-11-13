@@ -167,6 +167,21 @@ fn[K] Column::summed(self : Column[K]) -> Unit {
 }
 
 ///|
+/// Whether keys `now` are other than `was`: as many no more, or one of them another, from `from` on (where
+/// Column::refill found the first that is: those before it the same).
+fn[K : Eq] keys_other(was : Array[K], now : Array[K], from : Int) -> Bool {
+  if was.length() != now.length() {
+    return true
+  }
+  for i in from..<now.length() {
+    if now[i] != was[i] {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Block `i`'s height told: `h` as laid out on the grid, whether it was laid out; the sums over it added anew.
 fn[K] Column::set(self : Column[K], i : Int, h : Double, known : Bool) -> Unit {
   self.told = self.told + 1
@@ -667,6 +682,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // heights told of those kept told as ever)
       let was = column.keys
       let p = column.refill(ks, g)
+      // (its keys changed by data, one of them another or as many no more: what its bar's thumb shows changes with them,
+      // in the frame that takes them; the same keys given again as another array are no change)
+      if keys_other(was, ks, p) {
+        s.keys_changed()
+      }
       let laid_once = @signals.untracked(fn() { s.seen.get() is Some(_) })
       if came_by_data.val.length() > 0 {
         came_by_data.val = Map([])
