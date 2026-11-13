@@ -25,7 +25,10 @@
   as its `Admit`. So with what is under them: `src/mesh/endpoint.ts` is the endpoint as the addon gives it and the
   addon's loading from where its caller says (where the station's is, `STILLFAIL_MESH_NATIVE`, and what else it
   offers are `src/mesh/native.ts`'s), `src/mesh/accept.ts` the taking of an endpoint's connections, each served by
-  what it is given (`src/mesh/mesh.ts` gives the station's protocols). `scripts/mesh-base.ts` (a step of
+  what it is given (`src/mesh/mesh.ts` gives the station's protocols) and closed the moment serving it ends, with
+  code 0: so what serves a connection ends only once what it wrote has had its time to arrive and the close it means
+  is made (the door keeps a refused hello's connection until it is closed: by its own close, the refusal's code and
+  reason, `REFUSED_CLOSE_MS` after it was refused, where nothing closed it before). `scripts/mesh-base.ts` (a step of
   `scripts/check.sh`) refuses an import of anything else of the station's, a type's too, in them and in what they
   stand on, and still.fail's name in their code: what one of them needs is given it as a parameter.
 - The main thread waits on nothing: every device's request and every agent's tool call waits behind it, and a call of
@@ -215,7 +218,8 @@
   writes when it will.
 - A test waits for what the station set going with `settle()` (`test/hub-fakes.ts`): turns of the loop with no file
   request out, since the station reads off its main thread and how many turns the disk takes is the machine's. A count
-  of turns of a test's own before it looks is that race again.
+  of turns of a test's own before it looks is that race again. What may never come (a line, a close) is taken with
+  `given()` beside it: there by then, or the test fails saying so, not at the runner's limit.
 - The lock's world tests (`test/lock-world-sim.ts`, run by `test/lock-world-1.test.ts` to `-3`) pass when exactly what
   `KNOWN_SEEDS` and `KNOWN_TOLD` say fails on the product (2026-11-12): anything else failing fails them, and a known
   failure that holds now must be taken out of the table, which only shrinks. The fork-choice models' runners

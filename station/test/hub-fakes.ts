@@ -273,6 +273,15 @@ export async function settle(rounds = 100) {
   }
 }
 
+/// What `what` gives, where it gives it by the time all that was set going is done (`settle`): one that has not by
+/// then never will by itself, and the test fails saying `why` rather than wait for it for good.
+export async function given<A>(what: Promise<A>, why: string): Promise<A> {
+  const not = Symbol();
+  const got = await Promise.race([what, settle().then(() => not)]);
+  if (got === not) throw new Error(`not by the time all was done: ${why}`);
+  return got as A;
+}
+
 export const message = (over: Partial<InboundMessage> = {}): InboundMessage => {
   const ts = `${1000 + next()}.000100`;
   return { channel: "C1", threadTs: ts, ts, user: "U1", text: "<@UBOT> hello", addressed: true, ...over };
