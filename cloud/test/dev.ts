@@ -23,6 +23,8 @@
 // workspace kept in PERSIST/dev.json at the first start, nothing made anew (no workspace, no enrollments).
 // RELAY_URLS (comma-separated) and RELAY_NAMES (JSON) add relays beside RELAY, as on Cloudflare (the console's 中继 page:
 // what they send to /v1/relays/load is believed with a cf-connecting-ip of their address, as Cloudflare would set it).
+// LOGIN_LIMIT_TIMES=<n> lets an address start n times the sign-ins the cloud allows (env.ts): apps/mbui's end to end signs
+// every device of a run in from 127.0.0.1, runs in a row within the same minute and day.
 // With MAIL=1, signing in offers an email too (login.ts): the codes are printed here instead of being sent.
 // With PUSH_LOG=<file>, pushes work with a VAPID key made at start, and what the cloud pushes (to browsers, to FCM)
 // is written there, a JSON line each (its body base64), instead of reaching a push service.
@@ -80,7 +82,7 @@ const pushes = pushLog ? {
 const persisted = process.env.PERSIST ? join(process.env.PERSIST, "dev.json") : "";
 const resumed: { grantJwk: JsonWebKey; workspace: string } | null =
   process.env.RESUME && persisted ? JSON.parse(await readFile(persisted, "utf8").catch(() => "null")) : null;
-const h = await harness({ clock: "real", ...(resumed ? { grantJwk: resumed.grantJwk } : {}), ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", ...(process.env.RELAY_URLS ? { relayUrls: process.env.RELAY_URLS } : {}), ...(process.env.RELAY_NAMES ? { relayNames: JSON.parse(process.env.RELAY_NAMES) } : {}), adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.GCP_TELEMETRY ? { telemetry: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.MAIL ? { mail: (m: { to: string; subject: string }) => (console.log(`mail to ${m.to}: ${m.subject}`), true) } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
+const h = await harness({ clock: "real", ...(resumed ? { grantJwk: resumed.grantJwk } : {}), ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", ...(process.env.RELAY_URLS ? { relayUrls: process.env.RELAY_URLS } : {}), ...(process.env.RELAY_NAMES ? { relayNames: JSON.parse(process.env.RELAY_NAMES) } : {}), adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.GCP_TELEMETRY ? { telemetry: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(Number(process.env.LOGIN_LIMIT_TIMES) > 1 ? { loginLimitTimes: Number(process.env.LOGIN_LIMIT_TIMES) } : {}), ...(process.env.MAIL ? { mail: (m: { to: string; subject: string }) => (console.log(`mail to ${m.to}: ${m.subject}`), true) } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
 const aliceTokens = await h.login("alice");
 const alice = h.as(aliceTokens);
 // alice may use the test channel (the console's switch does the same).

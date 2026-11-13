@@ -550,7 +550,8 @@ export class LoginLimiter extends DurableObject<Env> {
       short: old?.minute === minute ? old.short : 0,
       daily: old?.day === day ? old.daily : 0,
     };
-    if (next.short >= 10 || next.daily >= 100) return false;
+    const times = Math.max(1, Math.floor(Number(this.env.LOGIN_LIMIT_TIMES ?? 1)) || 1);
+    if (next.short >= 10 * times || next.daily >= 100 * times) return false;
     next.short++;
     next.daily++;
     this.ctx.storage.kv.put("limits", next);

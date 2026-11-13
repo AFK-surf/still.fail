@@ -195,6 +195,9 @@ export const fail = (what: string, why: unknown) => {
   failed++;
   log(`FAIL ${what}: ${why instanceof Error ? why.message : String(why)}`.slice(0, 3000));
 };
+/// A device the dev cloud would not sign in (its sign-in limit, the cloud down): every round after it that needs that
+/// device would fail one by one, for minutes, each naming something else; the run ends at once instead, saying why.
+export class SignInFailed extends Error {}
 export async function check(what: string, body: () => Promise<unknown>): Promise<boolean> {
   try {
     await body();
@@ -202,6 +205,7 @@ export async function check(what: string, body: () => Promise<unknown>): Promise
     return true;
   } catch (e) {
     fail(what, e);
+    if (e instanceof SignInFailed) throw new SignInFailed(`stopped: a device not signed in (${e.message})`);
     return false;
   }
 }
@@ -365,7 +369,7 @@ export class Device {
     // (the dev cloud's sign-in: one over the account's requests a minute is a finding, not tried again)
     const r = await fetch(`${origin}/__dev/account?user=${this.user}`);
     const text = await r.text();
-    if (!r.ok) throw new Error(`dev sign-in: ${r.status} ${text.slice(0, 200)}`);
+    if (!r.ok) throw new SignInFailed(`${this.name} dev sign-in: ${r.status} ${text.slice(0, 200)}`);
     const account = JSON.parse(text);
     await this.call("migrate", { accounts: [account] });
     const accounts = await this.until({ topic: "accounts" }, (v) => (Array.isArray(v) && v.length > 0 ? v : undefined));

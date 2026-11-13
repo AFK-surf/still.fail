@@ -17,7 +17,9 @@
 //     started anew let in by both.
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
-import { readFileSync, writeFileSync } from "node:fs";
+import { createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { check, Device, dir, fail, failures, type J, log, must, stationDo, stationSays, whenChanged, within } from "./device.ts";
 
 const short = (s: J) => JSON.stringify({ state: s.state, cause: s.cause, message: s.message });
@@ -28,7 +30,10 @@ const pDev = new Device("P");
 const xDev = new Device("X", "alice", { page: true });
 const qDev = new Device("Q", "frank");
 const rDev = new Device("R", "gina");
-// hank, a member after the move (his first app); frank's web page
+// gina's web page, approved on the chain by R before the move, and her second app; hank, a member after the move (his
+// first app); frank's web page
+const gDev = new Device("G", "gina", { page: true });
+const tDev = new Device("T", "gina");
 const sDev = new Device("S", "hank");
 const yDev = new Device("Y", "frank", { page: true });
 const fifthData = `${process.env.E2E_STATION}/data`;
@@ -110,6 +115,12 @@ try {
     }
     await whenChanged([fifthData, sixthData], () => [threeSays("fifth"), threeSays("sixth")].every((s) => personsAt(s) === 3), 90_000, () => `persons: fifth ${personsAt(threeSays("fifth"))}, sixth ${personsAt(threeSays("sixth"))}`);
   });
+  await must("G, gina's web page, approved in the workspace's lock by her app R face to face", async () => {
+    await gDev.signIn();
+    await approvedInThree(gDev, true, rDev);
+  });
+  const gId = await baseOf(gDev);
+  const gLine = (s: string) => new RegExp(`^DEVICE ${gId.slice(0, 12)} ${rDev.sub} web `, "m").test(s);
   // A vault of `owner`'s in the workspace with an item, and how it is used: locked first (no key in memory), opened, an item
   // written; what its sealer was asked for that, a line each.
   const threeVaults = new Map<Device, { vault: string; item: string; secret: string }>();
@@ -127,6 +138,14 @@ try {
     return x.askedWhat(from).map((l) => l.split(" ").slice(1, 3).join(" "));
   };
   const usedBefore = new Map<Device, string[]>();
+  const atBoth = (what: string, ok: (said: string) => boolean, ms = 60_000) =>
+    whenChanged([fifthData, sixthData], () => [threeSays("fifth"), threeSays("sixth")].every(ok), ms, () => `${what}: fifth ${threeSays("fifth").split("\n").filter((x) => !x.startsWith("DEVICE")).join("; ")}`);
+  /// What `x`'s sealer was asked while `act` ran, a line each.
+  const asksOf = async (x: Device, act: () => Promise<unknown>): Promise<string[]> => {
+    const from = x.asked();
+    await act();
+    return x.askedWhat(from).map((l) => l.split(" ").slice(1).join(" "));
+  };
   await must("A and R each set up a vault of their own in the workspace on the first station, keep an item, open and write it", async () => {
     for (const x of [vDev, rDev]) {
       await x.call("vault.setup", { workspace: three });
@@ -149,6 +168,9 @@ try {
   const askedAt = new Map(threeDevices.map((x) => [x, x.asked()]));
   const rootOf = (said: string) => said.match(/^MOVED (\S+) (\S+)/m);
   const devicesIn = (s: string) => s.split("\n").filter((x) => x.startsWith("DEVICE ")).map((x) => x.split(" ").slice(1, 4).join(" ")).sort().join("; ");
+  // (the chain's devices but G: a member's web page is not said by the move, only by their own app as it next holds
+  // the seed for something they do, below)
+  const notG = (s: string) => s.split("\n").filter((x) => !x.startsWith(`DEVICE ${gId.slice(0, 12)} `)).join("\n");
   const personsIn3 = (s: string) => s.split("\n").filter((x) => x.startsWith("PERSON ")).sort().join("; ");
   // (the list as the chain has it at the first, before the move: what the state in force is held to after it)
   const onChain = threeSays("fifth");
@@ -172,7 +194,8 @@ try {
     for (const s of said) {
       if (!/^STATIONS 2$/m.test(s)) throw new Error(`moved: ${s.split("\n").filter((x) => !x.startsWith("DEVICE")).join("; ")}`);
       if (personsIn3(s) !== personsIn3(onChain)) throw new Error(`persons on the chain ${personsIn3(onChain)}; moved ${personsIn3(s)}`);
-      if (devicesIn(s) !== devicesIn(onChain)) throw new Error(`devices on the chain ${devicesIn(onChain)}; moved ${devicesIn(s)}`);
+      if (devicesIn(s) !== devicesIn(notG(onChain))) throw new Error(`devices on the chain but G ${devicesIn(notG(onChain))}; moved ${devicesIn(s)}`);
+      if (!gLine(onChain) || gLine(s)) throw new Error(`G on the chain ${gLine(onChain)}, moved ${gLine(s)}`);
     }
     log(`  ${devicesIn(onChain).split("; ").length} devices, as on the chain: ${devicesIn(onChain).split("; ").map((x) => x.split(" ").slice(1).join(" ")).join(", ")}`);
   });
@@ -193,6 +216,26 @@ try {
       if (now.join("; ") !== usedBefore.get(x)!.join("; ")) throw new Error(`${x.name} asked ${now.join("; ")}, on the chain ${usedBefore.get(x)!.join("; ")}`);
     }
   });
+  await check("G, gina's web page on the chain, not said before the move: out at both stations after it; said on gina's own log as R next holds its seed (her second app T approved face to face, one ask on R); then at both and let in by both, no code", async () => {
+    for (const id of both()) log(`  G sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(gDev, id, (s) => s.state !== "online" && s.state !== "connecting"))}`);
+    const out = await gDev.lock(three, (l) => l.me?.waiting === true && !l.me?.confirmed, 60_000);
+    log(`  G's page: confirmed ${out.me?.confirmed}, able to ask ${out.me?.waiting}`);
+    await tDev.signIn();
+    const asked = await asksOf(rDev, () => joinVia(rDev, tDev));
+    log(`  R asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`R asked ${asked.length} times`);
+    await atBoth("G at both", gLine);
+    // (whether the page, only waiting, comes back by itself; else as its person presses to ask there: its stations
+    // tried again first, nobody asked where one lets it in, views/pair.ts `begin`)
+    const back = await inThree(gDev, fifthId, (s) => s.state === "online", 20_000).then(() => true, () => false);
+    log(`  G let in by the first without being opened again within 20 s: ${back}`);
+    if (!back) {
+      const asked = await gDev.call("lock.pair", { workspace: three });
+      log(`  G pressed to ask: ${JSON.stringify(asked)}`);
+    }
+    for (const id of both()) await inThree(gDev, id, (s) => s.state === "online");
+    await gDev.lock(three, (l) => l.locked && l.me?.confirmed, 60_000);
+  });
   // ── round 20: the acts of a moved workspace, each end to end on the workspace after round 19's move (views/lock.ts: each a
   // statement in the actor's own log, `sayMoved`, which asks its person each time; client/core-ts/AGENTS.md, A lock
   // held here). A newcomer's first app approved face to face (`member` said by A, one ask) with the role A gave as it
@@ -201,14 +244,6 @@ try {
   // taken out, refused by both, her page's topic as it stands; off and on again by A (alice's, the root), frank, an
   // owner now, answered `lock_root_only` ──
   const memberAt = (said: string, who: string) => said.match(new RegExp(`^MEMBER ${who} (\\S+)`, "m"))?.[1] ?? null;
-  const atBoth = (what: string, ok: (said: string) => boolean, ms = 60_000) =>
-    whenChanged([fifthData, sixthData], () => [threeSays("fifth"), threeSays("sixth")].every(ok), ms, () => `${what}: fifth ${threeSays("fifth").split("\n").filter((x) => !x.startsWith("DEVICE")).join("; ")}`);
-  /// What `x`'s sealer was asked while `act` ran, a line each.
-  const asksOf = async (x: Device, act: () => Promise<unknown>): Promise<string[]> => {
-    const from = x.asked();
-    await act();
-    return x.askedWhat(from).map((l) => l.split(" ").slice(1).join(" "));
-  };
   await check("frank made an owner by A: an owner at both stations, A asked once", async () => {
     const asked = await asksOf(vDev, () => vDev.call("workspace.setRole", { account: vDev.sub, workspace: three, member: qDev.sub, role: "owner" }));
     log(`  A asked: ${asked.join("; ") || "nothing"}`);
@@ -238,15 +273,35 @@ try {
     log(`  Q asked: ${asked.join("; ") || "nothing"}`);
     await atBoth("Y frank's web page", (s) => new RegExp(`^DEVICE ${yId.slice(0, 12)} ${qDev.sub} web `, "m").test(s));
   });
+  // (which order the run covers: E2E_THIRD=last puts the third's id after one of the two's; first by default)
+  const thirdFirst = process.env.E2E_THIRD !== "last";
+  let thirdId = "";
   await check("a station enrolled by frank after the move, taken into its list by its code on Q: three at both, it holds the list moved and on; taken out: two again", async () => {
     const made = await qDev.call("workspace.enroll", { account: qDev.sub, workspace: three, name: "third" });
     const at = `${dir}/enroll-third.log`;
     writeFileSync(at, `ANSWER workspace.enroll ok ${JSON.stringify(made)}\n`);
-    stationDo("second-station", at, "third");
+    // (its key the run's, its id first of the three or not as E2E_THIRD says: the vault's fault #6056 mended showed only
+    // where it sorted first and A had copied its vault there, round "P taken off alice's own lock by A")
+    const seedFile = `${process.env.E2E_WORK}/run/third.seed`;
+    for (;;) {
+      const seed = randomBytes(32);
+      const key = createPrivateKey({ key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]), format: "der", type: "pkcs8" });
+      const id = Buffer.from(createPublicKey(key).export({ format: "jwk" }).x as string, "base64url").toString("hex");
+      if ((id < fifthId && id < sixthId) === thirdFirst) {
+        writeFileSync(seedFile, seed);
+        break;
+      }
+    }
+    try {
+      stationDo("second-station", at, "third");
+    } finally {
+      rmSync(seedFile, { force: true });
+    }
     const said = readFileSync(`${process.env.E2E_WORK}/run/third-enroll.log`, "utf8");
     const code = said.match(/(?:code|安全码为)\s*([0-9A-Z-]{4,})/i)?.[1];
     if (!code) throw new Error(`no code in: ${said}`);
     const id = (await qDev.until({ topic: "workspace", workspace: three }, (v) => (v?.stations ?? []).find((s: J) => s.id !== fifthId && s.id !== sixthId), 60_000)).id as string;
+    thirdId = id;
     const asked = await asksOf(qDev, () => qDev.call("lock.addStation", { workspace: three, station: id, code }));
     log(`  Q asked: ${asked.join("; ") || "nothing"}`);
     await atBoth("three stations", (s) => /^STATIONS 3$/m.test(s));
@@ -278,10 +333,34 @@ try {
     await atBoth("P off", (s) => !s.includes(`DEVICE ${pBase.slice(0, 12)} `));
     for (const id of both()) await inThree(pDev, id, (s) => s.state !== "online" && s.state !== "connecting");
     const v = await vDev.until({ topic: "vaults", workspace: three }, (v) => (v?.vaults ?? []).find((x: J) => x.id === threeVaults.get(vDev)!.vault), 30_000);
-    log(`  A's vault as P went: ${JSON.stringify({ keyed: v.keyed, devices: v.devices, waiting: v.waiting ?? null })}`);
+    log(`  A's vault as P went: ${JSON.stringify({ keyed: v.keyed, devices: v.devices, waits: v.waits ?? null })}`);
+    const copies = vDev.answers.filter((x) => thirdId !== "" && x.station.includes(thirdId) && x.path.includes("copy=1")).length;
+    log(`  third first: ${thirdId !== "" && thirdId < fifthId && thirdId < sixthId ? "yes" : "no"}, copies: ${copies}`);
     const asked = await vaultUse(vDev);
     log(`  A used its vault, asked: ${asked.join("; ") || "nothing"}`);
     await vDev.until({ topic: "vaults", workspace: three }, (v) => (v?.vaults ?? []).find((x: J) => x.id === threeVaults.get(vDev)!.vault && x.keyed && x.devices < held), 60_000);
+  });
+  // (no topic says who took a device out: views/lock.ts `outOf` covers a member taken out, and no page reads it yet. What
+  // P holds is read where its host keeps alice's own log, a file of its storage, as the app holds it: hosts/node.ts)
+  await check("P, taken off alice's own lock, holds who took it off and when: the removal on the log it keeps, signed by A's key there", async () => {
+    const pBase = await baseOf(pDev);
+    const file = join(dir, "P", "core", `personal-lock-${Buffer.from(vDev.sub).toString("hex")}`);
+    const kept = (): J[] => (existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : []);
+    const said = (es: J[]) => {
+      const ids = new Map<string, string>();
+      for (const e of es) {
+        const d = e.kind === "genesis" ? e.body?.device : e.kind === "device" ? e.body : null;
+        if (typeof d?.key === "string") ids.set(d.key, d.id);
+      }
+      const mine = [...ids].find(([, id]) => id === pBase)?.[0];
+      const off = es.filter((e) => e.kind === "device.remove" && e.body?.key === mine).at(-1);
+      return off === undefined ? null : { by: ids.get(off.sig?.key) ?? off.sig?.key, at: off.at };
+    };
+    await whenChanged([join(dir, "P", "core")], () => said(kept()), 60_000, () => `P keeps ${kept().length} entries of alice's log, no removal of it`);
+    const o = said(kept())!;
+    log(`  P holds: taken off by ${o.by === vBase ? "A" : o.by}, at ${new Date(o.at * 1000).toISOString()}`);
+    if (o.by !== vBase) throw new Error(`taken off by ${o.by}, not A (${vBase})`);
+    if (Math.abs(o.at * 1000 - Date.now()) > 300_000) throw new Error(`at ${o.at}, not now`);
   });
   await check("gina taken out by frank: out of the list at both stations; her app loses the workspace, nothing asked on it", async () => {
     const before = rDev.asked();
@@ -346,5 +425,5 @@ try {
   fail("the run", e);
 }
 log(failures() === 0 ? "ALL PASSED" : `${failures()} FAILED`);
-await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev].map((x) => x.close())), 5000);
+await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev].map((x) => x.close())), 5000);
 process.exit(failures() === 0 ? 0 : 1);

@@ -287,3 +287,21 @@ test("monoid's cloud names monoid on its pages and in its mails, still.fail's ho
     await h.close();
   }
 });
+
+test("an address starts ten sign-ins a minute; a local cloud told LOGIN_LIMIT_TIMES allows that many times more", async () => {
+  for (const times of [undefined, 3]) {
+    const h = await harness(times === undefined ? {} : { loginLimitTimes: times });
+    try {
+      const start = async () => {
+        const query = new URLSearchParams({ state: randomSecret(), redirect_uri: "http://127.0.0.1:32145/oauth/callback", code_challenge: await digest(randomSecret()), code_challenge_method: "S256" });
+        return (await h.fetch("/v1/auth/google/start?" + query, { redirect: "manual", headers: { "cf-connecting-ip": "10.9.0.1" } })).status;
+      };
+      const allowed = 10 * (times ?? 1);
+      const statuses: number[] = [];
+      for (let i = 0; i <= allowed; i++) statuses.push(await start());
+      assert.deepEqual([statuses.slice(0, allowed).every((s) => s !== 429), statuses[allowed]], [true, 429], `LOGIN_LIMIT_TIMES ${times}: ${statuses.join()}`);
+    } finally {
+      await h.close();
+    }
+  }
+});
