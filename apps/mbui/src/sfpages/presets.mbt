@@ -1088,9 +1088,10 @@ fn repo_mark(c : @ui.Ctx, name : String, repo : String, icon : String, size : Do
 }
 
 ///|
-/// A folder's mark in the preset's dialog: about as high as its two lines, its corner the small block's (the ladder's
-/// 10).
-let preset_dir_mark : Double = 34.0
+/// A folder's mark in the preset's dialog: as high as its two lines, its corner the small block's (the ladder's 10), so
+/// with a row's 8 over and under it stands a corner's inset (8) in from the row's round ground on every side, concentric
+/// with its 18 (@sf.panel_row_in_node) whether the row has one line or two.
+let preset_dir_mark : Double = 38.0
 
 ///|
 /// The icon in a neutral tile of a row that does something (浏览文件夹…, 从 Git 克隆…, 添加目录).

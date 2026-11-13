@@ -69,7 +69,9 @@ pub fn choice_row_node(
       let corner = if at.small {
         small_panel_inner(r_menu)
       } else if narrow {
-        if card { row_corner } else { 0.0 }
+        // (a page's row across it square; in a panel whose column stands in from its sides, round, never a square
+        // patch standing in from them: the corner rule's lit square, 2026-11-13)
+        if card || (in_panel is Some(_) && at.sides - out > 0.5) { row_corner } else { 0.0 }
       } else if reach {
         0.0
       } else if part.list {

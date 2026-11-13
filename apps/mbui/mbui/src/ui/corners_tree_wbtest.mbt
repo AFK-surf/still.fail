@@ -853,3 +853,47 @@ test "corners: a mark hung over a small dot in a tree row's corner (over + offse
   assert_eq(tree_dot_halo_faults(true), [])
   assert_eq(tree_dot_halo_faults(false).length(), 1)
 }
+
+///|
+/// A panel 24 round in the window's tree, `pad` in at its sides, holding a row pressed whole (240 by 48) `r` round whose
+/// ground shows only under the hand: the corner rule's faults, the row not pointed at.
+fn tree_lit_row_faults(pad : Double, r : Double) -> Array[String] {
+  let t = Tester::new(
+    fn(_) {  },
+    tree=fn(root) {
+      root.box(fn(page) {
+        page.pad(Is(40.0)) |> ignore
+        page.box(fn(panel) {
+          panel.width(Is(Some(300.0))).padding(Is((pad, 48.0, pad, 48.0))).radius(Is(24.0)).ground(Is(0x222222FFL)) |> ignore
+          panel.box(fn(v) {
+            v
+            .height(Is(Some(48.0)))
+            .radius(Is(r))
+            .ground(By(fn() { if v.pointed() { 0xEEEEEEFFL } else { 0L } }))
+            .presses(Is(true))
+            .on_press(fn() {  })
+            .says(Is(Some(@view.said(Button, label="row"))))
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  t.draw()
+  t.corner_faults()
+}
+
+///|
+test "corners: a row's ground under the hand drawn square, standing in from a rounded panel's sides far from its corners, is a fault; round, or flush with the panel's sides, none" {
+  let square = tree_lit_row_faults(20.0, 0.0)
+  assert_true(square.length() == 1 && square[0].contains("lit square under the hand"), msg=list_text(square))
+  assert_eq(tree_lit_row_faults(20.0, 12.0), [])
+  assert_eq(tree_lit_row_faults(0.0, 0.0), [])
+}
