@@ -55,7 +55,7 @@ fn made_by_nodes(t : @ui.Tester, s : String) -> Bool {
 ///|
 /// Whether an old view's list (Ctx::list, which only the old page's messages are) has a row over (x, y).
 fn made_old_row_at(t : @ui.Tester, x : Double, y : Double) -> Bool {
-  t.list_row_boxes().iter().any(fn(rows) { rows.iter().any(fn(b) { x >= b.0 && x < b.0 + b.2 && y >= b.1 && y < b.1 + b.3 }) })
+  t.old_list_row_boxes().iter().any(fn(rows) { rows.iter().any(fn(b) { x >= b.0 && x < b.0 + b.2 && y >= b.1 && y < b.1 + b.3 }) })
 }
 
 ///|

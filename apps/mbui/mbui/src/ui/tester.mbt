@@ -1868,10 +1868,23 @@ fn tree_lists() -> Array[@view.ListSeen] {
 }
 
 ///|
-/// Each list's visible rows' boxes (x, y, width, height), top to bottom, list by list as they were built.
+/// Each list's visible rows' boxes (x, y, width, height), top to bottom, list by list as they were built: an old view's
+/// (old_list_row_boxes); where none is on screen, each page's list's of the window's tree (tree_lists).
 pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Double, Double)]] {
+  let out = self.old_list_row_boxes()
+  if out.is_empty() {
+    for l in tree_lists() {
+      out.push(l.rows.map(fn(r) { r.2 }))
+    }
+  }
+  out
+}
+
+///|
+/// Each old view's list's visible rows' boxes (x, y, width, height), top to bottom, list by list as they were built
+/// (Ctx::list): none of a page's list of the window's tree, as Tester::list_row_boxes reads where no old one is.
+pub fn Tester::old_list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Double, Double)]] {
   self.reads_own()
-  ignore(self)
   let c = g()
   let out = []
   for i in 0..<c.count {
@@ -1884,11 +1897,6 @@ pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Dou
         r = n.next
       }
       out.push(rows)
-    }
-  }
-  if out.is_empty() {
-    for l in tree_lists() {
-      out.push(l.rows.map(fn(r) { r.2 }))
     }
   }
   out

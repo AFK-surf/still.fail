@@ -237,11 +237,16 @@ fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String]
   let runs = t.text_runs()
   // (the sidebar's: the title furthest left, a page beside it may say it again; whole, or cut to … where narrow)
   // (the last, 备用 key, only where the row above it ends: under the window's foot where the rows above are tall)
-  let title_runs = titles.mapi(fn(i, title) {
-    let found = runs.filter(fn(r) {
+  let titled = fn(title : String) {
+    runs.filter(fn(r) {
       r.text == title ||
       (r.text.has_suffix("…") && r.text.length() > 4 && title.has_prefix(r.text[:r.text.length() - 1].to_owned()))
     })
+  }
+  // (where the sidebar's titles start: the first's furthest left; a page beside drawing one again is not the sidebar's)
+  let side_x = titled(titles[0]).fold(init=@double.infinity, fn(a, r) { if r.x0 < a { r.x0 } else { a } })
+  let title_runs = titles.mapi(fn(i, title) {
+    let found = titled(title).filter(fn(r) { (r.x0 - side_x).abs() < 0.5 })
     if found.length() == 0 && i == titles.length() - 1 {
       return None
     }
