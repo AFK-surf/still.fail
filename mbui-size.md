@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [9128d4550](https://github.com/AFK-surf/monoid/commit/9128d4550f4d88bf161c1601baf5baed744ed8ed) Point repository references at AFK-surf/monoid (#5 | 1.95 | 2.62 | 11.24 | 30.7 | 40.37 | 27.36 | 52.3 | 93.98 | 100.45 |
 | [09e08a60c](https://github.com/AFK-surf/monoid/commit/09e08a60cb3f59f3d330f63f984bf55ce3b6489c) mbui app: the bars fall to what main d207ee61's ru | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 93.95 | 100.74 |
 | [7bfaa3583](https://github.com/AFK-surf/monoid/commit/7bfaa3583ef3628401acf4740307b0e8f48f40d5) app tests: chat_page_nodes in two runs on the four | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 100.8 |
 | [d207ee613](https://github.com/AFK-surf/monoid/commit/d207ee61367b15b57e665c43629f73f0c6d97bf8) mbui app: center chat top bar title inside touch w | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 98.58 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c9847417a](https://github.com/AFK-surf/monoid/commit/c9847417a98223dfe0fc08b1854e36b6ca51a911) core: a document written reads none of itself back | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.47 | 157.59 |
 | [5ea6ac79f](https://github.com/AFK-surf/monoid/commit/5ea6ac79f724b7a7404ef70355f84a9d1cbd3b11) mbui: measure only scroll_held from its top in siz | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.54 | 165.21 |
 | [604538288](https://github.com/AFK-surf/monoid/commit/6045382883fe5cc156a9b957eac3a0c13314df1d) core tests: what each change the sync writes makes | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.54 | 151.85 |
-| [f55d44fbd](https://github.com/AFK-surf/monoid/commit/f55d44fbd3bb9aa39c30c521b8547a12f64af8e5) locks: a change no station took is pending, said s | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.44 | 195.46 |
