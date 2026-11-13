@@ -324,6 +324,7 @@ pub fn work_mark_node(
   key : String,
   words : @ui.TextStyle,
   hot : @ui.TextStyle,
+  link? : @ui.TextStyle,
   lead? : String = "",
   smallest? : Bool = false,
 ) -> Unit {
@@ -363,29 +364,31 @@ pub fn work_mark_node(
     // row to give way)
     o.row(Is(true)).fits(Is(true)).lines_up(Is(Some(Middle))).shrink(Is(work_mark_gives)).min_width(Is(Some(0.0))) |> ignore
     if smallest {
+      let rest = link.unwrap_or(words)
       form(o, 0, fn() { count() != "" }, fn(p) {
         p.pick(running, fn(i, at_work) {
           if at_work {
             spokes(i)
           } else {
-            @sf.icon_node(i, "wait", 12.0, By(fn() { if @sf.lit_node(p) { @sf.theme().p.accent } else { @sf.theme().p.muted } })) |> ignore
+            @sf.icon_node(i, "wait", 12.0, By(fn() { if @sf.lit_node(p) { @sf.theme().p.accent } else if link is Some(_) { @sf.theme().p.blue } else { @sf.theme().p.muted } })) |> ignore
           }
         })
-        @sf.words_node(p, count, fn() { if @sf.lit_node(p) { hot } else { words } }) |> ignore
+        @sf.words_node(p, count, fn() { if @sf.lit_node(p) { hot } else { rest } }) |> ignore
       })
-      o.show(fn() { count() == "" }, fn(w) { work_mark_whole(w, form, spokes, mark, card, words, hot) })
+      o.show(fn() { count() == "" }, fn(w) { work_mark_whole(w, form, spokes, mark, card, words, hot, link) })
       return
     }
-    work_mark_whole(o, form, spokes, mark, card, words, hot)
+    let rest = link.unwrap_or(words)
+    work_mark_whole(o, form, spokes, mark, card, words, hot, link)
     form(o, -1, fn() { count() != "" }, fn(p) {
       p.pick(running, fn(i, at_work) {
         if at_work {
           spokes(i)
         } else {
-          @sf.icon_node(i, "wait", 12.0, By(fn() { if @sf.lit_node(p) { @sf.theme().p.accent } else { @sf.theme().p.muted } })) |> ignore
+          @sf.icon_node(i, "wait", 12.0, By(fn() { if @sf.lit_node(p) { @sf.theme().p.accent } else if link is Some(_) { @sf.theme().p.blue } else { @sf.theme().p.muted } })) |> ignore
         }
       })
-      @sf.words_node(p, count, fn() { if @sf.lit_node(p) { hot } else { words } }) |> ignore
+      @sf.words_node(p, count, fn() { if @sf.lit_node(p) { hot } else { rest } }) |> ignore
     })
   })
 }
@@ -404,10 +407,12 @@ fn work_mark_whole(
   card : () -> Json?,
   words : @ui.TextStyle,
   hot : @ui.TextStyle,
+  link : @ui.TextStyle?,
 ) -> Unit {
+  let rest = link.unwrap_or(words)
   form(o, work_mark_drop, fn() { true }, fn(p) {
     spokes(p)
-    @sf.words_node(p, mark, fn() { if @sf.lit_node(p) { hot } else { words } })
+    @sf.words_node(p, mark, fn() { if @sf.lit_node(p) { hot } else { rest } })
     .shorter(By(fn() {
       let counts = text(card(), "workMarkShort")
       if counts != "" && counts != mark() {

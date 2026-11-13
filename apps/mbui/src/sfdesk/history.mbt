@@ -68,41 +68,22 @@ fn history_head_node(v : @view.View, src : Source, r : ChatRef, key : String, ti
         @sf.style_node(k, fn() { @sf.keys_row() }, in_row=true)
         k.shrink(Is(0.0)) |> ignore
         // 只看收发, its ground the picked one's while it is on
-        let io = k.box(fn(b) {
-          let on = fn() { @sfpages.history_only_io() }
-          @sf.style_node(b, fn() { if on() { wh_toggle_on } else { wh_toggle } }, in_row=true)
-          @sf.presses_node(b, fn() { @sfpages.history_only_io_flip() })
-          b.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.history.onlyIo"))) })) |> ignore
-          let hot = fn() { on() || @sf.lit_node(b) }
-          @sf.icon_node(b, "filter", 14.0, By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } })) |> ignore
-          @sf.words_node(b, fn() { @sf.t("web-main.history.onlyIo") }, fn() { if hot() { wh_toggle_hot } else { wh_toggle_words } })
-          |> ignore
-        })
+        let io = @sf.toggle_chip_node(
+          k,
+          fn() { @sf.t("web-main.history.onlyIo") },
+          fn() { @sfpages.history_only_io() },
+          fn() { @sfpages.history_only_io_flip() },
+          icon="filter",
+        )
         @sf.tip_node(tips, io, fn() { @sf.t("web-main.history.onlyIoTip") }) |> ignore
         // 详情, folded or not
-        k.box(fn(b) {
-          @sf.style_node(b, fn() { wh_toggle }, in_row=true)
-          @sf.presses_node(b, fn() { history_own.shut.set(!history_own.shut.get()) })
-          b.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.history.details"))) })) |> ignore
-          @sf.words_node(b, fn() { @sf.t("web-main.history.details") }, fn() {
-            if @sf.lit_node(b) {
-              wh_toggle_hot
-            } else {
-              wh_toggle_words
-            }
-          })
-          |> ignore
-          b.pick(fn() { history_own.shut.get() }, fn(i, shut) {
-            @sf.icon_node(i, if shut { "chevron-down" } else { "chevron-up" }, 14.0, By(fn() {
-              if @sf.lit_node(b) {
-                @sf.theme().p.text
-              } else {
-                @sf.theme().p.muted
-              }
-            }))
-            |> ignore
-          })
-        })
+        @sf.toggle_chip_node(
+          k,
+          fn() { @sf.t("web-main.history.details") },
+          fn() { !history_own.shut.get() },
+          fn() { history_own.shut.set(!history_own.shut.get()) },
+          chevron=true,
+        )
         |> ignore
       })
       |> ignore
@@ -123,7 +104,7 @@ fn history_head_node(v : @view.View, src : Source, r : ChatRef, key : String, ti
 fn wh_summary_node(v : @view.View, a : () -> Json?, tips : @sf.TipLayer) -> Unit {
   v.box(fn(r) {
     @sf.style_node(r, fn() { wh_summary_row }, in_row=true)
-    r.shrink(Is(0.0)) |> ignore
+    r.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     @sfpages.history_attention_node(r, a, tips, wh_amber, wh_red)
   })
   |> ignore
@@ -178,30 +159,49 @@ fn wh_details_node(
       @sf.style_node(q, fn() { wh_quiet_line })
       q.fits(Is(true)) |> ignore
       @sf.words_node(q, quiet, fn() { wh_quiet_one }).shrink(Is(1.0)).min_width(Is(Some(0.0))).fit_whole(Is(true)) |> ignore
-      @sfpages.work_mark_node(q, src, station, key, wh_quiet_one, wh_quiet_link, lead=" · ")
+      @sfpages.work_mark_node(q, src, station, key, wh_quiet_one, wh_quiet_link, link=wh_quiet_link, lead=" · ")
     })
     // what runs it, and its account's page
     wh_line_node(
       d,
       fn(m) { @sfpages.agent_mark_node(m, fn() { text(field(s(), "maker"), "id") }, fn() { text(s(), "runtime") }, wh_mark_side) },
       fn(w) {
-        @sf.words_node(w, fn() { text(s(), "runtimeText") + " · " + text(s(), "processText") }, fn() { wh_words })
+        @sf.words_node(w, fn() { text(s(), "runtimeText") }, fn() { wh_words })
         .shrink(Is(1.0))
         .min_width(Is(Some(0.0)))
         |> ignore
-        w.show(fn() { text(s(), "process") == "warm" }, fn(e) {
-          e.row(Is(true)).lines_up(Is(Some(Middle))).shrink(Is(0.0)) |> ignore
-          @sf.words_node(e, fn() { " · " }, fn() { wh_dot }) |> ignore
-          wh_evict_node(e, src, station, key, tips)
-        })
       },
       fn(e) {
-        wh_link_node(e, fn() { @sf.t("web-pages.chat.profileDetails") }, fn(_) {
+        @sf.link_node(e, fn() { @sf.t("web-pages.chat.profileDetails") }, fn() {
           @sfbase.history_push()
           app.nav.push(Setting(@settings.Route::Profile(station, text(@signals.untracked(s), "profile"))))
-        })
+        }, chevron=true)
+        |> ignore
       },
     )
+    // process state and evict action on their own single line aligned under the runtime name (never wrapped beside centered icons)
+    d.show(fn() { text(s(), "processText") != "" || text(s(), "process") == "warm" }, fn(p) {
+      wh_line_node(
+        p,
+        fn(_) {  },
+        fn(w) {
+          w.show(fn() { text(s(), "processText") != "" }, fn(t) {
+            @sf.words_node(t, fn() { text(s(), "processText") }, fn() { wh_words })
+            .shrink(Is(1.0))
+            .min_width(Is(Some(0.0)))
+            |> ignore
+          })
+          w.show(fn() { text(s(), "process") == "warm" }, fn(e) {
+            e.row(Is(true)).lines_up(Is(Some(Middle))).shrink(Is(0.0)) |> ignore
+            e.show(fn() { text(s(), "processText") != "" }, fn(sep) {
+              @sf.words_node(sep, fn() { " · " }, fn() { wh_words }) |> ignore
+            })
+            wh_evict_node(e, src, station, key, tips)
+          })
+        },
+        fn(_) {  },
+      )
+    })
     // the station it runs on, what runs low on it at its end
     let look = fn() {
       @sfbase.station_marks(src, scope_of(station)).iter().find_first(fn(x) { x.address == station })
@@ -265,7 +265,11 @@ fn wh_details_node(
         },
         fn(e) {
           @sfpages.doing_mark_node(e, busy, failed, tips~)
-          wh_link_node(e, fn() { @sf.t("web-pages.chat.contextManage") }, manage)
+          @sf.link_opens_node(e, fn() { @sf.t("web-pages.chat.contextManage") }, fn(b) {
+            let (x, y, w, h) = b.placed_window_now()
+            manage(At(x, y, w, h))
+          }, chevron=true)
+          |> ignore
         },
       )
     })
@@ -280,7 +284,7 @@ fn wh_details_node(
 fn wh_evict_node(v : @view.View, src : Source, station : String, key : String, tips : @sf.TipLayer) -> Unit {
   let on = [("station", station), ("key", key)]
   let evicting = fn() { core_doing(src, ["session.evict"], on) }
-  wh_link_node(v, fn() { @sf.t("web-pages.chat.evict") }, fn(_) {
+  @sf.link_node(v, fn() { @sf.t("web-pages.chat.evict") }, fn() {
     if !@signals.untracked(evicting) {
       act(
         src,
@@ -292,6 +296,7 @@ fn wh_evict_node(v : @view.View, src : Source, station : String, key : String, t
       )
     }
   })
+  |> ignore
   @sfpages.doing_mark_node(v, evicting, fn() { core_failed(src, ["session.evict"], on) }, tips~)
 }
 
@@ -350,9 +355,13 @@ fn wh_transcript_node(v : @view.View, src : Source, station : String, key : Stri
         @sf.tip_node(tips, words, fn() { path.get() }) |> ignore
       },
       fn(e) {
-        wh_link_node(e, fn() { @sf.t("web-pages.chat.copyPath") }, fn(_) {
-          @sfbase.copy_out(path.get(), said=@sf.t("web-main.chat.transcriptCopied"))
-        })
+        @sf.link_node(
+          e,
+          fn() { @sf.t("web-pages.chat.copyPath") },
+          fn() { @sfbase.copy_out(path.get(), said=@sf.t("web-main.chat.transcriptCopied")) },
+          icon="copy",
+        )
+        |> ignore
       },
     )
   })
@@ -391,23 +400,6 @@ fn wh_line_node(
 }
 
 ///|
-/// A link of the details (detailLink) in `v`: its words, in the text's ink under the hand. `press` as it is pressed,
-/// given where it is.
-fn wh_link_node(v : @view.View, words : () -> String, press : (@sf.Beside) -> Unit) -> Unit {
-  v.box(fn(b) {
-    @sf.style_node(b, fn() { wh_link_box }, in_row=true)
-    b.shrink(Is(0.0)) |> ignore
-    @sf.presses_node(b, fn() {
-      let (x, y, w, h) = b.placed_window_now()
-      press(At(x, y, w, h))
-    })
-    b.says(By(fn() { Some(@view.said(Button, label=words())) })) |> ignore
-    @sf.words_node(b, words, fn() { if @sf.lit_node(b) { wh_link_hot } else { wh_dot } }) |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// A line's mark's side (sessionLineMark: 16).
 let wh_mark_side : Double = 16.0
 
@@ -434,24 +426,6 @@ let wh_identity : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2, align=ACen
 ///|
 // kept across runs: a value (no field of it changes)
 let wh_summary_row : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
-
-///|
-/// 只看收发 and 详情 (controls.css.ts textToggle): 2 by 4 in, 12 on 18, muted; the words' ink on hover; 只看收发 on, its
-/// ground the picked one's.
-// kept across runs: a value (no field of it changes)
-let wh_toggle : @ui.Style = @ui.css("row px=S1 py=S0_5 gap=S1 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wh_toggle_on : @ui.Style = @ui.css("row px=S1 py=S0_5 gap=S1 align=ACenter bg=Selected radius=Lg")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wh_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wh_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 /// 详情 (sessionDetails): 2 over, 16 at the sides, 14 under, 10 between; words 12, muted.
@@ -481,11 +455,11 @@ let wh_quiet_link : @ui.TextStyle = @ui.text_style(size=Meta, color=Link, wrap=f
 ///|
 /// What needs seeing to, in its tone (the disk amber, an account red).
 // kept across runs: a value (no field of it changes)
-let wh_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false)
+let wh_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
+let wh_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -504,11 +478,6 @@ let wh_line_words : @ui.Style = @ui.style(row=true, w=@sf.grow, align=ACenter, c
 let wh_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// The dot between a line's words and what is done at it, and a link at its end: kept whole.
-// kept across runs: a value (no field of it changes)
-let wh_dot : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
 /// The station's name: whole on its one line, what its machine is after it cut short first (itself only where it is
 /// longer than the line leaves beside the least of that, as a last resort: @sf.name_line_node).
 // kept across runs: a value (no field of it changes)
@@ -517,11 +486,3 @@ let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 ///|
 // kept across runs: a value (no field of it changes)
 let wh_file : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wh_link_box : @ui.Style = @ui.css("row align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)

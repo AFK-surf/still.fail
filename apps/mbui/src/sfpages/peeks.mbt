@@ -1138,7 +1138,7 @@ let peek_add : @ui.TextStyle = @ui.text_style(size=Meta, color=Positive, wrap=fa
 let peek_del : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A state's pill: a capsule 8 (6 before its glyph) in, its glyph 4 from its name.
+/// A state's pill: 20 high, full corners to stand concentric in its card's corner, no horizontal pad at the left so
 // kept across runs: a value (no field of it changes)
 let peek_state : @ui.Style = @ui.css("row h=S5 gap=S1 pl=S1_5 pr=S2 radius=Full align=ACenter")
 

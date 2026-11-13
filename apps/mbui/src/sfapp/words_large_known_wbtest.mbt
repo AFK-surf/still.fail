@@ -87,7 +87,6 @@ let words_large_known : Map[String, Int] = {
     // (its switch's title 「Send as file in this chat」 on two lines beside the switch, 40,642 224×50: the old panel's, told
     // of its nodes again as the tree's squeeze came to say what shares their row; it was 1 before its panel became nodes)
     ("phone-en chat-station-sheet", 1),
-    ("phone-en history-details", 1),
     ("phone-en drive-upload", 1),
     ("phone-en place-stations", 1),
     ("phone-en share-card", 3),

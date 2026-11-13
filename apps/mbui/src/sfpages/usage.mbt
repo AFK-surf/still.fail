@@ -257,11 +257,11 @@ let ug_cost : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibol
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_more_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
+let ug_more_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Link, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_more_lit : @ui.TextStyle = ug_more_words.then(@ui.text_style(color=Fg))
+let ug_more_lit : @ui.TextStyle = ug_more_words.then(@ui.text_style(color=Link))
 
 ///|
 // kept across runs: a value (no field of it changes)
