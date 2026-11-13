@@ -31,9 +31,9 @@ priv struct SizesSteady {
   mut words : Double
   /// when the hand last did something (rows_steady_hand) as the last frame was judged: what it did since is this frame's
   mut hand : Double
-  /// when each column of the tree's was last put at once (Tree::scroll_put_at) as the last frame was judged, by its node:
-  /// a put since is this frame's
-  puts : Map[Int, Double]
+  /// when each column of the tree's was last put at once (Tree::scroll_put_at) and its list's keys last changed by data
+  /// (Tree::scroll_keys_at) as the last frame was judged, by its node: either since is this frame's
+  puts : Map[Int, (Double, Double)]
 }
 
 ///|
@@ -320,10 +320,12 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     // track as the column goes, so in a frame the hand scrolled it as far in one frame as the hand did)
     let by_scroll = Array::make(k, false)
     // (and whether that column was put at once since the frame before (Scroll::put: a page's list brought to a block or
-    // its foot): what it moves by its offset alone goes there with it in this frame, as far as the put took it, its thumb
-    // as long as what the column holds came to in the put's layout, as it does in a frame the hand scrolled it)
+    // its foot), or its list's keys changed by data since (what it holds another length): what it moves by its offset
+    // alone goes there with it in this frame, as far as the put took it, its thumb as long as what the column holds came
+    // to in that frame's layout, as it does in a frame the hand scrolled it (the coordinator of the migration,
+    // 2026-11-13: a thumb says where the reader is in what the column holds, which the keys changing changes at once))
     let put_now = Array::make(k, false)
-    let puts_now : Map[Int, Double] = Map([])
+    let puts_now : Map[Int, (Double, Double)] = Map([])
     // (what holds each before it: a node of the window's tree put among the frame's may come after what it holds)
     let order : Array[Int] = []
     let ordered = Array::make(k, false)
@@ -363,7 +365,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
             // (not the one node the column holds, laid out in it: what is in that is measured with the scroll taken out)
             let moved = by >= 0 && !(tree_frame_ids.get(p) is Some(pid) && pid.at == by)
             if moved {
-              let at = tr.scroll_put_at(by)
+              let at = (tr.scroll_put_at(by), tr.scroll_keys_at(by))
               puts_now[by] = at
               if sizes_steady.puts.get(by) is Some(was) && was != at {
                 put_now[i] = true
@@ -468,7 +470,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         }
         let gap = seen.length() > 0 && now - seen[seen.length() - 1].1 > 2.5 * period
         // (what the hand's scroll moves by its offset alone, in the frame it did: as far as the hand took it; and in the
-        // frame its column was put at once, as far as the put took it)
+        // frame its column was put at once, or its list's keys changed by data, as far as that took it)
         if gap || resized || !shows || self.down || view_holds() || (hand_now && by_scroll[i]) || put_now[i] {
           seen.clear()
           continue
