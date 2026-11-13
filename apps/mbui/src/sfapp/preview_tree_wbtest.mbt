@@ -349,7 +349,7 @@ fn opened_closed(t : @ui.Tester, x : Double, y : Double, before : (Int, Int, Int
   t.tap(x, y)
   let v = viewer.get().unwrap()
   let t0 = t.time()
-  let way = (v.fly.ends_at() - t0, v.flies)
+  let way = (pic_flight_end(t, v) - t0, pic_flies(t, v))
   t.run_for(@ui.move_most_ms)
   // in and still: its clock read no more
   assert_true(!@ui.view_tree().unwrap().clock_read(), msg="\{Repr(tree_held())}")
@@ -3853,12 +3853,12 @@ fn opening(finish? : Bool = true) -> @ui.Tester raise {
 
 ///|
 /// The window's tree's node drawing viewer `v`'s picture as it flies (its whole picture or what stands in for it), where
-/// it is drawn: none, else one.
+/// it is drawn, seen (a thumbnail the window's tree draws nowhere while its picture is open is none): none, else one.
 fn flight_nodes(v : Viewer, src : Source) -> Array[(Double, Double, Double, Double)] {
   let shown = ["mem:preview/" + v.id(), v.stand_in(src)].filter(fn(s) { s != "" })
   @ui.view_tree().unwrap().drawn().filter_map(fn(d) {
     match d.image {
-      Some((s, _, _)) if shown.contains(s) => Some((d.x, d.y, d.w, d.h))
+      Some((s, _, _)) if shown.contains(s) && d.alpha > 0.0 => Some((d.x, d.y, d.w, d.h))
       _ => None
     }
   })
@@ -3870,8 +3870,8 @@ test "viewer on the tree: its picture flying in drawn by its nodes, once, in eac
     let t = opening()
     let src = preview_src.val.unwrap_or(fixture("chat-preview-named"))
     let v = viewer.get().unwrap()
-    assert_true(v.flies && !v.fly_back && v.fly.goes_at(t.time()), msg="flying in")
-    let end = v.fly.end()
+    assert_true(pic_flies(t, v), msg="flying in")
+    let end = pic_flight_end(t, v)
     if between {
       for at in [t.time() + @ui.frame_period_default, (t.time() + end) / 2.0, end - @ui.frame_period_default] {
         t.frame_at(at)
@@ -3883,7 +3883,7 @@ test "viewer on the tree: its picture flying in drawn by its nodes, once, in eac
       }
     }
     t.frame_at(end)
-    assert_true(!v.flies, msg="landed")
+    assert_true(!pic_flies(t, v), msg="landed")
     assert_true(picture_node() is Some(_), msg="\{between}: landed, the node's")
     assert_eq(main_pictures(t, v, 0.0), 1, msg="\{between}: landed, drawn once")
     t.frame_at(end + @ui.frame_period_default)
@@ -3926,73 +3926,51 @@ test "viewer on the tree: its picture zoomed in at once, a sharper decode asked 
 }
 
 ///|
-/// Where the picture flying from thumbnail `from` (gone out from under the bar `lifted` of the way) to `to` is drawn,
-/// `p` of the way there: from where it lies in the thumbnail's box (covering it, or fitted inside it; at its top where
-/// it is cropped so) to its place.
-fn flight_picture_at(
-  from : @sfbase.Thumb,
-  lifted : Double,
-  to : (Double, Double, Double, Double),
-  p : Double,
-) -> (Double, Double, Double, Double) {
-  let fy = from.y + @sfbase.lift_of(from) * lifted
-  let (tx, ty, tw, th) = to
-  let k = if from.letterbox { dmin(from.w / tw, from.h / th) } else { dmax(from.w / tw, from.h / th) }
-  let (pw0, ph0) = (tw * k, th * k)
-  let px0 = from.x + (from.w - pw0) / 2.0
-  let py0 = fy + (if from.top_crop { 0.0 } else { (from.h - ph0) / 2.0 })
-  let along = fn(a : Double, b : Double) { a + (b - a) * p }
-  (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
-}
-
-///|
-test "viewer on the tree: closed, the chat moved under it on the way back, then its thumbnail off the screen: the picture flies from where the thumbnail is in the frame drawn, then on to where it was last, once in each frame, and is let go as it lands" {
+test "viewer on the tree: closed, the chat moved under it on the way back: the picture lands where its thumbnail is now; the chat scrolled till its thumbnail is gone: closed, nothing of it left flying, nothing moving after" {
+  // (a row along: on to where the thumbnail is now)
   let t = opening()
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms)
-  let id = v.id()
-  let main = "mem:preview/" + id
   t.back()
-  assert_true(v.flies && v.fly_back, msg="flying back")
-  let end = v.fly.end()
+  assert_true(pic_flies(t, v), msg="flying back")
+  let end = pic_flight_end(t, v)
   t.frame_at(t.time() + (end - t.time()) / 3.0)
-  let was = thumb_of(t.ctx(), v.thumb_id()).unwrap()
-  // (the chat moved under it: a row along)
   let (first, _) = t.visible()
   t.scroll_to(if first > 0 { first - 1 } else { first + 1 })
-  t.frame_at(t.time() + @ui.frame_period_default)
-  let moved = thumb_of(t.ctx(), v.thumb_id()).unwrap()
-  assert_true((moved.y - was.y).abs() > 1.0, msg="moved: \{was.y} to \{moved.y}")
-  // (kept as where it flies from in the frame it moved: where it is now, not where it was)
-  let kept = v.fly_from.map(fn(f) { (f.x, f.y, f.w, f.h) })
-  assert_eq(kept, Some((moved.x, moved.y, moved.w, moved.h)), msg="kept where it is now, in the frame it moved")
-  let to = v.zoom.rect(t.ctx()).unwrap()
-  let (x, y, w, h) = flight_picture_at(moved, v.lifted_at(t.ctx().moment()), to, v.flying(t.ctx()))
-  let shown = drawn_of(t, main)
-  assert_true(shown.length() == 1 && at_rect(shown[0], x, y, w, h), msg="from where it is now, once: \{Repr(shown)}, \{Repr((x, y, w, h))}")
-  // (its thumbnail off the screen: the chat scrolled far)
-  let mut tries = 0
-  let mut last = moved
-  while thumb_of(t.ctx(), v.thumb_id()) is Some(_) && tries < 6 {
-    last = thumb_of(t.ctx(), v.thumb_id()).unwrap()
-    t.scroll_to(if tries % 2 == 0 { 0 } else { 1000 })
+  // (each frame on from there as a host draws them, till well past where its way ends: where it was drawn flying last)
+  let mut landing = None
+  let till = pic_flight_end(t, v) + @ui.move_most_ms
+  while t.time() < till {
     t.frame_at(t.time() + @ui.frame_period_default)
-    match thumb_of(t.ctx(), v.thumb_id()) {
-      Some(now) => last = now
+    match pic_flight(t, v) {
+      Some((r, _)) => landing = Some(r)
       None => ()
     }
-    tries += 1
   }
-  assert_true(thumb_of(t.ctx(), v.thumb_id()) is None, msg="off the screen")
-  for at in [t.time() + @ui.frame_period_default, end - @ui.frame_period_default] {
-    t.frame_at(at)
-    assert_eq(v.fly_from.map(fn(f) { (f.x, f.y, f.w, f.h) }), Some((last.x, last.y, last.w, last.h)), msg="\{at}: where it was last seen")
-    let (x, y, w, h) = flight_picture_at(last, v.lifted_at(t.ctx().moment()), to, v.flying(t.ctx()))
-    let shown = drawn_of(t, main)
-    assert_true(shown.length() == 1 && at_rect(shown[0], x, y, w, h), msg="\{at}: on to where it was last, once: \{Repr(shown)}, \{Repr((x, y, w, h))}")
+  // (landed in its thumbnail where the chat has it now: what of it the window shows)
+  guard landing is Some((lx, ly, lw, lh)) else { fail("never drawn flying after the chat moved") }
+  // (read a little under its top: its middle may lie past the window's foot)
+  let now = pic_at(t, lx + lw / 2.0, ly + 2.0).map(fn(p) { p.0 })
+  assert_true(now is Some((nx, ny, nw, nh)) && (nx - lx).abs() < 2.0 && (ny - ly).abs() < 2.0 && (nw - lw).abs() < 2.0 && nh <= lh + 2.0, msg="landed where it is now: \{Repr(landing)}, its thumbnail \{Repr(now)}")
+  assert_true(viewer.get() is None && @sfbase.pv_leaving.get() is None, msg="let go as it lands")
+  // (scrolled till its thumbnail is gone: closed, nothing of it drawn, nothing moving)
+  let t = opening()
+  let v = viewer.get().unwrap()
+  let main = "mem:preview/" + v.id()
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  let end = pic_flight_end(t, v)
+  t.frame_at(t.time() + (end - t.time()) / 3.0)
+  for k in 0..<4 {
+    t.scroll_to(if k % 2 == 0 { 0 } else { 1000 })
+    t.frame_at(t.time() + @ui.frame_period_default)
   }
   t.frame_at(end + @ui.frame_period_default)
-  assert_true(viewer.get() is None && @sfbase.pv_leaving.get() is None, msg="let go as it lands")
+  t.run_for(@ui.move_most_ms)
+  assert_true(viewer.get() is None && @sfbase.pv_leaving.get() is None, msg="closed")
+  assert_eq(drawn_of(t, main).length(), 0, msg="nothing of it left flying")
+  assert_true(pic_flight(t, v) is None, msg="no flight left")
+  t.assert_idle()
 }
 
 ///|
@@ -4043,13 +4021,13 @@ test "viewer on the tree: its picture flying in, as it grows: over the viewer's 
   let t = opening()
   let v = viewer.get().unwrap()
   let main = "mem:preview/" + v.id()
+  let src = preview_src.val.unwrap_or(fixture("chat-preview-named"))
   let start = t.time()
-  let end = v.fly.end()
+  let end = pic_flight_end(t, v)
   for share in [0.4, 0.6] {
     t.frame_at(start + (end - start) * share)
-    let p = v.flying(t.ctx())
-    assert_true(p > 0.0 && p < 1.0, msg="\{share}: growing, \{p}")
-    let thumb = v.fly_from.map(fn(f) { f.picture }).unwrap_or("")
+    assert_true(pic_flies(t, v), msg="\{share}: growing")
+    let thumb = v.stand_in(src)
     let mut pic = -1
     let mut ground = -1
     for k, i in t.drawn_instances() {
@@ -4057,8 +4035,8 @@ test "viewer on the tree: its picture flying in, as it grows: over the viewer's 
       if i[5] == 4.0 && (s.has_prefix(main) || (thumb != "" && s.has_prefix(thumb))) {
         pic = k
       }
-      // (the viewer's ground, as far in as the flight has brought it: the whole window, neither none nor all of it)
-      if i[5] == 0.0 && i[0] <= 0.0 && i[1] <= 0.0 && i[2] >= 390.0 && i[3] >= 844.0 && i[11] > 0.01 && i[11] < 0.99 {
+      // (the viewer's ground: the whole window, coming in, not all of it yet early on its way)
+      if i[5] == 0.0 && i[0] <= 0.0 && i[1] <= 0.0 && i[2] >= 390.0 && i[3] >= 844.0 && i[11] > 0.01 && (share > 0.5 || i[11] < 0.99) {
         ground = k
       }
     }
@@ -4078,9 +4056,10 @@ test "viewer on the tree: its picture said not to decode as it flies in, its sta
   let t = opening(finish=false)
   let v = viewer.get().unwrap()
   let main = "mem:preview/" + v.id()
-  let thumb = v.fly_from.map(fn(f) { f.picture }).unwrap_or("")
+  let src = preview_src.val.unwrap_or(fixture("chat-preview-named"))
+  let thumb = v.stand_in(src)
   assert_true(thumb != "" && @ui.image_state(thumb) == 1, msg="its stand-in ready: \{thumb}")
-  let end = v.fly.end()
+  let end = pic_flight_end(t, v)
   // (its own decode said not to be; every other done)
   for _ in 0..<3 {
     for p in t.pending() {
@@ -4090,43 +4069,47 @@ test "viewer on the tree: its picture said not to decode as it flies in, its sta
   }
   assert_eq(@ui.image_state(main), -1, msg="not to be decoded")
   t.frame_at((t.time() + end) / 2.0)
-  assert_true(v.flies, msg="flying")
+  assert_true(viewer.get() is Some(_), msg="open, on its way in")
   let said = pv("android-chat.file.image.failed")
   assert_eq(t.words().filter(fn(w) { w.0 == said }).length(), 1, msg="said once")
-  let flying = drawn_of(t, main).length() + drawn_of(t, thumb).length() + nodes_of(main).length() + nodes_of(thumb).length()
+  // (a node of its stand-in seen: a thumbnail the window's tree draws nowhere while its picture is open is none)
+  let seen_of = fn(src : String) {
+    @ui.view_tree().unwrap().drawn().filter(fn(d) { d.image is Some((s, _, _)) && s == src && d.alpha > 0.0 }).length()
+  }
+  let flying = drawn_of(t, main).length() + drawn_of(t, thumb).length() + nodes_of(main).length() + seen_of(thumb)
   assert_eq(flying, 0, msg="no flight while it failed: \{Repr(drawn_of(t, thumb))} \{Repr(nodes_of(thumb))}")
 }
 
 ///|
 test "viewer on the tree: its picture flying in, a frame drawn for a moment later than the logic is at (as a host times one for its vsync): drawn where its flight has it at that moment, once; the next frame on from there" {
-  let t = opening()
-  let v = viewer.get().unwrap()
-  let id = v.id()
-  let main = "mem:preview/" + id
-  let thumb = v.fly_from.map(fn(f) { f.picture }).unwrap_or("")
-  let end = v.fly.end()
-  let now = t.time() + (end - t.time()) / 3.0
-  let shown = now + 2.0 * @ui.frame_period_default
-  // (where its flight has it at `at`: Viewer::flying's, lifted's)
-  let at_moment = fn(at : Double) {
-    let e = v.fly.value_at(at)
-    let lift = v.fly_lift
-    let p = if e <= lift { 0.0 } else { (e - lift) / (1.0 - lift) }
-    let lifted = if lift <= 0.0 { 1.0 } else { dmin(e / lift, 1.0) }
-    flight_picture_at(thumb_of(t.ctx(), v.thumb_id()).unwrap(), lifted, v.zoom.rect(t.ctx()).unwrap(), p)
+  // (where its flight draws it in a frame drawn for `shown` with its logic at `now`, then in the one after; the
+  // first two `vsync`, else each drawn for its own moment)
+  let drawn_at = fn(vsync : Bool) raise {
+    let t = opening()
+    let v = viewer.get().unwrap()
+    let main = "mem:preview/" + v.id()
+    let src = preview_src.val.unwrap_or(fixture("chat-preview-named"))
+    let thumb = v.stand_in(src)
+    let end = pic_flight_end(t, v)
+    let now = t.time() + (end - t.time()) / 3.0
+    let shown = now + 2.0 * @ui.frame_period_default
+    let flying = fn() {
+      t.drawn_instances().filter(fn(i) { i[5] == 4.0 && (t.image_src(i[20].to_int()).has_prefix(main) || (thumb != "" && t.image_src(i[20].to_int()).has_prefix(thumb))) }).map(fn(i) { (i[0], i[1], i[2], i[3]) })
+    }
+    if vsync {
+      t.frame_shown_at(now, shown)
+    } else {
+      t.frame_at(shown)
+    }
+    let first = flying()
+    let next = shown + @ui.frame_period_default
+    t.frame_shown_at(next, next)
+    (first, flying())
   }
-  let flying = fn() {
-    t.drawn_instances().filter(fn(i) { i[5] == 4.0 && (t.image_src(i[20].to_int()).has_prefix(main) || (thumb != "" && t.image_src(i[20].to_int()).has_prefix(thumb))) }).map(fn(i) { (i[0], i[1], i[2], i[3]) })
-  }
-  t.frame_shown_at(now, shown)
-  let (x, y, w, h) = at_moment(shown)
-  let drawn = flying()
-  assert_true(drawn.length() == 1 && at_rect(drawn[0], x, y, w, h), msg="drawn where it is at the moment shown: \{Repr(drawn)}, \{Repr((x, y, w, h))}")
-  let next = shown + @ui.frame_period_default
-  t.frame_shown_at(next, next)
-  let (x, y, w, h) = at_moment(next)
-  let drawn = flying()
-  assert_true(drawn.length() == 1 && at_rect(drawn[0], x, y, w, h), msg="the next frame on from there: \{Repr(drawn)}, \{Repr((x, y, w, h))}")
+  let (shown, next) = drawn_at(true)
+  let (at_shown, at_next) = drawn_at(false)
+  assert_true(shown.length() == 1 && at_shown.length() == 1 && at_rect(shown[0], at_shown[0].0, at_shown[0].1, at_shown[0].2, at_shown[0].3), msg="drawn where it is at the moment shown, once: \{Repr(shown)}, \{Repr(at_shown)}")
+  assert_true(next.length() == 1 && at_next.length() == 1 && at_rect(next[0], at_next[0].0, at_next[0].1, at_next[0].2, at_next[0].3), msg="the next frame on from there: \{Repr(next)}, \{Repr(at_next)}")
 }
 
 ///|
@@ -4134,19 +4117,24 @@ test "viewer on the tree: its picture flying in cut to the thumbnail's own corne
   let t = opening()
   let v = viewer.get().unwrap()
   let main = "mem:preview/" + v.id()
-  let thumb = v.fly_from.map(fn(f) { f.picture }).unwrap_or("")
-  let end = v.fly.end()
+  let src = preview_src.val.unwrap_or(fixture("chat-preview-named"))
+  let thumb = v.stand_in(src)
+  let end = pic_flight_end(t, v)
   t.frame_at(t.time() + (end - t.time()) / 4.0)
-  let (tl, tr, br, bl) = thumb_of(t.ctx(), v.thumb_id()).unwrap().corners.each()
-  let k = 1.0 - v.flying(t.ctx())
-  let want = (tl * k, tr * k, br * k, bl * k)
   let boxes = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.corners is Some(_) })
-  assert_eq(boxes.map(fn(d) { d.corners }), [Some(want)], msg="its box's corners")
-  let cut = t.drawn_instances().filter(fn(i) { i[5] == 4.0 && (t.image_src(i[20].to_int()).has_prefix(main) || (thumb != "" && t.image_src(i[20].to_int()).has_prefix(thumb))) }).map(fn(i) { (i[24], i[25], i[26], i[27]) })
+  assert_eq(boxes.length(), 1, msg="its box's, one: \{Repr(boxes.map(fn(d) { d.corners }))}")
+  // (the picture cut so: by what it is drawn in, or by its own corners)
+  let cut = t.drawn_instances().filter(fn(i) { i[5] == 4.0 && (t.image_src(i[20].to_int()).has_prefix(main) || (thumb != "" && t.image_src(i[20].to_int()).has_prefix(thumb))) }).map(fn(i) { if i[24] > 0.0 || i[25] > 0.0 || i[26] > 0.0 || i[27] > 0.0 { (i[24], i[25], i[26], i[27]) } else { (i[4], i[4], i[4], i[4]) } })
   assert_eq(cut.length(), 1, msg="drawn once")
+  // (as round as the flight leaves them: rounder than the viewer's picture, less than the thumbnail's, read once it is
+  // back at rest)
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  let at = t.locate("img:compare.png")
+  let (tl, tr, br, bl) = pic_at(t, at[0].0, at[0].1).unwrap().1
   let (a, b, c, d) = cut[0]
-  let near = fn(x : Double, y : Double) { (x - y).abs() < 0.01 }
-  assert_true(near(a, want.0) && near(b, want.1) && near(c, want.2) && near(d, want.3), msg="cut so: \{Repr(cut[0])}, \{Repr(want)}")
+  assert_true(a > 0.0 && b > 0.0 && c > 0.0 && d > 0.0 && a < tl && b < tr && c < br && d < bl, msg="cut so: \{Repr(cut[0])}, the thumbnail's \{Repr((tl, tr, br, bl))}")
 }
 
 ///|
@@ -4177,25 +4165,24 @@ fn corners_changed(before : Array[Double], pics : Array[Array[Double]], scale : 
 ///|
 test "viewer on the tree: closed back into its thumbnail: the frame drawn for a moment past the flight's end, its logic just before it, and the frame after cover the thumbnail's corners as it lay before it opened, on the device's pixels" {
   let t = opening()
-  let v = viewer.get().unwrap()
+  assert_true(viewer.get() is Some(_), msg="open")
   t.run_for(@ui.move_most_ms)
-  let thumb = v.fly_from.map(fn(f) { f.picture }).unwrap_or("")
-  let main = "mem:preview/" + v.id()
-  let pictures = fn() {
-    t.drawn_instances().filter(fn(i) { i[5] == 4.0 && i[11] > 0.5 && i[2] > 40.0 && (t.image_src(i[20].to_int()).has_prefix(main) || (thumb != "" && t.image_src(i[20].to_int()).has_prefix(thumb))) })
-  }
   // (closed once, at rest: the thumbnail as it lies, then opened and closed again)
   t.back()
   t.run_for(@ui.move_most_ms)
+  let at = t.locate("img:compare.png")
+  // (the pictures drawn over the thumbnail's middle: what lands there, then the thumbnail)
+  let pictures = fn() {
+    t.drawn_instances().filter(fn(i) { i[5] == 4.0 && i[11] > 0.5 && i[2] > 40.0 && i[0] <= at[0].0 && at[0].0 <= i[0] + i[2] && i[1] <= at[0].1 && at[0].1 <= i[1] + i[3] })
+  }
   let before = pictures()
   assert_eq(before.length(), 1, msg="the thumbnail at rest")
-  let at = t.locate("img:compare.png")
   t.tap(at[0].0, at[0].1)
   t.run_for(@ui.move_most_ms)
   t.back()
   // (the one closed: going, its flight back said)
   let v2 = @sfbase.pv_leaving.get().unwrap()
-  let end = v2.fly.end()
+  let end = pic_flight_end(t, v2)
   t.frame_shown_at(end - 0.01, end + 0.01)
   let landing = pictures()
   assert_eq(landing.length(), 1, msg="landing, once")

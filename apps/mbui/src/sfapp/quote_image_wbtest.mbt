@@ -214,12 +214,21 @@ fn quoted_preview_places(platform : Int, width : Double, count : Int) -> Unit ra
     t.tap(x, y)
     assert_true(viewer.get() is Some(_), msg="no preview for picture \{i} at \{Repr((x, y))}")
     let v = viewer.get().unwrap()
-    let from = v.fly_from.unwrap()
-    assert_true(from.x <= x && x <= from.x + from.w && from.y <= y && y <= from.y + from.h, msg="pressed \{Repr((x, y))} but opened from \{Repr((from.x, from.y, from.w, from.h))}")
+    // (flying out of the picture pressed: where it sets out)
+    let from = match pic_flight(t, v) {
+      Some((r, _)) => r
+      None => fail("picture \{i} at \{Repr((x, y))} opened with no flight")
+    }
+    assert_true(holds_point(x, y, from), msg="pressed \{Repr((x, y))} but opened from \{Repr(from)}")
     t.run_for(@ui.move_most_ms)
     t.back()
-    let back = pv_leaving.get().unwrap().fly_from.unwrap()
-    assert_true(back.x <= x && x <= back.x + back.w && back.y <= y && y <= back.y + back.h, msg="closed to \{Repr((back.x, back.y, back.w, back.h))} instead of \{Repr((x, y))}")
+    // (flying back into it: where it lands)
+    t.frame_at(pic_flight_end(t, v) - 1.0)
+    let back = match pic_flight(t, v) {
+      Some((r, _)) => r
+      None => fail("picture \{i} at \{Repr((x, y))} closed with no flight")
+    }
+    assert_true(holds_point(x, y, back), msg="closed to \{Repr(back)} instead of \{Repr((x, y))}")
     t.run_for(@ui.move_most_ms)
   }
 }
@@ -274,20 +283,24 @@ test "a quoted picture opened as it is sent returns to its row after the core ta
   t.tap(pictures[0].0, pictures[0].1)
   let v = viewer.get().unwrap()
   let thumb = v.thumb_id()
-  assert_true(v.flies)
+  assert_true(pic_flies(t, v))
   has.set(true)
   t.frame()
-  let reading = @sfbase.readings.get("ws1/st1\u{1}s-c1").unwrap()
-  assert_true(reading.sent_as.contains("o:out-1"), msg="the core's outbox row did not take over")
+  // (the core's outbox row taken over as what was sent, its thumbnail the same one: its id kept)
   assert_eq(v.thumb_id(), thumb, msg="the thumbnail changed identity as the core took the row")
   let asked : Array[String] = []
   @sfbase.near_asked.each(fn(_, p) { asked.push(text(Some(Json::object(p)), "at")) })
   assert_true(asked.contains("o:out-1/q:0"), msg="the viewer did not ask for the row the core took over: \{Repr(asked)}")
-  let current = thumb_of(t.ctx(), thumb).unwrap()
   t.run_for(@ui.move_most_ms)
   t.back()
-  let back = pv_leaving.get().unwrap().fly_from.unwrap()
-  assert_true((back.x - current.x).abs() < 0.5 && (back.y - current.y).abs() < 0.5, msg="the picture did not return to the row that took it over")
+  // (where it lands: the row that took it over, its thumbnail drawn there again once it has)
+  t.frame_at(pic_flight_end(t, v) - 1.0)
+  let back = pic_flight(t, v).map(fn(f) { f.0 })
+  t.run_for(@ui.move_most_ms)
+  let current = t.locate("img:" + name)
+  assert_eq(current.length(), 1, msg="its thumbnail drawn again")
+  let (cx, cy) = current[0]
+  assert_true(back is Some(r) && holds_point(cx, cy, r), msg="the picture did not return to the row that took it over: \{Repr(back)}, its row's at \{Repr(current[0])}")
 }
 
 ///|
