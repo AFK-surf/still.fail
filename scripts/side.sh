@@ -8,7 +8,7 @@
 #   sh scripts/side.sh core-ts   one part's
 set -u
 cd "$(dirname "$0")/.."
-parts=${*:-core-ts station rust locks rigs cloud}
+parts=${*:-core-ts station rust locks locks-moved rigs cloud}
 status=0
 for part in $parts; do
   echo "· side: $part"
@@ -28,6 +28,11 @@ for part in $parts; do
     # station and the cloud frozen and started anew between; directories and ports of its own, beside the app's e2e.
     locks) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-locks E2E_STATION=/tmp/side-locks-$(id -u) E2E_PORT=28700 \
       E2E_RELAY=28709 bash scripts/e2e-local.sh locks-all) || status=1 ;;
+    # A workspace's chain handed over to its people's own logs and what is done in it after (apps/mbui/e2e/locks-moved.ts:
+    # an owner's two apps and web page, an admin, a member, two stations, the cloud frozen; scripts/e2e-local.sh
+    # locks-moved-all), a run of its own on ports and directories of its own (28740 is a stray relay's on the CI Mac).
+    locks-moved) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-locks-moved E2E_STATION=/tmp/side-moved-$(id -u) E2E_PORT=28760 \
+      E2E_RELAY=28769 bash scripts/e2e-local.sh locks-moved-all) || status=1 ;;
     # A rig end to end (apps/mbui/e2e/rigs.ts): a machine enrolled as alice's rig beside the test station, asked for by
     # a chat's agent, granted, used, taken back (scripts/e2e-local.sh rigs-all), on ports and directories of its own.
     rigs) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-rigs E2E_STATION=/tmp/side-rigs-$(id -u) E2E_PORT=28720 \

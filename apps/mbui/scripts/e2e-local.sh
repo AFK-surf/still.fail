@@ -19,6 +19,8 @@
 #                                   pass/fail per step
 #   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks); locks failed, what the run
 #                                   wrote is kept before down (`kept locks`)
+#   scripts/e2e-local.sh locks-moved-all  up, e2e/locks-moved.ts (a workspace's chain handed over to its people's own
+#                                   logs, and its acts after), down (scripts/side.sh locks-moved); kept as locks-all's
 #   scripts/e2e-local.sh rigs       a rig end to end against what `up` started (e2e/rigs.ts: a machine enrolled as
 #                                   alice's rig beside the test station, asked for, granted, used, taken back)
 #   scripts/e2e-local.sh rigs-all   up, rigs, down (the side run's, scripts/side.sh rigs); rigs failed, kept the same
@@ -373,6 +375,13 @@ locks() {
    E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
      E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks.ts </dev/null)
 }
+# e2e/locks-moved.ts the same way (a workspace's chain handed over to its people's own logs, and what is done in it
+# after), a run of its own on a fresh cloud and stations, its devices' data under $WORK/locks-moved
+locks_moved() {
+  (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/locks-moved-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks-moved E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
+     E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks-moved.ts </dev/null)
+}
 # e2e/rigs.ts the same way (a rig enrolled beside the test station, asked for, granted, used, taken back), its devices'
 # data under $WORK/rigs
 rigs() {
@@ -463,14 +472,29 @@ lock_state() {
   [ -n "$f" ] || { echo "LOCK off"; return; }
   (cd $E/station && node --input-type=module -e "
 import { readFileSync } from 'node:fs';
-const { fold } = await import('./src/cloud/lock.ts');
+const { fold, state4 } = await import('./src/cloud/lock.ts');
 const j = JSON.parse(readFileSync(process.argv[1], 'utf8'));
-const s = fold(j.entries ?? j, null);
+const chain = fold(j.entries ?? j, null);
+let s = chain;
+if (chain.moved !== undefined && !chain.disabled) {
+  // (its chain moved to its people's logs: the state in force is the rules' of the logs and bodies this station keeps,
+  // by its clock, as station/src/cloud/state.ts forceOf makes it; LOCK says it on or off, MOVED the root and how)
+  const data = process.argv[1].replace(/\/mesh\/.*$/, '');
+  const read = (f, or) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return or; } };
+  const kept = read(data + '/mesh/person-chains.json', {});
+  const logs = Object.values(kept.chains ?? kept).filter((c) => Array.isArray(c));
+  const ws = (j.entries ?? j)[0].ws;
+  const bodies = (read(data + '/mesh/locks/' + ws + '.bodies.json', {}).bodies ?? []);
+  const f = state4(ws, chain.moved, logs, bodies, Math.floor(Date.now() / 1000));
+  s = { ...f.state, disabled: f.on !== 'on', seq: chain.seq, head: chain.head };
+  console.log('MOVED ' + chain.moved.slice(0, 12) + ' ' + f.on.replace(' ', '-') + ' logs=' + logs.length + ' bodies=' + bodies.length);
+}
 console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
 for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' exp=' + (d.exp ?? '-') + ' ' + (d.label ?? ''));
 console.log('STATIONS ' + s.stations.size);
 console.log('HEAD ' + s.head);
 console.log('PERSONS ' + s.persons.size);
+for (const [sub, m] of s.members) console.log('MEMBER ' + sub + ' ' + (m?.role ?? m));
 for (const [sub, person] of s.persons) console.log('PERSON ' + sub + ' ' + String(person).slice(0, 12));
 const said = new Map();
 for (const e of (j.entries ?? j)) if (e?.kind === 'device' && typeof e.body?.id === 'string') said.set(e.body.id, typeof e.body.person_key === 'string');
@@ -880,12 +904,17 @@ case "${1:-all}" in
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;
   locks) locks ;;
+  locks-moved) locks_moved ;;
   kept) shift; kept "$@" ;;
   # (locks failed: what it leaves kept before the trap's down, and its status the run's)
   locks-all)
     trap down EXIT
     up
     locks || { rc=$?; kept locks || true; exit $rc; } ;;
+  locks-moved-all)
+    trap down EXIT
+    up
+    locks_moved || { rc=$?; kept locks-moved || true; exit $rc; } ;;
   rigs) rigs ;;
   rigs-all)
     trap down EXIT
