@@ -339,9 +339,9 @@ fn Ctx::paint_finger_ends(self : Ctx) -> Unit {
     let half = finger_end_half
     next_finger_ends[k] = Some({
       x: x - half,
-      y: if k == 0 { top - 28.0 } else { top },
+      y: if k == 0 { top - finger_knob_room } else { top },
       w: 2.0 * half,
-      h: h + 28.0,
+      h: h + finger_knob_room,
       ex: x,
       ey: top + h / 2.0,
     })
@@ -352,6 +352,10 @@ fn Ctx::paint_finger_ends(self : Ctx) -> Unit {
 ///|
 /// Half the room a finger takes a handle in across.
 let finger_end_half : Double = 18.0
+
+///|
+/// The room a finger takes a handle in past its line, where its knob is (over the start's, under the end's).
+let finger_knob_room : Double = 28.0
 
 ///|
 /// Whether what is picked with the pointer was picked by a finger (held on its words), followed as that changes.
