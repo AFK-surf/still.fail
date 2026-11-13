@@ -122,6 +122,7 @@ fn check_row_box_node(
 pub fn check_mark_node(
   parent : @view.View,
   on : () -> Bool,
+  mixed? : () -> Bool = fn() { false },
   dimmed? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> Unit {
@@ -140,6 +141,7 @@ pub fn check_mark_node(
     }
     dmax(0.0, row_corner - pad + 0.001)
   }
+  let active = fn() { on() || mixed() }
   parent.box(made_for=loc, fn(b) {
     if inset > 0.0 {
       b.margin(Is((inset, 0.0, 0.0, 0.0))) |> ignore
@@ -153,7 +155,7 @@ pub fn check_mark_node(
     .ground(By(fn() {
       let t = @ui.tree_theme()
       let p = theme().p
-      if !on() {
+      if !active() {
         t.bg
       } else if dimmed() {
         p.neutral_bg
@@ -163,20 +165,28 @@ pub fn check_mark_node(
     }))
     .edge(By(fn() {
       let t = @ui.tree_theme()
-      if on() && !dimmed() {
+      if active() && !dimmed() {
         (1.0, t.primary)
       } else {
         (1.0, t.border)
       }
     }))
     |> ignore
-    b.show(on, fn(m) {
+    b.show(fn() { on() && !mixed() }, fn(m) {
       m
       .words(Is("✓"))
       .words_look(By(fn() {
         { size: side() * 0.7, weight: 700, line: side(), wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { if dimmed() { theme().p.muted } else { @ui.tree_theme().on_primary } }))
+      |> ignore
+    })
+    b.show(mixed, fn(bar) {
+      bar
+      .width(By(fn() { Some((side() * 0.52).round()) }))
+      .height(Is(Some(2.0)))
+      .radius(Is(1.0))
+      .ground(By(fn() { if dimmed() { theme().p.muted } else { @ui.tree_theme().on_primary } }))
       |> ignore
     })
   })

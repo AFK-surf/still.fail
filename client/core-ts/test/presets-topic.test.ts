@@ -171,3 +171,62 @@ test("a_repository_cloned_onto_the_station_shows_as_it_goes_and_an_older_station
   assert.deepEqual(v(values, 1).clones, []);
   s.core.close();
 });
+
+test("a_preset_applies_its_optional_station_and_model_when_picked_or_leaves_them_unrestricted", async () => {
+  const p2 = {
+    ...profile,
+    id: "p2",
+    name: "p2@x.com",
+    models: ["claude-opus-5-5", "claude-sonnet-5-5"],
+  };
+  const presetBound = {
+    id: "review",
+    name: "Code Review",
+    dirs: [],
+    instructions: "Review carefully.",
+    autoStation: true,
+    model: { model: "claude-sonnet-5-5", runtime: "claude", effort: "high" },
+    createdBy: "a@x.com",
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const presetFree = {
+    id: "free",
+    name: "Free Prompt",
+    dirs: [],
+    instructions: "Just instructions.",
+    createdBy: "a@x.com",
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const said: Record<string, unknown> = {
+    ...base(),
+    "GET /overview": { ...overview, profiles: [p2] },
+    "GET /presets": { presets: [presetBound, presetFree], candidates: [candidate] },
+  };
+  const { host, core } = await started(said as never);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "presets", station: S });
+  subscribe(core, ui, 2, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
+
+  // Picking a preset with a model applies that model and effort.
+  call(core, ui, 3, "newChat.pick", { scope: "ws", preset: "review", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).preset, "review");
+  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
+  assert.equal(v(values, 2).pick.value.effort, "high");
+
+  // Picking an unrestricted preset keeps the current station and model untouched.
+  call(core, ui, 4, "newChat.pick", { scope: "ws", preset: "free", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).preset, "free");
+  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
+  assert.equal(v(values, 2).pick.value.effort, "high");
+  core.close();
+});
