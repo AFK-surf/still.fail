@@ -563,8 +563,12 @@ jobs:
           - { group: 3/4, fps: "60" }
           # (the fourth's pages at 60 in two halves: 211-277 s of its five minutes on main's runs, its tests passed in
           # 289 s and the job stopped at 301, main f7367fe4 43114028979, 2026-11-11; its time many files' frames)
-          - { group: 4/4, fps: "60", part: 1/2 }
-          - { group: 4/4, fps: "60", part: 2/2 }
+          # (in three since: its part 2/2's pages 1030 s on its four programs, 258 s, the job 270 s of its five minutes on
+          # main ed9727a1 43470621832, and stopped at its five minutes on GitHub's runners twice under TestFlight's call,
+          # 43467913716 and 43472912119, 2026-11-13)
+          - { group: 4/4, fps: "60", part: 1/3 }
+          - { group: 4/4, fps: "60", part: 2/3 }
+          - { group: 4/4, fps: "60", part: 3/3 }
           - { group: 1/4, fps: "24 7" }
           - { group: 2/4, fps: "24 7" }
           - { group: 3/4, fps: "24 7" }

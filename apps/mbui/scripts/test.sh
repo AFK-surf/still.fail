@@ -349,7 +349,9 @@ for t in $targets; do
           # fourth's eight programs, the third's to them too)
           # (the fourth's 100, 120, 50 and 120 more at 60, 120, 24 and 7 and the default rate: chat_page_nodes' two,
           # above, as main's runs of 2026-11-13 measured the file)
-          60) specs="4,4,700,1 4,4,120,1 1,4,690,1 8,8,100,1" ;;
+          # (the fourth's on three runners at 60 as at 120, twelve programs (mbui-check.yml's app-rates says why): the
+          # other three's pages dealt fewer by as much, app 1/4 at 60 fps 288 s of its five minutes on ed9727a1)
+          60) specs="4,4,700,1 4,4,120,1 1,4,690,1 12,12,100,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
