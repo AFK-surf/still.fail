@@ -184,6 +184,11 @@ another; the accounts' list's merge across stations and its refills.
   under a lock that is off): the person's own secrets opened first (the box key's ask), then `off` signed (their own
   lock's), the secrets written to the plain library after; one ask for both needs the host to open two sealed values
   under one prompt, not built. `test/lock-statements-made.test.ts` holds the bodies and the take-over to the model.
+- Nothing the core does by itself (as a lock comes, a retry, a background writer) reads a value sealed for the
+  person's presence or asks them: only what a person asked for on this device does, once for it, and what needs such
+  a value otherwise waits until it is in hand for something they do (2026-11-13: `src/views/vault.ts` `rekeyGone` read
+  the box key each time the lock came on a device nobody was using; now only where this device took the one out at
+  their asking, `tookOut`, else as the vault's key is next unsealed).
 - The cloud's taking an entry never counts (2026-11-12): what no station took nor refused by the call's wait
   (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
   held and never on it, shown on the lock's topic as not in effect, and brought to the stations as one is next read
