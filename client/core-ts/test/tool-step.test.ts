@@ -67,6 +67,7 @@ test("agy_file_and_command_steps_render_diff_code_and_clean_terminal_output", ()
     ),
     [],
   );
+  assert.deepEqual(toolResult("Edit", editCall, "The file has been updated.", false, t), []);
 
   const readCall = JSON.stringify({ Path: `${ws}/station/src/url.ts`, StartLine: 1, EndLine: 2 });
   assert.deepEqual(toolCall("read_file", readCall, true, t), [

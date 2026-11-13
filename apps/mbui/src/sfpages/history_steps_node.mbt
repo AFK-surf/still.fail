@@ -206,7 +206,7 @@ fn steps_list_node(
         place~,
         // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
         at_once=true,
-        near_top=(1.0, wants_older, ask_older),
+        near_top=(0.5, wants_older, ask_older),
         fn(slot, k) {
           slot.pick(fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {
             guard picked.row is Some(row) else { return }
@@ -447,43 +447,20 @@ fn ev_node(
     }
   }
   steps_box_node(v, h_ev, fn(e) {
-    if state != "" {
-      e.box(fn(o) {
-        o.over(Is(true)) |> ignore
-        o.box(fn(blk) {
-          @sf.style_node(blk, fn() {
-            match state {
-              "waiting" => h_state.then(@ui.style(bg=Data(@sf.theme().p.blue_bg)))
-              "human" => h_state_human
-              _ => h_state
-            }
-          })
-        })
-        |> ignore
-      })
-      |> ignore
-    } else if rail || rail_last {
+    if rail || rail_last {
       e.box(fn(o) {
         o.over(Is(true)) |> ignore
         o.box(fn(room) {
-          @sf.style_node(room, fn() {
-            // (from under its mark, in the middle of its first line)
-            let line = if row { @sf.row_least() } else { h_mark }
-            let under = @sf.room_of((line + h_mark) / 2.0)
-            (if rail_last { h_rail_room_last } else { h_rail_room }).then(@ui.style(pt=under))
-          })
+          @sf.style_node(room, fn() { if rail_last { h_rail_room_last } else { h_rail_room } })
           steps_box_node(room, h_rail, fn(_) {  })
         })
         |> ignore
       })
       |> ignore
     }
+    ignore(row)
     e.box(fn(i) {
-      @sf.style_node(i, fn() {
-        // (the first line's height: a line of words' 20, or a row's least)
-        let line = if row { @sf.row_least() } else { h_mark }
-        h_icon.then(@ui.style(h=Fixed(line)))
-      })
+      @sf.style_node(i, fn() { h_icon })
       if icon == "pulse" {
         steps_box_node(i, h_pulse, fn(_) {  })
       } else {
@@ -542,15 +519,15 @@ fn item_node(
       ev_node(v, "said", "", "", rail_last=rail, row=true, fn(b) {
         let words = text(content, "text")
         one_line_node(b, ik + "/text", fn(l) {
-          // (a chip: in bones one piece)
-          l.box(fn(tag) {
-            @sf.style_node(tag, fn() { h_tag })
-            tag.bone_whole(Is(true)) |> ignore
-            steps_words(tag, fn() {
-              @sf.t(if flag(content, "subagent") { "web-main.history.subagent" } else { "web-main.history.notSent" })
-            }, h_tag_words)
-          })
-          |> ignore
+          if flag(content, "subagent") {
+            // (a chip: in bones one piece)
+            l.box(fn(tag) {
+              @sf.style_node(tag, fn() { h_tag })
+              tag.bone_whole(Is(true)) |> ignore
+              steps_words(tag, fn() { @sf.t("web-main.history.subagent") }, h_tag_words)
+            })
+            |> ignore
+          }
         }, text(content, "line"), "", fn(w) { md_node(w, words, field(content, "md"), small=true) })
       })
     "post" => {
@@ -622,7 +599,7 @@ fn one_line_node(
 ) -> Unit {
   let open = fn() { steps_own.opened.contains(key) }
   v.box(fn(r) {
-    @sf.style_node(r, fn() { h_one_press.then(@sf.row_least_h()) })
+    @sf.style_node(r, fn() { h_one_press })
     @sf.presses_node(r, fn() { steps_flip(key) })
     r
     .says(By(fn() {
@@ -723,7 +700,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           }
         }
         t.box(fn(b) {
-          @sf.style_node(b, fn() { h_fold_toggle.then(@sf.row_least_h()) })
+          @sf.style_node(b, fn() { h_fold_toggle })
           steps_pressed(b, fn() { steps_flip(key) }, label=words, folds=true, open~)
           @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
           @sf.icon_node(b, "chevron-down", 12.0, By(fn() { if @sf.lit_node(b) { @sf.theme().p.accent } else { @sf.theme().p.blue } }), name_now=fn() {
@@ -976,14 +953,52 @@ fn mark_node(v : @view.View, src : Source, mark : Json?, rail : Bool) -> Unit {
 ///|
 /// How a turn ended in `v`.
 fn ended_node(v : @view.View, ends : String, words : String, rail : Bool) -> Unit {
-  let (icon, state) = match ends {
+  let effective_ends = if ends != "" {
+    ends
+  } else if words.has_prefix("标记为做完了") || words.has_prefix("标记为已完成") || words.has_prefix("Marked as done") {
+    "done"
+  } else if words.has_prefix("已暂停") || words.has_prefix("等待人工") || words.has_prefix("Paused") {
+    "human"
+  } else {
+    ""
+  }
+  let (icon, state) = match effective_ends {
     "human" => ("user", "human")
     "done" => ("check-circle", "done")
     "waiting" => ("wait", "waited")
     _ => ("info", "other")
   }
   ev_node(v, icon, state, "", rail_last=rail, fn(b) {
-    steps_box_node(b, h_state_line, fn(l) { steps_words(l, fn() { words }, h_state_words) })
+    steps_box_node(b, h_state_line, fn(l) {
+      l.box(fn(w) {
+        w
+        .words_runs(By(fn() {
+          let t = @sf.theme()
+          let lead_color = match state {
+            "done" => t.p.green_ink
+            "human" => t.p.accent_text
+            _ => t.p.text
+          }
+          match words.find("：") {
+            Some(at) => {
+              let head = words.unsafe_substring(start=0, end=at + 1)
+              let tail = words.unsafe_substring(start=at + 1, end=words.length())
+              [
+                @ui.span(head, weight=600, color=lead_color),
+                @ui.span(tail, color=t.p.muted),
+              ]
+            }
+            None => [@ui.span(words, weight=600, color=lead_color)]
+          }
+        }))
+        .words_look(By(fn() { @ui.style_words(h_state_words) }))
+        .ink(By(fn() { @ui.style_ink(h_state_words) }))
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        |> ignore
+      })
+      |> ignore
+    })
   })
 }
 
@@ -1011,11 +1026,7 @@ fn group_node(
       gv.box(fn(o) {
         o.over(Is(true)) |> ignore
         o.box(fn(room) {
-          @sf.style_node(room, fn() {
-            // (from under its chevron mark, in the middle of the group header row)
-            let under = @sf.room_of((@sf.row_least() + h_mark) / 2.0)
-            h_rail_room_last.then(@ui.style(pt=under))
-          })
+          @sf.style_node(room, fn() { h_rail_room_last })
           steps_box_node(room, h_rail, fn(_) {  })
         })
         |> ignore
@@ -1023,7 +1034,7 @@ fn group_node(
       |> ignore
     }
     gv.box(fn(h) {
-      @sf.style_node(h, fn() { h_group_head.then(@sf.row_least_h()) })
+      @sf.style_node(h, fn() { h_group_head })
       let hot = fn() { @sf.lit_node(h) }
       h.ground(By(fn() { if @sf.lit_in_node(h) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
@@ -1095,15 +1106,20 @@ fn group_node(
 /// Short localized action badge for a tool step row.
 fn step_label(name : String) -> String {
   match name {
-    "Read" | "NotebookRead" | "view_image" | "read" | "read_file" | "view_file_outline" | "view_code_item" | "skill_read" => "读取"
-    "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch" | "edit" | "edit_file" | "replace_file_content" | "multi_replace_file_content" => "编辑"
+    "Read" | "NotebookRead" | "view_image" | "read_image" | "read" | "read_file" | "view_file_outline" | "view_code_item" | "skill_read" | "skill" => "读取"
+    "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch" | "edit" | "edit_file" | "replace_file_content" | "multi_replace_file_content" | "search_replace" | "delete_file" => "编辑"
     "Write" | "write" | "write_file" | "write_to_file" => "新建"
-    "Glob" | "Grep" | "LS" | "ToolSearch" | "glob" | "grep" | "grep_search" | "find_by_name" | "list_dir" | "search" => "搜索"
-    "Bash" | "bash" | "BashOutput" | "KillShell" | "exec_command" | "exec" | "shell" | "local_shell" | "write_stdin" | "unified_exec" | "run_command" | "run_terminal_command" | "command_status" | "send_command_input" | "manage_task" => "命令"
-    "WebFetch" | "WebSearch" | "web_search" | "web_fetch" | "search_web" | "read_url_content" => "网页"
-    "Task" | "Agent" | "spawn_agent" | "subagent" | "invoke_subagent" | "define_subagent" | "manage_subagents" | "swarm" | "send_message" => "代理"
-    "chat_history" | "chat_list" | "chat_read" | "session_history" => "对话"
-    "chat_post" | "chat_state" | "session_send" | "chat_create" => "消息"
+    "Glob" | "Grep" | "LS" | "ToolSearch" | "search_tool" | "mcp_list_tools" | "glob" | "grep" | "grep_search" | "find_by_name" | "find_file_by_name" | "list_dir" | "search" => "搜索"
+    "Bash" | "bash" | "BashOutput" | "KillShell" | "exec_command" | "exec" | "shell" | "local_shell" | "write_stdin" | "wait" | "job_output" | "unified_exec" | "run_command" | "run_terminal_command" | "command_status" | "send_command_input" | "manage_task" => "命令"
+    "WebFetch" | "WebSearch" | "web_search" | "web_fetch" | "search_web" | "read_url_content" | "web__run" => "网页"
+    "Task" | "Agent" | "spawn_agent" | "subagent" | "invoke_subagent" | "define_subagent" | "manage_subagents" | "swarm" | "send_message" | "followup_task" | "list_agents" | "wait_agent" => "代理"
+    "chat_history" | "chat_list" | "chat_read" | "session_history" | "chat_archive" | "chat_leave" => "对话"
+    "chat_post" | "chat_state" | "session_send" | "chat_create" | "feishu_api" | "slack_api" => "消息"
+    "station_task" | "station_file" | "station_list" | "station_tool" | "relays" | "workspace_limit" => "远程"
+    "job_start" | "job_list" | "job_log" | "job_stop" | "sleep" | "get_output" | "clock__curr_time" => "任务"
+    "screen" | "browser" | "computer" => "屏幕"
+    "secret_list" | "secret_describe" | "secret_reask" | "secret_use" | "secret_save" | "secret_run" => "密钥"
+    "phone_use" | "phone_send" | "adb_devices" | "device_list" | "device_use" | "permissions" => "设备"
     "" => "工具"
     other => if other.length() > 10 { "工具" } else { other }
   }
@@ -1114,13 +1130,15 @@ fn step_label(name : String) -> String {
 fn step_node(v : @view.View, src : Source, station : String, key : String, rk : String, step : Json?) -> Unit {
   let failed = flag(step, "failed")
   opened_node(v, src, station, key, rk, step, fn(sum) {
-    steps_words(sum, fn() { step_label(text(step, "name")) }, if failed { h_step_name_red } else { h_step_name })
+    let label = step_label(text(step, "name"))
+    let show_secondary_hint = label == "读取" || label == "编辑" || label == "新建" || label == "搜索"
+    steps_words(sum, fn() { label }, if failed { h_step_name_red } else { h_step_name })
     steps_box_node(sum, h_grow_clip, fn(c) {
       match (text(step, "said"), text(step, "hint")) {
         ("", hint) => steps_run(c, fn() { hint }, h_step_hint_line, mono=true)
         (said, "") => steps_words(c, fn() { said }, h_step_said)
         (said, hint) =>
-          if said == hint {
+          if !show_secondary_hint || said == hint || said.contains(hint) {
             steps_words(c, fn() { said }, h_step_said)
           } else {
             c.box(fn(r) {
@@ -1161,7 +1179,7 @@ fn opened_node(
   let open = fn() { steps_own.opened.contains(rk) }
   steps_box_node(v, h_step, fn(s) {
     s.box(fn(line) {
-      @sf.style_node(line, fn() { h_step_summary.then(@sf.row_least_h()) })
+      @sf.style_node(line, fn() { h_step_summary })
       line.ground(By(fn() { if @sf.lit_in_node(line) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
       steps_pressed(line, fn() { steps_flip(rk) }, folds=true, open~)
@@ -1275,20 +1293,38 @@ fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Un
       return
     }
     let parts = @signals.untracked(fn() { steps_own.tools.get(tk) })
+    let raw_calls = items(parts, "call")
+    let step_hint = text(step, "hint")
+    let call_parts = raw_calls.filter(fn(part) {
+      if raw_calls.length() > 1 && text(Some(part), "kind") == "path" && text(Some(part), "extra") == "" {
+        let p = text(Some(part), "path")
+        !(step_hint != "" && (p == step_hint || p.has_suffix("/" + step_hint)))
+      } else {
+        true
+      }
+    })
+    let result_parts = items(parts, "result").filter(fn(part) {
+      if !flag(step, "failed") && text(Some(part), "kind") == "output" {
+        let out = text(Some(part), "text").trim().to_owned()
+        out != "The file has been updated." && out != "File updated successfully."
+      } else {
+        true
+      }
+    })
     steps_box_node(p, tool_body_box, fn(b) {
-      steps_box_node(b, tool_section, fn(s) {
-        for part in items(parts, "call") {
-          tool_part_node(s, Some(part))
-        }
-      })
-      match field(parts, "result") {
-        Some(Array(list)) =>
-          steps_box_node(b, tool_result_box, fn(s) {
-            for part in list {
-              tool_part_node(s, Some(part))
-            }
-          })
-        _ => ()
+      if call_parts.length() > 0 {
+        steps_box_node(b, tool_section, fn(s) {
+          for part in call_parts {
+            tool_part_node(s, Some(part))
+          }
+        })
+      }
+      if result_parts.length() > 0 {
+        steps_box_node(b, tool_result_box, fn(s) {
+          for part in result_parts {
+            tool_part_node(s, Some(part))
+          }
+        })
       }
     })
   })
@@ -1718,7 +1754,7 @@ let steps_row_first : @ui.Style = @ui.css("w=Full px=S4 pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let steps_row : @ui.Style = @ui.css("w=Full px=S4 pt=S3_5")
+let steps_row : @ui.Style = @ui.css("w=Full px=S4 pt=S2_5")
 
 ///|
 /// Its top (historyEdge): 4 over and under, 12 muted, in the middle; on their way, a spinner before the words.
@@ -1753,9 +1789,9 @@ pub fn history_marked() -> (String, String) {
 pub let steps_marked_ms : Double = 1600.0
 
 ///|
-/// A turn's rule (hTurn): 8 over it, 11 muted, a line on to the edge 8 after the words.
+/// A turn's rule (hTurn): 4 over it, 11 muted, a line on to the edge 8 after the words.
 // kept across runs: a value (no field of it changes)
-let h_turn : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 align=ACenter")
+let h_turn : @ui.Style = @ui.css("row w=Full pt=S1 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1772,40 +1808,23 @@ let h_main : @ui.Style = @ui.css("w=Full gap=S2_5")
 let h_ev : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 
 ///|
-/// The turn's rail: 1 wide, 9.5 in, from under its mark (20) down past the event to the next one's (10 more; 14 to the
-/// next item).
+/// The turn's rail: 1 wide, 9.5 in, from under its mark (20) down past the event to the next one's (10 more).
 // kept across runs: a value (no field of it changes)
 let h_rail_room : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(10.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_rail_room_last : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(14.0))
+let h_rail_room_last : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(10.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
 let h_rail : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 
 ///|
-/// A state's block (hEv[data-state]::after): 6 past its gutter, over and under, round as a field, on the neutral ground
-/// (waiting the blue's, on a person the accent's).
-// kept across runs: a value (no field of it changes)
-let h_state : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=Neutral").then(@sf.outset_start(6.0)).then(@sf.outset_top(6.0)).then(@sf.outset_bottom(6.0))
-
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_state_human : @ui.Style = h_state.then(@ui.css("bg=AccentBg"))
-
-///|
-/// An event's mark (hIcon): 20 square, on whatever it stands on (a state's block, a group's line pointed at): the
-/// turn's rail runs from under it, so nothing of it covers the rail (a ground of its own would stand out as a square
-/// on a pane that is not the canvas). As high as its event's first line (ev's `row`), its mark in its middle.
+/// An event's mark (hIcon): 20 square, on whatever it stands on: the turn's rail runs from under it, so nothing of it
+/// covers the rail. As high as its event's first line (ev's `row`), its mark in its middle.
 // kept across runs: a value (no field of it changes)
 let h_icon : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
-
-///|
-/// How high an event's mark is, and a line of its words.
-let h_mark : Double = 20.0
 
 ///|
 /// The model's pulse (activityPulse): a 7 dot in the accent.
@@ -2017,16 +2036,16 @@ let h_group_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg
 ///|
 /// Its calls, opened (hSteps): in its words' column (past the 20 gutter and 8), 2 apart, 2 under its line.
 // kept across runs: a value (no field of it changes)
-let h_steps : @ui.Style = @ui.css("w=Full pl=S7 pt=S0_5 gap=S0_5")
+let h_steps : @ui.Style = @ui.css("w=Full pl=S7 pt=S0_5 gap=SPx")
 
 ///|
-/// A call's line (hStep summary): 5 by 6 in, round 8, 8 apart, 12; the pointer's ground on it.
+/// A call's line (hStep summary): 4 by 6 in, round 8, 8 apart, 12; the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let h_step : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1_25 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}")
+let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2081,10 +2100,10 @@ let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false
 let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
-/// A call opened: 4 by 6 in, 10 under, the call and what came back 8 apart; each a section, its
+/// A call opened: 2 by 6 in, 6 under, the call and what came back 6 apart; each a section, its
 /// parts 6 apart (what came back 4).
 // kept across runs: a value (no field of it changes)
-let tool_body_box : @ui.Style = @ui.css("w=Full pt=S1 px=S1_5 pb=S2_5 gap=S2")
+let tool_body_box : @ui.Style = @ui.css("w=Full pt=S0_5 px=S1_5 pb=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

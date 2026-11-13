@@ -558,8 +558,8 @@ test("agy_tools_coalesced_reads_and_stage_splitting_are_grouped_cleanly", () => 
   assert.equal(coalesced.hint, "station/src/mesh");
   // < 50ms duration is hidden (not "0ms")
   assert.equal(coalesced.meta, "");
-  // Group 1 summary uses category counts (8 unique files across 9 steps) instead of raw tool name
-  assert.equal(g1.summary, "读取 8 个文件 · 共 9 项");
+  // Group 1 summary uses category counts + primary file basenames (8 unique files across 9 steps)
+  assert.equal(g1.summary, "读取 8 个文件（screens.ts、file3.ts 等） · 共 9 项");
 
   // Group 2 starts with the trailing thought before the edit, followed by Edit and Bash
   assert.equal(g2.rows[0].kind, "thought");
@@ -572,5 +572,211 @@ test("agy_tools_coalesced_reads_and_stage_splitting_are_grouped_cleanly", () => 
   assert.equal(g2.rows[2].content.said, "Unit test execution");
   assert.equal(g2.rows[2].content.hint, "pnpm test");
   assert.equal(g2.rows[2].content.meta, "2 秒");
-  assert.equal(g2.summary, "编辑 1 个文件、运行 1 条命令 · 共 2 项");
+  assert.equal(g2.summary, "编辑 1 个文件（screens.ts）、运行 1 条命令 · 共 2 项");
+});
+
+test("stillfail_tools_coalesced_edits_and_clean_thoughts_across_runtimes", () => {
+  const ws = "/Users/zuozijian/.stillfail/sessions/chat/c-4282c9a37cb40bab469a3b91c261af05/workspace/stillfail";
+  const timeline: J[] = [
+    { kind: "user", text: "optimize history" },
+    // Pure placeholder thought is skipped completely
+    { kind: "thinking", text: "I'm thinking through how to approach this." },
+    // Devin-style Process: header is stripped
+    { kind: "thinking", text: "Process:\n1. 先读取 skill 并检查 station 列表。" },
+    {
+      kind: "tool_call",
+      tool: "mcp_stillfail_skill_read",
+      callId: "s1",
+      text: JSON.stringify({ name: "stillfail-login", toolSummary: "Read stillfail-login skill" }),
+    },
+    { kind: "tool_result", callId: "s1", ok: true, text: "skill content" },
+    {
+      kind: "tool_call",
+      tool: "mcp_stillfail_station_list",
+      callId: "s2",
+      text: JSON.stringify({ toolSummary: "List workspace stations" }),
+    },
+    { kind: "tool_result", callId: "s2", ok: true, text: "{}" },
+    {
+      kind: "tool_call",
+      tool: "manage_task",
+      callId: "s3",
+      text: JSON.stringify({ Action: "status", TaskId: "3bd3d52b-1785-4f59-a73e-22a25fe11938/task-42" }),
+    },
+    { kind: "tool_result", callId: "s3", ok: true, text: "running" },
+    // 2 consecutive edits on the same file coalesce into 1 row
+    {
+      kind: "tool_call",
+      tool: "edit_file",
+      callId: "e1",
+      text: JSON.stringify({ Path: `${ws}/client/core-ts/src/history.ts`, Target: "a", Replacement: "b" }),
+      at: "2026-11-13T04:00:00.000Z",
+    },
+    { kind: "tool_result", callId: "e1", ok: true, text: "Made 1 replacement", at: "2026-11-13T04:00:01.000Z" },
+    {
+      kind: "tool_call",
+      tool: "edit_file",
+      callId: "e2",
+      text: JSON.stringify({ Path: `${ws}/client/core-ts/src/history.ts`, Target: "c", Replacement: "d" }),
+      at: "2026-11-13T04:00:01.000Z",
+    },
+    { kind: "tool_result", callId: "e2", ok: true, text: "Made 1 replacement", at: "2026-11-13T04:00:02.000Z" },
+    // Grep hint prefers pattern over path; command hint skips leading export/cd lines
+    {
+      kind: "tool_call",
+      tool: "grep",
+      callId: "g1",
+      text: JSON.stringify({ pattern: "presentHistory", path: `${ws}/client/core-ts/src/history.ts` }),
+    },
+    { kind: "tool_result", callId: "g1", ok: true, text: "found" },
+    {
+      kind: "tool_call",
+      tool: "bash",
+      callId: "b1",
+      text: JSON.stringify({ command: "export MBUI_TOOLS=/tmp/tools\ncd apps/mbui\n./scripts/check.sh" }),
+    },
+    { kind: "tool_result", callId: "b1", ok: true, text: "ok" },
+  ];
+  const g = presentHistory({ timeline }, cx([], [], [])).items[1].body.content;
+  assert.equal(g.rows[0].kind, "thought");
+  assert.equal(g.rows[0].content.first, "先读取 skill 并检查 station 列表。");
+  assert.equal(g.rows[1].content.said, "读取技能 stillfail-login");
+  assert.equal(g.rows[2].content.said, "查看 station 列表");
+  assert.equal(g.rows[3].content.said, "查看后台命令状态 task-42");
+  assert.equal(g.rows[4].content.name, "Edit");
+  assert.equal(g.rows[4].content.said, "history.ts · 2 处修改");
+  assert.equal(g.rows[4].content.hint, "client/core-ts/src");
+  assert.equal(g.rows[4].content.meta, "2 秒");
+  assert.equal(g.rows[5].content.name, "Grep");
+  assert.equal(g.rows[5].content.hint, "presentHistory");
+  assert.equal(g.rows[6].content.name, "Bash");
+  assert.equal(g.rows[6].content.hint, "./scripts/check.sh");
+});
+
+test("codex_exec_wrappers_and_multi_runtime_tools_are_unwrapped_and_labeled", () => {
+  const timeline: J[] = [
+    { kind: "user", text: "<message via=\"web\" thread=\"CHAT/1\" from=\"a@b.com\" ts=\"1\">check multi-runtime</message>" },
+    // 1. Single-call Codex exec wrapping exec_command: unwraps into 1 Bash step with real output
+    {
+      kind: "tool_call",
+      tool: "exec",
+      callId: "c1",
+      text: 'const r = await tools.exec_command({ cmd: "git status -sb" });\ntext(r.output);',
+    },
+    {
+      kind: "tool_call",
+      tool: "exec_command",
+      callId: "c1#0",
+      text: JSON.stringify({ cmd: "git status -sb" }),
+    },
+    { kind: "tool_result", callId: "c1#0", ok: true, text: "", inScript: true },
+    { kind: "tool_result", callId: "c1", ok: true, text: "## main" },
+    // 2. Multi-call Codex exec batch: labeled with call count and inner tools
+    {
+      kind: "tool_call",
+      tool: "exec",
+      callId: "c2",
+      text: "const results = await Promise.allSettled([tools.mcp__stillfail__station_list({}), tools.exec_command({ cmd: \"ls\" })]);",
+    },
+    { kind: "tool_call", tool: "mcp__stillfail__station_list", callId: "c2#0", text: "{}" },
+    { kind: "tool_result", callId: "c2#0", ok: true, text: "", inScript: true },
+    { kind: "tool_call", tool: "exec_command", callId: "c2#1", text: JSON.stringify({ cmd: "ls" }) },
+    { kind: "tool_result", callId: "c2#1", ok: true, text: "", inScript: true },
+    { kind: "tool_result", callId: "c2", ok: true, text: "batch output" },
+    // 3. Cross-runtime tools: AGY WebSearch, Codex write_stdin, manage_subagents, Devin find_file_by_name, DSH skill
+    { kind: "tool_call", tool: '"moonbit wasm-gc" on Web', callId: "w1", text: "{}" },
+    { kind: "tool_result", callId: "w1", ok: true, text: "results" },
+    { kind: "tool_call", tool: "write_stdin", callId: "p1", text: JSON.stringify({ session_id: 42, chars: "" }) },
+    { kind: "tool_result", callId: "p1", ok: true, text: "still running" },
+    { kind: "tool_call", tool: "Agent", callId: "a1", text: JSON.stringify({ Action: "list" }) },
+    { kind: "tool_result", callId: "a1", ok: true, text: "[]" },
+    { kind: "tool_call", tool: "find_file_by_name", callId: "f1", text: JSON.stringify({ query: "*.mbt" }) },
+    { kind: "tool_result", callId: "f1", ok: true, text: "a.mbt" },
+    { kind: "tool_call", tool: "skill", callId: "sk1", text: JSON.stringify({ command: "invoke", skill: "stillfail-show" }) },
+    { kind: "tool_result", callId: "sk1", ok: true, text: "ok" },
+    // 4. Codex exec wrapping chat_post + chat_state: no bogus exec group before post/mark
+    {
+      kind: "tool_call",
+      tool: "exec",
+      callId: "c3",
+      text: 'await tools.mcp__stillfail__chat_post({ to: "CHAT/1", text: "Done!" });\nawait tools.mcp__stillfail__chat_state({ kind: "all_done", done: "PR #5968 CI passed" });',
+    },
+    {
+      kind: "tool_call",
+      tool: "mcp__stillfail__chat_post",
+      callId: "c3#0",
+      text: JSON.stringify({ to: "CHAT/1", text: "Done!" }),
+    },
+    { kind: "tool_result", callId: "c3#0", ok: true, text: "", inScript: true },
+    {
+      kind: "tool_call",
+      tool: "mcp__stillfail__chat_state",
+      callId: "c3#1",
+      text: JSON.stringify({ kind: "all_done", done: "PR #5968 CI passed" }),
+    },
+    { kind: "tool_result", callId: "c3#1", ok: true, text: "", inScript: true },
+    { kind: "tool_result", callId: "c3", ok: true, text: "{}" },
+  ];
+  const h = presentHistory({ timeline }, cx([], [], []));
+  assert.deepEqual(
+    h.items.map((it: J) => it.body.kind),
+    ["received", "group", "post", "mark"],
+  );
+  const g = h.items[1].body.content;
+  assert.equal(g.rows.length, 9);
+  // Row 0: unwrapped single-call exec_command with real output from c1
+  assert.equal(g.rows[0].content.name, "Bash");
+  assert.equal(g.rows[0].content.hint, "git status -sb");
+  assert.equal(g.rows[0].content.result, "## main");
+  assert.deepEqual(g.rows[0].content.entries, [1, 4]);
+  // Row 1: multi-call exec batch
+  assert.equal(g.rows[1].content.name, "exec");
+  assert.equal(g.rows[1].content.said, "执行脚本（含 2 项调用）");
+  // Cross-runtime rows
+  assert.equal(g.rows[4].content.name, "WebSearch");
+  assert.equal(g.rows[4].content.said, "网页搜索「moonbit wasm-gc」");
+  assert.equal(g.rows[5].content.name, "Bash");
+  assert.equal(g.rows[5].content.said, "等待命令输出 #42");
+  assert.equal(g.rows[6].content.name, "Agent");
+  assert.equal(g.rows[6].content.said, "查看子 agent 列表");
+  assert.equal(g.rows[7].content.name, "Glob");
+  assert.equal(g.rows[7].content.hint, "*.mbt");
+  assert.equal(g.rows[8].content.name, "skill");
+  assert.equal(g.rows[8].content.said, "读取技能 stillfail-show");
+  // Mark includes done reason
+  assert.equal(h.items[3].body.content.text, "标记为已完成：PR #5968 CI passed");
+  assert.equal(h.items[3].body.content.ends, "done");
+
+  // 5. Devin/Claude boilerplate headings, inline env command hints, send_message group counts, and Grok duplicate/failed posts
+  const multi = presentHistory(
+    {
+      timeline: [
+        { kind: "user", text: "test multi-runtime edge cases" },
+        { kind: "thinking", text: "1. **Analyze the Request:**\n先检查多运行时边界情况。" },
+        { kind: "tool_call", tool: "send_message", callId: "sm1", text: JSON.stringify({ Recipient: "main", Message: "ok" }) },
+        { kind: "tool_result", callId: "sm1", ok: true, text: "sent" },
+        { kind: "tool_call", tool: "exec_command", callId: "ec1", text: JSON.stringify({ cmd: 'PATH="/usr/bin:$PATH" cd apps/mbui && . scripts/env.sh && moon test' }) },
+        { kind: "tool_result", callId: "ec1", ok: true, text: "PASS" },
+        { kind: "assistant", text: "已完成修复" },
+        { kind: "tool_call", tool: "mcp__stillfail__chat_post", callId: "p1", text: JSON.stringify({ to: "CHAT/1", text: "已完成修复", kind: "all_done" }) },
+        { kind: "tool_result", callId: "p1", ok: true, text: "ok" },
+        { kind: "tool_call", tool: "mcp__stillfail__chat_post", callId: "p2", text: JSON.stringify({ to: "CHAT/1", text: "bad post", kind: "all_done" }) },
+        { kind: "tool_result", callId: "p2", ok: true, text: "Failed to call mcp__stillfail__chat_post: invalid argument" },
+      ],
+    },
+    cx([], [], []),
+  );
+  assert.deepEqual(
+    multi.items.map((it: J) => it.body.kind),
+    ["received", "group", "post", "post"],
+  );
+  const mg = multi.items[1].body.content;
+  assert.equal(mg.rows[0].content.first, "先检查多运行时边界情况。");
+  assert.equal(mg.rows[1].content.name, "Agent");
+  assert.equal(mg.rows[1].content.said, "向主 agent 发送结果：ok");
+  assert.equal(mg.rows[2].content.hint, "moon test");
+  assert.equal(mg.summary, "运行 1 条命令 · 共 2 项");
+  assert.equal(multi.items[2].body.content.ends, "done");
+  assert.equal(multi.items[3].body.content.failed, true);
+  assert.equal(multi.items[3].body.content.ends, undefined);
 });

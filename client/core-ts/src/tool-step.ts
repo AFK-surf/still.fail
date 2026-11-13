@@ -67,14 +67,80 @@ export function closeCut(json: string): string {
 
 /** A workspace path stripped of its session workspace root (`/Users/.../.stillfail/sessions/.../workspace/(stillfail/)?`). */
 export function cleanPath(p: string): string {
-  const m = /^(?:\/Users\/[^/]+|\/home\/[^/]+|\/var\/[^/]+|~)?\/?\.(?:stillfail|ember)\/sessions\/[^/]+\/[^/]+\/workspace\/(?:stillfail\/)?(.+)$/.exec(p);
-  return m && m[1] ? m[1] : p;
+  const ws = /^(?:\/Users\/[^/]+|\/home\/[^/]+|\/var\/[^/]+|~)?\/?\.(?:stillfail|ember)\/sessions\/[^/]+\/[^/]+\/workspace(?:\/stillfail)?(?:\/(.+))?$/.exec(p);
+  if (ws) return ws[1] || ".";
+  const brain = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/brain\/[^/]+\/(?:\.system_generated\/)?(.+)$/.exec(p);
+  if (brain?.[1]) return brain[1];
+  const builtin = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/builtin\/(.+)$/.exec(p);
+  if (builtin?.[1]) return builtin[1];
+  const agent = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/agent\/(.+)$/.exec(p);
+  if (agent?.[1]) return agent[1];
+  const grokMem = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/grok\/memory[^/]*\/workspaces\/[^/]+\/(.+)$/.exec(p);
+  if (grokMem?.[1]) return `memory/${grokMem[1]}`;
+  const homeRuntime = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/([^/]+)\/(?:sessions\/[^/]+\/)?(.+)$/.exec(p);
+  if (homeRuntime?.[1] && homeRuntime[2]) return `${homeRuntime[1]}/${homeRuntime[2]}`;
+  const shared = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/(?:repos|transcripts)\/(.+)$/.exec(p);
+  if (shared?.[1]) return shared[1];
+  const overflow = /^(?:\/private)?\/var\/folders\/[^/]+\/[^/]+\/T\/devin-overflows-[^/]+\/(.+)$/.exec(p);
+  if (overflow?.[1]) return `devin-overflow/${overflow[1]}`;
+  const userHome = /^(?:\/Users|\/home)\/[^/]+\/(.+)$/.exec(p);
+  if (userHome?.[1]) return `~/${userHome[1]}`;
+  return p;
 }
 
 /** A command stripped of a leading `cd /absolute/workspace &&` prefix when present. */
 export function cleanCommand(cmd: string): string {
   const m = /^cd\s+(?:"[~/][^"]*"|'[~/][^']*'|[~/][^\s;&|]*)\s*(?:&&|;)\s*([\s\S]+)$/.exec(cmd);
   return m && m[1] ? m[1] : cmd;
+}
+
+/** One-line summary of a shell command for collapsed step rows, skipping leading `export` / `cd` / comment lines. */
+export function summaryCommand(cmd: string): string {
+  const cleanWs = (s: string): string =>
+    s
+      .replace(
+        /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/sessions\/[^/\s"']+\/[^/\s"']+\/workspace(?:\/stillfail)?\/?/g,
+        "",
+      )
+      .replace(
+        /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/(?:repos|homes\/[^/\s"']+)\//g,
+        "",
+      );
+  const cleaned = cleanCommand(cmd.trim());
+  const lines = cleaned
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  const stripSetup = (line: string): string => {
+    let s = line;
+    while (true) {
+      const next = s
+        .replace(/^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "")
+        .replace(/^(?:(?:export\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]*)\s+)+)/, "")
+        .replace(/^(?:cd\s+(?:"[^"]*\/[^"]*"|'[^']*\/[^']*'|[^\s;&|]*\/[^\s;&|]*|~[^\s;&|]*)\s*(?:&&|;)\s*)/, "")
+        .replace(/^(?:(?:\.|source)\s+[^\s;&|]*env\.sh\s*(?:&&|;)\s*)/, "");
+      if (next === s) break;
+      s = next.trim();
+    }
+    return s;
+  };
+  const isSetupOnly = (line: string): boolean =>
+    /^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)|cd\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)|set\s+-[euo]+(?:\s+pipefail)?)$/.test(
+      line,
+    );
+  const idx = lines.findIndex((l) => {
+    const stripped = stripSetup(l);
+    return stripped.length > 0 && !isSetupOnly(stripped);
+  });
+  const firstIdx = idx >= 0 ? idx : 0;
+  const first = cleanWs(stripSetup(lines[firstIdx] ?? ""));
+  if (/(?:-[ec]\s+['"]|<<-?\s*['"]?\w+['"]?)$/.test(first) && firstIdx + 1 < lines.length) {
+    const bodyLine = lines
+      .slice(firstIdx + 1)
+      .find((l) => !/^(?:import\s|from\s+\S+\s+import\s|['"]use strict['"])/.test(l) && !/^[)}'"]+$/.test(l));
+    if (bodyLine) return `${first} ${cleanWs(bodyLine)}`;
+  }
+  return first || cleanWs(lines[0] ?? "");
 }
 
 const isArgs = (v: unknown): v is Args => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -162,9 +228,9 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
     return call.trim() ? [code(call, name === "exec" ? "js" : undefined)] : [];
   }
   const a = parsed;
-  const skip = said ? ["description", "toolSummary"] : ["toolSummary"];
+  const skip = said ? ["description", "toolSummary", "explanation"] : ["toolSummary"];
   const command = commandOf(a);
-  const rawFile = str(a.file_path) ?? str(a.notebook_path) ?? str(a.path) ?? str(a.Path);
+  const rawFile = str(a.file_path) ?? str(a.notebook_path) ?? str(a.target_file) ?? str(a.path) ?? str(a.Path);
   const file = rawFile !== undefined ? cleanPath(rawFile) : undefined;
   if (command !== undefined) return [code(command, "sh"), ...facts(a, [...skip, "command", "cmd", "CommandLine", "WaitMsBeforeAsync"])];
   const oldStr = str(a.old_string) ?? str(a.Target);
@@ -188,9 +254,9 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
   if (typeof a.text === "string" && a.text.length > 0 && Object.values(a).filter((v) => typeof v === "string" && v.length > 120).length <= 1) {
     return [...facts(a, [...skip, "text"]), { kind: "markdown", text: a.text }];
   }
-  if (file && Object.keys(a).every((k) => ["file_path", "path", "Path", "notebook_path", "offset", "limit", "StartLine", "EndLine", "ByteOffset", ...skip].includes(k))) {
-    const startLine = typeof a.StartLine === "number" ? a.StartLine : undefined;
-    const endLine = typeof a.EndLine === "number" ? a.EndLine : undefined;
+  if (file && Object.keys(a).every((k) => ["file_path", "target_file", "path", "Path", "notebook_path", "offset", "limit", "StartLine", "EndLine", "ByteOffset", "start_line", "end_line", ...skip].includes(k))) {
+    const startLine = typeof a.StartLine === "number" ? a.StartLine : typeof a.start_line === "number" ? a.start_line : undefined;
+    const endLine = typeof a.EndLine === "number" ? a.EndLine : typeof a.end_line === "number" ? a.end_line : undefined;
     const from = startLine ?? (typeof a.offset === "number" ? a.offset : undefined);
     const count = startLine !== undefined && endLine !== undefined && endLine >= startLine
       ? endLine - startLine + 1
@@ -250,11 +316,28 @@ function readLines(text: string, numbered = /^\s*\d+(→|\t)/): string | null {
   return lines.slice(0, end).map((l) => l.replace(numbered, "")).join("\n");
 }
 
+const FILE_STEP_NAMES = new Set([
+  "Read",
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookRead",
+  "NotebookEdit",
+  "read",
+  "edit",
+  "write",
+  "read_file",
+  "edit_file",
+  "write_file",
+  "search_replace",
+]);
+
 /** What a call gave back. */
 export function toolResult(name: string, call: string, result: string, failed: boolean, say: Say): ToolPart[] {
-  if (!result.trim()) return [{ kind: "none", text: say("web-main.tool.noOutput") }];
+  const isFileStep = FILE_STEP_NAMES.has(name) || name.startsWith("File ");
+  if (!result.trim()) return !failed && isFileStep ? [] : [{ kind: "none", text: say("web-main.tool.noOutput") }];
   const args = parse(call);
-  const rawFile = isArgs(args) ? str(args.file_path) ?? str(args.path) ?? str(args.Path) : undefined;
+  const rawFile = isArgs(args) ? str(args.file_path) ?? str(args.target_file) ?? str(args.path) ?? str(args.Path) : undefined;
   const file = rawFile !== undefined ? cleanPath(rawFile) : undefined;
   const output = (text: string, red: boolean): ToolPart => (red ? { kind: "output", text, failed: true } : { kind: "output", text });
   const codex = commandOutput(result, say) ?? (name === "bash" ? exitMarker(result, say) : null);
@@ -265,17 +348,28 @@ export function toolResult(name: string, call: string, result: string, failed: b
     ];
   }
   const stripped = result.replace(/^(?:The tool's output was truncated[^\n]*\n\nHere is a preview[^\n]*\n)?Created At:\s*\S+\r?\nCompleted At:\s*\S+(?:\r?\n)+/, "");
-  const agyReadBody = stripped.replace(/^(?:Partial read[^\n]*\r?\n)?Showing lines \d+-\d+ of \d+\r?\n/, "");
+  const agyReadBody = stripped
+    .replace(
+      /(?:^|\r?\n)(?:(?:The tool's output was truncated[^\n]*\n\nHere is a preview[^\n]*\n)?Created At:\s*\S+\r?\nCompleted At:\s*\S+(?:\r?\n)+)?(?:Partial read[^\n]*\r?\n)?Showing lines \d+-\d+ of \d+\r?\n/g,
+      "\n",
+    )
+    .replace(/^\n+/, "");
   const read = !failed && (name === "Read" || name === "NotebookRead" || name === "read_file" || name.startsWith("File "))
     ? (readLines(result) ?? (agyReadBody !== stripped ? readLines(agyReadBody, /^\d+: ?/) : null))
     : null;
   if (read !== null) return [code(read, languageOf(file))];
-  if (!failed && (name === "Edit" || name === "edit_file" || name.startsWith("File "))) {
-    const agyEdit = /^Made \d+ replacements? in .+ starting at line (\d+) \(\+(\d+)\/-(\d+) lines\)\.\s*$/.exec(stripped.trim());
+  if (!failed && (name === "Edit" || name === "edit" || name === "edit_file" || name === "search_replace" || name.startsWith("File "))) {
+    const cleanStripped = stripped
+      .replace(/(?:^|\r?\n)Created At:\s*\S+\r?\nCompleted At:\s*\S+(?:\r?\n)+/g, "\n")
+      .trim();
+    const agyEdit = /^Made \d+ replacements? in .+ starting at line (\d+) \(\+(\d+)\/-(\d+) lines\)\.\s*$/.exec(cleanStripped);
     if (agyEdit) {
       return [{ kind: "facts", items: [{ key: `第 ${agyEdit[1]} 行 · +${agyEdit[2]} / -${agyEdit[3]}`, plain: true }] }];
     }
-    if (/^Made \d+ replacements? in [^\n]+\s*$/.test(stripped.trim())) {
+    if (cleanStripped.split(/\r?\n/).every((l) => /^Made \d+ replacements? in [^\n]+$/.test(l.trim()))) {
+      return [];
+    }
+    if (/^(?:The file\b[^\n]*\bhas been (?:updated|edited|modified|created)|File (?:updated|edited|modified|created|written) successfully)\.?$/i.test(cleanStripped)) {
       return [];
     }
   }
