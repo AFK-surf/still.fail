@@ -635,12 +635,17 @@ fn with_parent_it_stops_once_the_parent_is_gone() {
     until("Node to end", || (!alive(node)).then_some(()));
 }
 
-/// A stand-in for the front (front.rs) in the release: it says where it listens, appends its pid to <data>/fronts and
-/// runs until its stdin (the launcher's) ends.
+/// A stand-in for the front (front.rs) in the release: it says where it listens and how it hands streams (this
+/// release's way), appends its pid to <data>/fronts and runs until its stdin (the launcher's) ends.
 fn release_front(station: &Station) {
+    release_front_saying(station, ",\"streams\":2");
+}
+
+/// One that says `more` after where it listens (nothing: a front from before `streams`).
+fn release_front_saying(station: &Station, more: &str) {
     let path = station.app.join("station/stillfail-reader");
     let fronts = station.data.join("fronts");
-    std::fs::write(&path, format!("#!/bin/sh\n# --builder mesh --socket S --shell-dir D\necho $$ >> '{}'\nprintf '{{\"listening\":\"%s\"}}\\n' \"$4\"\nexec cat > /dev/null\n", fronts.display())).unwrap();
+    std::fs::write(&path, format!("#!/bin/sh\n# --builder mesh --socket S --shell-dir D\necho $$ >> '{}'\nprintf '{{\"listening\":\"%s\"{}}}\\n' \"$4\"\nexec cat > /dev/null\n", fronts.display(), more)).unwrap();
     std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
 }
 
@@ -709,6 +714,40 @@ fn a_launcher_from_before_the_front_renewed_starts_one_for_the_next_node() {
     station.signal(libc::SIGTERM);
     assert!(station.wait().success());
     until("the front to end with the launcher", || (!alive(fronts[0])).then_some(()));
+}
+
+#[test]
+fn a_front_handing_streams_as_a_release_before_is_replaced_by_the_launcher_that_takes_it_up() {
+    let mut station = Station::new("frontold");
+    // the front of a release before `streams` (it hands a connection's streams as they come, in any order)
+    release_front_saying(&station, "");
+    station.start("");
+    station.up();
+    let old = station.fronts();
+    assert_eq!(old.len(), 1);
+    // an update that brings this release's front and launcher (renew): the old front ended, the release's started
+    // before the next Node, which is told it
+    release_front(&station);
+    release_launcher(&station, "exec \"$BUILT\" \"$@\"\n");
+    station.conf("version=0.2.0\n");
+    station.signal(libc::SIGUSR2);
+    until("station.json of the new version", || station.station_json().filter(|s| s["version"] == "0.2.0"));
+    let new = *station.started().last().unwrap();
+    let socket = station.data.join("run/front.sock");
+    until("the new Node to say its front", || station.log().into_iter().any(|(_, p, w)| p == new && w.starts_with("front ")).then_some(()));
+    assert!(station.said(new, &format!("front {}", socket.display())), "{:?}", station.log());
+    let fronts = station.fronts();
+    assert_eq!(fronts.len(), 2, "{fronts:?}");
+    assert!(!alive(old[0]));
+    assert!(alive(fronts[1]));
+    // and kept from then on: a renew again leaves it
+    station.conf("version=0.3.0\n");
+    station.signal(libc::SIGUSR2);
+    until("station.json of the next version", || station.station_json().filter(|s| s["version"] == "0.3.0"));
+    assert_eq!(station.fronts(), fronts);
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+    until("the front to end with the launcher", || (!alive(fronts[1])).then_some(()));
 }
 
 #[test]
