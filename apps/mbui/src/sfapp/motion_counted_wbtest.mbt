@@ -19,7 +19,6 @@ fn init {
     "src/sfapp/duo_wbtest.mbt",
     "src/sfapp/emit_kept_wbtest.mbt",
     "src/sfapp/emit_wbtest.mbt",
-    "src/sfapp/fast_down_wbtest.mbt",
     "src/sfapp/files_places_wbtest.mbt",
     "src/sfapp/flight_under_bar_wbtest.mbt",
     "src/sfapp/hand_layout_wbtest.mbt",
