@@ -17,6 +17,7 @@ pub fn fill_chip_node(
   small? : Bool = false,
   said? : () -> String,
   tips? : TipLayer,
+  tips_within? : Bool = false,
   squeezes? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
@@ -89,8 +90,9 @@ pub fn fill_chip_node(
     |> ignore
   })
   match (tips, said) {
-    // (shown by the pointer within it: a chip takes no press, so is never pointed at itself, tip_node's `within`)
-    (Some(t), Some(s)) => tip_node(t, chip, s, within=true) |> ignore
+    // (`tips_within`: shown by the pointer within it, where the chip stands in what takes no press and so is never
+    // pointed at itself, an agent's card's; tip_node's `within`)
+    (Some(t), Some(s)) => tip_node(t, chip, s, within=tips_within) |> ignore
     _ => ()
   }
   chip
@@ -100,7 +102,7 @@ pub fn fill_chip_node(
 /// An allowance's windows as chips in a line (quota_chips', not worded, as a node) in `parent`, `q` as the core says it
 /// now: a chip per window, what is left in it, filled as far as that, its mark before it where `marked`; `small` a lower
 /// line; `gap` apart; nothing while the core cannot say or there is no window. Each says what is left of it and when it
-/// fills again over it while it is pointed at, in `tips`.
+/// fills again over it while it is pointed at, in `tips` (`tips_within`: while the pointer is within it, fill_chip_node's).
 pub fn quota_chips_node(
   parent : @view.View,
   q : () -> Json?,
@@ -108,6 +110,7 @@ pub fn quota_chips_node(
   marked? : Bool = true,
   gap? : Double = 8.0,
   tips? : TipLayer,
+  tips_within? : Bool = false,
 ) -> Unit {
   let windows = fn() {
     match chip_field(q(), "windows") {
@@ -131,6 +134,7 @@ pub fn quota_chips_node(
           small~,
           said=fn() { quota_said(w()) },
           tips?,
+          tips_within~,
         )
         |> ignore
       })
