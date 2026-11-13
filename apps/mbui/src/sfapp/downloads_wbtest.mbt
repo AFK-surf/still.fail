@@ -149,13 +149,7 @@ test "downloads: an image's menu downloads it and its picture shows the download
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
   nav_rested(t)
-  let mut tries = 0
-  while t.locate("img:compare.png").length() == 0 && tries < 12 {
-    let (first, _) = t.visible()
-    t.scroll_to(if first > 0 { first - 1 } else { 0 })
-    t.draw()
-    tries += 1
-  }
+  walk_to_image(t, "compare.png")
   let (x, y) = t.locate("img:compare.png")[0]
   t.right_click(x, y)
   t.draw()
