@@ -1115,16 +1115,53 @@ test "on the tape a passage held in the page beside the sidebar brings the page 
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()
-  assert_true(pk.ts != "")
+  assert_true(page_picked())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.run_for(@ui.move_most_ms)
-  // still picked, its bar over it where the page is now
-  assert_true(pk.ts != "")
-  t.tap_text("引用")
+  // still picked, its 引用 over it where the page is now
+  assert_true(page_picked())
+  quote_picked(t)
   t.draw()
-  assert_true(pk.ts == "")
+  assert_false(page_picked())
   assert_true(t.find("添加说明（可选）") is Some(_))
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+}
+
+///|
+/// Whether a passage of a message is picked in the page: the old view's (`pk`), or, the chat's page made as nodes, its
+/// words of the window's tree's (@ui.picked_now).
+fn page_picked() -> Bool {
+  pk.ts != "" || @ui.picked_now() is Some(_)
+}
+
+///|
+/// Which passage is picked in the page (page_picked): the old view's by its identity (@sfbase.picked), the tree's words by
+/// which selection it is; "" none.
+fn page_pick_id() -> String {
+  match (@sfbase.picked.get().serial, @ui.picked_now()) {
+    (0, Some(p)) => "words \{p.made}"
+    (0, None) => ""
+    (serial, _) => serial.to_string()
+  }
+}
+
+///|
+/// What is picked in the page let go, as a tap elsewhere lets it go.
+fn page_pick_clear() -> Unit {
+  @sfbase.pick_clear()
+  @ui.picked_let_go()
+}
+
+///|
+/// What is picked in the page quoted by its 引用: the pick's bar's (the old view's), or the system's text menu's first
+/// item of its own over what a finger picked of the tree's words (a chat's page made as nodes), as a person chooses it.
+fn quote_picked(t : @ui.Tester) -> Unit raise {
+  if t.text_menu().0 {
+    assert_eq(t.text_menu_own()[0], "引用")
+    t.key(@hostapi.key_menu_own)
+  } else {
+    t.tap_text("引用")
+  }
 }
 
 ///|
@@ -1257,10 +1294,10 @@ test "on the tape a passage left picked keeps nothing from coming over: the side
   t.draw()
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.run_for(@ui.move_most_ms)
-  assert_true(pk.ts != "")
+  assert_true(page_picked())
   // what shows of the sidebar pulled across, the passage still picked: the sidebar comes over, and stays
   t.drag(30.0, 400.0, 500.0, 400.0)
-  assert_true(pk.ts != "")
+  assert_true(page_picked())
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   t.run_for(@ui.move_most_ms)
@@ -1374,18 +1411,20 @@ test "on the tape a passage picked anew after the sidebar was brought over bring
   t.drag(30.0, 400.0, 500.0, 400.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
-  assert_true(pk.ts != "")
-  // (a press something in the message took as it stays picked, a menu's: picks nothing, brings nothing)
+  assert_true(page_picked())
+  // (a press something in the message took as it stays picked, a menu's: picks nothing, brings nothing; the old view's
+  // passage's, `pk`, whose press it is)
   pk.taken_at = pk.taken_at + 1
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // (let go of, as a tap elsewhere lets it go; then picked anew where the page shows beside: over again)
-  @sfbase.pick_clear()
+  let was = page_pick_id()
+  page_pick_clear()
   t.draw()
-  let serial = @sfbase.picked.get().serial
+  assert_false(page_picked())
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  assert_true(@sfbase.picked.get().serial > serial, msg="picked anew")
+  assert_true(page_picked() && page_pick_id() != was, msg="picked anew")
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)

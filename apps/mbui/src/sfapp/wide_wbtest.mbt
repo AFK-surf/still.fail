@@ -34,7 +34,36 @@ fn wide_tester(
 test "wide: existing chat messages are fully visible in the first frame" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  assert_eq(t.look_of("做完了：").map(fn(l) { l.2 }), Some(1.0))
+  // (its words drawn in the first frame as they are at rest: there, in the colours they are drawn in then, none on its
+  // way in; the old view's message by its look, one of the tree's by its glyphs where its words are drawn)
+  match t.look_of("做完了：") {
+    Some(l) => assert_eq(l.2, 1.0)
+    None => {
+      let first = colours_of_words(t, "做完了：")
+      assert_true(first.length() > 0, msg="「做完了：」 not drawn in the first frame")
+      t.run_for(@ui.move_most_ms)
+      assert_eq(first, colours_of_words(t, "做完了："))
+    }
+  }
+}
+
+///|
+/// The colours the glyphs drawn where words `s` of a paragraph are (Tester::run_rects' first line of them) are drawn
+/// in, each once, in order.
+fn colours_of_words(t : @ui.Tester, s : String) -> Array[Int64] {
+  match t.run_rects(s) {
+    [(x, y, w, h), ..] => {
+      let out : Array[Int64] = []
+      for g in t.drawn_glyphs() {
+        if g.0 >= x - 1.0 && g.0 < x + w && g.1 >= y - h / 2.0 && g.1 < y + h && !out.contains(g.2) {
+          out.push(g.2)
+        }
+      }
+      out.sort()
+      out
+    }
+    _ => []
+  }
 }
 
 ///|
@@ -1167,7 +1196,11 @@ test "wide: words in a message that did not go can be picked, copied and quoted"
   assert_true(selected != "")
   t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
   assert_eq(t.clipboard(), selected)
-  t.tap_text("引用")
+  // (its 引用 over where the pointer let go, an old view's words or a node of the tree's: where it is drawn)
+  match t.words().filter(fn(w) { w.0 == "引用" }) {
+    [(_, qx, qy, qw, qh, _), ..] => t.tap(qx + qw / 2.0, qy + qh / 2.0)
+    _ => fail("no 引用 over what is picked")
+  }
   let quoted = named(calls, "composer.quote")
   assert_eq(quoted.length(), 1)
   let q = field(Some(quoted[0].params), "quote")

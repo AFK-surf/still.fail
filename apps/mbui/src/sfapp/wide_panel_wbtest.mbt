@@ -352,6 +352,10 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   assert_true(t.find("发起") is None)
   // the way to it in Slack is what is done with it: its "…"'s
   assert_true(t.find("在 Slack 中打开") is None)
+  // (its info closed first: what is behind a popover the tree puts up over the window is pressed once it is gone, as a
+  // press outside it closes it)
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="更多")
   t.run_for(@ui.move_most_ms)
   open_share(t)
