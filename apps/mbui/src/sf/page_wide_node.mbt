@@ -407,6 +407,23 @@ let section_foot : Double = 28.0
 let section_note_w : Double = 624.0
 
 ///|
+/// A section's heading alone, a block of a page's list over the pieces of its card (card_piece_node): as section_node
+/// heads a section, narrow heading_node's, wide its title on its line, as far over the card as it stands there.
+#callsite(autofill(loc))
+pub fn section_heading_node(parent : @view.View, title : () -> String, loc~ : SourceLoc) -> Unit {
+  match look_node(parent) {
+    Narrow => heading_node(loc~, parent, title)
+    Wide =>
+      parent.box(made_for=loc, fn(line) {
+        let side = if in_pane_node(line) { panel_words - panel_card_in } else { 0.0 }
+        line.padding(Is((side, 0.0, side, title_card_wide))) |> ignore
+        words_node(line, title, fn() { section_title }) |> ignore
+      })
+      |> ignore
+  }
+}
+
+///|
 /// Rows together on a wide page (group's, wide): at the column's edges, a list card (desk_list: its rows `list_pad` in,
 /// 2 apart, its corner the list card's: what is made on it a list's rows, part_of) or, a `card` of words, desk_card
 /// (20 in, 14 apart, Xl3); standing as a section does where it is in none (wide_alone: 28 under it), where it says so (`alone`).

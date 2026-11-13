@@ -34,9 +34,18 @@ pub fn card_piece_of(i : Int, n : Int) -> CardPiece {
 /// rooms and corners only where it is the card's top or foot. It grows to what it is made in, as `parent` should to
 /// its block (a page's block grows to its slot: page_node): where the page's list sets its slots on whole pixels
 /// (Tree::set_rows_grid) each is whole pixels tall, and the grounds of pieces that meet meet there, with no seam. Wide,
-/// its rows alone (a wide group's card is not one of pieces).
+/// its rows alone (a wide group's card is not one of pieces), or, `wide_card`, a piece of the wide page's card (a
+/// section's, desk_card's: `card_pad` in, its corner Xl3, the section's foot under it), `wide_gap` over a piece that
+/// is not its top (the rows' gap, part of the piece, so it goes with the row it is over).
 #callsite(autofill(loc))
-pub fn card_piece_node(parent : @view.View, piece : () -> CardPiece, rows : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+pub fn card_piece_node(
+  parent : @view.View,
+  piece : () -> CardPiece,
+  rows : (@view.View) -> Unit,
+  wide_card? : Bool = false,
+  wide_gap? : Double = 0.0,
+  loc~ : SourceLoc,
+) -> Unit {
   let at = part_of(parent)
   let top = fn() { piece() is (CardWhole | CardTop) }
   let foot = fn() { piece() is (CardWhole | CardFoot) }
@@ -55,6 +64,24 @@ pub fn card_piece_node(parent : @view.View, piece : () -> CardPiece, rows : (@vi
       k.grow(Is(1.0)).corners(By(fn() { corners(card_corner) })).lends(on_card_lent, true).lends(part_at, { ..at, list: at.look is Wide })
       |> ignore
       rows(k)
+    })
+    |> ignore
+    return
+  }
+  if at.look is Wide && wide_card {
+    parent.box(made_for=loc, fn(room) {
+      room.grow(Is(1.0)).padding(By(fn() { (0.0, 0.0, 0.0, if foot() { section_foot } else { 0.0 }) })) |> ignore
+      room.box(fn(card) {
+        card
+        .grow(Is(1.0))
+        .padding(By(fn() { (card_pad, if top() { card_pad } else { wide_gap }, card_pad, if foot() { card_pad } else { 0.0 }) }))
+        .corners(By(fn() { corners(@ui.tree_theme().corner(Xl3)) }))
+        .ground(By(fn() { @ui.tree_theme().color(Card) }))
+        .clips(Is(true))
+        |> ignore
+        rows(card)
+      })
+      |> ignore
     })
     |> ignore
     return
