@@ -252,3 +252,10 @@ test "小屏顶栏：有状态栏且可点展开时，第 1 行标题自身高�
   }
   assert_eq(bar_node_audit(t), [])
 }
+
+///|
+test "小屏顶栏：对话有服务和后台任务时，打开它们的圆键有名字（读屏念得出、测试按名字找得到）" {
+  let (t, _) = chat_bar_node_tester("短标题", has_jobs=true)
+  let keys = t.all(Button, label="服务和后台任务")
+  assert_eq(keys.length(), 1, msg="the jobs key, by its name")
+}

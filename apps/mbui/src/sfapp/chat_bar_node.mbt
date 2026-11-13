@@ -535,7 +535,7 @@ fn bar_end_node(e : @view.View, src : Source, r : ChatRef, view : () -> ChatView
   }
   e.show(has_jobs, fn(k) {
     k.row(Is(true)).padding(By(fn() { (bar_keys_apart(), 0.0, 0.0, 0.0) })) |> ignore
-    @sf.round_key_node(k, "web", fn() { "" }, fn() { open_chat_jobs(src, r) }, icon_size=20.0)
+    @sf.round_key_node(k, "web", fn() { tr("android-misc.jobs.title") }, fn() { open_chat_jobs(src, r) }, icon_size=20.0)
     let alarm = fn() { text(jobs(), "alarm") }
     k.show(fn() { alarm() == "fail" || alarm() == "restart" }, fn(d) {
       d
