@@ -184,7 +184,7 @@ fn agent_card_head_node(
           let chips = fn(c : @view.View) {
             c.show(fn() { windows().length() > 0 }, fn(q) {
               q.pick(fn() { windows().length() > 1 }, fn(m, marked) {
-                @sf.quota_chips_node(m, quota, small=true, marked~, gap=agent_card_chips_gap.px(), tips~)
+                @sf.quota_chips_node(m, quota, small=true, marked~, gap=agent_card_chips_gap.px(), tips~, tips_within=true)
               })
             })
           }
