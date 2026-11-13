@@ -222,11 +222,11 @@ another; the accounts' list's merge across stations and its refills.
   one with neither is not said, their role noted (`note`), and comes in as a newcomer by their first app device (the
   owner, 2026-11-13: 「开了安全模式那就需要 app」). A `moved` that lost its place is never signed again (`again`,
   `#lost`, `deliver`): the next `handOver` works it out again. Another member's web page is out after it until their
-  own app approves it again. A handover today drops a member's app device that signs on the chain and is not on the
-  log that binds them (nobody approves it again by itself): this device holds no other member's log before a move
-  (a station gives `/lock/logs` of an unmoved chain only those holding a statement of the workspace, `Cloud.logsOf`;
-  `/lock/person` the asker's own), so it cannot tell. Making such a member wait needs those logs first: a station
-  giving the logs the chain binds (`person`) and `handOver` reading them before its plan. `test/lock-handover.test.ts`
+  own app approves it again. A member bound to a log whose app device signs on the chain and is not on that log, or
+  whose log no station gave, waits it too (`lock_not_ready`): the state names a member's devices by their log alone,
+  and nobody would approve that one again by itself. So `handOver` reads the logs the chain binds of its stations
+  before its plan and again before the `moved` (`readBound`; of an unmoved chain a station gives them to a device the
+  chain lets in, station/src/cloud/state.ts `logsOf`), and its `guard` holds the devices too. `test/lock-handover.test.ts`
   runs it on the station's own code, `test/lock-handover-model.test.ts` holds its plan to the model's handover.
 - Nothing the core does by itself (as a lock comes, a retry, a background writer) reads a value sealed for the
   person's presence or asks them: only what a person asked for on this device does, once for it, and what needs such

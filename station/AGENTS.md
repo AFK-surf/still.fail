@@ -157,6 +157,8 @@
   workspace as waiting for good) with whom to ask, the app devices that may let it in: its person's own where the list
   names them, else the owners' and admins', 16 at most. Not the list: only who can let it in, a hint it dials as
   before a move, each device dialled checking all itself. Never while waiting (the state names nobody) nor off.
+  Before a chain moves, `GET /lock/logs` gives a device it lets in the logs it binds its members by, as kept here
+  (`Cloud.logsOf`): what an owner's device reads before handing it over, so a member's device is not dropped.
   `test/lock-moved-model.test.ts` holds all of it to the model, `test/lock-left-out.test.ts` the refusal's `left`.
 
 ## Screens

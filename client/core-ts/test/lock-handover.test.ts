@@ -61,6 +61,8 @@ type Opts = {
   bobOwner?: boolean;
   /// The workspace's members as the cloud's view says them (none by default).
   view?: { sub: string; email: string; role: string }[];
+  /// Members whose log no station keeps (their app device never brought it).
+  unbrought?: ("r2" | "r3")[];
 };
 
 async function setUp(o: Opts = {}) {
@@ -121,7 +123,7 @@ async function setUp(o: Opts = {}) {
     const c = new Cloud(data, false);
     c.takeLock(chain as unknown as StationEntry[]);
     // (each member's log as their app device brought it to the station, POST /lock/person)
-    for (const l of [bob, xena]) bring(c, l, false, "ws");
+    for (const l of [bob, xena]) if (!o.unbrought?.includes(l.sub as "r2" | "r3")) bring(c, l, false, "ws");
     return c;
   };
   const stations = { A: station(A), B: station(B) };
@@ -195,6 +197,10 @@ async function setUp(o: Opts = {}) {
   };
   return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer, firstApp, g, now: () => now };
 }
+
+/// A second app device of `log`'s person (`d`) as the product puts it on their own log: a device entry signed by the
+/// first device there (personal-lock.ts `#addApproved`), with the key it signs the chain with.
+const onLog = (log: Log, d: Dev, label: string) => log.add("device", { key: d.key.id, id: d.base.hex, label, sign_key: d.signer.id });
 
 /// The core's state in force as the model's D4 has one (test/lock-moved-check.ts's reading).
 function d4Core(inner: any) {
@@ -309,12 +315,17 @@ test("no station reachable: the statements pending, no moved; a station back and
   assert.deepEqual(w.st.early, [], "no moved before a station held every body");
 });
 
-test("the chain changed between the statements and the moved: bob's own new device, nothing more said; an admin's new member with a log, said first, one more ask", async () => {
+test("the chain changed between the statements and the moved: bob's own new device, on his log too, nothing more said; an admin's new member with a log, said first, one more ask", async () => {
   const w = await setUp();
   const phone = dev();
   w.st.hook = () => {
+    // (approved by bob's app as the product does where his log is bound: on his log, then on the chain, views/pair.ts `approve`)
+    onLog(w.bob, phone, "bob's phone");
     w.after(w.bob.app.signer, "device", { id: phone.base.hex, sub: "r2", kind: "app", label: "bob's phone", sign_key: phone.signer.id });
-    for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
+    for (const c of Object.values(w.stations)) {
+      c.takeLock([...w.chain] as unknown as StationEntry[]);
+      bring(c, w.bob, false, "ws");
+    }
   };
   const out = await w.hand();
   assert.equal(out.error, undefined, out.error?.message);
@@ -322,6 +333,8 @@ test("the chain changed between the statements and the moved: bob's own new devi
   assert.equal(w.said().length, 5);
   assert.equal(w.stations.A.chain(null)?.state?.moved, w.gMe);
   assert.equal(w.stations.A.chain(null)?.state?.seq, w.chain.length, "the moved after bob's device");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(d4Core(w.inner).members.get("r2")?.apps, [w.bob.app.signer.id, phone.signer.id].sort(), "bob's phone in force with his app");
 
   const v = await setUp();
   const r7 = new Log("r7");
@@ -341,6 +354,76 @@ test("the chain changed between the statements and the moved: bob's own new devi
   assert.equal(v.stations.A.chain(null)?.state?.moved, v.gMe);
   await v.run(read(v.inner, "ws"));
   assert.deepEqual([...inForceOf(v.inner, "ws").f.members.keys()].sort(), ["r2", "r3", "r7", "s1"], "r7 in force after it");
+});
+
+test("a member bound to a log with a second app device on the chain and not on that log: lock_not_ready naming them, nothing said, nobody asked; once the device is on their log, handed over and both in force", async () => {
+  const w = await setUp();
+  const phone = dev();
+  w.after(w.bob.app.signer, "device", { id: phone.base.hex, sub: "r2", kind: "app", label: "bob's phone", sign_key: phone.signer.id });
+  for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
+  const out = await w.hand();
+  assert.equal(out.error?.code, "lock_not_ready", out.error?.message);
+  assert.match(out.error?.message ?? "", /r2/);
+  assert.doesNotMatch(out.error?.message ?? "", /r3/, "xena's devices are all on her log");
+  assert.equal(w.asked(), 0, "nobody asked");
+  assert.deepEqual(w.said(), [], "nothing said");
+  for (const c of Object.values(w.stations)) assert.equal(c.chain(null)?.state?.moved, undefined, "nothing moved");
+  onLog(w.bob, phone, "bob's phone");
+  for (const c of Object.values(w.stations)) bring(c, w.bob, false, "ws");
+  const done = await w.hand();
+  assert.equal(done.error, undefined, done.error?.message);
+  assert.equal(done.ok, null, "handed over");
+  assert.equal(w.asked(), 1);
+  assert.equal(w.stations.A.chain(null)?.state?.moved, w.gMe);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(d4Core(w.inner).members.get("r2")?.apps, [w.bob.app.signer.id, phone.signer.id].sort(), "both of bob's apps in force here");
+  const now = Math.floor(w.r.host.nowMs() / 1000);
+  assert.deepEqual(d4Diff(w.d4Chain(w.chain), d4Station(w.stations.A, w.gMe, now)), [], "A's state is the chain's list before, bob's phone in it");
+  const p = admitted("r2", phone, "admin");
+  assert.equal(inLock(w.stations.A, p as never, "admin", p.viewer.device).viewer.role, "admin", "bob's phone let in by A");
+});
+
+test("a member bound to a log no station keeps: lock_not_ready naming them, nothing said; once a station keeps it, handed over", async () => {
+  const w = await setUp({ unbrought: ["r2"] });
+  const out = await w.hand();
+  assert.equal(out.error?.code, "lock_not_ready", out.error?.message);
+  assert.match(out.error?.message ?? "", /r2/);
+  assert.equal(w.asked(), 0, "nobody asked");
+  assert.deepEqual(w.said(), [], "nothing said");
+  bring(w.stations.B, w.bob, false, "ws");
+  const done = await w.hand();
+  assert.equal(done.error, undefined, done.error?.message);
+  assert.equal(w.stations.A.chain(null)?.state?.moved, w.gMe);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(d4Core(w.inner).members.get("r2")?.apps, [w.bob.app.signer.id], "bob's app in force here");
+});
+
+test("a device approved on the chain after the statements and before the moved, not on its person's log: the moved refused (lock_not_ready), nothing signed; on the log, the next handOver moves it, nobody asked again", async () => {
+  const w = await setUp();
+  const phone = dev();
+  w.st.hook = () => {
+    w.after(w.bob.app.signer, "device", { id: phone.base.hex, sub: "r2", kind: "app", label: "bob's phone", sign_key: phone.signer.id });
+    for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
+  };
+  const out = await w.hand();
+  assert.equal(out.error?.code, "lock_not_ready", out.error?.message);
+  assert.match(out.error?.message ?? "", /r2/);
+  assert.equal(w.asked(), 1, "asked once, for the statements");
+  for (const c of Object.values(w.stations)) assert.equal(c.chain(null)?.state?.moved, undefined, "no moved at a station");
+  assert.notEqual(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
+  assert.ok(!pendingHeld(w.inner, "ws").some((x) => x.entry.kind === "moved"), "no moved pending");
+  const still = await w.hand();
+  assert.equal(still.error?.code, "lock_not_ready", "still waiting while the phone is on the chain alone");
+  onLog(w.bob, phone, "bob's phone");
+  for (const c of Object.values(w.stations)) bring(c, w.bob, false, "ws");
+  const done = await w.hand();
+  assert.equal(done.error, undefined, done.error?.message);
+  assert.equal(done.ok, null, "handed over");
+  assert.equal(w.asked(), 1, "nobody asked again");
+  assert.equal(w.said().length, 5, "nothing said again");
+  assert.equal(w.stations.A.chain(null)?.state?.moved, w.gMe);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(d4Core(w.inner).members.get("r2")?.apps, [w.bob.app.signer.id, phone.signer.id].sort(), "bob's phone in force");
 });
 
 for (const mine of ["admin", "otherKey", "unpinned"] as const) {
@@ -414,6 +497,10 @@ for (const wins of ["bob", "this device"] as const) {
     const head = w.chain.at(-1)!;
     const on = (parent: Entry, by: Key, kind: string, body: unknown): Entry => signed(next("ws", { seq: parent.seq, hash: entryHash(parent), genesis: entryHash(w.chain[0]!) }, Math.max(parent.at, w.now()), kind, body) as Omit<StationEntry, "sig">, by) as unknown as Entry;
     const xenas = on(head, w.xena.app.signer, "device", { id: phone.base.hex, sub: "r3", kind: "app", label: "xena's phone", sign_key: phone.signer.id });
+    // (on her own log too, as the product puts it there where her log is bound, kept by both stations: in force after the
+    // move whichever branch stands)
+    onLog(w.xena, phone, "xena's phone");
+    for (const c of [a, b]) bring(c, w.xena, false, "ws");
     if (wins === "bob") a.takeLock([...w.chain, xenas] as unknown as StationEntry[]);
     // bob's app hands over at B, which this device does not reach: his log says the chain's list, B takes it, then his moved
     w.st.down.add("B");
@@ -443,7 +530,7 @@ for (const wins of ["bob", "this device"] as const) {
       await w.run(w.inner.adb.personal().refresh("s1"));
     }
     const root = wins === "bob" ? w.bob.genesis : w.gMe;
-    const list = w.d4Chain(w.chain);
+    const list = w.d4Chain([...w.chain, xenas]);
     const nowS = Math.floor(w.r.host.nowMs() / 1000);
     for (const [n, c] of [["A", a], ["B", b]] as const) {
       assert.equal(c.chain(null)?.state?.moved, root, `${n} goes by ${wins}'s moved`);
