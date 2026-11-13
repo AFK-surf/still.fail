@@ -10,7 +10,7 @@ import { after, test } from "node:test";
 import { type Clock, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { StationBrowser, IDLE_MS, USER_TAB_IDLE_MS } from "../src/browser/browser.ts";
-import { extractFirstHttpUrl, normalizeBrowserUrl, siteOfBrowserUrl } from "../src/browser/url.ts";
+import { addressOrSearch, extractFirstHttpUrl, normalizeBrowserUrl, siteOfBrowserUrl } from "../src/browser/url.ts";
 import { ScreenHub } from "../src/screens/hub.ts";
 import { described, letGo } from "../src/tools/screen.ts";
 import { Admin } from "../src/api/admin.ts";
@@ -1270,7 +1270,8 @@ test("user pages: Arc-style idle hibernation, reload on open, station handover &
 
   assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/open-url`, { url: "mail.google.com" })).status, 200);
   assert.equal(hub2.listed("zh").screens[0]!.site, "mail.google.com");
-  assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/open-url`, { url: "not a url" })).status, 400);
+  // (nothing to go to: refused; words are searched for, as a browser's address bar does: the test of tabs below)
+  assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/open-url`, { url: "   " })).status, 400);
   assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/reload`)).status, 200);
   assert.equal((await req("POST", `/screens/${encodeURIComponent(id)}/sleep`)).status, 200);
   assert.equal(hub2.listed("zh").screens[0]!.sleeping, true);
@@ -1344,5 +1345,70 @@ test("navigating a sleeping user tab while a wake is already in flight lands on 
   assert.equal(stored.tabs[0].url, "https://new.example.com/inbox");
 
   view.close();
+  await b.close();
+});
+
+test("an address bar's words: an address goes there, anything else is searched for", () => {
+  assert.equal(addressOrSearch("mail.proton.me"), "https://mail.proton.me/");
+  assert.equal(addressOrSearch("  https://github.com/AFK-surf  "), "https://github.com/AFK-surf");
+  assert.equal(addressOrSearch("moonbit async"), "https://www.google.com/search?q=moonbit%20async");
+  assert.equal(addressOrSearch("javascript:alert(1)"), "https://www.google.com/search?q=javascript%3Aalert(1)");
+  assert.equal(addressOrSearch("   "), null);
+});
+
+test("user pages as a browser's tabs: a new tab by the app's own id on a blank page, its address told to its view, back and forward through its history", async () => {
+  const chrome = fakeChrome();
+  const { clock: c } = clock();
+  const dir = scratch();
+  const hub = new ScreenHub();
+  const b = new StationBrowser({ later: () => () => {}, dir, chrome: chrome.host, clock: c, screens: hub });
+
+  // ＋: the app's id, no address yet; asked again (its call retried), the same tab.
+  const id = await hub.openBrowser("", "u_0123456789ab");
+  assert.equal(id, "browser:u_0123456789ab");
+  assert.equal(await hub.openBrowser("", "u_0123456789ab"), id);
+  assert.equal(hub.list().length, 1);
+  const cdp = chrome.made[0]!;
+  assert.deepEqual(cdp.of("Target.createTarget").map((x) => x.params.url), ["about:blank"]);
+  const tab = hub.get(id)!;
+  assert.equal(tab.title(), "", "a new tab's page has no title of its own: the app names it");
+  assert.equal(tab.address?.(), "about:blank");
+  assert.equal(hub.listed("zh").screens[0]!.address, undefined, "the list says the site, never the address");
+
+  // Words typed in its bar are searched for; the address it lands on is its view's to show.
+  await hub.openUrl(id, "proton mail");
+  const navigated = chrome.made.flatMap((conn) => conn.of("Page.navigate")).map((x) => x.params.url);
+  assert.deepEqual(navigated, ["https://www.google.com/search?q=proton%20mail"]);
+  cdp.emit("Target.targetInfoChanged", { targetInfo: { targetId: "N1", type: "page", title: "Proton Mail", url: "https://mail.proton.me/u/0/inbox", attached: false } });
+  await b.flushed();
+  assert.equal(tab.address?.(), "https://mail.proton.me/u/0/inbox");
+
+  // Back and forward: the entry before or after the current one in its history.
+  const history = (at: number) => ({ currentIndex: at, entries: [{ id: 11 }, { id: 12 }, { id: 13 }] });
+  for (const conn of chrome.made) conn.answers["Page.getNavigationHistory"] = () => history(1);
+  const connected = chrome.host.connect.bind(chrome.host);
+  chrome.host.connect = async (...a: Parameters<ChromeHost["connect"]>) => {
+    const conn = await connected(...a);
+    (conn as FakeCdp).answers["Page.getNavigationHistory"] = () => history(1);
+    return conn;
+  };
+  await hub.historyScreen(id, -1);
+  await hub.historyScreen(id, 1);
+  const went = chrome.made.flatMap((conn) => conn.of("Page.navigateToHistoryEntry")).map((x) => x.params.entryId);
+  assert.deepEqual(went, [11, 13]);
+  // None that way: nothing.
+  chrome.host.connect = async (...a: Parameters<ChromeHost["connect"]>) => {
+    const conn = await connected(...a);
+    (conn as FakeCdp).answers["Page.getNavigationHistory"] = () => history(2);
+    return conn;
+  };
+  await hub.historyScreen(id, 1);
+  assert.equal(chrome.made.flatMap((conn) => conn.of("Page.navigateToHistoryEntry")).length, 2);
+
+  // Kept as it is across a restart: the new tab's blank page too.
+  await hub.openBrowser("", "u_ba9876543210");
+  await b.flushed();
+  const stored = JSON.parse(readFileSync(join(dir, "user-tabs.json"), "utf8"));
+  assert.deepEqual(stored.tabs.map((t: { id: string; url: string }) => [t.id, t.url]), [["u_0123456789ab", "https://mail.proton.me/u/0/inbox"], ["u_ba9876543210", "about:blank"]]);
   await b.close();
 });

@@ -17,7 +17,7 @@ import { langOfCore } from "../api/request.ts";
 import { liveClock } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
-import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
+import { type AccessShown, type ScreenHub, ScreenRefused, accessShown, addressShown } from "../screens/hub.ts";
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type LoginFill, type PasskeyAnswer, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
@@ -164,6 +164,14 @@ export class FrameIn {
 
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const unit = (v: number) => Math.min(1, Math.max(0, v));
+
+/// A view's pick of one of a desktop's windows (`{t: "window", id}`: its id, or none for the whole display): undefined
+/// when it is not one.
+export function parseWindowPick(v: any): number | null | undefined {
+  if (v === null || typeof v !== "object" || v.t !== "window") return undefined;
+  if (v.id === undefined || v.id === null) return null;
+  return Number.isInteger(v.id) && v.id > 0 && v.id < 2 ** 32 ? v.id : undefined;
+}
 
 /// A client's input event, checked: null when it is not one.
 export function parseInput(v: any): ScreenInput | null {
@@ -327,8 +335,10 @@ class ViewSession {
   #unchild: () => void = () => {};
   #unpoint: () => void = () => {};
   #unturn: () => void = () => {};
+  #unwindows: () => void = () => {};
   #title: string;
   #site: string | undefined;
+  #address: string | undefined;
   /// The keys down and the pointer as its input last left them: let go of if it is made to only look.
   readonly #keys = new Map<string, Extract<ScreenInput, { t: "key" }>>();
   #pointer: Extract<ScreenInput, { t: "pointer" }> | null = null;
@@ -400,6 +410,7 @@ class ViewSession {
     this.#lang = o.lang;
     this.#title = o.source.title();
     this.#site = o.source.site?.();
+    this.#address = addressShown(o.source.address?.());
   }
 
   /// A frame went: once the screen has been still for STILL_MS (no frame after it), if the rate has gone up since, the
@@ -440,6 +451,7 @@ class ViewSession {
     this.#unchild();
     this.#unpoint();
     this.#unturn();
+    this.#unwindows();
     this.view.close();
     this.#leave();
     this.#unwatch();
@@ -481,6 +493,7 @@ class ViewSession {
       title: this.#title,
       control: this.control,
       ...(this.#site ? { site: this.#site } : {}),
+      ...(this.#address ? { address: this.#address } : {}),
       ...(this.source.openUrl ? { openUrl: true } : {}),
       ...(this.source.userTab ? { userTab: true } : {}),
       ...(this.took.length > 0 ? { took: this.took } : {}),
@@ -492,7 +505,8 @@ class ViewSession {
       if (this.hub.get(this.id) !== this.source) return this.#stop("gone");
       const title = this.source.title();
       const site = this.source.site?.();
-      if (title !== this.#title || site !== this.#site) {
+      const address = addressShown(this.source.address?.());
+      if (title !== this.#title || site !== this.#site || address !== this.#address) {
         const patch: Record<string, unknown> = {};
         if (title !== this.#title) {
           this.#title = title;
@@ -501,6 +515,10 @@ class ViewSession {
         if (site !== this.#site) {
           this.#site = site;
           patch.site = site ?? "";
+        }
+        if (address !== this.#address) {
+          this.#address = address;
+          patch.address = address ?? "";
         }
         void this.#state(patch);
       }
@@ -540,6 +558,12 @@ class ViewSession {
     if (this.view.watchCursor) {
       this.#unpoint = this.view.watchCursor((cursor) => {
         if (!this.#closed) void this.#state({ cursor });
+      });
+    }
+    // A desktop's windows, and the one shown alone: the viewer's tabs (the user, 2026-11-13: 「远程控制也支持按窗口查看」).
+    if (this.view.watchWindows) {
+      this.#unwindows = this.view.watchWindows((w) => {
+        if (!this.#closed) void this.#state({ windows: w.windows, window: w.window });
       });
     }
     // How a simulator's picture is turned: its case is drawn turned with it.
@@ -721,11 +745,17 @@ class ViewSession {
             break;
           }
           case KIND.input: {
-            if (!this.control) break;
             let raw: unknown = null;
             try {
               raw = JSON.parse(got.payload.toString("utf8"));
             } catch {}
+            // A window shown alone, or the whole display again: this view's own, looking or driving (`{t: "window", id}`).
+            const shown = parseWindowPick(raw);
+            if (shown !== undefined) {
+              if (this.view.window) this.#then(async () => this.view.window!(shown));
+              break;
+            }
+            if (!this.control) break;
             const percent = parseScale(raw);
             if (percent !== null) {
               const source = this.source;

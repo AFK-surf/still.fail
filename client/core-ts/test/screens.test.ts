@@ -15,7 +15,7 @@ import type { FakeHost } from "../src/testing.ts";
 import { base64 } from "../src/util.ts";
 import { apply, call, subscribe } from "./helpers.ts";
 import { seeds } from "./sim-seeds.ts";
-import { base, started } from "./station-fixture.ts";
+import { Status, base, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -1303,7 +1303,7 @@ test("user_browser_pages_keep_site_and_sleep_state_and_follow_child_tabs", async
   assert.equal(v.screens[0].sleeping, true);
   assert.equal(v.screens[0].site, "mail.proton.me");
   assert.equal(v.screens[0].openUrl, true);
-  assert.equal(v.screens[0].line, "mail.proton.me · 已休眠");
+  assert.equal(v.screens[0].line, "mail.proton.me", "a tab asleep is the station's own, never said");
   assert.equal(v.screens[1].line, "浏览器标签页 · claude.ai · 由「部署」打开");
   assert.equal((values.get(2) as J).peek, false, "sleeping tabs are never woken by a card preview");
 
@@ -1343,4 +1343,33 @@ test("user_browser_pages_keep_site_and_sleep_state_and_follow_child_tabs", async
   core.receive(ui, { kind: "cancel", id: 14, cancel: true });
   await host.settle();
   core.close();
+});
+
+/// A tab opened by the id the app made for it (`screen.openBrowser` with `id`) is among the station's screens at once,
+/// and a view of it opened as it was pressed waits for the station (no stream asked of a tab it has not made); refused,
+/// it leaves the list and its view says it is gone.
+test("a_tab_opened_by_its_own_id_is_there_at_once_and_its_view_waits_for_its_station", async () => {
+  const answers = { ...base(), "GET /screens": { browser: true, screens: [] }, "POST /screens/browser": new Status(503, { error: "这台 station 没有浏览器" }) };
+  const { host, core, ui, views } = await viewing(1, answers);
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  await host.settle();
+  const log: J[] = [];
+  said(host, log);
+  call(core, ui, 2, "screen.openBrowser", { station: "ws/st", url: "", id: "u_0123456789ab" });
+  call(core, ui, 3, "screen.view", { station: "ws/st", screen: "browser:u_0123456789ab", view: "n", codecs: ["jpeg"] });
+  await host.settle();
+  said(host, log);
+  assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/browser") && String(new TextDecoder().decode(r.body)).includes("u_0123456789ab")));
+  assert.equal(views.length, 0, "no stream asked of a tab its station has not made");
+  assert.equal(lastState(log, 3).phase, "gone");
+  core.close();
+
+  // Made: its view opens on it as the station lists it.
+  const tab = { id: "browser:u_0123456789ab", kind: "browser", title: "", width: 1280, height: 800, viewers: [], controlledBy: [], userTab: true, closable: true, openUrl: true };
+  const made = await viewing(1, { ...base(), "GET /screens": { browser: true, screens: [tab] }, "POST /screens/browser": { screen: tab.id } });
+  call(made.core, made.ui, 2, "screen.openBrowser", { station: "ws/st", url: "", id: "u_0123456789ab" });
+  call(made.core, made.ui, 3, "screen.view", { station: "ws/st", screen: tab.id, view: "n", codecs: ["jpeg"] });
+  await made.host.settle();
+  assert.equal(made.views.length, 1, "its stream asked once the station listed it");
+  made.core.close();
 });

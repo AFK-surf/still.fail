@@ -25,6 +25,11 @@
 //   screen-keys (-dark)                 the same, 按键 open by the keyboard (组合键, F1–F12…)
 //   screen-simulator, -center, -logs,   driving an iOS Simulator: its page, what debugs an app beside the picture; 控制中心
 //     -apps, -device (-dark)            open; its 日志 open; its 重启 App open; 设备 showing
+//   screen-pages, -user-pages (-dark)   a tab of the station's browser as a browser shows it: an agent's (its address,
+//                                       ← → ⟳); a person's own (their tabs over it too)
+//   screen-user-tabs                    a person's own, the tabs' panel open (where the page is narrow)
+//   screen-windows, -window             a Mac's desktop with three windows as its tabs: the whole screen shown; one shown
+//                                       alone
 //   screen-login-fill, -pick (-dark)    driving a tab whose focus is in github.com's password field: 用 1Password
 //                                       填入 offered; pressed, its two logins there to pick from
 
@@ -69,7 +74,9 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     mode
   }
   screen_fix_mode.val = m
-  let at = if m == "screen-user-pages" {
+  let at = if m == "screen-windows" || m == "screen-window" {
+    { ..screen_fix_at, screen: "desktop", title: "Willow 的屏幕" }
+  } else if m == "screen-user-pages" || m == "screen-user-tabs" {
     { ..screen_fix_at, screen: "browser:u_mail", title: "收件箱 - Proton Mail" }
   } else if m == "screen-pages" {
     { ..screen_fix_at, title: "Sign in · Anthropic" }
@@ -94,7 +101,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"
-    "screen-pages" | "screen-user-pages" => u.asked_panel = "pages"
+    "screen-user-tabs" => u.asked_panel = "tabs"
     "screen-keys" => u.asked_panel = "keys"
     "screen-stats" => u.asked_panel = "net"
     "screen-simulator-center" => u.asked_panel = "center"
@@ -360,16 +367,37 @@ pub fn screen_fixture_stream(
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       screen_fix_drops(m == "screen-files-done")
     }
-    "screen-pages" | "screen-user-pages" => {
+    "screen-windows" | "screen-window" => {
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
         Object(o) => o.copy()
         _ => {}
       }
+      st["kind"] = Json::string("desktop")
+      st["title"] = Json::string("Willow 的屏幕")
+      st["windows"] = [
+        { "id": 101.0, "app": "访达", "title": "下载" },
+        { "id": 214.0, "app": "Google Chrome", "title": "still.fail — 发布清单" },
+        { "id": 305.0, "app": "终端", "title": "~/still.fail — zsh" },
+      ]
+      if m == "screen-window" {
+        st["window"] = Json::number(214.0)
+      }
+      on_value({ "state": Json::object(st) }, None)
+    }
+    "screen-pages" | "screen-user-pages" | "screen-user-tabs" => {
+      live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
+      let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
+        Object(o) => o.copy()
+        _ => {}
+      }
+      let user = m != "screen-pages"
+      st["kind"] = Json::string("browser")
       st["openUrl"] = Json::boolean(true)
-      st["userTab"] = Json::boolean(m == "screen-user-pages")
-      st["title"] = Json::string(if m == "screen-user-pages" { "收件箱 - Proton Mail" } else { "Sign in · Anthropic" })
-      st["line"] = Json::string(if m == "screen-user-pages" { "mail.proton.me · 控制" } else { "console.anthropic.com · 控制" })
+      st["userTab"] = Json::boolean(user)
+      st["address"] = Json::string(if user { "https://mail.proton.me/u/0/inbox" } else { "https://console.anthropic.com/login" })
+      st["title"] = Json::string(if user { "收件箱 - Proton Mail" } else { "Sign in · Anthropic" })
+      st["line"] = Json::string(if user { "mail.proton.me · 控制" } else { "console.anthropic.com · 控制" })
       on_value({ "state": Json::object(st) }, None)
     }
     _ => ()

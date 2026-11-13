@@ -281,9 +281,9 @@ export class ScreenHub implements Screens {
   }
 
   /// POST /admin/api/screens/browser: opens a persistent user tab in the station's browser (`{ url } -> screen id`).
-  async openBrowser(url: string): Promise<string> {
+  async openBrowser(url: string, id?: string): Promise<string> {
     if (this.#browser === null || !this.#browser.available()) throw new ScreenRefused(503, "station.screen.noBrowser");
-    return this.#browser.openUserTab(url);
+    return this.#browser.openUserTab(url, id);
   }
 
   /// POST /admin/api/screens/<id>/open-url: navigates a browser tab or opens a link on a simulator.
@@ -307,6 +307,15 @@ export class ScreenHub implements Screens {
     if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
     if (source.reload === undefined) throw new ScreenRefused(405, "station.screen.notBrowser");
     await source.reload();
+  }
+
+  /// POST /admin/api/screens/<id>/back and …/forward: a page back or forward in a browser tab's history.
+  async historyScreen(id: string, delta: -1 | 1): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    const go = delta < 0 ? source.back : source.forward;
+    if (go === undefined) throw new ScreenRefused(405, "station.screen.notBrowser");
+    await go.call(source);
   }
 
   /// POST /admin/api/screens/<id>/sleep: hibernates a user tab, closing its live Chrome page while keeping its saved entry.
@@ -374,4 +383,13 @@ export class ScreenHub implements Screens {
       }),
     };
   }
+}
+
+/// The longest address a view's state carries (a longer one is not said: its site still is). The list of screens says
+/// only the site: its path and query may hold what is the page's alone (a token), and only a view shows the page.
+export const ADDRESS_MOST = 2048;
+
+/// A browser tab's address as a view of it is told: none where it has none or it is longer than `ADDRESS_MOST`.
+export function addressShown(address: string | undefined): string | undefined {
+  return address !== undefined && address !== "" && address.length <= ADDRESS_MOST ? address : undefined;
 }

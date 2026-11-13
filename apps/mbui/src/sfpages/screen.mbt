@@ -853,7 +853,9 @@ fn ScreenSess::control(self : ScreenSess, src : Source, on : Bool) -> Unit {
 ///|
 /// Input for the station (`screen.input`): only while this viewer drives it.
 fn ScreenSess::input(self : ScreenSess, src : Source, input : Json) -> Unit {
-  if !self.input_goes() {
+  // (which of a desktop's windows it shows goes looking too: the view's own)
+  let window = text(Some(input), "t") == "window"
+  if !(self.input_goes() || (window && self.call != 0 && self.heard)) {
     return
   }
   screen_tell(src, "screen.input", { "view": Json::string(self.view), "input": input })

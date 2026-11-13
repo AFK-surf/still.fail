@@ -1520,7 +1520,7 @@ test "an account kind's panel on a wide window by the keyboard: the row with the
 }
 
 ///|
-test "a station's overview separates user pages (live, sleeping and open new) from agent pages and physical screens" {
+test "a station's overview: its browser one row opening it, the agents' pages and its screens apart" {
   for (w, platform) in page_cases {
     let at = "\{w} platform \{platform}"
     @sfbase.reset()
@@ -1610,29 +1610,27 @@ test "a station's overview separates user pages (live, sleeping and open new) fr
       station_agent_pages_node(p, core, here, s)
       station_screens_node(p, core, here, s)
     }, w~, h=900.0, platform~)
-    assert_true(t.find("用户页面") is Some(_), msg=at)
-    assert_true(t.find("收件箱 - Proton Mail") is Some(_), msg=at)
-    assert_true(t.find("GitHub") is Some(_), msg=at)
-    assert_true(t.find("已休眠 · github.com") is Some(_), msg=at)
-    assert_true(t.find("打开网页…") is Some(_), msg=at)
+    // a person's own pages: one row (how many in its note), none of them listed, nothing of their sleep
+    assert_true(t.find("浏览器") is Some(_), msg=at)
+    assert_true(t.find("打开浏览器") is Some(_), msg=at)
+    assert_true(t.find("2 个标签页") is Some(_), msg=at)
+    assert_true(t.find("收件箱 - Proton Mail") is None, msg=at)
+    assert_true(t.find("已休眠") is None, msg=at)
     assert_true(t.find("Agent 页面") is Some(_), msg=at)
     assert_true(t.find("Sign in · Anthropic") is Some(_), msg=at)
     assert_true(t.find("Willow 的屏幕") is Some(_), msg=at)
-    let (_, user_y) = t.find("用户页面").unwrap()
-    let (_, mail_y) = t.find("收件箱 - Proton Mail").unwrap()
-    let (_, agent_y) = t.find("Agent 页面").unwrap()
+    let (_, browser_y) = t.find("打开浏览器").unwrap()
     let (_, anthropic_y) = t.find("Sign in · Anthropic").unwrap()
     let (_, screen_y) = t.find("Willow 的屏幕").unwrap()
-    assert_true(user_y < mail_y && mail_y < agent_y && agent_y < anthropic_y && anthropic_y < screen_y, msg=at)
+    assert_true(browser_y < anthropic_y && anthropic_y < screen_y, msg=at)
     let said = fn(word : String) { t.words().filter(fn(x) { x.0 == word }).length() }
-    // only the live user tab offers 休眠; the two user tabs + the agent tab offer 关闭
-    assert_eq(said("休眠"), 1, msg=at)
-    assert_eq(said("关闭"), 3, msg=at)
+    // the agent's tab alone offers 关闭 here; 休眠 nowhere
+    assert_eq(said("休眠"), 0, msg=at)
+    assert_eq(said("关闭标签页"), 1, msg=at)
     assert_eq(t.squeeze_faults(), [], msg=at)
-    t.click(Button, label="休眠")
+    // pressed: the tab looked at last, else the newest, opened at once (no question first)
+    t.tap_text("打开浏览器")
     t.draw()
-    assert_eq(calls.length(), 1, msg=at)
-    assert_eq(calls[0].0, "screen.sleep", msg=at)
-    assert_eq(text(Some(calls[0].1), "screen"), "browser:u_mail", msg=at)
+    assert_true(calls.iter().all(fn(c) { c.0 != "screen.openBrowser" }), msg=at)
   }
 }

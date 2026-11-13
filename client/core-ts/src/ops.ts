@@ -31,7 +31,10 @@ export type Effect =
   /// A sign-in for a new profile (the overview's `logins`) started, given its code or dropped: as the station answered,
   /// in place at once until the overview says as much. `id`: the login's (null: the answer names it, as it starts);
   /// `from`: the state the step moves it on from (null: not listed yet).
-  | { kind: "login"; id: string | null; from: string | null };
+  | { kind: "login"; id: string | null; from: string | null }
+  /// A tab of the station's browser opened here by the id this device made for it (`screen`): listed at once, a view of
+  /// it waiting for the station, until the station lists it or refuses it.
+  | { kind: "tab"; screen: string };
 
 /// The request an operation makes.
 export type Request = {
@@ -160,10 +163,12 @@ export const PARAMS: Record<string, string> = {
   "job.get": "id:string",
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
-  "screen.openBrowser": "url:string",
+  "screen.openBrowser": "url:string id?:string",
   "screen.close": "screen:string",
   "screen.sleep": "screen:string",
   "screen.reload": "screen:string",
+  "screen.back": "screen:string",
+  "screen.forward": "screen:string",
   "screen.endView": "screen:string view:string",
   "screen.watchOnly": "screen:string view:string",
   "screen.endViews": "screen:string",
@@ -604,9 +609,15 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => `/jobs/${p.at("id")}/log?lines=${p.u64("lines")}`, null, NONE);
     case "job.stop":
       return op("POST", () => `/jobs/${p.at("id")}/stop`, null, { kind: "job" });
-    // A page opened in the station's persistent browser profile (`{screen}`), kept across idle sleeps until closed.
-    case "screen.openBrowser":
-      return op("POST", () => "/screens/browser", p.pick(["url"]), NONE);
+    // A page opened in the station's persistent browser profile (`{screen}`), kept across idle sleeps until closed. With
+    // `id` (`u_` and 12 hex digits, made by the app), its tab is `browser:<id>` and is there at once: a view of it opens
+    // as the press is made, without waiting for the station.
+    case "screen.openBrowser": {
+      // (one not made so is the station's to refuse; the call is not listed at once then)
+      const id = p.word("id");
+      const made = id !== null && /^u_[0-9a-f]{12}$/.test(id);
+      return op("POST", () => "/screens/browser", p.pick(["url", "id"]), made ? { kind: "tab", screen: `browser:${id}` } : NONE);
+    }
     // A screen closed for good (a tab of the station's browser): it leaves the station's list as
     // the station tells it (`screens` on its stream).
     case "screen.close":
@@ -615,6 +626,11 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/screens/${p.at("screen")}/sleep`, null, NONE);
     case "screen.reload":
       return op("POST", () => `/screens/${p.at("screen")}/reload`, null, NONE);
+    // A page back or forward in a tab's history, as a browser's arrows.
+    case "screen.back":
+      return op("POST", () => `/screens/${p.at("screen")}/back`, null, NONE);
+    case "screen.forward":
+      return op("POST", () => `/screens/${p.at("screen")}/forward`, null, NONE);
     // A person's view of a screen, wherever it is, ended or made to only look ( "Who is on a
     // screen"); it changes on the station's list as the station tells it.
     case "screen.endView":

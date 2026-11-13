@@ -450,9 +450,34 @@ export class StationsSync {
     this.onChange(address, "screens");
   }
 
-  /// What is held of the station's screens; undefined while it has not said.
+  /// What is held of the station's screens; undefined while it has not said. A tab this device is opening
+  /// (`#openingTabs`) is among them until the station lists it, said `opening`.
   screens(address: string): { screens: unknown[]; outdated: boolean; browser?: boolean } | undefined {
-    return this.#links.get(address)?.memory.get("screens") as { screens: unknown[]; outdated: boolean; browser?: boolean } | undefined;
+    const held = this.#links.get(address)?.memory.get("screens") as { screens: unknown[]; outdated: boolean; browser?: boolean } | undefined;
+    const opening = this.#openingTabs.get(address);
+    if (held === undefined || opening === undefined || opening.size === 0) return held;
+    // (the same object while neither changed: the views compare what they read by reference first)
+    const kept = this.#screensWithOpening.get(address);
+    if (kept !== undefined && kept.held === held && kept.opening === opening) return kept.value;
+    const listed = new Set(held.screens.map((s) => get(s, "id")));
+    const more = [...opening.values()].filter((s) => !listed.has(s.id));
+    const value = more.length === 0 ? held : { ...held, screens: [...held.screens, ...more] };
+    this.#screensWithOpening.set(address, { held, opening, value });
+    return value;
+  }
+
+  /// The tabs of each station's browser this device is opening (`screen.openBrowser` with an id), by their screen id.
+  /// Replaced whole as one comes or goes (so the merged list above is made again).
+  readonly #openingTabs = new Map<string, Map<string, { id: string; kind: "browser"; title: string; width: 0; height: 0; viewers: []; controlledBy: []; userTab: true; opening: true; closable: true; openUrl: true }>>();
+  readonly #screensWithOpening = new Map<string, { held: unknown; opening: unknown; value: { screens: unknown[]; outdated: boolean; browser?: boolean } }>();
+
+  #tabOpening(address: string, screen: string, on: boolean): void {
+    const next = new Map(this.#openingTabs.get(address) ?? []);
+    if (on) next.set(screen, { id: screen, kind: "browser", title: "", width: 0, height: 0, viewers: [], controlledBy: [], userTab: true, opening: true, closable: true, openUrl: true });
+    else next.delete(screen);
+    if (next.size === 0) this.#openingTabs.delete(address);
+    else this.#openingTabs.set(address, next);
+    this.onChange(address, "screens");
   }
 
   /// The station's screens read now, for a person waiting on them (a view of one opened before they were known).
@@ -2179,8 +2204,16 @@ export class StationsSync {
       const addr = StationAddr.parse(address);
       if (op.method === "POST" && op.path === "/updates/all") return yield* this.#updateAll(addr, ctx);
       let current: Request = op;
+      // A tab opened by the id made here: listed at once (a view of it waits for the station), until the station lists
+      // it as it makes it, or refuses it.
+      const tab = op.effect.kind === "tab" ? op.effect.screen : null;
+      if (tab !== null) this.#tabOpening(address, tab, true);
       for (;;) {
         const result = yield* Effect.result(this.requests.call(addr, current.method, current.path, current.body, { ctx }));
+        if (tab !== null) {
+          if (result._tag === "Success") yield* Effect.ignore(this.readScreens(address));
+          this.#tabOpening(address, tab, false);
+        }
         if (result._tag === "Failure") {
           if (result.failure.status === 404 && current.fallback) {
             current = current.fallback;
@@ -2208,6 +2241,8 @@ export class StationsSync {
       };
       switch (effect.kind) {
         case "none":
+        // (its list read before it answered: perform's)
+        case "tab":
           return;
         case "session": {
           if (effect.key !== null) reads.push([`session/${effect.key}`, this.#session(address, effect.key)]);

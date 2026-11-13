@@ -31,10 +31,11 @@ test "with keyboard and mouse: the viewer's bar across the top, the picture unde
   assert_true(r.t.find("still.fail — Chrome") is Some(_))
   assert_true(r.t.find("控制 · 李雷也在看") is Some(_))
   assert_true(r.labelled(tr("common.back")) is Some(_))
-  assert_true(r.labelled(tr("web-pages.screen.stats")) is Some(_))
+  // one row (2026-11-13): how the link goes only while it is poor, 只看 in 控制中心
+  assert_true(r.labelled(tr("web-pages.screen.stats")) is None)
   assert_true(r.labelled(tr("web-pages.screen.panel")) is Some(_))
   assert_true(r.labelled(tr("web-pages.screen.combos")) is Some(_))
-  assert_true(r.labelled("控制") is Some(_))
+  assert_true(r.labelled("控制") is None)
   // none of a phone's: its ×, the keyboard to raise, the trackpad, 按键, the paste button, the keys row
   assert_true(r.labelled("关闭") is None)
   assert_true(r.labelled("键盘") is None)
@@ -303,7 +304,6 @@ test "an agent driving it: who drives said by the bar's line, 接管 among its t
   r.frame(1000.0)
   assert_true(r.t.find("\{agent} 正在控制") is Some(_))
   assert_true(r.labelled(tr("web-pages.screen.panel")) is Some(_))
-  assert_true(r.labelled(tr("web-pages.screen.stats")) is Some(_))
   r.t.tap_text("接管")
   let asked = r.told("screen.control")
   assert_eq(asked.length(), 1)

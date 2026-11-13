@@ -22,7 +22,7 @@ import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 import { helperUi } from "./ui.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type AudioCodec, type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, OPUS_MAX, clipFits, codecFor, regionOf } from "./source.ts";
+import { type AudioCodec, type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ScreenWindows, type ViewOptions, OPUS_MAX, clipFits, codecFor, regionOf, windowsOf } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -210,7 +210,7 @@ type HelperError = Error & { code?: string };
 /// (JSON {codec: "pcm_s16le" | "opus", sampleRate: 48000, channels: 2}, or {error}: no more audio; `opus` only to a
 /// view opened with `audioCodec: "opus"`, which a helper that encodes none lets be), 9 audio (8 bytes timestamp µs, then
 /// 3840 bytes of interleaved stereo PCM16, or one Opus packet of those 20 ms).
-export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8, audio: 9 } as const;
+export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8, audio: 9, window: 10 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
 /// A clip as the helper's `clipboard` message has it: from the helper (`flags` none) or to it.
@@ -264,6 +264,10 @@ export class HelperView implements ScreenView {
   /// Who hears how a simulator's picture is turned, and the last it said (message 10).
   #turn: ((turn: number) => void) | null = null;
   #lastTurn: number | null = null;
+  /// The desktop's windows and the one shown alone as the helper last said them (its info, then message 4), and who
+  /// hears them; none from a helper from before windows.
+  #windows: ScreenWindows | null = null;
+  #heardWindows: ((windows: ScreenWindows) => void) | null = null;
 
   /// What it was asked for, then what it encodes (its `info`).
   #codec: Codec;
@@ -317,6 +321,7 @@ export class HelperView implements ScreenView {
           log.info("screens", "a view opened", { capture: this.#capture, width: info.width, height: info.height, encoder: info.encoder });
           if (typeof info.encoder === "string") this.#encoder = info.encoder.slice(0, 200);
           this.#regions = info.regions === true;
+          if (Array.isArray(info.windows)) this.#windows = { windows: windowsOf(info.windows), window: typeof info.window === "number" ? info.window : null };
           this.#audio = this.#audio && info.audio === true;
           this.#settle.resolve({ width: info.width, height: info.height });
         }
@@ -368,9 +373,24 @@ export class HelperView implements ScreenView {
         this.#waiting.shift()?.(frame);
         return;
       }
-      case 4:
+      case 4: {
+        let said: any = null;
+        try {
+          said = JSON.parse(payload.toString());
+        } catch {}
+        // The windows changed, or the one shown alone (asked, or it closed): told; anything else is the helper's log.
+        if (said !== null && typeof said === "object" && (Array.isArray(said.windows) || said.window === null || typeof said.window === "number")) {
+          const was = this.#windows ?? { windows: [], window: null };
+          this.#windows = {
+            windows: Array.isArray(said.windows) ? windowsOf(said.windows) : was.windows,
+            window: said.window === null || typeof said.window === "number" ? said.window : was.window,
+          };
+          this.#heardWindows?.(this.#windows);
+          return;
+        }
         log.info("screens", "still.fail Helper", { said: payload.toString() });
         return;
+      }
       case 6: {
         let said: any = null;
         try {
@@ -479,6 +499,19 @@ export class HelperView implements ScreenView {
     return () => {
       if (this.#cursor === heard) this.#cursor = null;
     };
+  }
+
+  watchWindows(heard: (windows: ScreenWindows) => void): () => void {
+    this.#heardWindows = heard;
+    if (this.#windows !== null) heard(this.#windows);
+    return () => {
+      if (this.#heardWindows === heard) this.#heardWindows = null;
+    };
+  }
+
+  window(id: number | null) {
+    if (id !== null && !(this.#windows?.windows ?? []).some((w) => w.id === id)) return;
+    this.#send(TO_HELPER.window, Buffer.from(JSON.stringify({ window: id })));
   }
 
   watchTurn(heard: (turn: number) => void): () => void {

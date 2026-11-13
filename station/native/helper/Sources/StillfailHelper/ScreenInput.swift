@@ -9,10 +9,13 @@ final class ScreenInput {
   let source = CGEventSource(stateID: .hidSystemState)
   var pointer = CGPoint(x: -1, y: -1)
   var refusedTold = false
+  /// What the picture shows, in global points: the display, or the window shown alone (ScreenView's `area`).
+  var area: () -> CGRect
 
   init(channel: Channel, displayID: CGDirectDisplayID) {
     self.channel = channel
     self.displayID = displayID
+    area = { CGDisplayBounds(displayID) }
   }
 
   func post(_ op: [String: Any]) {
@@ -20,7 +23,7 @@ final class ScreenInput {
   }
 
   func point(_ x: Double, _ y: Double) -> CGPoint {
-    let bounds = CGDisplayBounds(displayID)
+    let bounds = area()
     let cx = min(max(x, 0), 1), cy = min(max(y, 0), 1)
     return CGPoint(x: bounds.minX + cx * (bounds.width - 1), y: bounds.minY + cy * (bounds.height - 1))
   }

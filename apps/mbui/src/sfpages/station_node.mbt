@@ -511,9 +511,7 @@ fn is_agent_screen(sv : Json?) -> Bool {
 
 ///|
 fn screen_row_icon(sv : Json?) -> String {
-  if flag(sv, "sleeping") {
-    "moon"
-  } else if is_browser_screen(sv) {
+  if is_browser_screen(sv) {
     "web"
   } else if text(sv, "kind") == "simulator" {
     "phone"
@@ -523,39 +521,24 @@ fn screen_row_icon(sv : Json?) -> String {
 }
 
 ///|
-/// User-opened browser pages on this station (`station_overview`'s 用户页面): live and recycled (sleeping) tabs in the
-/// persistent user profile, plus 打开网页… at the section's end.
+/// A person's own pages on this station's browser (`station_overview`'s 浏览器): one row, opening it at once on the tab
+/// looked at last, else a new one (@settings.open_station_browser), how many it has in its note.
 fn station_user_pages_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?) -> Unit {
+  ignore(here)
   let address = text(@signals.untracked(s), "station")
   let v = fn() { (core.topic)("screens", { "station": str(address) }).get().value }
   let tabs = fn() { items(v(), "screens").filter(fn(sc) { is_user_screen(Some(sc)) }) }
-  st_section_node(
-    b,
-    fn() { @sf.t("web-pages.screen.userPages") },
-    count=fn() { tabs().length() },
-    ends=(
-      fn() { flag(v(), "browser") && flag(v(), "control") },
-      fn(e) {
-        @sf.action_node(
-          e,
-          fn() { @sf.t("web-pages.screen.openBrowser") },
-          fn() { @settings.open_station_browser(core, address, from=Node(e)) },
-          icon="plus",
-          busy=fn() { is_doing(core, ["screen.openBrowser"], [("station", address)]) },
-        )
-      },
-    ),
-    fn(sec) {
-      @sf.group_node(sec, fn(g) {
-        g.each(tabs, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
-          station_browser_row_node(row, core, here, address, fn() { Some(sc.get()) }, true)
-        })
-        g.show(fn() { tabs().is_empty() }, fn(n) {
-          said_row_node(n, fn() { @sf.t("web-pages.screen.noUserPages") }, lead=LeadLine(fn(l) { st_mark_node(l, fn() { "web" }) }))
-        })
-      })
-    },
-  )
+  st_section_node(b, fn() { @sf.t("web-pages.screen.browser") }, fn(sec) {
+    @sf.group_node(sec, fn(g) {
+      @sf.link_row_node(
+        g,
+        fn() { @sf.t("web-pages.screen.openBrowserRow") },
+        fn() { @settings.open_station_browser(core, address) },
+        note=fn() { browser_tabs_note(tabs().length()) },
+        lead=LeadLine(fn(l) { st_mark_node(l, fn() { "web" }) }),
+      )
+    })
+  })
 }
 
 ///|
@@ -567,63 +550,37 @@ fn station_agent_pages_node(b : @view.View, core : Core, here : () -> Here, s : 
   st_section_node(b, fn() { @sf.t("web-pages.screen.agentPages") }, count=fn() { tabs().length() }, fn(sec) {
     @sf.group_node(sec, fn(g) {
       g.each(tabs, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
-        station_browser_row_node(row, core, here, address, fn() { Some(sc.get()) }, false)
+        station_browser_row_node(row, core, here, address, fn() { Some(sc.get()) })
       })
     })
   })
 }
 
 ///|
-/// One browser tab row (`station_browser_row`'s node counterpart): opens the tab, with 休眠 (while an idle live user tab)
-/// and 关闭 at its end, and any active viewer rows under it.
-fn station_browser_row_node(
-  row : @view.View,
-  core : Core,
-  here : () -> Here,
-  address : String,
-  sv : () -> Json?,
-  user_tab : Bool,
-) -> Unit {
+/// One of the agents' tabs (`station_browser_row`'s node counterpart): opens the tab, 关闭 at its end where it may be,
+/// and any active viewer rows under it.
+fn station_browser_row_node(row : @view.View, core : Core, here : () -> Here, address : String, sv : () -> Json?) -> Unit {
   let id = text(@signals.untracked(sv), "id")
-  let can_sleep = fn() { user_tab && flag(sv(), "closable") && !flag(sv(), "sleeping") && items(sv(), "views").is_empty() }
-  let can_close = fn() { flag(sv(), "closable") }
-  row.pick(fn() { (can_sleep(), can_close()) }, fn(p, k) {
-    let (sleep_on, close_on) = k
+  row.pick(fn() { flag(sv(), "closable") }, fn(p, close_on) {
     @sf.group_rows_node(p, fn(r) {
       @sf.link_row_node(
         r,
         fn() { text(sv(), "title") },
         fn() {
-          @sfbase.open_page(Screen({ station: address, screen: id, title: text(@signals.untracked(sv), "title"), until_gone: !user_tab }))
+          @sfbase.open_page(Screen({ station: address, screen: id, title: text(@signals.untracked(sv), "title"), until_gone: true }))
         },
         note=fn() { text(sv(), "line") },
         lead=LeadLine(fn(l) { st_mark_node(l, fn() { screen_row_icon(sv()) }) }),
-        control?=if sleep_on || close_on {
+        control?=if close_on {
           Some(fn(e) {
             let on = [("station", address), ("screen", id)]
-            e.box(fn(c) {
-              c.row(Is(true)).gap(Is(ws_tail_gap)).lines_up(Is(Some(Middle))) |> ignore
-              if sleep_on {
-                let what = @sf.t("web-pages.screen.sleepWhat")
-                let press = fn() { @settings.act(core, what, "screen.sleep", obj([("station", str(address)), ("screen", str(id))])) }
-                let busy = fn() { is_doing(core, ["screen.sleep"], on) }
-                if close_on {
-                  @sf.button_node(c, fn() { @sf.t("web-pages.screen.sleep") }, press, tone=Ghost, busy~) |> ignore
-                } else {
-                  @sf.row_end_button_node(c, fn() { @sf.t("web-pages.screen.sleep") }, press, busy~) |> ignore
-                }
-              }
-              if close_on {
-                let what = @sf.t("web-pages.screen.closeTabWhat")
-                @sf.row_end_button_node(
-                  c,
-                  fn() { @sf.t("web-pages.screen.closeTab") },
-                  fn() { @settings.act(core, what, "screen.close", obj([("station", str(address)), ("screen", str(id))])) },
-                  busy=fn() { is_doing(core, ["screen.close"], on) },
-                )
-                |> ignore
-              }
-            })
+            let what = @sf.t("web-pages.screen.closeTabWhat")
+            @sf.row_end_button_node(
+              e,
+              fn() { @sf.t("web-pages.screen.closeTab") },
+              fn() { @settings.act(core, what, "screen.close", obj([("station", str(address)), ("screen", str(id))])) },
+              busy=fn() { is_doing(core, ["screen.close"], on) },
+            )
             |> ignore
           })
         } else {

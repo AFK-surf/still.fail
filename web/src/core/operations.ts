@@ -98,10 +98,12 @@ export interface OperationParams {
   "job.get": { id: string };
   "job.log": { id: string; lines: number };
   "job.stop": { id: string };
-  "screen.openBrowser": { url: string };
+  "screen.openBrowser": { url: string; id?: string | null | undefined };
   "screen.close": { screen: string };
   "screen.sleep": { screen: string };
   "screen.reload": { screen: string };
+  "screen.back": { screen: string };
+  "screen.forward": { screen: string };
   "screen.endView": { screen: string; view: string };
   "screen.watchOnly": { screen: string; view: string };
   "screen.endViews": { screen: string };
@@ -286,6 +288,8 @@ export function bindStationOperations(call: Call) {
     screenClose: <T = unknown>(params: OperationParams["screen.close"]) => call("screen.close", params) as Promise<T>,
     screenSleep: <T = unknown>(params: OperationParams["screen.sleep"]) => call("screen.sleep", params) as Promise<T>,
     screenReload: <T = unknown>(params: OperationParams["screen.reload"]) => call("screen.reload", params) as Promise<T>,
+    screenBack: <T = unknown>(params: OperationParams["screen.back"]) => call("screen.back", params) as Promise<T>,
+    screenForward: <T = unknown>(params: OperationParams["screen.forward"]) => call("screen.forward", params) as Promise<T>,
     screenEndView: <T = unknown>(params: OperationParams["screen.endView"]) => call("screen.endView", params) as Promise<T>,
     screenWatchOnly: <T = unknown>(params: OperationParams["screen.watchOnly"]) => call("screen.watchOnly", params) as Promise<T>,
     screenEndViews: <T = unknown>(params: OperationParams["screen.endViews"]) => call("screen.endViews", params) as Promise<T>,
