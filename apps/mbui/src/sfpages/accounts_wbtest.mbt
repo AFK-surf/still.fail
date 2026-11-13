@@ -664,7 +664,7 @@ test "a Devin profile's models panel asks Fusion pairs on demand, switches lead 
   // Already-ticked Fusion pair from another lead (`gpt-6-sol`) is shown in `Fusion 组合`, not duplicated in top series.
   assert_true(t.find("GPT-6 Sol + Sonnet 5.5 (中)") is None)
   assert_true(t.find("GPT-6 Sol + Sonnet 5.5 · 中") is Some(_))
-  assert_true(t.find("Opus 5.5 + SWE-2 · 中") is Some(_))
+  assert_true(t.query(Checkbox, label="SWE-2 · 中") is Some(_))
   // Unchecking the already-ticked & liked pair removes it from `models` and clears `pick.like`.
   t.click(Checkbox, label="GPT-6 Sol + Sonnet 5.5 · 中")
   t.frame()
@@ -674,9 +674,8 @@ test "a Devin profile's models panel asks Fusion pairs on demand, switches lead 
   // Switching lead model chip to `GPT-6 Sol` and checking a sidekick saves it and stars it.
   t.click(Radio, label="GPT-6 Sol")
   t.frame()
-  assert_true(t.find("GPT-6 Sol + SWE-2 · 中") is Some(_))
-  assert_true(t.find("Opus 5.5 + SWE-2 · 中") is None)
-  t.click(Checkbox, label="GPT-6 Sol + SWE-2 · 中")
+  assert_true(t.query(Checkbox, label="SWE-2 · 中") is Some(_))
+  t.click(Checkbox, label="SWE-2 · 中")
   t.frame()
   assert_eq(calls.map(fn(x) { x.0 }), ["profile.fusion", "profile.put", "pick.like", "profile.put", "pick.like"])
   let uid = "fusion-gpt-6-sol-sidekick-swe-2-medium"

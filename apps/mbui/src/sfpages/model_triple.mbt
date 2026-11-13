@@ -281,11 +281,18 @@ pub fn open_triple_panel(
   // before them)
   let now = src.topic("pick", pick_params(station, of)).get().value
   let many = items(now, "makers").length() > 1 && items(now, "options").length() > triple_flat_most
+  let has_sidekicks = !items(now, "sidekicks").is_empty()
   @sf.panel(
     @sf.t("android-chat.new.model"),
     fn(c, close) { triple_panel(c, src, station, of, contents, saved, close) },
     from~,
-    w=if many { triple_panel_w_many } else { triple_panel_w },
+    w=if has_sidekicks {
+      if many { triple_panel_w_fusion_many } else { triple_panel_w_fusion }
+    } else if many {
+      triple_panel_w_many
+    } else {
+      triple_panel_w
+    },
     // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
     fits=true,
     foot=fn(c, close) { triple_foot(c, src, station, of, contents, close) },
@@ -955,8 +962,22 @@ fn triple_body(
   // (the half row says there is more), less where the sheet at its most has less for it
   let t = @sf.theme()
   let row_h = t.rows.pick + 1.0
+  let sidekicks = items(v, "sidekicks")
+  let sidekick_now = text(v, "sidekickNow")
+  let h_sidekick = @sf.t("web-main.model.sidekick")
+  let pick_sidekick = fn(sk : Json) {
+    let sid = text(Some(sk), "id")
+    if sid == sidekick_now {
+      return
+    }
+    let m = text(Some(sk), "model")
+    if m != "" {
+      pick_save(src, station, of, { "model": Json::string(m), "runtime": Json::string("devin") })
+    }
+  }
+  let sheet_rest = if sidekicks.is_empty() { triple_sheet_rest } else { triple_sheet_rest + 110.0 }
   let list_most = if sheet {
-    dmax(3.0 * row_h, dmin(triple_sheet_rows * row_h, @sf.sheet_window_h(c) * @sf.sheet_most - triple_sheet_rest))
+    dmax(3.0 * row_h, dmin(triple_sheet_rows * row_h, @sf.sheet_window_h(c) * @sf.sheet_most - sheet_rest))
   } else {
     triple_list_h
   }
@@ -1199,9 +1220,55 @@ fn triple_body(
   }
   // (beside what opened it no wider than its first level needs, 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」; wider
   // only at the level of all of many, their makers a column before a maker's models, and as wide from then on)
-  let beside_w = (if all && !searching { triple_panel_w_many } else { triple_panel_w }) - 2.0 * @sf.panel_pad
+  let max_panel_w = if !sidekicks.is_empty() {
+    if all && !searching { triple_panel_w_fusion_many } else { triple_panel_w_fusion }
+  } else if all && !searching {
+    triple_panel_w_many
+  } else {
+    triple_panel_w
+  }
+  let beside_w = max_panel_w - 2.0 * @sf.panel_pad
   if sheet {
     models()
+    if !sidekicks.is_empty() {
+      c.box(style=triple_effort_block, fn() {
+        c.box(style=triple_effort_name, fn() { c.text(h_sidekick, style=triple_head) |> ignore }) |> ignore
+        c.box(style=triple_sidekick_pills, flow=true, line_gap=@ui.Space::px(S1_5), fn() {
+          for sk in sidekicks {
+            let sv = Some(sk)
+            let sid = text(sv, "id")
+            let label = text(sv, "text")
+            let maker_id = text(field(sv, "maker"), "id")
+            let on = sid == sidekick_now
+            let (name_part, eff_part) = match label.find(" · ") {
+              Some(idx) => (label.exact_view(start=0, end=idx).to_owned(), label.exact_view(start=idx + 3).to_owned())
+              None => (label, "")
+            }
+            let chip_id = c.id("triple/sidekick/" + at + "/" + sid)
+            let b = c.box(
+              style=if on { triple_sidekick_pill_on } else { triple_sidekick_pill },
+              id=chip_id,
+              fn() {
+                if sid != "" {
+                  @sf.maker_mark(c, maker_id, "devin", 12.0) |> ignore
+                }
+                c.text(name_part, style=if on { triple_sidekick_words_on } else { triple_sidekick_words }) |> ignore
+                if eff_part != "" {
+                  c.text(eff_part, style=triple_usual) |> ignore
+                }
+                if on {
+                  @sf.icon(c, "check", size=12.0, color=t.p.accent) |> ignore
+                }
+              },
+            )
+            c.semantics(b, Radio, id=chip_id, label~, check=if on { On } else { Off })
+            c.on_press(chip_id, fn() { pick_sidekick(sk) })
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    }
     if all_efforts.length() > 0 {
       // its name, and under it a stop for each level across the sheet, the one it is at said in the thumb (@sf.stops):
       // as many levels as a model has on one line in any language, nothing opened over the sheet to pick one
@@ -1228,30 +1295,43 @@ fn triple_body(
       })
       |> ignore
     }
-  } else if all_efforts.length() == 0 {
+  } else if all_efforts.length() == 0 && sidekicks.is_empty() {
     c.box(style=@ui.style(max_w=Fixed(beside_w)), fn() {
       models_head()
       models()
     })
     |> ignore
   } else {
-    // (the models and how hard it thinks side by side, each titled alike over it, the line between them up to the
-    // panel's top: 「上面的分割线试试到顶」)
+    // (the models, its sidekick on Devin Fusion, and how hard it thinks side by side, each titled alike over it, the
+    // line between them up to the panel's top: 「上面的分割线试试到顶」)
     c.box(style=triple_side_by_side.then(@ui.style(max_w=Fixed(beside_w))), fn() {
       c.box(style=triple_models_column, fn() {
         models_head()
         models()
       })
       |> ignore
-      c.box(style=triple_effort_column, fn() {
-        // (the line between them out of their flow, in the middle of the room between them, from the panel's top
-        // down to the line over its foot, meeting it: 「竖的那根怎么没跟横的接起来呢」)
-        c.box(style=triple_rule_v, left=-triple_between_rule, top=-@sf.panel_pad, bottom=-@sf.panel_rule_over(), fn() {  })
+      if !sidekicks.is_empty() {
+        c.box(style=triple_effort_column, fn() {
+          c.box(style=triple_rule_v, left=-triple_between_rule, top=-@sf.panel_pad, bottom=-@sf.panel_rule_over(), fn() {  })
+          |> ignore
+          @sf.panel_head(c, h_sidekick)
+          scroll("triple/sidekicks", triple_list_h, fn() {
+            triple_sidekick_choices(c, "triple/sidekick", sidekicks, sidekick_now, pick_sidekick)
+          })
+        })
         |> ignore
-        @sf.panel_head(c, h_effort)
-        triple_choices(c, "triple/effort", "", all_efforts, effort_now, pick_effort)
-      })
-      |> ignore
+      }
+      if all_efforts.length() > 0 {
+        c.box(style=triple_effort_column, fn() {
+          // (the line between them out of their flow, in the middle of the room between them, from the panel's top
+          // down to the line over its foot, meeting it: 「竖的那根怎么没跟横的接起来呢」)
+          c.box(style=triple_rule_v, left=-triple_between_rule, top=-@sf.panel_pad, bottom=-@sf.panel_rule_over(), fn() {  })
+          |> ignore
+          @sf.panel_head(c, h_effort)
+          triple_choices(c, "triple/effort", "", all_efforts, effort_now, pick_effort)
+        })
+        |> ignore
+      }
     })
     |> ignore
   }
@@ -1443,36 +1523,51 @@ fn triple_runtime(c : @ui.Ctx, src : Source, station : String, of : String, v : 
 }
 
 ///|
-/// What sidekick goes with the model on Devin Fusion, at the foot beside its runtime: its name and the sidekick picked
-/// (无 where none is); pressed, the sidekicks Devin offers for this lead model in a pick.
-fn triple_sidekick(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
-  let head = @sf.t("web-main.model.sidekick")
-  let now = text(v, "sidekickNow")
-  let sidekicks = items(v, "sidekicks")
-  let choices = sidekicks.map(fn(o) { @sf.choice(text(Some(o), "id"), text(Some(o), "text")) })
-  let id = c.id("triple/sidekick")
-  c.on_press(id, fn() {
-    @sf.pick(
-      head,
-      choices,
-      now,
-      fn(k) {
-        match sidekicks.search_by(fn(o) { text(Some(o), "id") == k }) {
-          Some(i) => {
-            let m = text(Some(sidekicks[i]), "model")
-            if m != "" {
-              pick_save(src, station, of, { "model": Json::string(m), "runtime": Json::string("devin") })
-            }
-          }
-          None => ()
+/// Which sidekick runs with the model on Devin Fusion, between the models and how hard it thinks: each a row with its
+/// maker's mark, its model's name and its effort, the one picked lit and checked; `pick` given the sidekick pressed.
+fn triple_sidekick_choices(
+  c : @ui.Ctx,
+  key : String,
+  sidekicks : Array[Json],
+  now : String,
+  pick : (Json) -> Unit,
+) -> Unit {
+  let t = @sf.theme()
+  for sk in sidekicks {
+    let sv = Some(sk)
+    let sid = text(sv, "id")
+    let label = text(sv, "text")
+    let maker_id = text(field(sv, "maker"), "id")
+    let on = sid == now
+    let (name_part, eff_part) = match label.find(" · ") {
+      Some(idx) => (label.exact_view(start=0, end=idx).to_owned(), label.exact_view(start=idx + 3).to_owned())
+      None => (label, "")
+    }
+    let id = c.id(key + "/" + sid)
+    let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
+      if sid != "" {
+        @sf.maker_mark(c, maker_id, "devin", 14.0) |> ignore
+      } else {
+        c.box(style=triple_check_room, fn() {  }) |> ignore
+      }
+      c.text(name_part, style=if on { triple_picked } else { triple_words }) |> ignore
+      if eff_part != "" {
+        c.text(eff_part, style=triple_usual) |> ignore
+      }
+      c.box(style=triple_end, keep=true, fn() {
+        if on {
+          @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+        } else {
+          c.box(style=triple_check_room, fn() {  }) |> ignore
         }
-      },
-      from=Of(id),
-      search=false,
-    )
-  })
-  let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
-  triple_chip(c, id, head, words)
+      })
+      |> ignore
+    })
+    c.semantics(b, Radio, id~, label~, check=if on { On } else { Off })
+    c.on_press(id, fn() {
+      pick(sk)
+    })
+  }
 }
 
 ///|
@@ -1550,9 +1645,6 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
     triple_runs_who(c, src, station, of, v, panel_serial)
     if !flag(v, "runtimeFixed") && items(v, "runtimes").length() > 1 {
       triple_runtime(c, src, station, of, v)
-    }
-    if !items(v, "sidekicks").is_empty() {
-      triple_sidekick(c, src, station, of, v)
     }
     if flag(v, "fastAvailable") {
       triple_speed(c, src, station, of, v)
@@ -2673,6 +2765,34 @@ let triple_panel_w : Double = 520.0
 ///|
 /// The same where its models are many: their makers a column before a maker's models.
 let triple_panel_w_many : Double = 660.0
+
+///|
+/// The same where the picked model offers Devin Fusion sidekicks as a column beside it.
+let triple_panel_w_fusion : Double = 660.0
+
+///|
+/// The same where its models are many and the picked model offers Devin Fusion sidekicks.
+let triple_panel_w_fusion_many : Double = 780.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_sidekick_pills : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_sidekick_pill : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1 align=ACenter radius=Full bg=Tint hovered{bg=TintStrong}")
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_sidekick_pill_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1 align=ACenter radius=Full bg=TintStrong")
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_sidekick_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_sidekick_words_on : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -956,7 +956,7 @@
   "web-pages.profiles.share.users": "使用中：{stations}",
   "web-pages.profiles.account.each": "可使用的 station",
   "web-pages.profiles.fusionModels": "Fusion 组合",
-  "web-pages.profiles.fusionHint": "勾选的组合会直接列在模型列表中；未勾选时也可在模型选择器底栏「副模型」中随时切换",
+  "web-pages.profiles.fusionHint": "勾选的组合会直接列在模型列表中；未勾选时也可在模型选择器「副模型」中随时切换",
   "web-pages.profiles.fusionLead": "主模型",
   "web-pages.profiles.fusionSidekick": "副模型",
   "web-pages.profiles.searchFusion": "搜索主副模型组合",

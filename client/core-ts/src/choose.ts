@@ -1151,12 +1151,23 @@ export class Choose implements Owner {
         : option !== undefined && typeof option.model === "string"
           ? model.key(option.model)
           : null;
-    const availSides = onName === "devin" && baseLead !== null ? (model.devinFusionSidesFor(baseLead) ?? []) : [];
+    const canDevin = onName === "devin" || (!fixed && leadRuntimes.includes("devin"));
+    const availSides = canDevin && baseLead !== null ? (model.devinFusionSidesFor(baseLead) ?? []) : [];
+    const leadModelId =
+      leadOption !== undefined && typeof leadOption.model === "string" ? leadOption.model : (baseLead ?? "");
     const sidekicks =
       availSides.length > 0 && baseLead !== null
         ? [
-            { id: "", text: t("core-logic.choose.sidekick.none"), model: baseLead },
-            ...availSides.map((s) => ({ id: s, text: model.sidekickName(s), model: `fusion-${baseLead}-sidekick-${s}` })),
+            { id: "", text: t("core-logic.choose.sidekick.none"), model: leadModelId, maker: null },
+            ...availSides.map((s) => {
+              const mk = format.makerOf(s);
+              return {
+                id: s,
+                text: model.sidekickName(s),
+                model: `fusion-${baseLead}-sidekick-${s}`,
+                maker: mk !== null ? { id: mk[0], name: mk[1] } : null,
+              };
+            }),
           ]
         : [];
     const sidekickNow = fusionSplit !== null && onName === "devin" ? fusionSplit.side : "";

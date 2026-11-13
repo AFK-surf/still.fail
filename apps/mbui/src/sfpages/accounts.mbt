@@ -2078,9 +2078,6 @@ fn profile_fusion_section(
   for lead in leads {
     let lv = Some(lead)
     let lead_id = text(lv, "id")
-    if lead_id == picked_lead_id {
-      continue
-    }
     let lead_name = text(lv, "name")
     let maker_id = text(field(lv, "maker"), "id")
     for idx_json in items(lv, "sides") {
@@ -2146,35 +2143,43 @@ fn profile_fusion_section(
     None => Some(leads[0])
   }
   let lead_id = text(cur_lead, "id")
-  let lead_name = text(cur_lead, "name")
-  for idx_json in items(cur_lead, "sides") {
-    if idx_json is Number(idx, ..) && sides.get(idx.to_int()) is Some(side) {
-      let sv = Some(side)
-      let side_id = text(sv, "id")
-      let side_name = text(sv, "name")
-      let side_maker_id = text(field(sv, "maker"), "id")
-      let uid = "fusion-" + lead_id + "-sidekick-" + side_id
-      let display = lead_name + " + " + side_name
-      let on = named.contains(uid)
-      let item = c.id("profile-fusion-item/" + key + "/" + uid)
-      c.box(style=pf_model_row.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
-        let now = @kit.checkbox(
-          c,
-          "profile-fusion-check/" + key + "/" + uid,
-          if on { On } else { Off },
-          disabled=busy,
-          label=display,
-        ).value
-        if (now == On) != on && !busy {
-          toggle_pair(uid, now == On)
+  c.box(style=pf_fusion_leads, flow=true, line_gap=@ui.Space::px(S1_5), fn() {
+    for idx_json in items(cur_lead, "sides") {
+      if idx_json is Number(idx, ..) && sides.get(idx.to_int()) is Some(side) {
+        let sv = Some(side)
+        let side_id = text(sv, "id")
+        let side_name = text(sv, "name")
+        let side_maker_id = text(field(sv, "maker"), "id")
+        let uid = "fusion-" + lead_id + "-sidekick-" + side_id
+        let on = named.contains(uid)
+        let (name_part, eff_part) = match side_name.find(" · ") {
+          Some(at) => (side_name.exact_view(start=0, end=at).to_owned(), side_name.exact_view(start=at + 3).to_owned())
+          None => (side_name, "")
         }
-        @sf.maker_mark(c, side_maker_id, runtime, pf_chip_glyph) |> ignore
-        c.text(display, style=pf_model_words) |> ignore
-      })
-      |> ignore
-      @sf.tip(c, "profile-fusion-item/" + key + "/" + uid + "/tip", item, uid, side=Right)
+        let item = c.id("profile-fusion-item/" + key + "/" + uid)
+        let b = c.box(
+          style=if on { pf_fusion_lead_on } else { pf_fusion_lead_chip },
+          id=item,
+          fn() {
+            @sf.maker_mark(c, side_maker_id, runtime, 12.0) |> ignore
+            c.text(name_part, style=if on { pf_fusion_lead_words_on } else { pf_fusion_lead_words }) |> ignore
+            if eff_part != "" {
+              c.text(eff_part, style=pf_series_words) |> ignore
+            }
+            if on {
+              @sf.icon(c, "check", size=12.0, color=@sf.theme().p.accent) |> ignore
+            }
+          },
+        )
+        c.semantics(b, Checkbox, id=item, label=side_name, check=if on { On } else { Off }, disabled=busy)
+        if !busy {
+          c.on_press(item, fn() { toggle_pair(uid, !on) })
+        }
+        @sf.tip(c, "profile-fusion-item/" + key + "/" + uid + "/tip", item, uid, side=Right)
+      }
     }
-  }
+  })
+  |> ignore
 }
 
 ///|

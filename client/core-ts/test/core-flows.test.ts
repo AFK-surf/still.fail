@@ -3463,6 +3463,15 @@ test("profile_fusion_is_asked_on_demand_and_legacy_tiered_agy_picks_resolve_to_b
     profiles: [
       profile("p2", "claude", ["claude-opus-5-5"], true, 80),
       agyProfile,
+      profile("dv", "devin", ["gemini-4-carbon"], true, 20, {
+        check: {
+          state: "ok",
+          detail: "ok",
+          models: ["gemini-4-carbon"],
+          fusionSidekicks: { "gemini-4-carbon": ["swe-2-medium"] },
+          checkedAt: 1,
+        },
+      }),
     ],
   };
   const { host, core } = await started({
@@ -3501,8 +3510,13 @@ test("profile_fusion_is_asked_on_demand_and_legacy_tiered_agy_picks_resolve_to_b
   apply(host, values);
 
   // New chat pick resolves legacy `gemini-4-carbon-medium` -> `gemini-4-carbon` at `medium`, and retains frequent combos + stars.
+  // Even while drafted on `agy`, `sidekicks` are offered because `gemini-4-carbon` also runs on `devin` with Fusion sidekicks.
   const newPick = v(values, 2);
   assert.deepEqual([newPick.value.model, newPick.value.runtime, newPick.value.effort], ["gemini-4-carbon", "agy", "medium"]);
+  assert.deepEqual(newPick.sidekicks.slice(0, 2), [
+    { id: "", text: "无", model: "gemini-4-carbon" },
+    { id: "swe-2-medium", text: "SWE-2 · 中", model: "fusion-gemini-4-carbon-sidekick-swe-2-medium", maker: { id: "devin" } },
+  ]);
   assert.deepEqual(newPick.liked, ["gemini-4-carbon", "gpt-oss-120b"]);
   assert.deepEqual(
     newPick.combos.map((c: J) => [c.model, c.runtime, c.effort, c.text]),

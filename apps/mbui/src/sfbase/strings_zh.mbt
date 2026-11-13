@@ -2305,7 +2305,7 @@ let zh : Map[String, String] = {
   "web-pages.profiles.fastSave": "保存 Fast",
   "web-pages.profiles.finish": "完成登录",
   "web-pages.profiles.finishing": "正在完成登录",
-  "web-pages.profiles.fusionHint": "勾选的组合会直接列在模型列表中；未勾选时也可在模型选择器底栏「副模型」中随时切换",
+  "web-pages.profiles.fusionHint": "勾选的组合会直接列在模型列表中；未勾选时也可在模型选择器「副模型」中随时切换",
   "web-pages.profiles.fusionLead": "主模型",
   "web-pages.profiles.fusionModels": "Fusion 组合",
   "web-pages.profiles.fusionSidekick": "副模型",
