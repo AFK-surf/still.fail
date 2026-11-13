@@ -727,6 +727,8 @@ common.uploading
 core-logic.accounts.login.failed
 core-logic.decisions.replied
 core-logic.decisions.you
+core-logic.history.usage.cost.unpriced
+core-views.usage.unpriced
 desktop.contextMenu.copy
 desktop.contextMenu.copyImage
 desktop.contextMenu.copyLink

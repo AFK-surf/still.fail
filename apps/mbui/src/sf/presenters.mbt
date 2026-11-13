@@ -2446,17 +2446,23 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {
-          sheet_grab(c)
-          sheet_body(c, key, p, scrolls=over)
-          sheet_foot(c)
+          c.box(style=sheet_content_whole, fn() {
+            sheet_body(c, key, p, scrolls=over)
+            sheet_foot(c)
+          })
+          |> ignore
+          c.layer(fn() { sheet_grab(c) }) |> ignore
         })
         |> ignore
       None =>
         // (named to be read back, not to be pressed: a tap goes to what is in it)
         c.box(style=full_width, id=fit, taps=false, fn() {
-          sheet_grab(c)
-          sheet_body(c, key, p)
-          sheet_foot(c)
+          c.box(style=sheet_content_fit, taps=false, fn() {
+            sheet_body(c, key, p)
+            sheet_foot(c)
+          })
+          |> ignore
+          c.layer(fn() { sheet_grab(c) }) |> ignore
         })
         |> ignore
     }
@@ -3072,6 +3078,14 @@ let sheet_row_check : Double = 14.0
 /// What a sheet of a share shows: all of it, a column.
 // kept across runs: a value (no field of it changes)
 let sheet_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sheet_content_whole : @ui.Style = sheet_whole.then(sheet_content_top)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sheet_content_fit : @ui.Style = full_width.then(sheet_content_top)
 
 ///|
 /// The room left in a sheet of a share (a long pick's list).

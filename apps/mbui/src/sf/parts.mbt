@@ -1029,26 +1029,32 @@ pub fn slider(
 }
 
 ///|
-/// Round a sheet's grabber: 8 above and 4 under it, then 4 above and under it (Sheet.kt's two paddings, each a length
-/// of its own: on Android's whole pixels 21 + 11 above the grabber and 11 + 11 under it, not one 12 and one 8).
+/// Top inset of the sheet's grabber overlay (`pt=S2_5`, 10px above the 38 × 5 bar) so it floats centred over the top
+/// band without taking a row of its own in the sheet's layout.
 // kept across runs: a value (no field of it changes)
-let sheet_grab_outer : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
+let sheet_grab_outer : @ui.Style = @ui.css("w=Full pt=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_grab_inner : @ui.Style = @ui.css("w=Full py=S1 align=ACenter")
+let sheet_grab_inner : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
-/// How tall a sheet's grabber stands at its top, all round it (sheet_grab: 8 and 4 over its 5, 4 and 4 under): where
-/// what the sheet holds begins.
-pub let sheet_grab_h : Double = 8.0 + 4.0 + 5.0 + 4.0 + 4.0
+/// How far down from a sheet's top its content starts (`pane_corner - 16 - S1 = 22`): leaves the top band clear for
+/// the overlaid grabber (`10..15`) and lands title rows (`pt=S1 = 4`) and 32px corner controls at `26`, concentric
+/// with `pane_corner` (`42 - 16 = 26`).
+pub let sheet_grab_h : Double = pane_corner - 16.0 - 4.0
 
 ///|
-/// The grabber at a sheet's top: 38 × 5 in the line's colour, 12 above it and 8 under.
+/// Top padding for sheet content below the overlaid grabber (`sheet_grab_h`).
+// kept across runs: a value (no field of it changes)
+let sheet_content_top : @ui.Style = @ui.style(pt=room(sheet_grab_h))
+
+///|
+/// The grabber overlaid at a sheet's top: 38 × 5 in the line's colour, 10 above it.
 pub fn sheet_grab(c : @ui.Ctx) -> Unit {
   let grabber = sheet_grabber.then(@ui.style(bg=Data(theme().p.line)))
-  c.box(style=sheet_grab_outer, fn() {
-    c.box(style=sheet_grab_inner, fn() { c.box(style=grabber, fn() {  }) |> ignore }) |> ignore
+  c.box(style=sheet_grab_outer, taps=false, fn() {
+    c.box(style=sheet_grab_inner, taps=false, fn() { c.box(style=grabber, fn() {  }) |> ignore }) |> ignore
   })
   |> ignore
 }

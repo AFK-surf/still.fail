@@ -380,7 +380,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
               })
             })
             |> ignore
-            chevron(c)
+            c.box(style=row_line1_chevron, fn() { chevron(c) }) |> ignore
           }, tile=true,
             on_press=fn() {
               close()
@@ -515,9 +515,21 @@ let info_title_words : @ui.Style = @ui.css("w=Cut pt=S1")
 ///|
 /// An agent's mark, name and where it stands in a line, what it did under it 16 down (panel_card_in).
 // kept across runs: a value (no field of it changes)
-let agent_title_line : @ui.Style = @ui.css("row w=Full pt=S1 gap=S3 align=ACenter").then(
+let agent_title_line : @ui.Style = @ui.css("row w=Full pt=S1 gap=S3 align=AStart").then(
   @ui.style(pb=@sf.room_of(@sf.panel_card_in)),
 )
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_title_words : @ui.Style = @ui.css("w=Cut pt=S1 gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let row_line1_label : @ui.Style = @ui.css("pt=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let row_line1_chevron : @ui.Style = @ui.css("pt=S1")
 
 ///|
 /// A chat's name in its sheet's head, two lines at most, its ✎ right after it where it can be renamed (`open`): the
@@ -720,13 +732,20 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"))
         })
       }
-      // (who runs it: the picker with its accounts open over it)
-      agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, under=fn() {
-        allowance_line(c, field(account, "quota"))
-      }, on_press=fn() {
+      // (who runs it: the picker with its accounts open over it; quota on its own single-line row below)
+      let open_accounts = fn() {
         close()
         @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"), accounts=true)
-      })
+      }
+      agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, on_press=open_accounts)
+      let quota = agent_allowance_quota(field(account, "quota"))
+      if @sf.has_quota(quota) {
+        info_row(c, "agent/quota", fn() {
+          agent_label(c, tr("web-pages.profiles.quota"), label_w)
+          c.box(w=Fill(1.0), keep=true, fn() { @sf.quota_chips(c, quota) }) |> ignore
+          chevron(c)
+        }, on_press=open_accounts)
+      }
       agent_row(
         c,
         "agent/history",
@@ -799,13 +818,15 @@ fn agent_title_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit
       c,
       text(field(s, "maker"), "id"),
       text(s, "runtime"),
-      40.0,
+      32.0,
       state_of_badge(text(a, "badge")),
       @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
       plain=true,
     )
-    c.box(w=Fill(1.0), gap=1.0, fn() {
-      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
+    c.box(style=agent_title_words, fn() {
+      let title = text(s, "agentText")
+      let title_size = if tile_figure_units(title) > 18 { 14.5 } else { t.t.title }
+      c.text(title, size=title_size, weight=700, color=t.p.text, wrap=false) |> ignore
       agent_status(c, src, a)
     })
     |> ignore
@@ -840,8 +861,13 @@ fn agent_row(
   under? : () -> Unit,
   on_press? : () -> Unit,
 ) -> Unit {
+  let multiline = under is Some(_)
   info_row(c, key, fn() {
-    agent_label(c, label, label_w)
+    if multiline {
+      c.box(style=row_line1_label, fn() { agent_label(c, label, label_w) }) |> ignore
+    } else {
+      agent_label(c, label, label_w)
+    }
     c.box(w=Fill(1.0), keep=true, fn() {
       c.text(value, style=agent_row_value, keep=true) |> ignore
       match under {
@@ -851,8 +877,12 @@ fn agent_row(
     })
     |> ignore
     trailing()
-    chevron(c)
-  }, on_press?)
+    if multiline {
+      c.box(style=row_line1_chevron, fn() { chevron(c) }) |> ignore
+    } else {
+      chevron(c)
+    }
+  }, align=if multiline { AStart } else { ACenter }, on_press?)
 }
 
 ///|
@@ -864,6 +894,44 @@ fn agent_label(c : @ui.Ctx, label : String, width : Double) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_row_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+/// Inside an agent's own card (`模型` already names the model family), drop a shared `"<Model> "` prefix from every
+/// quota window's `mark` (e.g. `Gemini 5H` + `Gemini W` -> `5H` + `W`) so chips stay on one clean horizontal row.
+fn agent_allowance_quota(quota : Json?) -> Json? {
+  guard quota is Some(Object(qm)) && qm.get("windows") is Some(Array(wins)) && wins.length() >= 2 else { return quota }
+  let prefix_of = fn(m : String) -> String {
+    match m.find(" ") {
+      Some(i) if i > 0 => m[:i + 1].to_owned()
+      _ => ""
+    }
+  }
+  let first = prefix_of(text(Some(wins[0]), "mark"))
+  if first == "" {
+    return quota
+  }
+  for w in wins {
+    let m = text(Some(w), "mark")
+    if !m.has_prefix(first) || m.length() <= first.length() {
+      return quota
+    }
+  }
+  let next = qm.copy()
+  next["windows"] = Json::array(
+    wins.map(fn(w) {
+      match w {
+        Object(wm) => {
+          let m = text(Some(w), "mark")
+          let o = wm.copy()
+          o["mark"] = Json::string(m[first.length():].to_owned())
+          Json::object(o)
+        }
+        _ => w
+      }
+    }),
+  )
+  Some(Json::object(next))
+}
 
 ///|
 /// An account's allowance (its chips) on a line of its own under what names it, 4 under it; nothing where it says none.
@@ -894,6 +962,16 @@ let info_agent_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, 
 
 ///|
 /// Stopping its turn, while it works: red on its tint, a spinner while it is asked.
+///|
+let stop_button_h : Double = 32.0
+
+///|
+/// Pulls the 32px capsule stop button inward by `2px` (`42 - 16 - 24`) so its right edge matches its 26px top inset,
+/// concentric with `pane_corner = 42`.
+// kept across runs: a value (no field of it changes)
+let stop_button_at : @ui.Style = @ui.style(mr=@sf.capsule_room(@sf.pane_corner, stop_button_h, less=@sf.panel_words))
+
+///|
 fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let t = @sf.theme()
   let skey = "stop/" + station + "/" + key
@@ -912,6 +990,7 @@ fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Uni
     }
   })
   c.box(
+    style=stop_button_at,
     dir=Row,
     h=Px(32.0),
     padx=14.0,
@@ -965,12 +1044,29 @@ fn agent_tiles_known(card : Json?) -> Bool {
 }
 
 ///|
+/// Visual width units of a tile figure: wide glyphs (e.g. CJK) count as 2.
+fn tile_figure_units(s : String) -> Int {
+  s.iter().fold(init=0, fn(acc, ch) { acc + (if ch.to_int() > 0x7f { 2 } else { 1 }) })
+}
+
+///|
+/// Short KPI-tile copy for an unpriced model (`未计价` / `Unpriced`), keeping table-row usage copy (`该模型无价目`)
+/// intact while matching numeric tiles beside it at `20.0`.
+fn agent_cost_figure(cost : String) -> String {
+  if cost == tr("core-logic.history.usage.cost.unpriced") {
+    tr("core-views.usage.unpriced")
+  } else {
+    cost
+  }
+}
+
+///|
 /// The figures that say most (AgentTiles): what it cost, the cache's hit rate, how full its context is, each large over
 /// its name, side by side; a context worth a look in its level's colour.
 fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = None) -> Unit {
   let t = @sf.theme()
   let context = field(card, "context")
-  let cost = text(card, "cost")
+  let cost = agent_cost_figure(text(card, "cost"))
   let cache = field(card, "cache")
   if !agent_tiles_known(card) {
     return
@@ -996,7 +1092,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
         c.box(fn() {
           c.text(
             figure,
-            size=if figure.length() > 6 { 16.0 } else { 20.0 },
+            size=if tile_figure_units(figure) > 6 { 16.0 } else { 20.0 },
             line=26.0,
             weight=600,
             color~,

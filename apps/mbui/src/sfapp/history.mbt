@@ -283,7 +283,7 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
             .lies_along(Is(Middle))
             |> ignore
             @sf.words_node(f, figure, fn() {
-              let big = if figure().length() > 6 { tile_figure_small } else { tile_figure }
+              let big = if tile_figure_units(figure()) > 6 { tile_figure_small } else { tile_figure }
               match level() {
                 "red" => big.then(@ui.text_style(color=Danger))
                 "amber" => big.then(@ui.text_style(color=WarnInk))
@@ -297,7 +297,7 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
         })
         |> ignore
       }
-      let cost = fn() { text(card(), "cost") }
+      let cost = fn() { agent_cost_figure(text(card(), "cost")) }
       let cache = fn() { field(card(), "cache") }
       let context = fn() { field(card(), "context") }
       // (each tile's share of the row: what shows it takes it)
