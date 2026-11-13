@@ -36,10 +36,17 @@ pub fn login_cards_reset() -> Unit {
 ///|
 /// Login `id` of `station` as the core says it now (None: one it does not know, ended long ago).
 fn login_of(core : Core, station : String, id : String) -> Json? {
-  match (core.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) }).get().value {
+  let ask = login_ask(station, id)
+  match (core.topic)(ask.0, ask.1).get().value {
     Some(Object(_)) as v => v
     _ => None
   }
+}
+
+///|
+/// What the core is asked for login `id` of `station` (login_of's, its card's): its `machineLogin`.
+fn login_ask(station : String, id : String) -> (String, Map[String, Json]) {
+  ("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
 }
 
 ///|
