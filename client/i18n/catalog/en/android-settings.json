@@ -18,7 +18,7 @@
     "other": "{n} joined."
   },
   "android-settings.add.many": "Add {n}",
-  "android-settings.add.note": "Added to “{name}” directly, without needing to accept. People who've used {app} join immediately; others join when they first sign in with this email.",
+  "android-settings.add.note": "Added to “{name}” directly, without needing to accept, and told by email. People who've used {app} join immediately; others join when they first sign in with this email.",
   "android-settings.add.one": "Add",
   "android-settings.add.picked": {
     "one": "{picked} of 1 selected",
@@ -28,6 +28,10 @@
   "android-settings.add.role": "Role",
   "android-settings.add.sep": " ",
   "android-settings.add.title": "Add members",
+  "android-settings.add.unmailed": {
+    "one": "1 notification email wasn't sent; add them again to resend.",
+    "other": "{n} notification emails weren't sent; add them again to resend."
+  },
   "android-settings.all": "All",
   "android-settings.appearance.theme": "Theme",
   "android-settings.appearance.title": "Appearance",

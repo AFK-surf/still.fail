@@ -2,7 +2,7 @@
 // itself: it names what it wants done and with what, and the core knows the request that does it and what it changes
 // (the effects declared beside each operation).
 import { CoreError } from "./error.ts";
-import { t } from "./i18n.ts";
+import { current, t } from "./i18n.ts";
 import { utf8 } from "./util.ts";
 
 /// Where an operation goes: a station (its address), or still.fail cloud as a signed-in account.
@@ -744,8 +744,9 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("DELETE", ws, null);
     case "workspace.invite":
       return op("POST", () => `${ws()}/invitations`, p.pick(["role", "email"]));
+    // (in the person's language: the cloud mails each one added in it, api.ts `mailAdded`)
     case "workspace.addMembers":
-      return op("POST", () => `${ws()}/members`, p.pick(["role", "emails"]));
+      return op("POST", () => `${ws()}/members`, { ...p.pick(["role", "emails"]), lang: current() });
     case "workspace.removeAdded":
       return op("DELETE", () => `${ws()}/added/${p.at("email")}`, null);
     case "workspace.revokeInvitation":

@@ -1095,7 +1095,7 @@ fn add_people_foot(v : @view.View, core : Core, here : Here, st : AddPeople, clo
 
 ///|
 /// Those to add added (`workspace.addMembers`) with the role chosen: what came of it said in the form's place (joined,
-/// added to join at their first sign-in, in already; where the lock's change no station took yet, that sentence), or
+/// added to join at their first sign-in, in already, whose mail could not be sent; where the lock's change no station took yet, that sentence), or
 /// why not under it.
 fn add_people_go(core : Core, here : Here, st : AddPeople) -> Unit {
   let emails = @signals.untracked(fn() { add_people_emails(st) })
@@ -1123,6 +1123,8 @@ fn add_people_go(core : Core, here : Here, st : AddPeople) -> Unit {
                   if n("joined") > 0 { fill("android-settings.add.joined", [("n", n("joined").to_string())]) } else { "" },
                   if n("added") > 0 { fill("android-settings.add.added", [("n", n("added").to_string()), ("app", "still.fail")]) } else { "" },
                   if n("already") > 0 { fill("android-settings.add.already", [("n", n("already").to_string())]) } else { "" },
+                  // (the cloud mails each one added; one it could not is sent again as they are added again)
+                  if n("unmailed") > 0 { fill("android-settings.add.unmailed", [("n", n("unmailed").to_string())]) } else { "" },
                 ],
                 tr("android-settings.add.sep"),
               ),
