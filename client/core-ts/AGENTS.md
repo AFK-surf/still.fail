@@ -7,7 +7,7 @@ design rules (the user, 2026-10-03):
 
 1. **Everything async is Effect**: calls, subscriptions, links, sockets, sync are fibers in scopes (`src/runtime.ts`);
    cancelling is interrupting; timers are the Clock's (a TestClock in tests), never `setTimeout`. `Host`
-   (`src/host.ts`, made in `src/hosts/`) is what differs per platform, every operation an Effect.
+   (`src/host.ts`, declared in `src/host-of.ts`, made in `src/hosts/`) is what differs per platform, every operation an Effect.
 2. **Pushed, never polled**: a station's `/events`, the cloud's `/v1/events`. Only a measure shown on screen (a link's
    speed, "waited 3 s") is sampled, while it is looked at.
 3. **Cache first**: each signed-in account has its SQLite database (`src/data.ts`, `src/db/`), one writer, schema
@@ -254,13 +254,17 @@ another; the accounts' list's merge across stations and its refills.
 ## The base stands apart
 
 The device's mesh (`src/mesh.ts`: its iroh endpoints, the ways to a peer and the choice among them, links, the streams'
-framing) and what runs a client (the host, the runtime, errors, traces, wakes, the scheduler) are the core's base:
-another program is built on it without still.fail's business (the owner, 2026-11-14), so a base file imports only base
-files and packages, as types too. `scripts/base.ts` holds it: its `BASE` names the files, its `STILL` what they still
-import of the rest, which only falls (a base file's own imports only: what a file named there imports in turn is not
-held until its entry goes). What the still.fail core does with the mesh (a station's requests on its links, the
-cloud's credentials and the lock's claim said with them, a lock's refusals, what an app's endpoint takes) is
-`src/station/mesh-wire.ts`, given to the mesh as its `MeshEnv` and a `CredentialSource`, never imported by it.
+framing) and what runs a client (the host, the runtime, errors, words, traces, wakes, the scheduler) are the core's
+base: another program is built on it without still.fail's business (the owner, 2026-11-14), so a base file imports
+only base files and packages, as types too. `scripts/base.ts` holds it: its `BASE` names the files, and the set is
+closed: nothing of it reaches, through any number of imports, a file that is not of it (its `STILL` is empty and stays
+so). The base says its own words with nothing else loaded (`src/lang.ts`: the parts of the catalog that `WORDS` names,
+apart from the core's by a longer name, `client/i18n/catalog/zh/core-misc.wake.json`). What is still.fail's is given
+to it, never imported by it: what the core does with the mesh (`src/station/mesh-wire.ts`, its `MeshEnv` and a
+`CredentialSource`: a station's requests on its links, the cloud's credentials and the lock's claim, a lock's
+refusals, what an app's endpoint takes), the rest of the catalog and the product's name (`src/i18n.ts`), the UIs'
+messages (`src/host.ts` `Host`, the base's `src/host-of.ts` of them), its APIs' paths as a span shows them
+(`src/route.ts`), where its addon is (`src/hosts/node-iroh.ts`).
 
 ## Contracts made from here
 

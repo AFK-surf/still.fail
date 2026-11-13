@@ -1,10 +1,11 @@
 // Messages between a UI and the core (protocol.rs, Protocol). The JSON is the Rust core's.
 import type { CoreError } from "./error.ts";
 import type { AnyOp } from "./collections.ts";
+import type { ClientId } from "./host-of.ts";
 import { isObject, toJson } from "./util.ts";
 
 /// One connected UI (a tab, a window).
-export type ClientId = number;
+export type { ClientId };
 /// Chosen by the UI; answers and subscription values carry it back.
 export type RequestId = number;
 

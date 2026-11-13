@@ -1,0 +1,5 @@
+{
+  "core-misc.wake.dropped": "页面回到前台，重新请求",
+  "core-misc.wake.gone": "页面回到前台，重新连接",
+  "core-misc.wake.network": "网络变了，重新连接"
+}

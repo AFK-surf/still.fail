@@ -3,7 +3,7 @@
 // a context across awaits on every host (the Rust core sets it around each poll), so here the context is current
 // around synchronous calls (`enter`) and is handed on explicitly to what runs later (`ctx` parameters).
 import { Effect } from "effect";
-import type { Host } from "./host.ts";
+import type { AnyHost } from "./host-of.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
 import { hex, toJsonBytes } from "./util.ts";
 
@@ -52,7 +52,7 @@ export type Export = (body: Uint8Array) => Effect.Effect<void, unknown>;
 export const service = { name: "stillfail-native", os: "macos" };
 
 export class Tracer {
-  readonly #host: Host;
+  readonly #host: AnyHost;
   readonly #runner: Runner;
   readonly #sample: number;
   #current: SpanContext | null = null;
@@ -65,7 +65,7 @@ export class Tracer {
   /// update changed from what older builds still running do.
   #version = "";
 
-  constructor(host: Host, runner: Runner, sample: number) {
+  constructor(host: AnyHost, runner: Runner, sample: number) {
     this.#host = host;
     this.#runner = runner;
     this.#sample = sample;
@@ -190,7 +190,7 @@ export class Tracer {
 export class Span {
   context: SpanContext;
   readonly #tracer: Tracer;
-  readonly host: Host;
+  readonly host: AnyHost;
   readonly #parent: Uint8Array | null;
   readonly #name: string;
   readonly #kind: Kind;
@@ -200,7 +200,7 @@ export class Span {
   #ended = false;
   #quiet = false;
 
-  constructor(tracer: Tracer, host: Host, context: SpanContext, parent: Uint8Array | null, name: string, kind: Kind, startMs: number) {
+  constructor(tracer: Tracer, host: AnyHost, context: SpanContext, parent: Uint8Array | null, name: string, kind: Kind, startMs: number) {
     this.#tracer = tracer;
     this.host = host;
     this.context = context;
@@ -267,19 +267,20 @@ function attribute(key: string, value: unknown): unknown {
   return { key, value: v };
 }
 
-const COLLECTIONS = ["sessions", "threads", "connects", "profiles", "logins", "workspaces", "stations", "members", "enrollments", "accounts"];
-
-/// A request path as a span shows it: no query, and ids as `:id`.
-export function route(path: string): string {
-  const p = path.split(/[?#]/)[0]!;
-  let afterCollection = false;
-  return p
-    .split("/")
-    .map((segment) => {
-      const word = segment !== "" && segment.length <= 24 && /^[a-z0-9\-_.]+$/.test(segment) && /[a-z]/.test(segment);
-      const id = segment !== "" && (afterCollection || !word);
-      afterCollection = !id && COLLECTIONS.includes(segment);
-      return id ? ":id" : segment;
-    })
-    .join("/");
+/// A request path as a span shows it: no query, and ids as `:id`: what follows one of `collections` (the names an
+/// API's paths give what they list: `/stations/<id>`), and whatever is no plain word.
+export function routeBy(collections: readonly string[]): (path: string) => string {
+  return (path) => {
+    const p = path.split(/[?#]/)[0]!;
+    let afterCollection = false;
+    return p
+      .split("/")
+      .map((segment) => {
+        const word = segment !== "" && segment.length <= 24 && /^[a-z0-9\-_.]+$/.test(segment) && /[a-z]/.test(segment);
+        const id = segment !== "" && (afterCollection || !word);
+        afterCollection = !id && collections.includes(segment);
+        return id ? ":id" : segment;
+      })
+      .join("/");
+  };
 }

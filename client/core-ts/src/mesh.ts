@@ -19,8 +19,8 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { dialLine, record, recordDht, recording, said, stationTag } from "./record.ts";
 import { Cause, Clock, Deferred, Effect, Exit, Fiber, Semaphore } from "effect";
 import { CoreError, asCoreError, failedIn } from "./error.ts";
-import type { Host, Pull } from "./host.ts";
-import { t } from "./i18n.ts";
+import type { AnyHost, Pull } from "./host-of.ts";
+import { t } from "./lang.ts";
 import type { CloseReason, Iroh, IrohConnection, IrohEndpoint, IrohStream } from "./iroh.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
 import { Kind, type SpanContext, type Tracer } from "./trace.ts";
@@ -693,7 +693,7 @@ type Hedge = { serial: number; credentials: CredentialSource; tx: Deferred.Defer
 /// `refusal`: what a peer's refusal of a link's first line is, by its answer as parsed (an object with `error`) and
 /// the reason it gave, where it refuses for something else than the credential (the still.fail core's: a workspace's
 /// lock, station/mesh-wire.ts); none, or null: the credential refused (`credential_refused`).
-export type MeshEnv = { host: Host; runner: Runner; tracer: Tracer; iroh: Iroh; wakes: Wakes; takes?: Uint8Array[]; incoming?: (connection: IrohConnection, alpn: Uint8Array) => void; refusal?: (answer: J, reason: string) => CoreError | null };
+export type MeshEnv = { host: AnyHost; runner: Runner; tracer: Tracer; iroh: Iroh; wakes: Wakes; takes?: Uint8Array[]; incoming?: (connection: IrohConnection, alpn: Uint8Array) => void; refusal?: (answer: J, reason: string) => CoreError | null };
 
 /// The links are kept by station address (`"<workspace>/<station>"`, `endpointId`; a bare station id stands for
 /// itself): a station in two workspaces has a link in each, opened with that workspace's credential, renewed, dropped and

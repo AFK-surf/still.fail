@@ -19,6 +19,28 @@ export function localDay(ms: number, offsetMin: number): number {
   return Math.floor((ms + offsetMin * 60_000) / 86_400_000);
 }
 
+export function remEuclid(a: number, b: number): number {
+  return ((a % b) + b) % b;
+}
+
+/// A local time's parts: [year, month 1–12, day, weekday 0 = Sunday, hour, minute].
+export function local(ms: number, offsetMin: number): [number, number, number, number, number, number] {
+  const at = ms + offsetMin * 60_000;
+  const days = Math.floor(at / 86_400_000);
+  const inDay = Math.trunc(Math.trunc(at - days * 86_400_000) / 60_000);
+  const z = days + 719_468;
+  const era = Math.floor(z / 146_097);
+  const doe = z - era * 146_097;
+  const yoe = Math.trunc((doe - Math.trunc(doe / 1460) + Math.trunc(doe / 36_524) - Math.trunc(doe / 146_096)) / 365);
+  const doy = doe - (365 * yoe + Math.trunc(yoe / 4) - Math.trunc(yoe / 100));
+  const mp = Math.trunc((5 * doy + 2) / 153);
+  const d = doy - Math.trunc((153 * mp + 2) / 5) + 1;
+  const m = mp < 10 ? mp + 3 : mp - 9;
+  const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
+  const weekday = remEuclid(days + 4, 7);
+  return [y, m, d, weekday, Math.trunc(inDay / 60), inDay % 60];
+}
+
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
