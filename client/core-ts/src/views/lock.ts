@@ -2540,9 +2540,14 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         break;
       }
       case "disable": {
-        // (where the chain moved: an `off` in the root's own log, by its person alone)
+        // (where the chain moved: an `off` in the root's own log, by its person alone; their own secrets opened first, as
+        // below, then `off` signed, which asks again: two asks there, for the person's own lock asks each time it is used
+        // and one ask for both needs the host to open two sealed values under one prompt, which it does not)
         if (movedHere(inner, c.workspace)) {
+          yield* offAllowed(inner, sub, c.workspace);
+          const secrets = yield* unsealOwn(inner, c.workspace, t("core-misc.lock.reason.disable"));
           result = yield* onOffMoved(inner, sub, c.workspace, false);
+          if (secrets.length > 0) inner.runner.fork(writePlain(inner, c.workspace, secrets));
           break;
         }
         // The person's own secrets opened while the lock still says whose they are ( 一个库): once it is
@@ -2725,7 +2730,7 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     const notAllowed = () => new CoreError("forbidden", t("core-misc.lock.notAllowed"));
     if (own === null || key === null || root === null || personal.standing(sub) !== "member") return yield* Effect.fail(lockMoved());
     // (on and off are said in the root's log alone: the rules count them nowhere else)
-    if (meant.some((m) => m.kind === "open" || m.kind === "off") && own !== root) return yield* Effect.fail(new CoreError("lock_root_only", "only the person who turned safe mode on turns it off or on again"));
+    if (meant.some((m) => m.kind === "open" || m.kind === "off") && own !== root) return yield* Effect.fail(rootOnly());
     const worked = (after: readonly Entry[]) => {
       const chains = new Map(logsOf(inner, ws, false));
       chains.set(own, after);
@@ -2754,6 +2759,18 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     const e = personal.entries(sub).at(-1);
     if (!done && e !== undefined && shown.act !== null) personal.notInEffect(sub, e, { ...shown, act: shown.act });
     return null;
+  });
+}
+
+const rootOnly = () => new CoreError("lock_root_only", "only the person who turned safe mode on turns it off or on again");
+
+/// Whether a moved workspace may be turned off here, before anyone is asked (its secrets opened, `sayMoved`): this
+/// device on its person's own lock, that person the root's.
+function offAllowed(inner: Inner, sub: string, ws: string): Effect.Effect<void, CoreError> {
+  return Effect.suspend(() => {
+    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    const own = inner.adb.personal().root(sub);
+    return own !== null && own === inForceOf(inner, ws).root ? Effect.void : Effect.fail(rootOnly());
   });
 }
 
