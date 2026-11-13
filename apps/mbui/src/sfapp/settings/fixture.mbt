@@ -626,6 +626,13 @@ pub fn fixture_page(mode : String) -> String {
       up("", "settings/profile/ws1/st1/cc", 0)
     }
     "settings-new-profile-login" => fx.new_login = true
+    // three stations online to add it on (Willow, Maple, Cedar): the add page's choice of them
+    // (desk_profile_wbtest.mbt's station pressed)
+    "settings-new-profile-stations" => {
+      fx.mba_online = true
+      fx.motion = 1
+      fx.names["st3"] = "Cedar"
+    }
     "settings-new-profile-login-station" => {
       fx.new_login = true
       fx.login_station = true
@@ -707,7 +714,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
-    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
+    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-stations" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
     "settings-connect-run" | "settings-connect-switch" | "settings-slack-app" => "connect:ws1/st1#k1"
     // the page of a connect of another kind, none of its sessions yet

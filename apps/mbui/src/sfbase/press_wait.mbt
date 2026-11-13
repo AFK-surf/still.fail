@@ -1,7 +1,8 @@
 // A press that waits for the core to open something: a row's menu, its swipe's question and its 归档 key waiting for
 // its chat's whole row (`chatRow`, whole_row.mbt), the chat page's "…" (sfpages' open_chat_menu), a new chat's model
 // panel waiting for its `pick` (sfpages' model_triple), an account's page waiting for what it shows
-// (account_open.mbt). The rule held here, once for all of them: such a press waits
+// (account_open.mbt), the add page's choice of station waiting for that station's flow (sfpages new_profile.mbt).
+// The rule held here, once for all of them: such a press waits
 // only while what it was pressed in stays as it was (the page on top's stay, Nav::top_stay: the page not left, the
 // workspace not switched; and nothing else put up by the presenters since, last_presented), and lets go of what it
 // asked when it stops waiting without opening anything. Once answered while it is so, it does what it waited for, in

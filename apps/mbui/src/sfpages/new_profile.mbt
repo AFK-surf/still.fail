@@ -15,10 +15,12 @@ pub let add_profile_start : Map[String, Array[(String, Json)]] = Map([])
 ///|
 /// A new profile (AddProfile) on station `address` (another online one where it is not: the first), made once in node
 /// `v`, laid out by the `width` its frame gives it, in the frame it is given: while the stations are read, the providers
-/// in their bones; none online to add it on, back to where it was opened from, at the moment it is made.
+/// in their bones; none online to add it on, back to where it was opened from, at the moment it is made. `src`: what
+/// its core is of (settings_core's), what another station's choice asks that station's flow of before it opens.
 pub fn new_profile_node(
   v : @view.View,
   core : Core,
+  src : Source,
   here : () -> Here,
   address : String,
   on_back~ : () -> Unit,
@@ -63,7 +65,7 @@ pub fn new_profile_node(
         p.at_moment(p.logic_at(), fn() { (core.pop)() }) |> ignore
         @sf.page_node(p, fn() { @sf.t("android-settings.profile.add") }, on_back~, frame~, said?, width?, tips?, fn() { [] }, fn(_, _) {  })
       }
-      st => new_profile_flow_node(p, core, here, st, online, on_back, frame, said, width, tips)
+      st => new_profile_flow_node(p, core, src, here, st, online, on_back, frame, said, width, tips)
     }
   })
 }
@@ -76,6 +78,7 @@ pub fn new_profile_node(
 fn new_profile_flow_node(
   v : @view.View,
   core : Core,
+  src : Source,
   here : () -> Here,
   station : String,
   online : () -> Array[Json]?,
@@ -181,7 +184,7 @@ fn new_profile_flow_node(
               None => ""
             }
           })
-        "stations" => new_profile_stations_node(b, station, online)
+        "stations" => new_profile_stations_node(b, core, src, station, online)
         "machine" =>
           machine_offers_node(
             b,
@@ -213,20 +216,60 @@ fn new_profile_flow_node(
 
 ///|
 /// Which station it is added on (its online ones, a choice each) in node `b`: another is another draft, its page in
-/// this one's place.
-fn new_profile_stations_node(b : @view.View, station : String, online : () -> Array[Json]?) -> Unit {
+/// this one's place. Pressed, that station's draft is opened and its flow asked (`src`), this page as it is meanwhile;
+/// its page comes in this one's place once the flow is answered, whole in the frame it comes, what was asked handed to
+/// it (sfbase's open_answered, press_wait: no page on its bones, no title, hint or providers coming in after it). The
+/// choice shows the station pressed from the press's frame; back to this one where the wait is given up (this page
+/// left, another pressed), that draft let go with it.
+fn new_profile_stations_node(b : @view.View, core : Core, src : Source, station : String, online : () -> Array[Json]?) -> Unit {
   let list = fn() { online().unwrap_or([]) }
+  // (the station pressed whose page is waited for, "" none; and what waits for it)
+  let pressed : @signals.Signal[String] = @signals.signal("")
+  let waiting : Ref[@sfbase.PressWait?] = Ref(None)
   b.box(fn(r) {
     @sf.style_node(r, fn() { ap_stations })
     @sf.labelled_field_node(r, fn() { @sf.t("web-pages.addProfile.station") }, fn(f) {
       @sf.page_choice_node(
         f,
         fn() { list().map(fn(s) { text(Some(s), "name") }) },
-        fn() { list().search_by(fn(s) { text(Some(s), "station") == station }).unwrap_or(0) },
+        fn() {
+          let at = match pressed.get() {
+            "" => station
+            p => p
+          }
+          list().search_by(fn(s) { text(Some(s), "station") == at }).unwrap_or(0)
+        },
         fn(i) {
-          match @signals.untracked(list).get(i) {
-            Some(s) if text(Some(s), "station") != station => app.nav.replace(Setting(NewProfile(text(Some(s), "station"))))
-            _ => ()
+          guard @signals.untracked(list).get(i) is Some(s) else { return }
+          let other = text(Some(s), "station")
+          guard other != pressed.untracked() else { return }
+          // (the one pressed before: waited for no more)
+          match waiting.val {
+            Some(w) => {
+              waiting.val = None
+              w.give_up()
+            }
+            None => ()
+          }
+          if other == station {
+            pressed.set("")
+            return
+          }
+          pressed.set(other)
+          let n = @settings.new_profile_opened(core, other, add_profile_start.get(other))
+          let w = @sfbase.open_answered(
+            src,
+            [("profileFlow", { "station": str(other), "form": str(n.form) })],
+            fn() { app.nav.replace(Setting(NewProfile(other))) },
+            let_go=fn() {
+              @settings.left(NewProfile(other))
+              if pressed.untracked() == other {
+                pressed.set("")
+              }
+            },
+          )
+          if w.waiting() {
+            waiting.val = Some(w)
           }
         },
       )
