@@ -40,8 +40,9 @@ fn activity_extreme_clock_positions(
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=if two_agents { 0 } else { platform })
   t.run_for(squeeze_opening)
   if two_agents {
-    let (x, y, _, h) = t.rect_of(before).unwrap()
-    t.move_to(x + 2.0, y + h / 2.0)
+    // (the pointer over the end of its line's words: the line found as it is read out, its words drawn elsewhere too)
+    let (x, y, w, h) = t.get(Button, label="Claude：" + before).rect
+    t.move_to(x + w - 2.0, y + h / 2.0)
     t.frame()
     assert_true(t.all(Button).iter().any(fn(s) { s.label == "停止 Claude" }), msg="the stop control is visible")
   }

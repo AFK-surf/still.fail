@@ -554,7 +554,8 @@ fn narrow_made_as(
                   col,
                   s,
                   r,
-                  tips=@sf.TipLayer::new(fn() { None }),
+                  // (its tips and hover cards over the page, in its node: an agent's card over its picture)
+                  tips=@sf.TipLayer::new(fn() { Some(v) }),
                   stint~,
                   shows~,
                   top=list_top,

@@ -1988,8 +1988,20 @@ pub fn Tester::visible(self : Tester) -> (Int, Int) {
 }
 
 ///|
+/// Whether the list is at its end: the old view's list where one is drawn, else the window's tree's page list made last
+/// (View::scrolls_window's, at its foot: Tree::lists_at_foot).
 pub fn Tester::at_end(self : Tester) -> Bool {
-  self.list_state().at_end
+  self.reads_own()
+  let c = g()
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_list && c.lists.get(c.nodes[i].id) is Some(_) {
+      return self.list_state().at_end
+    }
+  }
+  match view_tree().map(fn(tree) { tree.lists_at_foot() }) {
+    Some(feet) if feet.length() > 0 => feet[feet.length() - 1]
+    _ => self.list_state().at_end
+  }
 }
 
 ///|

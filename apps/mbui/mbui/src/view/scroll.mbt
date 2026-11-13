@@ -1392,6 +1392,21 @@ pub fn Tree::lists_reckoned(self : Tree) -> Array[(Double, Double, Double, Doubl
 }
 
 ///|
+/// Whether each page's list live now (Tree::lists_reckoned's, in the same order) is at its foot (Scroll::at_foot_now):
+/// what a test reads of a page's list being at its end, as what follows the newest reads it.
+pub fn Tree::lists_at_foot(self : Tree) -> Array[Bool] {
+  let ats = self.lists_scrolled.keys().to_array()
+  ats.sort()
+  ats.filter_map(fn(at) {
+    let n = self.nodes[at]
+    guard n.live && n.scroll_held >= 0 && n.scroll_held < self.nodes.length() && self.lists_scrolled.get(at) is Some(s) else {
+      return None
+    }
+    Some(s.at_foot_now())
+  })
+}
+
+///|
 /// Whether node `id` scrolls what it holds (View::scrolls), whether or not what it holds is taller than it now
 /// (Tree::scrolls_now): the same all the while it is one, as what it holds comes to fit in it or grows past it.
 pub fn Tree::is_scroller(self : Tree, id : NodeId) -> Bool {
