@@ -191,7 +191,7 @@ test "a switch waiting in rounds: each round asked as the one before is answered
     assert_eq(asked, [(1, 0), (1, 0), (if three { 1 } else { 0 }, 0)], msg="\{at}: asked once each, held")
     // (the page shown having read: what was handed let go, nobody reading it here)
     @sfbase.shown_read("rounds")
-    t.run_for(100.0)
+    t.run_for(rounds_late)
     assert_false(let_go.val, msg="\{at}: not given up")
   }
 }
@@ -217,7 +217,7 @@ test "a switch waiting in rounds, all of it answered already: switched in the pr
   assert_eq(switched.val, from, msg="answered already: switched in the press's event")
   assert_eq(rounds_asked(heard[from_heard:].to_owned()), [(0, 0), (0, 0), (0, 0)], msg="answered already: nothing asked anew")
   @sfbase.shown_read("rounds")
-  t.run_for(100.0)
+  t.run_for(rounds_late)
   held.each(fn(l) { l.release() })
 }
 
