@@ -279,6 +279,33 @@ test("a station whose home is locked joins locked workspaces only; each one's lo
   }
 });
 
+test("a workspace whose lock moved, on or off by what its root's log says (never here): joined as a locked one, joined from as the home with no refusal of the cloud's guess", async () => {
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    const [moved, open, locked] = [await create(alice, "M"), await create(alice, "O"), await create(alice, "L")];
+    const p = await key(), q = await key(), r = await key();
+    const s = signer("alice");
+    const genesis = await s.genesis(moved);
+    // (handed over: the chain's last entry is `moved` for good; whether it is on is said in the root's log alone)
+    assert.equal((await alice("POST", `/v1/workspaces/${moved}/lock`, { entries: [genesis, await s.entry(moved, genesis, "moved", { root: "ab".repeat(32) })] })).status, 200);
+    assert.equal((await alice("POST", `/v1/workspaces/${locked}/lock`, { entries: [await signer("alice").genesis(locked)] })).status, 200);
+    assert.equal((await enroll(h, p, await token(alice, moved, "p"))).status, 200);
+    assert.equal((await enroll(h, q, await token(alice, open, "q"))).status, 200);
+    assert.equal((await enroll(h, r, await token(alice, locked, "r"))).status, 200);
+    // Its home moved: it joins an unlocked workspace as far as the cloud goes (the station's check on the machine, and
+    // what it takes there, go by its home's state).
+    assert.equal((await enroll(h, p, await token(alice, open, "p"), true, { locks: true })).status, 200);
+    // Into it: as into a locked one, by a station that pins it only.
+    assert.deepEqual(Object.values(await enroll(h, q, await token(alice, moved, "q"), true)), [409, { error: "locked_workspace" }]);
+    assert.equal((await enroll(h, q, await token(alice, moved, "q"), true, { locks: true })).status, 200);
+    assert.equal((await enroll(h, r, await token(alice, moved, "r"), true, { locks: true })).status, 200);
+    assert.deepEqual([await count(alice, moved), await count(alice, open), await count(alice, locked)], [3, 2, 1]);
+  } finally {
+    await h.close();
+  }
+});
+
 /** Signed as a station signs what it sends (notices, reports): over the body's digest, tagged. */
 async function signed(h: Harness, station: Station, path: string, tag: string, value: unknown) {
   const body = JSON.stringify(value);

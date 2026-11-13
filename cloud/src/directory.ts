@@ -873,6 +873,14 @@ export class Directory extends DurableObject<Env> {
     return last !== undefined && (JSON.parse(last.entry as string) as LockEntry).kind !== "disable";
   }
 
+  /** Whether a workspace's chain moved to its people's logs (`moved {root}`, its last entry for good): whether it is on
+   * is said there, never here, and `#locked` stays true. */
+  #moved(workspace: string): boolean {
+    this.#lockChecked(workspace);
+    const last = this.#one("SELECT entry FROM lock_entries WHERE workspace = ? ORDER BY seq DESC LIMIT 1", workspace);
+    return last !== undefined && (JSON.parse(last.entry as string) as LockEntry).kind === "moved";
+  }
+
   /** The entries after `after` of a chain of the workspace's turned off (its genesis' hash), none if none is kept. */
   #lockTurnedOff(workspace: string, genesis: string, after: number): unknown[] {
     return this.#rows("SELECT entry FROM lock_turned_off WHERE workspace = ? AND genesis = ? AND seq > ? ORDER BY seq", workspace, genesis, after).map((r) => JSON.parse(r.entry as string));
@@ -1339,7 +1347,11 @@ export class Directory extends DurableObject<Env> {
     if (join && this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND rig = 1", station)) fail(409, "rig_enrollment");
     const member = was.includes(workspace);
     // Across a lock: a locked home into an unlocked workspace; or into a locked one, by a station that would not pin it.
-    if (join && !member && was.length > 0 && (this.#locked(was[0]!) ? !this.#locked(workspace) : this.#locked(workspace) && !locks)) fail(409, "locked_workspace");
+    // A chain moved is on or off by its root's log, which this cloud never reads: into one as into a locked one; out
+    // of one as the home, no refusal on a guess (the asker's own check comes first, the station's own after: it takes
+    // no members of a workspace that is off while its home is on, station/src/cloud/state.ts `leftOut`).
+    const homeOn = was.length > 0 && this.#locked(was[0]!) && !this.#moved(was[0]!);
+    if (join && !member && was.length > 0 && (homeOn ? !this.#locked(workspace) : this.#locked(workspace) && !locks)) fail(409, "locked_workspace");
     // Several tokens may be out at once: the last free place goes to the first redeemed.
     if (!member && this.#stationsFull(workspace)) fail(429, "too_many_stations");
     const left = join ? [] : was.filter((w) => w !== workspace);

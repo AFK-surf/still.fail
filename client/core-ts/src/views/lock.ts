@@ -485,8 +485,46 @@ export function inForceOf(inner: Inner, ws: string, entries: readonly Entry[] = 
   p.force = { entries, logs, bodies, own, listed, ...goodFor(chains.values(), at), made };
   // (the vaults follow the state as it is made anew, whatever made it so: a person's log, a body, the clock; in a turn
   // of their own, never on the read that made it, views/vault.ts vaultCome)
-  if (entries === held(inner, ws)?.entries) inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
+  if (entries === held(inner, ws)?.entries) inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => (keepSafe(inner, ws), vaultCome(inner, ws))))));
   return made;
+}
+
+/// Whether `ws` is in safe mode, by the lock this device holds there: a chain not turned off, as folded, or, moved, the
+/// state in force (`off` out; waiting in, since it lets nobody in). Only where it holds none on (none, or a chain
+/// turned off, which a lock begun anew would not be) the workspace's view's `locked`, the cloud's word: of a moved chain
+/// the cloud keeps only the chain, whose last entry is `moved` for good, and says it locked whether its root's log
+/// turned it off or not. What the lock held says is kept small beside it (`lockSafe`, `keepSafe`), so a reader of it
+/// (添加 station's `joinable`, for every workspace of the person's) reads a few bytes, never the chain, its logs or
+/// bodies (topic-work.test.ts); read here only while none is kept yet (a database from before), and kept then.
+export function safeMode(inner: Inner, ws: string): boolean {
+  const k = inner.data.record(SAFE, ws);
+  let on: boolean | null;
+  if (isObject(k) && (typeof k.on === "boolean" || k.on === null)) on = k.on as boolean | null;
+  else {
+    on = safeHeld(inner, ws);
+    inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => keepSafe(inner, ws)))));
+  }
+  return on ?? get(view(inner, ws), "locked") === true;
+}
+
+const SAFE = "lockSafe";
+
+/// Whether `ws` is in safe mode by the lock held (null: none held on, the view's word then).
+function safeHeld(inner: Inner, ws: string): boolean | null {
+  const h = held(inner, ws);
+  if (h?.head && movedHere(inner, ws)) return inForceOf(inner, ws, h.entries).said !== "off";
+  if (h?.head && !fold(h.entries).disabled) return true;
+  return null;
+}
+
+/// `safeHeld` kept beside the lock (`lockSafe`, a record of its own in the workspace's): made again as the lock is held
+/// (`hold`), as the state in force is made anew of what is held (`inForceOf`: a log, a body, this person's own log, the
+/// clock), and as a refusal brings logs and bodies (`heardOut`); written only where it changed.
+function keepSafe(inner: Inner, ws: string): void {
+  const on = safeHeld(inner, ws);
+  const k = inner.data.record(SAFE, ws);
+  if (isObject(k) && k.on === on) return;
+  inner.data.put(SAFE, ws, { on });
 }
 
 /// A workspace's name as the person knows it: as its view says, else as the account's list does.
@@ -1037,8 +1075,8 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
     // The lock held names no station (the last taken out): no station's read will ever bring what is pending, so it is
     // brought now, the cloud's way (`Lock.deliver`).
     if (head !== null && fold(now.entries).stations.size === 0 && !fold(now.entries).disabled) deliver(inner, ws);
-    // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
-    inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
+    // checked as it comes, in a turn of its own (views/vault.ts vaultCome), whether it is in safe mode kept (`keepSafe`)
+    inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => (keepSafe(inner, ws), vaultCome(inner, ws))))));
     // (where the chain moved, what is in force changes with the logs and bodies too, its head as it was)
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null) || (made && movedRoot(now.entries) !== null)) moved(inner, ws);
     // This device's own entries the chain held went off (kept aside, a read having moved it to another branch): each
@@ -1166,7 +1204,10 @@ function heardOut(inner: Inner, ws: string, raw: unknown): void {
   if (!isObject(raw) || !movedHere(inner, ws)) return;
   const logs = keepLogs(inner, ws, arr(raw.logs));
   const bodies = keepBodies(inner, ws, arr(raw.bodies));
-  if (logs || bodies) touch(inner, ws);
+  if (logs || bodies) {
+    touch(inner, ws);
+    keepSafe(inner, ws);
+  }
 }
 
 /// Whom to ask, as a station's refusal says this device is left out of moved workspace `ws` (its `left`, the base ids

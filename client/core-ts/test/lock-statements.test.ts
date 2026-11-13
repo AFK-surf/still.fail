@@ -20,6 +20,7 @@ import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, entryHash, next } from "../src/lock.ts";
 import { bodyHash, wsTag } from "../src/lock-moved.ts";
 import { held, inForceOf, read, roster } from "../src/views/lock.ts";
+import { joinable } from "../src/views/memberships.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { HostWire } from "../src/station/wire.ts";
@@ -264,6 +265,31 @@ test("off and on again by the root's person; another owner refused with lock_roo
   assert.equal((refused.error as { code?: string } | undefined)?.code, "lock_root_only");
   assert.equal(o.asked(), before, "nobody asked");
   assert.deepEqual(o.said(), [], "nothing signed");
+});
+
+test("添加 station goes by the lock held, not the workspace's view: moved and on, in safe mode though the view says nothing; off, out of it though the view says locked", async () => {
+  const w = await setUp();
+  // (the view as a cloud of today has it after a handover: `locked` for good, the chain's last entry being `moved`)
+  const viewSays = (locked: boolean) => w.inner.data.update({ topic: "workspace", workspace: "ws" }, (v: any) => {
+    const { locked: _, ...rest } = v;
+    return locked ? { ...rest, locked: true } : rest;
+  });
+  // (the account's list naming s1 an owner of both, as the cloud's does: who may add a station there)
+  for (const a of w.inner.accounts.list()) {
+    const me = w.inner.data.record("me", a.sub) as { workspaces: object[] };
+    w.inner.data.put("me", a.sub, { ...me, workspaces: me.workspaces.map((x) => ({ ...x, role: "owner" })) });
+  }
+  // ws's stations offered to w2 (no lock held there, its view saying none): to be picked only while ws is not in safe mode
+  const needsLock = () => (joinable(w.inner, "w2").items as { id: string; needsLock?: boolean }[]).filter((s) => s.id === A || s.id === C).map((s) => s.needsLock === true);
+  viewSays(false);
+  assert.deepEqual(needsLock(), [true, true], "on: they need w2 in safe mode");
+  const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(off.error, undefined, off.error?.message);
+  assert.equal(inForceOf(w.inner, "ws").said, "off");
+  viewSays(true);
+  // (what the lock held says kept beside it in a turn of its own, as the state is made anew)
+  await w.r.host.time.pass(100);
+  assert.deepEqual(needsLock(), [false, false], "off: to be picked");
 });
 
 test("an act that would have no effect (a member taking an admin out) is refused before the person is asked", async () => {

@@ -71,14 +71,17 @@ export function isRig(data: string): boolean {
 /// workspace's. What it joined. `atMachine`: asked on this machine (the command line), whose person may set aside a lock
 /// kept here for that workspace by naming another (nameJoinedLock); asked over the mesh, where who asks is the control
 /// plane's word unless the home is locked, a kept lock not holding `lock` stays and the join throws KeptLock once done.
-export async function joinWorkspace(data: string, token: string, lock?: string, { atMachine = false } = {}): Promise<{ workspace: string; workspace_name: string; name: string }> {
+export async function joinWorkspace(data: string, token: string, lock?: string, { atMachine = false, cloud }: { atMachine?: boolean; cloud?: Cloud } = {}): Promise<{ workspace: string; workspace_name: string; name: string }> {
   const state = readState(data);
   if (state === null || !state.workspace || state.removed_at !== undefined) throw new Error("this station is in no workspace: enroll it first");
   if (state.rig !== undefined) throw new Error(tr(stationLang(), "station.cli.rig.isRig", { workspace: state.workspace_name || state.workspace }));
   // A locked station joins locked workspaces only: an unlocked one's members are the control plane's word, which its
   // home's lock took away. Which lock to pin is the joining device's word (`lock`, the head it has), as `enroll --lock`.
+  // A home whose chain moved is locked as its root's log says now (off or on: Cloud.locked), never as the chain alone
+  // (`cloud`: the running station's, asked over the mesh; else this machine's files read here).
   const home = readLock(data);
-  if (home !== null && !home.state?.disabled && lock === undefined) throw new Error("this station's workspace is locked: it joins only a workspace with a lock of its own");
+  const on = home !== null && !home.state?.disabled && (home.state?.moved === undefined || (cloud ?? new Cloud(data, false)).locked() !== null);
+  if (on && lock === undefined) throw new Error("this station's workspace is locked: it joins only a workspace with a lock of its own");
   const provider = state.provider ?? "stillfail";
   const body = await redeem(data, state.origin, token, provider, specOf(provider).joinPath);
   const text = (k: string) => (typeof body[k] === "string" ? body[k] : "");
