@@ -441,7 +441,7 @@ pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
-      "agy" => "gemini"
+      "agy" => "agy"
       _ => "openai"
     }
   }

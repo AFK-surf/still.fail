@@ -78,6 +78,29 @@ function optionOf(options: J[], m: string | null): J {
   return options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
 }
 
+/// Legacy Antigravity ACP tiered model IDs (`gemini-4-carbon-high`, `claude-opus-5-5-medium`, `gpt-oss-120b-medium`)
+/// matched against a normalized station's base `agy` options when the tiered ID itself is no longer listed.
+function matchTiered(options: J[], m: string | null): { entry: J; effort: string } | null {
+  if (m === null || m === "") return null;
+  if (optionOf(options, m) !== undefined) return null;
+  const split = model.splitAgyTier(m);
+  if (split === null) return null;
+  const entry = optionOf(options, split.model) ?? options.find((o) => typeof o.model === "string" && model.same(o.model, split.model));
+  if (entry === undefined || !arr(entry.runtimes).includes("agy")) return null;
+  return { entry, effort: split.effort };
+}
+
+function normalizeTieredValue(options: J[], value: J): void {
+  if (value.runtime !== "agy" || typeof value.model !== "string") return;
+  const tiered = matchTiered(options, value.model);
+  if (tiered === null) return;
+  value.model = tiered.entry.model;
+  if (value.effort === null) {
+    const levels = arr(get(get(tiered.entry, "efforts"), "agy"));
+    if (levels.includes(tiered.effort)) value.effort = tiered.effort;
+  }
+}
+
 /// The runtimes a chat can be set to Fast on (Codex on an OpenAI subscription, Claude Code on an Anthropic key: the
 /// station's takesFast); the accounts that take it say so with their overview's `fast`.
 const fastRuntime = (runtime: unknown): boolean => runtime === "codex" || runtime === "claude";
@@ -105,7 +128,10 @@ function resolveAccounts(accounts: J[], asked: string[], multi: boolean): { prof
 export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; context: number | null; profile: string | null; profiles: string[] | null; efforts: J[]; contexts: number[]; accounts: J[] };
 
 export function resolve(options: J[], choice: J, subsets = true): Resolved {
-  const entry = optionOf(options, typeof get(choice, "model") === "string" ? choice.model : null) ?? options[0];
+  const rawModel = typeof get(choice, "model") === "string" ? choice.model : null;
+  const rawRt = get(choice, "runtime");
+  const tiered = rawRt === "agy" || rawRt === undefined || rawRt === "" || rawRt === null ? matchTiered(options, rawModel) : null;
+  const entry = (tiered !== null ? tiered.entry : optionOf(options, rawModel)) ?? options[0];
   const runtimes = entry !== undefined ? arr(entry.runtimes) : [];
   const rt = runtimes.find((r) => equal(r, get(choice, "runtime"))) ?? runtimes[0];
   const runtime = typeof rt === "string" ? rt : null;
@@ -125,7 +151,7 @@ export function resolve(options: J[], choice: J, subsets = true): Resolved {
     const subset = accounts.filter((a) => profiles.includes(a.id));
     if (subset.length > 0) efforts = subsetEfforts(subset, runtime);
   }
-  const e = text(get(choice, "effort"));
+  const e = text(get(choice, "effort")) ?? (tiered !== null && runtime === "agy" ? tiered.effort : null);
   const effort = e !== null && efforts.some((x) => x === e) ? e : null;
   const fast = typeof get(choice, "fast") === "boolean" && fastRuntime(runtime) ? choice.fast : null;
   const contexts = at("contexts").filter((n): n is number => typeof n === "number");
@@ -220,7 +246,7 @@ export function recordCombo(history: J[], choice: J, now: number): J[] {
 /// exact, still runnable ones are offered: never silently change a remembered depth, runtime or context; one only
 /// another station has (borrowable) is left out. `fixed`: the runtime the control cannot leave, only its own offered
 /// and none said by it. `selected`: `current` is exactly it.
-export function frequentCombos(history: J[], options: J[], current: Resolved, fixed: string | null = null): J[] {
+export function frequentCombos(history: J[], options: J[], current: Resolved, fixed: string | null = null, showRuntime = false): J[] {
   const sorted = [...history].sort(
     (a, b) => (typeof b.count === "number" ? b.count : -1) - (typeof a.count === "number" ? a.count : -1) || (typeof b.last === "number" ? b.last : 0) - (typeof a.last === "number" ? a.last : 0),
   );
@@ -228,12 +254,16 @@ export function frequentCombos(history: J[], options: J[], current: Resolved, fi
   const out: J[] = [];
   for (const v of sorted) {
     if (out.length >= NEAR) break;
-    const entry = optionOf(options, typeof get(v, "model") === "string" ? v.model : null);
-    if (entry === undefined || entry.availability === "borrowable") continue;
+    const rawModel = typeof get(v, "model") === "string" ? v.model : null;
     const runtime = get(v, "runtime");
+    const tiered = runtime === "agy" ? matchTiered(options, rawModel) : null;
+    const entry = tiered !== null ? tiered.entry : optionOf(options, rawModel);
+    if (entry === undefined || entry.availability === "borrowable") continue;
     if (typeof runtime !== "string" || !arr(entry.runtimes).some((r) => r === runtime)) continue;
     if (fixed !== null && runtime !== fixed) continue;
-    const effort = text(get(v, "effort"));
+    const effort =
+      text(get(v, "effort")) ??
+      (tiered !== null && arr(get(get(entry, "efforts"), "agy")).includes(tiered.effort) ? tiered.effort : null);
     const fast = comboFast(v);
     const context = contextOf(get(v, "context"));
     const r = resolve(options, { model: entry.model, runtime, effort, fast, context, profile: current.profile, profiles: current.profiles });
@@ -251,9 +281,10 @@ export function frequentCombos(history: J[], options: J[], current: Resolved, fi
     const speedText = fast === null ? null : fast ? "Fast" : t("core-logic.choose.speed.standard");
     const baseLabel = runtimeText === null ? `${name} · ${effortText}` : `${name} · ${runtimeText} · ${effortText}`;
     const label = speedText === null ? baseLabel : `${baseLabel} · ${speedText}`;
-    // how it runs in words, after its name: the runtime where it can be another (its short name, format.runtimeShort),
-    // the effort, the speed, the context
-    const parts = [fixed === null && runtimeText !== null ? format.runtimeShort(runtime) : null, effortText, speedText, context === null ? null : format.compactNumber(context)].filter((x): x is string => x !== null);
+    // how it runs in words, after its name: the runtime where it can be another or the station runs several (its short
+    // name, format.runtimeShort), the effort, the speed, the context
+    const runtimeShown = arr(entry.runtimes).length > 1 || (showRuntime && fixed === null);
+    const parts = [fixed === null && runtimeShown ? format.runtimeShort(runtime) : null, effortText, speedText, context === null ? null : format.compactNumber(context)].filter((x): x is string => x !== null);
     const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort && current.fast === fast && current.context === context;
     out.push({ model: m, runtime, effort, fast, context, ...(speedText === null ? {} : { speedText }), label, text: parts.join(" · "), name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
   }
@@ -480,7 +511,15 @@ export class Choose implements Owner {
     if (overview === undefined) return null;
     const r = resolve(options, this.#choice(ofAddress(station), stationId(station)), get(overview, "accountSubsets") === true);
     const value = picked(r);
-    return { value, valueOption: r.entry, efforts: r.efforts, account: named(value, r.entry, null, true).account, fastText: runsFast(overview, value, null) ? "Fast" : null };
+    const multiRuntime = new Set(options.flatMap((o) => arr(o.runtimes))).size > 1;
+    return {
+      value,
+      valueOption: r.entry,
+      efforts: r.efforts,
+      account: named(value, r.entry, null, true).account,
+      fastText: runsFast(overview, value, null) ? "Fast" : null,
+      ...(multiRuntime ? { showRuntime: true } : {}),
+    };
   }
 
   /// Whether another station of `scope` up now would lend station `here` a model (views/models.ts `lends`): a yes or no
@@ -684,7 +723,9 @@ export class Choose implements Owner {
         const bProfiles = normProfiles(get(bind, "profiles"));
         const bProfile = bProfiles !== null && bProfiles.length === 1 ? bProfiles[0]! : text(get(bind, "profile"));
         const bMulti = bProfile === null && bProfiles !== null && bProfiles.length > 1 ? bProfiles : null;
-        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: bProfile, ...(bMulti !== null ? { profiles: bMulti } : {}) }, null, !switchable, false, 0];
+        const value: J = { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: bProfile, ...(bMulti !== null ? { profiles: bMulti } : {}) };
+        normalizeTieredValue(options, value);
+        return [options, value, null, !switchable, false, 0];
       }
       case "session": {
         const agent = this.#env.agent(station, o.key);
@@ -694,7 +735,7 @@ export class Choose implements Owner {
         const pinned = get(s, "profilePinned") === true;
         const sProfile = pinned ? text(get(s, "profile")) : sProfiles !== null && sProfiles.length === 1 ? sProfiles[0]! : null;
         const sMulti = sProfile === null && sProfiles !== null && sProfiles.length > 1 ? sProfiles : null;
-        const value = {
+        const value: J = {
           model: text(get(s, "model")),
           runtime: get(s, "runtime") ?? null,
           effort: text(get(s, "effort")),
@@ -709,7 +750,9 @@ export class Choose implements Owner {
         const scope = ofAddress(station);
         const stationView = arr(this.#env.store.get({ topic: "stations", scope })).find((s) => s.id === stationId(station));
         const available = servingIn(ov, scope, get(stationView, "joined") === true);
-        return [switchable ? models(available, now) : arr(agent.choices), value, current, !switchable, false, arr(agent.profiles).length];
+        const list = switchable ? models(available, now) : arr(agent.choices);
+        normalizeTieredValue(list, value);
+        return [list, value, current, !switchable, false, arr(agent.profiles).length];
       }
     }
   }
@@ -901,7 +944,15 @@ export class Choose implements Owner {
     // drafted now).
     const scope = ofAddress(station);
     const history = arr(this.#record(`ws:${scope}:frequent`));
-    const likedKeys = this.#liked(scope, station);
+    const rawLikedKeys = this.#liked(scope, station);
+    const optionKeys = new Set(options.map((opt: J) => model.key(String(opt.model ?? ""))));
+    const agyOptionKeys = new Set(options.filter((opt: J) => arr(opt.runtimes).includes("agy")).map((opt: J) => model.key(String(opt.model ?? ""))));
+    const likedKeys: string[] = [];
+    for (const k of rawLikedKeys) {
+      const split = !optionKeys.has(k) ? model.splitAgyTier(k) : null;
+      const nk = split !== null && agyOptionKeys.has(model.key(split.model)) ? model.key(split.model) : k;
+      if (!likedKeys.includes(nk)) likedKeys.push(nk);
+    }
     const hand = this.#hand.get(topicKey(topic));
     // What a model never run here takes of what was set by hand in the panel: a runtime among those it runs on, how
     // hard it thinks among that runtime's levels, how fast and how much context where that runtime has them; none,
@@ -922,17 +973,28 @@ export class Choose implements Owner {
       };
       return took.runtime === null && took.effort === null && took.fast === null && took.context === null ? undefined : took;
     };
+    const multiRuntime = !fixed && new Set(options.flatMap((opt: J) => arr(opt.runtimes))).size > 1;
     work.annotated += options.length;
     const annotated = options.map((opt: J) => {
       const id = typeof opt.model === "string" ? opt.model : "";
       const ran = id === m ? { runtime: on ?? null, effort, fast, context } : (this.#usual(scope, id, history) ?? byHand(opt));
       const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast, context: ran.context });
+      const rts = arr(opt.runtimes);
       const parts: string[] = [];
       if (r !== null) {
-        if (!fixed && arr(opt.runtimes).length > 1 && r.runtime !== null) parts.push(format.runtimeShort(r.runtime));
+        if (!fixed && rts.length > 1 && r.runtime !== null) {
+          const other = rts.find((x) => x !== r.runtime);
+          parts.push(rts.length === 2 && typeof other === "string" ? `${format.runtimeShort(r.runtime)} / ${format.runtimeShort(other)}` : `${format.runtimeShort(r.runtime)} +${rts.length - 1}`);
+        } else if (multiRuntime && r.runtime !== null) {
+          parts.push(format.runtimeShort(r.runtime));
+        }
         if (r.effort !== null) parts.push(format.effortLabel(r.effort));
         if (r.fast === true) parts.push("Fast");
         if (r.context !== null && (o.kind === "new" || o.kind === "session")) parts.push(format.compactNumber(r.context));
+      } else if (!fixed && rts.length > 1) {
+        parts.push(rts.map((rt) => format.runtimeShort(String(rt))).join(" · "));
+      } else if (multiRuntime && rts.length === 1) {
+        parts.push(format.runtimeShort(String(rts[0])));
       }
       const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" ? r.context : null };
       return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, liked: likedKeys.includes(model.key(id)) };
@@ -944,7 +1006,7 @@ export class Choose implements Owner {
     // not. Then every model, by its maker (`makers`).
     const draftNow: Resolved = { entry: option ?? null, runtime: typeof on === "string" ? on : null, effort, fast, context, profile, profiles, efforts, contexts, accounts };
     const combos = o.kind === "new" || o.kind === "session"
-      ? frequentCombos(history, options, draftNow, fixed && typeof value.runtime === "string" ? value.runtime : null).map((c: J) => ({
+      ? frequentCombos(history, options, draftNow, fixed && typeof value.runtime === "string" ? value.runtime : null, multiRuntime).map((c: J) => ({
           model: c.model,
           runtime: c.runtime,
           effort: c.effort,
@@ -976,6 +1038,7 @@ export class Choose implements Owner {
         liked,
         makers,
         runtimeFixed: fixed,
+        ...(multiRuntime ? { showRuntime: true } : {}),
         value,
         valueOption: valueOption ?? null,
         account: accountView,
@@ -1048,7 +1111,11 @@ export class Choose implements Owner {
     if (m === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
     const scope = ofAddress(station);
     const key = model.key(m);
-    const now = this.#liked(scope, station).filter((k) => k !== key);
+    const now = this.#liked(scope, station).filter((k) => {
+      if (k === key) return false;
+      const split = model.splitAgyTier(k);
+      return split === null || model.key(split.model) !== key;
+    });
     if (liked) now.push(key);
     this.#env.data.put(TABLE, `ws:${scope}:liked`, now, false);
     this.#changed();
@@ -1062,7 +1129,16 @@ export class Choose implements Owner {
     if (text(get(choice, "model")) === null) throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
     const key = `ws:${ofAddress(station)}:frequent`;
     const history = arr(this.#record(key));
-    const left = history.filter((v) => !sameCombo(v, choice));
+    const overview = this.#env.store.get({ topic: "overview", station });
+    const opts = overview !== undefined ? models(overview, this.#env.now()) : [];
+    const normEntry = (v: J): J => {
+      if (get(v, "runtime") !== "agy" || typeof get(v, "model") !== "string") return v;
+      const tiered = matchTiered(opts, v.model);
+      if (tiered === null) return v;
+      const eff = text(get(v, "effort")) ?? (arr(get(get(tiered.entry, "efforts"), "agy")).includes(tiered.effort) ? tiered.effort : null);
+      return { ...v, model: tiered.entry.model, effort: eff };
+    };
+    const left = history.filter((v) => !sameCombo(v, choice) && !sameCombo(normEntry(v), choice));
     if (left.length === history.length) return;
     this.#env.data.put(TABLE, key, left, false);
     this.#changed();
@@ -1099,11 +1175,17 @@ export class Choose implements Owner {
 
   /// What model `model` last ran with here (`ws:<scope>:usual:<model>`, kept as it is saved and as a new chat starts on
   /// it), else as the newest new chat on it started; none, never used here.
-  #usual(scope: string, model: string, history: J[]): J {
-    const kept = this.#record(`ws:${scope}:usual:${model}`);
+  #usual(scope: string, m: string, history: J[]): J {
+    const kept = this.#record(`ws:${scope}:usual:${m}`);
     if (isObject(kept)) return kept;
     let newest: J;
-    for (const h of history) if (get(h, "model") === model && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) newest = h;
+    for (const h of history) {
+      const hm = get(h, "model");
+      const split = get(h, "runtime") === "agy" && typeof hm === "string" && hm !== m ? model.splitAgyTier(hm) : null;
+      if ((hm === m || (split !== null && split.model === m)) && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) {
+        newest = split !== null && text(get(h, "effort")) === null ? { ...h, effort: split.effort } : h;
+      }
+    }
     return newest === undefined ? undefined : { runtime: newest.runtime ?? null, effort: text(newest.effort), fast: comboFast(newest), context: null };
   }
 

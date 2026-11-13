@@ -18,6 +18,7 @@
 //   (kimi.ts).
 import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
 import { agyAccountFile, agyEmailIn, agyToken, classifyFailure as agyClassifyFailure } from "../agents/agy.ts";
+import { expandDevinFusion } from "../agents/devin.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { createHash, randomBytes } from "node:crypto";
@@ -120,7 +121,7 @@ export type AccountsDeps = {
   /// Hermes reports its configured providers and model IDs in ACP session/new (no model turn).
   hermes?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// The Antigravity CLI says whether it is signed in, and the models it offers, in ACP session/new (no model turn).
-  agy?: () => { models(profile: Profile): Promise<string[]> } | undefined;
+  agy?: () => { models(profile: Profile): Promise<string[]>; catalog?(profile: Profile): Promise<{ models: string[]; efforts: Record<string, string[]>; defaults: Record<string, string> }> } | undefined;
   /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
@@ -993,7 +994,10 @@ export class Accounts {
   /// (`outdatedUnchecked`), so one checked again by hand stays. Worked out at the start and again as a check finds other
   /// models (a newer one offered, an old one gone).
   private uncheckOutdated() {
-    const found = (id: string) => this.checks.get(id)?.models ?? null;
+    const found = (id: string) => {
+      const c = this.checks.get(id);
+      return c?.models ? [...c.models, ...expandDevinFusion(c.fusion)] : null;
+    };
     const unchecked = (raw: Json) => {
       const done = new Set<string>(Array.isArray(raw?.outdatedUnchecked) ? raw.outdatedUnchecked.filter((k: unknown) => typeof k === "string") : []);
       const { changes, unchecked } = uncheckOutdated(raw, found, done);
@@ -1124,7 +1128,15 @@ export class Accounts {
     // sign-in was revoked or removed is found signed out here, while an already-failed key check keeps its refusal.)
     if (profile.runtime === "agy" && (check.state === "ok" || check.state === "unknown") && this.deps.agy?.()) {
       try {
-        check.models = await this.deps.agy()!.models(profile);
+        const agy = this.deps.agy()!;
+        if (agy.catalog) {
+          const catalog = await agy.catalog(profile);
+          check.models = catalog.models;
+          check.modelEfforts = { agy: catalog.efforts };
+          if (Object.keys(catalog.defaults).length > 0) check.modelEffortDefaults = { agy: catalog.defaults };
+        } else {
+          check.models = await agy.models(profile);
+        }
         check.state = "ok";
         check.detail = tr(lang, "station.profile.works", { n: check.models.length });
       } catch (e) {
@@ -1152,7 +1164,12 @@ export class Accounts {
     const previous = this.checks.get(id);
     // A list not read this time (the provider not answering a moment, a check that failed) does not take away the models
     // the profile was found to run: the pickers' liked and frequent models are only those it runs.
-    if (check.models === null && previous !== undefined && previous.models !== null) check.models = previous.models;
+    if (check.models === null && previous !== undefined && previous.models !== null) {
+      check.models = previous.models;
+      if (check.modelEfforts === undefined && previous.modelEfforts !== undefined) check.modelEfforts = previous.modelEfforts;
+      if (check.modelEffortDefaults === undefined && previous.modelEffortDefaults !== undefined) check.modelEffortDefaults = previous.modelEffortDefaults;
+      if (check.fusion === undefined && previous.fusion !== undefined) check.fusion = previous.fusion;
+    }
     if (codexSubscription && previous?.codexRevoked) {
       check.state = "login";
       check.detail = previous.detail;
@@ -1621,6 +1638,7 @@ export class Accounts {
       let checkView: Json = null;
       if (check) {
         checkView = structuredClone(check);
+        delete checkView.fusion;
         if (isObject(checkView.decision)) delete checkView.decision.fingerprint;
         if (check.decision && check.decision.fingerprint !== fingerprint(p)) checkView.decision = { state: "pending", detail: "Profile 已修改，等待自动检查", reason: "changed" };
       }
@@ -1659,6 +1677,14 @@ export class Accounts {
     // The connects it runs of the viewer's workspace (those of others are not shown there).
     const connects = new Set(config.connects.filter((c) => c.workspace === joined).map((c) => c.id));
     return views.map((v) => ({ ...v, usedBy: v.usedBy.filter((c: string) => connects.has(c)) }));
+  }
+
+  /// GET /profiles/:id/fusion: the Devin Fusion catalog from the profile's last check (null on borrowed or non-Devin profiles).
+  fusionView(id: string): Json {
+    const profile = this.profile(id);
+    if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (borrowed(profile)) return null;
+    return this.checks.get(id)?.fusion ?? null;
   }
 
   /// The workspaces the station joined, its home one left out.

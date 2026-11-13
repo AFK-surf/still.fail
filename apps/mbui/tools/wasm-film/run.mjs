@@ -50,13 +50,14 @@ const script = name => {
 };
 const prepare = script('MBUI_FILM_PREPARE'), drive = script('MBUI_FILM_DRIVE');
 if (frame >= 0 && !drive) throw new Error('a frame requires a scene script');
+const fixtureJson = process.env.MBUI_FIXTURE_JSON_FILE ? fs.readFileSync(process.env.MBUI_FIXTURE_JSON_FILE, 'utf8') : (process.env.MBUI_FIXTURE_JSON ?? '');
 const strings = [process.env.MBUI_FIXTURE ?? '', process.env.MBUI_LOCALE ?? '', process.env.MBUI_DARK ?? '', prepare, drive,
   process.env.MBUI_POINTING ?? '', process.env.MBUI_NATIVE_INPUT ?? '', process.env.MBUI_KEYBOARD ?? '',
   process.env.MBUI_LOCAL_STATION ?? '', process.env.MBUI_WINDOW ?? '', process.env.MBUI_HOLD ?? '',
   process.env.MBUI_FAILED ?? '', process.env.MBUI_FAILED_WHY ?? '', process.env.MBUI_SAID ?? '',
   process.env.MBUI_UPDATE ?? '', process.env.MBUI_FILM_AUTOFILL ?? '',
   process.env.MBUI_CORE_MS ?? '', process.env.MBUI_UPDATES_MS ?? '',
-  process.env.MBUI_FIX_PACE ?? '', process.env.MBUI_FIX_CORE ?? ''].map(s => Array.from(s, c => c.codePointAt(0)));
+  process.env.MBUI_FIX_PACE ?? '', process.env.MBUI_FIX_CORE ?? '', fixtureJson].map(s => Array.from(s, c => c.codePointAt(0)));
 const numbers = [size[0], size[1], scale, platform, dark, at, fps, max, frame, fontScale, inset, corner, nav, cornersKept];
 let core, scratch = [], pixels;
 function text() {

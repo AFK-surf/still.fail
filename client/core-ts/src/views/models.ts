@@ -189,7 +189,8 @@ export function effortDefault(overview: J, runtime: string, m: string | null, pr
   const said = (p: J): string | null => {
     const levels = get(get(get(p, "check"), "modelEffortDefaults"), runtime);
     if (levels === undefined || levels === null || typeof levels !== "object") return null;
-    const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m));
+    const base = runtime === "agy" ? (model.splitAgyTier(m)?.model ?? m) : m;
+    const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m) || (base !== m && model.same(id, base)));
     return found !== undefined && typeof found[1] === "string" ? found[1] : null;
   };
   const profiles = profilesOf(overview).filter((p) => runs(p, runtime) && (allow === null || allow.includes(get(p, "id"))));
@@ -216,9 +217,10 @@ function commonEfforts(profiles: J[], runtime: string, m: string | null): string
 }
 
 function profilesRunning(overview: J, runtime: string, m: string | null, current: string | null, now: number): J[] {
+  const base = runtime === "agy" && m !== null ? (model.splitAgyTier(m)?.model ?? m) : m;
   const profiles = profilesOf(overview)
     .filter((p) => runs(p, runtime))
-    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && model.same(x, m)));
+    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && (model.same(x, m) || (base !== null && base !== m && model.same(x, base)))));
   return profileLines(profiles, runtime, m, current, now);
 }
 

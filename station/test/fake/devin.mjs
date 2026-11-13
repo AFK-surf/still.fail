@@ -35,6 +35,7 @@ const FAMILIES = {
     { family_label: "Claude Opus 5.5", slug: "claude-opus-5.5", variants: [{ model_uid: "claude-opus-5-5-medium" }, { model_uid: "claude-opus-5-5-low" }, { model_uid: "claude-opus-5-5-high-fast" }] },
     { family_label: "Kimi K2.6", slug: "kimi-k2.6", variants: [{ model_uid: "kimi-k2-6" }] },
     { family_label: "GLM 5.2", slug: "glm-5.2", variants: [{ model_uid: "glm-5-2" }, { model_uid: "glm-5-2-max" }, { model_uid: "glm-5-2-1m" }] },
+    { family_label: "Fusion", slug: "fusion", variants: [{ model_uid: "fusion-gpt-6-sol-max-sidekick-swe-2-medium" }, { model_uid: "fusion-gpt-6-sol-low-fast-sidekick-swe-2-medium" }] },
   ],
 };
 /// The `model` config option's values.

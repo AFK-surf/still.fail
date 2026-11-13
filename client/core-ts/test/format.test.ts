@@ -197,10 +197,14 @@ test("devin_is_named_after_cursor_its_models_at_their_own_thinking_levels_on_no_
   assert.deepEqual(fallback("devin"), ["low", "medium", "high", "xhigh", "max"]);
   assert.deepEqual(available("devin", "swe-2", { devin: { "swe-2": ["medium", "high", "max"] } }), ["medium", "high", "max"]);
   assert.deepEqual(available("devin", "kimi-k2-6", { devin: { "kimi-k2-6": [] } }), []);
-  assert.deepEqual(["swe-2", "swe-1-7", "claude-opus-5-5", "gpt-6-sol", "gemini-4-argon", "fusion-claude-opus-5-high-sidekick-swe-2"].map(f.makerOf), [
+  assert.deepEqual(available("devin", "fusion-gpt-6-sol-max-sidekick-swe-2-medium", {}), []);
+  assert.deepEqual(["swe-2", "swe-1-7", "claude-opus-5-5", "gpt-6-sol", "gemini-4-argon", "fusion-claude-opus-5-high-sidekick-swe-2", "fusion-gpt-6-sol-max-sidekick-claude-opus-5-5-medium"].map(f.makerOf), [
         // A Fusion pairing is its lead's.
-    ["devin", "Cognition"], ["devin", "Cognition"], ["anthropic", "Anthropic"], ["openai", "OpenAI"], ["gemini", "Google"], ["anthropic", "Anthropic"],
+    ["devin", "Cognition"], ["devin", "Cognition"], ["anthropic", "Anthropic"], ["openai", "OpenAI"], ["gemini", "Google"], ["anthropic", "Anthropic"], ["openai", "OpenAI"],
   ]);
+  assert.equal(f.agentLabel("fusion-gpt-6-sol-max-sidekick-swe-2-medium", null), "Fusion · GPT-6 Sol Max + SWE-2 Medium");
+  assert.equal(f.agentLabel("gpt-oss-120b", null), "GPT-OSS 120B");
+  assert.equal(f.agentLabel("gpt-4o", null), "GPT-4o");
   for (const id of ["openai", "anthropic", "xai", "opencode-go"]) {
     assert.ok(!providers.runtimes(providers.uses(providers.endpoints(providers.find(id)!, null, null)!, id)).includes("devin"), id);
   }

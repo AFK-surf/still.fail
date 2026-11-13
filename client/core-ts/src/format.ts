@@ -416,7 +416,9 @@ export function place(threads: unknown[], address: string, offsetMin: number, wo
 
 /// Who made a model, by its name: [id, name] for its mark; null when the marks do not know it.
 export function makerOf(modelName: string): [string, string] | null {
-  const m = modelName.toLowerCase();
+  const lower = modelName.toLowerCase();
+  const sidekick = lower.startsWith("fusion-") ? lower.indexOf("-sidekick-", 7) : -1;
+  const m = sidekick > 7 ? lower.slice(7, sidekick) : lower;
   const has = (words: string[]) => words.some((w) => m.includes(w));
   const o = m.startsWith("o") && /^[0-9]/.test(m.slice(1));
   const id = has(["claude", "opus", "sonnet", "haiku", "fable"]) ? "anthropic"

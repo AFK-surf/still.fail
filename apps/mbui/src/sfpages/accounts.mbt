@@ -1252,6 +1252,19 @@ fn profile_models_node(b : @view.View, core : Core, here : () -> Here, address :
               g,
               fn() { @sf.t("web-main.model.allModels") },
               fn() {
+                let fusion : @signals.Signal[Json?] = @signals.signal(None)
+                let p0 = @signals.untracked(p)
+                if text(p0, "runtime") == "devin" && text(field(p0, "share"), "role") != "user" {
+                  (core.call)(
+                    "profile.fusion",
+                    obj([("station", str(address)), ("id", str(id))]),
+                    fn(r) {
+                      if r is Ok(v) && field(Some(v), "fusion") is (Some(Object(_)) as f) {
+                        fusion.set(f)
+                      }
+                    },
+                  )
+                }
                 @sf.panel(
                   @sf.t("web-pages.profiles.models"),
                   fn(c, _) {
@@ -1261,7 +1274,7 @@ fn profile_models_node(b : @view.View, core : Core, here : () -> Here, address :
                       Some(i) => Some(listed[i])
                       None => @signals.untracked(p)
                     }
-                    profile_models_panel(c, core, address, now)
+                    profile_models_panel(c, core, address, now, fusion.get())
                   },
                   // (a dialog of its own, not beside its row: 2026-11-02 用户「用弹窗」)
                   from=Unanchored,
@@ -1915,7 +1928,7 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
 /// a box before it, ticked while it is starred (`pick.like`, as the model control's are: 2026-11-02 用户「这里改成也能
 /// 点勾」), its id under the pointer; one named by hand that its provider does not list taken off by its ×; one more
 /// named by hand over them, where it can be. (In the panel profile_models_node opens: a presenter's, an old view.)
-fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
+fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?, fusion : Json?) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
   let added = strings(p, "added")
@@ -1928,18 +1941,38 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
   let liked = fn(m : String) {
     options.iter().any(fn(o) { flag(Some(o), "liked") && (text(Some(o), "model") == m || strings(Some(o), "ids").contains(m)) })
   }
-  let series = items(p, "series")
+  let fusion_uids : Map[String, Bool] = Map([])
+  if fusion is Some(Object(_)) {
+    let sides = items(fusion, "sides")
+    for lead in items(fusion, "leads") {
+      let lv = Some(lead)
+      let lead_id = text(lv, "id")
+      for idx_json in items(lv, "sides") {
+        if idx_json is Number(idx, ..) && sides.get(idx.to_int()) is Some(side) {
+          fusion_uids["fusion-" + lead_id + "-sidekick-" + text(Some(side), "id")] = true
+        }
+      }
+    }
+  }
+  let shown_series : Array[(String, Array[String])] = []
+  for s in items(p, "series") {
+    let sv = Some(s)
+    let models = strings(sv, "models").filter(fn(m) { !fusion_uids.contains(m) })
+    if !models.is_empty() {
+      shown_series.push((text(sv, "name"), models))
+    }
+  }
   // (one more named by hand over them, where it can be: under them it stood in the panel's corner)
   if flag(p, "canAddModel") {
     c.box(style=pf_models_add, fn() { add_model(c, core, address, id) }) |> ignore
   }
   @sf.panel_column(c, "profile-models/" + key, pf_models_most, pf_model_rows.then(pf_models_foot()), fn() {
-    for s in series {
-      let sv = Some(s)
-      if series.length() > 1 {
-        c.box(style=pf_series_room, fn() { c.text(text(sv, "name"), style=pf_series_words) |> ignore }) |> ignore
+    for entry in shown_series {
+      let (series_name, models) = entry
+      if shown_series.length() > 1 {
+        c.box(style=pf_series_room, fn() { c.text(series_name, style=pf_series_words) |> ignore }) |> ignore
       }
-      for m in strings(sv, "models") {
+      for m in models {
         let on = liked(m)
         let item = c.id("profile-model-item/" + key + "/" + m)
         c.box(style=pf_model_row.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
@@ -1953,7 +1986,7 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
             (core.call)(
               "pick.like",
               obj([("station", str(address)), ("of", str("new")), ("model", str(m)), ("liked", Json::boolean(now == On))]),
-              fn(_) {  },
+              @sfbase.answer_unread,
             )
           }
           @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
@@ -1983,7 +2016,109 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
         @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, side=Right, repeats=name(m) == m)
       }
     }
+    if fusion is Some(Object(_)) {
+      profile_fusion_section(c, core, address, id, key, p, fusion, named, liked, busy)
+    }
   })
+}
+
+///|
+/// Devin's Fusion combinations (`lead + sidekick`), opted into by ticking so hundreds of pairs do not crowd the picker.
+fn profile_fusion_section(
+  c : @ui.Ctx,
+  core : Core,
+  address : String,
+  id : String,
+  key : String,
+  p : Json?,
+  fusion : Json?,
+  named : Array[String],
+  liked : (String) -> Bool,
+  busy : Bool,
+) -> Unit {
+  let sides = items(fusion, "sides")
+  let leads = items(fusion, "leads")
+  guard !sides.is_empty() && !leads.is_empty() else { return }
+  let f = profile_field("fusion-search/" + key)
+  let q = f.text().trim(chars=" \t\n").to_lower()
+  c.box(style=pf_fusion_head, fn() {
+    c.text(@sf.t("web-pages.profiles.fusionModels"), style=pf_series_words) |> ignore
+    c.text(@sf.t("web-pages.profiles.fusionHint"), style=pf_muted) |> ignore
+  })
+  |> ignore
+  c.box(style=pf_fusion_search, fn() {
+    @sf.input(
+      c,
+      "profile-fusion-search/" + key,
+      placeholder=@sf.t("web-pages.profiles.searchFusion"),
+      field=f,
+    )
+    |> ignore
+  })
+  |> ignore
+  let ticked : Array[(String, String, String, Bool)] = []
+  let rest : Array[(String, String, String, Bool)] = []
+  for lead in leads {
+    let lv = Some(lead)
+    let lead_id = text(lv, "id")
+    let lead_name = text(lv, "name")
+    let maker_id = text(field(lv, "maker"), "id")
+    for idx_json in items(lv, "sides") {
+      if idx_json is Number(idx, ..) && sides.get(idx.to_int()) is Some(side) {
+        let sv = Some(side)
+        let side_id = text(sv, "id")
+        let side_name = text(sv, "name")
+        let uid = "fusion-" + lead_id + "-sidekick-" + side_id
+        let display = lead_name + " + " + side_name
+        if q == "" || display.to_lower().contains(q) || uid.to_lower().contains(q) {
+          let on = named.contains(uid)
+          if on {
+            ticked.push((uid, display, maker_id, true))
+          } else if rest.length() < pf_fusion_most {
+            rest.push((uid, display, maker_id, false))
+          }
+        }
+      }
+    }
+  }
+  let runtime = text(p, "runtime")
+  for row in ticked + rest {
+    let (uid, display, maker_id, on) = row
+    let item = c.id("profile-fusion-item/" + key + "/" + uid)
+    c.box(style=pf_model_row.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
+      let now = @kit.checkbox(
+        c,
+        "profile-fusion-check/" + key + "/" + uid,
+        if on { On } else { Off },
+        disabled=busy,
+        label=display,
+      ).value
+      if (now == On) != on && !busy {
+        let next_named = if now == On {
+          if named.contains(uid) { named } else { named + [uid] }
+        } else {
+          named.filter(fn(x) { x != uid })
+        }
+        @settings.act(
+          core,
+          @sf.t("web-pages.profiles.fusionModels"),
+          "profile.put",
+          obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(next_named.map(str)))]))]),
+        )
+        if now == On || liked(uid) {
+          (core.call)(
+            "pick.like",
+            obj([("station", str(address)), ("of", str("new")), ("model", str(uid)), ("liked", Json::boolean(now == On))]),
+            @sfbase.answer_unread,
+          )
+        }
+      }
+      @sf.maker_mark(c, maker_id, runtime, pf_chip_glyph) |> ignore
+      c.text(display, style=pf_model_words) |> ignore
+    })
+    |> ignore
+    @sf.tip(c, "profile-fusion-item/" + key + "/" + uid + "/tip", item, uid, side=Right)
+  }
 }
 
 ///|
@@ -2145,6 +2280,18 @@ let pf_series_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, c
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_models_add : @ui.Style = @ui.css("w=Full pb=S2")
+
+///|
+/// How many unticked Fusion pairs are listed at once before filtering by search.
+let pf_fusion_most : Int = 40
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_head : @ui.Style = @ui.css("w=Full px=S2_5 pt=S3 pb=S1 gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_search : @ui.Style = @ui.css("w=Full px=S2_5 pb=S1_5")
 
 ///|
 /// The × of a model named by hand on its chip (a round button as high as its words' line).

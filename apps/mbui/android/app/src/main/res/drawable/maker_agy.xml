@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Antigravity's arch mark (antigravity.google), in Google's blue (#3186FF). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M 20.288 21.016 C 21.427 21.87 23.136 21.301 21.57 19.734 C 16.871 15.179 17.868 2.65 12.031 2.65 C 6.195 2.65 7.191 15.179 2.493 19.735 C 0.784 21.443 2.635 21.869 3.774 21.015 C 8.187 18.026 7.902 12.758 12.032 12.758 C 16.16 12.758 15.875 18.026 20.288 21.016 Z"
+        android:fillColor="#3186FF" />
+</vector>

@@ -4,6 +4,7 @@
 // its home made absolute and what parse_config derives added: name, runtimes, models, backgroundOnMessage.
 import { isAbsolute, join } from "node:path";
 import { afreshThreshold } from "../../../client/core-ts/src/cache-policy.ts";
+import { agyBaseModel } from "../agents/agy.ts";
 import { runtimeKind, runtimeLabel, type Profile as RuntimeProfile } from "../agents/runtime.ts";
 import { profileRuntimes, type Runtime } from "../agents/profiles.ts";
 import { modelKey } from "../read/usage.ts";
@@ -176,7 +177,13 @@ export function hubConfig(raw: any, dataDir: string, found: (id: string) => read
 /// Its own spelling of a model it runs, however the model is spelled (gpt-6-astra here may be
 /// openai/gpt-6-astra there).
 export function spelling(profile: Profile, model: string): string | null {
-  return profile.models.find((m) => m === model) ?? profile.models.find((m) => sameModel(m, model)) ?? null;
+  const direct = profile.models.find((m) => m === model) ?? profile.models.find((m) => sameModel(m, model));
+  if (direct !== undefined) return direct;
+  if (profile.runtimes.includes("agy")) {
+    const base = agyBaseModel(model).model;
+    return profile.models.find((m) => m === base || sameModel(m, base) || agyBaseModel(m).model === base) ?? null;
+  }
+  return null;
 }
 
 /// Whether it runs a model, in any spelling.

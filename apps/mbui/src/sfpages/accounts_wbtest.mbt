@@ -563,3 +563,118 @@ test "a profile's page on a phone: its long name, its figures on one line and ho
     assert_true(x3 + w3 <= w, msg="\{w}: inside the page")
   }
 }
+
+///|
+test "a Devin profile's models panel asks Fusion pairs on demand, deduplicates ticked ones, and syncs pick.like" {
+  let calls : Array[(String, Json)] = []
+  let existing_uid = "fusion-gpt-6-sol-max-sidekick-claude-sonnet-5-5-medium"
+  let fusion_catalog : Json = {
+    "sides": [
+      { "id": "swe-2-medium", "name": "SWE-2 · 中" },
+      { "id": "claude-sonnet-5-5-medium", "name": "Sonnet 5.5 · 中" },
+    ],
+    "leads": [
+      {
+        "id": "gpt-6-sol-max",
+        "name": "GPT-6 Sol · 最高",
+        "maker": { "id": "openai", "title": "OpenAI" },
+        "sides": [0, 1],
+      },
+    ],
+  }
+  let fusion_profile = fn(s : Source) -> Source {
+    fn shaped(v : Json) -> Json {
+      match v {
+        Object(o) if o.get("id") == Some(Json::string("cc")) && o.contains("available") => {
+          let p = o.copy()
+          p["runtime"] = "devin"
+          p["models"] = ["gemini-4-carbon", existing_uid]
+          p["named"] = [existing_uid]
+          p["added"] = [existing_uid]
+          p["modelsText"] = "2 个模型"
+          p["available"] = ["gemini-4-carbon", existing_uid]
+          p["names"] = {
+            "gemini-4-carbon": "Gemini 4 Carbon",
+            "fusion-gpt-6-sol-max-sidekick-claude-sonnet-5-5-medium": "Fusion · GPT-6 Sol · 最高 + Sonnet 5.5 · 中",
+          }
+          p["series"] = [
+            { "name": "Gemini", "models": ["gemini-4-carbon"] },
+            { "name": "Fusion", "models": [existing_uid] },
+          ]
+          Json::object(p)
+        }
+        Object(o) => {
+          let p = o.copy()
+          for k, x in o {
+            p[k] = shaped(x)
+          }
+          Json::object(p)
+        }
+        Array(a) => Json::array(a.map(shaped))
+        _ => v
+      }
+    }
+    fn shaped_pick(v : Json) -> Json {
+      match v {
+        Object(o) => {
+          let p = o.copy()
+          let opts = match o.get("options") {
+            Some(Array(a)) => a.copy()
+            _ => []
+          }
+          opts.push({ "model": existing_uid, "ids": [existing_uid], "liked": true })
+          p["options"] = Json::array(opts)
+          Json::object(p)
+        }
+        _ => v
+      }
+    }
+    {
+      ..s,
+      topic_read: fn(name, params) {
+        let v = s.topic(name, params).get().snapshot()
+        match v.value {
+          Some(x) => { ..v, value: Some(if name == "pick" { shaped_pick(x) } else { shaped(x) }) }
+          None => v
+        }
+      },
+      call: fn(name, params, done) {
+        calls.push((name, params))
+        if name == "profile.fusion" {
+          done(Ok({ "fusion": fusion_catalog }))
+        } else {
+          done(Ok(obj([])))
+        }
+      },
+    }
+  }
+  let t = setting_tester(Profile("ws1/st1", "cc"), 1280.0, over=fusion_profile)
+  assert_eq(calls.length(), 0)
+  scrolled_to(t, 1280.0, "全部模型")
+  t.tap_text("全部模型")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(calls.map(fn(x) { x.0 }), ["profile.fusion"])
+  assert_true(t.find("Fusion 组合") is Some(_))
+  // Already-ticked Fusion pair is shown once in `Fusion 组合`, not duplicated in top series.
+  assert_true(t.find("Fusion · GPT-6 Sol · 最高 + Sonnet 5.5 · 中") is None)
+  assert_true(t.find("GPT-6 Sol · 最高 + Sonnet 5.5 · 中") is Some(_))
+  assert_true(t.find("GPT-6 Sol · 最高 + SWE-2 · 中") is Some(_))
+  // Unchecking the already-ticked & liked pair removes it from `models` and clears `pick.like`.
+  t.click(Checkbox, label="GPT-6 Sol · 最高 + Sonnet 5.5 · 中")
+  t.frame()
+  assert_eq(calls.map(fn(x) { x.0 }), ["profile.fusion", "profile.put", "pick.like"])
+  assert_true(!calls[1].1.stringify().contains(existing_uid), msg="profile.put drops \{existing_uid}: \{calls[1].1.stringify()}")
+  assert_true(calls[2].1.stringify().contains("\"liked\":false"), msg="pick.like clears \{existing_uid}: \{calls[2].1.stringify()}")
+  // Filtering and checking a new Fusion pair saves it and stars it.
+  t.tap_text("搜索主副模型组合")
+  t.type_text("swe-2")
+  t.frame()
+  assert_true(t.find("GPT-6 Sol · 最高 + SWE-2 · 中") is Some(_))
+  assert_true(t.find("GPT-6 Sol · 最高 + Sonnet 5.5 · 中") is None)
+  t.click(Checkbox, label="GPT-6 Sol · 最高 + SWE-2 · 中")
+  t.frame()
+  assert_eq(calls.map(fn(x) { x.0 }), ["profile.fusion", "profile.put", "pick.like", "profile.put", "pick.like"])
+  let uid = "fusion-gpt-6-sol-max-sidekick-swe-2-medium"
+  assert_true(calls[3].1.stringify().contains(uid), msg="profile.put saves \{uid}: \{calls[3].1.stringify()}")
+  assert_true(calls[4].1.stringify().contains("\"liked\":true"), msg="pick.like likes \{uid}: \{calls[4].1.stringify()}")
+}

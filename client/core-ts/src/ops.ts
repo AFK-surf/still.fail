@@ -148,6 +148,7 @@ export const PARAMS: Record<string, string> = {
   "profile.resetQuota": "id:string reset?:string",
   "profile.quota": "id:string",
   "profile.check": "id:string",
+  "profile.fusion": "id:string",
   "profile.login": "id:string",
   "profile.cancelLogin": "id:string",
   "profile.loginCode": "id:string code?:string",
@@ -572,6 +573,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/profiles/${p.at("id")}/quota`, null, OVERVIEW);
     case "profile.check":
       return op("POST", () => `/profiles/${p.at("id")}/check`, null, OVERVIEW);
+    case "profile.fusion":
+      return op("GET", () => `/profiles/${p.at("id")}/fusion`, null, NONE);
     case "profile.login":
       return op("POST", () => `/profiles/${p.at("id")}/login`, null, OVERVIEW);
     case "profile.cancelLogin":

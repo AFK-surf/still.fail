@@ -1047,6 +1047,43 @@ export function profile(p: J): J {
   return o;
 }
 
+/// Opt-in Devin Fusion pairings (`fusion-<lead>-sidekick-<side>`), factored into sorted lead and sidekick tables.
+export function buildFusion(raw: J): J | null {
+  if (!isObject(raw)) return null;
+  const rawSides = arr(raw.sides)?.filter((s): s is string => typeof s === "string" && s !== "") ?? [];
+  const rawLeads = isObject(raw.leads) ? raw.leads : null;
+  if (rawSides.length === 0 || !rawLeads) return null;
+  const leadSides = new Map<string, Set<string>>();
+  const sideSet = new Set<string>();
+  for (const [lead, idxs] of Object.entries(rawLeads)) {
+    if (lead === "" || !Array.isArray(idxs)) continue;
+    for (const idx of idxs) {
+      const side = typeof idx === "number" ? rawSides[idx] : undefined;
+      if (typeof side !== "string" || side === "") continue;
+      let set = leadSides.get(lead);
+      if (!set) {
+        set = new Set();
+        leadSides.set(lead, set);
+      }
+      set.add(side);
+      sideSet.add(side);
+    }
+  }
+  if (leadSides.size === 0 || sideSet.size === 0) return null;
+  const sideIds = [...sideSet].sort(model.compareOrder);
+  const sideIndex = new Map(sideIds.map((id, i) => [id, i]));
+  const sides = sideIds.map((id) => ({ id, name: model.name(id), maker: maker(id) }));
+  const leads = [...leadSides.entries()]
+    .sort(([a], [b]) => model.compareOrder(a, b))
+    .map(([id, set]) => ({
+      id,
+      name: model.name(id),
+      maker: maker(id),
+      sides: [...set].map((sid) => sideIndex.get(sid)!).sort((a, b) => a - b),
+    }));
+  return { leads, sides };
+}
+
 /// A line of parts (a detail's: 已登录，an address，a plan) without the part that is `part` and the comma before it.
 function withoutPart(line: string, part: string): string {
   if (part === "") return line;
