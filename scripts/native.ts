@@ -1016,6 +1016,12 @@ async function releaseThroughApi(name: string): Promise<{ bytes: Buffer; url: st
   }
 }
 
+/// How long a download may go with nothing coming (no connection, no answer, no byte) before it is given up on and the
+/// next place asked. The CI Macs' route to the store stalls now and then, and a stall waited out to the download's
+/// 300 s cut the stable release's jobs at their limit (43458373814, 43460534865, 2026-11-13: four stalls of 177-303 s
+/// in one night, the same part from GitHub's release in 4 s); a part sent at all comes far faster than this.
+const STALLED_MS = 15_000;
+
 async function download(part: string, target: Target, k: string): Promise<string | null> {
   const name = asset(part, target, k);
   const inbox = process.env.STILLFAIL_NATIVE_INBOX;
@@ -1033,22 +1039,37 @@ async function download(part: string, target: Target, k: string): Promise<string
   // failed the whole job with only the socket's error, 39431384793)
   for (const at of [`${STORE}/${name}`, releaseUrl]) {
     let answered = false;
+    // (given up on once nothing came for STALLED_MS, the connection's or a byte's, and the next place asked)
+    const stalled = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const moved = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => stalled.abort(new Error(`nothing came for ${STALLED_MS / 1000} s`)), STALLED_MS);
+    };
+    moved();
     try {
-      const r = await fetchNative(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
+      const r = await fetchNative(at, { redirect: "follow", signal: AbortSignal.any([stalled.signal, AbortSignal.timeout(300_000)]) });
+      moved();
       if (!r.ok) {
         if (at === releaseUrl && r.status !== 404) releaseFailed = true;
         if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
+        await r.body?.cancel().catch(() => {});
         continue;
       }
       answered = true;
-      bytes = Buffer.from(await r.arrayBuffer());
+      const chunks: Uint8Array[] = [];
+      if (r.body) {
+        const reader = r.body.getReader();
+        for (let next = await reader.read(); !next.done; next = await reader.read()) { chunks.push(next.value); moved(); }
+      }
+      bytes = Buffer.concat(chunks);
       url = at;
       break;
     } catch (e) {
       if (at === releaseUrl) releaseFailed = true;
       const cause = (e as Error & { cause?: Error }).cause?.message;
       log(`${part} ${target}: ${answered ? `${at} broke off while sending it` : `could not reach ${new URL(at).host}`} (${(e as Error).message}${cause ? `: ${cause}` : ""})`);
-    }
+    } finally { clearTimeout(timer); }
   }
   if (!bytes && releaseFailed) {
     const fromApi = await releaseThroughApi(name);
