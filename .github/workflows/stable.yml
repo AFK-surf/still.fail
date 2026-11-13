@@ -67,12 +67,14 @@ jobs:
         with: { name: "monoid-android-stable", path: "${{ runner.temp }}/monoid", if-no-files-found: error, retention-days: 1, compression-level: 0 }
 
   # The Mac app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, signed by the same team, so an installed
-  # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26.
+  # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26. 10 minutes (it
+  # runs by hand): the day before's main has no warm build, and its build and Apple's notary took 4m59s on 2026-11-12
+  # and were cut at 5 on 2026-11-13.
   desktop:
     needs: plan
     runs-on: [self-hosted, macos-ci]
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
