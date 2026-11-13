@@ -1272,3 +1272,41 @@ test "大屏, a chat's page made with its inside nodes: words dragged over with 
   assert_true(quote_nodes_pill(t) is None, msg="引用 over a pick across messages")
   assert_eq(calls.filter(fn(c) { c.0 == "composer.quote" }).length(), 0)
 }
+
+///|
+test "小屏, a chat's page made with its inside nodes: a finger held still on a message's words picks; lifted, the system's text menu offers 引用 after its own and no pill is drawn; chosen, quoted into the chat's draft as that message's, nothing picked" {
+  let calls : Array[(String, Json)] = []
+  let (w, h) = (390.0, 844.0)
+  let t = find_nodes_open(calls, w, h, 2)
+  // (the words in sight, clear of the bar and the composer)
+  for _ in 0..<12 {
+    match t.run_rects("高度先按 90 估") {
+      [(_, y, _, _), ..] if y > 120.0 && y < 500.0 => break
+      _ => {
+        t.wheel(w / 2.0, 400.0, -200.0)
+        t.run_for(@ui.move_most_ms)
+      }
+    }
+  }
+  guard t.run_rects("高度先按 90 估") is [(px, py, _, ph), ..] else { fail("the message's words not drawn") }
+  // (on its first character, "高": its middle is the space before 估, which a hold picks alone)
+  t.press_at(px + 6.0, py + ph / 2.0)
+  t.run_for(@ui.long_press_ms)
+  t.release(px + 6.0, py + ph / 2.0)
+  t.draw()
+  guard @ui.picked_now() is Some(p) else { fail("nothing picked by the finger held still") }
+  assert_true(p.finger && p.text != "" && p.of.length() == 1, msg="\{p.text} of \{@ui.list_text(p.of)}, a finger's \{p.finger}")
+  assert_true(t.text_menu().0, msg="no text menu over what the finger picked")
+  assert_eq(t.text_menu_own(), "引用")
+  assert_true(quote_nodes_pill(t) is None, msg="a pill over a finger's pick")
+  let picked = p.text
+  t.key(@hostapi.key_menu_own)
+  t.run_for(@ui.move_most_ms)
+  let quoted = calls.filter(fn(c) { c.0 == "composer.quote" })
+  assert_eq(quoted.length(), 1, msg="\{Repr(calls.map(fn(c) { c.0 }))}")
+  assert_eq(text(Some(quoted[0].1), "key"), "ws1/st1:s-c1")
+  let q = field(Some(quoted[0].1), "quote")
+  assert_eq((text(q, "text"), text(q, "ts"), text(q, "author"), text(q, "role")), (picked.trim(chars=" \n\t").to_owned(), "ts8", "Claude", "agent"))
+  assert_eq(@ui.picked_now(), None)
+  assert_false(t.text_menu().0)
+}
