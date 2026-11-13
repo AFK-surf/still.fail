@@ -234,7 +234,7 @@
   "faq.do-my-code-and.b6ce": "代码和对话会传到云端吗？",
   "faq.no-chats-files-and.046c": "不会。对话、文件和记录留在你的电脑上；中继只转发它读不到的加密数据。",
   "faq.is-it-open-source.ad0a": "开源吗？",
-  "faq.yes-under-the-mit.f731": "开源，MIT 许可，代码在 <a href=\"https://github.com/AFK-surf/still.fail\">GitHub</a>。",
+  "faq.yes-under-the-mit.f731": "开源，MIT 许可，代码在 <a href=\"https://github.com/AFK-surf/monoid\">GitHub</a>。",
   "end.add-a-computer-it.c266": "加一台电脑<span class=\"vh\">，</span><br>剩下的交给它",
   "end.ask-once-your-computers.6d9f": "交代一次，你的电脑一直干到完。",
   "end.open-monoid.5754": "打开 monoid",

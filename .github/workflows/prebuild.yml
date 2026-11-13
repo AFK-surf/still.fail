@@ -2,7 +2,7 @@
 # CI's other jobs only fetch, built when asked: for a branch whose change makes a new one (apps/mbui/engine,
 # client/shell, …), the jobs that fetch it fail saying to run this:
 #
-#     gh workflow run prebuild.yml -R AFK-surf/still.fail --ref <branch>
+#     gh workflow run prebuild.yml -R AFK-surf/monoid --ref <branch>
 #
 # Each that neither the store nor the release has is built from the branch's checkout (Windows' on GitHub's Windows,
 # Android's on Linux with the NDK, Linux's on GitHub's Ubuntu of their own architecture) and put in the release

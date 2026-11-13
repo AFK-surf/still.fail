@@ -56,8 +56,8 @@ station 必须加入 workspace 才能运行对话。
 [docs/development.md](docs/development.md) 介绍了工具链、构建方法和一套隔离的本地环境：带模拟登录的本地控制面、本地中继和一次性 station。cloud 的测试不需要任何账号：
 
 ```sh
-git clone https://github.com/AFK-surf/still.fail.git
-cd still.fail
+git clone https://github.com/AFK-surf/monoid.git
+cd monoid
 pnpm install --frozen-lockfile
 cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 ```

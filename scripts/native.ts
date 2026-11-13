@@ -5,7 +5,7 @@
 //      $XDG_CACHE_HOME/stillfail-native or ~/.cache/stillfail-native (Linux), %LOCALAPPDATA%\stillfail-native (Windows),
 //      or $STILLFAIL_NATIVE_CACHE;
 //   2. $STILLFAIL_NATIVE_INBOX, a directory of artifacts (CI: those a branch's natives job built, as a run artifact);
-//   3. the release `native-artifacts` of AFK-surf/still.fail on GitHub (public: plain HTTPS, no login), which CI
+//   3. the release `native-artifacts` of AFK-surf/monoid on GitHub (public: plain HTTPS, no login), which CI
 //      publishes to from main;
 //   4. built here, from the checkout (and said so).
 // So an everyday build or test compiles no Rust; only a change to a part's own sources builds it, once per machine.
@@ -64,7 +64,7 @@ const NDK = "28.2.13676358";
 const ANDROID_API = 29;
 /// zig, for the Linux builds from a Mac (cargo-zigbuild): only its own version builds what gets published.
 const ZIG = "0.16.0";
-const REPO = process.env.STILLFAIL_NATIVE_REPO ?? "AFK-surf/still.fail";
+const REPO = process.env.STILLFAIL_NATIVE_REPO ?? "AFK-surf/monoid";
 const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 /// The store of the parts prebuilt on a development machine (`prebuild`): the releases bucket's natives/, served by
 /// still.fail cloud (install.ts releaseType) to anyone, as the release is by GitHub.

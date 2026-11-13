@@ -56,8 +56,8 @@ Every station must join a workspace before it can run conversations.
 [docs/development.md](docs/development.md) covers toolchains, builds and an isolated local setup: a local control plane with mock sign-in, a local relay and a disposable station. The cloud tests run without any accounts:
 
 ```sh
-git clone https://github.com/AFK-surf/still.fail.git
-cd still.fail
+git clone https://github.com/AFK-surf/monoid.git
+cd monoid
 pnpm install --frozen-lockfile
 cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 ```

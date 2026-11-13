@@ -1018,7 +1018,7 @@ test "a Linux component failure offers the installation guide at either page wid
     r.finish()
     assert_true(r.t.find("重新打开") is Some(_))
     r.t.tap_text("安装说明")
-    assert_true(r.t.opened().contains("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md"))
+    assert_true(r.t.opened().contains("https://github.com/AFK-surf/monoid/blob/main/docs/linux-desktop-setup.md"))
     screen_done(r.t)
   }
 }

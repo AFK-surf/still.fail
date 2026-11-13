@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       stillfail_ref:
-        description: "also build still.fail's apps/mbui sffix (AFK-surf/still.fail at this ref) and shoot its wide frame"
+        description: "also build still.fail's apps/mbui sffix (AFK-surf/monoid at this ref) and shoot its wide frame"
         required: false
         default: ""
 

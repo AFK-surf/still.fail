@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please do not report vulnerabilities, credentials or private conversation data in public issues. Use GitHub's **Security → Report a vulnerability** on [AFK-surf/still.fail](https://github.com/AFK-surf/still.fail/security/advisories/new) when private vulnerability reporting is enabled. If that option is unavailable, contact a repository maintainer privately to arrange a secure channel before sending sensitive details.
+Please do not report vulnerabilities, credentials or private conversation data in public issues. Use GitHub's **Security → Report a vulnerability** on [AFK-surf/monoid](https://github.com/AFK-surf/monoid/security/advisories/new) when private vulnerability reporting is enabled. If that option is unavailable, contact a repository maintainer privately to arrange a secure channel before sending sensitive details.
 
 Include the affected version or commit, reproduction steps, impact and a minimal proof of concept with synthetic data. Test only systems and accounts you are authorized to use. We do not currently promise a response SLA or maintain an LTS release line; fixes target current development and releases.
 

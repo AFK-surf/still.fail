@@ -136,7 +136,7 @@ jobs:
             def carry: reduce .[] as $r ([]; . + [((.[-1] // {}) * $r)]);
             ["commit", "web app.js br", "gzip", "raw", "APK", "libmbui.so", "Mac zip", "Mac program", "Mac idle", "Android idle PSS"] as $h
             | ($h | "| " + join(" | ") + " |"), ($h | map("---") | "| " + join(" | ") + " |"),
-              (carry | .[-40:] | reverse | .[] | "| [\(.sha[0:9])](https://github.com/AFK-surf/still.fail/commit/\(.sha)) \(.subject[0:50] | gsub("\\|"; "/")) | \(.web.app_js.brotli | mb) | \(.web.app_js.gzip | mb) | \(.web.app_js.raw | mb) | \(.android.apk | mb) | \(.android.libmbui_so.raw | mb) | \(.mac.zip | mb) | \(.mac.program | mb) | \(.mac_idle.app | mb) | \(.android_idle.app | mb) |")
+              (carry | .[-40:] | reverse | .[] | "| [\(.sha[0:9])](https://github.com/AFK-surf/monoid/commit/\(.sha)) \(.subject[0:50] | gsub("\\|"; "/")) | \(.web.app_js.brotli | mb) | \(.web.app_js.gzip | mb) | \(.web.app_js.raw | mb) | \(.android.apk | mb) | \(.android.libmbui_so.raw | mb) | \(.mac.zip | mb) | \(.mac.program | mb) | \(.mac_idle.app | mb) | \(.android_idle.app | mb) |")
           ' mbui-size.jsonl > table.md
           { echo "# mbui's sizes and idle memory (MB), each main commit that built them"
             echo

@@ -234,7 +234,7 @@
   "faq.do-my-code-and.b6ce": "<span class=\"nb\">コードやチャットは</span><span class=\"nb\">クラウドに</span><span class=\"nb\">送られますか？</span>",
   "faq.no-chats-files-and.046c": "いいえ。チャット、ファイル、履歴はあなたのコンピューターに残ります。リレーが中継するのは、中身を読めない暗号化データだけです。",
   "faq.is-it-open-source.ad0a": "オープンソースですか？",
-  "faq.yes-under-the-mit.f731": "はい、MIT ライセンスです。コードは <a href=\"https://github.com/AFK-surf/still.fail\">GitHub</a> で公開しています。",
+  "faq.yes-under-the-mit.f731": "はい、MIT ライセンスです。コードは <a href=\"https://github.com/AFK-surf/monoid\">GitHub</a> で公開しています。",
   "end.add-a-computer-it.c266": "1台足すだけ<span class=\"vh\">。</span><br>あとはおまかせ",
   "end.ask-once-your-computers.6d9f": "一度頼めば、<span class=\"nb\">終わるまでコンピューターが働く。</span>",
   "end.open-monoid.5754": "monoid を開く",

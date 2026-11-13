@@ -105,4 +105,4 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 - **monoid iOS**：一个应用身份 `build.monoid.iphone`（App Store Connect ID `6832495462`）从 TestFlight 沿用到 App Store，分享扩展 `build.monoid.iphone.share`，共享组 `group.build.monoid.iphone`。在公司 Apple 团队注册这三项、给主 App 启用 Push Notifications，并给两个 App ID 关联共享组后，用 CI 现有 Apple Distribution 证书创建两份 App Store 描述文件。在 GitHub Environment `ios-testflight` 设置 `MONOID_IOS_APP_PROFILE_B64`／`MONOID_IOS_SHARE_PROFILE_B64` secrets，及 `MONOID_IOS_APP_GROUP`、`MONOID_IOS_RELEASE_REVIEWED` vars；最后一项只在应用身份、能力和加密声明已审核后设为 true。共用公司的 CI 签名证书和 ASC 上传凭据，描述文件分开。上传与分发都会校验 App Store Connect 记录的 Bundle ID，后续分发轮次保留产品选择。App 内的名称、云地址和分享扩展说明来自签名的 monoid 配置。
 - **自托管 runner 跑什么**：完整检查（分支和 main）、station 和正式版桌面的打包签名、更新测试 station 到刚发布的包。pipeline 只由仓库成员的 push 触发（`plan` 只认本仓库的 push 和手动触发，不接 pull_request），外部贡献的代码不会在自托管 runner 上跑；带密钥的发布任务仍只在 main 的 production 环境里。
 - **main 有保护**（2026-10-20 起）：谁都不能直接推 main，改动一律走 PR；PR 要 pipeline 的 `gate` 通过才能合；管理员可以越过（`gh pr merge --admin`，2026-10-22 起），只在要紧的时候用。`gate` 汇总分支上跑的每个 job，跳过的算过，失败或取消的算挂；给分支加了新 job，要同时加进 `gate` 的 `needs`。
-- 看结果：`gh run list -R AFK-surf/still.fail -w pipeline`。
+- 看结果：`gh run list -R AFK-surf/monoid -w pipeline`。
