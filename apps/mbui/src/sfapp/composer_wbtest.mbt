@@ -462,21 +462,29 @@ test "a video picked or pasted that the host has no picture of shows its first f
   let clip = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x08wide"
   @sfbase.writing_add(src, w, r.station, "录屏.mov", clip)
   let id = text(Some(w.files.get()[0]), "id")
+  let seen = "ws1/st1//draft:" + id
   assert_eq(@sfbase.writing_pictures.get(id), None)
-  // the composer built: a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
+  // the composer built: a 56 × 56 picture tile from the first frame (never a 236 file card while its frame is read);
+  // a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
   let before = t.views().length()
   t.draw()
+  assert_eq(thumb_of(t.ctx(), seen).map(fn(tile) { (tile.w, tile.h, tile.picture) }), Some((56.0, 56.0, "")))
+  assert_true(t.query(Group, label="录屏.mov") is None)
   // (a player's open: "open <id> 1 <its type's length>", video/quicktime)
   let opened = t.views()[before:].to_owned().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
   assert_eq(opened.length(), 1)
   let view = (1).until(1000).find_first(fn(i) { opened[0].has_prefix("open \{i} ") }).unwrap()
   let req = t.view_reads(view, 0.0, 1 << 20)
   t.draw()
+  assert_eq(thumb_of(t.ctx(), seen).map(fn(tile) { (tile.w, tile.h, tile.picture) }), Some((56.0, 56.0, "")))
+  assert_true(t.query(Group, label="录屏.mov") is None)
   assert_eq(t.view_answers(view), [(req, clip.length(), clip.length().to_double())])
   assert_true(t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"89504e47\"}"))
   t.draw()
   let still = @sfbase.writing_pictures.get(id).unwrap()
   assert_true(still.has_prefix("mem:pv-first/"))
+  assert_eq(thumb_of(t.ctx(), seen).map(fn(tile) { (tile.w, tile.h, tile.picture) }), Some((56.0, 56.0, still)))
+  assert_true(t.query(Group, label="录屏.mov") is None)
   // sent while it still goes up: its message draws it from here, as a picture's
   let file = attachment_of({
     "name": Json::string("录屏.mov"),
@@ -485,6 +493,21 @@ test "a video picked or pasted that the host has no picture of shows its first f
     "upload": Json::string(id),
   })
   assert_eq(sent_picture(r.station, file), Some(still))
+  // up before its first frame was ready: its message still draws it by the station's path
+  let up = text(field(Some(@sfbase.writing(src, draft_key(r)).files.get()[0]), "done"), "path")
+  assert_true(up != "")
+  assert_eq(
+    sent_picture(
+      r.station,
+      attachment_of({
+        "name": Json::string("录屏.mov"),
+        "path": Json::string("/w/s-c1/" + up),
+        "size": Json::number(clip.length().to_double()),
+        "upload": Json::string(""),
+      }),
+    ),
+    Some(still),
+  )
   // the player let go
   t.draw()
   assert_true(t.views().contains("close \{view}"))

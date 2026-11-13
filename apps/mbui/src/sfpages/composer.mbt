@@ -1136,7 +1136,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
             picture?=quote_pictures[i].map(fn(own) {
               fn() {
                 let (picture, f) = own
-                let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"))
+                let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"), going=text(f, "id"))
                 @motion.measure_drawn(c, tile, quote_picture_key(id))
                 composing.pictures[id] = picture
               }
@@ -1250,8 +1250,8 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
 
 ///|
 /// A file waiting's picture, if it is drawn as one: the bytes picked or pasted here, else (a draft kept, read again as
-/// the app starts) an image's as the device keeps it (`composer.picture`), "" while that is read; None for any other
-/// file, and an image the device keeps none of (drawn as a file).
+/// the app starts) an image's as the device keeps it (`composer.picture`), "" while that is read, or a video's put up
+/// here while its first frame is read; None for any other file, and an image the device keeps none of (drawn as a file).
 fn waiting_picture(src : Source, w : Writing, v : Json?) -> String? {
   let id = text(v, "id")
   match writing_pictures.get(id) {
@@ -1261,6 +1261,7 @@ fn waiting_picture(src : Source, w : Writing, v : Json?) -> String? {
         "!" => None
         kept => Some(kept)
       }
+    None if file_kind(text(v, "name")) == "video" && @sfbase.writing_put_here(id) && waiting_as(v) is AnyFile => Some("")
     None => None
   }
 }
@@ -1424,6 +1425,7 @@ fn picture_tile(
   pending : Bool,
   part : Double?,
   error : String,
+  going? : String = picture.key,
   id? : Int = 0,
   again? : Int = 0,
 ) -> Int {
@@ -1432,7 +1434,7 @@ fn picture_tile(
     if pending {
       c.layer(fn() {
         c.box(style=thumb_veil, fn() {
-          @sf.progress_spinner(c, "composer/going/" + picture.key, part, size=@sf.theme().round.glyph) |> ignore
+          @sf.progress_spinner(c, "composer/going/" + going, part, size=@sf.theme().round.glyph) |> ignore
         })
         |> ignore
       })
@@ -1475,7 +1477,7 @@ fn composer_picture(
   // (its picture's box, its ✕ hung on its corner as every waiting file's)
   let tile = Ref(-1)
   @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), @sf.composer_inner(), w=thumb_side, fn() {
-    tile.val = picture_tile(c, local_media(picture, file_kind(name)), pending, part, error, id=thumb, again~)
+    tile.val = picture_tile(c, local_media(picture, file_kind(name)), pending, part, error, going=id, id=thumb, again~)
   }, on_remove=fn() { writing_remove(src, w, id) })
   if error != "" {
     c.on_press(again, fn() {
@@ -1923,7 +1925,10 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
           // up, no spinner over it; a card on the composer's ground, as wide as there
           face: fn(c) {
             match picture {
-              Some(p) => picture_tile(c, local_media(p, file_kind(text(v, "name"))), going_now(v), gone_up(v), text(v, "error")) |> ignore
+              Some(p) => {
+                let shown = writing_pictures.get(id).unwrap_or(p)
+                picture_tile(c, local_media(shown, file_kind(text(v, "name"))), going_now(v), gone_up(v), text(v, "error"), going=id) |> ignore
+              }
               None => {
                 c.box(style=@ui.style(w=Fixed(wide)), fn() { waiting_card(c, "flying/" + id, v, restore~) })
                 |> ignore
@@ -2123,7 +2128,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
             // while it waits; a picture already shown does not go back to an empty source when the draft is taken.
             let latest = quote_picture(c, src, w, station, v).map(fn(p) { p.0 }).unwrap_or(picture)
             let shown = if latest.key == "" && picture.key != "" { picture } else { latest }
-            picture_tile(c, shown, going_now(Some(f)), gone_up(Some(f)), text(Some(f), "error")) |> ignore
+            picture_tile(c, shown, going_now(Some(f)), gone_up(Some(f)), text(Some(f), "error"), going=text(Some(f), "id")) |> ignore
           },
           ground: 0L,
           leaving: None,

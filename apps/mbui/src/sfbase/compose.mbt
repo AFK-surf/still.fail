@@ -80,7 +80,7 @@ let writing_unseen : Set[String] = Set([])
 /// its tile's picture and its message's once made: called as a composer is built.
 pub fn writing_stills(c : @ui.Ctx) -> Unit {
   for id in writing_unseen.to_array() {
-    guard writing_went.get(id) is Some((_, name, bytes)) else {
+    guard writing_went.get(id) is Some((station, name, bytes)) else {
       writing_unseen.remove(id)
       continue
     }
@@ -91,6 +91,17 @@ pub fn writing_stills(c : @ui.Ctx) -> Unit {
         writing_unseen.remove(id)
         writing_pictures[id] = still
         sent_picture_kept("upload\u{1}" + id, still)
+        for _, w in writings {
+          for f in writing_files(w) {
+            let o = Some(f)
+            if text(o, "id") == id {
+              let path = text(field(o, "done"), "path")
+              if path != "" {
+                sent_picture_kept(sent_key(station, path), still)
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -638,6 +649,7 @@ pub fn writing_mode(src : Source, w : Writing, id : String, mode : String) -> Un
 pub fn writing_remove(src : Source, w : Writing, id : String) -> Unit {
   writing_pictures.remove(id)
   writing_went.remove(id)
+  writing_unseen.remove(id)
   writing_seeds.remove(id)
   writing_act(src, w, "remove", { "id": Json::string(id) }, show=fn(w) {
     w.state.files.set(w.state.files.get().filter(fn(f) { text(Some(f), "id") != id }))
