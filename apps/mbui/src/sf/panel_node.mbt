@@ -141,9 +141,9 @@ fn panel_node(
         // (`fits`: as wide as what it holds, `w` at most, never narrower than it has been: its parts each told how wide
         // what they hold is laid out, out to its sides, none narrower than it is, small_panel's min_w and max_w)
         .width(if x.fits { By(fn() { Some(dmin(x.w, wide.iter().fold(init=0.0, fn(m, s) { dmax(m, s.get().unwrap_or(0.0)) }))) }) } else { Is(Some(x.w)) })
-        .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
+        .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - 16.0)) }))
         // (`tall`: a share of the window, no taller than the room beside what opened it, small_panel's `h`)
-        .height(By(fn() { if x.tall > 0.0 { Some(dmin(x.tall * layer.window().1, dmax(0.0, layer.window().1 - 16.0))) } else { None } }))
+        .height(By(fn() { if x.tall > 0.0 { Some(dmin(x.tall * over_room(layer).1, dmax(0.0, over_room(layer).1 - 16.0))) } else { None } }))
         // (small_panel's: its padding round what it holds, its corner, ground, line and shadow)
         .padding(Is((panel_pad, panel_pad, panel_pad, panel_pad)))
         .radius(Is(r_menu))

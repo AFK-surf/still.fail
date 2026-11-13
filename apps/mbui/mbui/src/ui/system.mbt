@@ -38,7 +38,14 @@ pub fn system_bars() -> SystemBars {
 fn system_took(json : String) -> Unit {
   for said in @hostapi.system_said(json) {
     match said {
-      Bars(top~, bottom~, left~, right~) => system_bars_now.set({ top, bottom, left, right })
+      Bars(top~, bottom~, left~, right~) => {
+        system_bars_now.set({ top, bottom, left, right })
+        // (the window's tree keeps what goes over it clear of them, placed again by them now: View::clear)
+        match view_app.val {
+          Some(tree) => tree.clear_of(top, right, bottom, left)
+          None => ()
+        }
+      }
       SizeClasses(width~, height~) => system_size_class_now.val = Some({ width, height })
       Fold(hinge~, divisions~) => system_fold_now.set({ hinge, divisions })
       NavAction(x~, y~, w~, h~) => system_nav_action_now.val = if w > 0.0 && h > 0.0 { Some((x, y, w, h)) } else { None }

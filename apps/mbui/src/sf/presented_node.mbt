@@ -467,3 +467,13 @@ let foot_fills_lent : @view.Lent[Bool] = @view.Lent::new()
 pub fn foot_spacer_node(parent : @view.View, loc~ : SourceLoc) -> Unit {
   parent.box(made_for=loc, fn(s) { s.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore }) |> ignore
 }
+
+///|
+/// The room what is put over the window has (a dialog in its middle, a panel or a menu beside what opened it): the
+/// window, less what the system's bars reach in over it at each edge (View::clear: an iPhone Duo's bars of the app's
+/// actions over its top and its tabs at its foot or down its side, a status bar, the home indicator), followed.
+pub fn over_room(v : @view.View) -> (Double, Double) {
+  let (w, h) = v.window()
+  let (top, right, foot, left) = v.clear()
+  (dmax(0.0, w - left - right), dmax(0.0, h - top - foot))
+}

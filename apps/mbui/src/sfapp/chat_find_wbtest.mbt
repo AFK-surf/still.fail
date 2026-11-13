@@ -654,6 +654,27 @@ test "对话目录: on a page too narrow for the rail (a 1200 wide window) the r
 }
 
 ///|
+test "对话目录: beside what opened it, clear of the system's bars over the window (an iPhone Duo's actions over its top, its tabs at its foot or its column down its side), a share of the room they leave" {
+  // (top, right, foot: the Duo's upright bars across the top and foot; its column down the side; a status bar alone)
+  for bars in [(200.0, 0.0, 90.0), (24.0, 84.0, 20.0), (40.0, 0.0, 0.0)] {
+    let (top, right, foot) = bars
+    let calls : Array[Made] = []
+    let t = outline_tester(calls, w=1200.0, h=800.0)
+    t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":\{foot},\"left\":0,\"right\":\{right}}}")
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label="对话目录")
+    t.run_for(@ui.move_most_ms)
+    let (px, py, pw, ph) = outline_panel(t).unwrap()
+    let msg = "bars \{Repr(bars)}: panel \{Repr((px, py, pw, ph))}"
+    assert_true(py >= top + 8.0 - 0.5, msg~)
+    assert_true(py + ph <= 800.0 - foot - 8.0 + 0.5, msg~)
+    assert_true(px + pw <= 1200.0 - right - 8.0 + 0.5, msg~)
+    // (its share of the room left, not of the whole window: outline_tall's)
+    assert_true(ph <= 0.7 * (800.0 - top - foot) + 0.5, msg~)
+  }
+}
+
+///|
 test "对话目录: the reader's row in the accent's ink, it alone; each row's words drawn once" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)

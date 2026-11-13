@@ -889,7 +889,12 @@ fn view_arrived() -> Unit {
 /// nothing told, what set it going said no more. In a paint, what it brings is the paint's already.
 fn view_brought(tree : @view.Tree, told? : Bool = true) -> Unit {
   let (w, h) = view_window.val
-  let drawn = @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) })
+  let drawn = @signals.untracked(fn() {
+    // (the system's bars as the host last said them: what goes over the window keeps clear of them, View::clear)
+    let b = system_bars_now.untracked()
+    tree.clear_of(b.top, b.right, b.bottom, b.left)
+    tree.frame(w, h, now=view_logic_at.val)
+  })
   let taken = view_changes_taken(tree)
   old_place(tree)
   let hits = tree.hits_said()

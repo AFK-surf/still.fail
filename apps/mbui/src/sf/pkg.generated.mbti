@@ -1421,6 +1421,8 @@ pub fn over(Int64, Int64) -> Int64
 
 pub fn over_foot_reach(Double) -> @ui.Style
 
+pub fn over_room(@view.View) -> (Double, Double)
+
 pub fn over_rows(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn overlap(Double) -> @ui.Style

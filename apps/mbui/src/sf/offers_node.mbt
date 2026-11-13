@@ -207,7 +207,7 @@ pub fn offers_node(
         panel.val = Some(p)
         p
         .beside(anchor.id(), side~, along=Start, offset~, padding=8.0, width=Anchor)
-        .max_height(By(fn() { Some(dmax(0.0, shown.window().1 - 16.0)) }))
+        .max_height(By(fn() { Some(dmax(0.0, over_room(shown).1 - 16.0)) }))
         .glass(By(fn() { Some(glass_floating()) }))
         .shadow(By(fn() { (2.0, 1.0, @ui.tree_theme().shadow) }))
         .clips(Is(true))

@@ -805,6 +805,9 @@ pub struct Tree {
   mut last_h : Double
   /// the window's size, as its frames give it: what is laid out by it (which frame a window's width calls for) follows it
   room : @signals.Signal[(Double, Double)]
+  /// how far in from the window's top, right, foot and left the system's bars reach (Tree::clear_of): what goes beside
+  /// another (View::beside) and what is laid out over the window (View::clear) keeps clear of it
+  clear : @signals.Signal[(Double, Double, Double, Double)]
   /// Each window press, with its number and window coordinates (Tree::went_down).
   pressed_anywhere : @signals.Signal[(Int, Double, Double)]
   /// Whether a finger or a button is down anywhere in the window now (Tree::went_down, Tree::went_up).
@@ -1251,6 +1254,7 @@ pub fn Tree::new(
     keyed: KeyBook::new(),
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
+    clear: @signals.signal((0.0, 0.0, 0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal((0, -1.0, -1.0), same=fn(a, b) { a == b }),
     held_anywhere: @signals.signal(false, same=fn(a, b) { a == b }),
     tapped_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -3977,6 +3981,28 @@ fn Tree::comes_end_in(self : Tree, at : Int) -> Double {
 /// width calls for) made again as it changes.
 pub fn View::window(self : View) -> (Double, Double) {
   self.tree.room.get()
+}
+
+///|
+/// How far in from the window's top, right, foot and left the system's bars reach (its safe area: Tree::clear_of), followed:
+/// what is laid out over the window (a dialog in its middle, a panel's most height) keeps clear of it.
+pub fn View::clear(self : View) -> (Double, Double, Double, Double) {
+  self.tree.clear.get()
+}
+
+///|
+/// The system's bars reach `top`, `right`, `foot` and `left` in from the window's edges now (the host's safe area, as
+/// its frames give the window's size): what goes beside another placed again by it, what reads it (View::clear) made
+/// again.
+pub fn Tree::clear_of(self : Tree, top : Double, right : Double, foot : Double, left : Double) -> Unit {
+  let now = (top, right, foot, left)
+  if self.clear.untracked() == now {
+    return
+  }
+  self.clear.set(now)
+  if self.nodes.length() > 0 && self.nodes[0].live {
+    self.layout_marked_at(0)
+  }
 }
 
 ///|
