@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0b94120f3](https://github.com/AFK-surf/monoid/commit/0b94120f3daa4a73fd10e73ccbda5c4a9279c295) mbui app: a chat's page made as nodes lays its col | 1.95 | 2.62 | 11.3 | 30.79 | 40.57 | 27.44 | 52.47 | 94.39 | 108.48 |
 | [69f5f47d9](https://github.com/AFK-surf/monoid/commit/69f5f47d96b344772d120abccf93c27f973d028c) mbui app: a chat's page made as nodes colours in ⌘ | 1.95 | 2.62 | 11.3 | 30.79 | 40.57 | 27.44 | 52.45 | 94.21 | 104.9 |
 | [d3881a70c](https://github.com/AFK-surf/monoid/commit/d3881a70c15c55ae0b814fd6e520213d2c43b04f) mbui: a Tester reads the main list of the page in  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 94.03 | 99.98 |
 | [442464dd8](https://github.com/AFK-surf/monoid/commit/442464dd8bc2577494da0d64dd1612692ed7a790) fix(mbui,core-ts): align profile quota layout per  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 93.91 | 98.75 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [05dea8b40](https://github.com/AFK-surf/monoid/commit/05dea8b40b5bb70fb9f1c14e189694816c43df75) mbui app: 添加 station gives Windows' own command (i | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 94.19 | 153.41 |
 | [0ae3596db](https://github.com/AFK-surf/monoid/commit/0ae3596db79de3bc322c5e2b9ac8b913c8a66ffb) fix(cloud): a deploy takes away MOVING and the for | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.29 | 147.64 |
 | [8ea59093f](https://github.com/AFK-surf/monoid/commit/8ea59093faf39dd54ef0f7ba3dbff07b7ef5f1b7) core: what the views and the store walk for one ch | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.08 | 160.53 |
-| [8a0b79570](https://github.com/AFK-surf/monoid/commit/8a0b795707a9eea9d27486ae0387941c483355e4) app tests: chat_pictures_scrolled_wbtest's bytes b | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 93.14 | 175.17 |
