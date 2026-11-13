@@ -651,11 +651,23 @@ fn said_now(src : Source, r : ChatRef, v : ChatView) -> Array[Double] {
 
 ///|
 /// The outline of chat `r` (its view `v`) opened from the keys or ⌘K: beside its rail or its round button where one
-/// shows, else as the presenters put what nothing opened (a dialog; a sheet on Small); its field taking the keys.
-pub fn outline_open_keys(src : Source, r : ChatRef, v : ChatView, stint? : Int = 0, typed? : String = "") -> Bool {
+/// shows (a page made as nodes: its round button's node `button`, while it shows), else as the presenters put what
+/// nothing opened (a dialog; a sheet on Small); its field taking the keys.
+pub fn outline_open_keys(
+  src : Source,
+  r : ChatRef,
+  v : ChatView,
+  stint? : Int = 0,
+  typed? : String = "",
+  button? : @view.View,
+) -> Bool {
   guard v.thread is Some(th) else { return false }
   let rd = reading_of(chat_key(r))
   let current = outline_current(said_now(src, r, v), reader_top(rd, v, rd.top_seq), rd.at_end)
+  if button is Some(b) {
+    open_outline(src, r, th, current, from=Node(b), side=Left, keys=true, stint~, typed~)
+    return true
+  }
   match outline_entries.get(chat_key(r)) {
     Some((id, true)) => open_outline(src, r, th, current, from=Of(id), side=Left, along=Middle, keys=true, stint~, typed~)
     Some((id, false)) => open_outline(src, r, th, current, from=Of(id), side=Left, keys=true, stint~, typed~)

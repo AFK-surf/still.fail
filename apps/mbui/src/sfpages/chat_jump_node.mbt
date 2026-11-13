@@ -12,7 +12,7 @@
 /// it stands where a go-to put it (1 brought, 2 there: the page before not asked till the reader moves it; 0 not) and
 /// the message that go-to went to and its top under the list's (-1 none); the
 /// message ⌘F last asked the window moved about (chat.around, -1 none); the row last gone to that flashes and the moment it was gone to ("" none); the row a search opened the chat at and its words,
-/// marked there for as long as the list is.
+/// marked there for as long as the list is; 对话目录's round button while it shows (what ⌘G opens the outline beside).
 priv struct ChatJump {
   away : @signals.Signal[Bool]
   mut latest : Bool
@@ -22,10 +22,11 @@ priv struct ChatJump {
   mut around : Double
   flashed : @signals.Signal[(String, Double)]
   found : @signals.Signal[(String, Array[String])]
+  mut outline_at : @view.View?
 }
 
 ///|
-/// None away yet, nothing asked, nothing gone to.
+/// None away yet, nothing asked, nothing gone to, no round button.
 fn ChatJump::new() -> ChatJump {
   {
     away: @signals.signal(false, same=fn(a, b) { a == b }),
@@ -36,6 +37,7 @@ fn ChatJump::new() -> ChatJump {
     around: -1.0,
     flashed: @signals.signal(("", -1.0), same=fn(a, b) { a == b }),
     found: @signals.signal(("", []), same=fn(a, b) { a == b }),
+    outline_at: None,
   }
 }
 
@@ -298,7 +300,8 @@ fn chat_to_newest_node(
 ///|
 /// 对话目录's round button (outline_float's) over the way to the newest in the list's foot `foot`, with it
 /// (chat_outlines); pressed, chat `r`'s outline beside it (a sheet on Small), at the message the reader is at
-/// (outline_current: what the list last had in sight, sfbase's Reading). Its page's time on top `stint`.
+/// (outline_current: what the list last had in sight, sfbase's Reading); what ⌘G opens it beside while it shows
+/// (`jump`'s outline_at). Its page's time on top `stint`.
 fn chat_outline_node(
   foot : @view.View,
   src : Source,
@@ -321,6 +324,9 @@ fn chat_outline_node(
       open_outline(src, r, th, current, from=Node(button.val), side=Left, stint=@signals.untracked(stint))
     }
     button.val = @sf.float_button_node(o, "list", fn() { @sf.t("web-main.outline.title") }, press, tips~, shortcut="chat.outline")
+    // (⌘G's outline beside it while it shows: chat_body_node's chat.outline)
+    jump.outline_at = Some(button.val)
+    o.owns(fn() { if jump.outline_at.map(fn(b) { b.id() }) == Some(button.val.id()) { jump.outline_at = None } }) |> ignore
     // (a screen's fixture: the outline opened from it as it shows, its words typed, its field taking the keys, in
     // the button's moment's turn: outline_presets)
     match outline_presets.get(chat) {

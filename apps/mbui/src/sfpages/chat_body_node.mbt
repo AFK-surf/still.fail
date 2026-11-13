@@ -447,10 +447,11 @@ fn chat_body_node(
         true
       })
       // ⌘G 对话目录, ⌥⇧↑ and ⌥⇧↓ the message a person said before and after the reader's (outline_entries_of's keys;
-      // none in a replay of a run from before the outline, Source's `asks_outline`)
+      // none in a replay of a run from before the outline, Source's `asks_outline`); ⌘G's beside the round button
+      // while it shows
       .on_action("chat.outline", fn(_) {
         (src.asks_outline)() &&
-        outline_open_keys(src, r, @signals.untracked(here.view), stint=@signals.untracked(here.stint))
+        outline_open_keys(src, r, @signals.untracked(here.view), stint=@signals.untracked(here.stint), button?=jump.outline_at)
       })
       .on_action("chat.said.prev", fn(_) { (src.asks_outline)() && said_go(src, r, @signals.untracked(here.view), -1) })
       .on_action("chat.said.next", fn(_) { (src.asks_outline)() && said_go(src, r, @signals.untracked(here.view), 1) })
