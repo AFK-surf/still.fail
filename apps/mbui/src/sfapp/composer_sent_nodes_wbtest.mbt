@@ -6,6 +6,11 @@
 // sent message goes up only, by the sent row's height less what the composer gave back, and the room from the sent
 // message to the composer's hint opens and never closes again. On main the composer stayed three lines tall for good
 // (144.25 where its one line is 94.75, words 1).
+// Its list's rows are set on the host's pixels, as every device's host sets them (Tester::set_rows_on_pixels): what is
+// judged is where things are drawn against the composer, which stands still, so on the grid a device draws them on
+// (with rows off it, which no device runs, a pixel what is over fell for ~40 ms of a three-line send went unseen). How far
+// the list goes up is held to less than one device pixel of the sent key less what the composer gave back: the
+// composer's room is laid on the grid before and after, each up by less than a pixel.
 
 ///|
 /// The draft of the fixture's chat s-c1.
@@ -107,6 +112,7 @@ fn sent_nodes_chat(scale : Double) -> @ui.Tester {
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.set_font_scale(scale)
+  t.set_rows_on_pixels(true)
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -136,12 +142,14 @@ test "a chat's page made as nodes, 小屏, a finger's: three lines sent, the com
     assert_true((at_rest - room).abs() < 0.01, msg="\{at}: its room \{at_rest} at rest, \{room} with one line")
     // (at rest: the list up by what the sent key takes in it, its block as laid out (its words and the line under them)
     // and the room between it and the block before, less what the composer gave back; what is over it drawn up as far,
-    // on the device's pixels: 82.5 for the list's 82.75 at words 1)
+    // on the device's pixels: 82.5 for the list's 82.75 at words 1; within less than one device pixel of it, the
+    // composer's room laid on the grid before and after, each up by less than a pixel, so their difference off by less
+    // than one)
     let rest = sent_nodes_words(t, over)
     let row = sent_nodes_last_block(t, at)
     let up = t.list_offset() - off
     let want = row - (room_three - room)
-    assert_true((up - want).abs() < 0.01, msg="\{at}: the list up \{up}, the sent key's \{row} less \{room_three - room}")
+    assert_true((up - want).abs() < 1.0 / t.ctx().drawn_scale(), msg="\{at}: the list up \{up}, the sent key's \{row} less \{room_three - room}")
     assert_true((before.0 - rest.0 - up).abs() < 0.5, msg="\{at}: what is over it drawn up \{before.0 - rest.0}, the list \{up}")
   }
 }
@@ -158,6 +166,7 @@ test "a new chat on a page made as nodes, 小屏, a finger's: its first three li
     let t = tester("home")
     @sfbase.chat_page_nodes.set(true)
     t.set_font_scale(scale)
+    t.set_rows_on_pixels(true)
     t.draw()
     let (_, y) = bar_places_at()
     t.tap(195.0, y - 28.0 - 4.0)
