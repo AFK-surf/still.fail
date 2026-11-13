@@ -26,7 +26,9 @@
   keeps it by `station/src/cloud/log-keep.ts`) is decided by
   what its owners signed, not by the cloud: the cloud cannot add people or stations to it. It and the personal lock
   are kept here only for the stations and devices from before the stations carried them (the root AGENTS.md, The
-  cloud is the account system): nothing new that is not the account system comes here.
+  cloud is the account system): nothing new that is not the account system comes here. Once a chain moved (`moved`
+  its last entry) whether it is on is said in its root's log, never here: its `locked` stays true for those from before,
+  and nothing here refuses by it as if it knew (`enroll`; the stations and the core go by the lock they hold).
 - One cloud answers as the other product too (`src/guests.ts`; the user, 2026-11-12: still.fail's accounts move into
   monoid's cloud, both apps staying, each its own name): still.fail's hosts stay in still.fail's account, its API
   Worker forwarding there (`FORWARD_TO`), monoid's answering a forwarded request as still.fail's (`GUESTS`, under
