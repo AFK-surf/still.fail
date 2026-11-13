@@ -392,7 +392,13 @@ for t in $targets; do
           # (send_steady's three beside the fourth's pages were 114, 137 and 149 s, with real_size's half 78 and its
           # pages 211, app 4/4 222-237 s of its 5 minutes on main c54dc28b 43348134004 and branches after: reckoned 300,
           # by the table some 95 s of its pages go to the other three)
-          *) specs="4,4,380,1 2,4,430,1 1,4,500,1 4,4,420,1" ;;
+          # (the first's other runs some 520-600 s since (real_size's half 213, preview_tree's halves 114 and 69,
+          # answers_still's at the default rate), the fourth's 480-600 (send_steady's three 136-190, real_size's half 96),
+          # the third's 250-300: app 1/4 276 and 298 s and app 4/4 286 of their 5 minutes on main ab6f4880 43508430525
+          # and 9e98b280 43513225293, where the second's were 162-165 and the third's 114-173. The first and the
+          # fourth reckoned 700, the third 450: by the table the first's pages go from 759 s to 657, the fourth's from
+          # 719 to 637, the second's from 509 to 638 (on two programs) and the third's from 284 to 339)
+          *) specs="4,4,700,1 2,4,430,1 1,4,450,1 4,4,700,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
