@@ -117,7 +117,7 @@ export function summaryCommand(cmd: string): string {
       const next = s
         .replace(/^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "")
         .replace(/^(?:(?:export\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]*)\s+)+)/, "")
-        .replace(/^(?:cd\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "")
+        .replace(/^(?:cd\s+(?:"[^"]*\/[^"]*"|'[^']*\/[^']*'|[^\s;&|]*\/[^\s;&|]*|~[^\s;&|]*)\s*(?:&&|;)\s*)/, "")
         .replace(/^(?:(?:\.|source)\s+[^\s;&|]*env\.sh\s*(?:&&|;)\s*)/, "");
       if (next === s) break;
       s = next.trim();
