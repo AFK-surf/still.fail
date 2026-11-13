@@ -98,8 +98,10 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
     st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
     if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) return Effect.succeed({ head: headOf(x.chain), entries: x.chain, ...serves });
-    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: x.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) });
-    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: x.bodies, lacking: [] });
+    // (a device the list does not name is given no log and no body: it is told it is left out, `asking`)
+    const named = o.mine !== "none" || x !== st;
+    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: named ? x.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) : [] });
+    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: named ? x.bodies : [], lacking: [] });
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
     if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: st.own.length === 0 ? [] : [{ genesis: entryHash(st.own[0]!), entries: st.own }] });
     if (x.silent && method === "POST") return Effect.never;
@@ -508,12 +510,14 @@ test("a device whose person was taken out where the chain moved: the refusal's r
   assert.equal(outOf(other.inner, "ws"), null);
 });
 
-/// The new device's side: s1's device (ME) waiting in `ws`, whose list (alice's log the root) does not name s1. It asks
-/// with `lock.pair`; alice's app (it signs workspaces' locks, an owner) is dialled, and what it is sent is kept (it
+/// The new device's side: s1's device (ME) waiting in `ws`, whose list (alice's log the root) does not name s1: given
+/// no log, told by station A's refusal it is left out and to ask alice's app (station/src/mesh/serve.ts `leftOf`). It
+/// asks with `lock.pair`; alice's app (it signs workspaces' locks, an owner) is dialled, and what it is sent is kept (it
 /// answers no: only the hello is looked at here).
 async function asking(own: "on" | "none" | "other") {
   const w = await setUp({ root: "alice", mine: "none", own });
   const ALICE_APP = key(6101).hex;
+  hooks.lockRefused?.(w.inner, "ws", A, null, { left: { approvers: [ALICE_APP] } });
   w.inner.mesh = () => Effect.succeed({ deviceId: () => ME, lockClaim: () => null, link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
   w.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   const hellos: { workspaces?: { ws: string }[]; log?: Entry[]; personal?: unknown }[] = [];

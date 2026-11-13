@@ -152,7 +152,12 @@
   list `without` it, the model's `admitsBefore`). A device taken out is told so by its hello's refusal, which carries
   that removal, its `prev` chain and the log entries that commit to them (`src/mesh/serve.ts` `toldOut`, by the
   device's ids and the keys its log put on with them), nothing else of the workspace; one taken off its own log hears
-  it of that log (the refusal's `person`, as before). `test/lock-moved-model.test.ts` holds all of it to the model.
+  it of that log (the refusal's `person`, as before). A device the state in force does not name is told so by that
+  refusal's `left` (`leftOf`, 2026-11-14: given no logs, a newcomer's app or a member's new web page read the
+  workspace as waiting for good) with whom to ask, the app devices that may let it in: its person's own where the list
+  names them, else the owners' and admins', 16 at most. Not the list: only who can let it in, a hint it dials as
+  before a move, each device dialled checking all itself. Never while waiting (the state names nobody) nor off.
+  `test/lock-moved-model.test.ts` holds all of it to the model, `test/lock-left-out.test.ts` the refusal's `left`.
 
 ## Screens
 
