@@ -276,28 +276,11 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
 }
 
 ///|
-/// What its ⋯ holds (station_menu's): renaming it, restarting it while it is online, removing it (asked first).
+/// What its ⋯ holds (station_menu's): renaming it, restarting it while it is online, its chats moved away and it taken
+/// out (station_retire_item's), removing it (asked first).
 fn station_menu_items(core : Core, here : Here, s : Json?) -> Array[@sf.MenuItem?] {
   let address = text(s, "station")
-  let remove = fn() {
-    confirm(
-      @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
-      @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
-      @sf.t("web-pages.settings.stations.removeAction"),
-      danger=true,
-      // back to the list at once (the page of a station going has nothing to show), its answer said there
-      fn() {
-        (core.pop)()
-        @settings.act(
-          core,
-          @sf.t("web-pages.settings.stations.remove"),
-          "workspace.removeStation",
-          obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
-          done=@sf.t("android-settings.station.removed"),
-        )
-      },
-    )
-  }
+  let remove = fn() { station_remove_ask(core, here, s) }
   [
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
       if flag(s, "online") {
@@ -332,6 +315,7 @@ fn station_menu_items(core : Core, here : Here, s : Json?) -> Array[@sf.MenuItem
       } else {
         None
       },
+      station_retire_item(core, here, s),
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
   ]
 }
@@ -1682,3 +1666,26 @@ let st_problem : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 ///|
 // kept across runs: a value (no field of it changes)
 let st_problem_bad : @ui.TextStyle = st_problem.then(@ui.text_style(color=Danger))
+
+///|
+/// Taking a station out of the workspace, asked first (its ⋯'s 移出, and 移出 workspace once its chats were moved
+/// away, station_retire_node.mbt): back to the list at once (the page of a station going has nothing to show), its answer said there.
+fn station_remove_ask(core : Core, here : Here, s : Json?) -> Unit {
+  confirm(
+    @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
+    @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
+    @sf.t("web-pages.settings.stations.removeAction"),
+    danger=true,
+    // back to the list at once (the page of a station going has nothing to show), its answer said there
+    fn() {
+      (core.pop)()
+      @settings.act(
+        core,
+        @sf.t("web-pages.settings.stations.remove"),
+        "workspace.removeStation",
+        obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
+        done=@sf.t("android-settings.station.removed"),
+      )
+    },
+  )
+}

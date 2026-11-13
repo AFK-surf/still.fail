@@ -355,6 +355,7 @@ export async function drives(isDir: (path: string) => Promise<boolean>): Promise
 export const windows: Platform = {
   os: "windows",
   buildOs: "win32",
+  clonesFiles: false,
 
   exe: (name) => `${name}.exe`,
   home: (env) => env.HOME ?? env.USERPROFILE,

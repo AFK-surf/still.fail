@@ -94,6 +94,11 @@ priv struct SettingsFixture {
   mut key_giving : Bool
   /// Maple online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
+  /// how many other stations are online to take Willow's chats as it is retired (settings-station-retire…): 1 Maple,
+  /// 2 Cedar besides; 0 neither (Maple as it is)
+  mut retire_others : Int
+  /// the workspace Willow is retired from is its home (its accounts go along); false: one it joined (they stay)
+  mut retire_home : Bool
   // (settings-station-away: Willow away, what it last said of itself kept)
   mut willow_away : Bool
   // (settings-stations-incompatible: Willow up, saying what this core cannot read)
@@ -177,6 +182,8 @@ let fx : SettingsFixture = {
   key_ask_ended: "",
   key_giving: false,
   mba_online: false,
+  retire_others: 0,
+  retire_home: true,
   willow_away: false,
   willow_incompatible: false,
   willow_theirs: false,
@@ -314,6 +321,7 @@ fn fixture_reset() -> Unit {
   fx.logs = true
   fx.elevation = None
   fx.copies = None
+  fixture_retire_asked.clear()
   fx.gpus = false
   fx.more_gpus = false
   fx.low_meters = false
@@ -338,6 +346,8 @@ fn fixture_reset() -> Unit {
   fx.key_ask_ended = ""
   fx.key_giving = false
   fx.mba_online = false
+  fx.retire_others = 0
+  fx.retire_home = true
   fx.willow_away = false
   fx.willow_incompatible = false
   fx.willow_theirs = false
@@ -576,6 +586,34 @@ pub fn fixture_page(mode : String) -> String {
       station_parts["ws1/st1"] = "settings"
       up("", "settings/station/ws1/st1", -1)
     }
+    // Willow retired from the workspace, its chats moved to another station (station_retire_node.mbt): its ⋯'s
+    // 迁走聊天并移出… there (-retire: Maple the one other station up); its panel opened over its page, what goes and
+    // what stays as Willow counts them (-panel: Maple chosen; -panel-pick: Maple and Cedar up, none chosen; -panel-none:
+    // none up; -panel-joined: a workspace Willow only joined, its accounts staying; -panel-long: the one up named long);
+    // then 迁移 at the top of its page, its steps as it goes: sending (取消), its chats paused (取消), failed as Maple
+    // took them (重试, 取消), its accounts moving, done (移出 workspace), done with two accounts left behind; -taking:
+    // a station as old stations' chats come to it
+    "settings-station-retire" | "settings-station-retire-panel" | "settings-station-retire-panel-pick" | "settings-station-retire-panel-none" | "settings-station-retire-panel-joined" | "settings-station-retire-panel-long" => {
+      fx.copies = Some(fixture_copies_retire(""))
+      fx.retire_others = match m {
+        "settings-station-retire-panel-pick" => 2
+        "settings-station-retire-panel-none" => 0
+        _ => 1
+      }
+      fx.retire_home = m != "settings-station-retire-panel-joined"
+      if m == "settings-station-retire-panel-long" {
+        fx.names["st2"] = "Lin's MacBook Pro (2021)"
+      }
+      if m != "settings-station-retire" {
+        fixture_open.desk = "retire-panel"
+      }
+      station_parts["ws1/st1"] = "overview"
+    }
+    "settings-station-retire-sending" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" => {
+      fx.copies = Some(fixture_copies_retire(if m == "settings-station-taking" { "taking" } else { m.unsafe_substring(start=24, end=m.length()) }))
+      fx.retire_others = 1
+      station_parts["ws1/st1"] = "overview"
+    }
     // its 进程: what still.fail uses of the machine
     "settings-station-processes" => station_parts["ws1/st1"] = "processes"
     "settings-station-lower" => {
@@ -591,6 +629,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-add" => up("add", "", 0)
     // Profile's ＋ with more than one station online: which to add it on (pressed by the film's step)
     "settings-profiles-pick" => fx.mba_online = true
+    // an account's page with the station it is on and its move to another, Maple up to take it: ChatGPT 团队, a
+    // subscription not shared; 备用 key, a key not shared
+    "settings-profile-move" | "settings-profile-move-key" => fx.mba_online = true
     "settings-profiles-monthly" => fx.monthly = true
     "settings-profiles-fable" | "settings-profile-fable" => fx.own = 1
     // (settings-station-own3: the station's page, for its accounts' panel pictured with them)
@@ -709,7 +750,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-network" | "settings-station-away" | "settings-station-copies" | "settings-station-copies-alone" | "settings-station-restore" | "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" | "settings-station-restored" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-network" | "settings-station-away" | "settings-station-copies" | "settings-station-copies-alone" | "settings-station-restore" | "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" | "settings-station-restored" | "settings-station-retire" | "settings-station-retire-panel" | "settings-station-retire-panel-pick" | "settings-station-retire-panel-none" | "settings-station-retire-panel-joined" | "settings-station-retire-panel-long" | "settings-station-retire-sending" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -761,7 +802,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
     "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" | "settings-profile-fable" | "settings-profile-own3" | "settings-profile-week-fable" =>
       "profile:ws1/st1#cc"
-    "settings-profile-key" => "profile:ws1/st1#k2"
+    "settings-profile-key" | "settings-profile-move-key" => "profile:ws1/st1#k2"
+    "settings-profile-move" => "profile:ws1/st1#cx"
     "settings-profile-copy" => "profile:ws1/st1#bx"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
     "settings-profile-quota-kinds" => "profile:ws1/st1#cc"
@@ -1826,15 +1868,17 @@ fn fx_station(address : String) -> Json {
       ("betaOffered", Json::boolean(true)),
     ])
   } else {
+    // (Maple online for Profile's ＋; it, and Cedar besides, to take Willow's chats as it is retired)
+    let up = fx.mba_online || fx.retire_others >= 2 || (fx.retire_others == 1 && id == "st2")
     obj([
       ("station", str(address)),
       ("id", str(id)),
-      ("name", str(renamed.unwrap_or("Maple"))),
+      ("name", str(renamed.unwrap_or(if id == "st3" && fx.retire_others >= 2 { "Cedar" } else { "Maple" }))),
       ("icon", str(fx.marks.get(id).unwrap_or("glyph:laptop:teal"))),
-      ("summary", str(if fx.mba_online { "Apple M3 · 空闲" } else { "离线 · 2 天前" })),
-      ("face", str(if fx.mba_online { "idle" } else { "offline" })),
-      ("online", Json::boolean(fx.mba_online)),
-      ("link", obj([("state", str(if fx.mba_online { "online" } else { "offline" }))])),
+      ("summary", str(if up { "Apple M3 · 空闲" } else { "离线 · 2 天前" })),
+      ("face", str(if up { "idle" } else { "offline" })),
+      ("online", Json::boolean(up)),
+      ("link", obj([("state", str(if up { "online" } else { "offline" }))])),
       ("runtimes", []),
       ("models", []),
     ])
@@ -2320,7 +2364,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       } else {
         // (settings-stations-motion: 3 comes, then Maple goes)
         let all = [fx_station("ws1/st1"), fx_station("ws1/st2")]
-        if fx.motion >= 1 {
+        if fx.motion >= 1 || fx.retire_others >= 2 {
           all.push(fx_station("ws1/st3"))
         }
         if fx.motion >= 2 {
@@ -2846,7 +2890,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             "stations",
             [
               obj([("id", str("st1")), ("name", str("Willow")), ("online", Json::boolean(true))]),
-              obj([("id", str("st2")), ("name", str("Maple")), ("online", Json::boolean(false))]),
+              obj([("id", str("st2")), ("name", str("Maple")), ("online", Json::boolean(fx.mba_online))]),
             ],
           ),
           (
@@ -2991,6 +3035,20 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     None => ()
   }
   match devices_fixture_call(name, p) {
+    Some(r) => return Some(r)
+    None => ()
+  }
+  // (an account moved to Maple: asked with what the station needs, the one it is on, which, and where to)
+  if name == "profile.move" {
+    return Some(
+      if text(p, "station") == "ws1/st1" && text(p, "id") != "" && text(p, "to") == "st2" && fx.mba_online {
+        Ok(obj([]))
+      } else {
+        Err(obj([("code", str("invalid")), ("message", str("missing station, id or to"))]))
+      },
+    )
+  }
+  match retire_fixture_call(name, p) {
     Some(r) => return Some(r)
     None => ()
   }
@@ -4063,6 +4121,150 @@ fn fixture_copies_restored() -> Json {
     ("canRestore", Json::boolean(true)),
     ("formerly", [str("st9")]),
   ])
+}
+
+///|
+/// Willow's copies (StationCopies) as it is retired, by `step` (the fixture mode's end), in the core's words: "" none
+/// under way, it may be retired; "sending" its files going to Maple, "quiet" its chats paused, both let go of;
+/// "failed" Maple out of reach as it took them, tried again or let go of; "accounts" its accounts moving; "done" all
+/// on Maple, "done-left" with two accounts left behind; "taking": a station that takes two retired ones' chats in, Old
+/// Mac's working directories made again and Birch's failed.
+fn fixture_copies_retire(step : String) -> Json {
+  let to = "Maple"
+  let keys = ["sending", "quiet", "handing", "accounts", "connects"]
+  let at = match step {
+    "sending" => 0
+    "quiet" => 1
+    "failed" => 2
+    "accounts" => 3
+    _ => 5
+  }
+  let steps = keys.mapi(fn(i, key) {
+    let state = if i < at { "done" } else if i == at { if step == "failed" { "failed" } else { "now" } } else { "todo" }
+    let note = match (state, key) {
+      ("now", "sending") => fill("core-views.copies.retire.sent", [("done", "1.5 GB"), ("total", "3.2 GB")])
+      ("failed", _) => fill("core-views.copies.retire.why.offline", [("name", to)])
+      _ => ""
+    }
+    obj([
+      ("key", str(key)),
+      ("label", str(fill("core-views.copies.retire.step." + key, [("name", to)]))),
+      ("state", str(state)),
+      ("note", str(note)),
+    ])
+  })
+  let left = if step == "done-left" {
+    obj([
+      ("label", str(fill("core-views.copies.retire.left", [("n", "2")]))),
+      (
+        "note",
+        str(fill("core-views.copies.retire.leftNote", [("names", "cuesurf5@proton.me" + tr("core-views.copies.andLast") + "Kimi Code key"), ("name", to)])),
+      ),
+    ])
+  } else {
+    Json::null()
+  }
+  let r = if step == "" || step == "taking" {
+    Json::null()
+  } else {
+    obj([
+      ("steps", Json::array(steps)),
+      ("left", left),
+      ("done", Json::boolean(at == 5)),
+      ("stopped", Json::boolean(at > 0 && at < 5)),
+      ("to", str("st2")),
+      ("toName", str(to)),
+      ("cancellable", Json::boolean(at <= 2)),
+      ("retriable", Json::boolean(step == "failed")),
+    ])
+  }
+  let taking = fn(origin : String, name : String, line : String, level : String) {
+    obj([("origin", str(origin)), ("name", str(name)), ("line", str(line)), ("level", str(level))])
+  }
+  obj([
+    ("line", str("已备份到 Cedar 和 Aspen · 2 分钟前")),
+    ("level", str("ok")),
+    ("offers", []),
+    ("canRestore", Json::boolean(true)),
+    ("formerly", []),
+    ("canRetire", Json::boolean(step == "" || step == "taking")),
+    ("retire", r),
+    (
+      "taking",
+      if step == "taking" {
+        [
+          taking("st9", "Old Mac", tr("core-views.copies.taking.gits"), "ok"),
+          taking("st8", "Birch", fill("core-views.copies.taking.failed", [("why", tr("core-views.copies.why.error"))]), "amber"),
+        ]
+      } else {
+        []
+      },
+    ),
+  ])
+}
+
+///|
+/// What retiring Willow would take along and leave (RetirePreview, `copies.retirePreview`), as a station of real use
+/// says it: 594 chats, 525 of them archived; five connects; nine accounts, its home's, else staying; six tasks and
+/// services running; three chats whose folders are not on it.
+pub fn fixture_retire_preview() -> Json {
+  let things = fn(names : Array[String]) {
+    Json::array(names.mapi(fn(i, n) { obj([("id", str("t" + i.to_string())), ("name", str(n))]) }))
+  }
+  let accounts = [
+    "cuesurf5@proton.me", "lin@example.com", "studio-ci@cue.surf", "Kimi Code key", "OpenRouter (team)", "jev-decisions",
+    "zhou.design@example.com", "Anthropic API · nightly", "Cursor (Lin)",
+  ]
+  obj([
+    ("home", Json::boolean(fx.retire_home)),
+    ("chats", Json::number(594.0)),
+    ("archived", Json::number(525.0)),
+    ("connects", things(["发布助手 · Slack", "飞书助手", "Comma 助手", "值班机器人 · Slack", "Release notes · Slack"])),
+    ("accounts", if fx.retire_home { things(accounts) } else { [] }),
+    ("accountsStay", if fx.retire_home { [] } else { things(accounts) }),
+    (
+      "jobs",
+      Json::array(
+        ["pnpm dev", "station tests", "preview :5173", "storybook", "ollama serve", "nightly build"].map(fn(n) {
+          obj([("name", str(n)), ("session", str("s-c1"))])
+        }),
+      ),
+    ),
+    ("outside", Json::number(3.0)),
+  ])
+}
+
+///|
+/// The calls of Willow's retirement the made-up core was asked, as it was asked them (name and params), each answered
+/// only where what it was given is what the core needs (the station's address; for `copies.retire` a station of the
+/// workspace up and not Willow): a test reads what a page asked.
+// kept across runs: emptied by fixture_reset
+pub let fixture_retire_asked : Array[(String, Json)] = []
+
+///|
+/// A `copies.retire*` call answered as the core would, Willow's copies moved on as its station would say them next;
+/// one given what the core would refuse refused in its words. None: not one of them.
+fn retire_fixture_call(name : String, p : Json?) -> Result[Json, Json]? {
+  if name == "copies.retirePreview" {
+    fixture_retire_asked.push((name, p.unwrap_or(Json::null())))
+    return Some(if text(p, "station") == "ws1/st1" { Ok(fixture_retire_preview()) } else { Err(obj([("code", str("invalid")), ("message", str("missing station"))])) })
+  }
+  guard name == "copies.retire" || name == "copies.retireCancel" || name == "copies.retireAgain" else { return None }
+  fixture_retire_asked.push((name, p.unwrap_or(Json::null())))
+  let refused = fn(why : String) { Some(Err(obj([("code", str("invalid")), ("message", str(why))]))) }
+  guard text(p, "station") == "ws1/st1" else { return refused("missing station") }
+  match name {
+    "copies.retire" => {
+      let to = text(p, "to")
+      let up = (to == "st2" && fx.retire_others >= 1) || (to == "st3" && fx.retire_others >= 2)
+      guard up else { return refused("no such station up: " + to) }
+      fx.copies = Some(fixture_copies_retire("sending"))
+    }
+    "copies.retireCancel" => fx.copies = Some(fixture_copies_retire(""))
+    _ => fx.copies = Some(fixture_copies_retire("quiet"))
+  }
+  fx_changed()
+  Some(Ok(obj([])))
 }
 
 ///|

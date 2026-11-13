@@ -283,6 +283,7 @@ function mounts(): string[] {
 export const unix: Platform = {
   os: OS[process.platform] ?? process.platform,
   buildOs: process.platform === "darwin" || process.platform === "linux" ? process.platform : null,
+  clonesFiles: MACOS,
 
   exe: (name) => name,
   home: (env) => env.HOME,

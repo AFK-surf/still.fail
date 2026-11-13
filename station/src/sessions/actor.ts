@@ -81,6 +81,9 @@ export type SessionStore = {
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
   untoldCardChoices(key: string): CardChoice[];
   markCardChoicesTold(key: string, told: readonly CardChoice[]): void;
+  /// What it is told once of its chat having moved here from a station retired (store.ts `untoldMovedNote`).
+  untoldMovedNote?(key: string): string | null;
+  markMovedNoteTold?(key: string): void;
   heardThreads(key: string, threads: number[]): Set<number> | number[];
   postsAfter(key: string, messages: readonly { thread: number; n: number }[]): (string | null)[];
   cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
@@ -1270,6 +1273,17 @@ export class SessionActor {
   /// `text` as the agent is handed it, after what people chose on its cards with an option that closes them (no message
   /// was sent then, so it has not heard: store.ts closeCard), and what marks those told once it has been handed.
   private async withChoices(text: string): Promise<[string, () => void]> {
+    const store = this.deps.store;
+    // (its chat moved here from a station retired: said once, before the rest)
+    const moved = store.untoldMovedNote?.(this.key) ?? null;
+    if (moved !== null) {
+      const [rest, told] = await this.choicesWith(text);
+      return [rest === "" ? moved : `${moved}\n\n${rest}`, () => (told(), store.markMovedNoteTold?.(this.key))];
+    }
+    return this.choicesWith(text);
+  }
+
+  private async choicesWith(text: string): Promise<[string, () => void]> {
     const store = this.deps.store;
     const chose = store.untoldCardChoices(this.key);
     if (chose.length === 0) return [text, () => {}];

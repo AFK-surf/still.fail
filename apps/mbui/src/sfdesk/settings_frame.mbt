@@ -96,6 +96,14 @@ pub fn settings_fixture(src : Source, core : Core) -> Unit {
         [copy, ..] => @sfpages.copies_restore_confirm(core, "ws1/st1", Some(copy))
         _ => ()
       }
+    // (Willow's retirement asked: its ⋯'s 迁走聊天并移出…'s panel, what it would take along as Willow says it)
+    "retire-panel" =>
+      @sfpages.station_retire_panel(
+        core,
+        @settings.here_of(core, "ws1", "星火工作室"),
+        Some({ "station": Json::string("ws1/st1"), "name": Json::string("Willow") }),
+        @settings.fixture_retire_preview(),
+      )
     _ => ()
   }
 }

@@ -1,5 +1,6 @@
 // A station's backups as its 设置 shows them (copies.ts): one row, and on a new station a backup of a station no
-// longer there to restore; and a lost station's links opening the station that took its place (asks.ts `linkNow`).
+// longer there to restore; a station retired and one taking a retired one's chats in, as its page's 迁移 says them;
+// and a lost station's links opening the station that took its place (asks.ts `linkNow`).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { linkNow, linkTarget } from "../src/asks.ts";
@@ -74,4 +75,88 @@ test("a link to a lost station's chat opens the station that took its place", ()
   assert.equal(linkNow(target, now).station, B);
   assert.equal(linkNow(target, now).session, "chat:x");
   assert.equal(linkNow(linkTarget("https://app.still.fail/invite#t", "https://app.still.fail"), now).opens, "invite");
+});
+
+test("a station retired: its steps a row each, done, under way, failed or not yet, what may be done of it as its station says; may be retired only by one who manages it, while it has chats and none is recorded", () => {
+  const base = { to: 7, chats: 12, keepers: [keeper(A, "Cedar", {})], empty: false, manage: true, formerly: [] };
+  const free = copiesShown(base, c);
+  assert.equal(free.canRetire, true, "one who manages it may retire it");
+  assert.equal(free.retire, null);
+  assert.deepEqual(free.taking, []);
+  assert.equal(copiesShown({ ...base, manage: false }, c).canRetire, false, "not one who does not manage it");
+  assert.equal(copiesShown({ ...base, chats: 0 }, c).canRetire, false, "not one with no chats");
+  assert.equal(copiesShown({ ...base, empty: true, chats: 0 }, c).canRetire, false, "not a new station");
+  const retiring = (step: string, o: Record<string, unknown> = {}, manage = true) =>
+    copiesShown({ ...base, manage, retiring: { workspace: "w", to: B, toName: "Aspen", by: "p@x", at: 1, step, done: 1_500_000, total: 3_200_000_000, error: null, reason: null, cancellable: false, retriable: false, home: true, accountsLeft: [], ...o } }, c);
+  const rows = (v: { retire: { steps: { key: string; label: string; state: string; note: string }[] } }) => v.retire.steps.map((x) => `${x.label}:${x.state}${x.note === "" ? "" : `:${x.note}`}`);
+  const labels = ["传文件", "暂停聊天，补传改动", "Aspen 接收聊天", "移账号", "移连接"];
+  const at = (i: number, now: string) => labels.map((l, j) => `${l}:${j < i ? "done" : j === i ? now : "todo"}`);
+  const sending = retiring("sending", { cancellable: true });
+  assert.deepEqual(rows(sending), [`传文件:now:1.5 MB / 3.2 GB`, ...at(0, "now").slice(1)]);
+  assert.equal(sending.retire.cancellable, true);
+  assert.equal(sending.retire.stopped, false);
+  assert.equal(sending.retire.done, false);
+  assert.equal(sending.retire.to, B);
+  assert.equal(sending.retire.toName, "Aspen");
+  assert.equal(sending.retire.left, null);
+  assert.equal(sending.canRetire, false, "one recorded");
+  assert.ok("ok" in conform("StationCopies", sending), JSON.stringify(conform("StationCopies", sending)));
+  for (const [i, step] of ["quiet", "handing", "accounts", "connects"].entries()) {
+    const v = retiring(step);
+    assert.deepEqual(rows(v), at(i + 1, "now"), step);
+    assert.equal(v.retire.stopped, true, step);
+    assert.equal(v.retire.done, false, step);
+  }
+  const done = retiring("done");
+  assert.deepEqual(rows(done), labels.map((l) => `${l}:done`));
+  assert.equal(done.retire.done, true);
+  assert.equal(done.retire.stopped, false);
+  // accounts' step only where they move (its home workspace), or where the station is at it
+  assert.deepEqual(rows(retiring("connects", { home: false })), at(4, "now").filter((r) => !r.startsWith("移账号")).map((r) => r.replace("移连接:todo", "移连接:now")));
+  assert.deepEqual(rows(retiring("accounts", { home: undefined })), at(3, "now"));
+  // a failure marks its step, why in words; tried again and let go of as its station says, by one who manages it
+  const why: Record<string, string> = {
+    offline: "连不上 Aspen",
+    full: "磁盘满了",
+    old: "Aspen 的版本太旧，先更新它",
+    failed: "Aspen 放入聊天时出错",
+    error: "出错了，详情在 station 日志里",
+  };
+  for (const [reason, note] of Object.entries(why)) {
+    const v = retiring("handing", { error: "station said so", reason, retriable: true, cancellable: true });
+    assert.deepEqual(v.retire.steps[2], { key: "handing", label: "Aspen 接收聊天", state: "failed", note }, reason);
+    assert.deepEqual(v.retire.steps.map((x: { state: string }) => x.state), ["done", "done", "failed", "todo", "todo"], reason);
+    assert.equal(v.retire.retriable, true, reason);
+    assert.equal(v.retire.cancellable, true, reason);
+    assert.equal(v.retire.done, false, reason);
+    assert.ok("ok" in conform("StationCopies", v), JSON.stringify(conform("StationCopies", v)));
+  }
+  assert.equal(retiring("sending", { cancellable: true }, false).retire.cancellable, false, "not let go of by one who does not manage it");
+  assert.equal(retiring("handing", { error: "x", reason: "offline", retriable: true }, false).retire.retriable, false, "nor tried again");
+  assert.equal(retiring("sending", { toName: "" }).retire.toName, B.slice(0, 8), "one with no name by its id");
+  // the accounts that could not go: a row of their own, how many and which, done or not
+  const left = retiring("done", { accountsLeft: [{ id: "p1", name: "cuesurf5@proton.me", error: "x" }, { id: "p2", name: "Kimi key", error: "y" }] });
+  assert.deepEqual(left.retire.left, { label: "2 个账号没移过去", note: "cuesurf5@proton.me 和 Kimi key：需要在 Aspen 上重新添加" });
+  assert.equal(left.retire.done, true);
+  assert.deepEqual(retiring("connects", { home: false, accountsLeft: [{ id: "p1", name: "", error: "x" }] }).retire.left?.label, "1 个账号没移过去");
+  assert.ok("ok" in conform("StationCopies", left), JSON.stringify(conform("StationCopies", left)));
+});
+
+test("a station taking retired ones' chats in: a row for each, whose and where it stands at each step, and one that failed", () => {
+  const base = { to: 7, chats: 12, keepers: [keeper(A, "Cedar", {})], empty: false, manage: true, formerly: [] };
+  const step = (s: string, o: Record<string, unknown> = {}) => ({ origin: C, name: "Old Mac", step: s, error: null, ...o });
+  const v = copiesShown({ ...base, taking: [step("coming"), step("placing"), step("gits"), step("copy"), step("restart"), step("failed", { error: "x" }), step("placing", { error: "x" }), { origin: A, name: "", step: "coming", error: null }] }, c);
+  assert.deepEqual(v.taking.map((x: { name: string; line: string; level: string }) => [x.name, x.line, x.level]), [
+    ["Old Mac", "正在接收聊天", "ok"],
+    ["Old Mac", "正在放入聊天", "ok"],
+    ["Old Mac", "正在重建工作目录", "ok"],
+    ["Old Mac", "正在放入工作目录里的文件", "ok"],
+    ["Old Mac", "聊天已就绪，这台重启后接上", "ok"],
+    ["Old Mac", "没接收成：出错了，详情在 station 日志里", "amber"],
+    ["Old Mac", "没接收成：出错了，详情在 station 日志里", "amber"],
+    [A.slice(0, 8), "正在接收聊天", "ok"],
+  ]);
+  assert.equal(v.taking[0].origin, C);
+  assert.equal(v.canRetire, true, "taking others' in, it may be retired itself");
+  assert.ok("ok" in conform("StationCopies", v), JSON.stringify(conform("StationCopies", v)));
 });

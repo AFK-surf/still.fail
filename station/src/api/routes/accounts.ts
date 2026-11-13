@@ -177,7 +177,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
       }),
     ),
     // Shared with the workspace's other stations (on, and which may use it, of those it chose from), or no longer; moved
-    // to another station.
+    // to another station (any profile of this station's own, shared or not: share/index.ts moveProfile).
     route("POST", /^\/*profiles\/+([^/]+)\/+share\/*$/, (r, [id]) =>
       answer(async () => {
         if (!sharing) return error(503, "station starting");
@@ -201,7 +201,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         const to = input(r).station;
         if (typeof to !== "string" || !/^[0-9a-f]{64}$/.test(to)) throw new Refusal(400, "station must be a station id");
         try {
-          await sharing.moveProfile(segment(id!), to);
+          await sharing.moveProfile(segment(id!), to, r.lang);
         } catch (e) {
           throw new Refusal(409, (e as Error).message);
         }

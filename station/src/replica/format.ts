@@ -76,6 +76,27 @@ export const RESTORE_ORDER = ["threads", "sessions", "thread_sessions", "entries
 
 /// The column of a table that names the thread or the session a row is of: what goes with a thread or a session gone.
 const THREAD_OF: Record<string, string> = { threads: "id", thread_sessions: "thread", entries: "thread", letters: "thread", closed_cards: "thread", reads: "thread", hidden_chats: "thread", muted_chats: "thread", kept_chats: "thread", dismissed: "thread" };
+/// Where a copy is put into a station with chats of its own (a station retired into it, restore.ts `build`'s `merge`):
+/// the columns that name a thread by its id here, given the id it gets there; and the tables numbered by a thread's
+/// own log (`n`, a viewer's read to it too), whose rows go only with a thread new there (one followed by both is the one
+/// there, its log as it is).
+export const THREAD_COLUMNS: Record<string, string> = { thread_sessions: "thread", entries: "thread", letters: "thread", closed_cards: "thread", reads: "thread", hidden_chats: "thread", muted_chats: "thread", kept_chats: "thread", dismissed: "thread", turns: "about_thread" };
+export const OWN_LOG = new Set(["entries", "letters", "closed_cards", "dismissed", "reads"]);
+
+/// A thread's ts a step on (a still.fail chat's, which each station mints itself, met there by another's: restore.ts
+/// `build`'s `merge`): its last digits counted up by one (`9` to `10` as a number is), a `1` put after it where it
+/// ends in none.
+export function bumpedTs(ts: string): string {
+  let i = ts.length;
+  while (i > 0 && ts.charCodeAt(i - 1) >= 48 && ts.charCodeAt(i - 1) <= 57) i--;
+  if (i === ts.length) return `${ts}1`;
+  const digits = ts.slice(i).split("");
+  let j = digits.length - 1;
+  while (j >= 0 && digits[j] === "9") digits[j--] = "0";
+  if (j < 0) digits.unshift("1");
+  else digits[j] = String.fromCharCode(digits[j]!.charCodeAt(0) + 1);
+  return ts.slice(0, i) + digits.join("");
+}
 const SESSION_OF: Record<string, string> = { sessions: "key", thread_sessions: "session", turns: "session_key", runtime_sessions: "session_key", pins: "session", opened_chats: "child" };
 
 export const WORKSPACE = /^[0-9A-Za-z_-]{1,64}$/;

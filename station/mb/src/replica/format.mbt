@@ -49,6 +49,63 @@ let thread_of : Array[(String, String)] = [
 ]
 
 ///|
+/// Where a copy is put into a station with chats of its own (format.ts `THREAD_COLUMNS`): the columns that name a thread
+/// by its id here.
+let thread_columns : Array[(String, String)] = [
+  ("thread_sessions", "thread"),
+  ("entries", "thread"),
+  ("letters", "thread"),
+  ("closed_cards", "thread"),
+  ("reads", "thread"),
+  ("hidden_chats", "thread"),
+  ("muted_chats", "thread"),
+  ("kept_chats", "thread"),
+  ("dismissed", "thread"),
+  ("turns", "about_thread"),
+]
+
+///|
+/// The tables numbered by a thread's own log (format.ts `OWN_LOG`).
+let own_log : Array[String] = ["entries", "letters", "closed_cards", "dismissed", "reads"]
+
+///|
+/// still.fail's own chats' surface (store/rows.ts `STILLFAIL_SURFACE`): each station mints their ts itself.
+let stillfail_surface : String = "ember"
+
+///|
+/// A thread's ts a step on (format.ts `bumpedTs`): its last digits counted up by one, a `1` put after it where it ends
+/// in none.
+fn bumped_ts(ts : String) -> String {
+  let mut i = ts.length()
+  while i > 0 && ts.unsafe_charcode_at(i - 1) >= 48 && ts.unsafe_charcode_at(i - 1) <= 57 {
+    i -= 1
+  }
+  if i == ts.length() {
+    return ts + "1"
+  }
+  let digits : Array[Int] = []
+  for k in i..<ts.length() {
+    digits.push(ts.unsafe_charcode_at(k) - 48)
+  }
+  let mut j = digits.length() - 1
+  while j >= 0 && digits[j] == 9 {
+    digits[j] = 0
+    j -= 1
+  }
+  let out = StringBuilder::new()
+  out.write_string(ts.view(end_offset=i).to_string())
+  if j < 0 {
+    out.write_char('1')
+  } else {
+    digits[j] = digits[j] + 1
+  }
+  for d in digits {
+    out.write_char((d + 48).unsafe_to_char())
+  }
+  out.to_string()
+}
+
+///|
 /// The column of a table that names the session a row is of.
 let session_of : Array[(String, String)] = [
   ("sessions", "key"),

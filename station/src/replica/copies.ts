@@ -58,6 +58,8 @@ export type CopiesDeps = {
   changed: () => void;
   /// Asks the station's launcher to start it again (ops/restart.ts); null where there is none to ask.
   restart: () => Promise<(() => Promise<void>) | null>;
+  /// The stations whose chats this one is taking (retire.ts): what it keeps of them is not handed over meanwhile.
+  taking?: () => Set<string>;
 };
 
 /// How a place for this station's copies stands: how far it goes, when it was brought level last, what went wrong.
@@ -77,6 +79,9 @@ export type RestoreReason = Reason | "gone" | "notEmpty";
 
 /// A copy that the place asked for does not keep (any more).
 class Gone extends Error {}
+
+/// A retired station's copy put in beside this one's chats (restore.ts `Ready`).
+type Merge = { merge: true; connects: Record<string, string>; ws: string | null };
 
 /// The store's change put into `t`, what the next pass is to read again (a few keys, nothing read); false where it
 /// says nothing of what is copied.
@@ -530,8 +535,9 @@ export class Copies {
     for (const { workspace: ws } of this.#d.places().workspaces) {
       const roster = this.#d.roster(ws);
       if (roster === null) continue;
+      const taking = this.#d.taking?.() ?? new Set<string>();
       for (const origin of await readdir(join(keptDir(this.#d.data), ws)).catch(() => [] as string[])) {
-        if (!STATION.test(origin) || origin === here) continue;
+        if (!STATION.test(origin) || origin === here || taking.has(origin)) continue;
         const should = keepers(ws, origin, roster.map((s) => s.id));
         if (should.includes(here)) continue;
         const mine = await this.kept.held(ws, origin);
@@ -645,16 +651,43 @@ export class Copies {
     }));
   }
 
+  /// The stations this one took the place of.
+  formerly(): string[] {
+    return this.#was;
+  }
+
+  /// What came of the restore this station was started again for (null: none).
+  restored(): Outcome | null {
+    return this.#restored;
+  }
+
+  /// This station's copy of `ws` as it is now, brought to `peer` (a station this one's chats go to as it is retired,
+  /// retire.ts): its generation.
+  async bringTo(ws: string, peer: string): Promise<string> {
+    await this.settleExport();
+    const head = this.#passed?.heads[ws];
+    if (head === undefined) throw new Error("no copy of this workspace's chats");
+    const done = await level(new PeerPlace(peer, this.#d.ask), ws, this.#own(head));
+    if (done.behind) throw new Error("that station keeps more of this station's chats than it has");
+    return head.gen;
+  }
+
+  /// A retired station's copy (`gen`), brought here before (retire.ts), put in beside this station's own chats as it
+  /// starts again: `connects`, how the ids of that station's connects go here; `ws`, its sessions' `ws` here.
+  takeOver(ws: string, origin: string, gen: string, extra: { connects: Record<string, string>; ws: string | null }): Promise<void> {
+    return this.restore(ws, origin, gen, { station: this.#d.here() ?? "" }, { merge: true, connects: extra.connects, ws: extra.ws });
+  }
+
   /// Brings `origin`'s copy (`gen`) here from `from`, a station that keeps it, then has the station start again to put
-  /// it in before its store opens. Only into a station with no chat of its own.
-  restore(ws: string, origin: string, gen: string, from: { station: string }): Promise<void> {
+  /// it in before its store opens. Only into a station with no chat of its own, unless `merge` (takeOver).
+  restore(ws: string, origin: string, gen: string, from: { station: string }, merge: Merge | null = null): Promise<void> {
     if (!STATION.test(origin) || !GEN.test(gen) || !WORKSPACE.test(ws)) throw new Error("not a copy's name");
-    if (this.#passed?.empty !== true) throw new NotEmpty();
+    if (merge === null && this.#passed?.empty !== true) throw new NotEmpty();
     if (this.#restoring !== null && this.#restoring.error === null) throw new Error("a restore is under way");
     const r: Restoring = { origin, name: "", workspace: ws, gen, from: from.station, done: 0, total: 0, error: null, reason: null, restart: false };
     this.#restoring = r;
     this.#changed(0);
-    return this.#bring(r, from).catch((e) => {
+    return this.#bring(r, from, merge).catch((e) => {
       r.error = (e as Error).message;
       r.reason = e instanceof NotEmpty ? "notEmpty" : e instanceof Gone ? "gone" : this.#reason(from.station, e);
       log.warn("copies", "a copy not brought", { origin, from: r.from, error: r.error });
@@ -663,7 +696,7 @@ export class Copies {
     });
   }
 
-  async #bring(r: Restoring, from: { station: string }): Promise<void> {
+  async #bring(r: Restoring, from: { station: string }, merge: Merge | null): Promise<void> {
     const { workspace: ws, origin, gen } = r;
     // (each batch and file written to disk as it comes, a piece at a time)
     let stream: (gen: string | null, name: string) => Promise<AsyncIterable<Buffer>>;
@@ -711,8 +744,8 @@ export class Copies {
     await writeFile(join(dir, gen, "head.json"), JSON.stringify(head, null, 1));
     // (still no chat of its own, as it is about to be put in: one made meanwhile, and it is not)
     await this.settleExport();
-    if (this.#passed?.empty !== true) throw new NotEmpty();
-    const ready: Ready = { origin, workspace: ws, gen, name: head.name, from: r.from };
+    if (merge === null && this.#passed?.empty !== true) throw new NotEmpty();
+    const ready: Ready = { origin, workspace: ws, gen, name: head.name, from: r.from, ...(merge ?? {}) };
     await writeFile(readyFile(this.#d.data), JSON.stringify(ready));
     const go = await this.#d.restart();
     r.restart = go === null;

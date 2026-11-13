@@ -56,7 +56,7 @@ class FakeCloud {
 
 type Station = { data: string; config: ConfigFile; sharing: Sharing; lent: string[] };
 
-function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = [], codexRenewRunning: (id: string) => Promise<boolean> = async () => false, extra: { profileChanged?: (id: string, reset: boolean) => Promise<void>; quotaReset?: (id: string) => Promise<void>; machineEmail?: (runtime: string) => string | null } = {}): Station {
+function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = [], codexRenewRunning: (id: string) => Promise<boolean> = async () => false, extra: { profileChanged?: (id: string, reset: boolean) => Promise<void>; quotaReset?: (id: string) => Promise<void>; machineEmail?: (runtime: string) => string | null; profileGone?: (id: string) => Promise<void> } = {}): Station {
   const data = mkdtempSync(join(tmpdir(), "share-"));
   writeFileSync(join(data, "config.json"), JSON.stringify({ profiles }));
   const config = new ConfigFile(data);
@@ -586,8 +586,87 @@ test("a shared subscription moves to another station: login handed over, the old
   assert.equal(left.share.host, B, "it knows whom it borrows from");
   assert.equal(existsSync(join(a.data, "homes", "max", ".credentials.json")), false);
   assert.equal((await a.sharing.lendClaude(left)).token, `token-of-${taken.id}`);
-  // Only the station that has it can hand it over.
-  await assert.rejects(a.sharing.moveProfile("max", A), /only a profile this station shares/);
+  // Only the station that has it can hand it over: a borrowed copy is refused, in words that say where to move it from.
+  await assert.rejects(a.sharing.moveProfile("max", B, "en"), /shared from another station: move it from the station that has it/);
+});
+
+test("a profile not shared moves to another station: its login there, gone here, its id kept; one whose id is taken there gets another", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const gone: string[] = [];
+  const a = station(cloud, A, () => all, [SUB, KEY, { ...SUB, id: "cx", runtime: "codex", home: "homes/cx" }], undefined, { profileGone: async (pid) => void gone.push(pid) });
+  // (B has an account of its own under the id "cx")
+  const b = station(cloud, B, () => all, [{ ...KEY, id: "cx", name: "B's own" }]);
+  all.set(A, a).set(B, b);
+  mkdirSync(join(a.data, "homes", "max"), { recursive: true });
+  writeFileSync(join(a.data, "homes", "max", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "x", refreshToken: "r" } }));
+  writeFileSync(join(a.data, "homes", "max", "cache.json"), "a home's own, not a login");
+  mkdirSync(join(a.data, "homes", "cx"), { recursive: true });
+  writeFileSync(join(a.data, "homes", "cx", "auth.json"), JSON.stringify({ tokens: { access_token: "a", refresh_token: "r2" } }));
+  // A subscription: its login there, gone here, the same id; the profile gone here and its sessions moved off it.
+  assert.deepEqual(await a.sharing.moveProfile("max", B, "en"), { id: "max" });
+  const max = b.config.raw().profiles.find((p: any) => p.id === "max");
+  assert.equal(max.share, undefined, "its own there, not shared");
+  assert.equal(JSON.parse(readFileSync(join(b.data, "homes", "max", ".credentials.json"), "utf8")).claudeAiOauth.refreshToken, "r");
+  assert.equal(existsSync(join(b.data, "homes", "max", "cache.json")), false, "only the login goes");
+  assert.equal(existsSync(join(a.data, "homes", "max", ".credentials.json")), false, "one station alone holds the login");
+  assert.equal(a.config.raw().profiles.some((p: any) => p.id === "max"), false);
+  assert.deepEqual(gone, ["max"]);
+  // A key profile: its key there.
+  assert.deepEqual(await a.sharing.moveProfile("deepseek", B, "en"), { id: "deepseek" });
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === "deepseek").access.key, "sk-secret");
+  // One whose id is another account's there: another id.
+  const moved = await a.sharing.moveProfile("cx", B, "en");
+  assert.equal(moved.id, "cx-2");
+  assert.equal(JSON.parse(readFileSync(join(b.data, "homes", "cx-2", "auth.json"), "utf8")).tokens.refresh_token, "r2");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === "cx").name, "B's own", "B's own as it was");
+  assert.deepEqual(a.config.raw().profiles, []);
+  await a.sharing.close();
+  await b.sharing.close();
+});
+
+test("a moved account serves there only the workspaces it served here; one whose new station's home workspace it did not serve is not moved", async () => {
+  const cloud = new FakeCloud();
+  // (both stations in w, A's home, and in w2, where A's accounts are withheld from)
+  cloud.rosters.w2 = [{ id: A, name: "studio" }, { id: B, name: "mini" }];
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all, [{ ...KEY, withheld: ["w2"] }, { ...KEY, id: "shared", withheld: ["w2"] }, { ...KEY, id: "later", withheld: ["w2"] }]);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  // Moved as B's own: withheld there from w2 too, as it was here.
+  await a.sharing.moveProfile("deepseek", B, "en");
+  assert.deepEqual(b.config.raw().profiles.find((p: any) => p.id === "deepseek").withheld, ["w2"]);
+  // A shared one, the same (it was widened to every workspace of its new host before).
+  await a.sharing.shareProfile("shared", true, null);
+  await settle(a, b);
+  const sid = a.config.raw().profiles.find((p: any) => p.id === "shared").share.id;
+  await a.sharing.moveProfile("shared", B, "en");
+  const shared = b.config.raw().profiles.find((p: any) => p.share?.id === sid);
+  assert.equal(shared.share.borrowed, undefined);
+  assert.deepEqual(shared.withheld, ["w2"]);
+  // B's home is w2, which it never served: refused in words, kept here with its key.
+  cloud.homes[B] = "w2";
+  await assert.rejects(a.sharing.moveProfile("later", B, "en"), /home workspace is not one of them[^]*Move it to a station whose home workspace it serves/);
+  assert.ok(a.config.raw().profiles.some((p: any) => p.id === "later"), "it stays here");
+  assert.equal(b.config.raw().profiles.some((p: any) => p.id === "later"), false);
+  await a.sharing.close();
+  await b.sharing.close();
+});
+
+test("the machine's own login and a borrowed copy are not moved, in words that say what to do", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all, [{ ...SUB, id: "machine-claude", machine: true }, KEY]);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  await assert.rejects(a.sharing.moveProfile("machine-claude", B, "en"), /machine's own login: it stays on its machine/);
+  await a.sharing.shareProfile("deepseek", true, null);
+  await settle(a, b);
+  const copy = b.config.raw().profiles.find((p: any) => p.share?.borrowed === true);
+  await assert.rejects(b.sharing.moveProfile(copy.id, A, "en"), /move it from the station that has it/);
+  await assert.rejects(a.sharing.moveProfile("nothing", B, "en"), /no such account/);
+  await a.sharing.close();
+  await b.sharing.close();
 });
 
 test("quota reset notifications continue after a shared Codex account moves to a new host", { timeout: 45_000 }, async () => {

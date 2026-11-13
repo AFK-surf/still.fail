@@ -150,6 +150,17 @@ export type HubOptions = {
 /// The handover file, in the data directory.
 export const handoverFile = (dataDir: string) => join(dataDir, "run", "handover.json");
 
+/// A message refused, unrecorded, by a station handing its chats of that workspace to another (Hub `quiet`).
+export class Retiring extends Error {
+  constructor() {
+    super("this station is handing its chats of this workspace to another station");
+  }
+}
+
+/// What a station retired from `ws` says its chats there are of once the station they went to took them: no workspace
+/// it is in, so they are out of every device's sight here (replica/retire.ts).
+export const retiredWs = (ws: string) => `retired:${ws}`;
+
 export class Hub {
   readonly options: HubOptions;
   readonly store: Store;
@@ -379,12 +390,55 @@ export class Hub {
   }
 
   /// Whether a session's workspace is one the station is in now (a joined one may have taken it out): held otherwise.
-  /// Outside every workspace the "unbound" hold says so instead.
+  /// Outside every workspace the "unbound" hold says so instead. A workspace whose chats this station is handing to
+  /// another (`quiet`) is one it is not in.
   private inAWorkspace(key: string): boolean {
     const all = this.workspaces();
-    if (all.length === 0) return true;
     const ws = this.store.sessionWs(key) ?? null;
+    if (this.quieted.has(ws ?? all[0] ?? "")) return false;
+    if (all.length === 0) return true;
     return ws === null || all.includes(ws);
+  }
+
+  /// The workspaces whose chats this station hands to another as it is retired from them (replica/retire.ts).
+  private readonly quieted = new Set<string>();
+
+  /// Whether session `key` is one of `ws`'s chats here: its workspace, a home one's saying none (as `inAWorkspace`
+  /// reads it), or one put out of sight as the station was retired from `ws` (`retiredWs`).
+  ofWorkspace(key: string, ws: string): boolean {
+    const was = this.store.sessionWs(key);
+    if (was === undefined) return false;
+    return (was ?? this.workspaces()[0] ?? null) === ws || was === retiredWs(ws);
+  }
+
+  /// This station's chats of `ws` go to another (replica/retire.ts): from now on none of them takes a turn, those
+  /// running end as the station's leaving a workspace ends them (their deadlines with them), and what their platforms
+  /// say is not taken here (`acceptInTurn` refuses it, unrecorded; connects/workspace.ts keeps it for that station).
+  async quiet(ws: string) {
+    this.quieted.add(ws);
+    const keys = new Set([...this.deadlines.keys(), ...this.actors.keys()].filter((key) => this.ofWorkspace(key, ws)));
+    for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
+    await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
+  }
+
+  /// `quiet` taken back (the retirement cancelled): what it cut off resumes and what waited goes on, as `backIn` does.
+  unquiet(ws: string) {
+    if (!this.quieted.delete(ws)) return;
+    // (the home one's chats say no workspace, which the index of a workspace's activity does not name)
+    if (ws !== (this.workspaces()[0] ?? null)) return this.backIn(ws);
+    const keys = new Set([...this.store.runningSessions().map((row) => row.key), ...this.store.sessionsWithPending()]);
+    const rows = [...keys].filter((key) => this.ofWorkspace(key, ws)).map((key) => this.store.getSession(key)).filter((row): row is SessionRow =>
+      row !== null && (row.running || this.store.hasPending(row.key))).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    for (const row of rows) {
+      if (!this.online(row)) continue;
+      if (row.running) void this.actor(row).recover();
+      else void this.actor(row).kick();
+    }
+  }
+
+  /// Whether this station is handing `ws`'s chats to another.
+  quietIn(ws: string): boolean {
+    return this.quieted.has(ws);
   }
 
   /// The station left one of its workspaces but is still in others: that workspace's
@@ -658,6 +712,8 @@ export class Hub {
     // copy of it, seen through another connect, is not a message of its own.
     if (this.ownBot(config, message.user)) return;
     const connect = connectOf(config, connectId);
+    // (a workspace whose chats go to another station: not taken here, so that it is said there)
+    if (this.quieted.size > 0 && this.quieted.has(connect.workspace ?? this.workspaces()[0] ?? "")) throw new Retiring();
     const chat = this.chat(connectId);
     const surface = this.surface(connectId);
     const single = connect.mode === "single-session";

@@ -938,9 +938,10 @@ export class Jobs {
   /// Stops every job and service that runs or waits to start again, `why` written at the end of each one's log: the
   /// station left its workspace, and does no work outside one; or it starts already out of it, and what an earlier
   /// station left running (it ended before it could stop them) is ended. Agents are not told (no turn runs meanwhile,
-  /// and telling them once it is back would wake them all); a job's state and log say it when one looks.
-  async stopAll(why: string): Promise<void> {
-    for (const job of this.store.jobsUp()) {
+  /// and telling them once it is back would wake them all); a job's state and log say it when one looks. `only`: those
+  /// of some sessions alone (a station retired from one workspace stops that one's chats' jobs: replica/retire.ts).
+  async stopAll(why: string, only: (job: JobRow) => boolean = () => true): Promise<void> {
+    for (const job of this.store.jobsUp().filter(only)) {
       log.warn("jobs", "stopping a job", { job: job.id, why });
       try {
         await this.stop(job.id);

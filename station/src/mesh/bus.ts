@@ -104,6 +104,15 @@ export class PeerBus {
     return call(to, workspace, request);
   }
 
+  /// A request to the station `station` names itself, never to one that took its place (a retired station told by the one
+  /// its chats went to, which is that station too: replica/retire.ts).
+  async askItself(station: string, request: Json): Promise<Json> {
+    if (!this.call) await Promise.race([this.attached, this.sleep(this.waitMs)]);
+    const call = this.call;
+    if (!call) throw new Error("station mesh is not ready");
+    return call(station, typeof request?.workspace === "string" ? request.workspace : null, request);
+  }
+
   /// Which station took a lost one's place (`now`); `self`, this station's id.
   formerly(now: (station: string, workspace: string | null) => string, self: string): void {
     this.now = now;

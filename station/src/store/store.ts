@@ -804,6 +804,8 @@ export class Store {
     try {
       if (from === 12) store.#upgradeFrom12();
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+      // (read once here, so that a turn asks nothing of it unless its session has one)
+      for (const r of db.prepare("SELECT session FROM moved_notes WHERE told_at IS NULL").all() as { session: string }[]) store.#movedUntold.add(r.session);
     } catch (e) {
       db.close();
       throw e;
@@ -3216,6 +3218,31 @@ export class Store {
     return this.#all("SELECT thread, n, ts, viewer, option, at FROM card_choices INDEXED BY card_choices_untold WHERE session = ? AND told_at IS NULL ORDER BY at LIMIT ?", session, limit)
       .map((r) => this.#cardChoice(r));
   }
+
+  /// What each moved session's agent is told once of its chat having moved here from a station retired (retire.ts): set,
+  /// in one transaction, for each session that is here and was not told one already.
+  setMovedNotes(notes: readonly { session: string; text: string }[]): void {
+    if (notes.length === 0) return;
+    this.#tx(() => {
+      for (const n of notes) this.#run("INSERT OR IGNORE INTO moved_notes (session, text, told_at) SELECT ?, ?, NULL WHERE EXISTS (SELECT 1 FROM sessions WHERE key = ?)", n.session, n.text, n.session);
+    });
+    for (const r of this.#all("SELECT session FROM moved_notes WHERE told_at IS NULL AND session IN (SELECT value FROM json_each(?))", JSON.stringify(notes.map((n) => n.session)))) this.#movedUntold.add(r.session as string);
+  }
+
+  /// What it is to be told of its chat having moved here, not told yet (null: nothing). Asked as each turn starts: the
+  /// database only for a session that has one (`#movedUntold`).
+  untoldMovedNote(session: string): string | null {
+    if (!this.#movedUntold.has(session)) return null;
+    return (this.#one("SELECT text FROM moved_notes WHERE session = ? AND told_at IS NULL", session)?.text as string | undefined) ?? null;
+  }
+
+  /// It was told.
+  markMovedNoteTold(session: string): void {
+    if (!this.#movedUntold.delete(session)) return;
+    this.#run("UPDATE moved_notes SET told_at = ? WHERE session = ? AND told_at IS NULL", this.now(), session);
+  }
+  /// The sessions with a note of their chat having moved here not told yet, read as the store opens.
+  readonly #movedUntold = new Set<string>();
 
   /// The agent was told these choices.
   markCardChoicesTold(session: string, told: readonly Pick<CardChoice, "thread" | "n">[]): void {
