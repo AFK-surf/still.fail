@@ -15,6 +15,7 @@ export function toolName(tool: string): string {
 /// (lowercase: read, bash, …), and ACP/Antigravity's ("File …", read_file, edit_file, write_file, run_command, …).
 export function kindOf(tool: string, input?: string | Record<string, J> | null): string {
   const name = toolName(tool);
+  if (name.endsWith(" on Web")) return "web";
   const a = typeof input === "string" ? args(input) : input ?? null;
   if (
     name.startsWith("File ") ||
@@ -46,10 +47,12 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "Read":
     case "NotebookRead":
     case "view_image":
+    case "read_image":
     case "read":
     case "view_file_outline":
     case "view_code_item":
     case "skill_read":
+    case "skill":
       return "read";
     case "Glob":
     case "Grep":
@@ -61,6 +64,7 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "grep":
     case "grep_search":
     case "find_by_name":
+    case "find_file_by_name":
     case "list_dir":
     case "search":
       return "search";
@@ -81,6 +85,8 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "shell":
     case "local_shell":
     case "write_stdin":
+    case "wait":
+    case "job_output":
     case "unified_exec":
     case "run_command":
     case "run_terminal_command":
@@ -96,6 +102,7 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "web_fetch":
     case "search_web":
     case "read_url_content":
+    case "web__run":
       return "web";
     case "Task":
     case "Agent":
@@ -106,6 +113,9 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "manage_subagents":
     case "swarm":
     case "send_message":
+    case "followup_task":
+    case "list_agents":
+    case "wait_agent":
       return "agent";
     case "chat_history":
     case "chat_list":
@@ -232,9 +242,13 @@ export function tasksOf(timeline: J[]): Map<string, string> {
 /// A call of still.fail's own tools said in words rather than by its name: what it does on which station (station_task,
 /// station_file), the tools it loads (ToolSearch's `select:`), and still.fail's workspace/chat/job/skill tools; null for any other.
 export function told(tool: string, input: string, known: Known = {}): string | null {
-  const a = args(input);
-  if (!a) return null;
   const name = toolName(tool);
+  const a = args(input);
+  if (name.endsWith(" on Web")) {
+    const q = typeof a?.query === "string" && a.query ? firstLine(a.query) : firstLine(name.slice(0, -7).replace(/^["']|["']$/g, ""));
+    return q ? `网页搜索「${q}」` : "网页搜索";
+  }
+  if (!a) return null;
   if (name === "station_task" || name === "station_file") {
     const id = typeof a.station === "string" ? a.station : "";
     // An id not among the workspace's (or not read yet) is not shown as its 64 hex digits.
@@ -320,7 +334,10 @@ export function told(tool: string, input: string, known: Known = {}): string | n
       const names = a.query.slice("select:".length).split(",").map((n) => toolName(n.trim())).filter((n) => n !== "");
       if (names.length > 0) return t("core-logic.activity.tools", { names: names.join(t("core-logic.history.did.sep")) });
     }
-    return typeof a.query === "string" && a.query ? `查找工具「${firstLine(a.query)}」` : "查找工具";
+    if (name === "search_tool") {
+      return typeof a.query === "string" && a.query ? `查找工具「${firstLine(a.query)}」` : "查找工具";
+    }
+    return null;
   }
   if (name === "mcp_list_tools") return "查看可用 MCP 工具";
   if (name === "manage_task") {
@@ -334,6 +351,70 @@ export function told(tool: string, input: string, known: Known = {}): string | n
   }
   if (name === "sleep") return typeof a.seconds === "number" ? `等待 ${a.seconds} 秒` : "等待";
   if (name === "get_output") return typeof a.job_id === "string" && a.job_id ? `读取任务输出 ${a.job_id}` : "读取任务输出";
+  if (name === "job_output") return typeof a.job_id === "string" && a.job_id ? `查看命令输出 ${a.job_id}` : "查看命令输出";
+  if (name === "wait") {
+    const cid = typeof a.cell_id === "string" && a.cell_id ? ` #${a.cell_id}` : "";
+    return `等待命令输出${cid}`;
+  }
+  if (name === "write_stdin") {
+    const sid = a.session_id !== undefined ? ` #${a.session_id}` : "";
+    const chars = typeof a.chars === "string" ? firstLine(a.chars) : "";
+    return chars ? `向命令发送输入${sid}：${chars}` : `等待命令输出${sid}`;
+  }
+  if (name === "skill") {
+    const skill = typeof a.name === "string" && a.name ? a.name : typeof a.skill === "string" && a.skill ? a.skill : "";
+    return skill ? `读取技能 ${skill}` : "读取技能";
+  }
+  if (name === "web__run") {
+    if (Array.isArray(a.search_query) && a.search_query.length > 0) {
+      const q = typeof a.search_query[0]?.q === "string" ? firstLine(a.search_query[0].q) : "";
+      return q ? `网页搜索「${q}」` : "网页搜索";
+    }
+    if (Array.isArray(a.open) && a.open.length > 0) {
+      const u = typeof a.open[0]?.ref_id === "string" ? firstLine(a.open[0].ref_id) : "";
+      return u ? `打开网页 ${u}` : "打开网页";
+    }
+    return "网页操作";
+  }
+  if (name === "clock__curr_time") return "查看当前时间";
+  if (name === "list_agents") return "查看子 agent 列表";
+  if (name === "wait_agent") return "等待子 agent 完成";
+  if (name === "send_message") {
+    const to = typeof a.Recipient === "string" && a.Recipient ? a.Recipient : typeof a.recipient === "string" && a.recipient ? a.recipient : typeof a.task_name === "string" && a.task_name ? a.task_name : "";
+    const msg = typeof a.Message === "string" && !a.Message.startsWith("gAAAAAB")
+      ? firstLine(a.Message)
+      : typeof a.message === "string" && !a.message.startsWith("gAAAAAB")
+      ? firstLine(a.message)
+      : typeof a.content === "string"
+      ? firstLine(a.content)
+      : "";
+    const snippet = msg ? `：${msg.length > 36 ? `${msg.slice(0, 36)}…` : msg}` : "";
+    if (!to || to === "main") return `向主 agent 发送结果${snippet}`;
+    const shortTo = to.length > 16 ? to.slice(0, 8) : to;
+    return `向子 agent (${shortTo}) 发送消息${snippet}`;
+  }
+  if (name === "followup_task") {
+    const tname = typeof a.task_name === "string" && a.task_name ? ` ${a.task_name}` : "";
+    return `继续子 agent 任务${tname}`;
+  }
+  if (name === "manage_subagents" || name === "swarm" || name === "Agent" || name === "Task" || name === "spawn_agent" || name === "subagent" || name === "invoke_subagent" || name === "define_subagent") {
+    if (typeof a.Action === "string") {
+      if (a.Action === "list") return "查看子 agent 列表";
+      if (a.Action === "kill") return "停止子 agent";
+      if (a.Action === "kill_all") return "停止全部子 agent";
+    }
+    if (typeof a.action === "string") {
+      if (a.action === "status") return "查看协作 agent 状态";
+      if (a.action === "models") return "查看可用模型列表";
+      if (a.action === "add") return typeof a.name === "string" && a.name ? `添加协作 agent ${a.name}` : "添加协作 agent";
+      if (a.action === "kill") return typeof a.name === "string" && a.name ? `停止协作 agent ${a.name}` : "停止协作 agent";
+      if (a.action === "model") return typeof a.name === "string" && a.name ? `切换协作 agent 模型 ${a.name}` : "切换模型";
+      if (a.action === "title") return typeof a.title === "string" && a.title ? `设置协作标题「${firstLine(a.title)}」` : "设置协作标题";
+    }
+    if (typeof a.Role === "string" && a.Role) return `分派子 agent：${firstLine(a.Role)}`;
+    if (typeof a.task_name === "string" && a.task_name) return `分派子 agent：${firstLine(a.task_name)}`;
+    if (typeof a.Name === "string" && a.Name && name === "define_subagent") return `定义子 agent：${firstLine(a.Name)}`;
+  }
   return null;
 }
 

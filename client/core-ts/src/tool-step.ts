@@ -96,10 +96,12 @@ export function cleanCommand(cmd: string): string {
 
 /** One-line summary of a shell command for collapsed step rows, skipping leading `export` / `cd` / comment lines. */
 export function summaryCommand(cmd: string): string {
-  const cleaned = cleanCommand(cmd.trim()).replace(
-    /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/sessions\/[^/\s"']+\/[^/\s"']+\/workspace(?:\/stillfail)?\/?/g,
-    "",
-  );
+  const cleanWs = (s: string): string =>
+    s.replace(
+      /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/sessions\/[^/\s"']+\/[^/\s"']+\/workspace(?:\/stillfail)?\/?/g,
+      "",
+    );
+  const cleaned = cleanCommand(cmd.trim());
   const lines = cleaned
     .split("\n")
     .map((l) => l.trim())
@@ -109,7 +111,7 @@ export function summaryCommand(cmd: string): string {
     while (true) {
       const next = s
         .replace(/^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "")
-        .replace(/^(?:cd\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "");
+        .replace(/^(?:cd\s+(?:"[~/][^"]*"|'[~/][^']*'|[~/][^\s;&|]*)\s*(?:&&|;)\s*)/, "");
       if (next === s) break;
       s = next.trim();
     }
@@ -124,14 +126,14 @@ export function summaryCommand(cmd: string): string {
     return stripped.length > 0 && !isSetupOnly(stripped);
   });
   const firstIdx = idx >= 0 ? idx : 0;
-  const first = stripSetup(lines[firstIdx] ?? "");
+  const first = cleanWs(stripSetup(lines[firstIdx] ?? ""));
   if (/(?:-[ec]\s+['"]|<<-?\s*['"]?\w+['"]?)$/.test(first) && firstIdx + 1 < lines.length) {
     const bodyLine = lines
       .slice(firstIdx + 1)
       .find((l) => !/^(?:import\s|from\s+\S+\s+import\s|['"]use strict['"])/.test(l) && !/^[)}'"]+$/.test(l));
-    if (bodyLine) return `${first} ${bodyLine}`;
+    if (bodyLine) return `${first} ${cleanWs(bodyLine)}`;
   }
-  return first || (lines[0] ?? "");
+  return first || cleanWs(lines[0] ?? "");
 }
 
 const isArgs = (v: unknown): v is Args => typeof v === "object" && v !== null && !Array.isArray(v);

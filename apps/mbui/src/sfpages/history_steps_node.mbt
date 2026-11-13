@@ -447,22 +447,7 @@ fn ev_node(
     }
   }
   steps_box_node(v, h_ev, fn(e) {
-    if state != "" {
-      e.box(fn(o) {
-        o.over(Is(true)) |> ignore
-        o.box(fn(blk) {
-          @sf.style_node(blk, fn() {
-            match state {
-              "waiting" => h_state.then(@ui.style(bg=Data(@sf.theme().p.blue_bg)))
-              "human" => h_state_human
-              _ => h_state
-            }
-          })
-        })
-        |> ignore
-      })
-      |> ignore
-    } else if rail || rail_last {
+    if rail || rail_last {
       e.box(fn(o) {
         o.over(Is(true)) |> ignore
         o.box(fn(room) {
@@ -482,12 +467,19 @@ fn ev_node(
       @sf.style_node(i, fn() {
         // (the first line's height: a line of words' 20, or a row's least)
         let line = if row { @sf.row_least() } else { h_mark }
-        h_icon.then(@ui.style(h=Fixed(line)))
+        let base = h_icon.then(@ui.style(h=Fixed(line)))
+        match state {
+          "" => base
+          "done" => base.then(@ui.style(radius=Full, bg=Data(@sf.theme().p.green_bg)))
+          "waiting" => base.then(@ui.style(radius=Full, bg=Data(@sf.theme().p.blue_bg)))
+          "human" => base.then(@ui.css("radius=Full bg=AccentBg"))
+          _ => base.then(@ui.css("radius=Full bg=Neutral"))
+        }
       })
       if icon == "pulse" {
         steps_box_node(i, h_pulse, fn(_) {  })
       } else {
-        @sf.icon_node(i, icon, 14.0, By(ink)) |> ignore
+        @sf.icon_node(i, icon, if state != "" { 13.0 } else { 14.0 }, By(ink)) |> ignore
       }
     })
     |> ignore
@@ -542,15 +534,15 @@ fn item_node(
       ev_node(v, "said", "", "", rail_last=rail, row=true, fn(b) {
         let words = text(content, "text")
         one_line_node(b, ik + "/text", fn(l) {
-          // (a chip: in bones one piece)
-          l.box(fn(tag) {
-            @sf.style_node(tag, fn() { h_tag })
-            tag.bone_whole(Is(true)) |> ignore
-            steps_words(tag, fn() {
-              @sf.t(if flag(content, "subagent") { "web-main.history.subagent" } else { "web-main.history.notSent" })
-            }, h_tag_words)
-          })
-          |> ignore
+          if flag(content, "subagent") {
+            // (a chip: in bones one piece)
+            l.box(fn(tag) {
+              @sf.style_node(tag, fn() { h_tag })
+              tag.bone_whole(Is(true)) |> ignore
+              steps_words(tag, fn() { @sf.t("web-main.history.subagent") }, h_tag_words)
+            })
+            |> ignore
+          }
         }, text(content, "line"), "", fn(w) { md_node(w, words, field(content, "md"), small=true) })
       })
     "post" => {
@@ -976,14 +968,52 @@ fn mark_node(v : @view.View, src : Source, mark : Json?, rail : Bool) -> Unit {
 ///|
 /// How a turn ended in `v`.
 fn ended_node(v : @view.View, ends : String, words : String, rail : Bool) -> Unit {
-  let (icon, state) = match ends {
+  let effective_ends = if ends != "" {
+    ends
+  } else if words.has_prefix("标记为做完了") || words.has_prefix("标记为已完成") || words.has_prefix("Marked as done") {
+    "done"
+  } else if words.has_prefix("已暂停") || words.has_prefix("等待人工") || words.has_prefix("Paused") {
+    "human"
+  } else {
+    ""
+  }
+  let (icon, state) = match effective_ends {
     "human" => ("user", "human")
     "done" => ("check-circle", "done")
     "waiting" => ("wait", "waited")
     _ => ("info", "other")
   }
   ev_node(v, icon, state, "", rail_last=rail, fn(b) {
-    steps_box_node(b, h_state_line, fn(l) { steps_words(l, fn() { words }, h_state_words) })
+    steps_box_node(b, h_state_line, fn(l) {
+      l.box(fn(w) {
+        w
+        .words_runs(By(fn() {
+          let t = @sf.theme()
+          let lead_color = match state {
+            "done" => t.p.green_ink
+            "human" => t.p.accent_text
+            _ => t.p.text
+          }
+          match words.find("：") {
+            Some(at) => {
+              let head = words.unsafe_substring(start=0, end=at)
+              let tail = words.unsafe_substring(start=at, end=words.length())
+              [
+                @ui.span(head, weight=600, color=lead_color),
+                @ui.span(tail, color=t.p.muted),
+              ]
+            }
+            None => [@ui.span(words, weight=600, color=lead_color)]
+          }
+        }))
+        .words_look(By(fn() { @ui.style_words(h_state_words) }))
+        .ink(By(fn() { @ui.style_ink(h_state_words) }))
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        |> ignore
+      })
+      |> ignore
+    })
   })
 }
 
@@ -1095,17 +1125,17 @@ fn group_node(
 /// Short localized action badge for a tool step row.
 fn step_label(name : String) -> String {
   match name {
-    "Read" | "NotebookRead" | "view_image" | "read" | "read_file" | "view_file_outline" | "view_code_item" | "skill_read" => "读取"
+    "Read" | "NotebookRead" | "view_image" | "read_image" | "read" | "read_file" | "view_file_outline" | "view_code_item" | "skill_read" | "skill" => "读取"
     "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch" | "edit" | "edit_file" | "replace_file_content" | "multi_replace_file_content" | "search_replace" | "delete_file" => "编辑"
     "Write" | "write" | "write_file" | "write_to_file" => "新建"
-    "Glob" | "Grep" | "LS" | "ToolSearch" | "search_tool" | "mcp_list_tools" | "glob" | "grep" | "grep_search" | "find_by_name" | "list_dir" | "search" => "搜索"
-    "Bash" | "bash" | "BashOutput" | "KillShell" | "exec_command" | "exec" | "shell" | "local_shell" | "write_stdin" | "unified_exec" | "run_command" | "run_terminal_command" | "command_status" | "send_command_input" | "manage_task" => "命令"
-    "WebFetch" | "WebSearch" | "web_search" | "web_fetch" | "search_web" | "read_url_content" => "网页"
-    "Task" | "Agent" | "spawn_agent" | "subagent" | "invoke_subagent" | "define_subagent" | "manage_subagents" | "swarm" | "send_message" => "代理"
+    "Glob" | "Grep" | "LS" | "ToolSearch" | "search_tool" | "mcp_list_tools" | "glob" | "grep" | "grep_search" | "find_by_name" | "find_file_by_name" | "list_dir" | "search" => "搜索"
+    "Bash" | "bash" | "BashOutput" | "KillShell" | "exec_command" | "exec" | "shell" | "local_shell" | "write_stdin" | "wait" | "job_output" | "unified_exec" | "run_command" | "run_terminal_command" | "command_status" | "send_command_input" | "manage_task" => "命令"
+    "WebFetch" | "WebSearch" | "web_search" | "web_fetch" | "search_web" | "read_url_content" | "web__run" => "网页"
+    "Task" | "Agent" | "spawn_agent" | "subagent" | "invoke_subagent" | "define_subagent" | "manage_subagents" | "swarm" | "send_message" | "followup_task" | "list_agents" | "wait_agent" => "代理"
     "chat_history" | "chat_list" | "chat_read" | "session_history" | "chat_archive" | "chat_leave" => "对话"
     "chat_post" | "chat_state" | "session_send" | "chat_create" | "feishu_api" | "slack_api" => "消息"
     "station_task" | "station_file" | "station_list" | "station_tool" | "relays" | "workspace_limit" => "远程"
-    "job_start" | "job_list" | "job_log" | "job_stop" | "sleep" | "get_output" => "任务"
+    "job_start" | "job_list" | "job_log" | "job_stop" | "sleep" | "get_output" | "clock__curr_time" => "任务"
     "screen" | "browser" | "computer" => "屏幕"
     "secret_list" | "secret_describe" | "secret_reask" | "secret_use" | "secret_save" | "secret_run" => "密钥"
     "phone_use" | "phone_send" | "adb_devices" | "device_list" | "device_use" | "permissions" => "设备"
@@ -1793,20 +1823,8 @@ let h_rail_room_last : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.histo
 let h_rail : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 
 ///|
-/// A state's block (hEv[data-state]::after): 6 past its gutter, over and under, round as a field, on the neutral ground
-/// (waiting the blue's, on a person the accent's).
-// kept across runs: a value (no field of it changes)
-let h_state : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=Neutral").then(@sf.outset_start(6.0)).then(@sf.outset_top(6.0)).then(@sf.outset_bottom(6.0))
-
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_state_human : @ui.Style = h_state.then(@ui.css("bg=AccentBg"))
-
-///|
-/// An event's mark (hIcon): 20 square, on whatever it stands on (a state's block, a group's line pointed at): the
-/// turn's rail runs from under it, so nothing of it covers the rail (a ground of its own would stand out as a square
-/// on a pane that is not the canvas). As high as its event's first line (ev's `row`), its mark in its middle.
+/// An event's mark (hIcon): 20 square, on whatever it stands on: the turn's rail runs from under it, so nothing of it
+/// covers the rail. As high as its event's first line (ev's `row`), its mark in its middle.
 // kept across runs: a value (no field of it changes)
 let h_icon : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 

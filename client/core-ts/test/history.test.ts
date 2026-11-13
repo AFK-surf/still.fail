@@ -652,3 +652,98 @@ test("stillfail_tools_coalesced_edits_and_clean_thoughts_across_runtimes", () =>
   assert.equal(g.rows[6].content.name, "Bash");
   assert.equal(g.rows[6].content.hint, "./scripts/check.sh");
 });
+
+test("codex_exec_wrappers_and_multi_runtime_tools_are_unwrapped_and_labeled", () => {
+  const timeline: J[] = [
+    { kind: "user", text: "<message via=\"web\" thread=\"CHAT/1\" from=\"a@b.com\" ts=\"1\">check multi-runtime</message>" },
+    // 1. Single-call Codex exec wrapping exec_command: unwraps into 1 Bash step with real output
+    {
+      kind: "tool_call",
+      tool: "exec",
+      callId: "c1",
+      text: 'const r = await tools.exec_command({ cmd: "git status -sb" });\ntext(r.output);',
+    },
+    {
+      kind: "tool_call",
+      tool: "exec_command",
+      callId: "c1#0",
+      text: JSON.stringify({ cmd: "git status -sb" }),
+    },
+    { kind: "tool_result", callId: "c1#0", ok: true, text: "", inScript: true },
+    { kind: "tool_result", callId: "c1", ok: true, text: "## main" },
+    // 2. Multi-call Codex exec batch: labeled with call count and inner tools
+    {
+      kind: "tool_call",
+      tool: "exec",
+      callId: "c2",
+      text: "const results = await Promise.allSettled([tools.mcp__stillfail__station_list({}), tools.exec_command({ cmd: \"ls\" })]);",
+    },
+    { kind: "tool_call", tool: "mcp__stillfail__station_list", callId: "c2#0", text: "{}" },
+    { kind: "tool_result", callId: "c2#0", ok: true, text: "", inScript: true },
+    { kind: "tool_call", tool: "exec_command", callId: "c2#1", text: JSON.stringify({ cmd: "ls" }) },
+    { kind: "tool_result", callId: "c2#1", ok: true, text: "", inScript: true },
+    { kind: "tool_result", callId: "c2", ok: true, text: "batch output" },
+    // 3. Cross-runtime tools: AGY WebSearch, Codex write_stdin, manage_subagents, Devin find_file_by_name, DSH skill
+    { kind: "tool_call", tool: '"moonbit wasm-gc" on Web', callId: "w1", text: "{}" },
+    { kind: "tool_result", callId: "w1", ok: true, text: "results" },
+    { kind: "tool_call", tool: "write_stdin", callId: "p1", text: JSON.stringify({ session_id: 42, chars: "" }) },
+    { kind: "tool_result", callId: "p1", ok: true, text: "still running" },
+    { kind: "tool_call", tool: "Agent", callId: "a1", text: JSON.stringify({ Action: "list" }) },
+    { kind: "tool_result", callId: "a1", ok: true, text: "[]" },
+    { kind: "tool_call", tool: "find_file_by_name", callId: "f1", text: JSON.stringify({ query: "*.mbt" }) },
+    { kind: "tool_result", callId: "f1", ok: true, text: "a.mbt" },
+    { kind: "tool_call", tool: "skill", callId: "sk1", text: JSON.stringify({ command: "invoke", skill: "stillfail-show" }) },
+    { kind: "tool_result", callId: "sk1", ok: true, text: "ok" },
+    // 4. Codex exec wrapping chat_post + chat_state: no bogus exec group before post/mark
+    {
+      kind: "tool_call",
+      tool: "exec",
+      callId: "c3",
+      text: 'await tools.mcp__stillfail__chat_post({ to: "CHAT/1", text: "Done!" });\nawait tools.mcp__stillfail__chat_state({ kind: "all_done", done: "PR #5968 CI passed" });',
+    },
+    {
+      kind: "tool_call",
+      tool: "mcp__stillfail__chat_post",
+      callId: "c3#0",
+      text: JSON.stringify({ to: "CHAT/1", text: "Done!" }),
+    },
+    { kind: "tool_result", callId: "c3#0", ok: true, text: "", inScript: true },
+    {
+      kind: "tool_call",
+      tool: "mcp__stillfail__chat_state",
+      callId: "c3#1",
+      text: JSON.stringify({ kind: "all_done", done: "PR #5968 CI passed" }),
+    },
+    { kind: "tool_result", callId: "c3#1", ok: true, text: "", inScript: true },
+    { kind: "tool_result", callId: "c3", ok: true, text: "{}" },
+  ];
+  const h = presentHistory({ timeline }, cx([], [], []));
+  assert.deepEqual(
+    h.items.map((it: J) => it.body.kind),
+    ["received", "group", "post", "mark"],
+  );
+  const g = h.items[1].body.content;
+  assert.equal(g.rows.length, 9);
+  // Row 0: unwrapped single-call exec_command with real output from c1
+  assert.equal(g.rows[0].content.name, "Bash");
+  assert.equal(g.rows[0].content.hint, "git status -sb");
+  assert.equal(g.rows[0].content.result, "## main");
+  assert.deepEqual(g.rows[0].content.entries, [1, 4]);
+  // Row 1: multi-call exec batch
+  assert.equal(g.rows[1].content.name, "exec");
+  assert.equal(g.rows[1].content.said, "执行脚本（含 2 项调用）");
+  // Cross-runtime rows
+  assert.equal(g.rows[4].content.name, "WebSearch");
+  assert.equal(g.rows[4].content.said, "网页搜索「moonbit wasm-gc」");
+  assert.equal(g.rows[5].content.name, "Bash");
+  assert.equal(g.rows[5].content.said, "等待命令输出 #42");
+  assert.equal(g.rows[6].content.name, "Agent");
+  assert.equal(g.rows[6].content.said, "查看子 agent 列表");
+  assert.equal(g.rows[7].content.name, "Glob");
+  assert.equal(g.rows[7].content.hint, "*.mbt");
+  assert.equal(g.rows[8].content.name, "skill");
+  assert.equal(g.rows[8].content.said, "读取技能 stillfail-show");
+  // Mark includes done reason
+  assert.equal(h.items[3].body.content.text, "标记为已完成：PR #5968 CI passed");
+  assert.equal(h.items[3].body.content.ends, "done");
+});

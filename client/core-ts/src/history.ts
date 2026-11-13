@@ -53,9 +53,30 @@ function line(text: string, max: number): string {
   return Array.from(text.split("\n")[0] ?? "").slice(0, max).join("");
 }
 
+function jsExecCommand(text: string): string | null {
+  const m = /(?:"cmd"|cmd|"command"|command)\s*:\s*("(?:[^"\\]|\\.)*")/.exec(text);
+  if (!m?.[1]) return null;
+  try {
+    const parsed = JSON.parse(m[1]);
+    return typeof parsed === "string" && parsed.trim() !== "" ? summaryCommand(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function hint(text: string, tool = ""): string {
+  const name = toolName(tool);
+  if (name.endsWith(" on Web")) {
+    const a = args(text);
+    const q = typeof a?.query === "string" && a.query ? a.query : name.slice(0, -7).replace(/^["']|["']$/g, "");
+    return line(q, 160);
+  }
   const a = args(text);
-  if (!a) return line(text, 160);
+  if (!a) {
+    const jsCmd = name === "exec" ? jsExecCommand(text) : null;
+    if (jsCmd) return line(jsCmd, 160);
+    return line(text, 160);
+  }
   const kind = kindOf(tool, a);
   const keys =
     kind === "search"
@@ -165,22 +186,23 @@ function lineRangeOf(text: string): [number, number] | null {
 
 function stepName(tool: string, text: string): string {
   const name = toolName(tool);
+  if (name.endsWith(" on Web")) return "WebSearch";
   const a = args(text);
   if (name === "edit" || name === "edit_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_replace") return "Edit";
   if (name === "write" || name === "write_file" || name === "write_to_file") return "Write";
-  if (name === "read" || name === "read_file" || name === "view_file_outline" || name === "view_code_item") return "Read";
+  if (name === "read" || name === "read_file" || name === "view_file_outline" || name === "view_code_item" || name === "read_image" || name === "view_image") return "Read";
   if (name.startsWith("File ")) {
     if (a && (a.Target !== undefined || a.Replacement !== undefined || a.old_string !== undefined || a.new_string !== undefined)) return "Edit";
     if (a && (a.Content !== undefined || a.content !== undefined)) return "Write";
     return "Read";
   }
-  if (name === "bash" || name === "run_command" || name === "run_terminal_command") return "Bash";
+  if (name === "bash" || name === "run_command" || name === "run_terminal_command" || name === "exec_command" || name === "shell" || name === "local_shell" || name === "write_stdin" || name === "wait" || name === "job_output") return "Bash";
   if (name === "grep" || name === "grep_search") return "Grep";
-  if (name === "glob" || name === "find_by_name" || name === "list_dir" || name === "LS") return "Glob";
-  if (name === "web_search" || name === "search_web" || name === "read_url_content") return "WebSearch";
+  if (name === "glob" || name === "find_by_name" || name === "find_file_by_name" || name === "list_dir" || name === "LS") return "Glob";
+  if (name === "web_search" || name === "search_web" || name === "read_url_content" || name === "web__run") return "WebSearch";
   if (name === "web_fetch") return "WebFetch";
   if (name === "search_tool") return "ToolSearch";
-  if (name === "subagent" || name === "spawn_agent" || name === "invoke_subagent" || name === "define_subagent" || name === "manage_subagents" || name === "swarm") return "Agent";
+  if (name === "subagent" || name === "spawn_agent" || name === "invoke_subagent" || name === "define_subagent" || name === "manage_subagents" || name === "swarm" || name === "send_message" || name === "followup_task" || name === "list_agents" || name === "wait_agent") return "Agent";
   if (kindOf(tool, a) === "command" && (a?.CommandLine !== undefined || /^(?:cd|git|pnpm|npm|node|cargo|python3?|sh|bash|zsh|rg|ls|cat|mkdir|rm|cp|mv|curl|gh)\b/.test(name))) {
     return "Bash";
   }
@@ -448,12 +470,12 @@ function mentions(text: string, cx: Context): string {
   return present.mentions(text, bots.concat(cx.slackNames ?? []), cx.members);
 }
 
-type Step = { call: number; result: number | null };
+type Step = { call: number; result: number | null; unwrapped?: boolean; firstEntry?: number; scriptCount?: number; scriptTools?: string };
 type Item =
   | { kind: "received"; i: number }
   | { kind: "text"; i: number }
   | { kind: "post"; step: number }
-  | { kind: "mark"; mark: string; seconds: number | null; what: string | null }
+  | { kind: "mark"; mark: string; seconds: number | null; what: string | null; why: string | null }
   | { kind: "group"; rows: Row[] };
 /// A group's thinking and calls, in the order they came: a thought by its timeline index, a call by its step.
 type Row = { thought: number } | { step: number };
@@ -499,8 +521,9 @@ export function presentHistory(live: J, cx: Context): J {
   let groupHasAct = false;
   const isReadOnlyCommand = (tool: string, text: string): boolean => {
     const name = toolName(tool);
-    if (name === "manage_task" || name === "sleep" || name === "get_output" || name === "command_status") return true;
+    if (name === "manage_task" || name === "sleep" || name === "get_output" || name === "command_status" || name === "wait" || name === "job_output") return true;
     const a = args(text);
+    if (name === "write_stdin") return typeof a?.chars !== "string" || a.chars === "";
     const raw =
       typeof a?.command === "string"
         ? a.command
@@ -545,6 +568,10 @@ export function presentHistory(live: J, cx: Context): J {
       cover(i);
     } else if (kind === "tool_call") {
       const step = stepAt.get(i)!;
+      if (steps[step].unwrapped) {
+        cover(i);
+        return;
+      }
       const a = args(s(e, "text"));
       const arg = (k: string) => (typeof a?.[k] === "string" ? (a[k] as string) : null);
       const sub = flag(e, "subagent");
@@ -558,7 +585,8 @@ export function presentHistory(live: J, cx: Context): J {
       } else if (name === "chat_state" && arg("kind") !== null && !sub) {
         const sec = a?.seconds;
         const what = arg("for")?.trim() || null;
-        items.push([{ kind: "mark", mark: arg("kind") ?? "", seconds: typeof sec === "number" ? Math.trunc(Math.max(sec, 0)) : null, what }, i, i]);
+        const why = (arg("done") ?? arg("need"))?.trim() || null;
+        items.push([{ kind: "mark", mark: arg("kind") ?? "", seconds: typeof sec === "number" ? Math.trunc(Math.max(sec, 0)) : null, what, why }, i, i]);
         grouping = false;
         groupSteps = 0;
         groupPhase = null;
@@ -742,18 +770,19 @@ export function presentHistory(live: J, cx: Context): J {
           v = { kind: "mark", text, wait: since !== null ? { since, until, seconds: item.seconds, what: item.what } : null, ends: "waiting" };
         } else {
           const m = item.mark;
+          const baseText =
+            m === "final" || m === "all_done"
+              ? t("core-logic.history.mark.final")
+              : m === "need_human"
+                ? t("core-logic.history.mark.human")
+                : m === "block" || m === "need_help"
+                  ? t("core-logic.history.mark.block")
+                  : m === "need_decision"
+                    ? t("core-logic.history.mark.decision")
+                    : t("core-logic.history.mark.other", { mark: m });
           v = {
             kind: "mark",
-            text:
-              m === "final" || m === "all_done"
-                ? t("core-logic.history.mark.final")
-                : m === "need_human"
-                  ? t("core-logic.history.mark.human")
-                  : m === "block" || m === "need_help"
-                    ? t("core-logic.history.mark.block")
-                    : m === "need_decision"
-                      ? t("core-logic.history.mark.decision")
-                      : t("core-logic.history.mark.other", { mark: m }),
+            text: item.why !== null ? `${baseText}：${line(item.why, 200)}` : baseText,
           };
           const ends = endsOf(m);
           if (ends !== null) v.ends = ends;
@@ -984,6 +1013,14 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
     const name = stepName(callTool, callText);
     let said = told(callTool, callText, known) ?? describe(callText);
     let stepHint = hint(callText, callTool);
+    if (said === null && st.scriptCount !== undefined) {
+      if (st.scriptCount >= 2) {
+        said = `执行脚本（含 ${st.scriptCount} 项调用）`;
+        if (!jsExecCommand(callText) && st.scriptTools) stepHint = st.scriptTools;
+      } else {
+        said = "执行脚本";
+      }
+    }
     if (said === null && (name === "Read" || name === "Edit" || name === "Write")) {
       const file = fileOf(callText, callTool);
       if (file !== null) {
@@ -995,6 +1032,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
         stepHint = dirName;
       }
     }
+    const firstCall = st.firstEntry ?? st.call;
     return {
       said,
       name,
@@ -1003,7 +1041,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
       failed: isFailed,
       call: callText,
       result: result === null ? null : (result.text ?? ""),
-      entries: st.result !== null ? [base + st.call, base + st.result] : [base + st.call],
+      entries: st.result !== null ? [base + firstCall, base + st.result] : [base + firstCall],
       brief: call?.brief === true || result?.brief === true,
     };
   };
@@ -1191,6 +1229,44 @@ function pair(timeline: J[]): { steps: Step[]; stepAt: Map<number, number> } {
       if (step !== undefined) steps[step].result = i;
     }
   });
+  for (let idx = 0; idx < steps.length; idx++) {
+    const st = steps[idx];
+    const e = timeline[st.call];
+    const cid = typeof e?.callId === "string" ? e.callId : "";
+    if (!cid || cid.includes("#") || toolName(typeof e?.tool === "string" ? e.tool : "") !== "exec") continue;
+    const callText = typeof e?.text === "string" ? e.text : "";
+    if (args(callText) !== null) continue;
+    const prefix = `${cid}#`;
+    const innerSteps: number[] = [];
+    for (let j = idx + 1; j < steps.length; j++) {
+      const ie = timeline[steps[j].call];
+      if (typeof ie?.callId === "string" && ie.callId.startsWith(prefix)) innerSteps.push(j);
+      else break;
+    }
+    const isLoop = /\b(?:for|while)\s*\(|\.\s*(?:map|forEach)\s*\(/.test(callText);
+    const allPostOrMark = innerSteps.length > 0 && innerSteps.every((j) => beginsItem(timeline[steps[j].call]));
+    if ((innerSteps.length === 1 && !isLoop) || allPostOrMark) {
+      st.unwrapped = true;
+      const target = steps[innerSteps[innerSteps.length - 1]];
+      target.result = st.result;
+      target.firstEntry = st.call;
+    } else if (innerSteps.length >= 2) {
+      st.scriptCount = innerSteps.length;
+      const names = Array.from(
+        new Set(
+          innerSteps.map((j) =>
+            stepName(
+              typeof timeline[steps[j].call]?.tool === "string" ? timeline[steps[j].call].tool : "",
+              typeof timeline[steps[j].call]?.text === "string" ? timeline[steps[j].call].text : "",
+            ),
+          ),
+        ),
+      );
+      st.scriptTools = names.join("、");
+    } else {
+      st.scriptCount = 0;
+    }
+  }
   return { steps, stepAt };
 }
 
@@ -1238,7 +1314,7 @@ export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
   const known: Known = { stations, tasks: tasksOf(timeline) };
   for (const st of pair(timeline).steps) {
     const e = timeline[st.call];
-    if (st.call < turn || st.result !== null || e?.subagent === true) continue;
+    if (st.unwrapped || st.call < turn || st.result !== null || e?.subagent === true) continue;
     const name = toolName(s(e, "tool"));
     if (name === "chat_post") replying = true;
     else if (name !== "chat_state") {
