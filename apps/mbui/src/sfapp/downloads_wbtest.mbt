@@ -178,7 +178,9 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
   let keeping : Array[Json] = []
-  let src = downloads_src("chat-download", list, calls, keeping~)
+  // (what the core brings changed, told as the core tells its topic changed)
+  let told = @signals.signal(0)
+  let src = downloads_src("chat-download", list, calls, keeping~, told~)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
@@ -228,6 +230,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
     Json::object(o)
   }
   keeping.push(brought("going", "正在加载 20% · 5 MB", true))
+  told.set(told.get() + 1)
   t.draw()
   t.run_for(@sf.dur_ms)
   assert_true(t.find("20%") is Some(_))
@@ -247,6 +250,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   // brought in the background (opened and let go): the same, one thing whichever way it began
   keeping.clear()
   keeping.push(brought("queued", "后台缓存排队中 · 20%", false))
+  told.set(told.get() + 1)
   t.draw()
   t.run_for(@sf.dur_ms)
   assert_true(t.find("20%") is Some(_))
