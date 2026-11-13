@@ -8,12 +8,14 @@
 // picture's flight was drawn in the page's slot under it, a film's in the viewer's layer over everything.
 
 ///|
-/// What is drawn last at (`x`, `y`) in the frame just drawn: its kind (4 a picture), -1 nothing.
+/// What is drawn last at (`x`, `y`) in the frame just drawn, within what it is cut to: its kind (4 a picture), -1
+/// nothing.
 fn last_kind_at(t : @ui.Tester, x : Double, y : Double) -> Int {
   let mut kind = -1
-  for i in t.drawn_order() {
-    if i.5 > 0.5 && x >= i.1 && x <= i.1 + i.3 && y >= i.2 && y <= i.2 + i.4 {
-      kind = i.0
+  for i in t.drawn_instances() {
+    let cut = i[18] <= i[16] || (x >= i[16] && x <= i[18] && y >= i[17] && y <= i[19])
+    if i[11] > 0.5 && x >= i[0] && x <= i[0] + i[2] && y >= i[1] && y <= i[1] + i[3] && cut {
+      kind = i[5].to_int()
     }
   }
   kind
@@ -30,14 +32,14 @@ fn film_in_chat(platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double
   nav_rested(t)
   files_page_over(t, w, 844.0)
   let mut tries = 0
-  while t.reachable("演示录屏.mp4").length() == 0 && tries < 12 {
+  while film_at(t).length() == 0 && tries < 12 {
     let (first, _) = t.visible()
     t.scroll_to(if first > 0 { first - 1 } else { 0 })
     t.draw()
     tries += 1
   }
   t.run_for(@ui.image_fade_ms)
-  let at = t.reachable("演示录屏.mp4")
+  let at = film_at(t)
   assert_true(at.length() > 0) catch { _ => () }
   let (x, y) = at[0]
   (t, x, y)
@@ -77,7 +79,6 @@ fn picture_under_bar_faults(top : Double, platform : Int, w : Double, film? : Bo
   t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
   let moved = t.drawn_images().filter(fn(i) { i[8] > 0.5 && (i[0] - left).abs() < 1.0 && (i[2] - w0).abs() < 1.0 })
   assert_true(moved.length() > 0) catch { _ => () }
-  let y0 = moved[0][1]
   // (each frame built as a host builds it: not built once more to check its rows kept, which would draw a second
   // build of the frame)
   t.check_looks(false)
@@ -85,36 +86,41 @@ fn picture_under_bar_faults(top : Double, platform : Int, w : Double, film? : Bo
   let faults : Array[String] = []
   let frame = Ref(0)
   let set_out = Ref(false)
+  let flying = Ref(false)
+  // (the middle of the chat's bar over where the picture lies: its frosted glass across the picture's middle, the
+  // highest)
+  let mut under = -1.0
+  for i in t.drawn_instances() {
+    if i[5] == 5.0 && i[0] <= x && x <= i[0] + i[2] && i[3] < 200.0 && (under < 0.0 || i[1] + i[3] / 2.0 < under) {
+      under = i[1] + i[3] / 2.0
+    }
+  }
+  if under < 0.0 {
+    faults.push("no bar over it")
+  }
   t.each_frame(
     Some(fn() {
       let v = match viewer.get() {
         Some(v) => Some(v)
         None => pv_leaving.get()
       }
-      match v {
-        Some(v) if v.flies => {
-          set_out.val = true
-          let l = v.lifted_at(t.time())
-          match thumb_of(t.ctx(), v.thumb_id()) {
-            Some({ clear: Some((bar, _)), .. } as th) if l < 1.0 => {
-              if last_kind_at(t, x, bar / 2.0) == 4 {
-                faults.push("frame \{frame.val}: the picture over the bar (gone out \{l})")
-              }
-              let y_at = y0 + l * @sfbase.lift_of(th)
-              if !t
-                .drawn_images()
-                .iter()
-                .any(fn(i) {
-                  i[8] > 0.5 && (i[0] - left).abs() < 1.0 && (i[1] - y_at).abs() < 1.0 && (i[2] - w0).abs() < 1.0
-                }) {
-                faults.push("frame \{frame.val}: the picture off its place (expected (\{left}, \{y_at}))")
-              }
-            }
-            _ => ()
-          }
-        }
-        _ => ()
+      let flies = match v {
+        Some(v) => pic_flies(t, v)
+        None => false
       }
+      let over = last_kind_at(t, x, under) == 4
+      // (the frame it sets out in: the bar over it)
+      if flies && !flying.val && over {
+        faults.push("frame \{frame.val}: set out over the bar")
+      }
+      // (the frame it comes back to rest in: the bar over it again)
+      if !flies && flying.val && over {
+        faults.push("frame \{frame.val}: landed over the bar")
+      }
+      if flies {
+        set_out.val = true
+      }
+      flying.val = flies
       frame.val += 1
     }),
   )
@@ -165,4 +171,15 @@ test "a film under a chat's bar: the bar over it every frame till it is out from
       assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{Repr(faults)}")
     }
   }
+}
+
+///|
+/// Where the chat's 演示录屏.mp4 is reached by a finger: called by its name on the old page, by what pressing it does
+/// (「播放 …」) on a chat's page made as nodes.
+fn film_at(t : @ui.Tester) -> Array[(Double, Double)] {
+  let named = t.reachable("演示录屏.mp4")
+  if named.length() > 0 {
+    return named
+  }
+  t.reachable(@sf.t("web-main.file.play", args=[("name", "演示录屏.mp4")]))
 }

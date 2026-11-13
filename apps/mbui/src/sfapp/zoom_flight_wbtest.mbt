@@ -14,17 +14,18 @@ struct ZfPic {
 
 ///|
 fn zf_pic(t : @ui.Tester) -> ZfPic? {
-  let pics = t.drawn_images()
-  let clips = t.drawn_image_clips()
   let mut out = None
-  for k, p in pics {
-    if p[2] > 60.0 && p[8] > 0.5 {
-      let (w, h) = (p[2] / p[6], p[3] / p[7])
+  for i in t.drawn_instances() {
+    if i[5] == 4.0 && i[2] > 60.0 && i[11] > 0.5 {
+      let (w, h) = (i[2] / i[14], i[3] / i[15])
+      // (its corners as it is cut: by what it is drawn in, else by its own (a flight of the window's tree's draws a
+      // picture round in itself))
+      let cut = (i[24], i[25], i[26], i[27])
       out = Some({
-        at: (p[0], p[1], p[2], p[3]),
-        whole: (p[0] - p[4] * w, p[1] - p[5] * h, w, h),
-        clip: clips[k].0,
-        corners: clips[k].1,
+        at: (i[0], i[1], i[2], i[3]),
+        whole: (i[0] - i[12] * w, i[1] - i[13] * h, w, h),
+        clip: (i[16], i[17], i[18], i[19]),
+        corners: if cut.0 > 0.0 || cut.1 > 0.0 || cut.2 > 0.0 || cut.3 > 0.0 { cut } else { (i[4], i[4], i[4], i[4]) },
       })
     }
   }
@@ -55,15 +56,22 @@ fn zf_pinch(t : @ui.Tester, from : Double, to : Double) -> Unit {
 
 ///|
 /// The chat's picture (`film`: its recording) opened from its thumbnail in a window `w` wide (`platform`'s), in and at
-/// rest: the Tester, its viewer and its thumbnail's corners.
+/// rest: the Tester, its viewer and its thumbnail's corners as it lay before it opened (its place there kept in
+/// `zf_thumb`).
 fn zf_opened(film : Bool, platform : Int, w : Double) -> (@ui.Tester, @sfbase.Viewer, (Double, Double, Double, Double)) {
   let (t, x, y) = if film { film_in_chat(platform~, w~) } else { image_in_chat("compare.png", platform~, w~) }
+  let (at, corners) = pic_at(t, x, y).unwrap()
+  zf_thumb.val = at
   t.tap(x, y)
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms * 2.0)
-  let corners = thumb_of(t.ctx(), v.thumb_id()).unwrap().corners.each()
   (t, v, corners)
 }
+
+///|
+/// Where the thumbnail zf_opened opened lay before it opened (x, y, w, h).
+// kept across tests: set by each zf_opened before what reads it
+let zf_thumb : Ref[(Double, Double, Double, Double)] = Ref((0.0, 0.0, 0.0, 0.0))
 
 ///|
 /// Viewer `v` closed (back; in a window of a mouse's, Esc), a film's frame answered: the moment its flight back sets
@@ -92,7 +100,7 @@ fn zf_corner_faults(
   window : (Double, Double),
 ) -> Array[String] {
   let faults = []
-  let end = v.fly.end()
+  let end = pic_flight_end(t, v)
   let mut was = 0.0
   for share in [0.25, 0.5, 0.75] {
     t.frame_at(start + (end - start) * share)
@@ -145,7 +153,7 @@ fn zf_film_back_ms(from : Double) -> Double raise {
   let (x, y, w, h) = @sf.player_picture_at(v.media.unwrap().key()).unwrap()
   assert_true(x <= 0.0 && y <= 0.0 && x + w >= 390.0 && y + h >= 844.0, msg="over the whole window: \{Repr((x, y, w, h))}")
   let start = zf_closed(t, true, false)
-  v.fly.end() - start
+  pic_flight_end(t, v) - start
 }
 
 ///|
@@ -164,9 +172,9 @@ fn zf_stop_faults(t : @ui.Tester, v : @sfbase.Viewer, wide : Bool) -> Array[Stri
     faults.push("its zoom not on its way as it is closed")
   }
   let start = zf_closed(t, false, wide)
-  let end = v.fly.end()
+  let end = pic_flight_end(t, v)
   let stopped = v.zoom.rect_at(start).unwrap()
-  let home = thumb_of(t.ctx(), v.thumb_id()).unwrap().w
+  let home = zf_thumb.val.2
   let mut was = (stopped.2 - home).abs() + 0.01
   for share in [0.25, 0.5, 0.75] {
     t.frame_at(start + (end - start) * share)
@@ -321,13 +329,13 @@ test "a picture's and a film's flight out and back: its four corners as round as
   }
   for film in [false, true] {
     let (t, x, y) = if film { film_in_chat() } else { image_in_chat("compare.png") }
+    let (tl, tr, br, bl) = pic_at(t, x, y).unwrap().1
+    assert_true(tl > 4.0 && tl == tr && tl == br && tl == bl, msg="the thumbnail's corners")
     t.tap(x, y)
     let v = viewer.get().unwrap()
-    let (tl, tr, br, bl) = thumb_of(t.ctx(), v.thumb_id()).unwrap().corners.each()
-    assert_true(tl > 4.0 && tl == tr && tl == br && tl == bl, msg="the thumbnail's corners")
-    zf_none(zf_uneven_frames(t, v.fly.end()), "film \{film}, out")
+    zf_none(zf_uneven_frames(t, pic_flight_end(t, v)), "film \{film}, out")
     t.run_for(@ui.move_most_ms * 2.0)
     zf_closed(t, film, false) |> ignore
-    zf_none(zf_uneven_frames(t, v.fly.end()), "film \{film}, back")
+    zf_none(zf_uneven_frames(t, pic_flight_end(t, v)), "film \{film}, back")
   }
 }

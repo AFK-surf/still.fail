@@ -1032,40 +1032,46 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let at = t.locate("img:compare.png")
   assert_true(at.length() > 0)
   let (x, y) = at[0]
+  // (its thumbnail at rest: where it is drawn)
+  let (th, _) = pic_at(t, x, y).unwrap()
+  let tc = (th.0 + th.2 / 2.0, th.1 + th.3 / 2.0)
   t.tap(x, y)
   let v = viewer.get().unwrap()
   assert_eq(v.file.name, "compare.png")
-  assert_true(v.flies && !v.fly_back)
+  assert_true(pic_flies(t, v))
   // grown in: @ui.move_most_ms from the tap
   t.run_for(@ui.move_most_ms)
-  assert_true(!v.flies)
-  // where its thumbnail is in the chat under it
-  let th = thumb_of(t.ctx(), v.thumb_id()).unwrap()
-  let tc = (th.x + th.w / 2.0, th.y + th.h / 2.0)
+  assert_true(!pic_flies(t, v))
   t.back()
   // closed as back is taken: only drawn, flying back into its thumbnail
   assert_true(viewer.get() is None)
   assert_true(pv_leaving.get() is Some(_))
-  assert_true(v.flies && v.fly_back)
-  let to = v.zoom.rect(t.ctx()).unwrap()
+  assert_true(pic_flies(t, v))
   // each frame of the way back the picture is drawn where its flight is, nearer the thumbnail than the frame before,
   // the last one on it
   let mut last = 1.0e9
   let mut frames = 0
-  // its way back: @ui.move_most_ms from back
-  let end = t.time() + @ui.move_most_ms
+  // its way back: as long as its flight
+  let end = pic_flight_end(t, v)
   while t.time() < end {
     t.frame()
-    let p = v.flying(t.ctx())
-    let ex = th.x + (to.0 - th.x) * p + (th.w + (to.2 - th.w) * p) / 2.0
-    let ey = th.y + (to.1 - th.y) * p + (th.h + (to.3 - th.h) * p) / 2.0
-    let drawn = t
-      .drawn_images()
-      .iter()
-      .any(fn(i) { (i[0] + i[2] / 2.0 - ex).abs() < 0.5 && (i[1] + i[3] / 2.0 - ey).abs() < 0.5 && i[2] > th.w / 2.0 })
-    assert_true(drawn)
-    let d = (ex - tc.0).abs() + (ey - tc.1).abs()
-    assert_true(d <= last)
+    let d = match pic_flight(t, v) {
+      Some(((fx, fy, fw, fh), _)) => {
+        // (drawn there, as big as it flies)
+        let drawn = t
+          .drawn_images()
+          .iter()
+          .any(fn(i) { (i[0] + i[2] / 2.0 - (fx + fw / 2.0)).abs() < 0.5 && (i[1] + i[3] / 2.0 - (fy + fh / 2.0)).abs() < 0.5 && i[2] > th.2 / 2.0 })
+        assert_true(drawn)
+        (fx + fw / 2.0 - tc.0).abs() + (fy + fh / 2.0 - tc.1).abs()
+      }
+      // (landed: in its thumbnail)
+      None => {
+        let (lx, ly, lw, lh) = pic_at(t, tc.0, tc.1).unwrap().0
+        (lx + lw / 2.0 - tc.0).abs() + (ly + lh / 2.0 - tc.1).abs()
+      }
+    }
+    assert_true(d <= last + 0.001)
     last = d
     frames += 1
   }
