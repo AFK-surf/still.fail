@@ -47,7 +47,7 @@ const SMALL = 600;
 const BRIEF_CHARS = 300;
 /// The fields of a call's input that say what it does: what an execution history names a call by before it is opened,
 /// and a chat's activity says it does (client/core-ts/src/activity.ts doing, history.ts describe, hint, fileOf).
-const SAYING = ["description", "command", "cmd", "file_path", "path", "notebook_path", "pattern", "url", "query", "prompt"];
+const SAYING = ["description", "toolSummary", "command", "cmd", "CommandLine", "file_path", "path", "Path", "notebook_path", "StartLine", "EndLine", "offset", "limit", "Target", "Replacement", "Content", "Overwrite", "pattern", "url", "query", "prompt"];
 /// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
 const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);
 /// Each call's brief, as it was read (from its whole input, not one cut to MAX_TEXT).
@@ -59,10 +59,12 @@ const firstChars = (text: string, n: number) => Array.from(text).slice(0, n).joi
 /// A call's input in brief: of an object, only the fields that say what it does, each cut short; anything else cut short.
 function briefOf(input: Json | undefined): string {
   if (isObj(input)) {
-    const kept: Record<string, string | string[]> = {};
+    const kept: Record<string, string | number | boolean | string[]> = {};
     for (const name of SAYING) {
       const v = get(input, name);
       if (isStr(v)) kept[name] = firstChars(v, BRIEF_CHARS);
+      else if (typeof v === "number" && Number.isFinite(v)) kept[name] = v;
+      else if (typeof v === "boolean") kept[name] = v;
       else if (Array.isArray(v)) kept[name] = v.filter(isStr).map((p) => firstChars(p, BRIEF_CHARS));
     }
     return JSON.stringify(kept);
@@ -609,10 +611,21 @@ function cursorTimeline(r: Json, out: TimelineEntry[]) {
     if (name === "mcp" && isStr(get(input, "providerIdentifier")) && isStr(get(input, "toolName"))) [name, input] = [`mcp__${get(input, "providerIdentifier")}__${get(input, "toolName")}`, get(input, "args") ?? {}];
     const args = pretty(input);
     const id = stringOf(get(r, "id"));
-    const call: TimelineEntry = { at, kind: "tool_call", text: keptWhole(name) ? args : clip(args), tool: name };
+    const resultText = cursorResult(get(r, "result"));
+    const started = get(r, "startedAt");
+    const startedAt = typeof started === "number" && Number.isFinite(started) ? new Date(started).toISOString() : null;
+    const agyTimes = /^Created At:\s*(\S+)\r?\nCompleted At:\s*(\S+)/.exec(resultText);
+    const parseIso = (s: string | undefined): string | null => {
+      if (!s) return null;
+      const ms = Date.parse(s);
+      return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+    };
+    const callAt = startedAt ?? parseIso(agyTimes?.[1]) ?? at;
+    const resultAt = startedAt !== null ? at : (parseIso(agyTimes?.[2]) ?? at);
+    const call: TimelineEntry = { at: callAt, kind: "tool_call", text: keptWhole(name) ? args : clip(args), tool: name };
     if (id !== undefined) call.callId = id;
     out.push(withBrief(call, input));
-    const result: TimelineEntry = { at, kind: "tool_result", text: clip(cursorResult(get(r, "result"))), ok: get(r, "status") !== "error" };
+    const result: TimelineEntry = { at: resultAt, kind: "tool_result", text: clip(resultText), ok: get(r, "status") !== "error" };
     if (id !== undefined) result.callId = id;
     out.push(result);
   }

@@ -70,8 +70,8 @@ export function acpOutcome(answer: Json, classify: (text: string) => FailureReas
   return { kind: "completed" };
 }
 
-/// A call under way, as it started: its name (as the station names it: live.ts acpNamed) and its input.
-export type Call = { name: string; input: Json };
+/// A call under way, as it started: its name (as the station names it: live.ts acpNamed), its input and when it began.
+export type Call = { name: string; input: Json; startedAt?: number };
 /// A call done, and what it said.
 type Done = Call & { id: string; failed: boolean; text: string };
 
@@ -134,7 +134,7 @@ export class KeptTranscript {
     }
     if ((kind !== "tool_call" && kind !== "tool_call_update") || typeof update.toolCallId !== "string") return;
     this.flush(id);
-    if (done !== null) this.keep(id, { type: "tool", id: done.id, name: done.name, status: done.failed ? "error" : "completed", args: done.input, result: chars(done.text, 20_000) });
+    if (done !== null) this.keep(id, { type: "tool", id: done.id, name: done.name, status: done.failed ? "error" : "completed", ...(done.startedAt !== undefined ? { startedAt: done.startedAt } : {}), args: done.input, result: chars(done.text, 20_000) });
   }
 
   /// What was being said, written.
@@ -308,7 +308,7 @@ export abstract class AcpSession extends OwnProcessSession {
     if ((kind !== "tool_call" && kind !== "tool_call_update") || id === null) return null;
     if (kind === "tool_call" && !this.calls.has(id)) {
       const [name, input] = acpNamed(update);
-      this.calls.set(id, { name, input });
+      this.calls.set(id, { name, input, startedAt: wall.now() });
     }
     const call = this.calls.get(id);
     if (call === undefined || (update.status !== "completed" && update.status !== "failed")) return null;

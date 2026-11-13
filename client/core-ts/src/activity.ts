@@ -1,23 +1,35 @@
 // What an agent at work is doing, as a chat shows it: one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
-import { closeCut as close } from "./tool-step.ts";
+import { cleanCommand, cleanPath, closeCut as close } from "./tool-step.ts";
 import { get } from "./util.ts";
 
-/// A tool's name without its MCP prefix.
+/// A tool's name without its MCP prefix or ACP "Run " prefix.
 export function toolName(tool: string): string {
-  for (const p of ["mcp__stillfail__", "stillfail__", "stillfail.", "mcp__ember__", "ember__", "ember."]) if (tool.startsWith(p)) return tool.slice(p.length);
-  return tool;
+  const s = tool.startsWith("Run ") ? tool.slice(4) : tool;
+  for (const p of ["mcp__stillfail__", "mcp_stillfail_", "stillfail__", "stillfail.", "mcp__ember__", "mcp_ember_", "ember__", "ember."]) if (s.startsWith(p)) return s.slice(p.length);
+  return s;
 }
 
-/// What kind of thing a tool does, for its icon and its verb. Claude Code's names, Codex's, and DeepSeek Harness's
-/// (lowercase: read, bash, …).
-export function kindOf(tool: string): string {
-  switch (toolName(tool)) {
+/// What kind of thing a tool does, for its icon and its verb. Claude Code's names, Codex's, DeepSeek Harness's
+/// (lowercase: read, bash, …), and ACP/Antigravity's ("File …", read_file, edit_file, write_file, run_command, …).
+export function kindOf(tool: string, input?: string | Record<string, J> | null): string {
+  const name = toolName(tool);
+  const a = typeof input === "string" ? args(input) : input ?? null;
+  if (name.startsWith("File ") || name === "read_file" || name === "edit_file" || name === "write_file" || name === "write_to_file" || name === "replace_file_content" || name === "multi_replace_file_content") {
+    if (name === "edit_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "write_file" || name === "write_to_file") return "edit";
+    if (name === "read_file") return "read";
+    if (a && (a.Target !== undefined || a.Replacement !== undefined || a.Content !== undefined || a.old_string !== undefined || a.new_string !== undefined || a.content !== undefined)) return "edit";
+    return "read";
+  }
+  switch (name) {
     case "Read":
     case "NotebookRead":
     case "view_image":
     case "read":
+    case "view_file_outline":
+    case "view_code_item":
+    case "skill_read":
       return "read";
     case "Glob":
     case "Grep":
@@ -25,6 +37,10 @@ export function kindOf(tool: string): string {
     case "ToolSearch":
     case "glob":
     case "grep":
+    case "grep_search":
+    case "find_by_name":
+    case "list_dir":
+    case "search":
       return "search";
     case "Edit":
     case "MultiEdit":
@@ -39,20 +55,33 @@ export function kindOf(tool: string): string {
     case "BashOutput":
     case "KillShell":
     case "exec_command":
+    case "exec":
     case "shell":
     case "local_shell":
     case "write_stdin":
     case "unified_exec":
+    case "run_command":
+    case "run_terminal_command":
+    case "command_status":
+    case "send_command_input":
+    case "manage_task":
       return "command";
     case "WebFetch":
     case "WebSearch":
     case "web_search":
     case "web_fetch":
+    case "search_web":
+    case "read_url_content":
       return "web";
     case "Task":
     case "Agent":
     case "spawn_agent":
     case "subagent":
+    case "invoke_subagent":
+    case "define_subagent":
+    case "manage_subagents":
+    case "swarm":
+    case "send_message":
       return "agent";
     case "chat_history":
     case "chat_list":
@@ -60,6 +89,10 @@ export function kindOf(tool: string): string {
     case "session_history":
       return "thread";
     default:
+      if (a && typeof a.CommandLine === "string") return "command";
+      if (a && (a.Target !== undefined || a.Replacement !== undefined || a.Content !== undefined)) return "edit";
+      if (a && typeof a.Path === "string") return "read";
+      if (/^(?:cd|git|pnpm|npm|node|cargo|python3?|sh|bash|zsh|rg|ls|cat|mkdir|rm|cp|mv|curl|gh)\b/.test(name)) return "command";
       return "other";
   }
 }
@@ -69,7 +102,7 @@ export function kindOf(tool: string): string {
 /// remote task status checks can instead be coalesced when the agent moves on at once.
 export function importantCall(tool: string, input: string): boolean {
   const name = toolName(tool);
-  const kind = kindOf(tool);
+  const kind = kindOf(tool, input);
   if (kind === "edit" || kind === "agent") return true;
   if (name === "station_task") return args(input)?.action === "start";
   return ["request_user_input", "request_user_input_async", "chat_create", "session_send", "job_start"].includes(name);
@@ -189,19 +222,27 @@ export function told(tool: string, input: string, known: Known = {}): string | n
 /// calls by its latest the same way.
 export function doing(tool: string, input: string, known: Known = {}): string {
   const a = args(input) ?? {};
-  const said = typeof a.description === "string" ? firstLine(a.description) : "";
+  const desc = typeof a.description === "string" ? a.description : typeof a.toolSummary === "string" ? a.toolSummary : "";
+  const said = firstLine(desc);
   if (said) return said;
   const own = told(tool, input, known);
   if (own) return own;
-  const kind = kindOf(tool);
+  const kind = kindOf(tool, a);
   let target = "";
-  for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "queries", "prompt"]) {
+  for (const name of ["command", "cmd", "CommandLine", "file_path", "path", "Path", "pattern", "Pattern", "url", "query", "Query", "queries", "prompt", "Prompt"]) {
     const v = a[name];
     const s = typeof v === "string" ? v : Array.isArray(v) ? v.filter((p): p is string => typeof p === "string").join(" ") : null;
     if (s === null) continue;
-    const line = firstLine(s);
+    const raw = name === "command" || name === "cmd" || name === "CommandLine" ? cleanCommand(s) : name === "file_path" || name === "path" || name === "Path" ? cleanPath(s) : s;
+    const line = firstLine(raw);
     target = kind === "read" || kind === "edit" ? (line.split("/").pop() ?? line) : line;
     break;
+  }
+  if (!target && tool.startsWith("File ")) {
+    const p = cleanPath(tool.slice(5).trim());
+    target = p.split("/").pop() ?? p;
+  } else if (!target && kind === "command" && !["Bash", "bash", "run_command", "run_terminal_command", "exec", "exec_command", "shell", "local_shell"].includes(toolName(tool))) {
+    target = firstLine(cleanCommand(toolName(tool)));
   }
   return `${kind === "other" ? toolName(tool) : verb(kind)} ${target}`.trim();
 }

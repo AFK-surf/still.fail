@@ -481,3 +481,96 @@ test("a_slack_messages_files_are_its_files_not_its_words", () => {
   // Words that only look like it are words.
   for (const words of ["Attached files:\n- see below", "a\nAttached files:\n- /p (x, 1 bytes)"]) assert.deepEqual(heardFiles(words), { text: words, files: [] });
 });
+
+test("agy_tools_coalesced_reads_and_stage_splitting_are_grouped_cleanly", () => {
+  const ws = "/Users/zuozijian/.stillfail/sessions/chat/c-4282c9a37cb40bab469a3b91c261af05/workspace/stillfail";
+  const readCall = (id: string, file: string, start: number, end: number) => ({
+    kind: "tool_call",
+    tool: `File ${ws}/${file}`,
+    callId: id,
+    text: JSON.stringify({ Path: `${ws}/${file}`, StartLine: start, EndLine: end }),
+    at: "2026-11-13T04:00:00.000Z",
+  });
+  const readDone = (id: string, start: number, end: number, ms = 10) => ({
+    kind: "tool_result",
+    callId: id,
+    ok: true,
+    text: `Created At: 2026-11-13T04:00:00Z\nCompleted At: 2026-11-13T04:00:00Z\nShowing lines ${start}-${end} of 500\n${start}: const x = 1;`,
+    at: new Date(Date.parse("2026-11-13T04:00:00.000Z") + ms).toISOString(),
+  });
+  const timeline: J[] = [
+    { kind: "user", text: "refactor screens" },
+    { kind: "thinking", text: "I'm thinking through how to approach this.\n先看下 screens.ts 和 history.ts 的结构。" },
+    // 2 consecutive reads on the same file -> coalesced into 1 row
+    readCall("r1", "station/src/mesh/screens.ts", 1, 120),
+    readDone("r1", 1, 120, 0),
+    readCall("r2", "station/src/mesh/screens.ts", 121, 240),
+    readDone("r2", 121, 240, 20),
+  ];
+  // Add 7 more explore steps so groupSteps >= 8
+  for (let i = 3; i <= 9; i++) {
+    timeline.push(readCall(`r${i}`, `station/src/file${i}.ts`, 1, 50));
+    timeline.push(readDone(`r${i}`, 1, 50, 1200));
+  }
+  // Transition to act phase after a thought -> splits into a second group
+  timeline.push({ kind: "thinking", text: "现在开始修改代码并跑测试。" });
+  timeline.push({
+    kind: "tool_call",
+    tool: `File ${ws}/station/src/mesh/screens.ts`,
+    callId: "e1",
+    text: JSON.stringify({ Path: `${ws}/station/src/mesh/screens.ts`, Target: "old", Replacement: "new" }),
+    at: "2026-11-13T04:00:10.000Z",
+  });
+  timeline.push({
+    kind: "tool_result",
+    callId: "e1",
+    ok: true,
+    text: "Made 1 replacement",
+    at: "2026-11-13T04:00:10.500Z",
+  });
+  timeline.push({
+    kind: "tool_call",
+    tool: `cd ${ws} && pnpm test`,
+    callId: "c1",
+    text: JSON.stringify({ CommandLine: `cd ${ws} && pnpm test`, toolSummary: "Unit test execution" }),
+    at: "2026-11-13T04:00:11.000Z",
+  });
+  timeline.push({
+    kind: "tool_result",
+    callId: "c1",
+    ok: true,
+    text: "PASS",
+    at: "2026-11-13T04:00:13.200Z",
+  });
+
+  const items = presentHistory({ timeline }, cx([], [], [])).items;
+  // item[0] is user, item[1] is explore stage group, item[2] is act stage group
+  assert.equal(items.length, 3);
+  const g1 = items[1].body.content;
+  const g2 = items[2].body.content;
+
+  // Thought skips boilerplate opener
+  assert.equal(g1.rows[0].content.first, "先看下 screens.ts 和 history.ts 的结构。");
+  // Consecutive reads on screens.ts are coalesced into 1 row with combined line range and relative dir hint
+  const coalesced = g1.rows[1].content;
+  assert.equal(coalesced.name, "Read");
+  assert.equal(coalesced.said, "screens.ts · 1–240 行（共 2 段）");
+  assert.equal(coalesced.hint, "station/src/mesh");
+  // < 50ms duration is hidden (not "0ms")
+  assert.equal(coalesced.meta, "");
+  // Group 1 summary uses category counts (8 unique files across 9 steps) instead of raw tool name
+  assert.equal(g1.summary, "读取 8 个文件 · 共 9 项");
+
+  // Group 2 starts with the trailing thought before the edit, followed by Edit and Bash
+  assert.equal(g2.rows[0].kind, "thought");
+  assert.equal(g2.rows[0].content.first, "现在开始修改代码并跑测试。");
+  assert.equal(g2.rows[1].content.name, "Edit");
+  assert.equal(g2.rows[1].content.said, "screens.ts");
+  assert.equal(g2.rows[1].content.hint, "station/src/mesh");
+  assert.equal(g2.rows[1].content.meta, "500ms");
+  assert.equal(g2.rows[2].content.name, "Bash");
+  assert.equal(g2.rows[2].content.said, "Unit test execution");
+  assert.equal(g2.rows[2].content.hint, "pnpm test");
+  assert.equal(g2.rows[2].content.meta, "2 秒");
+  assert.equal(g2.summary, "编辑 1 个文件、运行 1 条命令 · 共 2 项");
+});

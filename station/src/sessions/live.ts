@@ -46,7 +46,7 @@ const INPUT_CHARS = 300;
 /// The fields of a call's input that say what it runs. A client core before 0.1.2301 says what a running call does by
 /// them (its activity.ts callText); a newer one says it by the call's transcript entry alone and reads none of them, but
 /// a step without them showed only 处理中 in an older one: they stay until no client that old is about.
-const SAYING = ["description", "command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt"];
+const SAYING = ["description", "toolSummary", "command", "cmd", "CommandLine", "file_path", "path", "Path", "pattern", "url", "query", "prompt"];
 /// The output rate is told at most this often, over this window (bytes / 4 ≈ tokens).
 const RATE_EVERY_MS = 1_000;
 const RATE_WINDOW_MS = 2_000;

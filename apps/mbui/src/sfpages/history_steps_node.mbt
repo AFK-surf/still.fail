@@ -1043,7 +1043,7 @@ fn group_node(
       steps_box_node(h, h_grow_clip, fn(w) {
         w.box(fn(r) {
           r
-          .words_runs(By(fn() { [@ui.span(text(g, "summary"), mono=calls)] }))
+          .words_runs(By(fn() { [@ui.span(text(g, "summary"), mono=false)] }))
           .words_look(By(fn() { @ui.style_words(h_group_words) }))
           .ink(By(fn() { @ui.style_ink(if hot() { h_group_hot } else { h_group_words }) }))
           .cuts(Is(true))
@@ -1061,10 +1061,7 @@ fn group_node(
         @sf.badge_node(h, fn() { @sf.t("web-main.history.pending", args=[("n", pending.to_string())]) }, tone=Accented)
         |> ignore
       }
-      match text(g, "title") {
-        "" => ()
-        title => @sf.tip_node(tips, h, fn() { title }) |> ignore
-      }
+      ignore(tips)
     })
     |> ignore
     @motion.reveal_node(gv, open, deferred=true, fn(s) {
@@ -1095,17 +1092,56 @@ fn group_node(
 }
 
 ///|
+/// Short localized action badge for a tool step row.
+fn step_label(name : String) -> String {
+  match name {
+    "Read" | "NotebookRead" | "view_image" | "read" | "read_file" | "view_file_outline" | "view_code_item" | "skill_read" => "读取"
+    "Edit" | "MultiEdit" | "NotebookEdit" | "apply_patch" | "edit" | "edit_file" | "replace_file_content" | "multi_replace_file_content" => "编辑"
+    "Write" | "write" | "write_file" | "write_to_file" => "新建"
+    "Glob" | "Grep" | "LS" | "ToolSearch" | "glob" | "grep" | "grep_search" | "find_by_name" | "list_dir" | "search" => "搜索"
+    "Bash" | "bash" | "BashOutput" | "KillShell" | "exec_command" | "exec" | "shell" | "local_shell" | "write_stdin" | "unified_exec" | "run_command" | "run_terminal_command" | "command_status" | "send_command_input" | "manage_task" => "命令"
+    "WebFetch" | "WebSearch" | "web_search" | "web_fetch" | "search_web" | "read_url_content" => "网页"
+    "Task" | "Agent" | "spawn_agent" | "subagent" | "invoke_subagent" | "define_subagent" | "manage_subagents" | "swarm" | "send_message" => "代理"
+    "chat_history" | "chat_list" | "chat_read" | "session_history" => "对话"
+    "chat_post" | "chat_state" | "session_send" | "chat_create" => "消息"
+    "" => "工具"
+    other => if other.length() > 10 { "工具" } else { other }
+  }
+}
+
+///|
 /// A call in `v`: its line; opened, what it asked for and what came back.
 fn step_node(v : @view.View, src : Source, station : String, key : String, rk : String, step : Json?) -> Unit {
   let failed = flag(step, "failed")
   opened_node(v, src, station, key, rk, step, fn(sum) {
-    match text(step, "said") {
-      "" => {
-        steps_words(sum, fn() { text(step, "name") }, if failed { h_step_name_red } else { h_step_name })
-        steps_box_node(sum, h_grow_clip, fn(c) { steps_run(c, fn() { text(step, "hint") }, h_step_hint_line, mono=true) }, in_row=true)
+    steps_words(sum, fn() { step_label(text(step, "name")) }, if failed { h_step_name_red } else { h_step_name })
+    steps_box_node(sum, h_grow_clip, fn(c) {
+      match (text(step, "said"), text(step, "hint")) {
+        ("", hint) => steps_run(c, fn() { hint }, h_step_hint_line, mono=true)
+        (said, "") => steps_words(c, fn() { said }, h_step_said)
+        (said, hint) =>
+          if said == hint {
+            steps_words(c, fn() { said }, h_step_said)
+          } else {
+            c.box(fn(r) {
+              r
+              .words_runs(By(fn() {
+                [
+                  @ui.span(said, color=@sf.theme().p.text),
+                  @ui.span("  " + hint, mono=true, color=@sf.theme().p.muted),
+                ]
+              }))
+              .words_look(By(fn() { @ui.style_words(h_step_said) }))
+              .ink(By(fn() { @ui.style_ink(h_step_said) }))
+              .cuts(Is(true))
+              .min_width(Is(Some(0.0)))
+              .allow_ellipsis(Is(true))
+              |> ignore
+            })
+            |> ignore
+          }
       }
-      said => steps_box_node(sum, h_grow_clip, fn(c) { steps_words(c, fn() { said }, h_step_said) }, in_row=true)
-    }
+    }, in_row=true)
     @sf.words_node(sum, fn() { text(step, "meta") }, fn() { if failed { h_step_meta_red } else { h_step_meta } }).shrink(Is(0.0)) |> ignore
   }, fn(body) { tool_body_node(body, src, rk, step) })
 }

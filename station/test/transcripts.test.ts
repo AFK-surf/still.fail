@@ -498,3 +498,56 @@ test("a chain that keeps nothing tells all that follows one of its transcripts t
   assert.equal(chain.length, 3);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("ACP/AGY tool calls keep toolSummary, Path, line numbers and timestamps in brief and timeline", () => {
+  const dir = temp();
+  const path = join(dir, "agy.jsonl");
+  const lines = [
+    {
+      time: 1_794_521_282_000,
+      type: "tool",
+      id: "call_1",
+      name: "File station/src/mesh/screens.ts",
+      status: "completed",
+      args: {
+        Path: "/Users/u/workspace/stillfail/station/src/mesh/screens.ts",
+        StartLine: 1,
+        EndLine: 120,
+        ExtraNoise: "x".repeat(700),
+      },
+      result: "Created At: 2026-11-13T04:28:00+08:00\nCompleted At: 2026-11-13T04:28:02+08:00\nShowing lines 1-120",
+    },
+    {
+      time: 1_794_521_290_500,
+      startedAt: 1_794_521_289_100,
+      type: "tool",
+      id: "call_2",
+      name: "cd /Users/u/workspace && git status",
+      status: "completed",
+      args: {
+        CommandLine: "cd /Users/u/workspace && git status",
+        toolSummary: "Git status check",
+        WaitMsBeforeAsync: 5000,
+        ExtraNoise: "y".repeat(700),
+      },
+      result: "ok",
+    },
+  ];
+  writeFileSync(path, lines.map((l) => `${JSON.stringify(l)}\n`).join(""));
+  const whole = readTimeline("agy", path);
+  assert.equal(whole[0]?.at, new Date(Date.parse("2026-11-13T04:28:00+08:00")).toISOString());
+  assert.equal(whole[1]?.at, new Date(Date.parse("2026-11-13T04:28:02+08:00")).toISOString());
+  assert.equal(whole[2]?.at, new Date(1_794_521_289_100).toISOString());
+  assert.equal(whole[3]?.at, new Date(1_794_521_290_500).toISOString());
+  const briefed = whole.map(brief);
+  assert.deepEqual(JSON.parse(briefed[0]!.text), {
+    Path: "/Users/u/workspace/stillfail/station/src/mesh/screens.ts",
+    StartLine: 1,
+    EndLine: 120,
+  });
+  assert.deepEqual(JSON.parse(briefed[2]!.text), {
+    toolSummary: "Git status check",
+    CommandLine: "cd /Users/u/workspace && git status",
+  });
+  rmSync(dir, { recursive: true, force: true });
+});
