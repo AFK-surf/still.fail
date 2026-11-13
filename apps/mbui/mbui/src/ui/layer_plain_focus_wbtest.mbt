@@ -84,3 +84,35 @@ test "a field of an old view with the focus, a modal layer of the tree's opened 
   t.draw()
   assert_eq(t.ime().1, "ab", msg="what is typed the field's")
 }
+
+///|
+test "an old view let go while a field of it held the focus, even with a modal layer keeping what is typed open: focus cleared and input method put away" {
+  let (shown, open) = (@signals.signal(true), @signals.signal(false))
+  let asked = Ref(false)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(h) {
+      h.grow(Is(1.0)) |> ignore
+      old(h, fn(c) {
+        c.editor("页/字段", placeholder="页字段") |> ignore
+        if !asked.val {
+          asked.val = true
+          c.focus_editor("页/字段")
+        }
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    root.show(fn() { open.get() }, fn(l) {
+      l.over(Is(true)).modal(Is(true)).presses(Is(true)).leaves_typing() |> ignore
+      l.box(fn(x) { x.width(Is(Some(80.0))).height(Is(Some(40.0))) |> ignore }) |> ignore
+    })
+  })
+  t.draw()
+  t.draw()
+  assert_true(t.ime().0 && g().field_focused(), msg="focused while shown: \{Repr(t.ime())}")
+  open.set(true)
+  shown.set(false)
+  t.draw()
+  assert_true(!g().field_focused() && !t.ime().0, msg="disposed old island drops focus and ime: field_focused=\{g().field_focused()} ime=\{Repr(t.ime())}")
+}
