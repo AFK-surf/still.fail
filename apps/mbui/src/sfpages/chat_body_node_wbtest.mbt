@@ -1021,8 +1021,8 @@ test "a chat's messages as nodes as its view changes, at rest after each: the sa
         // showed comes into it again, made as any row coming into view, no other made again)
         "its turn over" if s.0 == "小屏" => ["m:ts7"]
         "one not sent" => ["o:o-9"]
-        // (what was sent from here as the core's message: its key the outbox entry's, its row the viewer's message's)
-        "the core has it as a message" => ["o:o-9"]
+        // (what was sent from here as the core's message: its key the outbox entry's, its row the same, none made: what
+        // is sent and what it becomes are one row, its words' node kept so a finger's pick over them stays)
         _ => []
       }
       again.sort()
@@ -1200,9 +1200,9 @@ test "what was sent from here goes on by the key it was sent as: the core's outb
   t.run_for(@ui.move_most_ms)
   assert_eq(made.get("m:ts3"), None, msg="the core's message is the row sent from here")
   assert_eq(made.get("o:core-1"), None, msg="the core's message is the row sent from here")
-  // (its block the same, by the key it was sent as; what it holds made again once, as the viewer's message in the
-  // outbox entry's place)
-  assert_eq(made.get(key), Some(2), msg="made again once, the viewer's message in the outbox entry's place")
+  // (its block the same, by the key it was sent as, and what it holds not made again: what is sent and what it becomes
+  // are one row, its words' node the one made as it was sent, so a finger's pick over them keeps its handles and menu)
+  assert_eq(made.get(key), Some(1), msg="no row made as the core's message takes it over: its words' node the same")
   assert_true(t.words().iter().any(fn(w) { w.0 == "刚发的一句" }))
   assert_eq(t.audit().filter(fn(f) { !f.contains("刚刚") }), [])
 }
