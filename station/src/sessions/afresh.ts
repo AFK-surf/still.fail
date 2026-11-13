@@ -14,21 +14,32 @@ import { usageNow } from "../read/usage.ts";
 import { homesFirst, transcriptPaths } from "../read/transcript.ts";
 import type { Hub } from "./hub.ts";
 
+/// The addresses of a session's threads its agent is told to read back: the recent ones (store `recentSessionThreads`),
+/// and where it takes part in more, where it finds those, so that a chat with thousands of threads is not told them all.
+export function threadsToldOf(hub: Hub, key: string, recent = hub.store.recentSessionThreads(key)): string[] {
+  const { threads, more } = recent;
+  const told = threads.map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+  return more ? [...told, OLDER_THREADS] : told;
+}
+
+/// What a session's older threads left out of a list are said as.
+export const OLDER_THREADS = "and older ones (chat_list finds them)";
+
 /// What a session going on on `to` is told when it starts afresh rather than take up runtime session `id`, last run on
 /// `was` (when the store has no record of it); null when it takes it up: on the account it ran on, or one not known.
 export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was: string | null): string | null {
   const row = hub.store.getSession(key);
   const source = hub.store.runtimeSessionSource(key, id);
-  if (row && source && source.runtime !== row.runtime) return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
+  if (row && source && source.runtime !== row.runtime) return afresh(key, threadsToldOf(hub, key));
   const from = hub.store.ranOn(key, id) ?? was;
   if (from === null || from === to.id) return null;
-  return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
+  return afresh(key, threadsToldOf(hub, key));
 }
 
 /// What a session whose context was cleared by hand is told as its new runtime session starts: its chats to read back;
 /// cleared to go on afresh (`readBack`), what it needs of its work too, as on another account.
 export function toldCleared(hub: Hub, key: string, readBack = false): string {
-  const threads = hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+  const threads = threadsToldOf(hub, key);
   return readBack ? afresh(key, threads) : cleared(key, threads);
 }
 
@@ -50,7 +61,7 @@ export function goesAfresh(hub: Hub, key: string, now: number): boolean {
 /// One continued from a terminal is told where that conversation is on the machine: its own transcript there (not the
 /// station's copy, which may be what failed).
 export function toldResumeLost(hub: Hub, key: string): string {
-  const threads = hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+  const threads = threadsToldOf(hub, key);
   const row = hub.store.getSession(key);
   const first = hub.store.runtimeSessions(key)[0];
   const runtime = row?.runtime === "claude" || row?.runtime === "codex" ? row.runtime : null;
@@ -60,10 +71,11 @@ export function toldResumeLost(hub: Hub, key: string): string {
 
 /// What a session compacted or gone on in a new conversation is told when its chats are long (more than `LONG_CHAT`
 /// messages): to read back what people said in them. Null when they are not.
+/// Counted over the threads it is told of (`threadsToldOf`): those are what it reads back.
 export function toldLongChat(hub: Hub, key: string): string | null {
-  const threads = hub.store.sessionThreads(key);
-  const count = threads.reduce((sum, t) => sum + hub.store.messageCount(t.thread.id), 0);
-  return count > LONG_CHAT ? longChat(count, threads.map((t) => threadAddress(t.thread.channel, t.thread.threadTs))) : null;
+  const recent = hub.store.recentSessionThreads(key);
+  const count = recent.threads.reduce((sum, t) => sum + hub.store.messageCount(t.thread.id), 0);
+  return count > LONG_CHAT ? longChat(count, threadsToldOf(hub, key, recent)) : null;
 }
 
 /// Claude's subagents `ids` of runtime session `from`, stopped with its process, copied to session `to` (just started on

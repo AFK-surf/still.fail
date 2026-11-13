@@ -75,8 +75,8 @@ export function turnNotices(s: Store, key: string, since: number, ended: number 
   const api = apiOf(s);
   const missing: number[] = [];
   const found: { thread: ReturnType<typeof store.sessionThreads>[number]; last: MessageRow | null }[] = [];
-  for (const thread of store.sessionThreads(s, key)) {
-    if (thread.surface !== STILLFAIL_SURFACE || thread.hiddenAt !== null) continue;
+  for (const thread of store.sessionThreads(s, key, STILLFAIL_SURFACE)) {
+    if (thread.hiddenAt !== null) continue;
     let last: MessageRow | null;
     try { last = store.lastMessage(s, thread.id); }
     catch (error) {

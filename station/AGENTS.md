@@ -41,6 +41,10 @@
   the `*-bounded.test.ts` tests count the rows a read fetches; a new read gets one. Old data a new index needs is
   built in the background (`src/read/*-builder.ts`), its batches taking one shared permit and yielding to writes
   (`src/store/backfill.ts`); until it is built, the read is bounded some other way, never a scan.
+- A session can take part in thousands of threads (a chat that posts each release to Slack starts one each time):
+  what its agent is told, its turns, its tools and the archive look at its recent ones (store `recentSessionThreads`,
+  readers' `recentThreadRows`), never a loop over `sessionThreads`, which is for what must see every one (a share, an
+  archive's changes). `test/many-threads-bounded.test.ts` holds it.
 - A thread is a log: entries are appended, an edit is an entry of its own, nothing is deleted (a Slack delete is
   ignored); readers merge. The schema migrates forward only.
 - What changes is told: the store's change, then `GET /events` (`src/api/events.ts`) to devices. A device never polls.

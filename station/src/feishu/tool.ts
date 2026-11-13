@@ -70,7 +70,7 @@ export function feishuTools(hub: () => Hub | undefined, isFeishu: (connect: stri
         if (typeof args.to === "string" && args.to !== "") connect = target(h, key, args.to).connect;
         else {
           const own = h.store.getSession(key)?.connect ?? null;
-          connect = own !== null && isFeishu(own) ? own : (h.store.sessionThreads(key).map((t) => t.connect).find(isFeishu) ?? null);
+          connect = own !== null && isFeishu(own) ? own : (h.store.recentSessionThreads(key).threads.map((t) => t.connect).find(isFeishu) ?? null);
         }
         if (connect === null || !isFeishu(connect)) throw new Error("this session has no Feishu conversation: give to= one of your Feishu chats");
         const chat = h.chat(connect);

@@ -7,6 +7,7 @@ import { LAPSED } from "../store/rows.ts";
 import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
+import { threadsToldOf } from "./afresh.ts";
 import type { Hub } from "./hub.ts";
 import { Refused } from "./neighbours.ts";
 import { fetchAttachments, type Listed } from "./peer-files.ts";
@@ -351,10 +352,8 @@ export async function chatRead(hub: Hub, key: string, args: Args, seen: Attachme
   } else {
     const found = sessionThreadOf(hub, what.key);
     [thread, connect] = [found.thread, found.connect];
-    const others = hub.store
-      .sessionThreads(what.key)
-      .filter((t) => t.thread.id !== found.thread.id)
-      .map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+    const recent = hub.store.recentSessionThreads(what.key);
+    const others = threadsToldOf(hub, what.key, { threads: recent.threads.filter((t) => t.thread.id !== found.thread.id), more: recent.more });
     if (others.length > 0) note = `\n(Session ${what.key} also takes part in ${others.join(", ")}; read them with chat_read chat=<address>.)`;
   }
   const address = threadAddress(thread.channel, thread.threadTs);

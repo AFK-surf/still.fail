@@ -34,6 +34,7 @@ import {
   stateArg,
 } from "./args.ts";
 import { type ChatSurface, callApi } from "./chat.ts";
+import { threadsToldOf } from "./afresh.ts";
 import type { Hub } from "./hub.ts";
 import { shownFacts } from "./image-size.ts";
 import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
@@ -203,11 +204,15 @@ async function recordPendingForTurn(hub: Hub, key: string, actor: SessionActor, 
   }
 }
 
+/// The threads what a state is about is looked for in (`about`, the pending card): the recent ones, which hold what an
+/// agent answers and asks, however many threads its session joined.
+const recentThreadIds = (hub: Hub, key: string) => hub.store.recentSessionThreads(key).threads.map((t) => t.thread.id);
+
 /// A thread of this session the agent named with to=, and how the session posts there.
 export function target(hub: Hub, key: string, to: Json): SessionThread {
   if (hub.store.getSession(key) === null) throw new Error("unknown session");
   const known = () => {
-    const threads = hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+    const threads = threadsToldOf(hub, key);
     return threads.length === 0 ? "none yet" : threads.join(", ");
   };
   if (typeof to !== "string" || to.trim() === "") throw new Error(`to is required: the thread attribute of the message you are answering. This session's threads: ${known()}`);
@@ -652,7 +657,7 @@ async function intoOpening(hub: Hub, key: string, chat: ChatSurface, thread: Thr
 /// What a state recorded with chat_state is about: the message `about` names (by its ts, in one of the session's
 /// threads); else for need_help, the card still pending in its chats (the latest, if several).
 function stateAbout(hub: Hub, key: string, kind: DeclaredState, args: Args): [number, number, string] | null {
-  const threads = hub.store.sessionThreads(key);
+  const threads = hub.store.recentSessionThreads(key).threads;
   const ts = aboutTs(args);
   if (ts !== null) {
     for (const t of threads) {
@@ -702,10 +707,10 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   const questionTurn = questionActor?.currentTurnId() ?? null;
   let about: [number, number, string] | null;
   if (checkingQuestion) {
-    about = await questionForAbout(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts);
+    about = await questionForAbout(hub, key, () => recentThreadIds(hub, key), ts);
     if (about === null) throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
   } else if (checkingDefault) {
-    about = await pendingForState(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id));
+    about = await pendingForState(hub, key, () => recentThreadIds(hub, key));
   } else about = stateAbout(hub, key, kind, args);
   if (kind.kind === "need_help" && about === null && args.kind !== "block") {
     throw new Error(NEED_VISIBLE_QUESTION);
@@ -713,13 +718,13 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   if (checkingQuestion) {
     if (questionActor && questionTurn !== null &&
       (hub.actors.get(key) !== questionActor || about === null || !await recordQuestionForTurn(hub, key, questionActor,
-        questionTurn, kind, words, about, watch, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts,
+        questionTurn, kind, words, about, watch, () => recentThreadIds(hub, key), ts,
         `about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`)))
       throw new Error("the turn ended while checking its question; its state was not recorded");
   } else if (checkingDefault) {
     if (questionActor && questionTurn !== null &&
       !await recordPendingForTurn(hub, key, questionActor, questionTurn, kind, words, about, watch,
-        () => hub.store.sessionThreads(key).map((t) => t.thread.id), args.kind !== "block"))
+        () => recentThreadIds(hub, key), args.kind !== "block"))
       throw new Error("the turn ended while checking its question; its state was not recorded");
   } else {
     const actor = actorOf(hub, key);

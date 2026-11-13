@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { mbReaderBinary } from "../src/read/mb-reader.ts";
 import { Readers } from "../src/read/pool.ts";
+import { prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 
 const binary = mbReaderBinary();
@@ -68,6 +69,24 @@ test("the MoonBit reader reads a look of the auto-archive as the worker does", {
   const edited = chat("edited", "Edited", 100);
   const first = say(edited, 1100);
   for (let i = 0; i < 70; i++) store.editMessage("ember", "CHAT", "edited", first, `edit ${i}`);
+  // A chat in many threads (a release posted to Slack in a new one each time): its recent ones, its own chat first, the
+  // one it heard from last whether or not that order is prepared, the newest it joined.
+  session("releases", 1000);
+  const releasesHome = chat("releases-home", "Releases", 100);
+  db.prepare("UPDATE threads SET home = 'releases' WHERE id = ?").run(releasesHome);
+  store.joinThread(releasesHome, "releases", "ember");
+  const releases: number[] = [];
+  for (let i = 0; i < 40; i++) {
+    const t = store.openThread("slack:T1", "C2", `5000.${i}`, null, "releases").id;
+    store.joinThread(t, "releases", "team");
+    releases.push(t);
+  }
+  db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES (?,1,'releases',1)").run(releases[2]);
+  for (const [i, t] of releases.entries()) if (i % 9 === 0) store.keepChat("me@x", t);
+  session("releases-prepared", 1000);
+  for (let i = 0; i < 40; i++) store.joinThread(releases[i]!, "releases-prepared", "ember");
+  db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES (?,1,'releases-prepared',1)").run(releases[5]);
+  while (!prepareLatestThreadStep(db, "releases-prepared").done) { /* bounded batches */ }
   const worker = new Readers(data, 1);
   worker.mbReader = null;
   const program = new Readers(data, 1);
@@ -86,6 +105,14 @@ test("the MoonBit reader reads a look of the auto-archive as the worker does", {
     for (const sign of ["\"key\":\"old\"", "\"quietLong\":true", "\"pinned\":true", "\"bound\":true", "\"pending\":true", "\"upJob\":true", "\"ending\":\"need_help\"", "\"declared\":\"block\"", "\"title\":\"Idle\"", "\"next\":", "\"marksReady\":true"])
       assert.ok(said.includes(sign), sign);
     assert.ok(!said.includes("\"title\":\"Kept\""));
+    const look = first[0] as { sessions: { row: { key: string }; facts: { threads: { thread: { id: number } }[] } }[] };
+    for (const key of ["releases", "releases-prepared"]) {
+      const threads = look.sessions.find((s) => s.row.key === key)!.facts.threads.map((t) => t.thread.id);
+      assert.equal(threads.length, 20, key);
+      assert.ok(threads.includes(releases.at(-1)!), key);
+    }
+    const prepared = look.sessions.find((s) => s.row.key === "releases-prepared")!.facts.threads.map((t) => t.thread.id);
+    assert.equal(prepared[0], releases[5], "the one it heard from last first, where it has no chat of its own");
   } finally {
     worker.close(); program.close();
     store.close();
