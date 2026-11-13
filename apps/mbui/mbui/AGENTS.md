@@ -45,7 +45,13 @@ yet and you can add one, add it.
   its room left under the last block: what comes at its foot takes that room first, what is over it up only by what it
   needs past it, and the room goes only as the hand scrolls it off (the user, 2026-11-12: a turn that ends with no
   answer must not carry what is read up and let it fall back; the coordinator of the migration, 2026-11-13;
-  `src/view/list_foot_room_test.mbt`); what a block holds makes its way in the list's one way, its held column's
+  `src/view/list_foot_room_test.mbt`); what is sent takes it up only: at its foot, in a change by which a key comes at
+  its foot, the stretch from the top of the last key that stays to the column's end is never shorter than it was then
+  while that change's ways go and rests as long as it came to, so what is over the key goes up only by what it needs
+  past all that change gives back under that key's top (the room there, the pinned foot's shrink, a part closing in
+  it, a marked key), never down; a key the page lets go, not marked, gone at or under that key (by its way or at once)
+  is no such giving back, and that change is as ever (the coordinator of the migration, 2026-11-13;
+  `src/view/list_sent_up_test.mbt`); what a block holds makes its way in the list's one way, its held column's
   group, with what comes or goes down the list then (Tree::come_group_join); every list said `at_once` (keys there and
   gone at once, its blocks' insides each their own way) is a debt of 方案 A, counted (detlint's `list-comes-off`) and
   only falling, each switched on with before and after shown to the owner (the coordinator of the migration,

@@ -319,6 +319,11 @@ let places_none_at : Array[Int] = []
 let places_none_h : Array[Double] = []
 
 ///|
+/// How many of a page's list's last keys a change of its keys looks back over for the last that stays (the floor's,
+/// list_sent_up_test): more taken at its foot at once than that, nothing held.
+let floor_tail : Int = 8
+
+///|
 /// The column as it is counted: where its blocks are with none on its way, or once all of them are there.
 fn[K] Places::counted(col : Column[K]) -> Places[K] {
   { col, froms: places_none_at, lefts: places_none_h, own_at: places_none_at, own_h: places_none_h }
@@ -529,6 +534,32 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // it at once, in its place from then, the key let go at once with its room left (`gone_quiet`: whether that room is
   // counted already), never both seen; the key back, its fade undone. `fade_go`, `fade_undo`: what sets its fade on
   // its block, or takes it off, once the change is told)
+  // (what is sent takes it up only (list_sent_up_test): at its foot, a key come at its foot by a change, the stretch
+  // from the top of the last key there before that stays to the column's end never shorter than it was at that change's
+  // moment while that change's ways go, the room under the last block what keeps it so, never less than none; then the
+  // room as it came to, going as it is scrolled off. What it counts as given back: the room there, the pinned foot's
+  // shrink, a part closing in that key or under it, a key said to leave its room; what changes over that key's top is
+  // not its (it moves that key as ever). Never a key its page lets go, not said to leave its room, gone at or under that
+  // key (making its way, or at once: `goes` false, an `at_once` list): such a change is as ever, whole, not armed by it
+  // and ending one armed (what is over it comes back with it, list_rows_come_test's, list_blocks_way_test's). Where no
+  // key stays, nothing is held.
+  // `floor`: that key and how long the stretch was then, armed; `laid_whole`, `laid_last`: how tall the column was as
+  // its fill last left it and where its blocks were then; `laid_stretch`: the stretch held as that fill left it;
+  // `floor_arm`: armed by the change that brings such a key, again from the column as it shows by a second while armed;
+  // `floor_end`: ended, by such a change or by the hand taking it off its foot. A key said to leave its room going while
+  // armed raises it to the stretch as it shows (its room counted). What is pressed and held holds the room itself
+  // meanwhile, the floor armed under it as it was)
+  let floor : Ref[(K, Double)?] = Ref(None)
+  let laid_whole = Ref(0.0)
+  let laid_last : Ref[Places[K]?] = Ref(None)
+  let laid_stretch = Ref(0.0)
+  let floor_arm : Ref[(K, Double) -> Unit] = Ref(fn(_, _) {  })
+  let floor_end : Ref[() -> Unit] = Ref(fn() {  })
+  let floor_raise = fn() {
+    if floor.val is Some((k, e)) {
+      floor.val = Some((k, dmax(e, laid_stretch.val)))
+    }
+  }
   let fading : Ref[(K, Double)?] = Ref(None)
   let fade_rev : @signals.Signal[Int] = @signals.signal(0)
   let fade_go : Ref[(K) -> Unit] = Ref(fn(_) {  })
@@ -681,6 +712,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // (kept as it was up to the first key that is another: from there its keys found and their heights put again; the
       // heights told of those kept told as ever)
       let was = column.keys
+      // (where the last keys there before were as its fill last left them (a few, from its end): what the floor holds from)
+      let tail_tops : Array[(Int, Double)] = []
+      match laid_last.val {
+        Some(lp) if physical_equal(lp.col, column) && lp.length() == was.length() => {
+          let mut j = was.length() - 1
+          while j >= 0 && was.length() - j <= floor_tail {
+            tail_tops.push((j, lp.top(j)))
+            j = j - 1
+          }
+        }
+        _ => ()
+      }
       let p = column.refill(ks, g)
       // (its keys changed by data, one of them another or as many no more: what its bar's thumb shows changes with them,
       // in the frame that takes them; the same keys given again as another array are no change)
@@ -728,6 +771,27 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           b = b + 1
         }
         gone_from.val[k] = (off, if b < was.length() { Some(was[b]) } else { None })
+      }
+      // (one come at its foot by this change, seen, at its foot: the stretch from the last key there before that stays held
+      // as long as it was; not where a key its page lets go, not said to leave its room, is gone at or under that one,
+      // which ends one armed)
+      if @signals.untracked(fn() { s.at_foot() }) {
+        let mut j = was.length() - 1
+        let mut let_go = false
+        while j >= 0 && !laid_at.contains(was[j]) {
+          if !@signals.untracked(fn() { leaves_room(was[j]) }) {
+            let_go = true
+          }
+          j = j - 1
+        }
+        if let_go {
+          (floor_end.val)()
+        } else if j >= 0 && ks.length() > 0 && came_by_data.val.contains(ks[ks.length() - 1]) {
+          match tail_tops.search_by(fn(t) { t.0 == j }) {
+            Some(i) => (floor_arm.val)(was[j], laid_whole.val - tail_tops[i].1)
+            None => ()
+          }
+        }
       }
       for k in heights_changed {
         match laid_at.get(k) {
@@ -972,6 +1036,28 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     h
   }
+  // (when all a change at `cause` set off ends: the latest end any of what was set coming (or going too, where not
+  // `coming`) in it at that moment declares (its keys' ways, what its blocks hold: Tree's list_inner, a way turned back
+  // too), said once the change is told whole and its column's group with it; where none declares one, as long as a
+  // Move takes at most)
+  let set_off_end = fn(cause : Double, coming : Bool) -> Double {
+    let mut end = @double.neg_infinity
+    let set_off = ways.map(fn(w) { w.0 })
+    set_off.append(self.tree.list_inner_at(held_node.val, cause))
+    for w in set_off {
+      match w.live() {
+        Some(n) if (n.coming || !coming) &&
+          n.flex.style.come_at == cause &&
+          n.flex.style.come_ends == n.flex.style.come_ends => end = dmax(end, n.flex.style.come_ends)
+        _ => ()
+      }
+    }
+    if end > cause {
+      end
+    } else {
+      cause + @flex.move_most_ms
+    }
+  }
   s.pressed_said = fn(v) {
     // (the block it is in, made here, and what lies over it there: none, nothing held)
     let over : Array[View] = []
@@ -1029,17 +1115,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       @signals.after_flush(fn() {
         @signals.after_flush(fn() {
           guard physical_equal(pin.val, mine) else { return }
-          let mut end = @double.neg_infinity
-          let set_off = ways.map(fn(w) { w.0 })
-          set_off.append(self.tree.list_inner_at(held_node.val, cause))
-          for w in set_off {
-            match w.live() {
-              Some(n) if n.coming && n.flex.style.come_at == cause && n.flex.style.come_ends == n.flex.style.come_ends =>
-                end = dmax(end, n.flex.style.come_ends)
-              _ => ()
-            }
-          }
-          let end = if end > cause { end } else { cause + @flex.move_most_ms }
+          let end = set_off_end(cause, true)
           unpin.val = self.at_moment(end, fn() {
             pin_ends.val = true
             laid_again()
@@ -1048,6 +1124,36 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       })
     }
   }
+  // (the floor armed by a change: from how tall the column is as its fill last left it (as tall as it shows, a floor
+  // armed before counted in it), till all that change set off ends, coming or going; one armed again by another change
+  // meanwhile goes on from there. Not while what is pressed holds it)
+  let floor_off : Ref[() -> Unit] = Ref(fn() {  })
+  let floor_n = Ref(0)
+  floor_arm.val = fn(k, stretch) {
+    guard !(pin.val is Some(_)) else { return }
+    (floor_off.val)()
+    floor_off.val = fn() {  }
+    floor.val = Some((k, stretch))
+    floor_n.val = floor_n.val + 1
+    let mine = floor_n.val
+    let cause = self.tree.cause_now()
+    @signals.after_flush(fn() {
+      @signals.after_flush(fn() {
+        guard floor_n.val == mine && floor.val is Some(_) else { return }
+        floor_off.val = self.at_moment(set_off_end(cause, false), fn() {
+          if floor_n.val == mine {
+            floor.val = None
+          }
+        })
+      })
+    })
+  }
+  floor_end.val = fn() {
+    floor.val = None
+    (floor_off.val)()
+    floor_off.val = fn() {  }
+  }
+  self.owns(fn() { (floor_off.val)() }) |> ignore
   // (following its foot, scrolled back to it by the hand or the wheel, at rest there: at its foot again, kept there
   // however far that comes to be as what it holds grows, till it is moved off it; told as that comes to be so, not each
   // time the column is scrolled. By its own blocks and its anchor, as its near_foot is: by how far the scroll could
@@ -1800,6 +1906,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           pin.val = None
           (unpin.val)()
         }
+        // (taken off its foot: the column held no more, the room as it is, going as it is scrolled off)
+        if floor.val is Some(_) && !s.at_foot() {
+          (floor_end.val)()
+        }
         let all = places(laid.untracked())
         if all.length() > 0 {
           let i = ai.min(all.length() - 1).max(0)
@@ -1970,6 +2080,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         pressed_holds = true
         aoff = over_h(over) - was - below
         foot_room.set(dmax(0.0, all.top(i) + aoff + vh - blocks_foot(all)))
+      } else if floor.val is Some((lk, e0)) {
+        // (a key come at its foot: the stretch from the last that stayed as long as it was, it and what is under it and
+        // the foot as they show now)
+        match laid_at.get(lk) {
+          Some(i) if i < all.length() => foot_room.set(dmax(0.0, e0 - (blocks_foot(all) - all.top(i))))
+          _ => (floor_end.val)()
+        }
       }
       if centring {
         aoff = counted(laid.untracked()).h(ai) / 2.0 - vh / 2.0
@@ -2113,7 +2230,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       _ => ()
     }
     // (a block come at its foot that took the room, measured now: shorter than the room it set out from, from as tall
-    // as it is, the rest of the room left, so nothing over it comes down)
+    // as it is (the rest of the room the floor's, so nothing over it comes down))
     if took_room.length() > 0 {
       for k in took_room.keys().collect() {
         guard took_room.get(k) is Some((row, r)) else { continue }
@@ -2123,11 +2240,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             let st = m.flex.style
             if m.coming && h < r - 0.001 && st.come_from > h {
               st.come_from = h
-              foot_room.set(foot_room.untracked() + (r - h))
               self.tree.layout_marked_at(row.at)
-            } else if !m.coming && h < r {
-              // (there at once, no way: the room less by as tall as it is)
-              foot_room.set(foot_room.untracked() + (r - h))
             }
           }
           (None, _) => took_room.remove(k) |> ignore
@@ -2142,6 +2255,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     blocks.clear()
     blocks.append(live)
     let all = places(laid.untracked())
+    // (how tall the column is as this fill leaves it and where its blocks are: what a floor armed next is held to)
+    laid_whole.val = blocks_foot(all) + foot_room.untracked()
+    laid_last.val = Some(all)
+    match floor.val {
+      Some((lk, _)) =>
+        match laid_at.get(lk) {
+          Some(i) if i < all.length() => laid_stretch.val = laid_whole.val - all.top(i)
+          _ => ()
+        }
+      None => ()
+    }
     // (the anchor from now, where the scroll is put: anchor_put)
     anchor_put(all, top, vh, top)
     row_vh.val = vh
@@ -2252,6 +2376,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let quiet = gone_quiet.keys().filter(fn(g) { gone_quiet.get(g) == Some(false) }).collect()
     for g in quiet {
       gone_quiet[g] = true
+      floor_raise()
       foot_room.set(foot_room.untracked() + slot_tall(g))
     }
     let r = foot_room.untracked()
@@ -2377,6 +2502,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       Some(counted) if !coming => {
         gone_quiet.remove(k)
         if !counted {
+          floor_raise()
           let h = self.tree.along_now(row.at, self.tree.cause_now())
           foot_room.set(foot_room.untracked() + h)
         }
