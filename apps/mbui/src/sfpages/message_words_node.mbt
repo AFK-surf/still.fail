@@ -11,23 +11,33 @@
 ///|
 /// What a person wrote (person_words') in `v`, as `m` says it as it changes: in the face for what people wrote (the
 /// theme's `words`), in pieces as the core gave them, links in blue; a link tapped opens where it leads, held (or right
-/// clicked) its menu; the words `found` says in bold; each link's card while a mouse rests on it where `cards` says
+/// clicked) its menu; the words `found` says in bold, marked where `found_at` says (found_marks: the one the find is
+/// at of them, -1 none; None not marked); each link's card while a mouse rests on it where `cards` says
 /// them (drawn in its layer: a chat's link_peeks, message_link_card). The words' node.
 fn person_words_node(
   v : @view.View,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
+  found_at? : () -> Int? = fn() { None },
   cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
 ) -> @view.View {
   let runs = fn() {
     let now = m()
     @sf.found_weight(@sfbase.person_runs(now.text, now.words, @sf.theme().p.accent, chat_title=chat_title_of(now)), found())
   }
+  // (what a find marks of them: found_marks)
+  let marks = fn() {
+    match found_at() {
+      Some(at) => @sf.found_marks(runs(), found(), at)
+      None => []
+    }
+  }
   let shown : @signals.Signal[Array[(String, String, Int)]] = @signals.signal([])
   let links : Ref[@ui.RunsLinks?] = Ref(None)
   let words = v.box(fn(w) {
     w
     .words_runs(By(runs))
+    .runs_marks(By(marks))
     .words_look(By(fn() { @ui.style_words(@sf.theme().t.words) }))
     .runs_look(By(fn() { { ..@view.runs_plain, link: @sf.theme().p.blue, words: true } }))
     .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) }))
@@ -76,11 +86,12 @@ fn mine_bubble_node(
   here : MessageNodeHere,
   m : () -> Message,
   found : () -> Array[String],
+  found_at : () -> Int?,
   cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
 ) -> Unit {
   v.box(fn(b) {
     @sf.style_node(b, fn() { bubble.then(@ui.style(max_w=Fixed(mine_most_of((here.width)())))) })
-    person_words_node(b, m, found~, cards?) |> ignore
+    person_words_node(b, m, found~, found_at~, cards?) |> ignore
   })
   |> ignore
 }
@@ -103,6 +114,7 @@ fn mine_said_node(
   top : () -> Double,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
+  found_at? : () -> Int? = fn() { None },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
 ) -> MessageRowNode {
@@ -126,7 +138,7 @@ fn mine_said_node(
         at + "/f",
       )
       col.show(fn() { m().text != "" }, fn(b) {
-        mine_bubble_node(b, here, m, found, cards=(here.tips, message_link_card(src, here.station, "", m)))
+        mine_bubble_node(b, here, m, found, found_at, cards=(here.tips, message_link_card(src, here.station, "", m)))
         match share {
           Some(s) => message_menu_node(b, s)
           None => ()
@@ -207,6 +219,7 @@ fn person_said_node(
   top : () -> Double,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
+  found_at? : () -> Int? = fn() { None },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
 ) -> MessageRowNode {
@@ -230,7 +243,7 @@ fn person_said_node(
         let at = message_place(@signals.untracked(m))
         message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, at)
         b.show(fn() { m().text != "" }, fn(w) {
-          person_words_node(w, m, found~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
+          person_words_node(w, m, found~, found_at~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
         })
         message_files_node(
           b,

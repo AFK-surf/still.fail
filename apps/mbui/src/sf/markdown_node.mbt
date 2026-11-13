@@ -11,7 +11,8 @@
 /// `ink` (0: the theme's text); `document`: its headings a document's; `bleed`: how far past its column either side its
 /// tables scroll; `copy`: its tables offer to be copied; `fit_tables`: each table shown whole in the column, as much
 /// smaller as makes it fit, rather than part of it left to scroll to (a chat's shared picture: markdown's); `paths`: the files its paths name are a session's (chips);
-/// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held; `on_link_shown`, each
+/// `found`: words found, in bold; `found_at`, where a find marks them (None: in bold alone): each coloured in, the one it
+/// is at (counting them through all its words, -1 none) with a line at its foot (found_marks); `on_link` where a link leads, `on_link_hold` a link held; `on_link_shown`, each
 /// paragraph's links as they are (its words' node, each link's way, its words and its first run: what shows over one
 /// while it is pointed at, @ui.runs_links' `shown`); `link_cards`, the card each link has (drawn in its layer while a
 /// mouse rests on that link: link_cards_node); `one_line`: its first block's words alone, on one line as wide as
@@ -34,6 +35,7 @@ pub fn markdown_node(
   fit_tables? : Bool = false,
   paths? : Bool = false,
   found? : () -> Array[String] = fn() { [] },
+  found_at? : () -> Int? = fn() { None },
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   on_link_shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
@@ -76,6 +78,8 @@ pub fn markdown_node(
       fit: fit_tables,
       paths,
       found,
+      found_at,
+      before: fn() { 0 },
       on_link,
       on_link_hold,
       on_link_shown,
@@ -109,6 +113,10 @@ priv struct MdNode {
   fit : Bool
   paths : Bool
   found : () -> Array[String]
+  /// where a find marks what is found (markdown_node's `found_at`), and how many of its matches come before this part
+  /// of the words (in their order: what the one it is at is counted by)
+  found_at : () -> Int?
+  before : () -> Int
   on_link : (String) -> Unit
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
   on_link_shown : ((@view.View, Array[(String, String, Int)]) -> Unit)?
@@ -188,10 +196,33 @@ fn md_blocks_node(col : @view.View, md : MdNode, blocks : () -> Array[MdBlock], 
       }
     }))
     |> ignore
+    // (the matches before it: those before the blocks and in the blocks over it)
+    let here = { ..md, before: fn() { (md.before)() + md_found_in(md, blocks(), i) } }
     slot.pick(fn() { block().map(fn(x) { md_block_kind(md, x) }).unwrap_or(-1) }, fn(p, kind) {
-      md_block_node(p, md, kind, block, tight)
+      md_block_node(p, here, kind, block, tight)
     })
   })
+}
+
+///|
+/// How many matches of what is found (`md`'s) the first `upto` of `blocks` hold, as the find counts them through the
+/// words (a paragraph's, a heading's, a quote's and a list's; no table's or code's, whose words it marks not).
+fn md_found_in(md : MdNode, blocks : Array[MdBlock], upto : Int) -> Int {
+  guard (md.found_at)() is Some(_) else { return 0 }
+  let words = (md.found)()
+  fn count(b : MdBlock) -> Int {
+    match b {
+      Paragraph(xs) | Heading(_, xs) => find_words(md_plain(xs), words).length()
+      Quote(bs) => bs.fold(init=0, fn(n, x) { n + count(x) })
+      List(l) => l.items.fold(init=0, fn(n, it) { n + it.blocks.fold(init=0, fn(k, x) { k + count(x) }) })
+      _ => 0
+    }
+  }
+  let mut n = 0
+  for k = 0; k < upto && k < blocks.length(); k = k + 1 {
+    n = n + count(blocks[k])
+  }
+  n
 }
 
 ///|
@@ -608,6 +639,15 @@ fn md_words_node(
   let links : Ref[@ui.RunsLinks?] = Ref(None)
   let words = p.box(made_for=loc, fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
+    // (what a find marks of them, as what it found and where it is change: found_marks, the one it is at counted
+    // through all the words)
+    w.runs_marks(By(fn() {
+      match (md.found_at)() {
+        Some(at) => found_marks(runs(), (md.found)(), if at < 0 { -1 } else { at - (md.before)() })
+        None => []
+      }
+    }))
+    |> ignore
     // (on one line as wide as they are, cut short with an ellipsis where the column is narrower: one_line's)
     if cut {
       w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
@@ -722,6 +762,14 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
       blocks.each(count, fn(k) { k }, fn(slot, k) {
         let k = k.untracked()
         let b = fn() { bs().get(k) }
+        // (the matches before it: the list's, the items' over it as quoted blocks, its own blocks' over it)
+        let inner_md = {
+          ..inner_md,
+          before: fn() {
+            let items = list().map(fn(l) { l.items }).unwrap_or([])
+            (md.before)() + md_found_in(md, items.map(fn(it) { Quote(it.blocks) }), i) + md_found_in(md, bs(), k)
+          },
+        }
         slot
         .padding(By(fn() {
           if k == 0 {

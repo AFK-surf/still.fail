@@ -32,6 +32,13 @@ fn outbox_under(o : Outgoing) -> OutboxUnder {
 }
 
 ///|
+/// What the viewer sent, not yet the chat's (`o`), as a message of theirs: its words, no time and no place in the chat
+/// yet (what its bubble draws, what a quote of it says: the viewer's, of no message).
+fn outgoing_said(o : Outgoing) -> Message {
+  { ..@sfbase.message_of({ "mine": true }), text: o.text, words: o.words }
+}
+
+///|
 /// What was sent from here (outbox_row's, as nodes) in its row's room (message_row_frame_node: `key`, its list's
 /// Entry::id `o:<id>`; `side`, `top`; `over`), as `o` says it as it changes: at the column's end, its files, its words
 /// in their bubble; under them what outbox_under says, one in the other's place: 正在发送 seen once it has been on its
@@ -52,11 +59,7 @@ fn outbox_said_node(
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
 ) -> MessageRowNode {
   // (its words as a message of the viewer's for the bubble: what person_words_node reads of one)
-  let base = @sfbase.message_of({ "mine": true })
-  let said = fn() -> Message {
-    let now = o()
-    { ..base, text: now.text, words: now.words }
-  }
+  let said = fn() -> Message { outgoing_said(o()) }
   let place : MessageFilesAt = {
     station: fn() { here.station },
     session: fn() { here.session },
@@ -82,7 +85,7 @@ fn outbox_said_node(
           fn() { None },
           key + "/f",
         )
-        w.show(fn() { o().text != "" }, fn(b) { mine_bubble_node(b, here, said, fn() { [] }) })
+        w.show(fn() { o().text != "" }, fn(b) { mine_bubble_node(b, here, said, fn() { [] }, fn() { None }) })
       })
       |> ignore
       // (nothing under it at all while it is followed: no box of nothing in its column, its gap with it)

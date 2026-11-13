@@ -43,6 +43,7 @@ fn agent_said_node(
   top : () -> Double,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
+  found_at? : () -> Int? = fn() { None },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
@@ -85,7 +86,7 @@ fn agent_said_node(
             // (its words and its files one piece, none apart, as the old list holds them to be picked: pickable's
             // pick_fill; a letter's, drawn by the old view alone, has them 4 apart)
             @sf.style_node(p, fn() { agent_prose_piece })
-            agent_prose_node(p, src, here, m, found~, code~, screens=screens.unwrap_or(@sfbase.screen_links_node(src)), shown?)
+            agent_prose_node(p, src, here, m, found~, found_at~, code~, screens=screens.unwrap_or(@sfbase.screen_links_node(src)), shown?)
           } else {
             message_card_node(p, here, core, m)
           }
@@ -112,7 +113,7 @@ fn agent_said_node(
 
 ///|
 /// An agent's message's words and files (prose_with_files') in `v`, as `m` says them as they change: its words as the
-/// core read their Markdown at the body's size, those `found` says in bold; a link tapped opens where it leads (a file
+/// core read their Markdown at the body's size, those `found` says in bold (and marked where `found_at` says: markdown_node's); a link tapped opens where it leads (a file
 /// it places, that file; a path, that file of its agent's; else the link), held (or right clicked) its menu; a bare link
 /// to a chat read as that chat's title; its paths its agent's files' chips; the files it places drawn where it places
 /// them (their cards); the rest of its files under its words. `code`: what draws a fenced block of a language another
@@ -124,6 +125,7 @@ fn agent_prose_node(
   here : MessageNodeHere,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
+  found_at? : () -> Int? = fn() { None },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
@@ -177,6 +179,7 @@ fn agent_prose_node(
       tree=fn() { m().md },
       size=fn() { body_size },
       found~,
+      found_at~,
       // (its tables slid sideways out over the row's side to the pane's edge: the side as the list is laid out when it
       // is made, markdown_node's bleed being a number)
       bleed=@signals.untracked(fn() { row_side((here.width)()) }),

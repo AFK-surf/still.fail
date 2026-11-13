@@ -18,12 +18,16 @@ fn chat_quotable(rows : () -> ChatBodyRows) -> (@ui.WordsPicked, Message)? {
 }
 
 ///|
-/// The message of chat `rows` whose words what is picked lies wholly within, once let go, with the mouse or a finger:
-/// what is picked and the message; none otherwise.
+/// The message of chat `rows` whose words what is picked lies wholly within, once let go, with the mouse or a finger
+/// (one the viewer sent not yet the chat's too: outgoing_said): what is picked and the message; none otherwise.
 fn chat_picked_message(rows : () -> ChatBodyRows) -> (@ui.WordsPicked, Message)? {
   guard @ui.picked_now() is Some(p) && p.of.length() == 1 else { return None }
-  guard rows().rows.get(p.of[0]) is Some({ entry: Said(m), .. }) && m.ts != "" else { return None }
-  Some((p, m))
+  match rows().rows.get(p.of[0]) {
+    Some({ entry: Said(m), .. }) if m.ts != "" => Some((p, m))
+    // (one of the viewer's not the chat's yet, on its way or failed: theirs, of no message, as the old rows quote it)
+    Some({ entry: Out(o), .. }) => Some((p, outgoing_said(o)))
+    _ => None
+  }
 }
 
 ///|
@@ -59,7 +63,8 @@ fn chat_quote_node(v : @view.View, src : Source, r : ChatRef, here : MessageNode
   @ui.picked_menu(v, fn(_) {
     guard chat_picked_message(rows) is Some((_, m)) else { return [] }
     let items = [(@sf.t("web-main.chat.quote"), fn() { chat_quote_take(src, draft, rows) })]
-    match message_share_of(src, here, fn() { m }) {
+    // (one not the chat's yet has no turn to share, no link)
+    match (if m.ts == "" { None } else { message_share_of(src, here, fn() { m }) }) {
       Some(s) => {
         items.push((@sf.t("web-main.chat.selectMessages"), fn() {
           @ui.picked_let_go()

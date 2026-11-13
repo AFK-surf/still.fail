@@ -420,6 +420,36 @@ test "wide: where this machine is a station, files from the Finder let go on the
 }
 
 ///|
+/// Where the chat's find colours its matches in, in the window (x, y, w, h): the highlighter's bands (a shape, the old
+/// page's) or a mark's ground under the words (View::runs_marks: a rect), in its colour on the light theme.
+fn find_coloured_in(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
+  let ink = 0xFFCC00D9L
+  let out = t.drawn_shapes().filter(fn(r) { r.5 == ink }).map(fn(r) { (r.0, r.1, r.2, r.3) })
+  out.append(t.drawn_rects().filter(fn(r) { r.4 == ink }).map(fn(r) { (r.0, r.1, r.2, r.3) }))
+  out
+}
+
+///|
+/// Where the find's strokes in `color`, `width` thick, start, in the window (x, y): a hand-drawn line (the old page's)
+/// or a mark's line at the words' foot (View::runs_marks: a rect that thick).
+fn find_strokes(t : @ui.Tester, color : Int64, width : Double) -> Array[(Double, Double)] {
+  let out = t.drawn_lines().filter(fn(l) { l.4 == width && l.5 == color }).map(fn(l) { (l.0, l.1) })
+  out.append(
+    t.drawn_rects().filter(fn(r) { r.4 == color && (r.3 - width).abs() < 0.01 && r.2 > width }).map(fn(r) { (r.0, r.1) }),
+  )
+  out
+}
+
+///|
+/// Whether a stroke of the find's (find_strokes) is under a line of words drawn holding `words` (search_stroke_under's).
+fn find_stroke_under(t : @ui.Tester, words : String, color : Int64, width : Double) -> Bool {
+  let text = t.text_runs().filter(fn(r) { r.text.contains(words) })
+  find_strokes(t, color, width).iter().any(fn(l) {
+    text.iter().any(fn(r) { l.0 >= r.x0 - 3.0 && l.0 <= r.x1 + 3.0 && l.1 >= r.base && l.1 <= r.bottom + 8.0 })
+  })
+}
+
+///|
 test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter the next, Esc closes it and forgets" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
@@ -444,16 +474,16 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   assert_true(@sfpages.find_at() != first || @sfpages.find_k() > 0 || total == 1)
   assert_eq(@sfpages.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
   t.run_for(@sfpages.found_draw_ms)
-  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }), msg="the matches are not coloured in")
-  assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no stroke")
-  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches are stroked")
+  assert_true(find_coloured_in(t).length() > 0, msg="the matches are not coloured in")
+  assert_true(find_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no stroke")
+  assert_false(find_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches are stroked")
   // Clearing the field removes the current message's mark as well as the other matches'.
   t.backspace()
   t.backspace()
   t.frame()
   assert_true(@sfpages.find_words_in("ws1/st1\u{1}s-c1").is_empty())
-  assert_false(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }))
-  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width))
+  assert_true(find_coloured_in(t).is_empty())
+  assert_false(find_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width))
   t.key(@ui.key_escape)
   t.frame()
   assert_true(t.find("在对话中查找") is None)
@@ -488,18 +518,19 @@ test "wide: next and previous move the stroke between occurrences in one message
   t.type_text("一起")
   t.run_for(@sfpages.find_typing_ms * 2.0 + @sf.stroke_ms)
   t.frame()
-  let w = t.ctx().words_of("pick/ts8").unwrap()
-  let ranges = @sf.find_words(w.text, ["一起"])
+  // (ts8's words, where they are drawn: "深色模式我一起看。要不要把旧的截图也一起换掉？")
+  let (rl, wx, wy) = t.rich_of("深色模式我一起看").unwrap()
+  let ranges = @sf.find_words(rl.text, ["一起"])
   assert_eq(ranges.length(), 2)
-  let first = w.rects(ranges[0].0, ranges[0].1)[0]
-  let second = w.rects(ranges[1].0, ranges[1].1)[0]
+  let at = fn(r : (Double, Double, Double, Double)) { (r.0 + wx, r.1 + wy, r.2, r.3) }
+  let first = at(rl.rects(ranges[0].0, ranges[0].1)[0])
+  let second = at(rl.rects(ranges[1].0, ranges[1].1)[0])
   // (the matches coloured in: a band of it over a match's words)
   let coloured = fn(rect : (Double, Double, Double, Double)) {
-    t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L && r.0 < rect.0 + rect.2 && r.0 + r.2 > rect.0 && r.1 < rect.1 + rect.3 && r.1 + r.3 > rect.1 })
+    find_coloured_in(t).iter().any(fn(r) { r.0 < rect.0 + rect.2 && r.0 + r.2 > rect.0 && r.1 < rect.1 + rect.3 && r.1 + r.3 > rect.1 })
   }
   let strong_under = fn(rect : (Double, Double, Double, Double)) {
-    t.drawn_lines().iter().any(fn(l) {
-      l.4 == @sf.message_stroke.width && l.5 == @sf.theme().p.accent &&
+    find_strokes(t, @sf.theme().p.accent, @sf.message_stroke.width).iter().any(fn(l) {
       l.0 >= rect.0 - 3.0 && l.0 <= rect.0 + rect.2 + 3.0 && l.1 >= rect.1 && l.1 <= rect.1 + rect.3 + 8.0
     })
   }
@@ -2902,17 +2933,29 @@ test "wide: a row pressed on its state line while the core says which message th
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.draw()
-  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  // (message ts8 lit: the accent's ground drawn under all of its words' line, as either page lights a row gone to)
+  let accent = @ui.tree_theme().color(AccentBg)
+  let lit = fn() {
+    match t.run_rects("量过一次就记住") {
+      [(wx, wy, ww, wh), ..] =>
+        t.drawn_rects().iter().any(fn(r) {
+          (r.4 >> 8) == (accent >> 8) && (r.4 & 0xFFL) > 0L && r.0 <= wx && r.0 + r.2 >= wx + ww && r.1 <= wy && r.1 + r.3 >= wy + wh
+        })
+      _ => false
+    }
+  }
   // its title: the chat as it is
   let (tx, ty) = t.find("整理发布清单").unwrap()
   t.tap(tx, ty)
   t.frame()
-  assert_eq(rd.flash, "")
+  t.run_for(@sfbase.flash_in_ms)
+  assert_false(lit(), msg="its title: nothing flashing")
   // its state line: the message the state is about, flashing
   let (lx, ly) = t.find("等你回复：发布前要不要再跑一遍").unwrap()
   t.tap(lx, ly)
   t.frame()
-  assert_eq(rd.flash, "ts8")
+  t.run_for(@sfbase.flash_in_ms)
+  assert_true(lit(), msg="ts8 flashing")
 }
 
 ///|
