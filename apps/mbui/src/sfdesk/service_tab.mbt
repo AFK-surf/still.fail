@@ -204,30 +204,36 @@ fn service_beside(c : @ui.Ctx, src : Source, station : String, job : String) -> 
 /// place with it beside it, in front, at the change that put it on top (opened, pushed, come back to, or on top as the
 /// frame is made), before any frame builds it. So such a page is never built as a chat's page here. A service waits for
 /// the station to say whose chat runs it (its job's session), the page as it is till then; one not found stays, said
-/// so (service_beside).
+/// so (service_beside). Its chat's tabs as they are then are read with it (side_change_from): held while it is on top,
+/// let go as it goes, never by the frame's node for as long as that lives.
 fn beside_follow(v : @view.View, src : Source) -> Unit {
   let src = src.owned_by(v)
+  let tabs_of = fn(station : String, session : String) { side_now(src, { station, session, title: "", station_name: "" }) }
   v.reacts(
     fn() {
       match app.nav.top() {
-        Service(station, job) as p =>
-          Some((p, text(src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().value, "session")))
-        p if laid_beside(p) => Some((p, ""))
+        Service(station, job) as p => {
+          let session = text(src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().value, "session")
+          Some((p, session, if session == "" { ([], "") } else { tabs_of(station, session) }))
+        }
+        History(r, _, _) as p => Some((p, "", side_now(src, r)))
+        PreviewFile(station, key, _, _) as p => Some((p, "", tabs_of(station, key)))
         _ => None
       }
     },
     fn(top) {
       match top {
-        Some((History(r, key, entry), _)) => {
+        Some((History(r, key, entry), _, now)) => {
           app.nav.replace(Chat(r))
           match entry {
             Some(e) => @sfpages.history_focus(r.station, key, e)
             None => ()
           }
-          side_change(src, r, "open", Some(key))
+          side_change_from(src, r, "open", Some(key), now)
         }
-        Some((Service(station, job), session)) if session != "" => tab_beside(src, station, session, "service:" + job)
-        Some((PreviewFile(station, key, path, name), _)) => tab_beside(src, station, key, file_tab(key, path, name))
+        Some((Service(station, job), session, now)) if session != "" =>
+          tab_beside(src, station, session, "service:" + job, now)
+        Some((PreviewFile(station, key, path, name), _, now)) => tab_beside(src, station, key, file_tab(key, path, name), now)
         _ => ()
       }
     },
@@ -235,9 +241,10 @@ fn beside_follow(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
-/// Tab `tab` opened in front beside chat `session` on `station`, the page the chat's in place of the one on top that
-/// asked: the chat under it where it was asked from there (as it mostly is: a chat's link, its jobs), else that chat.
-fn tab_beside(src : Source, station : String, session : String, tab : String) -> Unit {
+/// Tab `tab` opened in front beside chat `session` on `station` (its tabs as they are `now`), the page the chat's in
+/// place of the one on top that asked: the chat under it where it was asked from there (as it mostly is: a chat's link,
+/// its jobs), else that chat.
+fn tab_beside(src : Source, station : String, session : String, tab : String, now : (Array[String], String)) -> Unit {
   let (r, under) = match app.nav.pages() {
     [.., Chat(u), _] if u.station == station && u.session == session => (u, true)
     _ => ({ station, session, title: "", station_name: "" }, false)
@@ -247,5 +254,5 @@ fn tab_beside(src : Source, station : String, session : String, tab : String) ->
   } else {
     app.nav.replace(Chat(r))
   }
-  side_change(src, r, "open", Some(tab))
+  side_change_from(src, r, "open", Some(tab), now)
 }

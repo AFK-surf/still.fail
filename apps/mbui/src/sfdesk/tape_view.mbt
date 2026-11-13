@@ -657,8 +657,6 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   // (where the system lays out the app's tabs, its bars handed what the tape's frame has for them each frame it shows:
   // rail_native.mbt nav_frame)
   nav_hold(src)
-  // (a chat's detail asked as a page put beside its chat as it comes on top, before a frame builds it)
-  beside_follow(v, src)
   // (the window's buttons, a Mac's, as far lower as its panels stand under the window's top: as far below the panel
   // showing at the window's left as they are in from the window's side, the side panel's edge out of the window there;
   // the user, 2026-11-09: 红绿灯位置不对. Back where they were as the tape goes; each way moved, not put there: 不要瞬移.)
@@ -752,6 +750,10 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       tape_settle(chat, open, known, v.cause_at())
     },
   )
+  // (a chat's detail asked as a page put beside its chat as it comes on top, before a frame builds it: after the tape's
+  // reaction, so the tape takes the page come and then its chat's panel opened, which comes over, as when the page was
+  // built first and told it; on top as the tape is made too)
+  beside_follow(v, src)
   // back while the wide frame takes it (wide_takes_back), a node of the window's tree's: drawn before the panels, what an old
   // view in one of them says takes back (a page's own stack) taking it before it, what is over them too; whose it is
   // said at the cause that changes it, each step taken at its moment (wide_back_step)

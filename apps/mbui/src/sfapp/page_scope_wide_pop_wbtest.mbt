@@ -84,22 +84,36 @@ fn independent_wide_pop_case(pop : Bool, intermediate : Bool, legacy : Bool, cov
   let refs = @sfbase.writings.get(draft_key(chat)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(@sfbase.text(@sfbase.field(refs.get(0), "ref"), "mode"), "file")
-  if cover {
-    let link = @sfbase.link_target({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "child-session", "service": "j-web" })
+  if cover && !render_cover {
+    // (a page over the chat: another chat, by a chat's link, over it on 大屏 as a link in a message opens it,
+    // Nav::push_over; popped before a frame builds it)
+    let link = @sfbase.link_target({ "opens": "chat", "workspace": "ws1", "station": "st1", "chat": "s-c2" })
     assert_true(@sfbase.open_target(src, link, false, None))
-    assert_true(app.nav.top() == Service("ws1/st1", "j-web"), msg="an agent's link stays over its chat")
-    if render_cover {
-      // The Client is isolated from the fixture's core: give it the tab update a real core would publish.
-      t.frame()
-      t.frame()
-      let with_tabs = chat_value.copy()
-      with_tabs["tabs"] = { "open": ["service:j-web"], "shown": "service:j-web", "auto": true }
-      client.receive_json({ "id": Json::number(chat_sub.id.to_double()), "value": Json::object(with_tabs) })
-      t.run_for(@ui.move_most_ms)
-      assert_true(service_pages.contains(service_key("ws1/st1", "j-web")), msg="the service page was actually built")
-      assert_true(t.query(Button, label="刷新") is Some(_), msg="the service page's controls are present")
-      assert_true(client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(s) && physical_equal(s, chat_sub), msg="the underlying chat keeps its reader while the service is built")
+    assert_true(app.nav.top() == Chat(@sfbase.chat_ref("ws1/st1", "s-c2")), msg="another chat's link opens it over the chat")
+  }
+  if render_cover {
+    // (an agent's web service asked as a page from its chat: on 大屏 handed over to the chat's side panel as it comes
+    // on top, sfdesk's beside_follow, before any frame: the chat on top again, the service's tab asked in front of the
+    // core, at once)
+    let link = @sfbase.link_target({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "child-session", "service": "j-web" })
+    let asked = calls.length()
+    assert_true(@sfbase.open_target(src, link, false, None))
+    assert_true(app.nav.top() is Chat(c) && c.station == chat.station && c.session == chat.session, msg="an agent's service is handed over to its chat at once")
+    let opened = Ref(0)
+    for k = asked; k < calls.length(); k = k + 1 {
+      if calls[k].0 == "chat.tabs.open" && @sfbase.text(Some(calls[k].1), "tab") == "service:j-web" { opened.val += 1 }
     }
+    assert_eq(opened.val, 1, msg="the service's tab asked in front beside its chat at once")
+    // The Client is isolated from the fixture's core: give it the tab update a real core would publish.
+    t.frame()
+    t.frame()
+    let with_tabs = chat_value.copy()
+    with_tabs["tabs"] = { "open": ["service:j-web"], "shown": "service:j-web", "auto": true }
+    client.receive_json({ "id": Json::number(chat_sub.id.to_double()), "value": Json::object(with_tabs) })
+    t.run_for(@ui.move_most_ms)
+    assert_true(service_pages.contains(service_key("ws1/st1", "j-web")), msg="the service page was actually built")
+    assert_true(t.query(Button, label="刷新") is Some(_), msg="the service page's controls are present")
+    assert_true(client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(s) && physical_equal(s, chat_sub), msg="the underlying chat keeps its reader while the service is built")
   }
   assert_eq(sent.length(), before_events, msg="event reads share the topics from the page")
   assert_true(app.nav.pages().iter().any(fn(p) { p is Chat(_) }))
