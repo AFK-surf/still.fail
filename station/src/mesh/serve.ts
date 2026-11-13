@@ -490,7 +490,10 @@ export async function serve(m: Members, conn: Connection) {
   const credentials = new Reader(first);
   const state = () => m.cloud.state!;
   const hello = await credentials.line();
-  if (hello === null) throw new Error("no credential");
+  if (hello === null) {
+    await first.reset(0).catch(() => {});
+    throw new Error("no credential");
+  }
   // Which device this is in the workspace's lock: its base key's proof for this endpoint, said once (cloud/lock.ts).
   const proof = lockProof(hello?.lock);
   // The role the credential names: the control plane's word, which the lock may lower but not raise.
@@ -589,6 +592,7 @@ export async function serve(m: Members, conn: Connection) {
       }
       await writeLine(first, reply).catch(() => {});
     }
+    await first.finish().catch(() => {});
   })();
 
   try {
@@ -596,7 +600,10 @@ export async function serve(m: Members, conn: Connection) {
       if (gone()) return;
       lastWays = waysOf(conn);
       const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
-      request(m, stream, viewer, conn).catch((e) => log.info("mesh", "request failed", { error: (e as Error).message }));
+      request(m, stream, viewer, conn).catch((e) => {
+        log.info("mesh", "request failed", { error: (e as Error).message });
+        void stream.reset(0).catch(() => {});
+      });
     }
   } finally {
     expiry?.();
@@ -609,7 +616,10 @@ async function request(m: Members, raw: Stream, viewer: Admitted["viewer"], conn
   const accepted = { wall: wall.now(), at: process.hrtime.bigint() };
   const firstReader = new Reader(raw);
   const head = await firstReader.line();
-  if (head === null) return;
+  if (head === null) {
+    await raw.finish().catch(() => {});
+    return;
+  }
   const method: string = typeof head.method === "string" ? head.method.toUpperCase() : "GET";
   const path: string = typeof head.path === "string" ? head.path : "";
   // A span of the caller's trace when it records one: from the stream's acceptance to its answer's last byte (an

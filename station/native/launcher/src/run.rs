@@ -457,8 +457,33 @@ fn keep_low_fds() {
     }
 }
 
+/// Raises the open-file soft limit from macOS launchd's 256 so the launcher, its front and Node do not run out.
+fn nofile_targets(limit: libc::rlimit, most: libc::rlim_t) -> [libc::rlim_t; 3] {
+    let cap = if limit.rlim_max == libc::RLIM_INFINITY { most } else { limit.rlim_max.min(most) };
+    [cap, cap.min(10240), cap.min(4096)]
+}
+
+fn raise_nofile() {
+    let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: getrlimit writes into a live `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } != 0 {
+        return;
+    }
+    for target in nofile_targets(limit, 65536) {
+        if target <= limit.rlim_cur {
+            return;
+        }
+        let next = libc::rlimit { rlim_cur: target, rlim_max: limit.rlim_max };
+        // SAFETY: setrlimit reads a live `rlimit` struct.
+        if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &next) } == 0 {
+            return;
+        }
+    }
+}
+
 pub fn run(mut options: Options) -> i32 {
     keep_low_fds();
+    raise_nofile();
     let run = options.data.join("run");
     if let Some(state) = options.resume.take() {
         return resume(options, run, &state);
@@ -723,5 +748,13 @@ mod tests {
         read_now(&theirs, &mut got);
         let lines: Vec<Value> = got.split(|b| *b == b'\n').filter(|l| !l.is_empty()).map(|l| serde_json::from_slice(l).unwrap()).collect();
         assert_eq!(lines, vec![carried, json!({ "op": "handover" })]);
+    }
+
+    #[test]
+    fn nofile_targets_respect_hard_limit_and_infinity() {
+        assert_eq!(nofile_targets(libc::rlimit { rlim_cur: 256, rlim_max: libc::RLIM_INFINITY }, 65536), [65536, 10240, 4096]);
+        assert_eq!(nofile_targets(libc::rlimit { rlim_cur: 256, rlim_max: 8192 }, 65536), [8192, 8192, 4096]);
+        assert_eq!(nofile_targets(libc::rlimit { rlim_cur: 1024, rlim_max: 2048 }, 65536), [2048, 2048, 2048]);
+        raise_nofile();
     }
 }

@@ -62,8 +62,14 @@ pub async fn mesh(host : @host.Host, path : String) -> Unit {
     }),
   )
   while true {
-    let (accepted, _) = host.shell("tcp.accept", { "id": listening })
-    guard accepted is { "id": id, .. } else { continue }
+    let accepted = try { Ok(host.shell("tcp.accept", { "id": listening })) } catch { e => Err(e) }
+    guard accepted is Ok(({ "id": id, .. }, _)) else {
+      if accepted is Err(e) {
+        @host.note("mesh: accept failed: \{message(e)}")
+        @effect.sleep(100)
+      }
+      continue
+    }
     let client : Client = {
       conn: { host, id },
       bound: 0,
@@ -216,6 +222,7 @@ fn Mesh::taking(self : Mesh, client : Client, conn : Json) -> Unit {
       ignore(self.host.shell("conn.hand", { "id": conn, "path": Json::string(client.streams) })) catch {
         _ => ()
       }
+      client.conns.remove(conn.stringify())
     }),
   )
 }
