@@ -501,6 +501,9 @@ test("people added to a locked workspace are in its lock with the role given: by
   const last = (n: number) => pendingHeld(r!.core.inner, "ws").slice(-n).map((p) => [p.entry.kind, p.entry.body]);
 
   await r.ask("workspace.addMembers", { account: "s1", workspace: "ws", role: "admin", emails: ["C@x.com", "d@x.com", "b@x.com"] });
+  // (what the cloud tells its members for it, this device too: the view, its members with them, read again as told)
+  r.host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws" }));
+  await r.host.time.pass(1_000);
   // (b@x.com the cloud had already, and the lock has as a member: left as they are)
   assert.deepEqual(last(2), [["member", { sub: "s3", email: "c@x.com", role: "admin" }], ["member", { sub: "pending:d@x.com", email: "", role: "admin" }]]);
   // Not on the lock's page: no one there yet to show devices of.

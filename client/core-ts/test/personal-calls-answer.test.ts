@@ -762,6 +762,8 @@ test("the person's one station gone for good, taken out of their workspace: an o
   });
   const gone = await timedCall(s.r, "workspace.removeStation", { account: "s1", workspace: "ws", station: A });
   assert.ok(gone.ok, JSON.stringify(gone.said));
+  // (what the cloud tells its members for it, this device too: the view read again as told, sync/cloud.ts `afterWrite`)
+  s.r.host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws" }));
   await s.r.host.time.pass(1_000);
   assert.deepEqual(s.personal.view("s1").pending, []);
   assert.ok(isRemove(LAPTOP_KEY)(s.personal.entries("s1").at(-1)!), "pinned");

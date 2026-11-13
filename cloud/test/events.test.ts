@@ -446,3 +446,20 @@ test("a workspace whose lock alone moved on says so in its event, its head with 
     await h.close();
   }
 });
+
+test("a request to be let in asked or dropped says so in its event: nothing a device of today asks for again", async () => {
+  const h = await harness();
+  try {
+    const token = await h.login("alice");
+    const alice = h.as(token);
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+    const on = { alice: await listen(h, token.access_token) };
+    const base = "ab".repeat(32);
+    assert.equal((await alice("POST", `/v1/workspaces/${w}/lock/requests`, { base, kind: "web", label: "Chrome" })).status, 200);
+    await expect(on, { alice: [{ type: "workspace", id: w, requests: true }] }, "asked");
+    assert.equal((await alice("DELETE", `/v1/workspaces/${w}/lock/requests/${base}`)).status, 200);
+    await expect(on, { alice: [{ type: "workspace", id: w, requests: true }] }, "dropped");
+  } finally {
+    await h.close();
+  }
+});

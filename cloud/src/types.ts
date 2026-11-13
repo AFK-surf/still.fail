@@ -38,10 +38,12 @@ export interface LockRequestView { base: string; sub: string; email: string; kin
 /** What `/v1/events` pushes: what changed, for the device to refetch. `release`: a release is out (its feeds read
  * again); `relays`: still.fail's own relay's counters were sampled (the operator's 中继 page reads them again).
  * `workspace` with `lock`: only its lock moved on (the view's `lock` and `locked` as they are now), nothing to refetch
- * for a device that reads the lock of its stations; one from before refetches as for any change. */
+ * for a device that reads the lock of its stations; one from before refetches as for any change. `workspace` with
+ * `requests`: only its requests to be let in changed (`/lock/requests`, which apps from before ask and drop), nothing
+ * a device of today reads; one from before refetches. */
 export type AccountEvent =
   | { type: "workspaces" }
-  | { type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean } }
+  | { type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean }; requests?: true }
   | { type: "release" }
   | { type: "relays" }
   /** The team or someone of the chat replied on a bug report from a chat of the workspace: its replies read again (GET /v1/workspaces/<id>/feedback). */

@@ -1,6 +1,6 @@
 // Execution of named client calls, as Effects. What changes something takes effect in the core at
-// once and answers when its source has it (rule 4); a write to still.fail cloud answers once what it changed is read
-// again (the account topics show it), or after `REREAD_WAIT_MS` with the reading left to go on.
+// once and answers when its source has it (rule 4); a write to still.fail cloud answers once what it changed that no
+// event tells is read again, or after `REREAD_WAIT_MS` with the reading left to go on.
 import { Deferred, Effect } from "effect";
 import * as brand from "../brand.ts";
 import type { Inner, Progress } from "../core.ts";
@@ -165,6 +165,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
               : asked;
             const pendingId = isObject(signed) && isObject(signed.pending) && typeof signed.pending.id === "string" ? signed.pending.id : null;
             let result = yield* (pendingId !== null && roster ? Effect.tapError(bounded, () => Effect.sync(() => hooks.pendingDrop?.(inner, roster.ws, pendingId))) : bounded);
+            const written = result;
             // The lock's entry pending (no station took it): the answer says so, the cloud's with its row as `pending`
             // (`LockPending`), which the app says in place of its done words.
             const pendingRow = (said: unknown) => (isObject(said) && isObject(said.pending) ? said.pending : null);
@@ -179,9 +180,9 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
             if (enrolling && hooks.enrolled) result = yield* hooks.enrolled(inner, sub, decodeURIComponent(enrolling[1]!), result);
             // A workspace made: the invite code kept through signing in is done with.
             if (made) prefs.inviteUsed(inner.data);
-            // A write may rename, join or leave a workspace: what the account's topics show is read again first, for a
-            // while (`REREAD_WAIT_MS`): the write is done, and the topics follow as they are read.
-            if (op.method !== "GET") yield* rereadAfterWrite(inner, inner.cloudSync.refreshAll(), ctx);
+            // What the write changed that no event of the cloud's tells is read again first, for a while
+            // (`REREAD_WAIT_MS`): the write is done, and the topics follow as they are read (sync/cloud.ts `afterWrite`).
+            if (op.method !== "GET") yield* rereadAfterWrite(inner, inner.cloudSync.afterWrite(sub, op.method, op.path, written), ctx);
             // An answer on a bug report: its replies read again (the cloud says so too, on the events socket).
             const answered = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/feedback\//.exec(op.path) : null;
             if (answered) inner.cloudSync.feedbackChanged(decodeURIComponent(answered[1]!));
