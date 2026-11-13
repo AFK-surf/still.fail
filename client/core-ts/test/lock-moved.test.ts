@@ -60,7 +60,7 @@ async function setUp(first: (st: { logs: Log[]; bodies: unknown[] }, w: { alice:
   add(bob, "web", { id: WEB, label: "bob's browser", exp: T + 300 });
   const headOf = (c: Entry[]): Head => ({ seq: c.length - 1, hash: entryHash(c[c.length - 1]!), genesis: entryHash(c[0]!) });
   const moved = signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(alice) }));
-  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob] as Log[], bodies: [open, member, station] as unknown[], posted: [] as string[], given: [] as unknown[] };
+  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob] as Log[], bodies: [open, member, station] as unknown[], posted: [] as string[], given: [] as unknown[], lacking: [] as string[] };
   first(st, { alice, bob, member });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
@@ -70,7 +70,7 @@ async function setUp(first: (st: { logs: Log[]; bodies: unknown[] }, w: { alice:
       return Effect.succeed({ head: headOf(c), entries: c.filter((e) => e.seq > after), ...(after >= 0 && c[after] ? { after_hash: entryHash(c[after]!) } : {}), ...serves });
     }
     if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: st.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) });
-    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: st.bodies, lacking: [] });
+    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: st.bodies, lacking: st.lacking });
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
     if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [] });
     st.posted.push(`${method} ${path}`);
@@ -186,4 +186,16 @@ test("each writer on a moved chain answers lock_moved: nothing signed, nothing p
   assert.equal(held(w.inner, "ws")!.entries.length, before, "nothing signed on the chain");
   assert.equal(pendingHeld(w.inner, "ws").length, 0, "nothing pending");
   assert.deepEqual(w.st.posted.filter((p) => p === "POST /lock"), [], "nothing brought to the station");
+});
+
+test("a body this device keeps that a station says it lacks is brought to it, once a read", async () => {
+  const w = await setUp();
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(w.st.given, [], "none lacking: none brought");
+  const h = bodyHash(w.member)!;
+  w.st.bodies = w.st.bodies.filter((b) => b !== w.member);
+  w.st.lacking = [h];
+  await w.told();
+  assert.deepEqual(w.st.given.map((b) => bodyHash(b)), [h], "the one it lacks, once");
+  assert.equal(w.st.posted.filter((p) => p === "POST /lock/bodies").length, 1);
 });

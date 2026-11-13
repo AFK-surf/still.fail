@@ -859,6 +859,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     const bodiesKept = head === null ? false : keepBodies(inner, ws, served.flatMap((a) => a.bodies));
     yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]), head === null ? [] : parted, logsKept || bodiesKept);
     carry(inner, ws, served);
+    carryBodies(inner, ws, served);
     // A station of the lock answered: what is pending here is brought to them now.
     deliver(inner, ws);
     return true;
@@ -948,6 +949,19 @@ function carry(inner: Inner, ws: string, served: readonly { id: string; head: He
     if (p.carried.has(at)) continue;
     p.carried.add(at);
     inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, a.id), "POST", "/lock", { entries: kept, keep: true }, { quiet: true }), { log: "Unhandled", message: "lock entries carried to a station" }));
+  }
+}
+
+/// The bodies a station just read named as lacking (its GET /lock/bodies `lacking`, by hash) that this device keeps,
+/// brought to it (POST /lock/bodies): once each read, forked, waited on by no one, never tried again on a timer (the
+/// next read tries again). Only to the stations of the workspace read now; it takes each only against an entry it keeps.
+function carryBodies(inner: Inner, ws: string, served: readonly { id: string; lacking: readonly string[] }[]): void {
+  if (!served.some((a) => a.lacking.length > 0)) return;
+  const by = new Map(bodiesHeld(inner, ws).map((b) => [bodyHash(b), b] as const));
+  for (const a of served) {
+    const bodies = [...new Set(a.lacking)].flatMap((hb) => (by.has(hb) ? [by.get(hb)] : []));
+    if (bodies.length === 0) continue;
+    inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, a.id), "POST", "/lock/bodies", { bodies }, { quiet: true }), { log: "Unhandled", message: "statements' bodies carried to a station" }));
   }
 }
 
