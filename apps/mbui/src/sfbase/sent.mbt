@@ -50,6 +50,7 @@ fn sending_changed() -> Unit {
 ///|
 pub fn sent_reset() -> Unit {
   local_sending.clear()
+  sent_here_n.clear()
   sent_here_made.clear()
   local_sent_n.val = 0
   sent_pictures.clear()
@@ -75,6 +76,26 @@ pub(all) struct LocalSent {
 
 ///|
 let local_sent_n : Ref[Int] = { val: 0 }
+
+///|
+/// How many times something was sent from here into each chat (its station and session, `\u{1}` between): words
+/// (sent_local) or an answer picked on one of its cards that says something in it (sent_here_told). What its list made
+/// as nodes goes to its end for, from wherever it is read, as it is sent (the old list's: the composer's list_to_end, a
+/// card's end_asked).
+// kept across runs: let go by sent_reset
+let sent_here_n : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
+
+///|
+/// Something was sent from here into chat `rk` (sent_here_n).
+pub fn sent_here_told(rk : String) -> Unit {
+  sent_here_n.set(rk, @signals.untracked(fn() { sent_here_n.get(rk) }).unwrap_or(0) + 1)
+}
+
+///|
+/// How many times something was sent from here into chat `rk`, followed as it changes (sent_here_n).
+pub fn sent_here_count(rk : String) -> Int {
+  sent_here_n.get(rk).unwrap_or(0)
+}
 
 
 ///|
@@ -198,6 +219,7 @@ pub fn sent_local(
     },
   })
   sending_changed()
+  sent_here_told(rk)
   "o:" + id
 }
 

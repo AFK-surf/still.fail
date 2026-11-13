@@ -324,6 +324,11 @@ fn decision_options_node(v : @view.View, src : Source, here : MessageNodeHere, m
         "seq": Json::number(now.seq),
         "option": Json::string(o.label),
       })
+      // (its answer said in the chat, sent from here: the list goes to its end, as for words sent; one that closes the
+      // card says nothing there)
+      if !o.closes {
+        @sfbase.sent_here_told(here.station + "\u{1}" + here.session)
+      }
     },
   )
   |> ignore
