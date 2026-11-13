@@ -1587,6 +1587,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     show_only(now)
     slots_cover(all, now, x, vh)
     made_now(all)
+    // (what shows still past what is made: the window stopped at a block never measured whose slot nothing lays out (made
+    // before as a slot round what showed, its height forgotten as the words were redone: Tree::alone_asks never asked
+    // of it), so `past_made` stays true and tells nothing more: the column laid out, its fill measuring what shows.
+    // Else a fling after the app came back with its glyphs moved on showed the list's ground till it came to rest)
+    if past_made.untracked() {
+      laid_again()
+    }
     // (those come in not seen yet: seen as they are laid out, Tree::alone_asks)
     let still = seen_rows.keys().filter(fn(k) { !now.contains(k) }).collect()
     for k in still {
