@@ -2408,39 +2408,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     row_vh.val = vh
     // (what is made, the stretch it covers)
     made_now(all)
-    // (the scroll put where the anchor says: moved by as much, a fling under way with it; at its foot where it follows
-    // it there, as it is)
-    if held {
-      // (held where it is at its foot: put there once what it holds has grown under it, its foot further down now;
-      // till then at its foot as it was)
-      if top < dmax(0.0, whole_now() - vh) - 0.5 {
-        s.put(top)
-      }
-    } else if !follows_foot && s.at_foot() {
-      // (held by what was pressed, off its foot from where it was there)
-      s.put(top)
-    } else if !follows_foot && (top - x).abs() > 0.000001 {
-      if s.as_list && !asked {
-        s.grew_above(top - x)
-      } else {
-        s.put(top)
-      }
-    }
-    // (back at its foot at rest, where it follows its foot: kept there from now as what it holds grows; not where an
-    // ask cut short by its foot still going down was put back, the next fill going on with it)
-    if !follows_foot &&
-      !held &&
-      !ask_cut.val &&
-      !(pin.val is Some((k, _, _, _)) && laid_at.contains(k)) &&
-      @signals.untracked(follows) &&
-      vh > 0.0 &&
-      top >= dmax(0.0, whole_now() - vh) - 0.5 &&
-      s.rest_now() is None &&
-      s.glides_till() is None {
-      s.held = false
-      row_let_go(false)
-      s.to_foot()
-    }
     seen_rows.clear()
     for k in shown_now {
       seen_rows[k] = true
@@ -2453,6 +2420,42 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       gone_from.val = Map([])
     }
     self.tree.room_bindings_run()
+    // (the scroll put where the anchor says, told as one with how far it goes (View::scrolls' measure_reach): moved by
+    // as much, a fling under way with it; at its foot where it follows it there, as it is)
+    let has_pin = pin.val is Some((k, _, _, _)) && laid_at.contains(k)
+    s.fill_put = fn() {
+      if held {
+        // (held where it is at its foot: put there once what it holds has grown under it, its foot further down now;
+        // till then at its foot as it was)
+        if top < dmax(0.0, whole_now() - vh) - 0.5 {
+          s.put(top)
+        }
+      } else if !follows_foot && s.at_foot() {
+        // (held by what was pressed, off its foot from where it was there)
+        s.put(top)
+      } else if !follows_foot && (top - x).abs() > 0.000001 {
+        if s.as_list && !asked {
+          s.grew_above(top - x)
+        } else {
+          s.put(top)
+        }
+      }
+      // (back at its foot at rest, where it follows its foot: kept there from now as what it holds grows; not where an
+      // ask cut short by its foot still going down was put back, the next fill going on with it)
+      if !follows_foot &&
+        !held &&
+        !ask_cut.val &&
+        !has_pin &&
+        @signals.untracked(follows) &&
+        vh > 0.0 &&
+        top >= dmax(0.0, whole_now() - vh) - 0.5 &&
+        s.rest_now() is None &&
+        s.glides_till() is None {
+        s.held = false
+        row_let_go(false)
+        s.to_foot()
+      }
+    }
   }
   s.whole = Some(whole_now)
   // (its ways kept till the latest end any of them declares (Style's come_ends, said as the change that set it was

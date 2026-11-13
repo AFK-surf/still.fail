@@ -54,6 +54,8 @@ pub struct Scroll {
   /// and measured for it, View::scrolls_window)
   priv seen : @signals.Signal[(Double, Double)?]
   priv mut fill : (Double?, (Double?, Double)?, Bool) -> Unit
+  /// where its fill puts it once measured, told as one with `seen` and `room`
+  priv mut fill_put : () -> Unit
   /// how tall what it holds comes to, where what fills it knows it as it fills it (a page's list: its blocks as they
   /// are counted, its foot's room), not measured again
   priv mut whole : (() -> Double)?
@@ -158,6 +160,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     room: fn() { None },
     seen: @signals.signal(None, same=fn(a, b) { a == b }),
     fill: fn(_, _, _) {  },
+    fill_put: fn() {  },
     whole: None,
     settle_off: fn() {  },
     hand_y: 0.0,
@@ -974,10 +977,14 @@ pub fn View::scrolls(
     let seen_now = Some(if across { (shown, h) } else { (w, shown) })
     let reach_now = Some(whole - shown)
     let changed = @signals.untracked(fn() { s.seen.get() != seen_now || reach.get() != reach_now })
-    // (told as one: what follows where it is scrolled to reads how big it shows with how far it can go, never the one
-    // told and the other as it was (a list brought to an entry 969 down read at its top, how far it could go none yet,
-    // and asked for the page before))
+    // (told as one: where its fill puts it, how big it shows and how far it can go, so what follows where it is
+    // scrolled to reads them together, never the one told and the other as it was (a list brought to an entry 969 down
+    // read at its top, how far it could go none yet, and asked for the page before; a page come in over what shows
+    // moving the scroll before how far it goes was told, clamped to how far it went before))
     @signals.start_batch()
+    let put = s.fill_put
+    s.fill_put = fn() {  }
+    put()
     s.seen.set(seen_now)
     reach.set(reach_now)
     @signals.end_batch()
@@ -1219,6 +1226,7 @@ pub fn View::scrolls(
     s.held_said = fn() {  }
     s.pressed_said = fn(_) { fn() {  } }
     s.fill = fn(_, _, _) {  }
+    s.fill_put = fn() {  }
     s.whole = None
     s.seen.set(None)
     s.tall = fn() { 0.0 }
