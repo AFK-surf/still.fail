@@ -247,8 +247,8 @@ fn finger_menu() -> (Double, Double, Double, Double, Int)? {
   if !picked.finger || picked.dragging || selected_words() == "" {
     return None
   }
-  // (and the app's own item where what holds the words it ends in offers one: picked_menu)
-  let own = if picked_menu_own() is Some(_) { @hostapi.text_menu_own_item } else { 0 }
+  // (and the app's own items where what holds the words it ends in offers some: picked_menu)
+  let own = if picked_menu_own().is_empty() { 0 } else { @hostapi.text_menu_own_item }
   match g().selection_box() {
     Some((x, y, w, h)) => Some((x, y, w, h, @hostapi.text_menu_copy | @hostapi.text_menu_select_all | own))
     None => None

@@ -21,12 +21,21 @@ fn quote_tester(
     root.box(fn(page) {
       page.padding(Is((0.0, 40.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
       words_picked(page)
-      picked_menu(page, fn(p) { if p.of.length() == 1 { Some("引用") } else { None } }, fn() {
-        match picked_now() {
-          Some(p) => took.push((p.text, p.of))
-          None => took.push(("", []))
-        }
-        picked_let_go()
+      picked_menu(page, fn(p) {
+        guard p.of.length() == 1 else { return [] }
+        [
+          (
+            "引用",
+            fn() {
+              match picked_now() {
+                Some(p) => took.push((p.text, p.of))
+                None => took.push(("", []))
+              }
+              picked_let_go()
+            },
+          ),
+          ("复制链接", fn() { took.push(("link", p.of)) }),
+        ]
       })
       |> ignore
       for of in ["m1", "m2"] {
@@ -150,7 +159,7 @@ test "words of the tree's a finger held still on: once lifted, the system's text
   let (shown, _, _, _, _, can) = t.text_menu()
   assert_true(shown)
   assert_eq(can, @hostapi.text_menu_copy | @hostapi.text_menu_select_all | @hostapi.text_menu_own_item)
-  assert_eq(t.text_menu_own(), "引用")
+  assert_eq(t.text_menu_own(), ["引用", "复制链接"])
   assert_eq(pill.val, None)
   t.key(@hostapi.key_menu_own)
   assert_eq(took, [("wide", ["m1"])])
@@ -242,4 +251,25 @@ test "words a finger held still on the space between two words: the word before 
   assert_eq(finger_word_at("  hi there", 0), (2, 4))
   assert_eq(finger_word_at("   ", 1), (0, 0))
   assert_eq(finger_word_at("hello wide", 7), (6, 10))
+}
+
+///|
+test "words of the tree's a finger picked: the page's items in the system's text menu in its order, each chosen by its own key, the second doing its own, what is picked kept where it keeps it" {
+  let took : Array[(String, Array[String])] = []
+  let pill : Ref[@view.NodeId?] = Ref(None)
+  let (t, _, _) = quote_tester(took, pill, platform=2)
+  t.press_at(60.0, 51.0)
+  t.run_for(long_press_ms)
+  t.release(60.0, 51.0)
+  t.draw()
+  assert_eq(t.text_menu_own(), ["引用", "复制链接"])
+  t.key(@hostapi.key_menu_own + 1)
+  assert_eq(took, [("link", ["m1"])])
+  assert_eq(t.ctx().selected_text(), "wide")
+  // (one the page does not offer: nothing)
+  t.key(@hostapi.key_menu_own + 2)
+  assert_eq(took.length(), 1)
+  t.key(@hostapi.key_menu_own)
+  assert_eq(took, [("link", ["m1"]), ("wide", ["m1"])])
+  assert_eq(picked_now(), None)
 }

@@ -93,7 +93,7 @@ static CGFloat nav_right(void);
 @end
 
 static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2 copy, 4 paste, 8 select all, 64 own)
-static NSString *menu_own = @"";  // the words of the app's own item (@hostapi.text_menu_own)
+static NSArray<NSString *> *menu_own;  // the words of the app's own items in their order (@hostapi.text_menu_own)
 
 @interface MBView : UIView <UITextInput, UIEditMenuInteractionDelegate>
 @property(nonatomic, strong) CADisplayLink *link;
@@ -221,12 +221,17 @@ static void link_rate(CADisplayLink *l) {
                                     identifier:nil
                                        handler:^(UIAction *a) { mb_cb.key(12, 0); [me requestFrame]; }]];
   }
-  // (the app's own, after the system's: chosen, the key 19)
-  if ((menu_can & 64) && menu_own.length > 0) {
-    [items addObject:[UIAction actionWithTitle:menu_own
-                                         image:nil
-                                    identifier:nil
-                                       handler:^(UIAction *a) { mb_cb.key(19, 0); [me requestFrame]; }]];
+  // (the app's own, after the system's, in their order: the k-th chosen, the key 60 + k; the menu pages on where they
+  // do not fit)
+  if (menu_can & 64) {
+    for (NSUInteger k = 0; k < menu_own.count && k < 8; k++) {
+      if (menu_own[k].length == 0) continue;
+      int32_t key = 60 + (int32_t)k;
+      [items addObject:[UIAction actionWithTitle:menu_own[k]
+                                           image:nil
+                                      identifier:nil
+                                         handler:^(UIAction *a) { mb_cb.key(key, 0); [me requestFrame]; }]];
+    }
   }
   return [UIMenu menuWithChildren:items];
 }
@@ -1759,8 +1764,11 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   [v.editMenu presentEditMenuWithConfiguration:c];
 }
 
-// The words of the app's own item of that menu (@hostapi.text_menu_own), offered where its `can` says 64.
-void mb_host_text_menu_own(moonbit_string_t words) { menu_own = mb_ns_from_string(words) ?: @""; }
+// The words of the app's own items of that menu, a line each (@hostapi.text_menu_own), offered where its `can` says 64.
+void mb_host_text_menu_own(moonbit_string_t words) {
+  NSString *s = mb_ns_from_string(words) ?: @"";
+  menu_own = s.length == 0 ? @[] : [s componentsSeparatedByString:@"\n"];
+}
 
 void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);

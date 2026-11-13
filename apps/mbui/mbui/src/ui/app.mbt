@@ -2135,14 +2135,17 @@ fn key_in(code : Int, mods : Int) -> Unit {
     }
     return
   }
-  // the system's menu's own item over words a finger picked of the tree's: what offers it does it (picked_menu)
-  if code == @hostapi.key_menu_own && picked.finger && !field_picks(c) {
-    match picked_menu_own() {
-      Some((_, take)) => {
-        take()
-        h_request_frame()
-      }
-      None => ()
+  // the system's menu's own items over words a finger picked of the tree's: the one chosen done by what offers it
+  // (picked_menu), in the order it offers them
+  if code >= @hostapi.key_menu_own &&
+    code < @hostapi.key_menu_own + @hostapi.text_menu_own_most &&
+    picked.finger &&
+    !field_picks(c) {
+    let items = picked_menu_own()
+    let k = code - @hostapi.key_menu_own
+    if k < items.length() {
+      (items[k].1)()
+      h_request_frame()
     }
     return
   }

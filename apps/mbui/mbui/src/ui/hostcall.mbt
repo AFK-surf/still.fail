@@ -34,7 +34,7 @@ struct FakeHost {
   /// the floating text menu as the host was last told it (text_menu): shown, where, what it offers; and what the menu
   /// bar's editing items can do (edit_can; -1 not told)
   mut text_menu : (Bool, Double, Double, Double, Double, Int)
-  /// the words of the app's own item of that menu as last told (text_menu_own)
+  /// the words of the app's own items of that menu as last told, a line each (text_menu_own)
   mut text_menu_own : String
   mut edit_can : Int
   mut clipboard : String
