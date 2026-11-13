@@ -321,3 +321,192 @@ test "history steps at 1.3x: fold toggle room, task wrap, step meta and tool pat
   let step_squeeze = t.squeeze_faults().filter(fn(f) { f.contains("history_steps_node.mbt") })
   assert_eq(step_squeeze, [])
 }
+
+///|
+/// How late the made-up core answers each subscription from a press of 详情 on (ms): at once, a frame late, and on to
+/// well past the 300 ms nothing may look like loading in.
+let details_press_lates : Array[Double] = [0.0, 16.0, 120.0, 250.0, 400.0, 700.0]
+
+///|
+/// An agent's history in fixture mode `mode` in screen `s`, answered through the app's client of its core, each
+/// subscription as late as `pace` says when it is asked (opened at once, the test's own setup), as a device's host draws
+/// it (check_looks off), at rest: what the client sent and was told, to `heard`.
+fn details_press_tester(s : Screen, mode : String, pace : Ref[Double], heard : Array[String]) -> @ui.Tester {
+  new_run()
+  let src = round_trip_again(fixture_app(mode), 0.0, heard=fn(h) { heard.push(h) }, late=fn(_, _) { pace.val })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=s.w, h=s.h, platform=s.platform)
+  t.check_looks(false)
+  t.draw()
+  t.run_for(@ui.move_most_ms + 1000.0)
+  t.ways_set_out() |> ignore
+  t
+}
+
+///|
+/// The control that folds or unfolds the details in screen `s`, as a screen reader finds it: on 小屏 the head's tab
+/// (`label`, 步骤 or 详情), on 大屏 the head's chip 详情; with whether it shows the details unfolded.
+fn details_control(t : @ui.Tester, s : Screen, label : String) -> (@ui.SemNode, Bool)? {
+  if s.platform == 2 {
+    t.query(Radio, label~).map(fn(n) { (n, n.check is Some(On) && label == "详情") })
+  } else {
+    t.query(Button, label="详情").map(fn(n) { (n, n.pressed == Some(true)) })
+  }
+}
+
+///|
+/// Every word drawn now and where (Tester::words: an old view's too, each frame), the control's own left out (what the
+/// pressed control answers with), none faded to nothing.
+fn details_words(t : @ui.Tester) -> Array[String] {
+  t
+  .words()
+  .filter(fn(w) { w.5 > 0.01 && w.0 != "详情" && w.0 != "步骤" })
+  .map(fn(w) { "\{w.0}@\{(w.1 * 10.0).round() / 10.0},\{(w.2 * 10.0).round() / 10.0}" })
+}
+
+///|
+/// What the client subscribed to in `heard` from its `from`th (each its topic and params as sent), whether it was let go
+/// after, and at which of `heard` it was sent.
+fn details_subscribed(heard : Array[String], from : Int) -> Array[(String, Bool, Int)] {
+  let out : Array[(Int, String, Int)] = []
+  let gone : Map[Int, Bool] = Map([])
+  for i in from..<heard.length() {
+    let h = heard[i]
+    guard h.has_prefix("out ") else { continue }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => continue }
+    guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
+    match (m.get("subscribe"), m.get("unsubscribe")) {
+      (Some(s), _) => out.push((n.to_int(), s.stringify(), i))
+      (_, Some(_)) => gone[n.to_int()] = true
+      _ => ()
+    }
+  }
+  out.map(fn(o) { (o.1, gone.contains(o.0), o.2) })
+}
+
+///|
+/// 详情 pressed in an agent's history's head to unfold it (sfpages' history_details_open: on 小屏 the head's tab, on 大屏
+/// its chip), and pressed to fold it, in turn, 小屏 by touch and 大屏 with a mouse, the history opened over a core
+/// answering at once and each press over one answering 0 to 700 ms late. Each unfolding: from the press till the details
+/// come, every frame's words but the control's own where they were at the press, the control showing itself pressed;
+/// from the frame they come, no way setting out but theirs, and once that is over (the most a move takes) every word
+/// where it is at rest; nothing asked after they came (all they read asked by the press), what was asked once and held
+/// at rest. Folding asks nothing.
+test "an agent's history's 详情 unfolded: the head as it was till all the details read is answered, then the details whole" {
+  let faults : Array[String] = []
+  let say = fn(at : String, f : String) {
+    if faults.length() < 24 {
+      println("HDETAIL \{at} \{f}")
+    }
+    faults.push(at + " " + f)
+  }
+  for case in [(daily_small, "history"), (daily_small, "history-details"), (daily_large, "history")] {
+    let (s, mode) = case
+    for ms in details_press_lates {
+      let heard : Array[String] = []
+      let pace = Ref(0.0)
+      let t = details_press_tester(s, mode, pace, heard)
+      pace.val = ms
+      guard details_control(t, s, "详情") is Some((_, open_at_first)) else {
+        say("\{s.name} \{mode}", "no 详情")
+        break
+      }
+      // (unfold, fold, unfold again: from folded at first; else folded first)
+      let presses = if open_at_first { [false, true, false, true] } else { [true, false, true] }
+      for p, unfold in presses {
+        let at = "\{s.name} \{mode} \{ms}ms #\{p}"
+        let label = if unfold || s.platform != 2 { "详情" } else { "步骤" }
+        guard details_control(t, s, label) is Some((c, _)) else {
+          say(at, "no \{label}")
+          break
+        }
+        let before = details_words(t)
+        let asked_from = heard.length()
+        let from = t.time()
+        t.tap(c.rect.0 + c.rect.2 / 2.0, c.rect.1 + c.rect.3 / 2.0)
+        if !unfold {
+          t.run_for(@ui.move_most_ms + ms + 1000.0)
+          t.ways_set_out() |> ignore
+          continue
+        }
+        // (each frame: its moment from the press, its words, what was heard by then)
+        let frames : Array[(Double, Array[String], Int)] = []
+        let ways : Array[(Double, String)] = []
+        let n = ((ms * 2.0 + @ui.move_most_ms * 2.0) / @ui.frame_period_default).ceil().to_int()
+        for i in 0..=n {
+          if i > 0 {
+            t.run_for(@ui.frame_period_default)
+          }
+          let now = t.time() - from
+          for w in t.ways_set_out() {
+            if w.at > from + 0.5 {
+              ways.push((w.at - from, "\{w.kind} \{w.made} \{w.part}"))
+            }
+          }
+          let words = details_words(t)
+          if !(details_control(t, s, "详情") is Some((_, true))) {
+            say(at, "+\{now.round()} 详情 not shown pressed")
+          }
+          frames.push((now, words, heard.length()))
+        }
+        t.run_for(@ui.move_most_ms + 1000.0)
+        for w in t.ways_set_out() {
+          ways.push((w.at - from, "\{w.kind} \{w.made} \{w.part}"))
+        }
+        let rest = details_words(t)
+        // (the frame they came in, and the one before it: what was heard by then, the press's asks; in the press's frame,
+        // what it heard)
+        let mut came = -1.0
+        let mut was = -1.0
+        let mut heard_then = heard.length()
+        for f in frames {
+          if f.1 != before {
+            came = f.0
+            break
+          }
+          was = f.0
+          heard_then = f.2
+        }
+        if came < 0.0 {
+          say(at, "the details never came")
+          continue
+        }
+        // (no way but theirs, set out as they came)
+        let mut way_at = came
+        for w in ways {
+          if w.0 > was + 0.5 && w.0 <= came + 0.5 {
+            way_at = @cmp.minimum(way_at, w.0)
+          } else {
+            say(at, "+\{w.0.round()} way set out: \{w.1}")
+          }
+        }
+        let still = way_at + @ui.move_most_ms
+        for f in frames {
+          if f.0 >= still && f.1 != rest {
+            let gone = rest.filter(fn(w) { !f.1.contains(w) })
+            let now = f.1.filter(fn(w) { !rest.contains(w) })
+            say(at, "+\{f.0.round()} not as at rest (came +\{came.round()}): gone [\{gone.iter().take(3).collect().join(" | ")}] new [\{now.iter().take(3).collect().join(" | ")}]")
+            break
+          }
+        }
+        // (all they read asked by the press, before they came; once each, held at rest)
+        let asked = details_subscribed(heard, asked_from)
+        let said : Map[String, Int] = Map([])
+        for a in asked {
+          said[a.0] = said.get(a.0).unwrap_or(0) + 1
+          if a.2 >= heard_then {
+            say(at, "asked after the details came: \{a.0}")
+          }
+          if a.1 {
+            say(at, "let go by rest: \{a.0}")
+          }
+        }
+        for k, c in said {
+          if c > 1 {
+            say(at, "asked \{c} times: \{k}")
+          }
+        }
+      }
+    }
+  }
+  assert_eq(faults.length(), 0, msg="详情 unfolded: \{faults.length()} faults (HDETAIL lines)")
+}

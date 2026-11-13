@@ -916,9 +916,17 @@ pub fn stations_asked(scope : String) -> Map[String, Json] {
 }
 
 ///|
+/// What the workspace's stations' rows are asked of the core by (a topic and its params): what station_rows reads by,
+/// and what a press asks ahead of what reads them.
+pub fn station_rows_ask(scope : String) -> (String, Map[String, Json]) {
+  ("stations", stations_asked(scope))
+}
+
+///|
 /// The workspace's stations' rows (stations_asked) as they are now.
 pub fn station_rows(src : Source, scope : String) -> TopicState {
-  src.topic("stations", stations_asked(scope)).get()
+  let (name, params) = station_rows_ask(scope)
+  src.topic(name, params).get()
 }
 
 ///|

@@ -148,10 +148,23 @@ pub fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
 }
 
 ///|
+/// What the core's `doing` is asked by (a topic and its params): what core_doing and core_failed read by.
+pub fn doing_ask() -> (String, Map[String, Json]) {
+  ("doing", {})
+}
+
+///|
+/// The core's `doing` as it is now (doing_ask's).
+fn doing_now(src : Source) -> Json? {
+  let (name, params) = doing_ask()
+  src.topic(name, params).get().value
+}
+
+///|
 /// Whether one of `calls` about what `on` names is under way, as the core's `doing` says (doing.ts useDoing: its
 /// params as words).
 pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, String)]) -> Bool {
-  items(src.topic("doing", {}).get().value, "doing").iter().any(fn(d) {
+  items(doing_now(src), "doing").iter().any(fn(d) {
     text(Some(d), "stage") != "failed" && doing_of(d, calls, on)
   })
 }
@@ -161,7 +174,7 @@ pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, Strin
 /// useDoingFailed), if it did.
 pub fn core_failed(src : Source, calls : Array[String], on : Array[(String, String)]) -> String? {
   let mut why : String? = None
-  for d in items(src.topic("doing", {}).get().value, "doing") {
+  for d in items(doing_now(src), "doing") {
     if text(Some(d), "stage") == "failed" && doing_of(d, calls, on) {
       why = Some(
         match text(Some(d), "error") {

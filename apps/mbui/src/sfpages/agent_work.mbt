@@ -313,6 +313,13 @@ let work_line_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 let work_line_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
 
 ///|
+/// What agent `key`'s card on `station` is asked of the core by (a topic and its params): what an agent's history's
+/// details and the mark of its work read it by.
+pub fn agent_card_ask(station : String, key : String) -> (String, Map[String, Json]) {
+  ("agentCard", { "station": Json::string(station), "key": Json::string(key) })
+}
+
+///|
 /// work_mark as nodes in `parent`, a row that leaves it out (View::fits) before its own words are cut (they are kept
 /// whole first: View::fit_whole), as agent `key`'s card on `station` says it now: 后台 4 · 2/6, said 4 · 2/6 where it
 /// has not the room (View::shorter), then in place of it a mark with how many (there only while the whole is left out:
@@ -329,7 +336,8 @@ pub fn work_mark_node(
   smallest? : Bool = false,
 ) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let card = fn() { src.topic("agentCard", params).get().value }
+  let (card_topic, card_params) = agent_card_ask(station, key)
+  let card = fn() { src.topic(card_topic, card_params).get().value }
   let mark = fn() { text(card(), "workMark") }
   let count = fn() { text(card(), "workMarkCount") }
   let running = fn() { items(card(), "tasks").length() > 0 }

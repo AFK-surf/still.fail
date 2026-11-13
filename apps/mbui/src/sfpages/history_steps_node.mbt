@@ -2253,14 +2253,61 @@ let tool_lead_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full
 let tool_none : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Full)
 
 ///|
+/// What agent `key`'s history on `station` is asked of the core by (a topic and its params): what its figures are read
+/// by (history_usage, history_usage_line).
+pub fn history_ask(station : String, key : String) -> (String, Map[String, Json]) {
+  ("history", { "station": Json::string(station), "key": Json::string(key) })
+}
+
+///|
+/// What an agent's history's details hold of the machine its station is (`host`), asked of the core by.
+pub fn history_host_ask(station : String) -> (String, Map[String, Json]) {
+  ("host", { "station": Json::string(station) })
+}
+
+///|
+/// What agent `key`'s history on `station` hands 详情's asks to (sfbase's hand_over_shown): its details say so as they
+/// read (shown_read).
+pub fn history_details_at(station : String, key : String) -> String {
+  "history-details\u{1}" + station + "\u{1}" + key
+}
+
+///|
+/// 详情 pressed in an agent's history's head, its details folded (sfdesk's chip, the narrow page's tab): `asks` (all the
+/// details read as they are first drawn, each said by the code it reads by) asked of `src` now, the head as it is
+/// meanwhile, the control showing itself pressed by a state of its own; once each is answered (at once where they are
+/// already), `open` unfolds them as it did at the press before, by their way where they have one: a person's act told
+/// late, never as an answer (sfbase's switch_answered would set nothing out). What was asked is handed to the details
+/// by `at` (history_details_at; hand_over_shown), let go at the end of the frame they first read it in. Given up
+/// (press_wait: the page left, the workspace switched, something else put up; by its caller as the control is pressed
+/// again), what was asked is let go and `let_go` run (the control put back). Made in the press's handler.
+pub fn history_details_open(
+  src : Source,
+  asks : Array[(String, Map[String, Json])],
+  at : String,
+  open : () -> Unit,
+  let_go? : () -> Unit = fn() {  },
+) -> @sfbase.PressWait {
+  // (asking nothing ahead where the source's run did not: a replay of a run from before, unfolded at the press)
+  if asks.is_empty() || src.read_only || !(src.switches_ahead)() {
+    return @sfbase.press_wait(fn() { true }, open)
+  }
+  let (answered, leases) = @sfbase.asked_now(src, asks)
+  @sfbase.press_wait(answered, fn() { @sfbase.hand_over_shown(at, leases, open) }, let_go=fn() {
+    leases.each(fn(l) { l.cancel() })
+    let_go()
+  })
+}
+
+///|
 /// What agent `key`'s history on `station` says it used, in a line (its `usageLine`): what reads it is told only as the
 /// line changes, not as the rest of the history does (what streams in as the agent works: history_steps_node).
 pub fn history_usage_line(src : Source, station : String, key : String) -> String {
-  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
+  let (name, params) = history_ask(station, key)
   steps_usage_line.read(
     src,
     station + "\u{1}" + key,
-    fn(_) { text(src.topic("history", params).get().value, "usageLine") },
+    fn(_) { text(src.topic(name, params).get().value, "usageLine") },
     same=fn(a, b) { a == b },
   )
 }
@@ -2268,11 +2315,11 @@ pub fn history_usage_line(src : Source, station : String, key : String) -> Strin
 ///|
 /// What agent `key`'s history on `station` says it used, each figure (its `usage`): told only as they change.
 pub fn history_usage(src : Source, station : String, key : String) -> Array[Json] {
-  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
+  let (name, params) = history_ask(station, key)
   let usage = steps_usage.read(
     src,
     station + "\u{1}" + key,
-    fn(_) { field(src.topic("history", params).get().value, "usage") },
+    fn(_) { field(src.topic(name, params).get().value, "usage") },
     same=fn(a, b) {
       match (a, b) {
         (Some(x), Some(y)) => physical_equal(x, y)
