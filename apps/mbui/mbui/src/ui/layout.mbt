@@ -1383,7 +1383,10 @@ fn Ctx::lay_out_field(self : Ctx, st : EditorState, fb : FieldBox) -> Unit {
   st.scroll = was
   if sw is None || now != st.followed {
     st.followed = now
-    if top - st.scroll < 0.0 {
+    // (a line taller than the field shown from its top: brought to its foot as well, it went from one to the other each
+    // time it was laid out, its words fading out at the top and at the foot by turns, a frame asked for each: a Chinese
+    // placeholder a hair taller than a field of one line, till 2026-11-13)
+    if top - st.scroll < 0.0 || tl.line_h > ih {
       st.scroll = top
     } else if top + tl.line_h - st.scroll > ih {
       st.scroll = top + tl.line_h - ih

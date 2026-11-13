@@ -551,7 +551,10 @@ fn ride_clip_square(c : FixedArray[Double]) -> Bool {
 ///|
 /// Which of instance `b`'s numbers (in `a`) move with the row drawn in clip `e`: its clip's edges and its outer's
 /// that are not `e`'s own (its own clips' within it, as far inside it as the row is), as bits 0-3 and 4-7; bit 8, the
-/// place 33-34 says.
+/// place 33-34 says; bits 9-12, where it fades out towards a cut (52, 54, 56, 58), each that it says: all of it what
+/// holds it inside the row or list said, none faded round them (a row or a list is kept only where nothing round it
+/// fades), so it moves with them (a field's words fading at its edges, in a list scrolled: drawn where the field was
+/// laid out, faded out wholly where it is drawn, till 2026-11-13).
 fn ride_moves(a : FixedArray[Double], b : Int, e : FixedArray[Double]) -> Int {
   let mut m = 0
   for j in 0..<4 {
@@ -572,6 +575,11 @@ fn ride_moves(a : FixedArray[Double], b : Int, e : FixedArray[Double]) -> Int {
   }
   if a[b + 32] != 0.0 {
     m = m | 256
+  }
+  for j in 0..<4 {
+    if a[b + 53 + 2 * j] > 0.0 {
+      m = m | (512 << j)
+    }
   }
   m
 }
@@ -1079,6 +1087,12 @@ fn ride_put(
       if (m & 256) != 0 {
         s.unsafe_set(b + 33, s.unsafe_get(b + 33) + dx)
         s.unsafe_set(b + 34, s.unsafe_get(b + 34) + dy)
+      }
+      for j in 0..<4 {
+        if (m & (512 << j)) != 0 {
+          let d = if j < 2 { dy } else { dx }
+          s.unsafe_set(b + 52 + 2 * j, s.unsafe_get(b + 52 + 2 * j) + d)
+        }
       }
     }
     inst_cut_to(s, b, h0, h1, h2, h3)
@@ -1613,6 +1627,11 @@ fn list_move(s : FixedArray[Double], b : Int, m : Int, dx : Double, dy : Double)
     if (m & 256) != 0 {
       s[b + 33] = s[b + 33] + dx
       s[b + 34] = s[b + 34] + dy
+    }
+    for j in 0..<4 {
+      if (m & (512 << j)) != 0 {
+        s[b + 52 + 2 * j] = s[b + 52 + 2 * j] + (if j < 2 { dy } else { dx })
+      }
     }
   }
 }
