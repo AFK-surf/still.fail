@@ -163,6 +163,15 @@
   it (`client/core-ts/src/rig-form.ts` `DeviceBody`), kept and checked by the rig itself (`src/rig/grants.ts`), granted alone or with the
   rig, or 免批准 on it.
 
+## Sandboxes
+
+- Heavy work goes to a sandbox as a target of station_task (`src/agents/sandbox.ts`; 左子健, 2026-11-13): config.json's
+  `sandboxes`, each an l4es front door, listed by station_list beside the stations; the station takes each task as its
+  own job and runs it in the chat's sandbox there through `src/agents/sandbox-bridge.mjs`. Nothing is installed in a
+  sandbox and no agent runs in one: a station there would be there only for resources and access, which this needs
+  neither of (「不应该让 sandbox 里装 station」). Not a device, no tool and nothing in the app adds one: the station's
+  config says them (「直接写 station 配置就好吧」). Sessions running in sandboxes (the `sandbox` setting) went with it.
+
 ## Tests
 
 - `pnpm exec tsgo --noEmit` types; one test file is `node ../scripts/native.ts run mesh runner archive-rs reader --

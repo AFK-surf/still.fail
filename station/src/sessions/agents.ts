@@ -5,6 +5,7 @@
 // over (run/handover.json) and the next takes them up, runtimes and all, from their runners. Under the launcher the
 // next process is up before the previous one hands over: it takes up only once that one is gone (run/hub.json says
 // which process holds the sessions), and opens the agents' door only then, so no call reaches a hub without its session.
+import { sandboxesOf } from "../agents/sandbox.ts";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Context, Effect, Layer, Schedule, Stream, SubscriptionRef } from "effect";
@@ -23,7 +24,6 @@ import { WorkspaceWatch, workspaceWorking, type WorkspaceReading } from "../jobs
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
-import { lentFile, placeIn, sandboxConfig, sandboxed } from "../agents/sandbox.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
@@ -89,7 +89,7 @@ import { type PageBase, sessionPage } from "./page.ts";
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
 
-/// How often the sandboxes nothing runs in are looked for (hub.ts `sweepSandboxes`).
+/// How often the old sandbox-name lookup is looked for, to take it down (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
 
 export type AgentsParts = {
@@ -226,9 +226,6 @@ export const AgentsLive = (control: Control) =>
       // What other stations of the workspace share with this one, and what it shares (made below, once the accounts are).
       let sharing: Sharing | null = null;
       const borrowed = (p: unknown) => sharing?.borrowedSubscription(p) === true;
-      // In sandboxes a subscription's login stays here: each process there is lent a short-lived one, as a borrowed
-      // subscription's is (agents/sandbox.ts).
-      const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
       const hermes = new HermesDriver({ data });
       const agy = new AgyDriver({ data });
       // What the station before this one left, taken up (`start`): until then the codex app-servers its runners keep are
@@ -242,8 +239,8 @@ export const AgentsLive = (control: Control) =>
         taking: () => control.taking(),
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: {
-          borrowed: (p) => borrowed(p) || lentToSandbox(p),
-          write: (p) => (borrowed(p) ? sharing!.lendCodex(p, false, sandboxed(data) ? lentFile(data, p.home) : undefined) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
+          borrowed: (p) => borrowed(p),
+          write: (p) => sharing!.lendCodex(p, false),
         },
       });
       // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
@@ -275,7 +272,7 @@ export const AgentsLive = (control: Control) =>
             machineToken: (env, rejected) => accounts.machineToken(env, rejected),
             subscriptionToken: (p, rejected) => accounts.claudeToken(p, rejected),
             lent: {
-              borrowed: (p) => borrowed(p) || (lentToSandbox(p) && p.machine !== true),
+              borrowed: (p) => borrowed(p),
               token: (p, rejected) => (borrowed(p) ? sharing!.lendClaude(p, rejected) : accounts.claudeToken(p, rejected)),
             },
           }),
@@ -330,6 +327,9 @@ export const AgentsLive = (control: Control) =>
         },
       });
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
+      // Its sandboxes (config.json's `sandboxes`): targets of station_task whose tasks run there as this station's jobs.
+      remote.setSandboxes(() => sandboxesOf(config.raw()));
+      jobs.setSandboxes((name) => sandboxesOf(config.raw()).find((s) => s.name === name) ?? null);
       // Measure only working chats, and only station-owned workspaces. A chat's remote workspaces are measured on the
       // machines that hold them; an offline or older station supplies no reading until it can answer.
       const working = (key: string): boolean => workspaceWorking(store, (session) => hub.processState(session), key);
@@ -575,7 +575,7 @@ export const AgentsLive = (control: Control) =>
         machineEmail: (runtime) => accounts.machineLogins().find((login) => login.runtime === runtime && login.loggedIn)?.email ?? null,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
         // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
-        codexRenewRunning: async (id) => !sandboxed(data) && (await codex.renewLogin(id)),
+        codexRenewRunning: async (id) => await codex.renewLogin(id),
         status: async (id) => { const h = await accounts.lentHealth(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
@@ -668,8 +668,6 @@ export const AgentsLive = (control: Control) =>
         if (kind !== "codex") hub.runtimeUpdated(kind);
       });
       hub.deps.updateOldCodex = async (version) => {
-        // The sandbox has its own executables: updating the station's Codex would not change the one that failed.
-        if (sandboxed(data)) throw new Error(tr(stationLang(), "station.notice.codexUpdateSandbox"));
         await updates.updateOldCodex(version);
         // Wait until old hosts are marked before any conversation can retry; other turns keep running there.
         await codex.runtimeChanged(version === null, true);
@@ -760,7 +758,7 @@ export const AgentsLive = (control: Control) =>
         Effect.forkScoped,
       );
 
-      // Sandboxes of sessions nothing runs in, left by a process that ended some other way than going idle: stopped.
+      // The sandbox-name lookup of the sandboxes sessions once ran in, taken down.
       yield* Effect.promise(() => hub.sweepSandboxes().catch(() => {})).pipe(
         Effect.repeat(Schedule.spaced(SWEEP_MS)),
         Effect.forkScoped,
@@ -810,8 +808,6 @@ export const AgentsLive = (control: Control) =>
         }
         const opened = door!;
         jobs.setNotifyUrl(opened.url.replace(/\/mcp$/, "/jobs/notify"));
-        // What it starts runs in sandboxes while config.json says so; their programs reach the door at its port there.
-        placeIn(data, () => sandboxConfig(config.raw()), () => [opened.port], settings().agentHome);
         // Taken over and serving: the launcher's entrance comes here now (not before: launcher/src/lifecycle.rs).
         control.serving("mcp", opened.port);
         log.info("station", "agents' door open", { url: opened.url });

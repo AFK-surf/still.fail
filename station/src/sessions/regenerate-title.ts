@@ -2,7 +2,6 @@
 // chat agent's running turn, its waiting state, or the files it is working on.
 import { randomUUID } from "node:crypto";
 import { wall } from "../ops/fibers.ts";
-import { sandboxed } from "../agents/sandbox.ts";
 import type { AgentSession, RuntimeEvent } from "../agents/runtime.ts";
 import type { SessionRow } from "../store/rows.ts";
 import type { Hub } from "./hub.ts";
@@ -33,8 +32,6 @@ export async function regenerateTitle(hub: Hub, thread: number, members: Session
   }).find((c) => c !== null);
   if (!candidate) throw new TitleError(members.length === 0 ? "noAgent" : "unsupported");
   const { row, profile, runtime, completion } = candidate;
-  // A Claude runner's id identifies its sandbox too. A separate runner cannot safely use the original sandbox yet.
-  if (runtime === "claude" && sandboxed(hub.config().dataDir)) throw new TitleError("unsupported");
   const driver = hub.drivers.get(runtime);
   if (runtime !== "api" && !driver) throw new TitleError("unsupported");
   const revision = hub.store.titleRevision(thread);

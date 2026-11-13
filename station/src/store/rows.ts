@@ -2,6 +2,7 @@
 // Option is `T | null`; where the Rust leaves a None Value out (EntryRow's agentIdentity, options, card) it is undefined.
 // The readers (read/store.ts) read rows with these same conversions, leaving out what is not for the pages (tokens).
 
+import type { SandboxPlace } from "../agents/sandbox.ts";
 import { LEGACY_SAID_LATEST } from "./legacy-said-build.ts";
 
 export type Json = any;
@@ -247,9 +248,8 @@ export type JobRow = {
   screen?: boolean;
   /// A brief offscreen task in the station's one small-work slot.
   small?: boolean;
-  /// The sandbox size it asked for, by the name the sandboxes' operator gave it (agents/sandbox.ts): a sandbox of its
-  /// own, of that size.
-  size?: string;
+  /// It runs in a sandbox, the chat's there (agents/sandbox.ts): a task asked of one of the station's sandboxes.
+  sandbox?: SandboxPlace;
 };
 
 export type JobNotice = { at: number; text: string };
@@ -584,7 +584,8 @@ export function toJob(r: Json): JobRow {
     state: r.state, pgid: r.pgid, exitCode: r.exit_code, startedAt: r.started_at, endedAt: r.ended_at,
     restarts: r.restarts, log: r.log, watch: r.watch !== 0, ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
     ...(r.small === 1 ? { small: true } : {}),
-    ...(typeof r.size === "string" ? { size: r.size } : {}),
+    // (`size` held a sandbox's size before sandboxes were station_task's targets; such a job runs nowhere now)
+    ...(typeof r.size === "string" && r.size.startsWith("{") ? { sandbox: JSON.parse(r.size) as SandboxPlace } : {}),
   };
 }
 

@@ -1138,14 +1138,9 @@ export class Sharing {
 
   /// A borrowed Codex subscription: its home's auth.json written with the host's current tokens (no refresh token, so
   /// Codex never renews it here); when they run out.
-  async lendCodex(profile: Json, rejected = false, sandboxFile?: string): Promise<number> {
+  async lendCodex(profile: Json, rejected = false): Promise<number> {
     const host = this.hostOf(profile);
     const home = this.home(profile);
-    const copyForSandbox = () => {
-      if (sandboxFile === undefined) return;
-      mkdirSync(dirname(sandboxFile), { recursive: true });
-      writePrivate(sandboxFile, readFileSync(join(home, "auth.json"), "utf8"));
-    };
     if (keptCodexExpiry(join(home, "auth.json")) - this.time.now() < KEEP_LENT_MS) await this.rosterSaid();
     let got: Json;
     try {
@@ -1157,7 +1152,6 @@ export class Sharing {
       const kept = keptCodexExpiry(join(home, "auth.json"));
       if (!rejected && kept - this.time.now() >= KEEP_LENT_MS) {
         log.warn("share", "the host did not lend a new login; the one lent before is used", { profile: profile.id, error: (e as Error).message });
-        copyForSandbox();
         return kept;
       }
       log.warn("share", "the host did not lend it", { profile: profile.id, error: (e as Error).message });
@@ -1171,22 +1165,6 @@ export class Sharing {
     };
     mkdirSync(home, { recursive: true });
     writePrivate(join(home, "auth.json"), JSON.stringify(auth, null, 2));
-    copyForSandbox();
-    return Number(got.expiresAt ?? 0);
-  }
-
-  /// This station's own Codex login lent to its sandboxes (agents/sandbox.ts `lentFile`): written to `file` as a borrowed
-  /// one is, its refresh token kept here. When it runs out.
-  async lendOwnCodex(profile: Json, file: string): Promise<number> {
-    const got = await this.lend(profile);
-    const auth = {
-      auth_mode: "chatgpt",
-      OPENAI_API_KEY: null,
-      tokens: { ...got.tokens, refresh_token: "lent-to-a-sandbox" },
-      last_refresh: new Date(this.time.now()).toISOString(),
-    };
-    mkdirSync(dirname(file), { recursive: true });
-    writePrivate(file, JSON.stringify(auth, null, 2));
     return Number(got.expiresAt ?? 0);
   }
 

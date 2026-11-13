@@ -302,7 +302,6 @@
   "station.notice.codexUpdating": "Codex 版本过旧，正在更新，更新后将重试",
   "station.notice.codexUpdateFailed": "Codex 更新失败：{why}",
   "station.notice.codexStillOld": "Codex 更新后仍不支持此模型，请在 station 的软件设置中检查 Codex",
-  "station.notice.codexUpdateSandbox": "此对话在隔离环境中运行，无法从此处更新其中的 Codex",
   "station.notice.codexVersionUnknown": "无法确认更新后的 Codex 版本，请在 station 的软件设置中检查",
   "station.notice.codexNoNewVersion": "没有可用的更新版本，请在 station 的软件设置中检查 Codex",
   "station.notice.codexDifferentPath": "此 Profile 使用的 Codex 与软件设置中的安装不同，无法在此更新",

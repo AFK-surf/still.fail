@@ -1835,7 +1835,7 @@ export function lastTurn(s: Store, key: string): TurnSummary | null {
 // ── jobs ──
 
 const toJob = (r: Json): JobRow => {
-  const { token: _, size: __, ...job } = rows.toJob(r);
+  const { token: _, sandbox: __, ...job } = rows.toJob(r);
   return job;
 };
 

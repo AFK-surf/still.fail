@@ -22,7 +22,6 @@ import { PhoneDisplays } from "./displays.ts";
 import { grantChatTitle } from "./title.ts";
 import { PHONE_SEND, adbTools, phoneTools, reached } from "./tool.ts";
 import { fetchOnPhone, staged } from "./send.ts";
-import { fromSandbox } from "../sessions/conversations.ts";
 import { Shares, adbPath, answerAdb } from "./link.ts";
 
 export const AdbLive = Layer.effectDiscard(
@@ -226,9 +225,7 @@ export const AdbLive = Layer.effectDiscard(
           if (share === undefined) return "Granted, but the phone is not lent to this station right now: call phone_use to see why.";
           const workspace = store.getSession(session)?.workspace;
           if (workspace === undefined) throw new Error(`unknown session ${session}`);
-          // (a sandboxed agent's file brought here first, as chat_post's are)
-          const given = (await fromSandbox(hub, session, { files: [typeof args.path === "string" ? args.path : ""] }, false)).files as string[];
-          const { name, size } = await staged(workspace, given[0]!);
+          const { name, size } = await staged(workspace, typeof args.path === "string" ? args.path : "");
           grants.used(grant.id, true);
           const r = await fetchOnPhone(share.conn, session, name, size, () => grants.used(grant.id, true), signal);
           if ("path" in r) return `On the phone at ${r.path} (${size} bytes). pm cannot read that folder: to install an APK, adb … shell 'cp ${r.path} /data/local/tmp/a.apk && pm install -r /data/local/tmp/a.apk'.`;

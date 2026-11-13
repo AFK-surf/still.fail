@@ -3516,7 +3516,7 @@ export class Store {
         "INSERT INTO jobs (id, session_key, name, command, cwd, port, token, state, pgid, exit_code, started_at, ended_at, restarts, log, watch, queued, screen, size, small) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         job.id, job.sessionKey, job.name, job.command, job.cwd, job.port, job.token, job.state, job.pgid, job.exitCode, job.startedAt,
         job.endedAt, job.restarts, job.log, flag(job.watch), flag(job.queued === true), flag(job.screen === true),
-        job.size ?? null, flag(job.small === true),
+        job.sandbox !== undefined ? JSON.stringify(job.sandbox) : null, flag(job.small === true),
       );
       changes.push({ type: "session", key: job.sessionKey });
       changes.push({ type: "job", id: job.id });

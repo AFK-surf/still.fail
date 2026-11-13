@@ -345,17 +345,13 @@ test("a borrowed Codex subscription's login is written in its home, the profile 
   const copy = b.config.raw().profiles[0];
   // As sessions/config.ts gives it to the runtime: its home absolute (C:\… on Windows; a doubled one was made there).
   const home = join(b.data, copy.home);
-  const sandboxFile = join(b.data, "run", "sandbox", "lent", "test", "auth.json");
-  await b.sharing.lendCodex({ ...copy, home }, false, sandboxFile);
+  await b.sharing.lendCodex({ ...copy, home }, false);
   const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"));
   assert.equal(auth.tokens.account_id, "acct");
   assert.equal(auth.tokens.refresh_token, "lent-by-another-station");
-  assert.deepEqual(JSON.parse(readFileSync(sandboxFile, "utf8")), auth, "a sandbox gets the borrowed login, without the host's refresh token");
   // The host away: the login lent before is used while it has long enough, not once it runs out soon.
   all.delete(A);
-  rmSync(sandboxFile);
-  assert.ok((await b.sharing.lendCodex({ ...copy, home }, false, sandboxFile)) > Date.now() + 23 * 3600_000);
-  assert.deepEqual(JSON.parse(readFileSync(sandboxFile, "utf8")), auth, "the kept login is also copied when the host is away");
+  assert.ok((await b.sharing.lendCodex({ ...copy, home }, false)) > Date.now() + 23 * 3600_000);
   await assert.rejects(b.sharing.lendCodex({ ...copy, home }, true), /未能借出/, "a refused token must not be reused while the host is offline");
   auth.tokens.access_token = jwt({ exp: Math.floor(Date.now() / 1000) + 600 });
   writeFileSync(join(home, "auth.json"), JSON.stringify(auth));

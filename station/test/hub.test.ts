@@ -2,12 +2,11 @@
 // recover and handover, eviction, single-session connects, the station's own chat. Ported from
 // the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
 import { runnerId } from "../src/agents/process.ts";
-import { CONNECTION_LOST, keyPart, placeIn, sandboxConfig, sandboxName } from "../src/agents/sandbox.ts";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_FAILED, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_FAILED, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { claudeProject, homesFirst, transcriptPaths } from "../src/read/transcript.ts";
@@ -869,37 +868,6 @@ test("Codex authentication failure moves an automatic session and continues once
   await r.close();
 });
 
-test("a turn whose sandbox connection was lost goes on once from its transcript, then is said to have ended", async () => {
-  const r = new Rig();
-  const m = message();
-  await r.accept(m);
-  await settle();
-  const first = r.claude.last();
-  const lost = { kind: "failed" as const, reason: "exited" as const, message: `claude exited (75) during the turn: ${CONNECTION_LOST} (ssh exited 255)` };
-  first.end(lost);
-  await settle();
-  const retry = r.claude.last();
-  assert.ok(first.disposed);
-  assert.equal(r.claude.count(), 2);
-  assert.equal(retry.options.resume, first.sessionId);
-  assert.deepEqual(retry.prompts, [GO_ON_AFTER_LOST]);
-  assert.ok(!r.chat.texts().some((t) => t.includes("意外退出")));
-  // Lost again in the turn it went on in: said, not started again.
-  retry.end(lost);
-  await settle();
-  assert.equal(r.claude.count(), 2);
-  assert.equal(r.chat.lastText().split("\n\n")[0], "⚠️ agent 进程意外退出，回复即可恢复");
-  assert.ok(r.chat.lastText().includes(CONNECTION_LOST));
-  // A runtime that exited by itself is not started again.
-  await r.accept(reply(m, "9999.2", "<@UBOT> again", { addressed: true }));
-  await settle();
-  const third = r.claude.count();
-  r.claude.last().end({ kind: "failed", reason: "exited", message: "exit 1" });
-  await settle();
-  assert.equal(r.claude.count(), third);
-  await r.close();
-});
-
 test("a runtime not installed is said about it, and what waited goes on once it is installed", async () => {
   const r = new Rig();
   r.claude.missing = true;
@@ -1590,127 +1558,6 @@ test("an idle process beyond the limit is evicted at its own deadline", async ()
   await settle();
   assert.ok(r.claude.last().disposed);
   await r.close();
-});
-
-/// Waits for what a real process does (the stand-in front door below), looking every 5 ms; no deadline.
-async function until(check: () => boolean) {
-  while (!check()) await new Promise((r) => setTimeout(r, 5));
-}
-
-test("in sandboxes an idle session's process ends after the sandbox idle time, whatever its runtime, and its sandbox is stopped", async () => {
-  const time = testClock();
-  const r = new Rig({ clock: time.clock });
-  // The front door as l4es's: `rm NAME` said deleted, each call kept.
-  const calls = join(r.dir, "ssh-calls");
-  writeFileSync(join(r.dir, "ssh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nfor a; do last=$a; done\necho "deleting $last"\n`);
-  chmodSync(join(r.dir, "ssh"), 0o755);
-  const path = process.env.PATH;
-  process.env.PATH = `${r.dir}:${path}`;
-  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", idleMinutes: 0.002 } }), () => []); // 120 ms
-  try {
-    const a = message();
-    await r.accept(a);
-    const b = say("<@UGPT> look", { threadTs: "1700000001.000200", ts: "1700000001.000200" });
-    await r.accept(b, "gpt");
-    await settle();
-    // Ended so that nothing follows (a turn that completes undeclared is nudged on).
-    r.claude.last().end({ kind: "aborted" });
-    r.codex.last().end({ kind: "aborted" });
-    await settle();
-    await time.adjust(119);
-    await settle();
-    assert.ok(!r.claude.last().disposed && !r.codex.last().disposed, "not idle long enough yet");
-    await time.adjust(1);
-    await settle();
-    // Both ended (no warm limit, no Codex exception), both sandboxes stopped through the front door.
-    assert.ok(r.claude.last().disposed && r.codex.last().disposed);
-    await until(() => existsSync(calls) && readFileSync(calls, "utf8").trim().split("\n").length === 2);
-    const stopped = readFileSync(calls, "utf8").trim().split("\n").map((l) => l.split(" ").slice(-3).join(" ")).sort();
-    const keyA = sessionKey("cl", "C1", a.threadTs);
-    const keyB = sessionKey("gpt", "C1", b.threadTs);
-    assert.deepEqual(stopped, [`_.ws@host rm ${sandboxName(keyPart(keyA))}`, `_.ws@host rm ${sandboxName(keyPart(keyB))}`].sort());
-  } finally {
-    unplace();
-    process.env.PATH = path;
-    await r.close();
-  }
-});
-
-/// A stand-in l4es front door in `dir`, on PATH: `ls` answers what `<dir>/ls` holds, `rm NAME` says it deleted it;
-/// each call kept in `<dir>/ssh-calls`.
-function frontDoor(dir: string): { calls: () => string[]; restore: () => void } {
-  const calls = join(dir, "ssh-calls");
-  writeFileSync(join(dir, "ssh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nfor a; do prev=$last; last=$a; done\nif [ "$last" = ls ]; then cat '${join(dir, "ls")}'; else echo "deleting $last"; fi\n`);
-  chmodSync(join(dir, "ssh"), 0o755);
-  const path = process.env.PATH;
-  process.env.PATH = `${dir}:${path}`;
-  return { calls: () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").map((l) => l.split(" ").slice(-2).join(" ")) : []), restore: () => (process.env.PATH = path) };
-}
-
-test("a session's idle time goes with it to the next station: taken up, it is not idle afresh", async () => {
-  const time = testClock();
-  const first = new Rig({ clock: time.clock });
-  const door = frontDoor(first.dir);
-  const unplace = placeIn(first.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", idleMinutes: 0.002 } }), () => []); // 120 ms
-  try {
-    await first.accept(message());
-    await settle();
-    first.claude.last().end({ kind: "aborted" });
-    await settle();
-    await time.adjust(100);
-    await settle();
-    const handed = await first.hub.handOver();
-    assert.equal(handed.sessions[0]!.idleMs, 100);
-    const claude = new FakeDriver("claude");
-    const hub = first.newHub({ chats: (id) => (id === "cl" ? first.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
-    await hub.takeUp();
-    hub.recover();
-    await settle();
-    await time.adjust(19);
-    await settle();
-    assert.ok(!claude.last().disposed, "not idle long enough yet");
-    await time.adjust(1);
-    await settle();
-    assert.ok(claude.last().disposed, "ended 120 ms after it went idle, not 120 ms after it was taken up");
-    await hub.shutdown();
-  } finally {
-    unplace();
-    door.restore();
-    await first.close();
-  }
-});
-
-test("a sandbox of a session nothing runs in is stopped; one in use, or not this station's, is left", async () => {
-  const r = new Rig();
-  const door = frontDoor(r.dir);
-  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []);
-  try {
-    const busy = message();
-    await r.accept(busy);
-    const cold = say("<@UBOT> other", { threadTs: "1700000002.000300", ts: "1700000002.000300" });
-    await r.accept(cold);
-    await settle();
-    // The second's process ended some other way than going idle (it exited).
-    r.claude.last().end({ kind: "aborted" });
-    await settle();
-    await r.hub.evict(sessionKey("cl", "C1", cold.threadTs));
-    await settle();
-    const name = (m: { threadTs: string }) => sandboxName(keyPart(sessionKey("cl", "C1", m.threadTs)));
-    writeFileSync(join(r.dir, "ls"), [
-      "Workspace ws",
-      "NAME                            STATE     CPU   IDLE",
-      `${name(busy)}   running   0%    deleted in 50 min if unused  labels=`,
-      `${name(cold)}   running   0%    deleted in 50 min if unused  labels=`,
-      "s-someone-else-0123456789       running   0%    deleted in 50 min if unused  labels=",
-      `${name({ threadTs: "1700000003.000400" })}   running   0%    1 session(s)  labels=`,
-    ].join("\n") + "\n");
-    await r.hub.sweepSandboxes();
-    assert.deepEqual(door.calls(), ["_.ws@host ls", `rm ${name(cold)}`]);
-  } finally {
-    unplace();
-    door.restore();
-    await r.close();
-  }
 });
 
 test("a running turn is never evicted", async () => {

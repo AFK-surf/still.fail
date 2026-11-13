@@ -698,7 +698,8 @@ export function addLeftColumn(db: DatabaseSync): void {
   if (!has(db, "thread_sessions", "left_at")) db.exec("ALTER TABLE thread_sessions ADD COLUMN left_at INTEGER");
 }
 
-/// The column a job's sandbox size came with (jobs.size, agents/sandbox.ts).
+/// The column a job's sandbox size came with (jobs.size); since sandboxes are station_task's targets, where a job runs in one, as JSON
+/// (agents/sandbox.ts `SandboxPlace`).
 export function addSizeColumn(db: DatabaseSync): void {
   if (!has(db, "jobs", "size")) db.exec("ALTER TABLE jobs ADD COLUMN size TEXT");
 }
