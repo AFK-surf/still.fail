@@ -167,7 +167,7 @@ test("a chain with web devices and a workspace's commitments is taken as it is, 
   const w = workspace();
   const lock = personal("carol");
   const today = personFold(lock.chain, "carol");
-  assert.deepEqual(today, { sub: "carol", genesis: genesisOf(lock.chain), head: genesisOf(lock.chain), seq: 0, devices: [{ key: lock.first.key.id, id: lock.first.base.hex, label: "first" }], webs: [] });
+  assert.deepEqual(today, { sub: "carol", genesis: genesisOf(lock.chain), head: genesisOf(lock.chain), seq: 0, devices: [{ key: lock.first.key.id, id: lock.first.base.hex, label: "first", sign_keys: [] }], webs: [] });
   const web = ed().hex;
   lock.add("web", { id: web, label: "a browser", exp: 1000 + 31 * 86400 }, lock.first.key);
   lock.add("ws", { t: "ab".repeat(32), h: "cd".repeat(32) }, lock.first.key);
