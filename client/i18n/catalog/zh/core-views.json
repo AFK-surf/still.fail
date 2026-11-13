@@ -402,7 +402,7 @@
   "core-views.resources.kind.station": "Station",
   "core-views.resources.note.offline": "{name} 离线，未计入",
   "core-views.resources.note.outdated": "{name} 的 station 版本较旧，还不统计资源",
-  "core-views.resources.note.uncounted": "{name} 不是 macOS，读不到各进程的资源",
+  "core-views.resources.note.uncounted": "{name} 读不到各进程的资源，只有 macOS 和 Linux 能读",
   "core-views.resources.tile.cpu": "CPU",
   "core-views.resources.tile.cpu_sub": "占 {cores} 核的 {percent}",
   "core-views.resources.tile.disk": "磁盘",

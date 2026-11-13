@@ -465,7 +465,7 @@
   "core-views.resources.kind.station": "Station",
   "core-views.resources.note.offline": "{name} is offline and not counted",
   "core-views.resources.note.outdated": "{name} runs an older station that does not read resources yet",
-  "core-views.resources.note.uncounted": "{name} is not on macOS, where per-process resources can be read",
+  "core-views.resources.note.uncounted": "{name} cannot read per-process resources: only macOS and Linux can",
   "core-views.resources.tile.cpu": "CPU",
   "core-views.resources.tile.cpu_sub": "{percent} of {cores} cores",
   "core-views.resources.tile.disk": "Disk",
