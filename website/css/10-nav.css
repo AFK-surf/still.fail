@@ -25,7 +25,9 @@
    them, at the container's edges). */
 .nav .w::before { content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: var(--gl); right: var(--gr); pointer-events: none;
   background: var(--dash-y), var(--dash-y); background-position: left top, right top; }
-.nav .w { position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
+/* Its brand and buttons stand off the guides (--n-in inside them): a mark or a filled button on a dashed line reads as cut. */
+.nav .w { --n-in: 12px; position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav);
+  padding-left: calc(var(--gl) + var(--n-in)); padding-right: calc(var(--gr) + var(--n-in)); }
 .brand {
   display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; color: var(--ink); flex: none;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
