@@ -43,7 +43,14 @@ export class TranscriptTail {
   readonly path: string;
   private offset = 0;
   private packedStamp: string | null = null;
-  private partial = Buffer.alloc(0);
+  /// A line still being written, in the parts it came in, joined once when its end comes. Joined again with each piece
+  /// that came, a line of L bytes read p at a time copied L²/p bytes: one of 8 MB followed 64 KB at a time while it was
+  /// written, 1.1 GB (21 MB now), on the main thread where the live view reads (`readSoon`); the same shape took 30 s
+  /// over a line of 160 MB of an agent's output (agents/runner.ts `Lines`, 2026-11-13). Not `Lines`: that keeps the
+  /// pieces it is given, and a piece here is one buffer read into again, so each part is a copy; and where a reading
+  /// stands (`snapshot`, `readBytes`) says what is held.
+  private parts: Buffer[] = [];
+  private held = 0;
   entries: TimelineEntry[] = [];
   private state: ReadState = { inner: new Map() };
   /// What each entry is kept and given as (null: as read; read/transcripts.ts keeps them in brief).
@@ -74,12 +81,14 @@ export class TranscriptTail {
 
   /// How many bytes of complete lines it has read.
   get readBytes(): number {
-    return this.offset - this.partial.length;
+    return this.offset - this.held;
   }
 
   /// Where its reading stands, to go on from in another thread.
   snapshot(): TailState {
-    return { path: this.path, runtime: this.runtime, offset: this.offset, partial: this.partial.toString("base64"), count: this.length, inner: [...this.state.inner], packedStamp: this.packedStamp };
+    // Joined here, the parts are one from now on: what is asked again copies no more than what came since.
+    if (this.parts.length > 1) this.parts = [Buffer.concat(this.parts, this.held)];
+    return { path: this.path, runtime: this.runtime, offset: this.offset, partial: (this.parts[0] ?? Buffer.alloc(0)).toString("base64"), count: this.length, inner: [...this.state.inner], packedStamp: this.packedStamp };
   }
 
   /// A tail that goes on from where another's reading stood: it keeps none of what that one read, only counts it; with
@@ -88,11 +97,17 @@ export class TranscriptTail {
     const tail = new TranscriptTail(state.runtime ?? runtime, state.path, null, false, marks !== null);
     if (marks !== null) tail.marks = [...marks];
     tail.offset = state.offset;
-    tail.partial = Buffer.from(state.partial, "base64");
+    tail.hold(Buffer.from(state.partial, "base64"));
     tail.count = state.count;
     tail.state = { inner: new Map(state.inner) };
     tail.packedStamp = state.packedStamp;
     return tail;
+  }
+
+  /// What is held of a line still being written becomes `rest` (its own bytes, not a view of a piece).
+  private hold(rest: Buffer) {
+    this.parts = rest.length > 0 ? [rest] : [];
+    this.held = rest.length;
   }
 
   /// New entries since the last read, with the index of the first (marking: none, only counted). On this thread: a
@@ -238,7 +253,7 @@ export class TranscriptTail {
       // Rewritten: start over.
       this.anew = true;
       this.offset = 0;
-      this.partial = Buffer.alloc(0);
+      this.hold(Buffer.alloc(0));
       this.entries = [];
       this.count = 0;
       this.marks = [];
@@ -251,10 +266,16 @@ export class TranscriptTail {
     // A piece of what came: its whole lines read, a line still being written waiting for the next read. Marking, each
     // line is read on its own, so a mark falls at the end of one.
     const take = (piece: Buffer) => {
-      const bytes = this.partial.length > 0 ? Buffer.concat([this.partial, piece]) : piece;
-      const cut = bytes.lastIndexOf(0x0a) + 1;
-      this.partial = Buffer.from(bytes.subarray(cut));
-      if (cut === 0) return;
+      // No line ends in it: one more part of the line being written, looked at no further.
+      const last = piece.lastIndexOf(0x0a);
+      if (last < 0) {
+        this.parts.push(Buffer.from(piece));
+        this.held += piece.length;
+        return;
+      }
+      const bytes = this.held > 0 ? Buffer.concat([...this.parts, piece], this.held + piece.length) : piece;
+      const cut = this.held + last + 1;
+      this.hold(Buffer.from(bytes.subarray(cut)));
       const base = this.offset - bytes.length;
       const lines = this.marking ? linesOf(bytes, cut) : [cut];
       let from = 0;
