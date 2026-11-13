@@ -880,7 +880,8 @@ fn login_paste_node(x : @view.View, core : Core, station : String, l : () -> Jso
   login_step_node(x, fn() { shows().step })
   // sent, nothing is left to type: the keyboard goes (the code stays in the field as it is checked)
   let send = fn(code : String) {
-    x.tree.focus_to(None) |> ignore
+    // (let go of on either side of what hosts the tree, its keyboard with it: View::focus_let_go)
+    x.focus_let_go()
     login_answer(core, station, id, code)
   }
   x.box(fn(b) {

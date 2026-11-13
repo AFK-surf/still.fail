@@ -199,7 +199,10 @@ test "the desk's chat: 忽略 at the end of the line saying what an agent needs,
   assert_true(y >= said_y && y <= said_y + said_h)
   // its words and 忽略 on lines as high as the bell's column (an option's disc, 20), the bell in their middle: on the
   // state line's 18 laid from the top they stood 1 over it
-  let (_, end_y, _, end_h) = t.rect_of("忽略").unwrap()
+  // (the one at the chat's end, the lowest drawn: a post's own 忽略 over it where one shows)
+  let ends = t.words().filter(fn(w) { w.0 == "忽略" })
+  let end = ends.iter().fold(init=ends[0], fn(a, w) { if w.2 > a.2 { w } else { a } })
+  let (end_y, end_h) = (end.2, end.4)
   assert_eq((said_h, end_y, end_h), (20.0, said_y, 20.0))
   t.tap(x, y)
   let made = named(calls, "decision.dismiss")
