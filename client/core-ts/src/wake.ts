@@ -90,6 +90,27 @@ export function hedgeable(request: HttpRequest): boolean {
 
 const HEDGES = 3;
 
+/// A write sent again changes nothing the first did not, whatever became of the first: one that puts a value (PUT,
+/// PATCH: still.fail cloud's set what they are given). Not a DELETE: sent again after the first went through, it is
+/// answered "not found". (A read is asked again by what keeps it, the sync, and at a wake beside itself: `hedged`.)
+export function resendable(request: HttpRequest): boolean {
+  const m = request.method.toUpperCase();
+  return !hedgeable(request) && (m === "PUT" || m === "PATCH");
+}
+
+/// How long a request that failed with no answer waits for the network to come back before it is sent again.
+export const RESEND_MS = 2_000;
+
+/// A request that may be sent again, failed under the core (no answer: its connection broke, the network went or
+/// changed as it went out): sent once more as the UI is next back or the network changes, or after RESEND_MS, the
+/// second's outcome its own. 2026-11-13: a station's icon taken away on a phone failed with 网络连接失败, the request
+/// never reaching still.fail cloud, as the phone's network changed under it; the same asked again went through.
+export function resentOnce<A>(wakes: Wakes, ask: Effect.Effect<A, HostError>): Effect.Effect<A, HostError> {
+  return Effect.catch(ask, () =>
+    Effect.raceFirst(Effect.asVoid(wakes.next), Effect.sleep(RESEND_MS)).pipe(Effect.andThen(ask)), // timer: a retry after a failure
+  );
+}
+
 /// `pending`, unless a wake says it went out before the UI was away: then an error.
 export function unlessDropped<A, R>(wakes: Wakes, sent: number, pending: Effect.Effect<A, HostError, R>): Effect.Effect<A, HostError, R> {
   const dropped = wakes.until((w) => w.dropsRequest(sent)).pipe(Effect.flatMap((w) => Effect.fail(new HostError(w.network ? NETWORK : DROPPED))));
@@ -240,7 +261,8 @@ export class WakingHost implements Host {
       const r = { ...request, headers: request.headers.filter(([k]) => k.toLowerCase() !== HEDGE) };
       return hedged(this.wakes, this.inner, Effect.suspend(() => this.inner.fetch(r)));
     }
-    return Effect.suspend(() => unlessDropped(this.wakes, this.inner.nowMs(), this.inner.fetch(request)));
+    const once = Effect.suspend(() => unlessDropped(this.wakes, this.inner.nowMs(), this.inner.fetch(request)));
+    return resendable(request) ? resentOnce(this.wakes, once) : once;
   }
 
   fetchStream(request: HttpRequest): Effect.Effect<StreamResponse, HostError, Scope.Scope> {
