@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [8c6ec8f5d](https://github.com/AFK-surf/monoid/commit/8c6ec8f5d9d27621f82f9676b2aa39e1c4c42074) station: the mesh's base takes the connections, ca | 1.98 | 2.7 | 11.52 | 31.12 | 41.44 | 27.74 | 53.19 | 97.16 | 108.57 |
 | [dd8703938](https://github.com/AFK-surf/monoid/commit/dd87039384c912b79eced0ecf04443f593e28be6) test(mbui app): 添加账号 with three stations, and a ke | 1.98 | 2.7 | 11.52 | 31.12 | 41.44 | 27.73 | 53.19 | 97.4 | 110 |
 | [8e65df79d](https://github.com/AFK-surf/monoid/commit/8e65df79d68957c9231b4a2b1f99361a7aff570b) core: the base's words, host and traces its own: n | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.74 | 53.19 | 97.26 | 111.09 |
 | [0b084bbe9](https://github.com/AFK-surf/monoid/commit/0b084bbe9e7db0dad894ab0af7fbe8fba3e63a06) core: a vault is written on a station the workspac | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.85 | 116.71 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [85e118c8d](https://github.com/AFK-surf/monoid/commit/85e118c8df152588655f5e1ebb29b27b30d73c56) mbui app: no flight on a chat's page made as nodes | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 95.57 | 108.35 |
 | [456c7fc15](https://github.com/AFK-surf/monoid/commit/456c7fc157392ed62e6305d554e5f7ca5dfa9943) mbui: what covers a list's top said once; a pictur | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.55 | 101.4 |
 | [5982f1c24](https://github.com/AFK-surf/monoid/commit/5982f1c24116c685f2c43650d0984a32984a4151) station: a connection's streams taken in the order | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.14 | 108.84 |
-| [45bffd5e1](https://github.com/AFK-surf/monoid/commit/45bffd5e15c69ea83d3e1f8d12ea186d7232f5d6) mbui: a node drawn off exactly where it says so, b | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.44 | 107.22 |
