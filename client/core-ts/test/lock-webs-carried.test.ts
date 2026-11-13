@@ -43,7 +43,8 @@ const seedOf = (n: number) => {
 const SETTINGS = (keys: unknown) => ({ origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: keys });
 const DAY = 86400;
 
-async function setUp() {
+/// `flag`: the host offers the handover (by default), which alone lets a page be said before any chain moved.
+async function setUp(o: { flag?: boolean } = {}) {
   const g = grant();
   const base = ed();
   const k = key(MINE);
@@ -70,6 +71,7 @@ async function setUp() {
     const e = next("ws", null, 1000, "genesis", { owner: "s0", ...SETTINGS(g.keys), members, devices, passkeys: [], stations: [{ key: A, name: "a" }, { key: B, name: "b" }], gateways: [] });
     return { ws: signed(e as Omit<StationEntry, "sig">, owner.app.signer) as unknown as Entry };
   }, (host) => {
+    host.handOverByTests = o.flag !== false;
     now = Math.floor(host.nowMs() / 1000);
     host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(myLog)));
     host.storage.set("personal-signer-id", utf8(k.id));
@@ -197,6 +199,15 @@ for (const [name, k] of [["run out", "WX"], ["taken off the chain", "WD"], ["tak
     assert.ok(!w.webs().some((x) => x.id === w[k].hex), `${name}: not said`);
   });
 }
+
+test("a host that does not offer the handover, no chain moved: nothing said (a station or app from before `web` refuses a log holding one); once a chain moved, said", async () => {
+  const w = await setUp({ flag: false });
+  assert.equal((await w.grantAsked()).error, undefined);
+  assert.deepEqual(w.webs(), [], "nothing said");
+  await w.handOver();
+  assert.equal((await w.grantAsked()).error, undefined);
+  assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said once the chain moved");
+});
 
 test("said before the handover: in force after it, let in by both stations, nobody asked again", async () => {
   const w = await setUp();

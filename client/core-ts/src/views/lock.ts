@@ -1727,10 +1727,14 @@ export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouche
 /// chain this device checked itself (`checkLock`, by its clock), not turned off, that binds `sub` to the lock begun by
 /// `genesis`, each `web` device of theirs it names, not run out, nor taken off it; a chain that moved too (it is
 /// frozen as it was and still names them, so a page comes back as its person next does something on their app). One
-/// a page, its `exp` the latest of the chains', `by` the key that signed the entry that named it so there.
+/// a page, its `exp` the latest of the chains', `by` the key that signed the entry that named it so there. None until
+/// `web` may be written: a station or app from before `web` refuses a log holding one whole (rules/AGENTS.md: nothing
+/// writes it until its build has been out seven days), so only where a chain of theirs moved, or on a host that offers
+/// the handover (`handOverByTests`, as `handOver`), which is what moves one yet.
 export function websIn(inner: Inner, sub: string, genesis: string): ChainWeb[] {
   const out = new Map<string, ChainWeb>();
   const at = now(inner);
+  if (inner.host.handOverByTests !== true && !inner.workspaces.owned().some(([ws, owner]) => owner === sub && movedHere(inner, ws))) return [];
   for (const [ws, owner] of inner.workspaces.owned()) {
     const h = held(inner, ws);
     if (owner !== sub || !h?.head) continue;
