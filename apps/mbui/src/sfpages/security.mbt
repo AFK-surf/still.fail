@@ -46,9 +46,7 @@ pub fn security_node(
             out.push("pair")
           }
           // (what was just done and is not in effect: first after the state)
-          if items(l, "pending").length() > 0 {
-            out.push("pending")
-          }
+          pending_keys(l, out)
           out.push("people")
           out.push("stations")
           out.push("web")
@@ -58,9 +56,7 @@ pub fn security_node(
         }
         Some(_) => {
           out.push("off")
-          if items(l, "pending").length() > 0 {
-            out.push("pending")
-          }
+          pending_keys(l, out)
           out.push("signing")
         }
       }
@@ -91,7 +87,8 @@ pub fn security_node(
         "signing" => signing_node(b)
         "on" => lock_on_node(b, lock)
         "pair" => pair_node(b, core, ws, lock)
-        "pending" => pending_node(b, core, ws, lock)
+        "pending" => @sf.section_heading_node(b, fn() { text(lock(), "pendingText") })
+        k if k.has_prefix(pending_key) => pending_node(b, core, ws, lock, k.unsafe_substring(start=pending_key.length(), end=k.length()))
         "people" => people_node(b, core, ws, lock)
         "stations" => stations_node(b, core, ws, lock, stint)
         "web" =>
@@ -281,16 +278,51 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
 }
 
 ///|
-/// 以下改动还没有生效: the changes this device made that no station took yet (the core's `pending`, oldest first, of the
-/// workspace's lock and the person's own alike), a row each by its id, so one going leaves the others where they are.
-fn pending_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?) -> Unit {
-  @sf.section_node(parent, fn() { text(lock(), "pendingText") }, fn(s) {
-    sec_group_node(s, fn(g) {
-      g.each(fn() { items(lock(), "pending") }, fn(x) { text(Some(x), "id") }, fn(row, x) {
-        sec_pending_node(row, core, ws, fn() { Some(x.get()) })
-      })
-    })
-  })
+/// 以下改动还没有生效, as the page's list's blocks (`out`, after what is there): its heading, then each change this
+/// device made that no station took yet (the core's `pending`, oldest first, of the workspace's lock and the person's
+/// own alike) a block of its own by its id, a row a piece of the section's card (a block is a row: apps/mbui/AGENTS.md),
+/// so one going leaves the others where they are; none while there are none.
+fn pending_keys(l : Json?, out : Array[String]) -> Unit {
+  let rows = items(l, "pending")
+  if rows.length() > 0 {
+    out.push("pending")
+    for r in rows {
+      out.push(pending_key + text(Some(r), "id"))
+    }
+  }
+}
+
+///|
+/// A pending change's block's key: this, then its id.
+let pending_key : String = "pending/"
+
+///|
+/// The pending change `id` as `lock` says it now, a piece of the section's card (which piece by where it stands among
+/// them now: the top, one between, the foot, the whole card), the rows 12 apart wide (sec_rows').
+fn pending_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?, id : String) -> Unit {
+  // (where it stands and what it says, as the core says them; gone, as they last were, while its block makes its way
+  // out)
+  let last : Ref[(@sf.CardPiece, Json?)] = Ref((@sf.CardPiece::CardWhole, None))
+  let now = fn() {
+    let rows = items(lock(), "pending")
+    for j, r in rows {
+      if text(Some(r), "id") == id {
+        last.val = (@sf.card_piece_of(j, rows.length()), Some(r))
+      }
+    }
+    last.val
+  }
+  // (as tall as its block, its piece of the card in it as tall: card_piece_node)
+  parent.grow(Is(1.0)) |> ignore
+  @sf.card_piece_node(
+    parent,
+    fn() { now().0 },
+    wide_card=true,
+    wide_gap=sec_rows_gap,
+    fn(k) {
+      sec_pending_node(k, core, ws, fn() { now().1 })
+    },
+  )
 }
 
 ///|
@@ -1226,6 +1258,10 @@ let sec_point_rest : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color
 /// what it is the meta's 12 muted 6 after it); a person's devices 42 in, 8 apart.
 // kept across runs: a value (no field of it changes)
 let sec_rows : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// sec_rows' gap, over a pending change's piece of the card but the first (pending_node).
+let sec_rows_gap : Double = 12.0
 
 ///|
 /// A narrow row's title, taking what its first line leaves what is at its end.

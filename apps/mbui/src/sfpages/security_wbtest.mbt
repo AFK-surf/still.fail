@@ -383,6 +383,66 @@ test "安全, at each width and with either hand: a change gone as the core says
 }
 
 ///|
+/// The fixture's pending changes by id, each by words of its sentence.
+let pending_words : Array[(String, String)] = [
+  ("p1", "移除设备 林的"),
+  ("p2", "把 Ana 改为"),
+  ("p3", "续期 Chrome"),
+]
+
+///|
+/// The corners of the piece of the section's card change `id` is drawn on (the smallest ground drawn round its
+/// sentence: top left, then round it), and whether they are what its place among `ids` makes them: the first rounded
+/// at the top, the last at the foot, one alone both, none between.
+fn pending_corners_wrong(t : @ui.Tester, ids : Array[String], at : String) -> Array[String] {
+  let wrong = []
+  let rects = t.drawn_rect_corners().filter(fn(r) { (r.4 & 0xFFL) > 0L })
+  for j, id in ids {
+    guard pending_words.search_by(p => p.0 == id) is Some(k) else { continue }
+    guard t.rect_of(pending_words[k].1) is Some((x, y, w, h)) else {
+      wrong.push("\{at} \{id}: not drawn")
+      continue
+    }
+    let round = rects.filter(fn(r) { r.0 <= x && r.1 <= y && r.0 + r.2 >= x + w && r.1 + r.3 >= y + h })
+    guard round.length() > 0 else {
+      wrong.push("\{at} \{id}: no ground round it")
+      continue
+    }
+    let mut piece = round[0]
+    for r in round {
+      if r.2 * r.3 < piece.2 * piece.3 {
+        piece = r
+      }
+    }
+    let (tl, tr, br, bl) = piece.5
+    let top = j == 0
+    let foot = j == ids.length() - 1
+    let ok = (tl > 0.0) == top && (tr > 0.0) == top && (br > 0.0) == foot && (bl > 0.0) == foot
+    if !ok {
+      wrong.push("\{at} \{id} (\{j + 1} of \{ids.length()}): corners \{tl}, \{tr}, \{br}, \{bl}")
+    }
+  }
+  wrong
+}
+
+///|
+test "安全, at each width and with either hand: a change taken from the middle or the top leaves the card's corners right" {
+  for (w, platform) in page_cases {
+    for gone in [["p1", "p3"], ["p2", "p3"]] {
+      let t = setting_tester(Security, w, platform~, mode="settings-security-pending")
+      t.run_for(@ui.move_most_ms)
+      let at = "\{w} platform \{platform}"
+      let before = pending_corners_wrong(t, ["p1", "p2", "p3"], at)
+      assert_eq(before, [], msg=at)
+      @settings.fixture_pending_set(gone)
+      t.run_for(@ui.move_most_ms)
+      let after = pending_corners_wrong(t, gone, "\{at}, left \{Repr(gone)}")
+      assert_eq(after, [], msg=at)
+    }
+  }
+}
+
+///|
 test "安全, at each width and with either hand: a removal answered pending says its sentence, not 已移除" {
   for (w, platform) in page_cases {
     let said = "移除设备 林的 MacBook Pro：已记下，等 Maple 上线后生效"
