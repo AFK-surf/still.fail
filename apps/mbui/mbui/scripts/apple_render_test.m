@@ -25,8 +25,11 @@ static int failed;
 
 int main(void) {
   @autoreleasepool {
-    mlayer = [CAMetalLayer layer];
-    inflight = dispatch_semaphore_create(3);
+    CAMetalLayer *layer = [CAMetalLayer layer];
+    mb_render_init(layer);
+    CHECK(mlayer == layer);
+    CHECK(mlayer.framebufferOnly == YES);
+    CHECK(mlayer.opaque == YES);
     mb_render_set_size(400, 300, 2);
     CHECK(CGSizeEqualToSize(mlayer.drawableSize, CGSizeMake(800, 600)));
 
@@ -35,6 +38,10 @@ int main(void) {
     inst[1] = 20;
     inst[2] = 100;
     inst[3] = 50;
+    inst[16] = 0;
+    inst[17] = 0;
+    inst[18] = 400;
+    inst[19] = 300;
     float f[MB_INST] = {0};
     for (int i = 0; i < MB_INST; i++) f[i] = (float)inst[i];
     last_inst = f;
@@ -50,6 +57,42 @@ int main(void) {
 
     // An identical frame while shown is skipped.
     CHECK(same_as_shown(inst, 1, 0.1, 0.2, 0.3) == 1);
+    CHECK(glass_through(inst, 1) == 0);
+
+    // A frame with a visible hole (kind 9) turns mlayer.opaque off; once the hole leaves, mlayer.opaque is YES again.
+    double hole[MB_INST] = {0};
+    hole[0] = 10;
+    hole[1] = 20;
+    hole[2] = 100;
+    hole[3] = 50;
+    hole[5] = 9;
+    hole[16] = 0;
+    hole[17] = 0;
+    hole[18] = 400;
+    hole[19] = 300;
+    CHECK(glass_through(hole, 1) == 1);
+    last_inst = NULL;
+    mb_render_present(hole, 1, 0.1, 0.2, 0.3);
+    CHECK(mlayer.opaque == NO);
+    CHECK(shown_ok == 1);
+    mb_render_present(inst, 1, 0.1, 0.2, 0.3);
+    CHECK(mlayer.opaque == YES);
+    CHECK(shown_ok == 1);
+    free(last_inst);
+    last_cap = 0;
+
+    // Restore synthetic state for trim checks.
+    for (int i = 0; i < MB_INST; i++) f[i] = (float)inst[i];
+    last_inst = f;
+    last_count = 1;
+    last_bg[0] = 0.1;
+    last_bg[1] = 0.2;
+    last_bg[2] = 0.3;
+    shown_w = 400;
+    shown_h = 300;
+    shown_scale = 2;
+    shown_ok = 1;
+    canvas_ok = 1;
 
     // Trimming shrinks drawableSize to 1x1 and invalidates both canvas_ok and shown_ok; after mb_render_set_size
     // restores the full drawableSize, an identical frame must not be skipped by same_as_shown.

@@ -248,6 +248,7 @@ static double paced_hz, link_hz = -1;
 }
 
 - (BOOL)isFlipped { return YES; }
+- (BOOL)isOpaque { return self.layer ? self.layer.opaque : YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
 
 // The app's widgets for VoiceOver and whatever reads the screen: elements under the view (mb_host_a11y_tree), the
