@@ -989,6 +989,50 @@ test "a toast naming a long title with its 撤销: inside the screen, its 撤销
 }
 
 ///|
+test "a toast clear of the system's bars over the window: over its foot's, beside its sides' (a tablet's navigation bar, an iPhone Duo's column down its side), in the middle of the room they leave" {
+  // (2026-11-13 「不光是浮层，你看看那个 toast 之类的呢？」: on 中屏 and 大屏 a toast stood toast_bottom over the
+  // window's own foot, under a tablet's navigation bar or the home indicator, and in the middle of the whole window)
+  // (wide, then: top, right, foot, left)
+  for case in [(true, (24.0, 0.0, 48.0, 0.0)), (true, (24.0, 84.0, 20.0, 0.0)), (true, (0.0, 0.0, 0.0, 120.0)), (false, (40.0, 0.0, 34.0, 0.0))] {
+    let (wide, (top, right, foot, left)) = case
+    let calls : Array[Made] = []
+    let (w, h) = if wide { (1280.0, 800.0) } else { (390.0, 844.0) }
+    let t = if wide { wide_tester(calls) } else { wide_tester(calls, w~, h~, platform=2) }
+    t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":\{foot},\"left\":\{left},\"right\":\{right}}}")
+    t.run_for(@ui.move_most_ms)
+    let ((x, y, tw, th), _) = rested_toast(t, "已复制", "")
+    let msg = "\{Repr(case)}: toast \{Repr((x, y, tw, th))}"
+    assert_true(y + th <= h - foot - @sf.toast_bottom + 0.5, msg~)
+    assert_true(x >= left - 0.5 && x + tw <= w - right + 0.5, msg~)
+    // (in the middle of what the bars leave)
+    assert_true((x - left - (w - right - (x + tw))).abs() < 1.0, msg~)
+    t.run_for(@sf.toast_ms + @kit.presence_out_ms)
+  }
+}
+
+///|
+test "a toast naming a long title with its 撤销, the system's bars down the window's sides: as wide as what they leave less 16 each side at most, its 撤销 inside it" {
+  // (2026-11-13 「toast的宽度有考虑到safe area吗」: a phone on its side, its cutout and the home indicator at its
+  // sides; a wide window the bars leave 424 of)
+  for case in [(false, 390.0, 844.0, (0.0, 40.0, 21.0, 40.0)), (true, 1024.0, 768.0, (24.0, 300.0, 20.0, 300.0))] {
+    let (wide, w, h, (top, right, foot, left)) = case
+    let calls : Array[Made] = []
+    let t = if wide { wide_tester(calls, w~, h~) } else { wide_tester(calls, w~, h~, platform=2) }
+    t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":\{foot},\"left\":\{left},\"right\":\{right}}}")
+    t.run_for(@ui.move_most_ms)
+    let words = "已归档「把首页对话列表改成按天分组并且在每一组的标题里写上那天的日期和星期几，再把置顶的对话单独放在最上面」"
+    let ((x, y, tw, th), button) = rested_toast(t, words, "撤销")
+    let (bx, by, bw, bh) = button.unwrap()
+    let msg = "\{Repr(case)}: toast \{Repr((x, y, tw, th))}"
+    // (held to its most: the room the bars leave less 16 each side, narrower than toast_max)
+    assert_true(w - left - right - 32.0 < @sf.toast_max, msg~)
+    assert_true(x >= left + 16.0 - 0.5 && x + tw <= w - right - 16.0 + 0.5, msg~)
+    assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{msg} \{Repr(button)}")
+    t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
+  }
+}
+
+///|
 test "a toast naming a title that wraps: its 撤销 whole, as wide as beside a short one, the title giving way" {
   // (2026-10-28 「归档某个 session 时出现撤销按钮变成了点点点」: on the phone a two-line title squeezed the button, its
   // words cut to their ellipsis; the row shrank both by their width, the button's least only its padding)

@@ -5,7 +5,7 @@
 /// What a write said as the window's tree's nodes (made once: @kit.toaster_node in the library's look,
 /// @sf.toast_look_node): the toast said now (toast_later), each saying its own toast (its id its saying's), what its
 /// action does its own (run as its button is pressed, once, and the toast goes), gone by itself (its time out, swiped
-/// away) only if it is still the one said; `bottom` over the window's foot, the frame's to say as it changes. The node.
+/// away) only if it is still the one said; `bottom` over what the system's bars leave of the window's foot, the frame's to say as it changes. The node.
 pub fn toasts_node(parent : @view.View, bottom : () -> Double) -> @view.View {
   // (the saying a toast is of, by its id)
   let of = fn(id : String) -> ToastSaid? {
