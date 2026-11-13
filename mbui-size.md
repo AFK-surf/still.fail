@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d207ee613](https://github.com/AFK-surf/still.fail/commit/d207ee61367b15b57e665c43629f73f0c6d97bf8) mbui app: center chat top bar title inside touch w | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 98.58 |
 | [5a3a0d1b8](https://github.com/AFK-surf/still.fail/commit/5a3a0d1b87de00ead534de221c99feb119c23916) app: the chat's composer made beside a sliding pan | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 104.52 |
 | [bcb03cad9](https://github.com/AFK-surf/still.fail/commit/bcb03cad986d199c7981d46cf880f8aac08c9dbc) cloud: send traces and logs to Google Cloud instea | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.29 | 52.22 | 94 | 97.25 |
 | [0adf038a4](https://github.com/AFK-surf/still.fail/commit/0adf038a4f2d428eb86a4883f562fed61b2c1500) mbui: a page's list's ask is taken only by a fill  | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.29 | 52.22 | 94 | 106.12 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f55d44fbd](https://github.com/AFK-surf/still.fail/commit/f55d44fbd3bb9aa39c30c521b8547a12f64af8e5) locks: a change no station took is pending, said s | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.44 | 195.46 |
 | [0c2cefade](https://github.com/AFK-surf/still.fail/commit/0c2cefade414d76375cce92d44602bc8192faf61) mbui: a chat's page made as nodes opens where it w | 1.93 | 2.59 | 11.13 | 30.47 | 39.88 | 27.15 | 51.9 | 94.44 | 134.93 |
 | [b57eff00e](https://github.com/AFK-surf/still.fail/commit/b57eff00eee66af42e2e90be5c9895b7ff3bf75b) The last of the names from before: preview frames' | 1.93 | 2.59 | 11.13 | 30.47 | 39.88 | 27.15 | 51.9 | 94.36 | 200.59 |
-| [bb67b07b0](https://github.com/AFK-surf/still.fail/commit/bb67b07b03885ed3cfb571eb91958cf04cabc716) mbui: a mouse's drag scrolls and flings the tree's | 1.93 | 2.59 | 11.12 | 30.36 | 39.88 | 27.02 | 51.63 | 94.19 | 127.67 |
