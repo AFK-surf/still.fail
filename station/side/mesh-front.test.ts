@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createInterface } from "node:readline";
 import { withFront } from "../src/mesh/front.ts";
-import { loadMesh } from "../src/mesh/native.ts";
+import { loadMesh, type Stream } from "../src/mesh/native.ts";
 
 const PIPE_END = 0xffff_fffe;
 
@@ -55,7 +55,7 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
         c.write(JSON.stringify({ id: msg.id, ok: [] }) + "\n");
       } else if (msg.op === "accept") {
         nextAccept.resolve((ok) => c.write(JSON.stringify({ id: msg.id, ok }) + "\n"));
-      } else if (msg.op === "openBi") {
+      } else if (msg.op === "openBi" || msg.op === "openUni") {
         c.write(JSON.stringify({ id: msg.id, ok: { stream: nextStream++ } }) + "\n");
         openBiReplied.resolve();
       } else if (msg.op === "conn.closed") {
@@ -130,4 +130,23 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   await conn2.closed();
   await pendingOpen;
   await orphanClosed;
+
+  // 5. A send-only stream's read side ends normally; its write side remains usable afterward.
+  const accepting3 = endpoint.accept();
+  (await waitAccept())({ conn: 3, remote: "33".repeat(32), alpn: "74657374", via: null, paths: [], stats: { txBytes: 0, rxBytes: 0 } });
+  const conn3 = (await accepting3)!;
+  const opening = (conn3 as typeof conn3 & { openUni(): Promise<Stream> }).openUni();
+  const uniSocket = connect(streamsPath);
+  const chunks: Buffer[] = [];
+  uniSocket.on("data", (chunk: Buffer) => chunks.push(chunk));
+  const uniEnded = new Promise<void>((resolve) => uniSocket.once("end", resolve));
+  await new Promise<void>((resolve) => uniSocket.once("connect", resolve));
+  uniSocket.write(streamHead(3, 21, 1));
+  uniSocket.end();
+  const uni = await opening;
+  await assert.rejects(uni.read(), /the stream's way to the front ended/);
+  await uni.write(Buffer.from("one way"));
+  await uni.finish();
+  await uniEnded;
+  assert.deepEqual(Buffer.concat(chunks), Buffer.concat([frame(Buffer.from("one way")), endFrame()]));
 });

@@ -225,6 +225,28 @@ test("the front rebinds its fixed port when the previous endpoint has open strea
   }
 });
 
+test("a front's send-only stream stays writable after its read side closes", { skip }, async () => {
+  const addon = loadMesh();
+  const f = await front();
+  const station = await bindOn(withFront(addon, f.socket), randomBytes(32));
+  const device = await bindOn(addon, randomBytes(32));
+  try {
+    const accepting = station.accept();
+    const theirs = await device.connect(addrOf(station), ALPN);
+    const conn = (await accepting)!;
+    const uni = await (conn as Connection & { openUni(): Promise<Stream> }).openUni();
+    // The front has no incoming half for this stream. Wait for that EOF before writing.
+    await assert.rejects(uni.read(), /the stream's way to the front ended/);
+    await uni.write(Buffer.from("one way"));
+    await uni.finish();
+    theirs.close(0, "");
+  } finally {
+    await device.close();
+    await station.close();
+    await f.stop();
+  }
+});
+
 test("a front that ended, another in its place: the Node links to it again and takes what comes", { skip }, async () => {
   const addon = loadMesh();
   const dir = mkdtempSync(join(tmpdir(), "mbm-"));

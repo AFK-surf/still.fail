@@ -256,7 +256,8 @@ class FrontStream implements Stream {
       this.#parse(d);
     });
     this.#socket.on("end", () => {
-      if (!this.#over && !this.#socket.writableEnded) this.#socket.end();
+      // A send-only stream has no read side, so its normal EOF must not close its write side.
+      if (this.#both && !this.#over && !this.#socket.writableEnded) this.#socket.end();
       this.#came(new Error("the stream's way to the front ended"));
     });
     this.#socket.on("close", () => this.#came(new Error("the stream's way to the front ended")));
