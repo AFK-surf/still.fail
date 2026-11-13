@@ -1138,9 +1138,10 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   picked.to = match sel_spot_at(laid, x, y) {
     Some((t, off)) =>
       match picked.word {
-        // a finger sliding on from the word its hold picked: by words, that word kept whole (Pick::slide's)
+        // a finger sliding on from the word its hold picked: by words as its hold finds them (a space the word beside
+        // it: finger_word_at), that word kept whole (Pick::slide's)
         Some((ws, we)) => {
-          let (s, e) = word_at(t.text, off)
+          let (s, e) = finger_word_at(t.text, off)
           let start = now({ base: t.base, off: s, at: [] })
           if spot_cmp(start, now(ws)) < 0 {
             picked.from = now(we)

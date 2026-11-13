@@ -130,7 +130,7 @@ fn Ctx::finger_pick(self : Ctx, t : SelTarget, x : Double, y : Double) -> Unit {
   finger_held.val = self.press_at
   let text = t.text
   let off = imax(0, imin(t.offset_at(x, y), text.length()))
-  let (s, e) = word_at(text, off)
+  let (s, e) = finger_word_at(text, off)
   if e <= s {
     return
   }
@@ -150,6 +150,55 @@ fn Ctx::finger_pick(self : Ctx, t : SelTarget, x : Double, y : Double) -> Unit {
   self.take_press()
   haptic(LongPress)
   picked_told()
+}
+
+///|
+/// The word a finger held at offset `off` of `text` picks (word_at): held on spaces between words, the word next to
+/// them, the one before first, else the one after, as iOS's and Android's text pick it (a space alone is of no use to
+/// anyone); none where there is only space.
+fn finger_word_at(text : String, off : Int) -> (Int, Int) {
+  let n = text.length()
+  if n == 0 {
+    return (0, 0)
+  }
+  // (spaces, in the text's units as its offsets are: the ideographic one too)
+  let blank = fn(k : Int) {
+    let c = text.at(k).to_int()
+    c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D || c == 0x3000
+  }
+  // (a word as the system finds it, without the spaces it may hold at its ends: a word with its space after it)
+  let word = fn(k : Int) {
+    let (s, e) = word_at(text, k)
+    let mut s = s
+    let mut e = e
+    while s < e && blank(s) {
+      s = s + 1
+    }
+    while e > s && blank(e - 1) {
+      e = e - 1
+    }
+    (s, e)
+  }
+  let i = imax(0, imin(off, n - 1))
+  if !blank(i) {
+    return word(i)
+  }
+  let mut l = i - 1
+  while l >= 0 && blank(l) {
+    l = l - 1
+  }
+  if l >= 0 {
+    return word(l)
+  }
+  let mut r = i + 1
+  while r < n && blank(r) {
+    r = r + 1
+  }
+  if r < n {
+    word(r)
+  } else {
+    (0, 0)
+  }
 }
 
 ///|
