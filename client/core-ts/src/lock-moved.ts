@@ -143,11 +143,16 @@ export function lackingOf(ws: string, chains: Iterable<readonly [string, readonl
 export type Settings = { origins: string[]; rp_id: string; cloud_keys: unknown };
 export type InForce = { said: "chain" | "on" | "off" | "waiting"; root: string | null; f: Folded; settings?: Settings };
 
+/// How often `inForce` was run: what the rules' state costs, counted for test/lock-moved.test.ts (views/lock.ts makes
+/// it once while what it is made of stands, `inForceOf`).
+export const made: { count: number } = { count: 0 };
+
 /// What workspace `ws` is in force by the chain held (`entries`, its active chain), each person log's active chain
 /// kept here (by its genesis hash), the bodies kept and this device's clock (`nowMs`). `name`: a station's name by its
 /// key where its chain moved (a `station` body has none; what the workspace's view lists, deciding nothing), else its
 /// key's first characters.
 export function inForce(ws: string, entries: readonly Entry[], chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], nowMs: number, name: (key: string) => string | undefined = () => undefined): InForce {
+  made.count++;
   const root = movedRoot(entries);
   if (root === null) return { said: "chain", root: null, f: fold(entries) };
   const now = Math.floor(nowMs / 1000);
