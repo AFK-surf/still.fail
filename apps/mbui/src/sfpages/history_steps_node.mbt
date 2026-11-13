@@ -206,7 +206,7 @@ fn steps_list_node(
         place~,
         // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
         at_once=true,
-        near_top=(1.0, wants_older, ask_older),
+        near_top=(0.5, wants_older, ask_older),
         fn(slot, k) {
           slot.pick(fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {
             guard picked.row is Some(row) else { return }
