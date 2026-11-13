@@ -92,7 +92,9 @@ jobs:
           sh .github/release-desktop.sh --stable
           build=$(git rev-list --count HEAD)
           cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-stable"}
-          work=${WORK:-"$cache/work"}
+          # (where scripts/beta.sh of the release's checkout builds: beside libs/mbui once mbui is there)
+          work=$cache/tree/apps/mbui; [ -d "$GITHUB_WORKSPACE/libs/mbui" ] || work=$cache/work
+          work=${WORK:-$work}
           if [ "${MBUI_FRESH:-}" = 1 ]; then work="$GITHUB_WORKSPACE/apps/mbui"; fi
           # The checkout is the reviewed release, which can be older than this workflow. Use this workflow's helper.
           git show "$GITHUB_SHA:scripts/release-put.sh" > "$RUNNER_TEMP/release-put-cleanup.sh"
@@ -138,8 +140,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
+            libs/mbui/_build
+            libs/mbui/out
           key: mbui-win-build-mono-${{ needs.plan.outputs.sha }}
           restore-keys: mbui-win-build-mono-
       - uses: actions/cache/restore@v4

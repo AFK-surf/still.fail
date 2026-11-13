@@ -1,8 +1,8 @@
 # Working on still.fail's apps (for agents)
 
 This is still.fail's app on every platform (README.md: which app is built), written in mbui, which is in this
-repository at `mbui/` (no pin: a change to mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md`
-applies here as well; what follows is particular to this app.
+repository at `libs/mbui` (no pin: a change to mbui and to the app is one pull request, mbui's side built and tested on
+its own). mbui's own `libs/mbui/AGENTS.md` applies here as well; what follows is particular to this app.
 
 ## The terms (术语)
 
@@ -32,7 +32,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What the app looks like and how it moves is what it does now; a change means to differ and says why. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
-- Comments here and in `mbui/` that name a `.kt` file, `apps/android/…` or `still.fail … apps/android` mean the Kotlin
+- Comments here and in `libs/mbui/` that name a `.kt` file, `apps/android/…` or `still.fail … apps/android` mean the Kotlin
   Android app's (gone in #2547: `git show 5065f823b^:apps/android/…`); `apps/desktop/…` the Electron app's (gone in
   #2182: `git show eba1e7f47^:apps/desktop/…`); a `web/src/…` file that is not there any more, the React web app's
   (`git show 4577000fd7:web/src/…`). They say where a way of doing a thing came from; where they name a
@@ -145,7 +145,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 ## Made once, as nodes
 
 - The app is moving off the old immediate-mode view (`Ctx`, built again each frame) onto the window's tree, made once
-  (mbui's `mbui/src/view`; `mbui/AGENTS.md`, Two views). What is new or rewritten is nodes: a page is `@sf.page_node`, a
+  (mbui's `libs/mbui/src/view`; `libs/mbui/AGENTS.md`, Two views). What is new or rewritten is nodes: a page is `@sf.page_node`, a
   panel `@sf.panel_nodes` (drawn on 小屏 as a sheet from the foot), a long list `View::each` in what scrolls
   (`View::scrolls_window`); the library's parts are its `*_node.mbt` ones. A press does its work in its handler (`on_press`, `on_pick`, `on_change`).
 - A page's list makes a block only while it shows, so a block is a row, not a group of them: a card of a long list
@@ -265,14 +265,14 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## The host is asked through mbui/hostapi
 
-- App code asks its host through `@hostapi` (or `@ui`), never imports mbui's host package (`mbui/src/host`): only a
+- App code asks its host through `@hostapi` (or `@ui`), never imports mbui's host package (`libs/mbui/src/host`): only a
   main (`src/stillfail`, the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
   (`TARGETS=native scripts/test.sh`, CI's check-mbui native). detlint's `host-import` holds it.
 
 ## Time is declared
 
 - What the app shows is tested in the Tester (`src/sfapp`, `src/sfreplay` replaying recorded core tapes): walk to it,
-  say the moment, assert, as mbui's rules say. `detlint.json` (run with `mbui/scripts/detlint`) counts the waits left
+  say the moment, assert, as mbui's rules say. `detlint.json` (run with `libs/mbui/scripts/detlint`) counts the waits left
   and only lets them fall.
 - What the host gives the app as it runs (its window and scale, the system and its settings, its time zone) is kept in
   a recorded trace (`{"settings":…}`, mbui's `@ui.trace_settings`) and given back by its replay, never a default in its
@@ -281,7 +281,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## Where the tests run (the user, 2026-11-08)
 
-- The whole suite (`scripts/test.sh`, `mbui/scripts/test.sh`) is the PR's CI's: native, side by side, five minutes.
+- The whole suite (`scripts/test.sh`, `libs/mbui/scripts/test.sh`) is the PR's CI's: native, side by side, five minutes.
   On Studio or a laptop it is wasm-gc in a row, half an hour and more, with every other agent queued behind it, so
   both scripts refuse outside CI. There run `check`, detlint and the test files the change touches
   (`moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt`), and a bench when it is a speed change.
@@ -303,21 +303,21 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 ## Warnings
 
 - A compiler warning is an error or off, never left a warning (the user, 2026-11-11): `warnings` in `moon.mod` and
-  `mbui/moon.mod`, the same line. Why: moon keeps no diagnostics, so a package that printed a warning is type-checked
+  `libs/mbui/moon.mod`, the same line. Why: moon keeps no diagnostics, so a package that printed a warning is type-checked
   again on every `moon check` (8 s with nothing changed; 0.1 s when none is printed), and the tree's ~5800 were read by
   nobody.
 - Off for good: 33, a line past 65535 columns (the fonts' bytes and kept data are written on one line on purpose);
   79, said at every `derive` of a public type and stopped only by an `extend` declaration for each trait of each type
   (~600 lines of boilerplate); and 29, an unused package, since an import kept for its effect (every main's of
-  mbui's host, `mbui/src/host`) or for one target's files cannot be told from an unused one in a `moon.pkg`.
+  mbui's host, `libs/mbui/src/host`) or for one target's files cannot be told from an unused one in a `moon.pkg`.
 - A value shown for a person who debugs is `Repr(x)` or `#derive(Debug)`; `Show` is for words meant to be read as they
   are written, by hand. A text that is itself a value (a key, a line a script or a test reads) and held an option, an
-  array or a rectangle is written by ui's `some_text`, `list_text`, `rect_text` (`mbui/src/ui/shown_text.mbt`).
+  array or a rectangle is written by ui's `some_text`, `list_text`, `rect_text` (`libs/mbui/src/ui/shown_text.mbt`).
 - What is kept unused for a reason says so where it is declared: `#warnings("-unused_value")` (a function, a derive),
   `-unused_field`, `-unused_constructor` or `-struct_never_constructed` on that declaration alone, the reason on the
   line above (its tests alone use it; not used by the app yet; a state matched only by `_`). On a struct it hushes every
   field's, so the reason names the field. Anything else unused is deleted.
-- The modules with a `moon.mod` of their own (`mbui/tools`, `tools`, `mbui/bench/signals`) carry the same kind of line.
+- The modules with a `moon.mod` of their own (`libs/mbui/tools`, `tools`, `libs/mbui/bench/signals`) carry the same kind of line.
 - CI's MoonBit is the latest release, taken each hour (`.github/workflows/mbui-moonbit.yml`), so a release that
   deprecates something, or warns of something new, fails every pull request with no commit of ours, till its places are
   mended: taken as it is (the user, 2026-11-12: 继续跟最新), whoever meets it first mends it. Check with the MoonBit CI

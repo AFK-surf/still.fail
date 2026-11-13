@@ -131,8 +131,8 @@ jobs:
         id: build-cache
         with:
           path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
+            libs/mbui/_build
+            libs/mbui/out
           key: mbui-win-build-a-${{ github.event.workflow_run.head_sha }}
           restore-keys: |
             mbui-win-build-a-
@@ -189,8 +189,8 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
+            libs/mbui/_build
+            libs/mbui/out
           key: ${{ env.BUILD_A_KEY }}
       - if: always() && env.HBC_A_KEY != '' && env.HBC_A_KEY != steps.hbc.outputs.cache-matched-key
         uses: actions/cache/save@v4

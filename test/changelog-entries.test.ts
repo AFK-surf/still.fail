@@ -70,10 +70,10 @@ test("the mbui app reaches Android and the desktop; its desktop's own pages and 
   const nothing = ["apps/mbui/e2e/traces/wide-new-chat.trace", "apps/mbui/src/sfkept/kept.mbt", "apps/mbui/src/sffilm/main.mbt", "apps/mbui/src/sfapp/search_fixture.mbt", "apps/mbui/src/sfapp/wide_panel_wbtest.mbt", "apps/mbui/scripts/motion/wide-switcher.drive", "apps/mbui/detlint.json", "client/core-ts/scripts/kept-answers.ts"];
   assert.deepEqual(partsOf([...desk, ...nothing]), ["desktop"]);
   assert.deepEqual(partsOf(["apps/mbui/src/sfapp/chat.mbt", ...nothing]), ["android", "desktop"]);
-  assert.deepEqual(partsOf(["apps/mbui/mbui/src/ui/text.mbt"]), ["android", "desktop"]);
-  assert.deepEqual(partsOf(["apps/mbui/android/app/src/main/java/dev/mbui/Crashes.java", "apps/mbui/mbui/src/host/android_host.c"]), ["android"]);
-  assert.deepEqual(partsOf(["apps/mbui/mbui/src/host/mac_app.m", "apps/mbui/src/host/win_core.c"]), ["desktop"]);
-  assert.deepEqual(partsOf(["apps/mbui/mbui/src/host/ios_app.m", "apps/mbui/ios/Info.plist"]), []);
+  assert.deepEqual(partsOf(["libs/mbui/src/ui/text.mbt"]), ["android", "desktop"]);
+  assert.deepEqual(partsOf(["apps/mbui/android/app/src/main/java/dev/mbui/Crashes.java", "libs/mbui/src/host/android_host.c"]), ["android"]);
+  assert.deepEqual(partsOf(["libs/mbui/src/host/mac_app.m", "apps/mbui/src/host/win_core.c"]), ["desktop"]);
+  assert.deepEqual(partsOf(["libs/mbui/src/host/ios_app.m", "apps/mbui/ios/Info.plist"]), []);
 });
 
 test("a commit's agent says the parts people see it in; one that does not, or names none of them, is refused", () => {

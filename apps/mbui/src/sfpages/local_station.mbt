@@ -1,6 +1,6 @@
 // 本机 Station (apps/desktop/src/main.ts localStation), one page in every frame: this
 // machine's station whoever runs it (the service the installer made, a process started by hand), as the system says
-// it (@ui.local_station), shown as a workspace's stations are: its dot, its name and
+// it (its native call `local_station`), shown as a workspace's stations are: its dot, its name and
 // how it is, 启动 where it is stopped, its menu (停止 or 启动, 重启, 更新到最新版, 打开日志, its data shown); under
 // them who runs it, its version, its workspace, its data, in lines as the room has them; the installer's progress and
 // what went wrong in it. None here: 添加这台 Mac where the app adds one. (The phone's copy, its rows a list each, is
@@ -19,8 +19,8 @@ pub fn local_station_node(
   width? : () -> Double,
 ) -> Unit {
   // (what the host says of it, as it said it last: a signal of that input, read again at each moment it is asked)
-  let host : @signals.Signal[String] = @signals.signal(@ui.local_station(), same=fn(a, b) { a == b })
-  let asked = fn() { host.set(@ui.local_station()) }
+  let host : @signals.Signal[String] = @signals.signal(@hostapi.app_said("local_station"), same=fn(a, b) { a == b })
+  let asked = fn() { host.set(@hostapi.app_said("local_station")) }
   fn again(at : Double) -> Unit {
     v.at_moment(at + @settings.local_read_ms, later=true, fn() {
       asked()
@@ -123,7 +123,7 @@ fn local_card_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
     match a {
       "update" => (core.local_install)(false)
       "start" => local_start(core, now)
-      _ => @ui.local_station_act(a)
+      _ => @hostapi.app_tell("local_station_act", a)
     }
     asked()
   }
@@ -344,7 +344,7 @@ fn local_startable(s : Json?) -> Bool {
 /// 启动 the station here (local_startable): its service started, else the installer without a token.
 fn local_start(core : Core, s : Json?) -> Unit {
   if field(s, "service") is Some(_) {
-    @ui.local_station_act("start")
+    @hostapi.app_tell("local_station_act", "start")
   } else {
     (core.local_install)(false)
   }
@@ -355,7 +355,7 @@ fn local_start(core : Core, s : Json?) -> Unit {
 /// stations' row) and is not running, but can be started from here (stopped, or being started, installed or updated):
 /// 启动 offered for it there, not a try at reaching it again. None for any other.
 pub fn local_stopped(address : String) -> Json? {
-  local_stopped_in(address, @ui.local_station())
+  local_stopped_in(address, @hostapi.app_said("local_station"))
 }
 
 ///|

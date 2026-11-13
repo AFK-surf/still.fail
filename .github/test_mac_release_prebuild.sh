@@ -7,11 +7,11 @@ root=$(mktemp -d)
 trap 'rm -rf "$root"' EXIT
 case_dir() {
   export GITHUB_WORKSPACE="$root/$1/work" RUNNER_TEMP="$root/$1/temp" RUNNER_TOOL_CACHE="$root/$1/tools"
-  mkdir -p "$GITHUB_WORKSPACE/apps/mbui/scripts" "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts" \
+  mkdir -p "$GITHUB_WORKSPACE/apps/mbui/scripts" "$GITHUB_WORKSPACE/libs/mbui/scripts" \
     "$GITHUB_WORKSPACE/apps/mbui/_build" "$RUNNER_TEMP" "$RUNNER_TOOL_CACHE"
   cat > "$GITHUB_WORKSPACE/apps/mbui/scripts/env.sh" <<'EOF'
 A="$GITHUB_WORKSPACE/apps/mbui"
-MBUI_DIR="$A/mbui"
+MBUI_DIR="$GITHUB_WORKSPACE/libs/mbui"
 export A MBUI_DIR
 EOF
   cat > "$GITHUB_WORKSPACE/apps/mbui/scripts/core.sh" <<'EOF'
@@ -37,13 +37,13 @@ case "$*" in
 esac
 EOF
   cp "$app_mac" "$GITHUB_WORKSPACE/apps/mbui/scripts/mac.sh"
-  cat > "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/chk" <<'EOF'
+  cat > "$GITHUB_WORKSPACE/libs/mbui/scripts/chk" <<'EOF'
 #!/bin/bash
 [ "$1" = logwait ] && [ "$2" = --gone ] || exit 12
 while [ -e "$3" ]; do sleep 0.1; done
 EOF
-  chmod +x "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/chk"
-  cat > "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/mac.sh" <<'EOF'
+  chmod +x "$GITHUB_WORKSPACE/libs/mbui/scripts/chk"
+  cat > "$GITHUB_WORKSPACE/libs/mbui/scripts/mac.sh" <<'EOF'
 #!/bin/bash
 set -eu
 [ "$*" = build ]

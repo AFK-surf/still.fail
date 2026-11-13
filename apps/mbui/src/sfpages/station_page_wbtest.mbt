@@ -730,7 +730,7 @@ fn this_mba_tester(own_station : String, w? : Double = 390.0) -> @ui.Tester {
   // (this machine's station as the system says it from the start: the host's)
   let t = setting_tester(Station("ws1/st2"), w, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st2")
-  }, host=fn(h) { h.set_local_station(own_station) })
+  }, host=fn(h) { h.set_app_said("local_station", own_station) })
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -748,7 +748,7 @@ test "this machine's station not running here: its page says it stopped and offe
     assert_true(t.query(Button, label="重试") is None, msg=at)
     t.click(Button, label="启动")
     t.frame()
-    let acts = t.local_acts()
+    let acts = t.app_told("local_station_act")
     assert_eq(acts.length(), 1, msg=at)
     assert_true(acts[0].has_prefix("update {"), msg="\{at}: \{acts[0]}")
   }
@@ -773,7 +773,7 @@ test "this machine's station being installed: its page says so, its 启动 busy;
   let t = setting_tester(Station("ws1/st2"), 390.0, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st1")
   }, host=fn(h) {
-    h.set_local_station((
+    h.set_app_said("local_station", (
       #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Willow","removed":false}}
       ),
     )

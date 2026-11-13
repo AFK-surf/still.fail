@@ -7,9 +7,9 @@ A=$(cd "$D/.." && pwd)
 # (moon: the toolchain the scripts use)
 . "$D/env.sh"
 T=$A/tools
-TOOLS_SCRIPTS=$A/mbui/scripts; . "$TOOLS_SCRIPTS/tooltarget.sh"
+TOOLS_SCRIPTS=$A/../../libs/mbui/scripts; . "$TOOLS_SCRIPTS/tooltarget.sh"
 B=$T/_build/$TT/release/build/sftools/icons/icons.$TX
-src=$(cd "$A" && find tools/icons tools/moon.mod tools/moon.work mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
+src=$(cd "$A" && find tools/icons tools/moon.mod tools/moon.work ../../libs/mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
 if [ ! -f "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
   (cd "$T" && env -u MOON_CC moon build --target $TT --release icons >&2) || { echo "icons: tools/icons did not build" >&2; exit 1; }
   echo "$src" > "$B.src"

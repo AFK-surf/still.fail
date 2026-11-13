@@ -1,4 +1,4 @@
-// Made by scripts/curves.ts from the app's apps/mbui/mbui/src/ui/motion.mbt: do not edit.
+// Made by scripts/curves.ts from the app's libs/mbui/src/ui/motion.mbt: do not edit.
 
 /** What comes (Out). */
 export const EASE_OUT = [0.2, 0.7, 0.2, 1] as const;

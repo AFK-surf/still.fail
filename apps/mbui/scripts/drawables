@@ -5,9 +5,9 @@
 D=$(cd "$(dirname "$0")" && pwd)
 A=$(cd "$D/.." && pwd)
 T=$A/tools
-TOOLS_SCRIPTS=$A/mbui/scripts; . "$TOOLS_SCRIPTS/tooltarget.sh"
+TOOLS_SCRIPTS=$A/../../libs/mbui/scripts; . "$TOOLS_SCRIPTS/tooltarget.sh"
 B=$T/_build/$TT/release/build/sftools/drawables/drawables.$TX
-src=$(cd "$A" && find tools/drawables tools/moon.mod tools/moon.work mbui/tools/re mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
+src=$(cd "$A" && find tools/drawables tools/moon.mod tools/moon.work ../../libs/mbui/tools/re ../../libs/mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
 if [ ! -f "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
   (cd "$T" && env -u MOON_CC moon build --target $TT --release drawables >&2) || { echo "drawables: tools/drawables did not build" >&2; exit 1; }
   echo "$src" > "$B.src"

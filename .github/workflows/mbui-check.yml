@@ -20,7 +20,7 @@ on:
       rates: { type: string, default: "" }
   push:
     branches: [main]
-    paths: ["apps/mbui/**", ".github/workflows/mbui-check.yml"]
+    paths: ["apps/mbui/**", "libs/mbui/**", ".github/workflows/mbui-check.yml"]
   # (once a day: sfapp's page tests all in one process, below)
   schedule:
     - cron: "53 3 * * *"
@@ -53,7 +53,7 @@ jobs:
   # into kept in the Actions cache by content (MBC_STORE: main's newest and a branch's own together): 667 tests,
   # ~170 s a part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the preview app (preview.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
-  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's: no macOS
+  # libs/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's: no macOS
   # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, pipeline.yml's desktop and preview.yml's ios). No ThinLTO
   # parts: the apps are not built with it (scripts/mbc's lto_for, 2026-10-24).
   native:
@@ -323,7 +323,7 @@ jobs:
       - name: How what moves goes
         if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
         run: |
-          [ "$MBUI_TEST_MOTION" != count ] || bash apps/mbui/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
+          [ "$MBUI_TEST_MOTION" != count ] || bash libs/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
           echo "MOTION_NAME=motion-$(echo "${PART:-app}-${{ matrix.group }}-${APP_PART:-}-${FPS:-default}" | tr '/ ' '__')" >> "$GITHUB_ENV"
           touch "$MOTION_OUT"
       - if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
@@ -419,7 +419,7 @@ jobs:
       - name: How what moves goes
         if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
         run: |
-          [ "$MBUI_TEST_MOTION" != count ] || bash apps/mbui/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
+          [ "$MBUI_TEST_MOTION" != count ] || bash libs/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
           echo "MOTION_NAME=motion-replay-${FPS:-default}" >> "$GITHUB_ENV"
           touch "$MOTION_OUT"
       - if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
@@ -491,7 +491,7 @@ jobs:
       - name: How what moves goes
         if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
         run: |
-          [ "$MBUI_TEST_MOTION" != count ] || bash apps/mbui/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
+          [ "$MBUI_TEST_MOTION" != count ] || bash libs/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
           echo "MOTION_NAME=motion-$(echo "${PART:-app}-${{ matrix.group }}-${APP_PART:-}-${FPS:-default}" | tr '/ ' '__')" >> "$GITHUB_ENV"
           touch "$MOTION_OUT"
       - if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
@@ -595,7 +595,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-        with: { sparse-checkout: apps/mbui/mbui/scripts }
+        with: { sparse-checkout: libs/mbui/scripts }
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with: { pattern: "motion-*", path: "${{ runner.temp }}/motion" }
@@ -607,7 +607,7 @@ jobs:
         run: |
           # (the app's jobs' alone: mbui's own, motion-mbui-*, are mbui-ci's)
           find "$RUNNER_TEMP/motion" -mindepth 1 -maxdepth 1 -type d ! -name 'motion-mbui-*' -exec find {} -type f \; | xargs -r cat > "$RUNNER_TEMP/motion.txt"
-          MOTION_BARS_FAIL=$STRICT bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "the app's bars against what 60, 120 and the default rate found" >> "$GITHUB_STEP_SUMMARY" ||
+          MOTION_BARS_FAIL=$STRICT bash libs/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "the app's bars against what 60, 120 and the default rate found" >> "$GITHUB_STEP_SUMMARY" ||
             { echo "::error title=$NAME::a bar to fall or a file to leave motion_counted: this job's summary says which, and the one line to change for each"; exit 1; }
 
   # On main, after a merge: what failed, at the rates or the default's, and what merged since the last run that went

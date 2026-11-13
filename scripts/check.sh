@@ -261,7 +261,7 @@ if part ts; then
     step "operation bindings" after core node client/core-ts/scripts/operations.ts --check
   fi
   # still.fail's colours are web/ui/src/palette.ts's (the app's palette made from it); the web's curves are the app's.
-  if touches '^web/ui/src/(palette|curves-data)\.ts$|^scripts/(palette|curves)\.ts$|^apps/mbui/src/sf/(palette_data|tokens)\.mbt$|^apps/mbui/mbui/src/ui/motion\.mbt$'; then
+  if touches '^web/ui/src/(palette|curves-data)\.ts$|^scripts/(palette|curves)\.ts$|^apps/mbui/src/sf/(palette_data|tokens)\.mbt$|^libs/mbui/src/ui/motion\.mbt$'; then
     step "palette and curves" sh -c 'node scripts/palette.ts --check && node scripts/curves.ts --check'
   fi
   # The app's UI fault categories are the core's (client/core-ts/src/ui-faults.ts).
@@ -287,7 +287,7 @@ if part ts; then
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
   # the Wasm side of the native host's calls as their declarations make it
-  if touches '^apps/mbui/(mbui/src/host|src/(core|stillfail|pinyin|sfreplay))/.*native\.mbt$|^apps/mbui/mbui/tools/wasmhost/'; then
+  if touches '^libs/mbui/src/host/.*native\.mbt$|^apps/mbui/src/(core|stillfail|pinyin|sfreplay)/.*native\.mbt$|^libs/mbui/tools/wasmhost/'; then
     step "wasm host calls" bash apps/mbui/scripts/wasm-app.sh check
   fi
   if touches '^(web/src|web/ui|apps/mbui/src)/'; then
@@ -439,7 +439,7 @@ if [ $full = 1 ]; then
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station: it and its tests run whenever it, one of its native parts or the words it says changed (station_paths:
   # scripts/plan.sh reads it from this line for CI's check-station).
-  station_paths='^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$|^scripts/station-slice\.sh$'
+  station_paths='^station/|^vendor/|^client/i18n/|^client/shell/|^libs/mbui/src/effect/|^rules/js/|^scripts/native\.ts$|^scripts/station-slice\.sh$'
   # Its tests' native parts, prebuilt (mesh addon, runner, the reader in MoonBit; on a Mac the Rust station's archive
   # command too, for the compatibility tests, which skip themselves without it: it is prebuilt for darwin alone).
   station_natives="mesh runner reader"
@@ -447,7 +447,7 @@ if [ $full = 1 ]; then
   if part station && touches "$station_paths"; then
     prep station deps station
     # Its programs in MoonBit (station/mb): what of them runs without a host (src/wire).
-    remembered "tests: station's MoonBit" "station/mb apps/mbui/mbui/src/effect apps/mbui/mbui/moon.mod" sh -c 'cd station/mb && moon test --target native src/wire && moon test --target native src/jsjson && moon test --target native src/nodepath && moon test --target native src/jscase'
+    remembered "tests: station's MoonBit" "station/mb libs/mbui/src/effect libs/mbui/moon.mod" sh -c 'cd station/mb && moon test --target native src/wire && moon test --target native src/jsjson && moon test --target native src/nodepath && moon test --target native src/jscase'
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
     # The station's time is its Clock's (写法): the machine's only through ops/fibers.ts' wall. Cursor's
     # driver (agents/cursor-bridge.mjs) and the sandbox bridge (agents/sandbox-bridge.mjs) run in processes of their own,
@@ -470,7 +470,7 @@ if [ $full = 1 ]; then
     slice=${STILLFAIL_STATION_SHARD:-}
     # (STILLFAIL_NODE_TEST_JOBS: that many files at a time rather than Node's own count)
     # shellcheck disable=SC2016 # the command's own variables, expanded by its shell
-    remembered "tests: station${slice:+ $slice}" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts scripts/station-slice.sh" after station env STATION_SLICE="$slice" STATION_NATIVES="$station_natives" sh -c 'cd station && files=$(sh ../scripts/station-slice.sh "${STATION_SLICE:-0/1}") && [ -n "$files" ] && node ../scripts/native.ts run $STATION_NATIVES -- node --import ./test/setup-env.mjs --test ${STILLFAIL_NODE_TEST_JOBS:+--test-concurrency="$STILLFAIL_NODE_TEST_JOBS"} --test-timeout=600000 $files'
+    remembered "tests: station${slice:+ $slice}" "station client/i18n client/shell vendor rules/js libs/mbui/src/effect scripts/native.ts scripts/station-slice.sh" after station env STATION_SLICE="$slice" STATION_NATIVES="$station_natives" sh -c 'cd station && files=$(sh ../scripts/station-slice.sh "${STATION_SLICE:-0/1}") && [ -n "$files" ] && node ../scripts/native.ts run $STATION_NATIVES -- node --import ./test/setup-env.mjs --test ${STILLFAIL_NODE_TEST_JOBS:+--test-concurrency="$STILLFAIL_NODE_TEST_JOBS"} --test-timeout=600000 $files'
   fi
   # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
   # typecheck and prepare both sides before checking and running it, including on a fresh checkout.

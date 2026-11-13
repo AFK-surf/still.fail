@@ -8,13 +8,13 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { constants, deflateRawSync, inflateRawSync, type ZlibOptions } from "node:zlib";
 
-// The desktop hosts' delta applier (apps/mbui/mbui/src/host/update_delta.h: its own inflate and SHA-256, in C) held to
+// The desktop hosts' delta applier (libs/mbui/src/host/update_delta.h: its own inflate and SHA-256, in C) held to
 // scripts/delta.ts, which makes the release's deltas, and to node's zlib: what it makes is byte for byte what the
 // reference makes, and whatever is wrong with a delta it refuses with a reason, never crashing (run under the address
 // and undefined-behaviour sanitizers where the compiler has them).
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const harness = join(root, "apps/mbui/mbui/src/host/update_delta_test.c");
+const harness = join(root, "libs/mbui/src/host/update_delta_test.c");
 const deltaTs = join(root, "scripts/delta.ts");
 const work = mkdtempSync(join(tmpdir(), "delta-c-test-"));
 process.on("exit", () => rmSync(work, { recursive: true, force: true }));

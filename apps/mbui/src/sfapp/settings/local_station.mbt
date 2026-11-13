@@ -11,9 +11,9 @@ pub fn local_station_managed() -> Bool {
 }
 
 ///|
-/// What the host says of this machine's station (@ui.local_station), read as it is now.
+/// What the host says of this machine's station (its native call `local_station`), read as it is now.
 fn local_station_json() -> Json? {
-  Some(@json.parse(@ui.local_station()) catch { _ => Json::null() })
+  Some(@json.parse(@hostapi.app_said("local_station")) catch { _ => Json::null() })
 }
 
 ///|

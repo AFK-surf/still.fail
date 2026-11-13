@@ -295,7 +295,7 @@ pub fn Flow::start(
   }
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {
-    t.set_local_station(r.local_station())
+    t.set_app_said("local_station", r.local_station())
   }
   // (the time of day the run's: its first event that has happened here (the app's first ask, made as it started) at
   // the run's moment of it, going on with the frames' clock from there, @ui.wall_ms)

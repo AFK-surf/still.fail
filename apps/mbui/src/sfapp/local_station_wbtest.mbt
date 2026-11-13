@@ -14,12 +14,12 @@ fn local_ask_of(act : String) -> (String, Json?) {
 test "本机 Station, none here: 添加这台 Mac asks the cloud for this workspace's token and runs the installer with it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station("")
+  t.set_app_said("local_station", "")
   app.nav.replace(Setting(@settings.Route::LocalStation))
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("本机没有单独安装的 station") is Some(_))
   // nothing run before it is asked for
-  assert_eq(t.local_acts(), [])
+  assert_eq(t.app_told("local_station_act"), [])
   let (x, y) = t.find("添加这台 Mac").unwrap()
   t.tap(x, y)
   t.frame()
@@ -32,7 +32,7 @@ test "本机 Station, none here: 添加这台 Mac asks the cloud for this worksp
   assert_true(text(Some(made[0].params), "account") != "")
   // (the made-up core answers with its token: settings/fixture.mbt)
   t.frame()
-  let acts = t.local_acts()
+  let acts = t.app_told("local_station_act")
   assert_eq(acts.length(), 1)
   let (verb, ask) = local_ask_of(acts[0])
   assert_eq(verb, "install")
@@ -62,13 +62,13 @@ test "添加这台 Mac in a workspace in safe mode: the installer is handed the 
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
-  t.set_local_station("")
+  t.set_app_said("local_station", "")
   app.nav.replace(Setting(@settings.Route::LocalStation))
   t.run_for(@ui.move_most_ms)
   let (x, y) = t.find("添加这台 Mac").unwrap()
   t.tap(x, y)
   t.frame()
-  let acts = t.local_acts()
+  let acts = t.app_told("local_station_act")
   assert_eq(acts.length(), 1)
   let (verb, ask) = local_ask_of(acts[0])
   assert_eq(verb, "install")
@@ -81,7 +81,7 @@ test "添加这台 Mac names the station after this machine, its .local cut" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.set_env("MBUI_MACHINE", "Pengs-Mac-Mini-2.local")
-  t.set_local_station("")
+  t.set_app_said("local_station", "")
   app.nav.replace(Setting(@settings.Route::LocalStation))
   t.run_for(@ui.move_most_ms)
   let (x, y) = t.find("添加这台 Mac").unwrap()
@@ -108,21 +108,21 @@ test "添加这台 Mac refused by the cloud: said why, nothing installed" {
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
-  t.set_local_station("")
+  t.set_app_said("local_station", "")
   app.nav.replace(Setting(@settings.Route::LocalStation))
   t.run_for(@ui.move_most_ms)
   let (x, y) = t.find("添加这台 Mac").unwrap()
   t.tap(x, y)
   t.frame()
   assert_eq(app.toast.get().words, "无法添加这台 Mac：只有 owner 和 admin 可以添加 station")
-  assert_eq(t.local_acts(), [])
+  assert_eq(t.app_told("local_station_act"), [])
 }
 
 ///|
 test "添加 station's sheet offers 添加这台 Mac while this machine has none: pressed, added here and 本机 Station shown" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station("")
+  t.set_app_said("local_station", "")
   app.nav.replace(Place("stations"))
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="添加 station")
@@ -133,7 +133,7 @@ test "添加 station's sheet offers 添加这台 Mac while this machine has none
   let made = calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect()
   assert_eq(made.length(), 1)
   assert_true(text(Some(made[0].params), "name") != "")
-  let acts = t.local_acts()
+  let acts = t.app_told("local_station_act")
   assert_eq(acts.length(), 1)
   assert_eq(local_ask_of(acts[0]).0, "install")
   assert_true(t.find("本机 Station") is Some(_))
@@ -143,7 +143,7 @@ test "添加 station's sheet offers 添加这台 Mac while this machine has none
 test "添加 station's sheet: no 添加这台 Mac where this machine has a station" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station((
+  t.set_app_said("local_station", (
     #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
     ),
   )
@@ -159,7 +159,7 @@ test "添加 station's sheet: no 添加这台 Mac where this machine has a stati
 test "本机 Station: the one here brought up to the latest release from its card's menu" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station((
+  t.set_app_said("local_station", (
     #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
     ),
   )
@@ -170,7 +170,7 @@ test "本机 Station: the one here brought up to the latest release from its car
   let (x, y) = t.find("更新到最新版").unwrap()
   t.tap(x, y)
   t.frame()
-  let acts = t.local_acts()
+  let acts = t.app_told("local_station_act")
   assert_eq(acts.length(), 1)
   let (verb, ask) = local_ask_of(acts[0])
   assert_eq(verb, "update")
@@ -182,7 +182,7 @@ test "本机 Station: the one here brought up to the latest release from its car
 test "本机 Station while the installer runs: how far, as a bar and its percent, and the step it said" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station((
+  t.set_app_said("local_station", (
     #|{"doing":"install","percent":42,"said":"正在下载 still.fail station"}
     ),
   )
@@ -214,9 +214,9 @@ test "built in still.fail's desktop app's place, the station that app ran here i
   new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, env=[("MBUI_OWN", "1")])
-  t.set_local_station(desktop_apps_station({}))
+  t.set_app_said("local_station", desktop_apps_station({}))
   @sfbase.local_station_carry_on()
-  let acts = t.local_acts()
+  let acts = t.app_told("local_station_act")
   assert_eq(acts.length(), 1)
   let (verb, ask) = local_ask_of(acts[0])
   assert_eq(verb, "update")
@@ -239,9 +239,9 @@ test "a station carried on only when still.fail's desktop app alone ran it" {
     new_run()
     let src = fixture("home")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, env=[("MBUI_OWN", "1")])
-    t.set_local_station(desktop_apps_station(more))
+    t.set_app_said("local_station", desktop_apps_station(more))
     @sfbase.local_station_carry_on()
-    if t.local_acts() != [] {
+    if t.app_told("local_station_act") != [] {
       fail("carried on, \{why}")
     }
   }
@@ -249,9 +249,9 @@ test "a station carried on only when still.fail's desktop app alone ran it" {
   new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
-  t.set_local_station(desktop_apps_station({}))
+  t.set_app_said("local_station", desktop_apps_station({}))
   @sfbase.local_station_carry_on()
-  assert_eq(t.local_acts(), [])
+  assert_eq(t.app_told("local_station_act"), [])
 }
 
 ///|
@@ -266,7 +266,7 @@ test "添加 station's sheet offers 添加这台 Mac when local data exists but 
     let (label, ws) = one
     let calls : Array[Made] = []
     let t = wide_tester(calls)
-    t.set_local_station((
+    t.set_app_said("local_station", (
       { "data": "/Users/test/.stillfail", "runner": "none", "installed": true, "workspace": ws } : Json
     ).stringify())
     app.nav.replace(Place("stations"))
@@ -299,7 +299,7 @@ test "添加 station's sheet joins via station.join when this machine is online 
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
-  t.set_local_station((
+  t.set_app_said("local_station", (
     {
       "data": "/Users/test/.stillfail",
       "runner": "service",
@@ -326,7 +326,7 @@ test "添加 station's sheet joins via station.join when this machine is online 
 test "添加 station's sheet disables 添加这台 Mac with reason when this machine's home needs security mode" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station((
+  t.set_app_said("local_station", (
     {
       "data": "/Users/test/.stillfail",
       "runner": "service",
@@ -348,7 +348,7 @@ test "添加 station's sheet disables 添加这台 Mac with reason when this mac
 test "添加 station's sheet hides 添加这台 Mac when station id is already in this workspace" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station((
+  t.set_app_said("local_station", (
     {
       "data": "/Users/test/.stillfail",
       "runner": "service",
@@ -377,7 +377,7 @@ fn local_with(ws : Json, runner? : String = "none", doing? : String = "") -> Str
 /// The 添加 station sheet opened over `src` with the host saying `said` of this machine.
 fn add_sheet_over(src : Source, said : String, platform? : Int = 0) -> @ui.Tester raise {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform~)
-  t.set_local_station(said)
+  t.set_app_said("local_station", said)
   app.nav.replace(Place("stations"))
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="添加 station")
@@ -399,7 +399,7 @@ test "添加 station's sheet: no 添加这台 Mac where it is in this workspace 
     let (label, said) = one
     let calls : Array[Made] = []
     let t = wide_tester(calls)
-    t.set_local_station(said)
+    t.set_app_said("local_station", said)
     app.nav.replace(Place("stations"))
     t.run_for(@ui.move_most_ms)
     t.click(Button, label="添加 station")
@@ -413,7 +413,7 @@ test "添加 station's sheet: no 添加这台 Mac where it is in this workspace 
 test "添加 station's sheet: a rig taken out of its workspace may be added as a station" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.set_local_station(local_with({ "id": "ws2", "name": "个人", "station": "st99", "removed": true, "rig": true }))
+  t.set_app_said("local_station", local_with({ "id": "ws2", "name": "个人", "station": "st99", "removed": true, "rig": true }))
   app.nav.replace(Place("stations"))
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="添加 station")
@@ -438,7 +438,7 @@ test "添加 station's sheet: this machine among joinable but its station not ru
   t.run_for(@ui.move_most_ms)
   assert_eq(calls.iter().filter(fn(m) { m.name == "station.join" }).collect().length(), 0)
   assert_eq(calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect().length(), 1)
-  assert_eq(local_ask_of(t.local_acts()[0]).0, "install")
+  assert_eq(local_ask_of(t.app_told("local_station_act")[0]).0, "install")
   assert_true(app.nav.top() == Setting(@settings.Route::LocalStation))
 }
 
@@ -464,7 +464,7 @@ test "添加 station's sheet: station.join refused, said under 添加这台 Mac,
   assert_eq(calls.iter().filter(fn(m) { m.name == "station.join" }).collect().length(), 1)
   assert_true(t.find("这台 station 暂时连不上，等它上线后再试") is Some(_))
   assert_true(@sf.presenting())
-  assert_eq(t.local_acts(), [])
+  assert_eq(t.app_told("local_station_act"), [])
 }
 
 ///|
@@ -472,7 +472,7 @@ test "添加 station's sheet on Windows and Linux: 添加这台电脑, its words
   for platform in [3, 5] {
     let calls : Array[Made] = []
     let t = wide_tester(calls, platform~)
-    t.set_local_station(local_with(Json::null()))
+    t.set_app_said("local_station", local_with(Json::null()))
     app.nav.replace(Place("stations"))
     t.run_for(@ui.move_most_ms)
     t.click(Button, label="添加 station")
@@ -503,7 +503,7 @@ test "a workspace's first station: 添加这台 Mac for a station here in anothe
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
-  t.set_local_station(local_with({ "id": "ws2", "name": "个人", "station": "st9", "removed": false }, runner="service"))
+  t.set_app_said("local_station", local_with({ "id": "ws2", "name": "个人", "station": "st9", "removed": false }, runner="service"))
   app.nav.replace(Setting(@settings.Route::Stations))
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("把本机已有的 station 加入这个 workspace") is Some(_))

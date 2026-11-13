@@ -1,4 +1,4 @@
-// still.fail's app (apps/mbui, the same one every device runs) in a browser: mbui's web host (apps/mbui/mbui/web/host.js)
+// still.fail's app (apps/mbui, the same one every device runs) in a browser: mbui's web host (libs/mbui/web/host.js)
 // draws it on a canvas, and the core it talks to is this page's, the web's own worker (src/core/worker.ts), given to it
 // as `globalThis.__mbcore` (mbui/core's js.mbt). What the app says is a message's JSON and maybe bytes beside it, as
 // on the native hosts (src/core/core_native.c there); what the worker says back goes to mbui's queue on the channel

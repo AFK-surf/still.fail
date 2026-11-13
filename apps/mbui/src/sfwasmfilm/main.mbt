@@ -212,7 +212,7 @@ pub fn draw() -> Int {
   t.set_frame_period(1000.0 / option_number(6))
   if option_number(10) == 1.0 { t.set_window_inset(true) }
   if option_number(9) > 0.0 { t.set_font_scale(option_number(9)) }
-  if option(8) != "" { t.set_local_station(option(8)) }
+  if option(8) != "" { t.set_app_said("local_station", option(8)) }
   let prepare = option(3)
   let script = option(4)
   let max = option_number(7).to_int()

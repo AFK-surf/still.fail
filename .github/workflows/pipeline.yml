@@ -803,7 +803,9 @@ jobs:
     if: ${{ !cancelled() && !failure() && ((github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true') || needs.plan.outputs.release_smoke == 'true') }}
     runs-on: macos-26
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 5
+    # (a run by hand compiles what main's store has none of whole: once the units' commands named mbui at libs/mbui,
+    # 2026-11-13, none of the store's were theirs, 441 of 831 units, cut at 5 on a push)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
@@ -1036,7 +1038,7 @@ jobs:
         run: |
           build=$(git rev-list --count HEAD)
           cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-beta"}
-          work=${WORK:-"$cache/work"}
+          work=${WORK:-"$cache/tree/apps/mbui"}
           if [ "${MBUI_FRESH:-}" = 1 ]; then work="$GITHUB_WORKSPACE/apps/mbui"; fi
           export STILLFAIL_RELEASE_CACHE_KEY="desktop/stillfail-beta-0.1.$build-arm64-mac.zip"
           export STILLFAIL_RELEASE_CACHE_SOURCE="$work/out/mac/stillfail-beta-$build-arm64-mac.zip"
@@ -1093,8 +1095,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
+            libs/mbui/_build
+            libs/mbui/out
           key: mbui-win-build-mono-${{ github.sha }}
           restore-keys: mbui-win-build-mono-
       - uses: actions/cache/restore@v4

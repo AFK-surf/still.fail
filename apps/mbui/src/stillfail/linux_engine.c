@@ -1,6 +1,9 @@
 // core_engine.m's Linux twin, put in its place by mbui's scripts/linux.sh for APP=stillfail (moon.pkg cannot pick stubs
 // per OS): the core in Hermes on the Rust shell (src/sfcore/linux_engine.c).
 #include "../sfcore/linux_engine.c"
+// this machine's station, the app's own native call (src/host/station_calls.h)
+#include "../host/linux_station.c"
+#include "../host/station_calls.h"
 
 // main.mbt asks it before it starts the core (core_engine.m has the same on Apple's systems): what keeps this file in the
 // link (moon links an app's stubs as an archive, and an object nothing refers to is left out, its engine's constructor

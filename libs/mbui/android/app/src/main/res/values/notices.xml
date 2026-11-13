@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A notification's colour (Notices.java), for an app that gives none of its own (an app's res, linked after mbui's,
+     says its own under this name). -->
+<resources>
+    <color name="mbui_notice">#FF5F6368</color>
+</resources>

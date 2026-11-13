@@ -378,6 +378,10 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
+  // the name its native views are served under (stillfail-preview://svc/…, https://preview.stillfail.invalid/…): what
+  // a station's service keeps in a view is kept by that name's origin, and the web's preview frame speaks by it
+  // (cloud/src/preview.ts's stillfail-preview-*); sfbase's service_page.mbt reads its pages' addresses by it
+  @hostapi.set_site_name("stillfail")
   // what the places open on, and the last few chats, are kept by the core's client as they are let go of, asked again
   // with their version
   @core.client.keep(@sfbase.topic_kept)
@@ -430,9 +434,9 @@ fn main {
       started[name] = Json::string("1")
     }
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
-    // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
-    // a replay's host to say the same
-    let own_station = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+    // and which station this machine is, as the app's own native call says it (`local_station`: what the files' page
+    // lists first), for a replay's host to say the same
+    let own_station = @json.parse(@hostapi.app_said("local_station")) catch { _ => Json::null() }
     @hostapi.log("CORETRACE " + ({ "host": { "localStation": own_station } } : Json).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
@@ -456,6 +460,9 @@ fn main {
   }
   // (how what the core says is taken, the same in a replay: sfapp's core_taking)
   @sfcore.listening.val = @sfapp.core_taking()
+  // (this machine's station changed, as its native call posts it, src/host/station_calls.h: the frame built again, its
+  // pages reading it anew)
+  @ui.on_message("local_station", fn(_, _) { () })
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()
     @ui.run(@sf.product(), fn(c) {

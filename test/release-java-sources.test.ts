@@ -8,8 +8,8 @@ import { test } from "node:test";
 
 const script = readFileSync(new URL("../apps/mbui/scripts/beta.sh", import.meta.url), "utf8");
 const marker = "| python3 -c '";
-const start = script.indexOf(marker, script.indexOf("copy() {")) + marker.length;
-const end = script.indexOf("' \"$A\" \"$WORK\"", start);
+const start = script.indexOf(marker, script.indexOf("mirror() {")) + marker.length;
+const end = script.indexOf("' \"$1\" \"$2\"", start);
 assert.ok(start >= marker.length && end > start);
 const copy = script.slice(start, end);
 
@@ -20,16 +20,16 @@ test("a warm release keeps external Java roots in the checkout and local roots i
     const app = join(repo, "apps/mbui");
     const work = join(dir, "cache/work");
     const vendor = join(repo, "vendor/jzlib/src");
-    const configs = ["android/apk.json", "mbui/android/apk.json"] as const;
+    const configs = ["android/apk.json"] as const;
     const files = [...configs, "android/app/src/main/java/App.java"] as const;
     const put = (path: string, text: string) => {
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, text);
     };
     put(join(vendor, "Deflater.java"), "class Deflater {}");
-    put(join(app, files[2]), "class App {}");
-    for (const [i, name] of configs.entries()) {
-      put(join(app, name), JSON.stringify({ java: ["app/src/main/java", i === 0 ? "../../../vendor/jzlib/src" : "../../../../vendor/jzlib/src"] }));
+    put(join(app, files[1]), "class App {}");
+    for (const name of configs) {
+      put(join(app, name), JSON.stringify({ java: ["app/src/main/java", "../../../vendor/jzlib/src"] }));
     }
     const git = spawnSync("git", ["init", "--quiet", repo], { encoding: "utf8" });
     assert.equal(git.status, 0, git.stderr);
@@ -49,7 +49,7 @@ test("a warm release keeps external Java roots in the checkout and local roots i
       assert.ok(existsSync(join(resolve(dirname(cached), cfg.java[1]), "Deflater.java")));
       assert.equal(readFileSync(join(app, name), "utf8"), original[i]);
     }
-    assert.ok(existsSync(join(work, files[2])));
+    assert.ok(existsSync(join(work, files[1])));
     // Unchanged sources keep their times; the cache's generated output stays too.
     const cached = join(work, configs[0]);
     utimesSync(cached, 100, 100);

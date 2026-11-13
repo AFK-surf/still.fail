@@ -176,8 +176,8 @@ function java(args: string[]) {
   if (!javaClasses) {
     javaClasses = mkdtempSync(join(tmpdir(), "release-deltas-java-"));
     process.on("exit", () => rmSync(javaClasses!, { recursive: true, force: true }));
-    const jz = join(root, "apps/mbui/mbui/android/jzlib/src/com/jcraft/jzlib");
-    const srcs = [join(root, "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Delta.java"), ...readdirSync(jz).filter((f) => f.endsWith(".java")).map((f) => join(jz, f))];
+    const jz = join(root, "libs/mbui/android/jzlib/src/com/jcraft/jzlib");
+    const srcs = [join(root, "libs/mbui/android/app/src/main/java/dev/mbui/Delta.java"), ...readdirSync(jz).filter((f) => f.endsWith(".java")).map((f) => join(jz, f))];
     execFileSync("javac", ["-nowarn", "-encoding", "UTF-8", "-d", javaClasses, ...srcs], { stdio: "pipe" });
   }
   const r = spawnSync("java", ["-Xmx256m", "-cp", javaClasses, "dev.mbui.Delta", ...args], { encoding: "utf8" });

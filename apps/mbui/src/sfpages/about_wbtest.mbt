@@ -228,7 +228,7 @@ test "关于's 本机 Station, at each width and with either hand: where the app
     let (w, platform) = case
     let at = "\{w} platform \{platform}"
     let calls : Array[(String, Json)] = []
-    let t = setting_tester(About, w, platform~, host=fn(h) { h.set_local_station(about_local) }, over=fn(base) {
+    let t = setting_tester(About, w, platform~, host=fn(h) { h.set_app_said("local_station", about_local) }, over=fn(base) {
       {
         ..base,
         call: fn(name, params, done) {
@@ -269,7 +269,7 @@ test "关于's 本机 Station, at each width and with either hand: where the app
 test "关于's 本机 Station where the core has none of its software up: its version as the host says it; while it is away, that its update is seen once it is up; nothing to update it with" {
   // (in a workspace this account is not in)
   let t = setting_tester(About, 1280.0, host=fn(h) {
-    h.set_local_station((
+    h.set_app_said("local_station", (
       #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","workspace":{"id":"ws9","station":"st9","name":"别处","stationName":"Elm","removed":false}}
       ),
     )
@@ -278,19 +278,19 @@ test "关于's 本机 Station where the core has none of its software up: its ve
   assert_true(t.query(Button, label="更新") is None)
   assert_true(t.find("station 离线") is None)
   // (its own, away)
-  let t = setting_tester(About, 1280.0, mode="settings-station-away", host=fn(h) { h.set_local_station(about_local) })
+  let t = setting_tester(About, 1280.0, mode="settings-station-away", host=fn(h) { h.set_app_said("local_station", about_local) })
   assert_true(about_drawn(t, "Station 0.1.1288"))
   assert_true(t.find("station 离线，连接后可查看更新") is Some(_))
   assert_true(t.query(Button, label="更新") is None)
   let faults = t.audit()
   assert_true(faults.is_empty(), msg=faults.join(" | "))
   // (none here: nothing of it)
-  let t = setting_tester(About, 1280.0, host=fn(h) { h.set_local_station("") })
+  let t = setting_tester(About, 1280.0, host=fn(h) { h.set_app_said("local_station", "") })
   assert_true(t.find("本机 Station") is None)
   assert_true(t.find("Station") is None)
   // (one added while the page is open: its block once its host is read again, a few seconds on, as 本机 Station's page
   // reads it)
-  t.set_local_station(about_local)
+  t.set_app_said("local_station", about_local)
   t.run_for(@settings.local_read_ms + @ui.move_most_ms)
   assert_true(t.find("本机 Station") is Some(_))
   assert_true(about_drawn(t, "0.1.1300"))
@@ -307,7 +307,7 @@ test "关于's 本机 Station in English, at each width and with either hand, up
       let at = "\{w} platform \{platform} \{mode}"
       // (English as the device says it: what a test sets before its Tester is put back as the Tester starts)
       let t = setting_tester(About, w, platform~, mode~, env=[("MBUI_LOCALE", "en-US")], host=fn(h) {
-        h.set_local_station(about_local)
+        h.set_app_said("local_station", about_local)
       })
       assert_eq(t.find("0.1.1288") is Some(_), platform == 0, msg=at)
       assert_eq(t.find("This machine's station") is Some(_), platform == 0 && laid_wide(w), msg=at)

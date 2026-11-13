@@ -31,13 +31,13 @@ pub fn about_node(
   // (local_station_managed: a Mac's, Windows', Linux's): a signal of that input, read again every few seconds from when
   // the page is made, as 本机 Station's page reads it, for it is added, stops and updates on its own time; "" elsewhere)
   let managed = @settings.local_station_managed()
-  let host : @signals.Signal[String] = @signals.signal(if managed { @ui.local_station() } else { "" }, same=fn(a, b) {
+  let host : @signals.Signal[String] = @signals.signal(if managed { @hostapi.app_said("local_station") } else { "" }, same=fn(a, b) {
     a == b
   })
   if managed {
     fn again(at : Double) -> Unit {
       v.at_moment(at + @settings.local_read_ms, later=true, fn() {
-        host.set(@ui.local_station())
+        host.set(@hostapi.app_said("local_station"))
         again(at + @settings.local_read_ms)
       })
       |> ignore

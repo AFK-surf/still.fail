@@ -11,6 +11,8 @@
 
 ///|
 fn main {
+  // the name its native views are served under, as the app's (src/stillfail/main.mbt)
+  @hostapi.set_site_name("stillfail")
   // no core here: the real core's answers to its pure calls, kept (src/sfkept)
   @sf.kept_call.val = Some(@sfkept.answer)
   // MBUI_DARK=1: the dark theme

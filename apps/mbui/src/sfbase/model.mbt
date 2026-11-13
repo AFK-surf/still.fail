@@ -461,7 +461,7 @@ pub fn this_machine() -> String {
   match machine_here.val {
     Some(h) => h
     None => {
-      let v = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+      let v = @json.parse(@hostapi.app_said("local_station")) catch { _ => Json::null() }
       let ws = field(Some(v), "workspace")
       let h = if text(ws, "id") != "" && text(ws, "station") != "" {
         text(ws, "id") + "/" + text(ws, "station")

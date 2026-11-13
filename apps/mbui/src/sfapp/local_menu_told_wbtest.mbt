@@ -7,7 +7,7 @@
 fn local_tester() -> @ui.Tester {
   let t = wide_tester([])
   t.host_says_finger(Some(false))
-  t.set_local_station((
+  t.set_app_said("local_station", (
     #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
     ),
   )

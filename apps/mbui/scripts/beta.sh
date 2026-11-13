@@ -3,7 +3,7 @@
 # main), built, signed and put in the releases bucket as .github/workflows/preview.yml does; and the released and beta
 # Android and Mac apps' builds for scripts/release.sh (MBUI_VARIANT=stable or beta):
 #   apps/mbui/scripts/beta.sh tools      MoonBit, its latest release (installed again only when cli.moonbitlang.com
-#                                        has a newer one: its ETag), mbui (apps/mbui/mbui), the core's packages
+#                                        has a newer one: its ETag), mbui (libs/mbui), the core's packages
 #   apps/mbui/scripts/beta.sh build      the APK (scripts/android.sh, VARIANT=$MBUI_VARIANT: stable or beta, still.fail's
 #                                        Android app's own): versionCode the build (git rev-list --count HEAD), signed
 #                                        with ANDROID_DEBUG_KEYSTORE_B64 (every still.fail Android release's key;
@@ -34,14 +34,15 @@
 # MBUI_FRESH=1 (GitHub's runners, .github/workflows/preview.yml): the checkout built in place (WORK=apps/mbui), what stays
 # between runs the Actions cache's (MBC_STORE, MBC_LTO_CACHE, HBC_CACHE, the core's parts in out/core), the release in
 # MBUI_CACHE ($RUNNER_TEMP's).
-# Warm between runs on a machine of its own (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
-# other jobs' clean takes), so moonc's and the compiler's outputs and the link stay; core.hbc is kept by its inputs
+# Warm between runs on a machine of its own (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui and of libs/mbui
+# beside it, as the repository has them (MBUI_CACHE/tree), kept outside the job's checkout (which the other jobs' clean
+# takes), so moonc's and the compiler's outputs and the link stay; core.hbc is kept by its inputs
 # (HBC_CACHE), the APK's dex by its own (mbui's scripts/apk: APK_CACHE).
 set -eo pipefail
 A=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(cd "$A/../.." && pwd)
 C=${MBUI_CACHE:-$HOME/stillfail-ci/mbui}
-if [ "${MBUI_FRESH:-}" = 1 ]; then WORK=$A; else WORK=${WORK:-$C/work}; fi
+if [ "${MBUI_FRESH:-}" = 1 ]; then WORK=$A; else WORK=${WORK:-$C/tree/apps/mbui}; fi
 RELEASE_DIR=${RELEASE_DIR:-$C/release}
 ORIGIN=${STILLFAIL_ORIGIN:-https://app.still.fail}
 mkdir -p "$C"
@@ -56,7 +57,7 @@ build_number() { git -C "$REPO" rev-list --count HEAD; }
 # apps/mbui/android/apk.json; the core, the client's packages, media's, vendor's crates), not their tests, docs, the
 # scripts or CI (a push of those alone is no new package: 2026-10-21)
 APP_SRC=(apps/mbui/src apps/mbui/core apps/mbui/android apps/mbui/ios apps/mbui/windows apps/mbui/engine
-  apps/mbui/mbui/src apps/mbui/mbui/android apps/mbui/mbui/moon.mod apps/mbui/moon.mod apps/mbui/moon.work client media vendor
+  libs/mbui/src libs/mbui/android libs/mbui/moon.mod apps/mbui/moon.mod apps/mbui/moon.work client media vendor
   ':(exclude,glob)**/test/**' ':(exclude,glob)**/tests/**' ':(exclude,glob)**/*_test.mbt' ':(exclude,glob)**/*_wbtest.mbt' ':(exclude,glob)**/*.test.*'
   ':(exclude,glob)**/*.md')
 # the commit PART's feed names now (versionCode n is main's nth commit); nothing when it has none
@@ -110,17 +111,22 @@ tools() {
   local mbui
   mbui=$(sh "$A/scripts/mbui.sh")
   (cd "$REPO/client/core-ts" && pnpm install --frozen-lockfile --prefer-offline 2>&1 | tail -1)
-  summary "- MoonBit $("$C/tools/moon/bin/moon" version | head -1); mbui $(git -C "$A" log -1 --format=%h -- mbui); tools in $(secs $t0) s"
+  summary "- MoonBit $("$C/tools/moon/bin/moon" version | head -1); mbui $(git -C "$A" log -1 --format=%h -- "$mbui"); tools in $(secs $t0) s"
 }
 
-# apps/mbui into WORK as git has it (a file gone goes there too, mbui's as well), by content: a file that did not change
-# keeps its time, and moon sees it as it was; the build's outputs (what git ignores) stay.
+# apps/mbui into WORK as git has it, and libs/mbui beside it where the app's paths name it (../../libs/mbui), a file
+# gone going there too, by content: a file that did not change keeps its time, and moon sees it as it was; the build's
+# outputs (what git ignores) stay.
 copy() {
   [ "$WORK" != "$A" ] || return 0
-  mkdir -p "$WORK"
-  # (WORK's mbui was once a link of its own, to a checkout beside it: mbui is apps/mbui/mbui's files now)
-  [ ! -L "$WORK/mbui" ] || rm "$WORK/mbui"
-  (cd "$A" && git ls-files -z) | python3 -c '
+  mirror "$A" "$WORK"
+  mirror "$(sh "$A/scripts/mbui.sh")" "$WORK/../../libs/mbui"
+}
+
+# mirror SRC DST: SRC's files as git has them, into DST
+mirror() {
+  mkdir -p "$2"
+  (cd "$1" && git ls-files -z) | python3 -c '
 import json, os, shutil, subprocess, sys
 src, dst = sys.argv[1:3]
 keep = {"out", "_build", ".mooncakes", "android/app/build", "android/app/src/main/jniLibs"}
@@ -134,7 +140,7 @@ for f in files:
     data = open(a, "rb").read()
     # The copy has no repository above it. Java outside apps/mbui (vendor/jzlib) stays in the checkout, as the core
     # parts do through SF_SRC; app-local roots still name the cached sources. Only the cached config is changed.
-    if f in {"android/apk.json", "mbui/android/apk.json"}:
+    if f == "android/apk.json":
         cfg = json.loads(data)
         java = cfg.get("java", [])
         roots = [os.path.abspath(os.path.join(src, os.path.dirname(f), p)) for p in java]
@@ -167,7 +173,7 @@ ignored = set(subprocess.run(["git", "-C", src, "check-ignore", "--no-index", "-
 for r in gone:
     if r not in ignored:
         os.remove(os.path.join(dst, r))
-' "$A" "$WORK"
+' "$1" "$2"
 }
 
 # feed PART N NAME FILE [SIGNED]: $RELEASE_DIR/PART/PART/mbui/latest.json (still.fail's AppRelease) for FILE, put as
@@ -220,7 +226,7 @@ build() {
   local syms=
   case $variant in stable|beta) syms=$RELEASE_DIR/android/app-$variant.syms.xz ;; esac
   local r=0
-  env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" SF_SRC="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
+  env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" SF_SRC="$REPO" MBUI_BUILD=$n \
     MBUI_SYMBOLS="$syms" bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ -z "$posthog" ] || rm -rf "$posthog"

@@ -33,9 +33,9 @@ if [ "${1:-}" = make ] && [ -z "${E2E_STATION_PATHS:-}" ]; then
   export E2E_STATION_PATHS
 fi
 T=$A/tools
-TOOLS_SCRIPTS=$A/mbui/scripts; . "$TOOLS_SCRIPTS/tooltarget.sh"
+TOOLS_SCRIPTS=$A/../../libs/mbui/scripts; . "$TOOLS_SCRIPTS/tooltarget.sh"
 B=$T/_build/$TT/release/build/sftools/trace/trace.$TX
-src=$(cd "$A" && find tools/trace tools/moon.mod tools/moon.work mbui/tools/re mbui/tools/rjson mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
+src=$(cd "$A" && find tools/trace tools/moon.mod tools/moon.work ../../libs/mbui/tools/re ../../libs/mbui/tools/rjson ../../libs/mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
 if [ ! -f "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
   (cd "$T" && env -u MOON_CC moon build --target $TT --release trace >&2) || { echo "trace: tools/trace did not build" >&2; exit 1; }
   echo "$src" > "$B.src"

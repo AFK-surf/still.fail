@@ -1941,7 +1941,7 @@ pub fn Replay::settings(self : Replay) -> Json? {
 }
 
 ///|
-/// This machine's station as the run's host said it (Tester::set_local_station: @ui.local_station's JSON); "" where
+/// This machine's station as the run's host said it (Tester::set_app_said: what `local_station` says); "" where
 /// its trace does not say.
 pub fn Replay::local_station(self : Replay) -> String {
   self.run_local
