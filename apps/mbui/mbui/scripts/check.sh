@@ -12,6 +12,11 @@ cc -Wall -I "$D/../src/host" "$D/log_files_test.c" -o "$D/../out/log_files_test"
 # what the desktops' hosts hand the station's installer (src/host/station_install.h)
 cc -Wall -I "$D/../src/host" "$D/station_install_test.c" -o "$D/../out/station_install_test" && "$D/../out/station_install_test" || exit 1
 . "$D/env.sh"
+if [ "$(uname)" = Darwin ]; then
+  cc -Wall -fobjc-arc -I "$D/../src/host" -I "$MOON_HOME/include" "$D/apple_render_test.m" \
+    -framework Foundation -framework QuartzCore -framework Metal -framework CoreGraphics -framework ImageIO \
+    -o "$D/../out/apple_render_test" && "$D/../out/apple_render_test" || exit 1
+fi
 for t in ${TARGETS:-native}; do
   echo "=== $t"
   moon check --target $t --output-json 2>&1 | "$D/chk" errs
