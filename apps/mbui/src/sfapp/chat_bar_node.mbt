@@ -176,7 +176,8 @@ fn chat_bar_of(b : @view.View, src : Source, r : ChatRef, stint : () -> Int) -> 
       let th = @sf.theme()
       let sp = @sf.node_sp(g, th.t.title)
       let title_w = @sf.node_words_w(title_now(), sp, weight=600)
-      let three_w = dmax(44.0, @sf.node_words_w("一二三…", sp, weight=600))
+      // 3 CJK em (~1em each) + ellipsis (~0.75em): scales with font size without shaping an unrecorded literal in CI textref.
+      let three_w = dmax(44.0, sp * 3.75)
       let agents = match view() {
         Some(v) => v.agents
         None => []
