@@ -682,6 +682,8 @@ struct Node {
   /// the end of a flight that stays where it is (View::shared's `stays`: a thumbnail), drawn nowhere while one of its
   /// id that moves lives
   mut share_stays : Bool
+  /// one that moves that flies only from or to one of its id that stays (View::shared's `with_stays`)
+  mut share_with_stays : Bool
   /// on a flight's way, drawn over the rest of its layer where the flight has it (shared.mbt); none, where it is
   mut lift : Lift?
 }
@@ -1755,6 +1757,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.share = None
       n.share_flight = None
       n.share_stays = false
+      n.share_with_stays = false
       n.lift = None
       i
     }
@@ -1912,6 +1915,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         share: None,
         share_flight: None,
         share_stays: false,
+        share_with_stays: false,
         lift: None,
       })
       self.nodes.length() - 1

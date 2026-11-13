@@ -109,9 +109,15 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     }
   })
   |> ignore
+  // (its layer made again for another tier of the window, this one let go of after it as what is shared in it is
+  // let go of as the change is committed: only the one it is in now says it is out of the tree)
+  vw.tree_layers += 1
+  let layer = vw.tree_layers
   vw.in_tree = true
   n.owns(fn() {
-    vw.in_tree = false
+    if vw.tree_layers == layer {
+      vw.in_tree = false
+    }
     (vw.hold_off)()
     vw.fingers.clear()
   })
@@ -303,8 +309,9 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
         }
       }
       // (the picture lying flat where its zoom has it, moved across with the strip, its node (but while it flies: its
-      // flight's nodes), under what is drawn over it)
-      canvas.box(fn(p) {
+      // flight's nodes), under what is drawn over it; let go of at once as it is closed back into a thumbnail the
+      // window's tree draws, flown back there by the tree as the rest fades: Viewer::tree_back)
+      canvas.show(at_once=true, fn() { !vw.tree_back.get() }, fn(p) {
         let flat = fn() {
           strip_at(p) |> ignore
           vw.bytes.get() |> ignore
@@ -327,9 +334,13 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
             _ => None
           }
         }))
+        // (the end of its flight that moves, by the id of the thumbnail it shows (Viewer::thumb_id, the one it is on as
+        // it steps): flown from that thumbnail where the chat shows it as a node that stays, back to it as it closes,
+        // that thumbnail drawn nowhere meanwhile (View::shared's `stays`); none such, it comes and goes as it would;
+        // made again for another tier of the window, there at once (`with_stays`))
+        .shared(By(fn() { vw.thumb_id() }), @motion.flight_by(@motion.moved()), with_stays=true)
         |> ignore
       })
-      |> ignore
       // (the picture flying in or back, its nodes: from the thumbnail as the chat lays it out in the frame drawn
       // (Viewer::flight_from) to where its zoom has it, as far as its flight has come then (flight_box): what shows of it
       // on the window, the box it is cut to, its corners round, the picture in it, as Viewer::picture_shown has it, its

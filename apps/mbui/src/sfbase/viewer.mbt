@@ -282,6 +282,11 @@ pub(all) struct Viewer {
   serial : Int
   /// drawn by a node of the window's tree (viewer_tree.mbt), not by the old view's layer
   mut in_tree : Bool
+  /// how many layers of the window's tree it has been drawn in (viewer_node): the last the one it is in
+  mut tree_layers : Int
+  /// closed back into its thumbnail drawn by the window's tree (Viewer::shut): its picture's node let go of at once,
+  /// flown back by the tree (viewer_tree.mbt's image_layer)
+  tree_back : @signals.Signal[Bool]
   /// the fingers on its stage by their ids (Drag's `finger`), where each is now; how fast the one moving it goes, by
   /// its events' own moments; what calls off the hold waited for (its picture's menu)
   fingers : Map[Int, (Double, Double)]
@@ -737,6 +742,16 @@ pub fn over_flight(c : @ui.Ctx, i : Int) -> Unit {
 }
 
 ///|
+/// Whether the thumbnail of `id` is a node of the window's tree drawn now (a chat's page made as nodes: its end of the
+/// picture's flight that stays, View::shared's `stays`), to be flown back into by the tree.
+fn tree_thumb_seen(id : String) -> Bool {
+  match @ui.view_tree() {
+    Some(tree) => tree.stays_seen(id)
+    None => false
+  }
+}
+
+///|
 /// The thumbnail of `id` where it was last laid out, while some of it is on the screen.
 pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
   match (pv_thumbs.get(id), @motion.measured_rect(c, "pv-thumb/" + id)) {
@@ -1018,6 +1033,8 @@ pub fn new_viewer(
       viewers_opened.val
     },
     in_tree: false,
+    tree_layers: 0,
+    tree_back: @signals.signal(false),
     fingers: Map([]),
     speed: @ui.Velocity::new(),
     hold_off: fn() {  },
@@ -1813,6 +1830,12 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
           }
           _ => self.fly_home("", viewer_moment(c), (c.width, c.height))
         }
+      }
+      // an image of a chat's page made as nodes, its thumbnail drawn: let go of at once, its picture flown back into
+      // it by the window's tree (viewer_tree.mbt's image_layer: View::shared, the thumbnail's end that stays)
+      (None, Some(KImage), _) if self.in_tree && tree_thumb_seen(self.thumb_id()) => {
+        self.tree_back.set(true)
+        self.fade.go(0.0, @motion.tween(pv_fade_ms, ease=Leave), at=viewer_moment(c))
       }
       // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
       // ground and the picture stay nearly whole at first, then go
