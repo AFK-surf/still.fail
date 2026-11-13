@@ -129,6 +129,8 @@ pub(all) struct Beside {
   at_pointer : Bool
   width : BesideWidth
   along_offset : Double
+  /// on the side it first went on for as long as it is shown (View::beside's `keeps_side`)
+  keeps_side : Bool
 }
 
 ///|
@@ -163,7 +165,12 @@ pub(all) enum BesideWidth {
 /// out or placed again. So it reads the anchor's words as they are laid out, nothing else. `along_offset`: moved
 /// that much further along its side (Ctx::place's): right, or down, beside a side across the anchor; right to left, the
 /// other way; from all of the anchor, or from its `piece` where it has one; in its own points, drawn as it is; kept in
-/// the window as ever (`padding`).
+/// the window as ever (`padding`). `keeps_side`: on the side it first went on (its own, or the other where that had not
+/// the room) for as long as it is shown, never to the other however tall or wide what it holds comes to be: grown or
+/// shrunk, only its edge away from its anchor moves (above it, its top; below it, its foot). Where that side comes to
+/// have not the room for it (the window made smaller), it stays on it and is moved along and over its anchor to stay
+/// in the window, as one on neither side with the room is (place_beside's shift); made anew (shown again), it goes on
+/// whichever side has the room then.
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -175,6 +182,7 @@ pub fn View::beside(
   width? : BesideWidth = Own,
   piece? : (Double, Double) -> (Double, Double, Double, Double)?,
   along_offset? : Double = 0.0,
+  keeps_side? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.beside_piece = piece
@@ -185,7 +193,7 @@ pub fn View::beside(
     Some(_) => ()
     None => self.tree.beside_widths.remove(self.at)
   }
-  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, width, along_offset })
+  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, width, along_offset, keeps_side })
   if !self.tree.besides_at.contains(self.at) {
     self.tree.besides_at.push(self.at)
   }
@@ -334,13 +342,19 @@ fn Tree::besides_placed(self : Tree) -> Unit {
         _ => (ax, ay, aw, ah)
       }
     }
+    // (keeping the side it first went on: placed on it again, never flipped; first, on whichever has the room)
+    let (side, flip) = match (b.keeps_side, n.went) {
+      (true, Some(w)) => (w, false)
+      _ => (b.side, true)
+    }
     let (x, y, went) = place_beside(
       rect,
       n.lw * hs,
       n.lh * hs,
       self.last_w,
       self.last_h,
-      side=b.side,
+      side~,
+      flip~,
       along=b.along,
       offset=b.offset,
       along_offset=b.along_offset * hs,
