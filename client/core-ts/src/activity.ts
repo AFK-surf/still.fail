@@ -105,18 +105,21 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "web__run":
       return "web";
     case "Task":
-    case "Agent":
     case "spawn_agent":
     case "subagent":
     case "invoke_subagent":
+      return "agent";
+    case "Agent":
+      return typeof a?.Action === "string" || typeof a?.action === "string" ? "other" : "agent";
+    case "swarm":
+      return a?.action === "add" ? "agent" : "other";
     case "define_subagent":
     case "manage_subagents":
-    case "swarm":
     case "send_message":
     case "followup_task":
     case "list_agents":
     case "wait_agent":
-      return "agent";
+      return "other";
     case "chat_history":
     case "chat_list":
     case "chat_read":

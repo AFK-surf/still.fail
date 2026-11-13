@@ -97,7 +97,7 @@ const SAYING = [
 /// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
 const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);
 const BOILERPLATE_THOUGHT_LINE =
-  /^(?:I'm thinking(?: through how to approach this)?\.?|Thinking(?:\s+process)?\.?:?|Thought\s+process:?|Process:?|Reasoning:?|`?\d{4}-\d{2}-\d{2}T[\d:.]+Z`?[),.;:]*)$/i;
+  /^(?:I'm thinking(?: through how to approach this)?\.?|I am thinking(?: through how to approach this)?\.?|Let's think(?:\s+through\s+this|\s+about\s+this)?\.?|Thinking(?:\s+process)?\.?:?|Thought\s+process:?|Process:?|Reasoning:?|(?:\d+\.\s*)?(?:\*\*)?(?:Analyze the Request|Analysis|Summary|Plan|Context|Goal|Steps|Next Steps|Approach|Findings|Observations):(?:\*\*)?|`?\d{4}-\d{2}-\d{2}T[\d:.]+Z`?[),.;:]*)$/i;
 /// Each call's brief, as it was read (from its whole input, not one cut to MAX_TEXT).
 const briefs = new WeakMap<TimelineEntry, string>();
 
@@ -638,7 +638,7 @@ function grokTimeline(r: Json, out: TimelineEntry[]) {
     }
   } else if (kind === "tool_result") {
     const text = isStr(content) ? content : toText(content ?? null);
-    const e: TimelineEntry = { at: null, kind: "tool_result", text: clip(text), ok: get(r, "is_error") !== true };
+    const e: TimelineEntry = { at: null, kind: "tool_result", text: clip(text), ok: get(r, "is_error") !== true && !/^Failed to call [\w.-]+:/.test(text) };
     const id = stringOf(get(r, "tool_call_id"));
     if (id !== undefined) e.callId = id;
     out.push(e);

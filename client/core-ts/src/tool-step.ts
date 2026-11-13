@@ -97,10 +97,15 @@ export function cleanCommand(cmd: string): string {
 /** One-line summary of a shell command for collapsed step rows, skipping leading `export` / `cd` / comment lines. */
 export function summaryCommand(cmd: string): string {
   const cleanWs = (s: string): string =>
-    s.replace(
-      /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/sessions\/[^/\s"']+\/[^/\s"']+\/workspace(?:\/stillfail)?\/?/g,
-      "",
-    );
+    s
+      .replace(
+        /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/sessions\/[^/\s"']+\/[^/\s"']+\/workspace(?:\/stillfail)?\/?/g,
+        "",
+      )
+      .replace(
+        /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/(?:repos|homes\/[^/\s"']+)\//g,
+        "",
+      );
   const cleaned = cleanCommand(cmd.trim());
   const lines = cleaned
     .split("\n")
@@ -111,7 +116,9 @@ export function summaryCommand(cmd: string): string {
     while (true) {
       const next = s
         .replace(/^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "")
-        .replace(/^(?:cd\s+(?:"[~/][^"]*"|'[~/][^']*'|[~/][^\s;&|]*)\s*(?:&&|;)\s*)/, "");
+        .replace(/^(?:(?:export\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]*)\s+)+)/, "")
+        .replace(/^(?:cd\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "")
+        .replace(/^(?:(?:\.|source)\s+[^\s;&|]*env\.sh\s*(?:&&|;)\s*)/, "");
       if (next === s) break;
       s = next.trim();
     }
@@ -360,6 +367,9 @@ export function toolResult(name: string, call: string, result: string, failed: b
       return [{ kind: "facts", items: [{ key: `第 ${agyEdit[1]} 行 · +${agyEdit[2]} / -${agyEdit[3]}`, plain: true }] }];
     }
     if (cleanStripped.split(/\r?\n/).every((l) => /^Made \d+ replacements? in [^\n]+$/.test(l.trim()))) {
+      return [];
+    }
+    if (/^(?:The file\b[^\n]*\bhas been (?:updated|edited|modified|created)|File (?:updated|edited|modified|created|written) successfully)\.?$/i.test(cleanStripped)) {
       return [];
     }
   }

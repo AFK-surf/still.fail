@@ -210,7 +210,7 @@ function stepName(tool: string, text: string): string {
 }
 
 const THOUGHT_BOILERPLATE_LINE =
-  /^(?:I'm thinking(?: through how to approach this)?\.?|I am thinking(?: through how to approach this)?\.?|Let's think(?:\s+through\s+this|\s+about\s+this)?\.?|Thinking(?:\s+process)?(?:\.{3}|…|:)?|Thought\s+process:?|Process:?|Reasoning:?|`?\d{4}-\d{2}-\d{2}T[\d:.]+Z`?[),.;:]*)$/i;
+  /^(?:I'm thinking(?: through how to approach this)?\.?|I am thinking(?: through how to approach this)?\.?|Let's think(?:\s+through\s+this|\s+about\s+this)?\.?|Thinking(?:\s+process)?(?:\.{3}|…|:)?|Thought\s+process:?|Process:?|Reasoning:?|(?:\d+\.\s*)?(?:\*\*)?(?:Analyze the Request|Analysis|Summary|Plan|Context|Goal|Steps|Next Steps|Approach|Findings|Observations):(?:\*\*)?|`?\d{4}-\d{2}-\d{2}T[\d:.]+Z`?[),.;:]*)$/i;
 
 function cleanThoughtText(raw: string): string {
   const lines = raw.split(/\r?\n/);
@@ -663,7 +663,29 @@ export function presentHistory(live: J, cx: Context): J {
     }
   });
 
-  const failedOf = (step: Step) => step.result !== null && timeline[step.result]?.ok === false;
+  const isFailedResult = (rIdx: number | null) =>
+    rIdx !== null && (timeline[rIdx]?.ok === false || /^Failed to call [\w.-]+:/.test(s(timeline[rIdx], "text")));
+  const failedOf = (step: Step) => isFailedResult(step.result);
+  for (let idx = items.length - 1; idx >= 0; idx--) {
+    const [cur, cFirst, cLast] = items[idx];
+    if (cur.kind !== "text" || flag(timeline[cur.i], "subagent")) continue;
+    const said = s(timeline[cur.i], "text").trim();
+    if (!said) continue;
+    const matchPost = (other: [Item, number, number] | undefined): boolean => {
+      if (!other || other[0].kind !== "post") return false;
+      const st = steps[other[0].step];
+      if (failedOf(st)) return false;
+      const a = args(s(timeline[st.call], "text"));
+      return typeof a?.text === "string" && a.text.trim() === said;
+    };
+    if (matchPost(items[idx + 1])) {
+      items[idx + 1][1] = Math.min(items[idx + 1][1], cFirst);
+      items.splice(idx, 1);
+    } else if (matchPost(items[idx - 1])) {
+      items[idx - 1][2] = Math.max(items[idx - 1][2], cLast);
+      items.splice(idx, 1);
+    }
+  }
   const place = (address: string | null, message: string | null = null) => (address === null ? null : format.place(cx.threads, address, cx.offsetMin, cx.workspaces, message));
   const shown = items.map(([item, first, last]) => {
     let v: J;
@@ -724,8 +746,9 @@ export function presentHistory(live: J, cx: Context): J {
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
         const kind = text("kind");
         const said = mentions(text("text") ?? "", cx);
-        v = { kind: "post", text: said, md: markdown(said, cx.md), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
-        const ends = endsOf(kind);
+        const isFailed = failedOf(steps[item.step]);
+        v = { kind: "post", text: said, md: markdown(said, cx.md), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: isFailed };
+        const ends = isFailed ? null : endsOf(kind);
         if (ends !== null && ends !== "waiting") v.ends = ends;
         break;
       }
@@ -919,11 +942,12 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
   const thinking = rows.flatMap((r) => ("thought" in r ? [r.thought] : []));
   const text = (i: number): string => (typeof timeline[i]?.text === "string" ? timeline[i].text : "");
   const tool = (i: number): string => (typeof timeline[i]?.tool === "string" ? timeline[i].tool : "");
-  const failedOf = (st: Step) => st.result !== null && timeline[st.result]?.ok === false;
+  const failedOf = (st: Step) =>
+    st.result !== null && (timeline[st.result]?.ok === false || /^Failed to call [\w.-]+:/.test(text(st.result)));
   const counts: [string, string[], number][] = [];
   for (const m of members) {
     const call = steps[m].call;
-    const kind = kindOf(tool(call), text(call));
+    const kind = steps[m].scriptCount !== undefined && steps[m].scriptCount! >= 2 ? "other" : kindOf(tool(call), text(call));
     const file = kind === "read" || kind === "edit" ? fileOf(text(call), tool(call)) : null;
     let at = counts.findIndex(([k]) => k === kind);
     if (at < 0) {
@@ -987,6 +1011,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
   }
   const stepTookMs = (st: Step): number | null => {
     const call = timeline[st.call];
+    if (st.firstEntry === undefined && typeof call?.callId === "string" && call.callId.includes("#")) return null;
     const result = st.result !== null ? timeline[st.result] : null;
     const b = result && typeof result.at === "string" ? epochMs(result.at) : null;
     const a = typeof call?.at === "string" ? epochMs(call.at) : null;
@@ -1016,7 +1041,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
     if (said === null && st.scriptCount !== undefined) {
       if (st.scriptCount >= 2) {
         said = `执行脚本（含 ${st.scriptCount} 项调用）`;
-        if (!jsExecCommand(callText) && st.scriptTools) stepHint = st.scriptTools;
+        if (st.scriptTools) stepHint = st.scriptTools;
       } else {
         said = "执行脚本";
       }

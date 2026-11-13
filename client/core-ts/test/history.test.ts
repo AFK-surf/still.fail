@@ -746,4 +746,37 @@ test("codex_exec_wrappers_and_multi_runtime_tools_are_unwrapped_and_labeled", ()
   // Mark includes done reason
   assert.equal(h.items[3].body.content.text, "标记为已完成：PR #5968 CI passed");
   assert.equal(h.items[3].body.content.ends, "done");
+
+  // 5. Devin/Claude boilerplate headings, inline env command hints, send_message group counts, and Grok duplicate/failed posts
+  const multi = presentHistory(
+    {
+      timeline: [
+        { kind: "user", text: "test multi-runtime edge cases" },
+        { kind: "thinking", text: "1. **Analyze the Request:**\n先检查多运行时边界情况。" },
+        { kind: "tool_call", tool: "send_message", callId: "sm1", text: JSON.stringify({ Recipient: "main", Message: "ok" }) },
+        { kind: "tool_result", callId: "sm1", ok: true, text: "sent" },
+        { kind: "tool_call", tool: "exec_command", callId: "ec1", text: JSON.stringify({ cmd: 'PATH="/usr/bin:$PATH" cd apps/mbui && . scripts/env.sh && moon test' }) },
+        { kind: "tool_result", callId: "ec1", ok: true, text: "PASS" },
+        { kind: "assistant", text: "已完成修复" },
+        { kind: "tool_call", tool: "mcp__stillfail__chat_post", callId: "p1", text: JSON.stringify({ to: "CHAT/1", text: "已完成修复", kind: "all_done" }) },
+        { kind: "tool_result", callId: "p1", ok: true, text: "ok" },
+        { kind: "tool_call", tool: "mcp__stillfail__chat_post", callId: "p2", text: JSON.stringify({ to: "CHAT/1", text: "bad post", kind: "all_done" }) },
+        { kind: "tool_result", callId: "p2", ok: true, text: "Failed to call mcp__stillfail__chat_post: invalid argument" },
+      ],
+    },
+    cx([], [], []),
+  );
+  assert.deepEqual(
+    multi.items.map((it: J) => it.body.kind),
+    ["received", "group", "post", "post"],
+  );
+  const mg = multi.items[1].body.content;
+  assert.equal(mg.rows[0].content.first, "先检查多运行时边界情况。");
+  assert.equal(mg.rows[1].content.name, "Agent");
+  assert.equal(mg.rows[1].content.said, "向主 agent 发送结果：ok");
+  assert.equal(mg.rows[2].content.hint, "moon test");
+  assert.equal(mg.summary, "运行 1 条命令 · 共 2 项");
+  assert.equal(multi.items[2].body.content.ends, "done");
+  assert.equal(multi.items[3].body.content.failed, true);
+  assert.equal(multi.items[3].body.content.ends, undefined);
 });

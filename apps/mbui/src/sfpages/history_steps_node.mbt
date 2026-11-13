@@ -451,35 +451,20 @@ fn ev_node(
       e.box(fn(o) {
         o.over(Is(true)) |> ignore
         o.box(fn(room) {
-          @sf.style_node(room, fn() {
-            // (from under its mark, in the middle of its first line)
-            let line = if row { @sf.row_least() } else { h_mark }
-            let under = @sf.room_of((line + h_mark) / 2.0)
-            (if rail_last { h_rail_room_last } else { h_rail_room }).then(@ui.style(pt=under))
-          })
+          @sf.style_node(room, fn() { if rail_last { h_rail_room_last } else { h_rail_room } })
           steps_box_node(room, h_rail, fn(_) {  })
         })
         |> ignore
       })
       |> ignore
     }
+    ignore(row)
     e.box(fn(i) {
-      @sf.style_node(i, fn() {
-        // (the first line's height: a line of words' 20, or a row's least)
-        let line = if row { @sf.row_least() } else { h_mark }
-        let base = h_icon.then(@ui.style(h=Fixed(line)))
-        match state {
-          "" => base
-          "done" => base.then(@ui.style(radius=Full, bg=Data(@sf.theme().p.green_bg)))
-          "waiting" => base.then(@ui.style(radius=Full, bg=Data(@sf.theme().p.blue_bg)))
-          "human" => base.then(@ui.css("radius=Full bg=AccentBg"))
-          _ => base.then(@ui.css("radius=Full bg=Neutral"))
-        }
-      })
+      @sf.style_node(i, fn() { h_icon })
       if icon == "pulse" {
         steps_box_node(i, h_pulse, fn(_) {  })
       } else {
-        @sf.icon_node(i, icon, if state != "" { 13.0 } else { 14.0 }, By(ink)) |> ignore
+        @sf.icon_node(i, icon, 14.0, By(ink)) |> ignore
       }
     })
     |> ignore
@@ -614,7 +599,7 @@ fn one_line_node(
 ) -> Unit {
   let open = fn() { steps_own.opened.contains(key) }
   v.box(fn(r) {
-    @sf.style_node(r, fn() { h_one_press.then(@sf.row_least_h()) })
+    @sf.style_node(r, fn() { h_one_press })
     @sf.presses_node(r, fn() { steps_flip(key) })
     r
     .says(By(fn() {
@@ -715,7 +700,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           }
         }
         t.box(fn(b) {
-          @sf.style_node(b, fn() { h_fold_toggle.then(@sf.row_least_h()) })
+          @sf.style_node(b, fn() { h_fold_toggle })
           steps_pressed(b, fn() { steps_flip(key) }, label=words, folds=true, open~)
           @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
           @sf.icon_node(b, "chevron-down", 12.0, By(fn() { if @sf.lit_node(b) { @sf.theme().p.accent } else { @sf.theme().p.blue } }), name_now=fn() {
@@ -996,8 +981,8 @@ fn ended_node(v : @view.View, ends : String, words : String, rail : Bool) -> Uni
           }
           match words.find("：") {
             Some(at) => {
-              let head = words.unsafe_substring(start=0, end=at)
-              let tail = words.unsafe_substring(start=at, end=words.length())
+              let head = words.unsafe_substring(start=0, end=at + 1)
+              let tail = words.unsafe_substring(start=at + 1, end=words.length())
               [
                 @ui.span(head, weight=600, color=lead_color),
                 @ui.span(tail, color=t.p.muted),
@@ -1041,11 +1026,7 @@ fn group_node(
       gv.box(fn(o) {
         o.over(Is(true)) |> ignore
         o.box(fn(room) {
-          @sf.style_node(room, fn() {
-            // (from under its chevron mark, in the middle of the group header row)
-            let under = @sf.room_of((@sf.row_least() + h_mark) / 2.0)
-            h_rail_room_last.then(@ui.style(pt=under))
-          })
+          @sf.style_node(room, fn() { h_rail_room_last })
           steps_box_node(room, h_rail, fn(_) {  })
         })
         |> ignore
@@ -1053,7 +1034,7 @@ fn group_node(
       |> ignore
     }
     gv.box(fn(h) {
-      @sf.style_node(h, fn() { h_group_head.then(@sf.row_least_h()) })
+      @sf.style_node(h, fn() { h_group_head })
       let hot = fn() { @sf.lit_node(h) }
       h.ground(By(fn() { if @sf.lit_in_node(h) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
@@ -1198,7 +1179,7 @@ fn opened_node(
   let open = fn() { steps_own.opened.contains(rk) }
   steps_box_node(v, h_step, fn(s) {
     s.box(fn(line) {
-      @sf.style_node(line, fn() { h_step_summary.then(@sf.row_least_h()) })
+      @sf.style_node(line, fn() { h_step_summary })
       line.ground(By(fn() { if @sf.lit_in_node(line) { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
       steps_pressed(line, fn() { steps_flip(rk) }, folds=true, open~)
@@ -1312,20 +1293,38 @@ fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Un
       return
     }
     let parts = @signals.untracked(fn() { steps_own.tools.get(tk) })
+    let raw_calls = items(parts, "call")
+    let step_hint = text(step, "hint")
+    let call_parts = raw_calls.filter(fn(part) {
+      if raw_calls.length() > 1 && text(Some(part), "kind") == "path" && text(Some(part), "extra") == "" {
+        let p = text(Some(part), "path")
+        !(step_hint != "" && (p == step_hint || p.has_suffix("/" + step_hint)))
+      } else {
+        true
+      }
+    })
+    let result_parts = items(parts, "result").filter(fn(part) {
+      if !flag(step, "failed") && text(Some(part), "kind") == "output" {
+        let out = text(Some(part), "text").trim().to_owned()
+        out != "The file has been updated." && out != "File updated successfully."
+      } else {
+        true
+      }
+    })
     steps_box_node(p, tool_body_box, fn(b) {
-      steps_box_node(b, tool_section, fn(s) {
-        for part in items(parts, "call") {
-          tool_part_node(s, Some(part))
-        }
-      })
-      match field(parts, "result") {
-        Some(Array(list)) if list.length() > 0 =>
-          steps_box_node(b, tool_result_box, fn(s) {
-            for part in list {
-              tool_part_node(s, Some(part))
-            }
-          })
-        _ => ()
+      if call_parts.length() > 0 {
+        steps_box_node(b, tool_section, fn(s) {
+          for part in call_parts {
+            tool_part_node(s, Some(part))
+          }
+        })
+      }
+      if result_parts.length() > 0 {
+        steps_box_node(b, tool_result_box, fn(s) {
+          for part in result_parts {
+            tool_part_node(s, Some(part))
+          }
+        })
       }
     })
   })
@@ -1755,7 +1754,7 @@ let steps_row_first : @ui.Style = @ui.css("w=Full px=S4 pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let steps_row : @ui.Style = @ui.css("w=Full px=S4 pt=S3_5")
+let steps_row : @ui.Style = @ui.css("w=Full px=S4 pt=S2_5")
 
 ///|
 /// Its top (historyEdge): 4 over and under, 12 muted, in the middle; on their way, a spinner before the words.
@@ -1790,9 +1789,9 @@ pub fn history_marked() -> (String, String) {
 pub let steps_marked_ms : Double = 1600.0
 
 ///|
-/// A turn's rule (hTurn): 8 over it, 11 muted, a line on to the edge 8 after the words.
+/// A turn's rule (hTurn): 4 over it, 11 muted, a line on to the edge 8 after the words.
 // kept across runs: a value (no field of it changes)
-let h_turn : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 align=ACenter")
+let h_turn : @ui.Style = @ui.css("row w=Full pt=S1 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1809,14 +1808,13 @@ let h_main : @ui.Style = @ui.css("w=Full gap=S2_5")
 let h_ev : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 
 ///|
-/// The turn's rail: 1 wide, 9.5 in, from under its mark (20) down past the event to the next one's (10 more; 14 to the
-/// next item).
+/// The turn's rail: 1 wide, 9.5 in, from under its mark (20) down past the event to the next one's (10 more).
 // kept across runs: a value (no field of it changes)
 let h_rail_room : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(10.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_rail_room_last : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(14.0))
+let h_rail_room_last : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(10.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1827,10 +1825,6 @@ let h_rail : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 /// covers the rail. As high as its event's first line (ev's `row`), its mark in its middle.
 // kept across runs: a value (no field of it changes)
 let h_icon : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
-
-///|
-/// How high an event's mark is, and a line of its words.
-let h_mark : Double = 20.0
 
 ///|
 /// The model's pulse (activityPulse): a 7 dot in the accent.
@@ -2042,16 +2036,16 @@ let h_group_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg
 ///|
 /// Its calls, opened (hSteps): in its words' column (past the 20 gutter and 8), 2 apart, 2 under its line.
 // kept across runs: a value (no field of it changes)
-let h_steps : @ui.Style = @ui.css("w=Full pl=S7 pt=S0_5 gap=S0_5")
+let h_steps : @ui.Style = @ui.css("w=Full pl=S7 pt=S0_5 gap=SPx")
 
 ///|
-/// A call's line (hStep summary): 5 by 6 in, round 8, 8 apart, 12; the pointer's ground on it.
+/// A call's line (hStep summary): 4 by 6 in, round 8, 8 apart, 12; the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let h_step : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1_25 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}")
+let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2106,10 +2100,10 @@ let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false
 let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
-/// A call opened: 4 by 6 in, 10 under, the call and what came back 8 apart; each a section, its
+/// A call opened: 2 by 6 in, 6 under, the call and what came back 6 apart; each a section, its
 /// parts 6 apart (what came back 4).
 // kept across runs: a value (no field of it changes)
-let tool_body_box : @ui.Style = @ui.css("w=Full pt=S1 px=S1_5 pb=S2_5 gap=S2")
+let tool_body_box : @ui.Style = @ui.css("w=Full pt=S0_5 px=S1_5 pb=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
