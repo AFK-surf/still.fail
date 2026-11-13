@@ -64,7 +64,7 @@ import { checkWidgetSources, installWidgetSources, widgetSourceBeforeAddNeedsRep
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
 import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_SMALL, SESSION_CHAT_VERSION, SessionChatUnavailable } from "./session-chat-index.ts";
-import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION } from "./latest-thread-index.ts";
+import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREADS_INDEXED, LATEST_THREAD_VERSION } from "./latest-thread-index.ts";
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installClosedCardsIndex } from "./legacy-closed-cards.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
@@ -126,6 +126,14 @@ export const DELIVERY_INSERT_IF_MEMBER = `INSERT OR IGNORE INTO deliveries (thre
 // A Router may only deliver while the whole chat still belongs to the requesting workspace.
 export const ROUTER_WORKSPACE_MISMATCH = `SELECT 1 FROM thread_sessions ts LEFT JOIN sessions s ON s.key = ts.session
   WHERE ts.thread = ?1 AND (s.key IS NULL OR COALESCE(s.ws, ?2) IS NOT ?3) LIMIT 1`;
+/// How many of a session's threads `recentSessionThreads` gives.
+export const RECENT_THREADS = 20;
+/// A session's threads it joined last (the membership's own order, by its index).
+export const RECENT_JOINED_THREADS = `SELECT t.*, ts.connect FROM thread_sessions ts INDEXED BY thread_sessions_session
+  CROSS JOIN threads t ON t.id = ts.thread WHERE ts.session = ?1 ORDER BY ts.rowid DESC LIMIT ?2`;
+/// A session's threads in sessionThreads' order, the first ?2 (where it has no more than that).
+export const FEW_SESSION_THREADS = `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
+  WHERE ts.session = ?1 ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT ?2`;
 export const SESSION_HOME_THREAD = `SELECT t.*, ts.connect FROM threads t INDEXED BY threads_home
   CROSS JOIN thread_sessions ts WHERE t.home = ?1 AND ts.thread = t.id AND ts.session = ?1
   ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1`;
@@ -197,7 +205,8 @@ export const workOfRow = (r: Json | undefined): WorkOf | undefined =>
 
 /// What the auto-archive needs to know of a session idle long enough (sessions/lifecycle.ts), as a reader says it
 /// (read/ops-sessions.ts `archiveFacts`): bound to a connect, pinned, its chats and which of them are kept, its work and
-/// whether a job of its is up. Null where the index that says it is not built yet.
+/// whether a job of its is up. Null where the index that says it is not built yet. Its chats are the recent ones
+/// (`recentThreadRows`), as everything the station decides of a session's threads looks at.
 export type ArchiveFacts = { bound: boolean | null; pinned: boolean | null; threads: SessionThread[]; kept: number[] | null; work: WorkOf | null; upJob: boolean | null };
 
 /// What one look of the auto-archive reads (sessions/lifecycle.ts), a reader's: the sessions shown that are idle long
@@ -241,6 +250,31 @@ export function archiveLookOf(db: DatabaseSync, now: number, after: number, slac
   return { next, sessions: idleSessions.flatMap((s) => { const f = facts[s.row.key]; return f ? [{ ...s, facts: f }] : []; }), own, ownUnknown, marksReady };
 }
 
+/// store `recentSessionThreads` on `db` (readers' too: mb/src/readops/archive.mbt `recent_threads`), as rows: its own
+/// chat, then half of those it heard from last (the latest thread's order, once prepared: `unprepared` while not) and
+/// half of those it joined last, then the rest of each, at most `limit`; all of them, in sessionThreads' order, where
+/// it has no more. Those it heard from rank every thread that ever had a delivery above one that never did, as a new
+/// thread it started (a release posted) has not: hence both.
+export function recentThreadRows(db: DatabaseSync, session: string, limit: number): { rows: Json[]; more: boolean; unprepared: boolean } {
+  const joined = db.prepare(RECENT_JOINED_THREADS).all(session, limit + 1) as Json[];
+  // All of them, few: in sessionThreads' order.
+  if (joined.length <= limit) return { rows: db.prepare(FEW_SESSION_THREADS).all(session, limit) as Json[], more: false, unprepared: false };
+  const attempt = db.prepare(LATEST_THREAD_ATTEMPT).get(session) as Json;
+  const ready = attempt._latest_version === LATEST_THREAD_VERSION && attempt._latest_ready === 1;
+  const heard = ready ? (db.prepare(LATEST_THREADS_INDEXED).all(session, limit) as Json[]) : [];
+  const home = db.prepare(SESSION_HOME_THREAD).get(session) as Json | undefined;
+  const half = Math.ceil(limit / 2);
+  const seen = new Set<number>();
+  const rows: Json[] = [];
+  for (const r of [...(home ? [home] : []), ...heard.slice(0, half), ...joined.slice(0, half), ...heard.slice(half), ...joined.slice(half)]) {
+    if (rows.length === limit) break;
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    rows.push(r);
+  }
+  return { rows, more: true, unprepared: !ready };
+}
+
 /// `ArchiveFacts` of each of `keys` there is (null for one that is not), read on `db` in one snapshot.
 export function archiveFactsOf(db: DatabaseSync, keys: readonly string[]): Record<string, ArchiveFacts | null> {
   const bindings = sessionBindingsReady(db);
@@ -250,12 +284,11 @@ export function archiveFactsOf(db: DatabaseSync, keys: readonly string[]): Recor
   const keep = db.prepare(ARCHIVE_KEEP_EXISTS);
   const work = db.prepare(WORK_OF_SESSION);
   const upJob = db.prepare(SESSION_UP_JOB);
-  const threads = db.prepare("SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC");
   const out: Record<string, ArchiveFacts | null> = {};
   for (const key of keys) {
     const of = workOfRow(work.get(key) as Json | undefined);
     if (of === undefined) { out[key] = null; continue; }
-    const chats = (threads.all(key) as Json[]).map(toSessionThread);
+    const chats = recentThreadRows(db, key, RECENT_THREADS).rows.map(toSessionThread);
     out[key] = {
       bound: bindings ? bound.get(key) !== undefined : null,
       pinned: marks ? pin.get(key) !== undefined : null,
@@ -1772,11 +1805,23 @@ export class Store {
   }
 
   /// The threads a session takes part in, most recently joined first, with the connect it posts through in each.
-  sessionThreads(session: string): SessionThread[] {
+  /// Every one of them: for what must see all (a share, an archive); what an agent is told of or the station decides by
+  /// looks at the recent ones (`recentSessionThreads`), and `limit` gives the first few.
+  sessionThreads(session: string, limit = -1): SessionThread[] {
     return this.#all(
-      "SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC",
-      session,
+      "SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT ?",
+      session, limit,
     ).map(toSessionThread);
+  }
+
+  /// The threads of a session its agent is told of and what it answers is looked for in: its own chat, the ones it heard
+  /// from last (by the latest thread's order, once prepared) and the ones it joined last, at most `limit`, read by
+  /// indexes and limits however many threads it joined (a chat that posts each release in a new Slack thread joins
+  /// thousands). `more`: it takes part in others too.
+  recentSessionThreads(session: string, limit = RECENT_THREADS): { threads: SessionThread[]; more: boolean } {
+    const recent = recentThreadRows(this.db, session, limit);
+    if (recent.unprepared) this.requestLatestThread?.(session);
+    return { threads: recent.rows.map(toSessionThread), more: recent.more };
   }
 
   /// The latest thread when its order is ready, or undefined while an old multi-chat session needs preparation.

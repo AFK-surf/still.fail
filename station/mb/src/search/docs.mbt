@@ -649,12 +649,10 @@ fn js_string(v : Json) -> String {
 fn Reading::job_thread(self : Reading, key : Json) -> Json? raise {
   for t in
     self.db.all(
-      "SELECT t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC",
+      "SELECT t.id FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? AND t.surface = 'ember' ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1",
       [key],
     ) {
-    if field(t, "surface") == Json::string("ember") {
-      return Some(field(t, "id"))
-    }
+    return Some(field(t, "id"))
   }
   None
 }

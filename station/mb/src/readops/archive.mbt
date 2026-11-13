@@ -276,6 +276,61 @@ fn archive_last_read(db : @sql.Db, thread : Json) -> (Bool, Json) raise {
 }
 
 ///|
+/// store.ts `recentThreadRows` (its RECENT_THREADS is `limit` here): a session's own chat, then half of those it heard
+/// from last (the latest thread's order, once prepared) and half of those it joined last, then the rest of each, at most
+/// `limit`; all of them, in sessionThreads' order, where it has no more.
+fn recent_threads(db : @sql.Db, key : Json, limit : Int) -> Array[Map[String, Json]] raise {
+  let n = Json::number(limit.to_double())
+  let joined = db.all(
+    "SELECT t.*, ts.connect FROM thread_sessions ts INDEXED BY thread_sessions_session CROSS JOIN threads t ON t.id = ts.thread WHERE ts.session = ?1 ORDER BY ts.rowid DESC LIMIT ?2",
+    [key, Json::number((limit + 1).to_double())],
+  )
+  if joined.length() <= limit {
+    return db.all(
+      "SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ?1 ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT ?2",
+      [key, n],
+    )
+  }
+  let ready = match one(db, "SELECT (SELECT version FROM latest_thread_meta WHERE id=1) AS version, COALESCE((SELECT complete FROM latest_thread_scopes WHERE session=?1),0) AS ready", [key]) {
+    Some(r) => field(r, "version") is Number(1.0, ..) && field(r, "ready") is Number(1.0, ..)
+    None => false
+  }
+  let heard = if ready {
+    db.all(
+      "SELECT t.*,m.connect FROM latest_thread_rows r CROSS JOIN thread_sessions m ON m.session=r.session AND m.thread=r.thread CROSS JOIN threads t ON t.id=r.thread WHERE r.session=?1 ORDER BY r.has_last DESC,r.last_delivery DESC,r.joined_at DESC,r.member_rowid DESC LIMIT ?2",
+      [key, n],
+    )
+  } else {
+    []
+  }
+  let home = db.all(
+    "SELECT t.*, ts.connect FROM threads t INDEXED BY threads_home CROSS JOIN thread_sessions ts WHERE t.home = ?1 AND ts.thread = t.id AND ts.session = ?1 ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1",
+    [key],
+  )
+  let half = (limit + 1) / 2
+  let order : Array[Map[String, Json]] = []
+  order.push_iter(home.iter())
+  order.push_iter(heard.iter().take(half))
+  order.push_iter(joined.iter().take(half))
+  order.push_iter(heard.iter().drop(half))
+  order.push_iter(joined.iter().drop(half))
+  let seen : Array[Json] = []
+  let rows : Array[Map[String, Json]] = []
+  for r in order {
+    if rows.length() == limit {
+      break
+    }
+    let id = field(r, "id")
+    if seen.contains(id) {
+      continue
+    }
+    seen.push(id)
+    rows.push(r)
+  }
+  rows
+}
+
+///|
 /// store.ts `archiveFactsOf` for one session: none when it is not there.
 fn archive_facts(db : @sql.Db, key : Json, bindings : Bool, marks : Bool) -> Json? raise {
   guard one(db, work_of_session_sql, [key]) is Some(w) else { return None }
@@ -283,10 +338,7 @@ fn archive_facts(db : @sql.Db, key : Json, bindings : Bool, marks : Bool) -> Jso
     "pending": Json::boolean(field(w, "pending") != Json::number(0.0)),
     "lastTurn": if field(w, "started_at") is Null { Json::null() } else { turn_summary_json(w) },
   }
-  let chats = db.all(
-    "SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC",
-    [key],
-  )
+  let chats = recent_threads(db, key, 20)
   let threads = chats.map(r => ({ "thread": thread_json(r), "connect": or_null(col(r, "connect")) } : Json))
   let kept = if marks {
     let ids = []

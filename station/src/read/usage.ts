@@ -426,7 +426,7 @@ export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace 
       out[key] = null;
       continue;
     }
-    const thread = sessionThreads(s, key)[0] ?? null;
+    const thread = sessionThreads(s, key, null, 1)[0] ?? null;
     const [, first] = thread !== null ? (usageThreads(s, [thread.id])[0] ?? [thread, null]) : [null, null];
     const title = thread !== null ? titleOf(thread, first, thread.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, thread.id), thread.channel)) : null;
     out[key] = { thread: thread?.id ?? null, title };

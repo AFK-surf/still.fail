@@ -377,7 +377,8 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// it. Anything new said brings it back. Returns when the next one not idle long enough yet will have (null: none, or
 /// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
-/// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
+/// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats. Of a session, its
+/// recent chats (store `recentSessionThreads`) are what is looked at, as the review looks at them, however many it joined.
 export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void, prepareBindings?: () => void,
   prepareJobs?: (session: string) => void, prepareMarks?: () => void, prepareLast?: (thread: number) => void,
   look?: ArchiveLook): number | null {
@@ -474,7 +475,7 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     const quiet = idle([s.lastActiveAt, s.shownAt]);
     const quietLong = idle([s.lastActiveAt, s.shownAt], slackArchiveMs);
     if (!quiet && !quietLong) continue;
-    const threads = store.sessionThreads(s.key);
+    const threads = store.recentSessionThreads(s.key).threads;
     const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
     const done = quiet && !busy(s.key);
     const lingering = slack && quietLong && !working(s.key);
