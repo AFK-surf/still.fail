@@ -46,7 +46,7 @@ import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, personOf, personRules } from "../personal-lock.ts";
-import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, inForce, movedRoot } from "../lock-moved.ts";
+import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot } from "../lock-moved.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -190,6 +190,10 @@ type Held = { head: Head | null; entries: Entry[]; aside?: Entry[]; seen?: J[] |
 
 /// What this device keeps of a workspace's lock this run.
 type Part = {
+  /// The state in force of a moved chain as made last (`inForceOf`), with what it was made of, as the objects read: the
+  /// chain held, the `lockLogs` and `lockBodies` records, the person's own pinned chain, the stations the workspace's
+  /// view lists; and from when until when by this device's clock it stands (src/lock-moved.ts `goodFor`).
+  force: { entries: readonly Entry[]; logs: unknown; bodies: unknown; own: readonly Entry[] | null; listed: unknown; from: number; until: number; made: InForce } | null;
   /// Stations that refused this device for the lock, and the lock's head then.
   refused: Map<string, string | null>;
   /// Stations that refused this device though the lock as held names it, and how often this head.
@@ -332,7 +336,7 @@ export function live<D extends { exp?: unknown }>(d: D | undefined, at: number):
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -447,10 +451,31 @@ export const lockMoved = (): CoreError => new CoreError("lock_moved", "this work
 /// What is in force in `ws` by the chain held: folded where it moved nowhere (no other record read), else the rules'
 /// state of the person logs and bodies held here, by this device's clock (src/lock-moved.ts `inForce`). A station's
 /// name is the workspace's view's for its key (a `station` body has none).
+///
+/// The rules' state checks every entry of every log again: it is made once and kept in this core's memory for the
+/// workspace (`part`'s `force`, never in the database), as a station keeps its own (station/src/cloud/state.ts
+/// `forceOf`), and made again only where what it is made of is not the objects it was made of (each record read is
+/// the object the database's cache holds until it is written: src/db/account.ts `#doc`) or this device's clock left
+/// the span it stands for. Every reader reads what is given and none writes on it (src/lock-moved.ts `Folded`, read
+/// only).
 export function inForceOf(inner: Inner, ws: string, entries: readonly Entry[] = held(inner, ws)?.entries ?? []): InForce {
   if (movedRoot(entries) === null) return { said: "chain", root: null, f: fold(entries) };
-  const listed = arr(get(view(inner, ws), "stations"));
-  return inForce(ws, entries, logsOf(inner, ws, false), bodiesHeld(inner, ws), inner.host.nowMs(), (key) => str(listed.find((s) => s?.id === key)?.name) || undefined);
+  // (each read as a reader reads it, so a topic made of it is made again as one changes)
+  const logs = inner.data.record("lockLogs", ws);
+  const bodies = inner.data.record("lockBodies", ws);
+  const sub = inner.workspaces.owner(ws);
+  const pinned = sub === null ? [] : inner.adb.personal().pinnedOf(sub);
+  const own = pinned.length > 0 ? pinned : null;
+  const listed = get(view(inner, ws), "stations");
+  const at = now(inner);
+  const p = part(inner, ws);
+  const was = p.force;
+  if (was !== null && was.entries === entries && was.logs === logs && was.bodies === bodies && was.own === own && was.listed === listed && at >= was.from && at < was.until) return was.made;
+  const chains = logsOf(inner, ws, false);
+  const names = arr(listed);
+  const made = inForce(ws, entries, chains, bodiesHeld(inner, ws), inner.host.nowMs(), (key) => str(names.find((s) => s?.id === key)?.name) || undefined);
+  p.force = { entries, logs, bodies, own, listed, ...goodFor(chains.values(), at), made };
+  return made;
 }
 
 /// A workspace's name as the person knows it: as its view says, else as the account's list does.
@@ -2411,6 +2436,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         break;
       }
       case "disable": {
+        // (where the chain moved nothing is signed on it: the person not asked for what would not be done)
+        if (movedHere(inner, c.workspace)) return yield* Effect.fail(lockMoved());
         // The person's own secrets opened while the lock still says whose they are ( 一个库): once it is
         // off they go into the plain library, as the dialog said. Turned down there, nothing is turned off.
         // (the person asked once, for this: the box key's prompt says it, the vaults' keys unsealed with it; asked by
@@ -2584,6 +2611,8 @@ export function roster(inner: Inner, sub: string, ws: string, what: Roster): Eff
 /// asked too past it (see `ASKED_MS`).
 export function added(inner: Inner, sub: string, ws: string, role: string, answer: unknown): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
+    // (where the chain moved, as `roster` answers; the cloud has added them by now, as an enrollment it made, `enrolled`)
+    if (movedHere(inner, ws)) return yield* Effect.fail(lockMoved());
     const within = asked(inner);
     const m = yield* managed(inner, sub, ws, within);
     if (m === null || (role === "owner" && m.role !== "owner")) return null;
@@ -2880,6 +2909,8 @@ export class Lock {
   renew(device: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
+      // (where the chain moved its devices are not the chain's: nothing signed there, whichever is named)
+      if (movedHere(self.#inner, self.ws)) return yield* Effect.fail(lockMoved());
       const d = fold(held(self.#inner, self.ws)?.entries ?? []).devices.get(device);
       if (!d) return yield* Effect.fail(CoreError.invalid("no such device in the lock"));
       return yield* self.append("device", { ...d, exp: now(self.#inner) + WEB_DEVICE_SECS });
@@ -3188,7 +3219,15 @@ export class Lock {
     const inner = this.#inner;
     const ws = this.ws;
     const once = Effect.gen(function* () {
-      if (movedHere(inner, ws)) return;
+      // Where the chain moved, nothing pending will be taken after it: each a person asked for is told them as one that
+      // did not take effect, in the words of one let be (`#letBe`), the core's own dropped, none waiting for ever.
+      if (movedHere(inner, ws)) {
+        const items = pendingHeld(inner, ws);
+        if (items.some((x) => x.state === "waiting")) {
+          putPending(inner, ws, items.flatMap((x) => (x.state !== "waiting" ? [x] : x.act === null ? [] : [{ ...x, state: "failed" as const, what: whatOf(inner, ws, x.entry) }])));
+        }
+        return;
+      }
       const signer = yield* Signer.load(inner.host);
       const passes = new Map<string, number>();
       for (;;) {

@@ -16,10 +16,13 @@ import { crypto } from "./personal-lock.ts";
 type J = any;
 const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
 
-/// What is folded from the entries, unchecked (the stations check them): who and what is in the lock.
-export type Folded = { members: Map<string, { email: string; role: string }>; devices: Map<string, J>; stations: Map<string, string>; disabled: boolean; added: Map<string, number>; persons: Map<string, string> };
+/// What is folded from the entries, unchecked (the stations check them): who and what is in the lock. Read only: one
+/// made of a moved chain is kept and given to every reader (views/lock.ts `inForceOf`).
+export type Folded = { readonly members: ReadonlyMap<string, { email: string; role: string }>; readonly devices: ReadonlyMap<string, J>; readonly stations: ReadonlyMap<string, string>; readonly disabled: boolean; readonly added: ReadonlyMap<string, number>; readonly persons: ReadonlyMap<string, string> };
+/// One being made.
+type Making = { members: Map<string, { email: string; role: string }>; devices: Map<string, J>; stations: Map<string, string>; disabled: boolean; added: Map<string, number>; persons: Map<string, string> };
 
-const none = (): Folded => ({ members: new Map(), devices: new Map(), stations: new Map(), disabled: false, added: new Map(), persons: new Map() });
+const none = (): Making => ({ members: new Map(), devices: new Map(), stations: new Map(), disabled: false, added: new Map(), persons: new Map() });
 
 export function fold(entries: readonly Entry[]): Folded {
   const f = none();
@@ -142,6 +145,28 @@ export function lackingOf(ws: string, chains: Iterable<readonly [string, readonl
 /// newest `open`'s, where moved and said.
 export type Settings = { origins: string[]; rp_id: string; cloud_keys: unknown };
 export type InForce = { said: "chain" | "on" | "off" | "waiting"; root: string | null; f: Folded; settings?: Settings };
+
+/// How far ahead of this device's clock a web device's `at` may be and still count (rules/src/lock/state4.mbt
+/// `web_skew_secs`, station/src/cloud/state.ts WEB_SKEW).
+export const WEB_SKEW = 600;
+
+/// From when until when (unix seconds, `[from, until)`) the state made at `now` of `chains` stands by the clock alone:
+/// between the nearest web device's `at - WEB_SKEW` or `exp` passed and the nearest to come, as a station's `forceOf`
+/// bounds it. Nothing else the rules' state reads depends on the clock.
+export function goodFor(chains: Iterable<readonly Entry[]>, now: number): { from: number; until: number } {
+  let from = -Infinity, until = Infinity;
+  for (const es of chains) {
+    for (const e of es) {
+      if (e.kind !== "web") continue;
+      for (const x of [e.at - WEB_SKEW, Number((e.body as J)?.exp)]) {
+        if (!Number.isFinite(x)) continue;
+        if (x <= now) from = Math.max(from, x);
+        else until = Math.min(until, x);
+      }
+    }
+  }
+  return { from, until };
+}
 
 /// How often `inForce` was run: what the rules' state costs, counted for test/lock-moved.test.ts (views/lock.ts makes
 /// it once while what it is made of stands, `inForceOf`).

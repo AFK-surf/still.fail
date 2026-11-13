@@ -49,7 +49,7 @@ const SETTINGS = { origins: ["https://stillfail.test"], rp_id: "stillfail.test",
 /// `first`: what the station serves from the first read on (the rig reads it as its link opens). `other`: the genesis
 /// names a second device of the owner's (`elsewhere`), which signs the `moved`: none of this device's own entries is
 /// then off the chain as it changes branch (`again` would sign it again).
-type Served = { chain: Entry[]; logs: Log[]; bodies: unknown[]; posted: string[]; given: unknown[]; lacking: string[]; silent: boolean };
+type Served = { chain: Entry[]; logs: Log[]; bodies: unknown[]; posted: string[]; given: unknown[]; lacking: string[]; silent: boolean; brought: string[] };
 async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unknown; open: unknown }) => void = () => {}, opts: { other?: boolean } = {}) {
   const g = grant();
   let me: Signer | null = null;
@@ -72,7 +72,7 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
   const byOther = (e: Omit<Entry, "sig">): Entry => ({ ...e, sig: { key: other.id, alg: "Ed25519", sig: other.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e as Entry))])) } });
   const sign = (e: Omit<Entry, "sig">): Entry => (opts.other ? byOther(e) : signer.sign(e));
   const moved = sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(alice) }));
-  const st: Served = { chain: [g0, moved], logs: [alice, bob], bodies: [open, member, station], posted: [], given: [], lacking: [], silent: false };
+  const st: Served = { chain: [g0, moved], logs: [alice, bob], bodies: [open, member, station], posted: [], given: [], lacking: [], silent: false, brought: [] };
   first(st, { alice, bob, member, open });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
@@ -88,6 +88,7 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
     st.posted.push(`${method} ${path}`);
     // (silent: what it is brought it neither takes nor refuses)
     if (st.silent && method === "POST") return Effect.never;
+    if (method === "POST" && path === "/lock") st.brought.push(...((body as { entries?: Entry[] })?.entries ?? []).map((e) => entryHash(e)));
     if (method === "POST" && path === "/lock/bodies") st.given.push(...((body as { bodies?: unknown[] })?.bodies ?? []));
     if (method === "POST") return Effect.succeed({ taken: 1, head: headOf(c) });
     return Effect.fail(new CoreError("http_404", "no route", 404));
@@ -229,7 +230,7 @@ test("the state in force is made once while what it is made of stands: a body co
   made.count = 0;
   await again();
   await again();
-  assert.equal(made.count, 0, "the topic made twice, nothing changed: the state made before stands");
+  assert.equal(made.count, 0, `the topic made twice, nothing changed: the state made before stands (made ${made.count} times)`);
   made.count = 0;
   w.st.bodies = [...w.st.bodies, w.member];
   await w.told();
@@ -375,7 +376,7 @@ test("the background writers on a moved chain, their causes present: a read sign
   await w.run(read(w.inner, "ws"));
   for (let t = 0; t < 3000; t += 10) await w.r.host.time.pass(10);
   assert.equal(held(w.inner, "ws")!.head?.hash, entryHash(x));
-  const before = { posted: w.st.posted.length, cloud: w.r.cloud.posted.length, asked: w.r.host.secureAsked.length, pending: pendingHeld(w.inner, "ws").length };
+  const before = { posted: w.st.posted.length, brought: w.st.brought.length, cloud: w.r.cloud.posted.length, asked: w.r.host.secureAsked.length, pending: pendingHeld(w.inner, "ws").length };
   w.st.chain = [w.g0, w.moved];
   await w.told();
   const h = held(w.inner, "ws")!;
@@ -383,7 +384,10 @@ test("the background writers on a moved chain, their causes present: a read sign
   assert.ok((h.aside ?? []).some((e) => entryHash(e) === entryHash(x!)), "this device's own entry off the chain");
   for (const e of [bindPerson(w.inner, "ws"), keepToPerson(w.inner, "ws"), ownLockFor(w.inner, "ws"), Effect.sync(() => deliver(w.inner, "ws"))]) await w.run(e);
   for (let t = 0; t < 3000; t += 10) await w.r.host.time.pass(10);
-  assert.deepEqual(w.st.posted.slice(before.posted).filter((p) => p !== "POST /lock/bodies"), [], "nothing brought to the station");
+  // (what a station showed and lacks now is carried to it, `carry`: the chain read for itself, nothing signed)
+  const known = new Set([w.g0, x, w.moved].map((e) => entryHash(e)));
+  assert.deepEqual(w.st.brought.slice(before.brought).filter((h) => !known.has(h)), [], "nothing signed brought to the station");
+  assert.deepEqual(w.st.posted.slice(before.posted).filter((p) => p !== "POST /lock/bodies" && p !== "POST /lock"), [], "nothing else brought (no lock of the person's own begun)");
   assert.equal(w.r.cloud.posted.length, before.cloud, "nothing sent to the cloud's lock");
   assert.equal(w.r.host.secureAsked.length, before.asked, "nobody asked");
   assert.equal(held(w.inner, "ws")!.entries.length, h.entries.length, "nothing signed on the chain");
