@@ -37,10 +37,10 @@ test "a chat's screen button with more of them: a menu, its display first, the o
 }
 
 ///|
-test "a chat's screen button says how many there are where more than one" {
+test "a chat's screen button says no count on it, however many there are" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-station-screens", wide=true)
-  assert_eq(screen_count_on(t), ["2"])
+  assert_eq(screen_count_on(t), [])
   let one = decide_core(calls, "chat-station-screen", wide=true)
   assert_eq(screen_count_on(one), [])
 }

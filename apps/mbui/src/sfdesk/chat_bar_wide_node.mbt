@@ -717,35 +717,18 @@ fn wide_bar_keys(
             }
           }, tips~, linked=ends.linked, shortcut="chat.screen")
           me.val = Some(button)
-          let screens = fn() {
+          // (no count on it: how many there are is its menu's; the user, 2026-11-13: a count on the icon's corner hid it)
+          let driven = fn() {
             match view() {
-              Some(v) => v.screens
-              None => []
+              Some(v) => chat_screens_driven(v.screens)
+              None => false
             }
           }
-          sb.pick(fn() { (screens().length() > 1, chat_screens_driven(screens())) }, fn(o, k) {
+          sb.show(driven, fn(o) {
             // (over the button, not after it: the old view's layer)
             o.over(Is(true)) |> ignore
-            let (many, driven) = k
-            if many {
-              o.box(fn(room) {
-                room.over(Is(true)) |> ignore
-                @sf.style_node(room, fn() { screen_count_room })
-                room.box(fn(pill) {
-                  @sf.style_node(pill, fn() { if driven { screen_count_driven } else { screen_count } })
-                  @sf.words_node(pill, fn() { screens().length().to_string() }, fn() { screen_count_words }) |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
-            } else if driven {
-              o.box(fn(room) {
-                room.over(Is(true)) |> ignore
-                @sf.style_node(room, fn() { jobs_alarm_room })
-                room.box(fn(d) { @sf.style_node(d, fn() { screen_driven_dot }) }) |> ignore
-              })
-              |> ignore
-            }
+            @sf.style_node(o, fn() { jobs_alarm_room })
+            o.box(fn(d) { @sf.style_node(d, fn() { screen_driven_dot }) }) |> ignore
           })
         })
         |> ignore
