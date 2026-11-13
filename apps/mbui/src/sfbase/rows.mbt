@@ -119,6 +119,13 @@ pub fn window_step(tall : Double) -> Int {
 let windows_asked : Map[String, Int] = Map([])
 
 ///|
+/// How many rows list `filter` of workspace `scope` was last told its window grows to (windows_asked's; 0, none asked
+/// since it was asked anew): what tells a page more that comes from rows that arrive (the sidebar's RowsMotion).
+pub fn chats_window_asked(scope : String, filter : String) -> Int {
+  windows_asked.get(list_window_key(chats_params(scope, filter))).unwrap_or(0)
+}
+
+///|
 /// A chat list's key among windows_asked: its workspace and filter as asked.
 fn list_window_key(p : Map[String, Json]) -> String {
   let on = fn(k : String) { if p.get(k) is Some(True) { "1" } else { "0" } }

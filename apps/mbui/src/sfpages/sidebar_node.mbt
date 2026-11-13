@@ -179,7 +179,14 @@ fn chats_pane_node(
         recorded_rows.val = by_name.length()
         @hostapi.perf_line("chat-list: filter=\{filter} rows=\{recorded_rows.val}")
       }
-      motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched), at.2)
+      motion.said(
+        v,
+        shown,
+        by_name,
+        @signals.untracked(current) && @signals.untracked(frame.watched),
+        at.2,
+        @sfbase.chats_window_asked(id, filter),
+      )
       ordered.set(shown)
       rows.set(by_name)
       revision.set(revision.untracked() + 1)
@@ -556,6 +563,8 @@ priv struct RowsMotion {
   mut had : Bool
   // (the page's stay on top it was last said in: Nav's stint)
   mut stint : Int
+  // (how many rows it held as it was last said: rows held grown within a window asked past that, a page more came)
+  mut held : Int
   going : Map[String, (ChatItem?, String)]
   moving : Map[String, (Bool, Double)]
   told : @signals.Signal[Int]
@@ -563,7 +572,7 @@ priv struct RowsMotion {
 
 ///|
 fn RowsMotion::new() -> RowsMotion {
-  { last: [], last_items: {}, had: false, stint: 0, going: {}, moving: {}, told: @signals.signal(0) }
+  { last: [], last_items: {}, had: false, stint: 0, held: 0, going: {}, moving: {}, told: @signals.signal(0) }
 }
 
 ///|
@@ -581,9 +590,13 @@ fn day_keys(days : Array[ChatDay]) -> Array[String] {
 
 ///|
 /// The list's days now said (`shown`, its rows `by_name`) in node `v`'s timeline, `watched` whether it is the list
-/// shown, in its page's stay on top `stint`: what came, went and went ahead set off from the cause's moment. What
-/// changed while its page was off the top (on 小屏 kept on the stack's shelf at rest, its list said again only as it is
-/// taken back: a new stint) is there at once, as on a page made anew.
+/// shown, in its page's stay on top `stint`, the window its list was last told it grows to `asked` (chats_window_asked):
+/// what came, went and went ahead set off from the cause's moment. What changed while its page was off the top (on 小屏
+/// kept on the stack's shelf at rest, its list said again only as it is taken back: a new stint) is there at once, as on
+/// a page made anew; so are the rows a page more brings (its rows held grown within a window asked past what it held,
+/// the lines new to it after the last it had), only a chat that arrives coming where it is (the coordinator of the
+/// migration's ruling, 2026-11-13: a page more's rows opening one by one, measured as they opened, a fling into them
+/// showed the list's ground).
 fn RowsMotion::said(
   self : RowsMotion,
   v : @view.View,
@@ -591,9 +604,14 @@ fn RowsMotion::said(
   by_name : Map[String, ChatItem],
   watched : Bool,
   stint : Int,
+  asked : Int,
 ) -> Unit {
   let lines = day_keys(shown)
   let was = self.last
+  // (a page more come: more rows held than before, a window past what it held asked)
+  let held = by_name.length()
+  let paged = held > self.held && asked > self.held
+  self.held = held
   let watched = watched && self.had && !lines.is_empty() && stint == self.stint
   self.stint = stint
   if watched && !(was == lines) {
@@ -606,9 +624,13 @@ fn RowsMotion::said(
     for j, k in was {
       before[k] = j
     }
-    // (new to it: comes where it is)
-    for k in lines {
-      if !before.contains(k) {
+    // (new to it: comes where it is; after the last line it had, in a page more that came, there at once)
+    let past = match was.last() {
+      Some(l) if paged => lines.search(l)
+      _ => None
+    }
+    for i, k in lines {
+      if !before.contains(k) && !(past is Some(p) && i > p) {
         self.moving[k] = (true, now)
       }
       self.going.remove(k)
