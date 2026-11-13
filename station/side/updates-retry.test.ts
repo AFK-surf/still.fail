@@ -7,11 +7,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
+import { hearLines } from "../src/ops/log.ts";
 import { Updates } from "../src/updates/updates.ts";
 import { settle, testClock } from "../test/hub-fakes.ts";
 import { feedOf, trusted } from "../test/release-fakes.ts";
 
-test("a failed installer is retried once and the release is installed", { skip: process.platform === "win32" }, async (t) => {
+for (const outage of [false, true]) test(outage
+  ? "a failed installer is retried when the signed feed recovers"
+  : "a failed installer is retried once and the release is installed", { skip: process.platform === "win32" }, async (t) => {
   const data = mkdtempSync(join(tmpdir(), "updates-retry-side-"));
   const app = join(data, "app"), run = join(data, "run");
   mkdirSync(join(app, "bin"), { recursive: true });
@@ -28,9 +31,14 @@ fi
 printf 'handoff\\n' > "$STILLFAIL_DATA/run/update.step"
 printf '1310\\n' > "$STILLFAIL_DATA/app/BUILD"
 `);
+  let mode: "online" | "offline" | "plan" | "plan-fails" = "online", served = 0;
   const server = createServer((req, res) => {
-    if (req.url?.startsWith("/releases/station.json")) res.end(JSON.stringify(feedOf(1310)));
-    else res.writeHead(404).end();
+    if (!req.url?.startsWith("/releases/station.json")) return void res.writeHead(404).end();
+    if (mode === "offline") return void res.writeHead(503).end();
+    if (mode === "plan-fails") { mode = "online"; return void res.writeHead(503).end(); }
+    if (mode === "plan") mode = "plan-fails";
+    else if (outage && ++served === 2) mode = "offline";
+    res.end(JSON.stringify(feedOf(1310)));
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -66,10 +74,30 @@ printf '1310\\n' > "$STILLFAIL_DATA/app/BUILD"
   await time.adjust(200);
   await failed;
   assert.equal(readFileSync(join(data, "attempts"), "utf8"), "ran\n");
+  if (outage) {
+    await until(() => updates.get()[0]!.latest === undefined);
+    const checked = updates.get()[0]!.checkedAt;
+    const reread = until(() => updates.get()[0]!.checkedAt !== checked);
+    await settle();
+    await time.adjust(60_000);
+    await reread;
+    assert.equal(updates.get()[0]!.latest, undefined, "the retry's first feed read also failed");
+    assert.equal(readFileSync(join(data, "attempts"), "utf8"), "ran\n");
+    // The next reading succeeds, but the separate feed read to plan the installer fails once.
+    const planFailed = new Promise<void>((resolve) => hearLines((line) => {
+      if (line.at === "updates" && line.message === "the station not updated by itself") resolve();
+    }));
+    t.after(() => hearLines(null));
+    mode = "plan";
+    await settle();
+    await time.adjust(120_000);
+    await planFailed;
+    assert.equal(readFileSync(join(data, "attempts"), "utf8"), "ran\n", "a failed plan did not start the installer");
+  }
   const done = until(() => updates.get()[0]!.done !== undefined);
   const doneExit = exit("0");
   await settle();
-  await time.adjust(60_000);
+  await time.adjust(outage ? 240_000 : 60_000);
   await doneExit;
   await settle();
   await time.adjust(200);

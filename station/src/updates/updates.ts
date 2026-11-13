@@ -44,7 +44,7 @@ import { rm } from "node:fs/promises";
 import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, parse } from "node:path";
-import { type Clock, Effect, Fiber } from "effect";
+import { type Clock, Effect, Fiber, Schedule } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
@@ -116,6 +116,7 @@ export const TIMING: Timing = {
 
 /// A transient handover failure can clear; try once more without repeatedly starting a broken release.
 const STATION_RETRY_MS = 60_000;
+const STATION_RETRY_BACKOFF = Schedule.min([Schedule.exponential("2 minutes"), Schedule.spaced("15 minutes")]); // timer: backoff after a failed update
 
 export type UpdatesOptions = {
   /// The release this station runs from (`--app`).
@@ -260,6 +261,7 @@ export class Updates {
   /// A failed version whose retry is due, and the version whose retry was attempted in this process.
   private retryDue: string | null = null;
   private retried: string | null = null;
+  private retrySerial = 0;
   private lastCheck: number | null = null;
   private running: () => number;
   private runtimeChanged: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
@@ -662,12 +664,35 @@ export class Updates {
   private autoUpdate(why: string) {
     const to = this.toUpdateTo();
     if (to === null) return;
-    if (this.retryDue === to) {
-      this.retryDue = null;
-      this.retried = to;
-    }
     log.info("updates", `${why}: the station updates itself`, { to });
     this.updateStation(stationLang()).catch((e) => log.warn("updates", "the station not updated by itself", { error: (e as Error).message }));
+  }
+
+  /// Retry one failed installer, rereading the signed feed with backoff if it or the installer's plan is unavailable.
+  private retryStation(version: string) {
+    const serial = ++this.retrySerial;
+    const over = () => this.closed || serial !== this.retrySerial || this.tried !== version || this.retried === version;
+    const attempt = Effect.promise(async () => {
+      if (over()) return true;
+      this.retryDue = version;
+      if (this.auto()) {
+        try {
+          // A runtime-only reading may already be in flight; wait for it, then read the station's feed too.
+          if (this.checking) await this.checking.catch(() => {});
+          if (over()) return true;
+          await this.check();
+          if (!over()) this.autoUpdate("retrying a failed update");
+        } catch (e) {
+          log.warn("updates", "the failed update's release not read", { error: (e as Error).message });
+        }
+      }
+      return over();
+    });
+    // timer: retry after a failed update, then back off if the release cannot be read or its installer started.
+    this.fibers.fork(Effect.sleep(STATION_RETRY_MS).pipe(
+      Effect.andThen(attempt.pipe(Effect.repeat({ schedule: STATION_RETRY_BACKOFF, until: (done) => done }))), // timer: retry after a failed update
+      Effect.asVoid,
+    ));
   }
 
   // ---- updating ----
@@ -1166,6 +1191,8 @@ export class Updates {
       return false;
     }
     log.info("updates", "updating the station", { origin: plan.env.STILLFAIL_ORIGIN, channel: plan.env.STILLFAIL_CHANNEL, to: plan.release.version, delta: handed.STILLFAIL_ARCHIVE !== undefined });
+    if (this.retryDue === plan.release.version) this.retried = plan.release.version;
+    this.retryDue = null;
     this.tried = plan.release.version;
     const started: Started = { at: this.fibers.now(), from: stationVersion(this.app) ?? null };
     try {
@@ -1273,15 +1300,12 @@ export class Updates {
       });
       // A timeout alone does not mean the installer exited. It and success also cancel an earlier pending retry.
       if (code === null || failed === null) {
+        this.retrySerial++;
         this.retryDue = null;
         this.retried = this.tried;
       } else if (this.tried !== null && this.retried !== this.tried) {
-        const version = this.tried;
-        this.later(STATION_RETRY_MS, () => { // timer: one retry after a failed update
-          if (this.tried !== version || this.retried === version) return;
-          this.retryDue = version;
-          this.autoUpdate("retrying a failed update");
-        });
+        this.retryDue = null;
+        this.retryStation(this.tried);
       }
       this.spawn(() => this.check());
       if (done !== null) {

@@ -23,9 +23,12 @@ test("a failed automatic update gets one delayed retry, still waiting for vault 
   const attempts: string[] = [];
   // Keep the real update decision, but substitute the installer and version fetch.
   updates.check = async () => {};
-  (updates as unknown as { updateStation(): Promise<void> }).updateStation = async () => {
+  const internal = updates as unknown as { retryDue: string | null; retried: string | null; updateStation(): Promise<void> };
+  internal.updateStation = async () => {
     const to = updates.get()[0]!.latest!;
     attempts.push(to);
+    if (internal.retryDue === to) internal.retried = to;
+    internal.retryDue = null;
     updates.tried = to;
   };
   updates.stationWith("0.1.1310");
@@ -80,4 +83,52 @@ test("a failed automatic update gets one delayed retry, still waiting for vault 
   await time.adjust(60_000);
   await settle();
   assert.deepEqual(attempts, ["0.1.1310", "0.1.1320"], "an unconfirmed installer exit is never retried");
+});
+
+test("a retry survives an unavailable release feed before the installer starts", async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "updates-retry-feed-"));
+  const app = join(data, "app"), run = join(data, "run");
+  mkdirSync(app);
+  mkdirSync(run);
+  writeFileSync(join(app, "BUILD"), "1300\n");
+  const config = new ConfigFile(data);
+  config.update((raw) => (raw.autoUpdate = true));
+  const time = testClock();
+  const updates = new Updates({ app, data, config, origin: () => null, stationOnly: true, clock: time.clock });
+  t.after(async () => { await updates.close(); rmSync(data, { recursive: true, force: true }); });
+  let reads = 0, plans = 0, started = 0;
+  updates.check = async () => {
+    reads++;
+    if (reads <= 2) updates.poke("station", (item) => (item.latest = null));
+    else updates.stationWith("0.1.1310");
+  };
+  const internal = updates as unknown as { retryDue: string | null; retried: string | null; updateStation(): Promise<void> };
+  internal.updateStation = async () => {
+    plans++;
+    if (plans === 1) throw new Error("feed failed while planning the installer");
+    started++;
+    internal.retried = internal.retryDue;
+    internal.retryDue = null;
+    updates.tried = "0.1.1310";
+  };
+  updates.stationWith("0.1.1310");
+  updates.tried = "0.1.1310";
+  writeFileSync(join(run, "update.exit"), "1\n");
+  updates.follow({ at: time.clock.currentTimeMillisUnsafe(), from: "0.1.1300" });
+  await settle();
+  assert.equal(reads, 1, "the check after failure could not read the feed");
+  await time.adjust(60_000);
+  await settle();
+  assert.equal(reads, 2, "the due retry checks the feed again");
+  assert.equal(started, 0);
+  await time.adjust(120_000);
+  await settle();
+  assert.equal(plans, 1, "the feed recovered but planning it failed");
+  assert.equal(started, 0);
+  await time.adjust(240_000);
+  await settle();
+  assert.equal(started, 1, "only a started installer consumes the retry");
+  await time.adjust(15 * 60_000);
+  await settle();
+  assert.equal(started, 1, "the installer is started at most once again");
 });
