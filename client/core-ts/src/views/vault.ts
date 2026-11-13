@@ -57,7 +57,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
-import { OTHERS_MS, answersOf, askPerson, tookOrRefused, deviceText, fold, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf } from "./lock.ts";
+import { OTHERS_MS, answersOf, askPerson, tookOrRefused, deviceText, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf, stateOf } from "./lock.ts";
 import { workspaceIds } from "./marks.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -893,7 +893,7 @@ export function vaultAsks(inner: Inner): J[] {
     const vouched = certs(inner, ws, lock);
     const mine = vouched.find((c) => c.device === self.device);
     if (mine === undefined) continue;
-    const folded = fold(lockHeld(inner, ws)?.entries ?? []);
+    const folded = stateOf(inner, ws);
     for (const v of Object.values(h.vaults)) {
       if (v.deleted || !trusted(lock, v) || v.owner !== self.sub) continue;
       const keyed = new Map(v.keys.map((k) => [k.cert.device, k.cert.box]));

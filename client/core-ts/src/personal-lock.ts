@@ -68,7 +68,8 @@ const verifies = (id: string, sig: string, bytes: Uint8Array) => {
 export type Device = { key: string; id: string; label: string; sign_key?: string };
 export type Chain = { readonly devices: ReadonlyMap<string, Device>; readonly hash: string | null };
 
-const crypto = {
+/// What the rules are given to hash and check signatures with, here and in src/lock-moved.ts.
+export const crypto = {
   sha256Hex: (text: string) => hex(sha256(utf8(text))),
   sigValid: (sig: J, hash: string) => sig?.alg === "Ed25519" && typeof sig.key === "string" && typeof sig.sig === "string" && verifies(sig.key, sig.sig, signedBytes(hash)),
   validKeyId: (id: string) => /^ed25519:[0-9a-f]{64}$/.test(id),
@@ -81,7 +82,7 @@ const STATEMENTS = new Set(["ws.member", "ws.member.remove", "ws.station", "ws.s
 
 /// A person log's rules for keeping (src/lock-keep.ts), of `sub`'s log of genesis hash `root`: its chain by the rules'
 /// fork choice, one vote a device (rules/src/lock/chain.mbt `person_chain`).
-function personRules(sub: string, root: string): LogRules {
+export function personRules(sub: string, root: string): LogRules {
   return {
     chain: (all) => {
       const out = rules.person_chain_js(all, root, crypto) as J;
@@ -225,6 +226,11 @@ export class PersonalLock {
 
   constructor(env: PersonalEnv) {
     this.#env = env;
+  }
+
+  /// The chain pinned here as read so far, its entries from the genesis (read only).
+  pinnedOf(sub: string): readonly Entry[] {
+    return this.#pinned.get(sub) ?? [];
   }
 
   /// The chain pinned here as read so far, what it says.

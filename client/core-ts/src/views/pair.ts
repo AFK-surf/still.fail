@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, asked, baseOf, deviceText, fold, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view, withBound } from "./lock.ts";
+import { Lock, asked, baseOf, deviceText, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, stateOf, view, withBound } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -419,7 +419,7 @@ function boundTo(inner: Inner, subs: string[]): string[] {
   return inner.workspaces.owned().flatMap(([ws, sub]) => {
     const h = held(inner, ws);
     if (!subs.includes(sub) || !h?.head) return [];
-    const f = fold(h.entries);
+    const f = stateOf(inner, ws, h.entries);
     const bound = f.persons.get(sub);
     return !f.disabled && bound !== undefined && bound === personal.root(sub) ? [ws] : [];
   });
@@ -518,7 +518,7 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
   for (const [ws, sub] of inner.workspaces.owned()) {
     const h = held(inner, ws);
     if (!h?.head) continue;
-    const f = fold(h.entries);
+    const f = stateOf(inner, ws, h.entries);
     const had = live(f.devices.get(base), Math.floor(inner.host.nowMs() / 1000));
     const unsigned = had !== undefined && had.kind === "app" && inner.host.appKeys === true && (signer === null || had.sign_key !== signer);
     // (nor where its person bound a lock of their own that it is not on: approved into this one it would still be
@@ -829,7 +829,7 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
       const places = y.workspaces.filter((w) => !isPerson(w));
       const signedIn = () => {
         const now = Math.floor(inner.host.nowMs() / 1000);
-        return places.filter((ws) => live(fold(held(inner, ws)?.entries ?? []).devices.get(base), now) !== undefined);
+        return places.filter((ws) => live(stateOf(inner, ws).devices.get(base), now) !== undefined);
       };
       // Not named, though a trusted device that had the confirmation went without a word: it signs after the
       // confirmation (a read, the signature, the cloud's POST), and the read here can come first (2026-11-12: signed
