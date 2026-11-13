@@ -493,7 +493,7 @@ fn tape_made(
     Setting(Usage) if pane_makes.val =>
       made("usage", fn(p, core, here, _stint, told, acts) {
         context_node(p)
-        @sfpages.usage_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, bar_actions=acts)
+        @sfpages.usage_node(p, core, src, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, bar_actions=acts)
       })
     // (by its days: another's of other days another page)
     Setting(UsagePrices(days)) if pane_makes.val =>

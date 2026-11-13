@@ -471,8 +471,9 @@ pub fn hand_over_shown(at : String, leases : Array[TopicLease], open : () -> Uni
 }
 
 ///|
-/// The page shown for `at` (hand_over_shown's) first built: what was handed to it let go once this build has read what
-/// it reads, at its frame's end; what it read is its own reader's by then.
+/// The page shown for `at` (hand_over_shown's) first built, or a reader of a page switched in place having read anew
+/// (switch_answered's): what was handed to it let go once this build has read what it reads, at its frame's end; what
+/// it read is its own reader's by then.
 pub fn shown_read(at : String) -> Unit {
   match handed_shown.get(at) {
     Some(readers) => {

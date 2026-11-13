@@ -4,7 +4,7 @@
 // bones till they came, where it opened whole before the list's rows were rows. So the press asks them, and the page
 // opens as they are answered (press_wait: at once where they are already, else the moment they are, while what it was
 // pressed in stays as it was); meanwhile the screen stays as it was (the coordinator of the migration, 2026-11-12:
-// opening an account's page draws no bones).
+// opening an account's page draws no bones). So too a choice that switches what its page reads (switch_answered).
 
 ///|
 /// The workspace a station's topics are asked of (settings' station_scope): its address's, `ws` for one without it.
@@ -97,4 +97,39 @@ pub fn show_answered(src : Source, asks : Array[(String, Map[String, Json])], at
   let (answered, leases) = asked_now(src, asks)
   press_wait(answered, fn() { hand_over_shown(at, leases, show) }, let_go=fn() { leases.each(fn(l) { l.cancel() }) })
   |> ignore
+}
+
+///|
+/// A choice that switches what the same page reads (用量's days and split), nothing made anew to take what it asks.
+/// Pressed, `asks` (what the page reads as it is first drawn for that choice, said by the code it reads by) are asked of
+/// `src` now; the page stays as it is meanwhile, the choice showing what was pressed by a state of its own. Once each is
+/// answered (at once where they are already), `switch_to` writes what the page reads by, told as what the answer tells
+/// (view's `answering`: what it changes comes whole, no way set out by it), at the end of what is running (the press's
+/// event, the answer's, the frame): a switch told while a frame is being built would show part of each in it. What was
+/// asked is handed over with it to the page's readers by `at` (hand_over_shown): each that reads it anew says so as it
+/// has read it (shown_read), and the leases are let go at the end of that frame, its subscriptions then its readers' own.
+/// Given up (press_wait: the page left, the workspace switched, something else put up; and by its caller where another
+/// choice is pressed, by the PressWait returned), what was asked is let go and `let_go` run (the choice put back to what
+/// is shown).
+pub fn switch_answered(
+  src : Source,
+  asks : Array[(String, Map[String, Json])],
+  at : String,
+  switch_to : () -> Unit,
+  let_go? : () -> Unit = fn() {  },
+) -> PressWait {
+  // (told while a frame is drawn, after it brought the window's tree: at that frame's end, so the frame shows the page
+  // wholly as it was, never its words read anew over what is laid out as it was; in a press or between frames, at the
+  // end of that event, before the next frame)
+  let told = fn() { @ui.after_frame(fn() { @view.answering(switch_to) }) }
+  if asks.is_empty() || src.read_only {
+    return press_wait(fn() { true }, told)
+  }
+  let (answered, leases) = asked_now(src, asks)
+  // (what was asked handed over with the switch, so the frame its readers read it anew in is the one after it)
+  let go = fn() { @ui.after_frame(fn() { hand_over_shown(at, leases, fn() { @view.answering(switch_to) }) }) }
+  press_wait(answered, go, let_go=fn() {
+    leases.each(fn(l) { l.cancel() })
+    let_go()
+  })
 }

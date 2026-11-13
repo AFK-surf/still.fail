@@ -54,22 +54,40 @@ fn usage_reset() -> Unit {
 let usage_days_choices : Array[Int] = [7, 30]
 
 ///|
-/// What the page asks the core's `usage` view for: its workspace's `days`, split as picked, of the one picked alone, of
-/// the day picked. The chart keeps the whole period and all its parts, so picks do not replace its legend or scale.
-fn usage_args(here : Here, days : Int, chart? : Bool = false) -> Map[String, Json] {
+/// What the page asks of the core (a topic and its params): its `usage` view of its workspace's `days`, `split` ("" the
+/// core's choice), of the one picked alone (`only`: its list and key), of the day picked (`day`). The chart's is asked
+/// with neither: it keeps the whole period and all its parts, so picks do not replace its legend or scale.
+fn usage_ask(
+  here : Here,
+  days : Int,
+  split : String,
+  only? : (String, String) = ("", ""),
+  day? : String = "",
+) -> (String, Map[String, Json]) {
   let args : Map[String, Json] = { "scope": str(here.workspace), "days": Json::number(days.to_double()) }
-  let (only_list, only_key) = usage_pick.only.get()
-  if !chart && only_list != "" {
-    args["only"] = { "list": str(only_list), "key": str(only_key) }
+  if only.0 != "" {
+    args["only"] = { "list": str(only.0), "key": str(only.1) }
   }
-  if usage_pick.split.get() != "" {
-    args["split"] = str(usage_pick.split.get())
+  if split != "" {
+    args["split"] = str(split)
   }
-  if !chart && usage_pick.day.get() != "" {
-    args["day"] = str(usage_pick.day.get())
+  if day != "" {
+    args["day"] = str(day)
   }
-  args
+  ("usage", args)
 }
+
+///|
+/// What the page reads as it is drawn with these picks (usage_ask's): what was spent, then the chart's.
+fn usage_reads(here : Here, days : Int, split : String, only : (String, String), day : String) -> Array[(String, Map[String, Json])] {
+  [usage_ask(here, days, split, only~, day~), usage_ask(here, days, split)]
+}
+
+///|
+/// What usage_node's readers say they have read anew by, what a choice pressed asked handed to them (sfbase's
+/// switch_answered, shown_read).
+// kept across runs: a name, never written
+let usage_shown_at : String = "usage"
 
 ///|
 /// The part picked in this chart, if the pick belongs to its split.

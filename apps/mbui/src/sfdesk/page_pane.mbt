@@ -351,7 +351,7 @@ fn pane_made(
       })
     Setting(Usage) =>
       made("usage", fn(a, core, here, _stint, frame, width) {
-        @sfpages.usage_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
+        @sfpages.usage_node(a, core, src, here, on_back=core.pop, frame~, width~, tips~)
       })
     // (by its days: another's of other days another page)
     Setting(UsagePrices(days)) =>

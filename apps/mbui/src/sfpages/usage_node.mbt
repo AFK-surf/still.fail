@@ -209,7 +209,7 @@ fn usage_track_node(parent : @view.View, share : () -> Double) -> Unit {
 /// end, in lines where it has not the room), the cost large and its change against the days before after it on its
 /// foot (under it where the line has not the room); once something was spent, the days' parts named and what they
 /// are split by, and the days' bars; what the page is narrowed to.
-fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, tips? : @sf.TipLayer) -> Unit {
+fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, press : UsagePress, tips? : @sf.TipLayer) -> Unit {
   let cost = fn() {
     match items(v(), "tiles").get(0) {
       Some(t) => Some(t)
@@ -242,7 +242,7 @@ fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart 
       k.show(fn() { !flag(chart(), "empty") && items(chart(), "daily").length() > 0 }, fn(s) {
         // (each the card's own, as far apart as what is on it)
         s.gap(Is(ug_card_gap)) |> ignore
-        usage_split_node(s, chart)
+        usage_split_node(s, chart, press)
         usage_chart_node(s, chart, v)
       })
       usage_narrowed_node(k, v, chart, tips?)
@@ -271,8 +271,9 @@ fn usage_prices_link_node(parent : @view.View, core : Core) -> Unit {
 ///|
 /// The days' bars' parts named and what they are split by (usage_split's): each part a dot of its colour and its name
 /// (one pressed seen alone, not the rest; the words' ink under the hand), in lines where they have not the room; under
-/// them, where both have parts, 按人 or 按模型 (a narrow page's choice, filling the line).
-fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
+/// them, where both have parts, 按人 or 按模型 (a narrow page's choice, filling the line), the one pressed shown from the
+/// press till what it reads is answered (`press`).
+fn usage_split_node(parent : @view.View, v : () -> Json?, press : UsagePress) -> Unit {
   let lists = fn() { items(v(), "lists") }
   let choices = fn() {
     ["people", "models"].filter(fn(k) {
@@ -352,17 +353,18 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
       @sf.segmented_node(
         s,
         split_labels,
-        fn() { choices().search(text(v(), "split")).unwrap_or(0) },
+        fn() {
+          let shown = match press.pressed.get() {
+            Some((_, k)) if k != "" => k
+            _ => text(v(), "split")
+          }
+          choices().search(shown).unwrap_or(0)
+        },
         fn(i) {
-          @signals.untracked(fn() {
-            match choices().get(i) {
-              Some(k) => {
-                usage_pick.split.set(k)
-                usage_pick.only.set(("", ""))
-              }
-              None => ()
-            }
-          })
+          match @signals.untracked(choices).get(i) {
+            Some(k) => (press.press)(usage_pick.days.untracked(), k)
+            None => ()
+          }
         },
       )
     })
@@ -652,7 +654,16 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, chart : () -> Json?
 /// The page's body under its head (usage_body's): the summary, the overview, then (once something was spent) the chats,
 /// or that none was spent (in its bones while it is still read, what failed said over it); how it is counted last; 16
 /// apart.
-fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, error : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
+fn usage_body_node(
+  parent : @view.View,
+  core : Core,
+  v : () -> Json?,
+  chart : () -> Json?,
+  error : () -> Json?,
+  page_w : () -> Double,
+  press : UsagePress,
+  tips? : @sf.TipLayer,
+) -> Unit {
   let details_pending = fn() { flag(v(), "detailsPreparing") || flag(chart(), "detailsPreparing") }
   parent.box(fn(b) {
     b.gap(Is(ug_body_gap)) |> ignore
@@ -662,12 +673,12 @@ fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, chart : ()
       @sf.waiting_node(at, fn(s) {
         s.box(fn(details) {
           details.gap(Is(ug_body_gap)) |> ignore
-          usage_overview_node(details, core.quiet(), sample, sample)
+          usage_overview_node(details, core.quiet(), sample, sample, press)
           usage_none_node(details)
         }) |> ignore
       }, note=fn() { { reading: true, text: @sf.t("common.reading"), failing: [] } })
     })
-    b.show(fn() { !details_pending() }, fn(at) { usage_overview_node(at, core, v, chart, tips?) })
+    b.show(fn() { !details_pending() }, fn(at) { usage_overview_node(at, core, v, chart, press, tips?) })
     b.show(fn() { v() is None && error() is Some(_) }, fn(p) {
       @sf.words_node(p, fn() { @sf.t("web-pages.settings.usage.failed", args=[("error", error_text(error().unwrap()))]) }, fn() { ug_failed }) |> ignore
     })
@@ -939,14 +950,28 @@ fn ug_grid_row_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
+/// A choice of the page's pressed, its days or its split (usage_node's): what was pressed, `pressed` (its days and split;
+/// None none), shown by the choices from the press till what the page reads for it is answered; `press` presses one.
+priv struct UsagePress {
+  pressed : @signals.Signal[(Int, String)?]
+  press : (Int, String) -> Unit
+}
+
+///|
 /// 用量 (UsageSettings, UsageScreen) made once as nodes (page_node, laid out by the `width` its frame gives it, narrow
 /// where none is given): its title, at its line's end 分享卡片 once something was spent and the days (7 or 30); the
 /// core's view once read (usage_body_node), what failed while it is not, a wait till then (the view made up, in its
 /// bones, nothing of the core's asked for it). What it says of itself told `said`; what is said of what the pointer
 /// rests on in the frame's layer of tips over the window where it gives one (`tips`), else in its own over the page.
+/// Its days or its split pressed, what the page reads for them is asked of `src` (usage_reads) and the page stays as it
+/// is, the choice showing what was pressed; what it reads is switched to them whole in the frame that is answered, in
+/// the press's where it is already (sfbase's switch_answered): never its bones for a choice pressed. What it reads
+/// (usage_pick: the days kept while the page is) changes only then; another choice pressed, or the page left, gives the
+/// wait up, the choice back on what is shown.
 pub fn usage_node(
   v : @view.View,
   core : Core,
+  src : Source,
   here : () -> Here,
   on_back~ : () -> Unit,
   frame~ : () -> PageFrame,
@@ -969,11 +994,69 @@ pub fn usage_node(
     Some(w) => w
     None => fn() { v.window().0 }
   }
-  let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())).get() }
+  let topic_of = fn(ask : (String, Map[String, Json])) { (core.topic)(ask.0, ask.1).get() }
+  // (each read as it reads it, saying so where a choice pressed handed it what it asked: sfbase's shown_read)
+  let read_of = fn(ask : (String, Map[String, Json])) {
+    let r = topic_of(ask)
+    @sfbase.shown_read(usage_shown_at)
+    r
+  }
+  let read = fn() {
+    read_of(usage_ask(here(), usage_pick.days.get(), usage_pick.split.get(), only=usage_pick.only.get(), day=usage_pick.day.get()))
+  }
   let value = fn() { read().value }
   // Keep the chart's unfiltered view subscribed while the selected totals and chats are read.
-  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)).get() }
+  let chart_ask = fn() { usage_ask(here(), usage_pick.days.get(), usage_pick.split.get()) }
+  let chart_read = fn() { read_of(chart_ask()) }
   let chart = fn() { chart_read().value }
+  // (a choice pressed and what waits for what it reads: one at a time)
+  let pressed : @signals.Signal[(Int, String)?] = @signals.signal(None)
+  let waiting : Ref[@sfbase.PressWait?] = Ref(None)
+  let press = fn(days : Int, split : String) {
+    @signals.untracked(fn() {
+      guard pressed.get() != Some((days, split)) else { return }
+      // (the one pressed before: waited for no more, the choice back on what is shown)
+      match waiting.val {
+        Some(w) => {
+          waiting.val = None
+          w.give_up()
+        }
+        None => ()
+      }
+      let shown_days = usage_pick.days.get()
+      let shown_split = usage_pick.split.get()
+      // (what the page shows pressed: nothing to ask; the core's choice of split pressed as it says it)
+      if days == shown_days && (split == shown_split || (shown_split == "" && split == text(topic_of(chart_ask()).value, "split"))) {
+        pressed.set(None)
+        return
+      }
+      // (another day's span lets the day seen alone go; another split the part seen alone)
+      let day = if days == shown_days { usage_pick.day.get() } else { "" }
+      let only = if split == shown_split { usage_pick.only.get() } else { ("", "") }
+      pressed.set(Some((days, split)))
+      let w = @sfbase.switch_answered(
+        src,
+        usage_reads(here(), days, split, only, day),
+        usage_shown_at,
+        fn() {
+          usage_pick.days.set(days)
+          usage_pick.split.set(split)
+          usage_pick.only.set(only)
+          usage_pick.day.set(day)
+          pressed.set(None)
+        },
+        let_go=fn() {
+          if pressed.untracked() == Some((days, split)) {
+            pressed.set(None)
+          }
+        },
+      )
+      if w.waiting() {
+        waiting.val = Some(w)
+      }
+    })
+  }
+  let choice : UsagePress = { pressed, press }
   // (at its title's line's end; where a frame's bar names it, in that bar, as tall as its days' choice stands there)
   let actions = fn(l : @view.View) {
     // (the card to share of the agents' week, once something was spent, before the days)
@@ -984,11 +1067,14 @@ pub fn usage_node(
       l,
       head=true,
       fn() { usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) }) },
-      fn() { if usage_pick.days.get() == 30 { 1 } else { 0 } },
-      fn(k) {
-        usage_pick.days.set(usage_days_choices[k])
-        usage_pick.day.set("")
+      fn() {
+        let days = match pressed.get() {
+          Some((d, _)) => d
+          None => usage_pick.days.get()
+        }
+        if days == 30 { 1 } else { 0 }
       },
+      fn(k) { press(usage_days_choices[k], usage_pick.split.untracked()) },
     )
   }
   match bar_actions {
@@ -1010,7 +1096,7 @@ pub fn usage_node(
         },
         fn(p, state) {
           match state {
-            0 => usage_body_node(p, core, value, chart, fn() { read().error }, page_w, tips~)
+            0 => usage_body_node(p, core, value, chart, fn() { read().error }, page_w, choice, tips~)
             1 =>
               @sf.words_node(p, fn() {
                 match chart_read().error {
@@ -1022,7 +1108,7 @@ pub fn usage_node(
             _ => {
               let quiet = core.quiet()
               let sample = fn() { Some(usage_sample()) }
-              @sf.waiting_node(p, fn(s) { usage_body_node(s, quiet, sample, sample, fn() { None }, page_w) })
+              @sf.waiting_node(p, fn(s) { usage_body_node(s, quiet, sample, sample, fn() { None }, page_w, choice) })
             }
           }
         },

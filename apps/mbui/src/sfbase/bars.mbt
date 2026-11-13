@@ -129,7 +129,7 @@ fn place_reads(src : Source, ws : String, scope : String, place : String, shown 
     "profiles" => [("profiles", { "scope": of })]
     "connects" => [("stations", stations), ("connects", { "scope": of, "mine": Json::boolean(false) })]
     "vault" => [("vaults", { "workspace": of })]
-    // (as their pages ask them with nothing chosen in them: usage_args' seven days, the archive's first page)
+    // (as their pages ask them with nothing chosen in them: sfpages usage_ask's seven days, the archive's first page)
     "usage" if shown => [("usage", { "scope": of, "days": Json::number(7.0) })]
     "archive" if shown => [("archive", { "scope": of, "limit": Json::number(60.0) })]
     _ => []
