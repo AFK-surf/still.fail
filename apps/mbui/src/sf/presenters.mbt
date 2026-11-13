@@ -1299,6 +1299,13 @@ pub fn panel_row_reach() -> @ui.Style {
 pub fn panel_row_in() -> @ui.Style {
   if small_panel_now.val {
     small_panel_row_in
+  } else if words_in_now.val > 0.0 {
+    let inset = dmax(0.0, panel_card_in - panel_sides_in.val)
+    let pad = dmax(0.0, words_in_now.val - inset)
+    @ui.style(mx=room(inset), px=room(pad), radius=row_radius, hovered=@ui.patch(bg=Hover))
+  } else if rows_out.val > 0.0 {
+    let out = dmin(rows_out.val, text_in)
+    @ui.style(mx=room(-out), px=room(out), radius=row_radius, hovered=@ui.patch(bg=Hover))
   } else {
     panel_words_in().then(panel_row_lit)
   }

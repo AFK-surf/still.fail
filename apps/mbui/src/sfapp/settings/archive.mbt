@@ -98,9 +98,11 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       }
     None => ()
   }
+  let pane = @sf.pane_round.val
   place_page(c, core, tr("android-misc.bar.place.archive"), back=tr("android-misc.bar.place.chats"), fn() {
     c.list("settings/archive", entries.length(), 54.0, fn(i) {
-      match entries[i] {
+      @sf.with_pane(pane, fn() {
+        match entries[i] {
         Room(h) => gap(c, h)
         Search => archive_search(c)
         Wait(note, error) =>
@@ -138,7 +140,8 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         Empty => place_empty(c, tr("android-misc.archive.note"))
         Day(label) => section_header(c, label)
         Item(it) => archive_row(c, core, it)
-      }
+        }
+      })
     })
     |> ignore
   })
@@ -199,12 +202,10 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     None => failed_of(core, ["session.delete"], [("station", station), ("key", session)])
   }
   let id = c.id("archived/" + station + "/" + session)
+  let in_pane = @sf.in_pane() || c.width >= 480.0
+  let row_style = if in_pane { archive_pane_row } else { archive_whole_row }
   c.box(
-    w=Fill(1.0),
-    pl=20.0,
-    pr=10.0,
-    pt=6.0,
-    pb=6.0,
+    style=row_style,
     id~,
     fn() {
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=10.0, align=ACenter, fn() {
@@ -272,14 +273,30 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
         c.text(text(v, "last"), size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=20.0) |> ignore
       })
       |> ignore
-      // Archive.kt Row: clickable over the whole row
-      @motion.ripple(c, id, 0.0)
+      // Archive.kt Row: clickable over the whole row; in a pane/wide frame inset & concentric
+      @motion.ripple(c, id, if in_pane { @sf.row_corner } else { 0.0 })
     },
   )
   |> ignore
   // (a press on one of its actions is that action's: Ctx::on_press, the innermost one pressed)
   @sf.press_does(c, id, true, Some(fn() { (core.open_chat)(station, session, title) }))
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let archive_whole_row : @ui.Style = @ui.css("w=Full pl=S5 pr=S2_5 py=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let archive_pane_row : @ui.Style = @ui.style(
+  w=Full,
+  mx=S4,
+  pl=S3,
+  pr=S2_5,
+  py=S1_5,
+  radius=@sf.row_radius,
+  hovered=@ui.patch(bg=Hover),
+)
 
 ///|
 let round_action_side : Double = 34.0

@@ -1887,8 +1887,8 @@ fn row_line(narrow : Bool) -> @ui.Style {
     @ui.style(mx=room(-out), px=room(out), radius=Full)
   } else if in_small_panel() {
     panel_row_in()
-  } else if in_card.val == 0 && words_in_now.val > 0.0 {
-    panel_words_in()
+  } else if in_card.val == 0 && (words_in_now.val > 0.0 || rows_out.val > 0.0) {
+    panel_row_in()
   } else if reach > 0.0 {
     @ui.style(mx=room(-reach), px=room(reach))
   } else {
@@ -2490,7 +2490,16 @@ let own_head_back : Ref[(() -> Unit)?] = Ref(None)
 ///|
 /// A finger's press rippling over a row (ListRow's, its corner concentric with its card's; square outside one).
 pub fn row_ripple(c : @ui.Ctx, id : Int) -> Unit {
-  press_ripple(c, id, if in_card.val > 0 { row_corner } else { 0.0 })
+  let r = if in_card.val > 0 {
+    row_corner
+  } else if in_small_panel() {
+    small_panel_inner(r_menu)
+  } else if words_in_now.val > 0.0 || rows_out.val > 0.0 {
+    row_corner
+  } else {
+    0.0
+  }
+  press_ripple(c, id, r)
 }
 
 // ── styles: narrow (web/src/mobile/parts.css.ts) ────────────────────────

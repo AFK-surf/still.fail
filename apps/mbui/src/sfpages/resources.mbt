@@ -852,7 +852,7 @@ let rs_name_least : @ui.Space = S40
 ///|
 /// A group's row: the page's hover under the pointer.
 // kept across runs: a value (no field of it changes)
-let rs_group_row : @ui.Style = rs_row.then(@ui.css("hovered{bg=Hover}"))
+let rs_group_row : @ui.Style = rs_row.then(@ui.style(radius=@sf.row_radius, hovered=@ui.patch(bg=Hover)))
 
 ///|
 /// The first column: what is left of the row's width, 6 by 8 in.

@@ -502,7 +502,7 @@ fn station_rows_node(n : @view.View, src : Source, w : Workspace, v : Json?, clo
       @sf.rippled_node(row, fn() {
         @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
         close()
-      }, @sf.row_corner, fn() { text(st, "name") })
+      }, @sf.panel_row_corner_node(row), fn() { text(st, "name") })
       // (read out checked or not: the one it starts on)
       row.says(Is(Some(@view.said(Button, label=text(st, "name"), check=if here { On } else { Off })))) |> ignore
       row.box(fn(m) {

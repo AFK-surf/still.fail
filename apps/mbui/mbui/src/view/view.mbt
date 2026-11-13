@@ -420,6 +420,9 @@ struct Node {
   /// a state it is not in now, which the corner rule holds at rest as shown (ui's corners.mbt, Node::lit_ground). None
   /// kept elsewhere
   mut ground_read : Int
+  /// where the tree keeps a press ripple over this node, its corner (`View::note_ripple`): read by `Tester` to hold press
+  /// ripples to the corner rule even while no press is active
+  mut ripple_corner : Live[Double]?
   /// what it does as the pointer moves onto it or over it (View::on_pointer_moved): the pointer's own moving, not a
   /// layout putting it under a still pointer
   mut on_pointer_moved : (() -> Unit)?
@@ -1729,6 +1732,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.share = None
       n.share_flight = None
       n.lift = None
+      n.ripple_corner = None
       i
     }
     None => {
@@ -1765,6 +1769,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         pressed_cell: None,
         pointed_cell: None,
         ground_read: 0,
+        ripple_corner: None,
         on_pointer_moved: None,
         pointed_in_cell: None,
         within_cell: None,
@@ -4403,6 +4408,26 @@ pub fn Tree::ground_read(self : Tree, id : NodeId) -> Int {
     self.nodes[id.at].ground_read
   } else {
     0
+  }
+}
+
+///|
+/// Record the corner radius of a press ripple drawn over this node so automated corner checks can inspect it at rest.
+pub fn View::note_ripple(self : View, corner : Live[Double]) -> Unit {
+  self.tree.nodes[self.at].ripple_corner = Some(corner)
+}
+
+///|
+/// The press ripple corner recorded on node `id` via `View::note_ripple`, if any.
+pub fn Tree::ripple_corner(self : Tree, id : NodeId) -> Double? {
+  if self.alive_id(id) {
+    match self.nodes[id.at].ripple_corner {
+      Some(Is(c)) => Some(c)
+      Some(By(f)) => Some(@signals.untracked(f))
+      None => None
+    }
+  } else {
+    None
   }
 }
 

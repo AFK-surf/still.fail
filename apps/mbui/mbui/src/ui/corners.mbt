@@ -195,11 +195,14 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
   c.with_tree_nodes(fn() { c.corner_faults() })
 }
 
+// kept across runs: filled and emptied around each frame with the tree's nodes (Ctx::with_tree_nodes)
+let tree_ripples : Map[Int, Double] = Map([])
+
 ///|
 /// Where a frame built with all that shows only while lit shown (Ctx::lit_shown: a row's 归档 under the pointer, every
 /// row's at once; the window's tree's nodes each told it is pointed at and pressed, Tree::lit_all) breaks the corner
-/// rule; the frames after it as before, the tree's hand as it is.
-pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
+/// rule, plus any press ripple or lit ground that is square outside full-bleed window-edge rows.
+pub fn Tester::lit_all_press_faults(self : Tester) -> (Array[String], Array[String]) {
   self.reads_own()
   let c = g()
   c.lit_all = true
@@ -210,7 +213,7 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
   // (how it is drawn changed by the test, no signal: built whole, as the frame after it is, frame_watch.mbt)
   test_stepped()
   self.frame()
-  let faults = c.with_tree_nodes(fn() { c.corner_faults() })
+  let (faults, press_faults) = c.with_tree_nodes(fn() { (c.corner_faults(), c.press_corner_faults()) })
   c.lit_all = false
   match view_app.val {
     Some(tree) => tree.lit_all(false)
@@ -218,7 +221,22 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
   }
   test_stepped()
   self.frame()
-  faults
+  (faults, press_faults)
+}
+
+///|
+/// Where a frame built with all that shows only while lit shown (Ctx::lit_shown: a row's 归档 under the pointer, every
+/// row's at once; the window's tree's nodes each told it is pointed at and pressed, Tree::lit_all) breaks the corner
+/// rule; the frames after it as before, the tree's hand as it is.
+pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
+  self.lit_all_press_faults().0
+}
+
+///|
+/// Press ripples and lit (hover/press/focus) grounds that are square (or do not match their rounded box) outside
+/// full-bleed window-edge rows.
+pub fn Tester::press_corner_faults(self : Tester) -> Array[String] {
+  self.lit_all_press_faults().1
 }
 
 ///|
@@ -369,6 +387,10 @@ fn[T] Ctx::with_tree_nodes(
     if tree.is_scroll_held(d.id) {
       tree_scroll_held_at.add(i)
     }
+    match tree.ripple_corner(d.id) {
+      Some(rc) => tree_ripples[i] = rc
+      None => ()
+    }
     if facts {
       self.tree_facts(i, n, d, if holder >= 0 { Some(held[holder].0) } else { None }, contents, tree)
     } else if !laid {
@@ -442,6 +464,7 @@ fn[T] Ctx::with_tree_nodes(
   tree_fixed_h_at.clear()
   tree_moved_at.clear()
   tree_scroll_held_at.clear()
+  tree_ripples.clear()
   tree_nodes_from.val = -1
   for r in reparented {
     self.nodes[r.0].parent = r.1
@@ -534,6 +557,74 @@ pub fn Tester::corner_pairs(self : Tester) -> Array[String] {
   self.corner_faults() |> ignore
   let out = corner_pairs_out.val.unwrap_or([])
   corner_pairs_out.val = None
+  out
+}
+
+///|
+/// Whether node `i` is clipped cleanly on all four corners by a rounded ancestor of equal or tighter bounds.
+fn Ctx::clipped_round_whole(self : Ctx, i : Int) -> Bool {
+  let b = self.nodes[i]
+  let mut q = b.parent
+  while q >= 0 {
+    let a = self.nodes[q]
+    if a.clip && a.corner() >= 0.5 &&
+      (b.x - a.x).abs() <= 0.5 &&
+      (b.y - a.y).abs() <= 0.5 &&
+      (a.x + a.fw - (b.x + b.fw)).abs() <= 0.5 &&
+      (a.y + a.fh - (b.y + b.fh)).abs() <= 0.5 {
+      return true
+    }
+    q = a.parent
+  }
+  false
+}
+
+///|
+/// Check that every press ripple and lit (hover/press/focus) ground is rounded unless it is a full-bleed window-edge
+/// row outside any rounded card, sheet, or panel, and that ripple corners match rounded box corners.
+fn Ctx::press_corner_faults(self : Ctx) -> Array[String] {
+  let out : Array[String] = []
+  let grounds = self.layer_grounds()
+  for i in 0..<self.count {
+    let b = self.nodes[i]
+    if b.layer || b.opacity <= 0.01 || b.fw < 4.0 || b.fh < 4.0 || self.cut_away(i) {
+      continue
+    }
+    let ct = self.corner_container(i, grounds)
+    let full_window_row = b.x <= 0.5 &&
+      b.x + b.fw >= self.width - 0.5 &&
+      (match ct {
+        None => true
+        Some(c) => c.window
+      })
+    let rs = b.radii_now()
+    let r_max = dmax(dmax(rs[0], rs[1]), dmax(rs[2], rs[3]))
+    let r_min = dmin(dmin(rs[0], rs[1]), dmin(rs[2], rs[3]))
+    let ripple_info : (Double, Bool)? = if b.id > 0 {
+      self.ripples.get(b.id)
+    } else {
+      tree_ripples.get(i).map(fn(rc) { (rc, false) })
+    }
+    match ripple_info {
+      Some((rc, has_out)) =>
+        if rc < 0.5 {
+          if !(!has_out && full_window_row && r_max < 0.5) {
+            out.push("\{self.named(i)}: square press ripple (corner \{rc}) on \{b.fw}×\{b.fh} (box corner \{r_max})")
+          }
+        } else if !has_out && r_min >= 0.5 && r_max - r_min <= 0.5 {
+          let half = dmin(b.fw, b.fh) / 2.0
+          if r_min >= half - 0.5 && rc < half - 0.5 {
+            out.push("\{self.named(i)}: press ripple corner \{rc} is too small for capsule/circle box (half \{half})")
+          } else if r_min < half - 0.5 && rc < half - 0.5 && (rc - r_min).abs() > 0.5 {
+            out.push("\{self.named(i)}: press ripple corner \{rc} does not match box corner \{r_min}")
+          }
+        }
+      None => ()
+    }
+    if (b.state_ground || (b.ground_by_hand && b.grounded())) && r_max < 0.5 && !full_window_row && !self.clipped_round_whole(i) {
+      out.push("\{self.named(i)}: square lit ground on \{b.fw}×\{b.fh} (\{b.x}, \{b.y})")
+    }
+  }
   out
 }
 

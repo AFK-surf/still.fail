@@ -1311,6 +1311,7 @@ pub fn Ctx::node_radii(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::node_radius(Self, Int32) -> Double
 pub fn Ctx::node_rect(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::notch_by(Self, Int32, () -> (Double, Double, Double)) -> Unit
+pub fn Ctx::note_ripple(Self, Int32, Double, out? : Bool) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::now_of(Self, Mover, loc~ : SourceLoc) -> Double
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit
@@ -2654,6 +2655,7 @@ pub fn Tester::list_offset(Self) -> Double
 pub fn Tester::list_overscroll(Self) -> Double
 pub fn Tester::list_row_boxes(Self) -> Array[Array[(Double, Double, Double, Double)]]
 pub fn Tester::lit_all_faults(Self) -> Array[String]
+pub fn Tester::lit_all_press_faults(Self) -> (Array[String], Array[String])
 pub fn Tester::live_image(Self, Int32) -> Int32?
 pub fn Tester::local_acts(Self) -> Array[String]
 pub fn Tester::locate(Self, String) -> Array[(Double, Double)]
@@ -2696,6 +2698,7 @@ pub fn Tester::posted(Self) -> Int32
 pub fn Tester::presented(Self) -> (FixedArray[Double], Int32, (Double, Double, Double))
 pub fn Tester::press(Self, String) -> Unit
 pub fn Tester::press_at(Self, Double, Double) -> Unit
+pub fn Tester::press_corner_faults(Self) -> Array[String]
 pub fn Tester::press_lands_at(Self, Double, Double) -> String
 pub fn Tester::presses_unheld(Self) -> Array[String]
 pub fn Tester::probe_at(Self, Double, Double) -> String
