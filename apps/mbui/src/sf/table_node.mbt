@@ -202,7 +202,8 @@ pub fn table_node(
 ///|
 /// A table (`table`, as it changes) as nodes in `outer` (table_node's, whatever reads its Markdown: a table alone, or
 /// one of a message's blocks, markdown_node's): its columns' widths from the room `outer` is given (View::by_room), `bleed` past
-/// it either side where it scrolls across; its copy key where `copy`; its links taken by `on_link` (`on_link_hold`).
+/// it either side where it scrolls across; its copy key where `copy`; its links taken by `on_link` (`on_link_hold`); a
+/// cell of only the message's images drawn as those (`cell_images`: md_cell_images, Md::cell_images').
 #callsite(autofill(loc))
 fn md_table_body_node(
   outer : @view.View,
@@ -212,6 +213,7 @@ fn md_table_body_node(
   on_link : (String) -> Unit,
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?,
   fit? : Bool = false,
+  cell_images? : (Array[MdInline]) -> Array[(Double, (@view.View, () -> Double) -> Unit)]?,
   loc~ : SourceLoc,
 ) -> Unit {
     outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
@@ -227,8 +229,17 @@ fn md_table_body_node(
         rows.append(t.rows)
         let extents = rows.mapi(fn(r, row) {
           row.map(fn(cell) {
-            let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { node_sp(outer, x) })
-            (lo, hi, false)
+            match cell_images.bind(fn(f) { f(cell) }) {
+              // (a cell of images as wide as their row: Md::table's)
+              Some(images) => {
+                let w = cell_images_node_width(images)
+                (w, w, true)
+              }
+              None => {
+                let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { node_sp(outer, x) })
+                (lo, hi, false)
+              }
+            }
           })
         })
         table_widths(extents, room(), fit, fn(x) { node_sp(outer, x) })
@@ -271,6 +282,7 @@ fn md_table_body_node(
               scale~,
               on_link~,
               on_link_hold~,
+              cell_images?,
             )
           })
           |> ignore
@@ -293,7 +305,7 @@ fn md_table_body_node(
           .points(Is(copy))
           .margin(Is((0.0, 0.0, if copy && bleed >= table_key_room { -table_key_room } else { 0.0 }, 0.0)))
           |> ignore
-        table_frame_node(beside, table, widths, head_h~, on_link~, on_link_hold~)
+        table_frame_node(beside, table, widths, head_h~, on_link~, on_link_hold~, cell_images?)
         if copy {
           table_key_node(beside, key, fn() { table() }, fn() {
             match head_h.val {
@@ -314,7 +326,8 @@ fn md_table_body_node(
 ///|
 /// A table's frame as nodes in `beside` (md_table_body_node's, and its picture's: table_key_node): its head's row and
 /// its rows (`table`, as it changes), each a row of cells its columns `widths` wide, ruled between them; its head's row
-/// told `head_h` as it is made, its links taken by `on_link` (`on_link_hold`).
+/// told `head_h` as it is made, its links taken by `on_link` (`on_link_hold`); a cell of only the message's images
+/// those images in a row (`cell_images`, md_table_body_node's).
 #callsite(autofill(loc))
 fn table_frame_node(
   beside : @view.View,
@@ -324,6 +337,7 @@ fn table_frame_node(
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   scale? : () -> Double = fn() { 1.0 },
+  cell_images? : (Array[MdInline]) -> Array[(Double, (@view.View, () -> Double) -> Unit)]?,
   loc~ : SourceLoc,
 ) -> Unit {
   beside.box(made_for=loc, fn(frame) {
@@ -362,30 +376,66 @@ fn table_frame_node(
           }))
           .lies_along(Is(Middle))
           |> ignore
-          // (its words as a message's, in pieces, a press on a link where it leads: runs_links)
-          cell.box(fn(w) {
-            let look = fn() -> @view.WordsLook {
-              let size = (if head { 12.0 } else { 13.0 }) * scale()
-              {
-                size,
-                weight: if head { 500 } else { 400 },
-                line: (Float::from_double(size) * (1.65 : Float)).to_double(),
-                wrap: true,
-                tracking: @view.letters_own,
-                balance: false,
-                max_lines: 0,
+          // its words (as a message's, in pieces, a press on a link where it leads: runs_links)
+          let words_box = fn(cell : @view.View) {
+            cell.box(fn(w) {
+              let look = fn() -> @view.WordsLook {
+                let size = (if head { 12.0 } else { 13.0 }) * scale()
+                {
+                  size,
+                  weight: if head { 500 } else { 400 },
+                  line: (Float::from_double(size) * (1.65 : Float)).to_double(),
+                  wrap: true,
+                  tracking: @view.letters_own,
+                  balance: false,
+                  max_lines: 0,
+                }
               }
-            }
-            let runs = fn() { table_cell_runs(words()) }
-            w
-            .words_runs(By(runs))
-            .words_look(By(look))
-            .runs_look(By(table_runs_look))
-            .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
+              let runs = fn() { table_cell_runs(words()) }
+              w
+              .words_runs(By(runs))
+              .words_look(By(look))
+              .runs_look(By(table_runs_look))
+              .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
+              |> ignore
+              @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
+            })
             |> ignore
-            @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
-          })
-          |> ignore
+          }
+          // its images in a row where it is only the message's images (CellImageRow: 6 apart, 4 over and under, each
+          // cell_image_width wide), else its words, made again only as it comes to hold another number of them; where
+          // it is given no images (`cell_images` none: every table but one of a message that places its files), its
+          // words alone, nothing made for the choice
+          match cell_images {
+            None => words_box(cell)
+            Some(of_cell) => {
+              let images = fn() { of_cell(words()) }
+              cell.pick(at_once=true, fn() { images().map_or(0, fn(ims) { ims.length() }) }, fn(cell, n) {
+                if n > 0 {
+                  cell.box(fn(row) {
+                    row.row(Is(true)).gap(By(fn() { 6.0 * scale() })).padding(By(fn() { (0.0, 4.0 * scale(), 0.0, 4.0 * scale()) })) |> ignore
+                    for i in 0..<n {
+                      row.box(fn(im) {
+                        let width = fn() {
+                          cell_image_width(images().bind(fn(ims) { ims.get(i) }).map_or(1.0, fn(x) { x.0 })) * scale()
+                        }
+                        im.width(By(fn() { Some(width()) })) |> ignore
+                        match @signals.untracked(fn() { images().bind(fn(ims) { ims.get(i) }) }) {
+                          Some((_, draw)) => draw(im, width)
+                          None => ()
+                        }
+                      })
+                      |> ignore
+                    }
+                  })
+                  |> ignore
+                  return
+                }
+                words_box(cell)
+              })
+              |> ignore
+            }
+          }
         })
       })
       |> ignore
@@ -400,6 +450,16 @@ fn table_frame_node(
     })
   })
   |> ignore
+}
+
+///|
+/// How wide a table's cell of images is (cell_images_width's): their widths and the gaps between them.
+fn cell_images_node_width(images : Array[(Double, (@view.View, () -> Double) -> Unit)]) -> Double {
+  let mut w = 0.0
+  for i, im in images {
+    w = w + cell_image_width(im.0) + (if i > 0 { 6.0 } else { 0.0 })
+  }
+  w
 }
 
 ///|
