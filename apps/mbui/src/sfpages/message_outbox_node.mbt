@@ -2,32 +2,22 @@
 // outbox_unsent, unsent_button; their styles the same): the viewer's message as it went (what it quotes, its files,
 // its words in their bubble), and under it 正在发送 (or what it waits on) a while after it was sent, its time once the
 // station has it, or, not sent, 未发送 with 重试 (or 编辑) and 删除, each turning while the core does it and marked red
-// a moment where that failed (the core's doing). Each read through what it is given, as that changes. Not here yet:
-// its files still going up as cards (the library's file_card_node has no upload yet), its words flying in from the
-// composer (the list's flight).
+// a moment where that failed (the core's doing). Each read through what it is given, as that changes. It is the
+// viewer's own message's row (message_words_node.mbt mine_said_node), on its way: one row as the core's message takes
+// it over. Not here yet: its files still going up as cards (the library's file_card_node has no upload yet), its
+// words flying in from the composer (the list's flight).
 
 ///|
-/// What is under what was sent from here (outbox_row's order): what did not go, nothing (followed), its time (the
-/// station has it), 正在发送.
-#derive(Eq)
-priv enum OutboxUnder {
-  OutUnsent
-  OutNothing
-  OutTime
-  OutSending
-}
-
-///|
-/// What is under `o` now.
-fn outbox_under(o : Outgoing) -> OutboxUnder {
+/// What is under `o` now, where anything is (outbox_row's order; nothing while it is followed and went, which its row
+/// says apart: mine_said_node's `lone`): what did not go, its time (the station has it), 正在发送; as what is under the
+/// viewer's message is said (mine_said_node's).
+fn outbox_mine_under(o : Outgoing) -> MineUnder {
   if o.state == "failed" {
-    OutUnsent
-  } else if o.followed {
-    OutNothing
+    MineUnsent
   } else if o.state == "sent" {
-    OutTime
+    MineTime
   } else {
-    OutSending
+    MineSending
   }
 }
 
@@ -39,11 +29,17 @@ fn outgoing_said(o : Outgoing) -> Message {
 }
 
 ///|
+/// What the viewer sent, not yet the chat's (`o`), as its row draws it (mine_said_node's `m` while it is on its way):
+/// its words, what it quotes and its files.
+fn outgoing_row(o : Outgoing) -> Message {
+  { ..outgoing_said(o), quotes: o.quotes, attachments: o.attachments }
+}
+
+///|
 /// What was sent from here (outbox_row's, as nodes) in its row's room (message_row_frame_node: `key`, its list's
-/// Entry::id `o:<id>`; `side`, `top`; `over`), as `o` says it as it changes: at the column's end, its files, its words
-/// in their bubble; under them what outbox_under says, one in the other's place: 正在发送 seen once it has been on its
-/// way sending_shows_ms from `since` (when it was sent, a moment of the frames' clock: the caller's, sending_line_node)
-/// and not while its words fly here (`flying`: the list's); its time; what did not go (outbox_unsent_node).
+/// Entry::id `o:<id>`; `side`, `top`; `over`), as `o` says it as it changes: the viewer's message's row
+/// (mine_said_node) on its way, 正在发送 under it seen once it has been on its way sending_shows_ms from `since` (when
+/// it was sent, a moment of the frames' clock: the caller's) and not while its words fly here (`flying`: the list's).
 // the chat's page as nodes: held by its tests, not used by the app yet
 #warnings("-unused_value")
 fn outbox_said_node(
@@ -58,65 +54,7 @@ fn outbox_said_node(
   flying? : () -> Bool = fn() { false },
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
 ) -> MessageRowNode {
-  // (its words as a message of the viewer's for the bubble: what person_words_node reads of one)
-  let said = fn() -> Message { outgoing_said(o()) }
-  let place : MessageFilesAt = {
-    station: fn() { here.station },
-    session: fn() { here.session },
-    view: here.view,
-  }
-  message_row_frame_node(v, key, side, top, over~, fn(r) {
-    r.box(fn(col) {
-      @sf.style_node(col, fn() { mine_column })
-      col.box(fn(w) {
-        @sf.style_node(w, fn() { outbox_words })
-        // (what it quotes ahead of its files and words, as outbox_row's)
-        message_quotes_node(w, src, here, fn() { o().quotes }, fn() { o().attachments }, true, key)
-        message_files_node(
-          w,
-          src,
-          here.tips,
-          place,
-          fn() {
-            let now = o()
-            beside_quotes(now.quotes, now.attachments)
-          },
-          fn() { true },
-          fn() { None },
-          key + "/f",
-        )
-        w.show(fn() { o().text != "" }, fn(b) { mine_bubble_node(b, here, said, fn() { [] }, fn() { None }) })
-      })
-      |> ignore
-      // (nothing under it at all while it is followed: no box of nothing in its column, its gap with it)
-      col.show(fn() { outbox_under(o()) != OutNothing }, fn(n) {
-        n.pick(fn() { outbox_under(o()) }, fn(u, under) {
-          match under {
-            OutUnsent => outbox_unsent_node(u, src, here, o)
-            OutTime => message_time_node(u, here.tips, fn() { o().time })
-            OutSending =>
-              sending_line_node(
-                u,
-                fn() {
-                  let now = o()
-                  if now.waits != "" {
-                    now.waits
-                  } else {
-                    @sf.t("web-main.chat.sending")
-                  }
-                },
-                fn() { o().progress },
-                since,
-                flying,
-              )
-              |> ignore
-            OutNothing => ()
-          }
-        })
-      })
-    })
-    |> ignore
-  })
+  mine_said_node(v, src, here, key, side, top, fn() { outgoing_row(o()) }, over~, out=fn() { Some(o()) }, since~, flying~)
 }
 
 ///|

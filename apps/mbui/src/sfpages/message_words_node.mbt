@@ -103,6 +103,13 @@ fn mine_bubble_node(
 /// for where its station lacks it (blocked_line_node), else that its agents have yet to take it (agent_waiting_node),
 /// else its time: one in the other's place as that changes. Where it offers itself (`share`), its bubble right clicked
 /// offers that (message_menu_node: the old bubble's pickable's; no ⋯, as the old row had none).
+///
+/// What was sent from here and is not the chat's yet is the same row (`out`: Some while it is on its way, `m` then
+/// outgoing_said's), one row to a person as the core's message takes it over: its words' node made once and kept, so
+/// what is picked of them, its handles and its menu stay. What differs is bound to which it is now: under it 正在发送
+/// seen once it has been on its way sending_shows_ms from `since` (a moment of the frames' clock: the caller's) and not
+/// while its words fly here (`flying`), or what did not go (outbox_unsent_node), or its time once the station has it;
+/// on its way, its files said by no one yet, its links no cards, nothing found in it and no right click's offer.
 // the chat's page as nodes: held by its tests, not used by the app yet
 #warnings("-unused_value")
 fn mine_said_node(
@@ -117,12 +124,17 @@ fn mine_said_node(
   found_at? : () -> Int? = fn() { None },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
+  out? : () -> Outgoing? = fn() { None },
+  since? : () -> Double = fn() { 0.0 },
+  flying? : () -> Bool = fn() { false },
 ) -> MessageRowNode {
+  let said = fn() { out() is None }
   message_row_frame_node(v, key, side, top, over~, fn(r) {
     r.box(fn(col) {
       @sf.style_node(col, fn() { mine_column })
-      // (what it quotes ahead of its files and words, in the order the composer held them: mine_message's)
-      let at = message_place(@signals.untracked(m))
+      // (what it quotes ahead of its files and words, in the order the composer held them: mine_message's; its place
+      // the row's as it was made, what was sent from here its key's)
+      let at = if @signals.untracked(said) { message_place(@signals.untracked(m)) } else { key }
       message_quotes_node(col, src, here, fn() { m().quotes }, fn() { m().attachments }, true, at)
       message_files_node(
         col,
@@ -134,20 +146,50 @@ fn mine_said_node(
           beside_quotes(now.quotes, now.attachments)
         },
         fn() { true },
-        fn() { Some((@sf.t("web-main.chat.you"), "person", m().ts)) },
+        fn() { if said() { Some((@sf.t("web-main.chat.you"), "person", m().ts)) } else { None } },
         at + "/f",
       )
       col.show(fn() { m().text != "" }, fn(b) {
-        mine_bubble_node(b, here, m, found, found_at, cards=(here.tips, message_link_card(src, here.station, "", m)))
+        let cards = message_link_card(src, here.station, "", m)
+        mine_bubble_node(
+          b,
+          here,
+          m,
+          fn() { if said() { found() } else { [] } },
+          fn() { if said() { found_at() } else { None } },
+          cards=(here.tips, fn(l) { if said() { cards(l) } else { None } }),
+        )
+        // (offered once it is the chat's, by the message it is then)
         match share {
-          Some(s) => message_menu_node(b, s)
+          Some(s) =>
+            b.on_menu(fn(e) {
+              if said() {
+                @sfbase.share_offer(e.wx, e.wy, s.go, @signals.untracked(s.link), @signals.untracked(s.words), "m:" + @signals.untracked(m).ts)
+              }
+            })
+            |> ignore
           None => ()
         }
       })
-      // (nothing under it at all while it is followed: no box of nothing in its column, its gap with it)
-      col.show(fn() { mine_under(m()) != MineNothing }, fn(n) {
-        n.pick(fn() { mine_under(m()) }, fn(u, under) {
-          match under {
+      let under = fn() {
+        match out() {
+          Some(o) => outbox_mine_under(o)
+          None => mine_under(m())
+        }
+      }
+      // (nothing under it at all while it is followed, but what did not go: no box of nothing in its column, its gap
+      // with it. There and gone at once, apart from the pick of what is under it: it goes in the frame the key after it
+      // comes, which sets out from as tall as that gives back (the list's), where one of its states in another's place
+      // makes its way)
+      let lone = fn() {
+        match out() {
+          Some(o) => o.state == "failed" || !o.followed
+          None => !m().followed
+        }
+      }
+      col.show(at_once=true, lone, fn(n) {
+        n.pick(under, fn(u, now) {
+          match now {
             MineBlocked =>
               blocked_line_node(u, src, here.tips, fn() { here.station }, fn() {
                 // (as it is while it is: what took its place is made once it is not)
@@ -155,8 +197,28 @@ fn mine_said_node(
               })
               |> ignore
             MineWaiting => agent_waiting_node(u) |> ignore
-            MineTime => message_time_node(u, here.tips, fn() { m().time })
-            MineNothing => ()
+            MineTime =>
+              message_time_node(u, here.tips, fn() {
+                match out() {
+                  Some(o) => o.time
+                  None => m().time
+                }
+              })
+            MineSending =>
+              sending_line_node(
+                u,
+                fn() {
+                  match out() {
+                    Some(o) if o.waits != "" => o.waits
+                    _ => @sf.t("web-main.chat.sending")
+                  }
+                },
+                fn() { out().bind(fn(o) { o.progress }) },
+                since,
+                flying,
+              )
+              |> ignore
+            MineUnsent => outbox_unsent_node(u, src, here, fn() { out().unwrap_or(chat_body_no_out) })
           }
         })
       })
@@ -166,22 +228,21 @@ fn mine_said_node(
 }
 
 ///|
-/// What is under the viewer's message (mine_message's): nothing (followed), the runtime it waits for, that its agents
-/// have yet to take it, its time.
+/// What is under the viewer's message while anything is (mine_message's; nothing while it is followed, which its row
+/// says apart: mine_said_node's `lone`): the runtime it waits for, that its agents have yet to take it, its time; on
+/// its way (outbox_row's), 正在发送, or what did not go.
 #derive(Eq)
 priv enum MineUnder {
-  MineNothing
   MineBlocked
   MineWaiting
   MineTime
+  MineSending
+  MineUnsent
 }
 
 ///|
-/// What is under the viewer's message `m` now (mine_message's order).
+/// What is under the viewer's message `m` now, where anything is (mine_message's order).
 fn mine_under(m : Message) -> MineUnder {
-  if m.followed {
-    return MineNothing
-  }
   match m.blocked {
     Some(b) if b.state != "installed" => MineBlocked
     _ => if m.waiting { MineWaiting } else { MineTime }

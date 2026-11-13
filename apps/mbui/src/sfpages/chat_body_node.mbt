@@ -208,7 +208,6 @@ priv enum ChatBodyKind {
   KPerson
   KAgent
   KSent
-  KOut
   KState
   KWorking
 }
@@ -234,7 +233,8 @@ fn chat_body_kind(e : Entry) -> ChatBodyKind {
         KAgent
       }
     Sent(_) => KSent
-    Out(_) => KOut
+    // (what was sent from here the viewer's own message on its way: one row with what the core's message makes of it)
+    Out(_) => KMine
     State(_, _, _) => KState
     Working(_) => KWorking
   }
@@ -566,8 +566,32 @@ fn chat_body_row(
       KEmpty => frame(fn(b) { chat_empty_node(b) |> ignore })
       KLine => frame(fn(b) { unread_line_node(b) |> ignore })
       KNewer => frame(fn(b) { pages_coming_node(b, fn() { false }) |> ignore })
-      KMine =>
-        more.val = mine_said_node(p, src, here, k, side, top, m, found~, found_at~, share=message_share_of(src, here, m), over~).menu_on
+      KMine => {
+        // (on its way, or the core's message that took it over: one row, its words' node kept as it is taken over)
+        let out = fn() -> Outgoing? {
+          match entry() {
+            Out(o) => Some(o)
+            _ => None
+          }
+        }
+        let mine = fn() {
+          match entry() {
+            Out(o) => outgoing_row(o)
+            _ => m()
+          }
+        }
+        // (正在发送 seen once it has been on its way a while, counted from when it was sent, the source's time of day
+        // (chat_rows.mbt outbox_row's): that moment on the frames' clock, worked out as the row is made and as when it
+        // was sent changes (the core's row taking it over), not read of the source's clock as it is drawn)
+        let since = @signals.signal(0.0)
+        p.reacts(fn() { out().map(fn(o) { o.created_at }) }, fn(at) {
+          match at {
+            Some(at) => since.set(p.cause_at() - ((src.now)() - at))
+            None => ()
+          }
+        })
+        more.val = mine_said_node(p, src, here, k, side, top, mine, found~, found_at~, share=message_share_of(src, here, mine), over~, out~, since=fn() { since.get() }).menu_on
+      }
       KNotice => notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied, pill_over~) |> ignore
       KPerson =>
         more.val = person_said_node(p, src, here, k, side, top, m, found~, found_at~, share=message_share_of(src, here, m), over~).menu_on
@@ -591,24 +615,6 @@ fn chat_body_row(
           }
         })
         |> ignore
-      }
-      KOut => {
-        let o0 = match @signals.untracked(entry) {
-          Out(o) => o
-          _ => chat_body_no_out
-        }
-        let o = fn() {
-          match entry() {
-            Out(o) => o
-            _ => o0
-          }
-        }
-        // (正在发送 seen once it has been on its way a while, counted from when it was sent, the source's time of day
-        // (chat_rows.mbt outbox_row's): that moment on the frames' clock, worked out as the row is made and as when it
-        // was sent changes (the core's row taking it over), not read of the source's clock as it is drawn)
-        let since = @signals.signal(0.0)
-        p.reacts(fn() { o().created_at }, fn(at) { since.set(p.cause_at() - ((src.now)() - at)) })
-        outbox_said_node(p, src, here, k, side, top, o, fn() { since.get() }) |> ignore
       }
       KState => {
         let said = fn() {
