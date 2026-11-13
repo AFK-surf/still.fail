@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0adf038a4](https://github.com/AFK-surf/still.fail/commit/0adf038a4f2d428eb86a4883f562fed61b2c1500) mbui: a page's list's ask is taken only by a fill  | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.29 | 52.22 | 94 | 106.12 |
 | [4470962ed](https://github.com/AFK-surf/still.fail/commit/4470962edfe02fdfcdaf1926123076a6ec5846ef) mbui: unify interactive chips, links, and 4px stat | 1.95 | 2.61 | 11.24 | 30.69 | 40.34 | 27.29 | 52.22 | 94 | 98.75 |
 | [0451c1a9a](https://github.com/AFK-surf/still.fail/commit/0451c1a9ab3968a3863af0bebfdaa3a911601136) mbui: what a Tester reads of a list and of words d | 1.95 | 2.61 | 11.22 | 30.67 | 40.28 | 27.29 | 52.22 | 94 | 98.44 |
 | [4f0c9acae](https://github.com/AFK-surf/still.fail/commit/4f0c9acaefb0122fe4b96380980cc4d495b155e7) mbui app: adaptive two-row chat top bar title with | 1.94 | 2.61 | 11.21 | 30.64 | 40.26 | 27.29 | 52.22 | 94 | 171.4 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [bb67b07b0](https://github.com/AFK-surf/still.fail/commit/bb67b07b03885ed3cfb571eb91958cf04cabc716) mbui: a mouse's drag scrolls and flings the tree's | 1.93 | 2.59 | 11.12 | 30.36 | 39.88 | 27.02 | 51.63 | 94.19 | 127.67 |
 | [a7808b9dc](https://github.com/AFK-surf/still.fail/commit/a7808b9dc8996e16cb3ec3420f4093786cd9780c) docs/releases: stable 0.1.8498 (#5800) | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.21 | 138.29 |
 | [eed3184fa](https://github.com/AFK-surf/still.fail/commit/eed3184fa82fe04ff8b2ee8c2811feaa0241a01a) mbui: a chat's page made as nodes tells the core w | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.21 | 138.29 |
-| [eed3184fa](https://github.com/AFK-surf/still.fail/commit/eed3184fa82fe04ff8b2ee8c2811feaa0241a01a) mbui: a chat's page made as nodes tells the core w | 1.93 | 2.59 | 11.12 | 30.35 | 39.88 | 27.02 | 51.63 | 94.29 | 132.58 |
