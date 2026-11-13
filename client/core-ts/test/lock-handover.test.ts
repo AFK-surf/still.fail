@@ -30,7 +30,7 @@ import { type Entry, type Signer, canonical, entryHash, next } from "../src/lock
 import { bodyHash } from "../src/lock-moved.ts";
 import { httpError } from "../src/station/requests.ts";
 import { hex, utf8 } from "../src/util.ts";
-import { handOver, held, inForceOf, notedRole, pendingHeld, read } from "../src/views/lock.ts";
+import { handOver, handOverState, held, inForceOf, notedRole, pendingHeld, read } from "../src/views/lock.ts";
 import { serveTrusted, tryOne } from "../src/views/pair.ts";
 import { grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
 
@@ -53,8 +53,15 @@ type Opts = {
   more?: ("notReady" | "web" | "none")[];
   /// s1's own web page on the chain.
   myWeb?: boolean;
-  /// s1 an admin (s0 the owner, its genesis signer); this device on the chain with another signer; s1's log not pinned.
-  mine?: "admin" | "otherKey" | "unpinned";
+  /// s1 an admin (s0 the owner, its genesis signer); this device on the chain with another signer; s1's log not pinned;
+  /// s1 a second owner (`second`: s0 the first, its genesis signer, bound to a log of their own as the others).
+  mine?: "admin" | "otherKey" | "unpinned" | "second";
+  /// Chains handed over by themselves here (`Host.handOverAuto`; off by default).
+  auto?: boolean;
+  /// The genesis's `at` (unix seconds; 1000 by default).
+  genesisAt?: number;
+  /// With `second`: s0 made an admin by s1 after the bindings (the genesis's person no owner any more).
+  firstLowered?: boolean;
   /// The host offers `lock.handOver` (by default).
   flag?: boolean;
   /// bob (r2) an owner, not an admin.
@@ -72,7 +79,7 @@ async function setUp(o: Opts = {}) {
   const k = key(MINE);
   const myLog = [simSigned({ v: 1, ws: "person:s1", seq: 0, prev: null, at: 1000, kind: "genesis", body: { sub: "s1", device: { key: k.id, id: base.hex, label: "s1's app" } } } as Omit<StationEntry, "sig">, k)];
   const gMe = stationHash(myLog[0]!);
-  const bob = new Log("r2"), xena = new Log("r3"), r4 = new Log("r4"), s0 = dev();
+  const bob = new Log("r2"), xena = new Log("r3"), r4 = new Log("r4"), s0 = dev(), first = new Log("s0");
   const A = ed().hex, B = ed().hex, D = ed().hex, WEB = ed(), WEB5 = ed();
   let mine: Signer | null = null;
   let now = 0;
@@ -83,14 +90,16 @@ async function setUp(o: Opts = {}) {
     const members = [{ sub: "s1", email: "a@x.com", role: o.mine === "admin" ? "admin" : "owner" }, { sub: "r2", email: "b@x.com", role: o.bobOwner ? "owner" : "admin" }, { sub: "r3", email: "c@x.com", role: "member" }];
     const devices: Record<string, unknown>[] = [{ id: base.hex, sub: "s1", kind: "app", label: "s1's app", sign_key: o.mine === "otherKey" ? other.id : signer.id }, appOf("r2", bob.app), appOf("r3", xena.app)];
     if (o.mine === "admin") members.unshift({ sub: "s0", email: "o@x.com", role: "owner" }), devices.unshift(appOf("s0", s0));
+    if (o.mine === "second") members.unshift({ sub: "s0", email: "o@x.com", role: "owner" }), devices.unshift(appOf("s0", first.app));
     if (o.more?.includes("notReady")) members.push({ sub: "r4", email: "d@x.com", role: "member" }), devices.push(appOf("r4", r4.app));
     if (o.more?.includes("web")) members.push({ sub: "r5", email: "e@x.com", role: "admin" });
     if (o.more?.includes("none")) members.push({ sub: "r6", email: "f@x.com", role: "member" });
-    const e = next("ws", null, 1000, "genesis", { owner: members[0]!.sub, ...SETTINGS(g.keys), members, devices, passkeys: [], stations: [{ key: A, name: "a" }, { key: B, name: "b" }], gateways: [] });
-    const by = o.mine === "admin" ? s0.signer : o.mine === "otherKey" ? other : null;
+    const e = next("ws", null, o.genesisAt ?? 1000, "genesis", { owner: members[0]!.sub, ...SETTINGS(g.keys), members, devices, passkeys: [], stations: [{ key: A, name: "a" }, { key: B, name: "b" }], gateways: [] });
+    const by = o.mine === "admin" ? s0.signer : o.mine === "second" ? first.app.signer : o.mine === "otherKey" ? other : null;
     return { ws: by === null ? signer.sign(e) : (signed(e as Omit<StationEntry, "sig">, by) as unknown as Entry) };
   }, (host) => {
     host.handOverByTests = o.flag !== false;
+    host.handOverAuto = o.auto === true;
     now = Math.floor(host.nowMs() / 1000);
     if (o.mine === "unpinned") return;
     host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(myLog)));
@@ -113,6 +122,8 @@ async function setUp(o: Opts = {}) {
   after(o.mine === "otherKey" ? other : signer, "person", { sub: "s1", person: gMe });
   after(bob.app.signer, "person", { sub: "r2", person: bob.genesis });
   after(xena.app.signer, "person", { sub: "r3", person: xena.genesis });
+  if (o.mine === "second") after(first.app.signer, "person", { sub: "s0", person: first.genesis });
+  if (o.firstLowered) after(signer, "member", { sub: "s0", email: "o@x.com", role: "admin" });
   if (o.myWeb) after(signer, "device", { id: WEB.hex, sub: "s1", kind: "web", label: "s1's browser", exp: now + 10 * 86400 });
   if (o.more?.includes("web")) after(o.mine === "admin" ? s0.signer : signer, "device", { id: WEB5.hex, sub: "r5", kind: "web", label: "r5's browser", exp: now + 10 * 86400 });
   r.cloud.chains.set("ws", chain);
@@ -123,7 +134,7 @@ async function setUp(o: Opts = {}) {
     const c = new Cloud(data, false);
     c.takeLock(chain as unknown as StationEntry[]);
     // (each member's log as their app device brought it to the station, POST /lock/person)
-    for (const l of [bob, xena]) if (!o.unbrought?.includes(l.sub as "r2" | "r3")) bring(c, l, false, "ws");
+    for (const l of [bob, xena, ...(o.mine === "second" ? [first] : [])]) if (!o.unbrought?.includes(l.sub as "r2" | "r3")) bring(c, l, false, "ws");
     return c;
   };
   const stations = { A: station(A), B: station(B) };
@@ -195,7 +206,9 @@ async function setUp(o: Opts = {}) {
     const code = ((await prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
     return { answer, done: await run(tryOne(inner, { id: base.hex, d: phone, workspaces: ["ws"] }, id, code)) };
   };
-  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer, firstApp, g, now: () => now };
+  /// An ask of the person's own lock's key for something else: grants signed (none: the ask alone).
+  const askGrant = () => run(inner.adb.personal().signGrants("s1", [], "a grant"));
+  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer, firstApp, g, askGrant, now: () => now };
 }
 
 /// A second app device of `log`'s person (`d`) as the product puts it on their own log: a device entry signed by the
@@ -568,3 +581,127 @@ for (const wins of ["bob", "this device"] as const) {
     }
   });
 }
+
+// Handed over by itself (views/lock.ts `handsOver`, `movedBySelf`; personal-lock.ts `#addHandOvers`): nobody calls
+// `lock.handOver`; the statements ride on an ask of the person's own lock's key for something else, the `moved` follows
+// with no key as the lock is held. The switch is the host's `handOverAuto` here (HAND_OVER_FROM is null).
+const DAY = 86400;
+const T0 = Date.UTC(2026, 9, 6, 9, 0, 0) / 1000;
+const MOVED_SAYS = ["open", "member r2 admin", "member r3 member", "station A", "station B"];
+const movedAt = (w: Awaited<ReturnType<typeof setUp>>) => Object.values(w.stations).map((c) => c.chain(null)?.state?.moved ?? null);
+
+test("the switch off: whatever is asked (a grant, an own device approved), nothing said and nothing moved", async () => {
+  const w = await setUp();
+  assert.equal(handOverState(w.inner, "ws"), null, "not this device's to hand over by itself");
+  assert.equal((await w.askGrant()).error, undefined);
+  const d = dev();
+  const added = await w.run(w.inner.adb.personal().addDevice("s1", { key: d.key.id, id: d.base.hex, label: "s1's second", sign_key: d.signer.id }, "a device"));
+  assert.equal(added.error, undefined, added.error?.message);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(w.said(), [], "nothing said");
+  assert.notEqual(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
+  assert.deepEqual(movedAt(w), [null, null]);
+});
+
+for (const how of ["a grant", "an own device approved"] as const) {
+  test(`on: the genesis's person's device hands over as it answers ${how}, one ask in all, the chain's list in force`, async () => {
+    const w = await setUp({ auto: true });
+    const before = w.d4Chain(w.chain);
+    assert.deepEqual(handOverState(w.inner, "ws"), { asks: true }, "to be said, no ask yet");
+    await w.run(read(w.inner, "ws"));
+    assert.deepEqual(w.said(), [], "nothing said with no ask");
+    if (how === "a grant") assert.equal((await w.askGrant()).error, undefined);
+    else {
+      const d = dev();
+      const out = await w.run(w.inner.adb.personal().addDevice("s1", { key: d.key.id, id: d.base.hex, label: "s1's second", sign_key: d.signer.id }, "a device"));
+      assert.equal(out.error, undefined, out.error?.message);
+    }
+    assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS, "said in that ask");
+    await w.run(read(w.inner, "ws"));
+    assert.equal(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved", "moved, nobody calling lock.handOver");
+    assert.deepEqual(movedAt(w), [w.gMe, w.gMe]);
+    assert.equal(w.asked(), 1, "one ask in all");
+    assert.equal(handOverState(w.inner, "ws"), null, "moved");
+    // (the device approved on s1's own log is s1's in the state rooted there, though the chain never named it)
+    assert.deepEqual(d4Diff(before, d4Core(w.inner)), how === "a grant" ? [] : ["apps s1"], "the chain's list in force (the model's d4Old)");
+    assert.deepEqual(w.st.early, [], "no moved before a station held every body");
+  });
+}
+
+test("another owner's device: not before 14 days from the genesis, then as it answers an ask", async () => {
+  const w = await setUp({ auto: true, mine: "second", genesisAt: T0 - 13 * DAY });
+  assert.equal(handOverState(w.inner, "ws"), null, "the first owner's yet");
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(w.said(), [], "nothing said before 14 days");
+  w.r.host.advance((DAY + 60) * 1000);
+  assert.deepEqual(handOverState(w.inner, "ws"), { asks: true });
+  assert.equal((await w.askGrant()).error, undefined);
+  assert.deepEqual(w.said().map((x) => x.what), ["open", "member s0 owner", "member r2 admin", "member r3 member", "station A", "station B"]);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved to s1's log");
+  assert.equal(w.asked(), 2);
+});
+
+test("another owner's device at once where the genesis's person is no owner any more", async () => {
+  const w = await setUp({ auto: true, mine: "second", genesisAt: T0 - DAY, firstLowered: true });
+  assert.deepEqual(handOverState(w.inner, "ws"), { asks: true });
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe]);
+  assert.equal(w.asked(), 1);
+});
+
+test("a member not ready: nothing said, handOverState names them; ready, said at the next ask and moved", async () => {
+  const w = await setUp({ auto: true, more: ["notReady"] });
+  assert.equal((await w.askGrant()).error, undefined);
+  assert.deepEqual(w.said(), [], "nothing said");
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: ["r4"] });
+  w.after(w.r4.app.signer, "person", { sub: "r4", person: w.r4.genesis });
+  for (const c of Object.values(w.stations)) {
+    c.takeLock([...w.chain] as unknown as StationEntry[]);
+    bring(c, w.r4, false, "ws");
+  }
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(handOverState(w.inner, "ws"), { asks: true }, "ready: what is to be said waits for an ask");
+  assert.deepEqual(movedAt(w), [null, null]);
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe]);
+  assert.equal(w.asked(), 2, "one more ask where nothing was said");
+});
+
+test("a member not ready after all was said: it waits, then moves by itself once they are, no ask more", async () => {
+  const w = await setUp({ auto: true });
+  w.st.hook = () => {
+    // (as the statements are taken: a new app device of xena's on the chain, not on her log)
+    const d = dev();
+    w.after(w.xena.app.signer, "device", { id: d.base.hex, sub: "r3", kind: "app", label: "r3's second", sign_key: d.signer.id });
+    for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
+    onLog(w.xena, d, "r3's second");
+  };
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: ["r3"] });
+  assert.deepEqual(movedAt(w), [null, null]);
+  for (const c of Object.values(w.stations)) bring(c, w.xena, false, "ws");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved as the lock was read");
+  assert.equal(w.asked(), 1, "no ask more");
+});
+
+test("stations all down at the ask: said and pending, nothing moved; one back, moved as it took them, no ask", async () => {
+  const w = await setUp({ auto: true });
+  w.st.silent = true;
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [null, null]);
+  assert.notEqual(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
+  assert.deepEqual(handOverState(w.inner, "ws"), { moving: true }, "all said, not taken");
+  w.st.silent = false;
+  await w.run(w.inner.adb.personal().refresh("s1"));
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe]);
+  assert.equal(w.asked(), 1);
+  assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS, "nothing said twice");
+});

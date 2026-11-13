@@ -850,8 +850,11 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
               lacking = arr(get(b.success, "lacking")).filter((x): x is string => typeof x === "string");
             }
           }
-          // (and where this device hands the chain over by itself: the logs it binds, which its plan reads, `movedBySelf`)
-          if (serves.includes("logs") && (moves || bodies.length > 0 || lacking.length > 0 || handingOver(inner, ws, sub))) {
+          // (and, chains handed over by themselves, of an owner's chain: the logs it binds, which its plan reads as an ask
+          // comes and before its `moved`, `movedBySelf`; read whoever's turn it is yet, since 14 days pass on the clock
+          // alone, `mayHandOver`)
+          const owns = handsOver(inner) && (entries ?? was?.entries ?? []).length > 0 && fold(entries ?? was!.entries).members.get(sub)?.role === "owner";
+          if (serves.includes("logs") && (moves || bodies.length > 0 || lacking.length > 0 || owns)) {
             const l = yield* ask(id, "/lock/logs");
             if (l._tag === "Success") logs = arr(get(l.success, "chains"));
           }
