@@ -75,6 +75,10 @@ decide() {
   # to mbui (libs/mbui).
   mbui=false
   if has '^(apps|libs)/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
+  # Comma's parts' module's check (check-comma-ui: libs/comma-ui/scripts/check.sh): for a change to it, or to mbui, which
+  # it is built on.
+  comma_ui=false
+  if has '^libs/(comma-ui|mbui)/'; then comma_ui=true; fi
   # The station's tests (check-station: scripts/check.sh's station-tests, in slices on Linux runners): for a change to
   # what they read, as check.sh says it (its station_paths, read from there: said once), to the check itself, or to
   # CI's own files (which make every check run whole: pipeline.yml).
@@ -107,6 +111,7 @@ print() {
     echo "windows_natives=$windows_natives"
     echo "kit=$kit"
     echo "mbui=$mbui"
+    echo "comma_ui=$comma_ui"
     echo "station_tests=$station_tests"
     echo "core_tests=$core_tests"
     echo "release_smoke=$release_smoke"

@@ -56,6 +56,7 @@ jobs:
       windows_natives: ${{ steps.plan.outputs.windows_natives }}
       kit: ${{ steps.plan.outputs.kit }}
       mbui: ${{ steps.plan.outputs.mbui }}
+      comma_ui: ${{ steps.plan.outputs.comma_ui }}
       station_tests: ${{ steps.plan.outputs.station_tests }}
       core_tests: ${{ steps.plan.outputs.core_tests }}
       release_smoke: ${{ steps.plan.outputs.release_smoke }}
@@ -389,6 +390,19 @@ jobs:
     permissions: { contents: read, actions: read }
     with: { rates: "no" }
 
+  # Comma's parts' module (libs/comma-ui), on its own beside mbui: detlint, native type-checked, its tests. On main too:
+  # nothing runs it after the merge.
+  check-comma-ui:
+    needs: plan
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.comma_ui == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - run: bash libs/comma-ui/scripts/check.sh
+
   # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);
   # nothing sent, no secrets.
   bundle:
@@ -442,7 +456,7 @@ jobs:
   # 2026-10-22): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
   # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
   gate:
-    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-station, check-core, check-mbui, bundle, mac-build, mbui-web, static, desktop-build, desktop]
+    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-station, check-core, check-mbui, check-comma-ui, bundle, mac-build, mbui-web, static, desktop-build, desktop]
     if: always() && github.ref != 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 2

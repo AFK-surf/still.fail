@@ -1,0 +1,781 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "comma-ui/cm"
+
+import {
+  "mbui/signals",
+  "mbui/ui",
+  "mbui/view",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
+}
+
+// Values
+pub fn alpha(Int64, Double) -> Int64
+
+#callsite(autofill(loc))
+pub fn avatar_node(@view.View, () -> String, size? : AvatarSize, online? : () -> Bool?, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn badge_node(@view.View, () -> String, tone? : Tone, kind? : BadgeKind, size? : BadgeSize, dot? : Bool, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn button_group_node(@view.View, Array[String], @signals.Signal[Int32], dot? : Int32, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn button_node(@view.View, () -> String, () -> Unit, hierarchy? : Hierarchy, size? : Size, dot? : Bool, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn check_group_node(@view.View, Array[(String, String)], @signals.Signal[Array[Bool]], label? : String, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn check_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String, size? : ControlSize, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn collapse_node(@view.View, () -> String, @signals.Signal[Bool], (@view.View) -> Unit, loc~ : SourceLoc) -> @view.View
+
+pub fn colors() -> Colors
+
+pub fn curve((Double, Double, Double, Double)) -> (Double) -> Double
+
+pub let dark : Colors
+
+pub fn dialog_node(Layer, @signals.Signal[Bool], () -> String, description? : () -> String, body? : (@view.View) -> Unit, actions? : (@view.View) -> Unit, width? : Double) -> Unit
+
+#callsite(autofill(loc))
+pub fn dropdown_node(@view.View, Layer, Array[String], @signals.Signal[Int32], label? : String, placeholder? : String, open? : @signals.Signal[Bool], disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+pub let ease_calm_in_out : (Double, Double, Double, Double)
+
+pub let ease_calm_out : (Double, Double, Double, Double)
+
+pub let ease_contextual_icon : (Double, Double, Double, Double)
+
+pub let ease_drawer : (Double, Double, Double, Double)
+
+pub let ease_generated_media_swap : (Double, Double, Double, Double)
+
+pub let ease_icon_swap : (Double, Double, Double, Double)
+
+pub let ease_light_sweep : (Double, Double, Double, Double)
+
+pub let ease_press_recoil : (Double, Double, Double, Double)
+
+pub let ease_press_travel : (Double, Double, Double, Double)
+
+pub let ease_sharp_in : (Double, Double, Double, Double)
+
+pub let ease_smooth_out : (Double, Double, Double, Double)
+
+pub let ease_soft_in_out : (Double, Double, Double, Double)
+
+pub let ease_spatial_move : (Double, Double, Double, Double)
+
+pub let ease_surface_smooth_out : (Double, Double, Double, Double)
+
+pub fn eased_by(@view.View, () -> Bool, Double, (Double, Double, Double, Double)) -> Eased
+
+pub let error_500 : Int64
+
+pub let focus_brand : (Double, Int64)
+
+pub let focus_error : (Double, Int64)
+
+pub let focus_gray : (Double, Int64)
+
+pub let icon_bubble_alert : Array[IconLayer]
+
+pub let icon_check : Array[IconLayer]
+
+pub let icon_chevron_down_small : Array[IconLayer]
+
+pub let icon_circle_check : Array[IconLayer]
+
+pub let icon_circle_check_filled : Array[IconLayer]
+
+pub let icon_circle_info_filled : Array[IconLayer]
+
+pub let icon_circle_x : Array[IconLayer]
+
+pub let icon_circle_x_filled : Array[IconLayer]
+
+pub let icon_cross : Array[IconLayer]
+
+pub let icon_exclamation_circle_filled : Array[IconLayer]
+
+pub let icon_loader : Array[IconLayer]
+
+pub let icon_minus : Array[IconLayer]
+
+#callsite(autofill(loc))
+pub fn icon_node(@view.View, Array[IconLayer], Double, () -> Int64, ground? : () -> Int64, label? : String, stroke? : Double, loc~ : SourceLoc) -> @view.View
+
+pub let icon_stroke : Double
+
+#callsite(autofill(loc))
+pub fn indicator_node(@view.View, Signal, String, size? : Int32, loc~ : SourceLoc) -> @view.View
+
+pub fn initials(String) -> String
+
+#callsite(autofill(loc))
+pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String, size? : ControlSize, invalid? : () -> Bool, disabled? : () -> Bool, submitted? : (String) -> Unit, loc~ : SourceLoc) -> @view.View
+
+pub fn is_dark() -> Bool
+
+#callsite(autofill(loc))
+pub fn layer_node(@view.View, Layer, loc~ : SourceLoc) -> Unit
+
+pub let light : Colors
+
+pub fn lit(@view.View, () -> Bool) -> Bool
+
+pub fn menu_item(String, () -> Unit, danger? : Bool, checked? : Bool, divided? : Bool) -> MenuRow
+
+pub fn menu_node(Layer, @view.View, @signals.Signal[Bool], () -> Array[MenuRow], label? : String, width? : Double, side? : @view.Side) -> Unit
+
+pub fn mix(Int64, Double, Int64) -> Int64
+
+pub let ms_caret_blink : Double
+
+pub let ms_dialog_enter : Double
+
+pub let ms_dialog_exit : Double
+
+pub let ms_disclosure_turn : Double
+
+pub let ms_feedback_in : Double
+
+pub let ms_feedback_out : Double
+
+pub let ms_hover_card_enter : Double
+
+pub let ms_hover_card_exit : Double
+
+pub let ms_icon_swap : Double
+
+pub let ms_image_filmstrip : Double
+
+pub let ms_loading_shine : Double
+
+pub let ms_login_stage_enter : Double
+
+pub let ms_login_stage_exit : Double
+
+pub let ms_menu_enter : Double
+
+pub let ms_menu_exit : Double
+
+pub let ms_onboarding_auto_start : Double
+
+pub let ms_onboarding_bubble_stagger : Double
+
+pub let ms_onboarding_dim : Double
+
+pub let ms_onboarding_exit : Double
+
+pub let ms_onboarding_first_line : Double
+
+pub let ms_onboarding_intro_part_enter : Double
+
+pub let ms_onboarding_intro_stagger : Double
+
+pub let ms_onboarding_key_hint : Double
+
+pub let ms_onboarding_light_drift : Double
+
+pub let ms_onboarding_light_shift : Double
+
+pub let ms_onboarding_logo_enter : Double
+
+pub let ms_onboarding_logo_travel : Double
+
+pub let ms_onboarding_reply_beat : Double
+
+pub let ms_onboarding_settle : Double
+
+pub let ms_onboarding_shortcut_beat : Double
+
+pub let ms_onboarding_shortcut_done : Double
+
+pub let ms_onboarding_sweep : Double
+
+pub let ms_onboarding_welcome_beat : Double
+
+pub let ms_panel_enter : Double
+
+pub let ms_panel_exit : Double
+
+pub let ms_picture_in_picture_enter : Double
+
+pub let ms_picture_in_picture_exit : Double
+
+pub let ms_pointer_intent : Double
+
+pub let ms_press_recoil : Double
+
+pub let ms_press_travel : Double
+
+pub let ms_progress_fill : Double
+
+pub let ms_reply_draw : Double
+
+pub let ms_reply_thread_enter : Double
+
+pub let ms_reply_thread_exit : Double
+
+pub let ms_reveal_item : Double
+
+pub let ms_reveal_stagger : Double
+
+pub let ms_routine_cleared_enter : Double
+
+pub let ms_routine_dismiss_close : Double
+
+pub let ms_routine_dismiss_fade : Double
+
+pub let ms_spatial_move : Double
+
+pub let ms_state_change : Double
+
+pub let ms_state_swap_enter : Double
+
+pub let ms_state_swap_exit : Double
+
+pub let ms_submenu_close_delay : Double
+
+pub let ms_submenu_open_delay : Double
+
+pub let ms_tab_close_fade : Double
+
+pub let ms_task_status_spin : Double
+
+pub let ms_toast_enter : Double
+
+pub let ms_toast_exit : Double
+
+pub let ms_tooltip_enter : Double
+
+pub let ms_tooltip_exit : Double
+
+pub let ms_tooltip_handoff : Double
+
+pub fn popup_node(Layer, @view.View, @signals.Signal[Bool], (@view.View) -> Unit, label? : String, width? : Double) -> Unit
+
+pub fn presses_node(@view.View, () -> Unit, on? : () -> Bool) -> Unit
+
+#callsite(autofill(loc))
+pub fn radio_group_node(@view.View, Array[(String, String)], @signals.Signal[Int32], label? : String, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn radio_node(@view.View, () -> Bool, () -> Unit, () -> String, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+pub let radius_2xl : Double
+
+pub let radius_3xl : Double
+
+pub let radius_4xl : Double
+
+pub let radius_full : Double
+
+pub let radius_lg : Double
+
+pub let radius_md : Double
+
+pub let radius_none : Double
+
+pub let radius_sm : Double
+
+pub let radius_xl : Double
+
+pub let radius_xs : Double
+
+pub let radius_xxs : Double
+
+pub fn ring_node(@view.View, () -> Double, ink? : Int64) -> Unit
+
+pub let ring_w : Double
+
+#callsite(autofill(loc))
+pub fn scroll_area_node(@view.View, Double, (@view.View) -> Unit, label? : String, loc~ : SourceLoc) -> @view.View
+
+pub fn set_dark(Bool?) -> Unit
+
+pub let shadow_2xl : (Double, Double, Int64)
+
+pub let shadow_3xl : (Double, Double, Int64)
+
+pub let shadow_dark_2xl : (Double, Double, Int64)
+
+pub let shadow_dark_3xl : (Double, Double, Int64)
+
+pub let shadow_dark_lg : (Double, Double, Int64)
+
+pub let shadow_dark_md : (Double, Double, Int64)
+
+pub let shadow_dark_sm : (Double, Double, Int64)
+
+pub let shadow_dark_xl : (Double, Double, Int64)
+
+pub let shadow_dark_xs : (Double, Double, Int64)
+
+pub let shadow_lg : (Double, Double, Int64)
+
+pub let shadow_md : (Double, Double, Int64)
+
+pub let shadow_sm : (Double, Double, Int64)
+
+pub let shadow_xl : (Double, Double, Int64)
+
+pub let shadow_xs : (Double, Double, Int64)
+
+#callsite(autofill(loc))
+pub fn slider_node(@view.View, @signals.Signal[Double], () -> String, least? : Double, most? : Double, step? : Double, width? : Double, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+pub let space_10xl : Double
+
+pub let space_11xl : Double
+
+pub let space_2xl : Double
+
+pub let space_3xl : Double
+
+pub let space_4xl : Double
+
+pub let space_5xl : Double
+
+pub let space_6xl : Double
+
+pub let space_7xl : Double
+
+pub let space_8xl : Double
+
+pub let space_9xl : Double
+
+pub let space_lg : Double
+
+pub let space_md : Double
+
+pub let space_none : Double
+
+pub let space_sm : Double
+
+pub let space_xl : Double
+
+pub let space_xs : Double
+
+pub let space_xxs : Double
+
+#callsite(autofill(loc))
+pub fn status_node(@view.View, @signals.Signal[TaskStatus], label? : String, loc~ : SourceLoc) -> @view.View
+
+#callsite(autofill(loc))
+pub fn tag_node(@view.View, () -> String, tone? : Tone, size? : BadgeSize, remove? : () -> Unit, loc~ : SourceLoc) -> @view.View
+
+pub let task_statuses : Array[TaskStatus]
+
+pub let toast_stays : Double
+
+pub fn toaster_node(Layer, Toaster) -> Unit
+
+#callsite(autofill(loc))
+pub fn toggle_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String, size? : ControlSize, disabled? : () -> Bool, loc~ : SourceLoc) -> @view.View
+
+pub fn tooltip_node(Layer, @view.View, () -> String, side? : @view.Side, delay? : Double, shown? : () -> Bool) -> Unit
+
+pub let type_large : TypeRole
+
+pub let type_micro : TypeRole
+
+pub let type_mini : TypeRole
+
+pub let type_regular : TypeRole
+
+pub let type_small : TypeRole
+
+pub let type_title1 : TypeRole
+
+pub let type_title2 : TypeRole
+
+pub let type_title3 : TypeRole
+
+pub fn ui_theme() -> @ui.Theme
+
+pub let weight_bold : Int32
+
+pub let weight_medium : Int32
+
+pub let weight_regular : Int32
+
+pub let weight_semibold : Int32
+
+pub fn words_in(TypeRole, weight? : Int32, wrap? : Bool) -> @view.WordsLook
+
+pub let yellow_500 : Int64
+
+// Errors
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) enum AvatarSize {
+  AvatarXs
+  AvatarSm
+  AvatarMd
+  AvatarLg
+  AvatarXl
+  Avatar2xl
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum BadgeKind {
+  PillColor
+  PillOutline
+  BadgeColor
+  BadgeModern
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum BadgeSize {
+  BadgeSm
+  BadgeMd
+  BadgeLg
+}
+
+pub(all) struct Colors {
+  text_primary : Int64
+  text_secondary : Int64
+  text_tertiary : Int64
+  text_quaternary : Int64
+  text_white : Int64
+  text_disabled : Int64
+  text_placeholder : Int64
+  text_claude : Int64
+  text_codex : Int64
+  text_brand_primary : Int64
+  text_brand_secondary : Int64
+  text_brand_tertiary : Int64
+  text_error_primary : Int64
+  text_warning_primary : Int64
+  text_success_primary : Int64
+  border_primary : Int64
+  border_menu_primary : Int64
+  border_secondary : Int64
+  border_tertiary : Int64
+  border_disabled : Int64
+  border_brand : Int64
+  border_brand_solid : Int64
+  border_error : Int64
+  border_error_solid : Int64
+  fg_primary : Int64
+  fg_secondary : Int64
+  fg_tertiary : Int64
+  fg_quaternary : Int64
+  fg_quinary : Int64
+  fg_quinary_hover : Int64
+  fg_senary : Int64
+  fg_button : Int64
+  fg_button_active : Int64
+  fg_button_secondary : Int64
+  fg_white : Int64
+  fg_disabled : Int64
+  fg_brand_primary : Int64
+  fg_error_primary : Int64
+  fg_warning_primary : Int64
+  fg_warning_secondary : Int64
+  fg_success_primary : Int64
+  bg_primary : Int64
+  bg_popup_primary : Int64
+  bg_popup_secondary : Int64
+  bg_secondary : Int64
+  bg_secondary_hover : Int64
+  bg_tertiary : Int64
+  bg_quaternary : Int64
+  bg_quaternary_hover : Int64
+  bg_active : Int64
+  bg_disabled : Int64
+  bg_overlay : Int64
+  bg_brand_primary : Int64
+  bg_brand_secondary : Int64
+  bg_brand_solid : Int64
+  bg_brand_solid_hover : Int64
+  bg_error_primary : Int64
+  bg_error_solid : Int64
+  bg_warning_primary : Int64
+  bg_warning_solid : Int64
+  bg_success_primary : Int64
+  bg_success_solid : Int64
+  bg_toggle : Int64
+  bg_toggle_hover : Int64
+  bg_window : Int64
+  bg_claude : Int64
+  bg_codex : Int64
+  bg_gpt : Int64
+  toast_text_primary : Int64
+  toast_text_secondary : Int64
+  toast_icon_primary : Int64
+  button_primary_bg : Int64
+  button_primary_bg_hover : Int64
+  button_primary_border : Int64
+  button_primary_border_hover : Int64
+  button_primary_fg : Int64
+  button_primary_fg_hover : Int64
+  button_secondary_bg : Int64
+  button_secondary_border : Int64
+  button_secondary_fg : Int64
+  button_secondary_color_bg : Int64
+  button_secondary_color_bg_hover : Int64
+  button_secondary_color_border : Int64
+  button_secondary_color_border_hover : Int64
+  button_secondary_color_fg : Int64
+  button_secondary_color_fg_hover : Int64
+  button_tertiary_fg : Int64
+  button_tertiary_fg_hover : Int64
+  button_tertiary_bg_hover : Int64
+  button_tertiary_color_fg : Int64
+  button_tertiary_color_fg_hover : Int64
+  button_tertiary_color_bg_hover : Int64
+  button_primary_error_bg : Int64
+  button_primary_error_bg_hover : Int64
+  button_primary_error_border : Int64
+  button_primary_error_border_hover : Int64
+  button_primary_error_fg : Int64
+  button_primary_error_fg_hover : Int64
+  dialog_bg : Int64
+  dialog_shortcut_on_primary_bg : Int64
+  dialog_shortcut_on_primary_text : Int64
+  menu_hover_error : Int64
+  toggle_button_fg_disabled : Int64
+  slider_handle_bg : Int64
+  slider_handle_border : Int64
+  avatar_bg : Int64
+  avatar_profile_photo_border : Int64
+  tooltip_bg : Int64
+  tooltip_border : Int64
+  tooltip_text : Int64
+  tooltip_supporting_text : Int64
+  tooltip_shortcut_bg : Int64
+  tooltip_shortcut_text : Int64
+  ai_input_header_icon_primary : Int64
+  ai_input_header_text_primary : Int64
+  ai_input_header_text_secondary : Int64
+  ai_input_panel_icon_primary : Int64
+  ai_input_panel_icon_disabled : Int64
+  ai_input_panel_icon_fg : Int64
+  ai_input_panel_icon_warning : Int64
+  ai_input_panel_text_primary : Int64
+  ai_input_panel_text_placeholder : Int64
+  ai_input_panel_text_warning : Int64
+  ai_input_panel_bg_input : Int64
+  ai_input_panel_bg_tag : Int64
+  ai_input_panel_text_attachment_primary : Int64
+  ai_input_panel_text_attachment_secondary : Int64
+  ai_input_panel_bg_disabled : Int64
+  ai_input_panel_bg_attachment : Int64
+  panel_bg_file : Int64
+  markdown_text_primary : Int64
+  markdown_text_secondary : Int64
+  markdown_text_tool_primary : Int64
+  markdown_audio_control_primary : Int64
+  markdown_text_inline_primary : Int64
+  markdown_text_inline_code : Int64
+  markdown_bg_inline_code : Int64
+  markdown_text_link : Int64
+  markdown_bg_message : Int64
+  markdown_bg_table : Int64
+  markdown_border_table : Int64
+  markdown_bg_tool : Int64
+  markdown_icon_primary : Int64
+  markdown_bg_icon_hover : Int64
+  markdown_image_bg_primary : Int64
+  markdown_image_hover : Int64
+  markdown_image_icon_primary : Int64
+  markdown_image_bar_border : Int64
+  markdown_sound_video_icon_primary : Int64
+  markdown_sound_video_text_primary : Int64
+  markdown_sound_video_bg_hover : Int64
+  markdown_sound_video_bg_player_bar : Int64
+  markdown_sound_video_bg_progress : Int64
+  markdown_sound_video_bg_tracker : Int64
+  markdown_sound_video_bar_border : Int64
+  markdown_sound_video_bg_preview : Int64
+  main_panel_bg : Int64
+  main_panel_item_bg : Int64
+  plugin_bg_button : Int64
+  plugin_border : Int64
+  plugin_row_bg_hover : Int64
+  todo_kanban_bg_card_primary : Int64
+  todo_kanban_bg_column_primary : Int64
+  todo_list_bg_needs_review_main : Int64
+  todo_list_bg_done : Int64
+  todo_list_bg_cancel : Int64
+  todo_list_bg_group_fade : Int64
+  sidebar_text_primary : Int64
+  sidebar_text_secondary : Int64
+  sidebar_text_tertiary : Int64
+  sidebar_bg_selection : Int64
+  sidebar_text_highlight : Int64
+  sidebar_icon_primary : Int64
+  sidebar_icon_secondary : Int64
+  sidebar_icon_disabled : Int64
+  sidebar_bg_item : Int64
+  scrollbar_bg : Int64
+  utility_gray_50 : Int64
+  utility_gray_200 : Int64
+  utility_gray_300 : Int64
+  utility_gray_700 : Int64
+  utility_brand_50 : Int64
+  utility_brand_100 : Int64
+  utility_brand_200 : Int64
+  utility_brand_300 : Int64
+  utility_brand_400 : Int64
+  utility_brand_700 : Int64
+  utility_error_50 : Int64
+  utility_error_200 : Int64
+  utility_error_300 : Int64
+  utility_error_700 : Int64
+  utility_warning_50 : Int64
+  utility_warning_200 : Int64
+  utility_warning_300 : Int64
+  utility_warning_700 : Int64
+  utility_success_50 : Int64
+  utility_success_200 : Int64
+  utility_success_300 : Int64
+  utility_success_700 : Int64
+  utility_blue_50 : Int64
+  utility_blue_200 : Int64
+  utility_blue_300 : Int64
+  utility_blue_700 : Int64
+  utility_indigo_50 : Int64
+  utility_indigo_200 : Int64
+  utility_indigo_300 : Int64
+  utility_indigo_700 : Int64
+  utility_purple_50 : Int64
+  utility_purple_200 : Int64
+  utility_purple_300 : Int64
+  utility_purple_700 : Int64
+  utility_pink_50 : Int64
+  utility_pink_200 : Int64
+  utility_pink_300 : Int64
+  utility_pink_700 : Int64
+  utility_orange_50 : Int64
+  utility_orange_200 : Int64
+  utility_orange_300 : Int64
+  utility_orange_700 : Int64
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ControlSize {
+  ControlSm
+  ControlMd
+}
+
+type Eased
+pub fn Eased::go(Self, @view.View, Double, Double, (Double, Double, Double, Double), delay? : Double) -> Unit
+pub fn Eased::new(Double) -> Self
+pub fn Eased::shown(Self, @view.View) -> Double
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Hierarchy {
+  Primary
+  SecondaryColor
+  SecondaryGray
+  TertiaryColor
+  TertiaryGray
+  LinkColor
+  LinkGray
+  Destructive
+}
+
+pub(all) struct IconLayer {
+  d : String
+  fill : Bool
+  width : Double
+  cut : Bool
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Intent {
+  Neutral
+  Success
+  Warning
+  Error
+}
+
+pub struct Layer {
+  at : @ref.Ref[@view.View?]
+}
+pub fn Layer::new() -> Self
+
+pub(all) struct MenuRow {
+  label : String
+  press : () -> Unit
+  danger : Bool
+  checked : Bool
+  divided : Bool
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Signal {
+  Idle
+  Info
+  Good
+  Caution
+  Bad
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Size {
+  Xs
+  Sm
+  Md
+  Lg
+}
+pub fn Size::height(Self) -> Double
+
+#derive(Eq, @debug.Debug)
+pub(all) enum TaskStatus {
+  InProgress
+  NeedsReview
+  Done
+  Cancelled
+}
+pub fn TaskStatus::label(Self) -> String
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ToastSaid {
+  id : Int32
+  title : String
+  description : String
+  intent : Intent
+}
+
+pub struct Toaster {
+  shown : @signals.Signal[Array[ToastSaid]]
+  mut next : Int32
+  at : @ref.Ref[@view.View?]
+}
+pub fn Toaster::dismiss(Self, Int32) -> Unit
+pub fn Toaster::new() -> Self
+pub fn Toaster::show(Self, String, description? : String, intent? : Intent, stays? : Double) -> Unit
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Tone {
+  Gray
+  Brand
+  Error
+  Warning
+  Success
+  Blue
+  Indigo
+  Purple
+  Pink
+  Orange
+}
+
+pub(all) struct TypeRole {
+  size : Double
+  line : Double
+  tracking : Double
+}
+
+// Type aliases
+
+// Traits
