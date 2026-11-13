@@ -194,6 +194,26 @@ test("a newcomer's first app: not confirmed and able to ask; it dials an owner's
   assert.equal(subs(after), "r1,r2,s1", "it reads the list");
 });
 
+test("a newcomer approved before a station took its `member` statement (2026-11-14, real stations): tried again as it is, and in once a station takes it", async () => {
+  const w = await setUp();
+  w.approvers.set(w.alice.app.base.hex, {
+    where: () => ["ws"],
+    approve: (hello) => {
+      w.alice.say("member", { sub: "s1", email: "s1@x.com", lock: stationHash(hello.log[0]), role: "member" }, "ws");
+      return { t: "approved", workspaces: ["ws"], failed: [] };
+    },
+  });
+  assert.equal((await w.ask("lock.pair", { workspace: "ws" })).error, undefined);
+  const done = await w.ask("lock.pairCode", { workspace: "ws", code: CODE });
+  assert.equal(done.error, undefined, done.error?.message);
+  assert.equal((await w.page()).me.confirmed, false, "not in while no station took it");
+  w.bring(w.alice);
+  await w.r.host.time.pass(10_000);
+  const after = await w.page();
+  assert.equal(after.me.confirmed, true, `in (${w.why()})`);
+  assert.equal(subs(after), "r1,r2,s1");
+});
+
 test("a member's new web page: it asks that member's own app, `web` said, in", async () => {
   const w = await setUp({ named: true, web: true });
   const before = await w.page();

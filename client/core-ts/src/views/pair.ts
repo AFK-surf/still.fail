@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -1031,7 +1031,10 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
         const sub = place.slice("person:".length);
         yield* inner.adb.personal().joined(sub, arr(get(get(approved, "chains"), sub)) as Entry[]);
       }
-      for (const ws of y.approvedIn.filter((w) => !isPerson(w))) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      for (const ws of y.approvedIn.filter((w) => !isPerson(w))) {
+        approvedHere(inner, ws);
+        yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      }
     } else if (checked.some((m) => y.met.get(m.id) === m)) {
       y.state = "wrong";
       y.left = left;

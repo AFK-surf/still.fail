@@ -201,6 +201,9 @@ type Part = {
   /// Where the chain moved: the stations whose refusal said this device is left out of the state in force there
   /// (station/src/mesh/serve.ts `leftOf`), each with the devices it said to ask (a hint: whom it dials lets nobody in).
   left: Map<string, string[]>;
+  /// Where the chain moved: this device's try was approved here this run (views/pair.ts `prove`), so a station that
+  /// refuses it still may not have taken what let it in yet, and is tried again shortly, as one behind is (`refused`).
+  approved: boolean;
   /// Stations that refused this device though the lock as held names it, and how often this head.
   behind: Map<string, number>;
   /// Of the draft: what is left out; the devices that asked for credentials; each station's answer to GET /lock.
@@ -341,7 +344,7 @@ export function live<D extends { exp?: unknown }>(d: D | undefined, at: number):
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, refused: new Map(), left: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, refused: new Map(), left: new Map(), approved: false, behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -1134,7 +1137,11 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   // what the workspace's lock says of it which came just after it refused, and each try's refusal tells it
   // (`heardTail`); else, nobody telling a device it refuses, it never heard (2026-11-12: the entry taking it out landed
   // 5 ms after the refusal, the cloud frozen). Tried as long as the lock held names it, then held as before.
-  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined) {
+  // Where the chain moved and this device was approved here, though the state it holds names nobody (given no logs
+  // yet): so too (2026-11-14, real stations: the trusted device answered before a station took its `member`, and
+  // the device, its chain's head never moving, never asked again).
+  const approved = p.approved && movedHere(inner, ws) && told?.left !== undefined;
+  if (base !== null && h?.head != null && !f.disabled && (approved || live(f.devices.get(base), now(inner)) !== undefined)) {
     const tries = p.behind.get(station) ?? 0;
     const off = offOwnLock(inner, ws);
     if (tries < BEHIND_TRIES) {
@@ -1183,6 +1190,16 @@ function heardLeft(inner: Inner, ws: string, station: string, raw: unknown): voi
 
 /// How many devices to ask a station's refusal is taken for at most (it names 16 at most).
 const LEFT_MOST = 32;
+
+/// This device's try was approved in moved workspace `ws` (views/pair.ts `prove`): the stations that refused it are
+/// tried again now, and as they refuse it, a few times more (`refused`).
+export function approvedHere(inner: Inner, ws: string): void {
+  if (!movedHere(inner, ws)) return;
+  const p = part(inner, ws);
+  p.approved = true;
+  p.behind.clear();
+  refusedAgain(inner, ws);
+}
 
 /// Whom the stations of moved workspace `ws` said to ask, this device being left out of the state in force there
 /// (`heardLeft`): null where none said it is.
