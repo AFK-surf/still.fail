@@ -125,6 +125,8 @@ pub(all) struct Look {
   /// how far it and what it holds are drawn off where they are laid out, drawn only (View::drawn_off); how far its own
   /// ground is drawn off and how much bigger than it is laid out, and how round (View::ground_drawn)
   mut drawn_off : (Double, Double)
+  /// whether that is drawn off exactly as far as said, by parts of a pixel (View::drawn_off's `exact`), not by whole ones
+  mut drawn_exact : Bool
   mut ground_drawn : GroundShape
   /// whether what it holds past its edges fades out towards them softly, by how far it reaches past (View::cuts_softly)
   mut cut_soft : Bool
@@ -1633,6 +1635,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.look.fades = (0.0, 0.0, 0.0, 0.0)
       n.look.stretch = 0.0
       n.look.drawn_off = (0.0, 0.0)
+      n.look.drawn_exact = false
       n.look.ground_drawn = ground_as_laid
       n.look.cut_soft = false
       if n.look.lines.length() > 0 {
@@ -1766,7 +1769,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_marks: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, words_breaks: false, glyphs_said: 0, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_marks: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), drawn_exact: false, ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, words_breaks: false, glyphs_said: 0, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         words_as_said,
@@ -4921,9 +4924,18 @@ pub fn Tree::cut_soft_of(self : Tree, id : NodeId) -> (Double, Double, Double)? 
 ///|
 /// How far it, and what it holds with it, is drawn off where it is laid out (points), as it changes: where it is drawn
 /// only, pressed and found where it is laid out (a thing on its way from where its cause found it to where it is laid
-/// out now: @motion's Moves::moves_with). Place's: nothing of it laid out or made again.
+/// out now: @motion's Moves::moves_with). Place's: nothing of it laid out or made again. Drawn off by whole pixels of
+/// the host's, so that words carried with it stay crisp; `exact`: by as far as is said, parts of a pixel too, for what
+/// goes so slowly that a pixel is many frames (a thin line following a clock: by whole pixels it is seen to step). What
+/// it holds is carried by the same, its words too: off the pixels while it is, as crisp as ever where it comes to rest
+/// on them.
 #callsite(autofill(loc))
-pub fn View::drawn_off(self : View, d : Live[(Double, Double)], loc~ : SourceLoc) -> View {
+pub fn View::drawn_off(self : View, d : Live[(Double, Double)], exact? : Bool = false, loc~ : SourceLoc) -> View {
+  let look = self.tree.nodes[self.at].look
+  if look.drawn_exact != exact {
+    look.drawn_exact = exact
+    self.tree.places_rev = self.tree.places_rev + 1
+  }
   self.bind(loc~, DrawnOff, d, Place, fn(d) {
     self.tree.nodes[self.at].look.drawn_off = d
     self.tree.places_rev = self.tree.places_rev + 1
@@ -11260,12 +11272,13 @@ fn Tree::each_drawn_in_order(
     }
     // (where it is in what holds it, drawn as big as that is; its own scale about its point: its origin drawn in as far
     // as that leaves it)
-    // (drawn off where it is laid out, drawn only, by whole pixels where the host says how many a point: View::drawn_off)
+    // (drawn off where it is laid out, drawn only, by whole pixels where the host says how many a point, or exactly as
+    // far as said where it says so: View::drawn_off)
     let mut ox = n.look.drawn_off.0
     let mut oy = n.look.drawn_off.1
     // (whole pixels of the host's, in its own terms, as an old view's look's dx is before what holds it is drawn
     // bigger or smaller: draw.mbt's on_pixels(look.dx, scale))
-    if g > 0.0 && (ox != 0.0 || oy != 0.0) {
+    if g > 0.0 && !n.look.drawn_exact && (ox != 0.0 || oy != 0.0) {
       ox = (ox * g).round() / g
       oy = (oy * g).round() / g
     }
@@ -11378,7 +11391,7 @@ pub fn Tree::drawn_one(
     // (each as Tree::each_drawn_in_order works it out: written the same, the same numbers)
     let mut ox = n.look.drawn_off.0
     let mut oy = n.look.drawn_off.1
-    if g > 0.0 && (ox != 0.0 || oy != 0.0) {
+    if g > 0.0 && !n.look.drawn_exact && (ox != 0.0 || oy != 0.0) {
       ox = (ox * g).round() / g
       oy = (oy * g).round() / g
     }
