@@ -122,38 +122,74 @@ test "an account's windows and its models' own, five: where no line holds them t
 }
 
 ///|
-test "multi-window model pools group each pool on its own line when one line cannot hold all windows" {
+test "multi-window model pools group each pool with a left group column and aligned short [5H] [W] capsules" {
   let q = Json::object({
     "state": "ok",
     "windows": [
-      { "label": "5 小时 · Gemini", "mark": "Gemini 5H", "scope": "Gemini", "left": 90.0, "level": "ok" },
-      { "label": "每周 · Gemini", "mark": "Gemini W", "scope": "Gemini", "left": 68.0, "level": "ok" },
-      { "label": "5 小时 · Claude / GPT", "mark": "Claude / GPT 5H", "scope": "Claude / GPT", "left": 58.0, "level": "ok" },
-      { "label": "每周 · Claude / GPT", "mark": "Claude / GPT W", "scope": "Claude / GPT", "left": 79.0, "level": "ok" },
+      { "label": "5 小时 · Gemini", "mark": "Gemini 5H", "scope": "gemini", "left": 56.0, "level": "ok" },
+      { "label": "每周 · Gemini", "mark": "Gemini W", "scope": "gemini", "left": 58.0, "level": "ok" },
+      { "label": "5 小时 · Claude / GPT", "mark": "Claude / GPT 5H", "scope": "3p", "left": 100.0, "level": "ok" },
+      { "label": "每周 · Claude / GPT", "mark": "Claude / GPT W", "scope": "3p", "left": 79.0, "level": "ok" },
     ],
   })
-  let t = @ui.Tester::new(
+  for nav in [false, true] {
+    let t = @ui.Tester::new(
+      fn(c) {
+        begin(c) |> ignore
+        c.with_theme(ui_theme(), fn() {
+          c.box(w=Px(224.0), fn() {
+            if nav {
+              nav_quota_chips(c, Some(q))
+            } else {
+              quota_chips(c, Some(q), lines=true, small=true)
+            }
+          })
+          |> ignore
+        })
+      },
+      w=640.0,
+      h=200.0,
+      platform=0,
+    )
+    t.draw()
+    let shown = t.words().filter(fn(w) { w.5 > 0.5 })
+    let find_all = fn(mark : String) { shown.filter(fn(w) { w.0 == mark }) }
+    let gemini = find_all("Gemini")[0]
+    let claude_gpt = find_all("Claude / GPT")[0]
+    let fives = find_all("5H")
+    let weeks = find_all("W")
+    assert_eq(fives.length(), 2)
+    assert_eq(weeks.length(), 2)
+    // Both 5H capsules align at the exact same X coordinate after the left group column
+    assert_eq(fives[0].1, fives[1].1)
+    assert_eq(gemini.2, fives[0].2)
+    assert_eq(fives[0].2, weeks[0].2)
+    assert_eq(claude_gpt.2, fives[1].2)
+    assert_eq(fives[1].2, weeks[1].2)
+    assert_true(claude_gpt.2 > gemini.2)
+    assert_eq(t.squeeze_faults(), [])
+  }
+  // Narrowest 180pt sidebar (row width 164pt): stacks the group title above the pair of short capsules
+  let narrow = @ui.Tester::new(
     fn(c) {
       begin(c) |> ignore
       c.with_theme(ui_theme(), fn() {
-        c.box(w=Px(260.0), fn() { quota_chips(c, Some(q), lines=true, small=true) }) |> ignore
+        c.box(w=Px(164.0), fn() { nav_quota_chips(c, Some(q)) }) |> ignore
       })
     },
     w=640.0,
     h=200.0,
-    platform=2,
+    platform=0,
   )
-  t.draw()
-  let shown = t.words().filter(fn(w) { w.5 > 0.5 })
-  let find = fn(mark : String) { shown.filter(fn(w) { w.0 == mark })[0] }
-  let g5h = find("Gemini 5H")
-  let gw = find("Gemini W")
-  let c5h = find("Claude / GPT 5H")
-  let cw = find("Claude / GPT W")
-  assert_eq(g5h.2, gw.2)
-  assert_eq(c5h.2, cw.2)
-  assert_true(c5h.2 > g5h.2)
-  assert_eq(t.squeeze_faults(), [])
+  narrow.draw()
+  let nshown = narrow.words().filter(fn(w) { w.5 > 0.5 })
+  let nfind = fn(mark : String) { nshown.filter(fn(w) { w.0 == mark }) }
+  let ng = nfind("Gemini")[0]
+  let nfives = nfind("5H")
+  let nweeks = nfind("W")
+  assert_true(nfives[0].2 > ng.2)
+  assert_eq(nfives[0].2, nweeks[0].2)
+  assert_eq(narrow.squeeze_faults(), [])
 }
 
 ///|
