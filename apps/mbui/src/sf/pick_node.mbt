@@ -185,7 +185,7 @@ fn pick_row_node(
     .presses(Is(true))
     .focusable(Is(true))
     .on_press(go)
-    .says(Is(Some(@view.said(Button, label=said.join(" ")))))
+    .says(Is(Some(@view.said(MenuItemRadio, label=said.join(" "), check=if on { On } else { Off }))))
     |> ignore
     let first_line = fn(into : @view.View) {
       if panel {

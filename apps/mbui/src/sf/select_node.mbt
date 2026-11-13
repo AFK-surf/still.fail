@@ -26,6 +26,7 @@ pub fn select_node(
     }
   }
   let live = fn() { !disabled() }
+  let opener = Opener::new()
   parent.box(made_for=loc, fn(b) {
     let press = fn() {
       let (x, y, w, h) = b.placed_window_now()
@@ -37,6 +38,7 @@ pub fn select_node(
         choose,
         from=At(x, y, w, h),
       )
+      opener.mark()
     }
     presses_node(b, press, on=live)
     b
@@ -51,7 +53,7 @@ pub fn select_node(
     .alpha(By(fn() { if disabled() { select_disabled_alpha } else { 1.0 } }))
     .says(By(fn() {
       let l = label()
-      Some(@view.said(Button, label=if l == "" { words() } else { l + ": " + words() }))
+      Some(@view.said(Button, label=if l == "" { words() } else { l + ": " + words() }, expanded=opener.open()))
     }))
     |> ignore
     if !whole {

@@ -197,7 +197,7 @@ pub fn toggle_chip_node(
     .bone_whole(Is(true))
     |> ignore
     presses_node(b, press)
-    b.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
+    b.says(By(fn() { Some(@view.said(Button, label=label(), pressed=active())) })) |> ignore
     if icon != "" {
       icon_node(b, icon, toggle_chip_icon, By(ink)) |> ignore
     }

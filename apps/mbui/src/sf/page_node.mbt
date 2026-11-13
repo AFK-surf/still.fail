@@ -1781,6 +1781,7 @@ pub fn round_key_node(
   side? : Double = 34.0,
   icon_size? : Double = 22.0,
   ink? : () -> Int64 = fn() { theme().p.text },
+  opener? : Opener,
   loc~ : SourceLoc,
 ) -> Unit {
   parent.box(made_for=loc, fn(k) {
@@ -1792,6 +1793,10 @@ pub fn round_key_node(
     .lies_along(Is(Middle))
     |> ignore
     pressed_node(k, press, Is(side / 2.0), Button, label)
+    // (what opens a menu says it is open while that is drawn)
+    if opener is Some(o) {
+      k.says(By(fn() { Some(@view.said(Button, label=label(), expanded=o.open())) })) |> ignore
+    }
     icon_node(k, icon, icon_size, By(ink)) |> ignore
   })
   |> ignore
