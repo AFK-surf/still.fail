@@ -185,8 +185,10 @@ let phone_ask_none : PhoneAsk = { request: "", reason: "", status: "", scope: ""
 ///|
 /// Post `m`'s request for its person's phone in place of its words (phone_ask_card's, as nodes) in `v`: its card while it
 /// waits (answered with `adb.decide` on the chat's station), then a line saying how it went, how its station holds the
-/// phone after it, pressed for what was asked; decided, the line in the card's place. Not here yet: the step left on
-/// the phone under the line (settings' phone_ask_node).
+/// phone after it, pressed for what was asked; decided, the line in the card's place. Granted to the viewer, on a phone
+/// that lends its own adb (its host's answer, settings' adb_phone_node), the first thing left on it a card under the
+/// line (step_card_node: the card does it, never a page about it; one the phone cannot do, said with nothing to press),
+/// the line saying no more than what was allowed.
 fn phone_ask_node(v : @view.View, here : MessageNodeHere, core : @settings.Core?, m : () -> Message) -> Unit {
   let ask = fn() {
     match m().card {
@@ -220,6 +222,14 @@ fn phone_ask_node(v : @view.View, here : MessageNodeHere, core : @settings.Core?
       })
       |> ignore
     } else {
+      // (on the phone, granted to the viewer: what is left to do on it, as its host and the core say it now)
+      let mine_granted = fn() { core is Some(_) && ask().status == "granted" && mine_to_node(here, assignee()) }
+      let step = fn() -> @settings.AdbStep? {
+        match core {
+          Some(core) if mine_granted() => @settings.adb_step_of(core, here.station, @settings.adb_phone_now())
+          _ => None
+        }
+      }
       @settings.phone_outcome_node(
         p,
         fn() { ask().status },
@@ -232,7 +242,25 @@ fn phone_ask_node(v : @view.View, here : MessageNodeHere, core : @settings.Core?
             @sf.ask_words_node(b, fn() { @sf.t("android-misc.adb.ask.chat.title") }, fn() { ask().reason }) |> ignore
           })
         }),
+        step_here=fn() { step() is Some(_) },
       )
+      p.show(mine_granted, fn(s) {
+        // (the phone asked of its host as this is made: read by the line above and the card here, as it is said)
+        @settings.adb_phone_node(s) |> ignore
+        s.show(fn() { step() is Some(_) }, fn(k) {
+          step_card_node(
+            k,
+            fn() { step().map(fn(a) { a.title }).unwrap_or("") },
+            fn() { step().map(fn(a) { a.sub }).unwrap_or("") },
+            fn() {
+              match (core, step()) {
+                (Some(core), Some(a)) if a.act != "" => Some(fn() { @settings.adb_do(core, a.act, station=here.station) })
+                _ => None
+              }
+            },
+          )
+        })
+      })
     }
   })
 }

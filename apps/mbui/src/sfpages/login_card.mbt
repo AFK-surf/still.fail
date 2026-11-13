@@ -1185,3 +1185,57 @@ let lc_inner_round : @ui.Style = @ui.style(radius=@sf.radius_between(lc_inner_co
 ///|
 // kept across runs: a value (no field of it changes)
 let lc_done_round : @ui.Style = @ui.style(radius=@sf.radius_between(lc_done_corner))
+
+///|
+/// A step left of something under an agent's message (step_card's, as nodes), as it says it now: its title, a line
+/// under it where there is one, the whole card the way to it (`go`) with a › in its corner; none to go by, the card
+/// alone, taking no press.
+pub fn step_card_node(
+  v : @view.View,
+  title : () -> String,
+  line : () -> String,
+  go : () -> (() -> Unit)?,
+) -> Unit {
+  v.box(fn(room) {
+    @sf.style_node(room, fn() { lc_room })
+    room.box(fn(card) {
+      let goes = fn() { go() is Some(_) }
+      @sf.style_node(card, fn() { if goes() && @sf.lit_node(card) { lc_card_step_lit } else { lc_card } })
+      @sf.presses_node(
+        card,
+        fn() {
+          match @signals.untracked(go) {
+            Some(f) => f()
+            None => ()
+          }
+        },
+        on=goes,
+      )
+      card.says(By(fn() { if goes() { Some(@view.said(Button, label=title())) } else { None } })) |> ignore
+      card.box(fn(h) {
+        @sf.style_node(h, fn() { lc_head })
+        h.box(fn(t) {
+          @sf.style_node(t, fn() { if line() == "" { lc_title_alone } else { lc_title_room } }, in_row=true)
+          @sf.words_node(t, title, fn() { lc_title }) |> ignore
+        })
+        |> ignore
+        h.show(goes, fn(s) {
+          s.box(fn(b) {
+            @sf.style_node(b, fn() { lc_cancel }, in_row=true)
+            @sf.icon_node(b, "chevron-right", lc_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+          })
+          |> ignore
+        })
+      })
+      |> ignore
+      card.show(fn() { line() != "" }, fn(s) { login_said_node(s, fn() { said_line(line(), last=true) }) })
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A step's card (step_card_node) under the pointer: lit, as lc_card_step's hovered.
+// kept across runs: a value (no field of it changes)
+let lc_card_step_lit : @ui.Style = lc_card.then(@ui.css("bg=Hover"))

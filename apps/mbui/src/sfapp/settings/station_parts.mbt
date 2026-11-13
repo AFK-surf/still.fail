@@ -51,22 +51,23 @@ pub fn short_date_time(ms : Double) -> String {
 
 ///|
 /// What this device's host says it has for 共享调试 (the app's Android's AdbShare.java, as `adb.phone` answers and
-/// "native:adb.phone" says again: supported, developer, wireless, wifi, canSwitch, switchRefused); None until it has said. The
-/// native call asking it, and those taps made (adb.switch, adb.open), while they are under way.
+/// "native:adb.phone" says again: supported, developer, wireless, wifi, canSwitch, switchRefused); None until it has said.
+/// Whether `adb.phone` is being asked, and how many nodes read it (adb_phone_node): what an answer that changed the
+/// phone (adb.switch's) asks again for.
 priv struct AdbHost {
   phone : @signals.Signal[Json?]
-  mut asking : @ui.NativeCall?
-  doing : Array[@ui.NativeCall]
+  mut asking : Bool
+  mut readers : Int
 }
 
 ///|
-let adb_host : AdbHost = { phone: @signals.signal(None), asking: None, doing: [] }
+let adb_host : AdbHost = { phone: @signals.signal(None), asking: false, readers: 0 }
 
 ///|
 fn adb_reset() -> Unit {
   adb_host.phone.set(None)
-  adb_host.asking = None
-  adb_host.doing.clear()
+  adb_host.asking = false
+  adb_host.readers = 0
 }
 
 ///|
@@ -77,48 +78,67 @@ pub fn adb_phone_said(json : String) -> Unit {
 }
 
 ///|
-/// The phone as its host last said it, asked once (as the page shows) and taken as it comes; what a tap asked of the
-/// host taken too (an answer that changed the phone: asked again).
+/// `adb.phone` asked of the host where the phone is not said and it is not asked already, from an event (a node made:
+/// adb_phone_node; an old view's build: Ctx::tell; an answer that changed it), its answer taken as the host's event
+/// tells it (@ui.native_call's on_got): said in adb_host.phone, a signal, what reads it told then; a host without
+/// 共享调试 at all (a computer's, iOS): nothing it can lend, and no phone to say anything of (`none`; an Android before
+/// 11 answers `supported: false` itself).
+fn adb_phone_ask() -> Unit {
+  guard !adb_host.asking && adb_host.phone.untracked() is None else { return }
+  adb_host.asking = true
+  @ui.native_call("adb.phone", obj([]), on_got=fn(r) {
+    adb_host.asking = false
+    adb_host.phone.set(
+      Some(
+        match r {
+          Ok(j) => j
+          Err(_) => obj([("supported", Json::boolean(false)), ("none", Json::boolean(true))])
+        },
+      ),
+    )
+  })
+  |> ignore
+}
+
+///|
+/// The phone as its host last said it, asked once as an old view's page shows (adb_phone_ask, after its build).
 fn adb_phone(c : @ui.Ctx) -> Json? {
-  match adb_host.asking {
-    Some(k) =>
-      match k.got() {
-        Some(Ok(j)) => {
-          adb_host.phone.set(Some(j))
-          adb_host.asking = None
-        }
-        // a host without 共享调试 at all (a computer's, iOS): nothing it can lend, and no phone to say anything of
-        // (`none`; an Android before 11 answers `supported: false` itself)
-        Some(Err(_)) => {
-          adb_host.phone.set(Some(obj([("supported", Json::boolean(false)), ("none", Json::boolean(true))])))
-          adb_host.asking = None
-        }
-        None => ()
-      }
-    None => ()
-  }
-  let left = []
-  for k in adb_host.doing {
-    match k.got() {
-      Some(r) =>
-        if r is Ok(Object(m)) && m.contains("on") {
-          adb_host.phone.set(None)
-        }
-      None => left.push(k)
-    }
-  }
-  adb_host.doing.clear()
-  adb_host.doing.append(left)
-  if adb_host.phone.get() is None && adb_host.asking is None {
-    c.tell("adb-phone", fn() { adb_host.asking = Some(@ui.native_call("adb.phone", obj([]))) })
+  if adb_host.phone.get() is None && !adb_host.asking {
+    c.tell("adb-phone", adb_phone_ask)
   }
   adb_host.phone.get()
 }
 
 ///|
-/// What a tap asks of the host (adb.switch, adb.open), its answer taken as the page builds (adb_phone).
+/// The phone as its host says it, for what node `v` makes (a request's card in its chat): asked as `v` is made, between
+/// frames (View::at_moment, its making's moment), where it is not said; asked again while `v` lives as an answer changes
+/// it; read where it is read, told as it is said (a signal), never looked at frame by frame.
+pub fn adb_phone_node(v : @view.View) -> () -> Json? {
+  adb_host.readers = adb_host.readers + 1
+  v.owns(fn() { adb_host.readers = if adb_host.readers > 0 { adb_host.readers - 1 } else { 0 } }) |> ignore
+  v.at_moment(0.0, adb_phone_ask) |> ignore
+  fn() { adb_host.phone.get() }
+}
+
+///|
+/// The phone as its host last said it, followed (a signal): None till it has said (adb_phone_node asks it).
+pub fn adb_phone_now() -> Json? {
+  adb_host.phone.get()
+}
+
+///|
+/// What a tap asks of the host (adb.switch, adb.open), its answer taken as the host's event tells it: one that changed
+/// the phone (`on`) has it said again, asked again at once where a node reads it (an old view's page asks as it builds).
 fn adb_ask(name : String, params : Json) -> Unit {
-  adb_host.doing.push(@ui.native_call(name, params))
+  @ui.native_call(name, params, on_got=fn(r) {
+    if r is Ok(Object(m)) && m.contains("on") {
+      adb_host.phone.set(None)
+      if adb_host.readers > 0 {
+        adb_phone_ask()
+      }
+    }
+  })
+  |> ignore
 }
 
 ///|
@@ -238,7 +258,12 @@ fn adb_next(view : Json?, phone : Json?, there : Bool) -> AdbStep? {
 /// in its chat, decision.mbt): its 共享调试 switch off, then what the phone lacks, then what that station's lending
 /// waits on (adb_next). None where nothing is, or this device lends no adb of its own.
 pub fn adb_step_at(c : @ui.Ctx, core : Core, station : String) -> AdbStep? {
-  let phone = adb_phone(c)
+  adb_step_of(core, station, adb_phone(c))
+}
+
+///|
+/// The same, the phone as `phone` says it (adb_phone_node's, a node's).
+pub fn adb_step_of(core : Core, station : String, phone : Json?) -> AdbStep? {
   if !flag(phone, "supported") {
     return None
   }

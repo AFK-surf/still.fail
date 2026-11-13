@@ -2,10 +2,9 @@
 // as nodes of the window's tree, made once, following the card and the core as they change: what is asked in its
 // title, the agent's reason under it, and at its foot 允许, 拒绝 and how long (`adb.decide` on the chat's station);
 // elsewhere whose it is. What it keeps between frames is the vault card's, keyed `phone/<id>` (vault_pending,
-// vault_picked: signals). Not here yet: whether this device is a phone that lends its own adb (adb_phone: the host's
-// answer to `adb.phone`, only looked at each frame, @hostapi.polled), so neither 允许 turning its 共享调试 on nor the
-// step left on the phone under the line once granted (decision.mbt's step_card): what this device says of itself
-// (adb_host.phone, a signal) is read where it has said it.
+// vault_picked: signals). Whether this device is a phone that lends its own adb is its host's answer to `adb.phone`
+// (adb_phone_node: asked as its answer's node is made, a signal told as the host says it), so 允许 turns its 共享调试
+// on with it; once granted, the step left on the phone is a card under the line (sfpages' phone_ask_node).
 
 ///|
 /// What a phone's request's card says, as its message has it now (phone_card's arguments): the request, the agent's
@@ -79,6 +78,8 @@ fn phone_lacks(core : Core, request : String) -> (String, Bool)? {
 /// and the length's choice; where it cannot be allowed here yet, why, and 查看步骤 (`how`) in 允许's place for a device to
 /// be approved. Pressed, the one pressed turns and neither takes a press till the core has it.
 fn phone_foot_node(v : @view.View, core : Core, station : String, card : () -> PhoneCard, how : () -> Unit) -> Unit {
+  // (whether this device lends its own adb: asked of its host as the answer is made, phone_lends_said reads it)
+  adb_phone_node(v) |> ignore
   let key = fn() { "phone/" + card().request }
   let lacks = fn() { phone_lacks(core, card().request) }
   let scopes = fn() { if card().lasts == "hour" { ["hour"] } else { ["hour", "idle", "eight", "chat"] } }
@@ -186,7 +187,8 @@ fn phone_foot_node(v : @view.View, core : Core, station : String, card : () -> P
 /// How a request ended in `v` (phone_outcome's, as nodes), as the card and the core say it now: a dot (green while
 /// granted and held, or not said) and its words, how its station's adb holds the phone after them (`link`,
 /// phone_link's); granted and waiting to be paired, under the line's words that it is paired on the phone. `inline`,
-/// `history`: ask_outcome_node's.
+/// `history`: ask_outcome_node's. `step_here`: on the phone, a card under the line says what is left to do (sfpages'
+/// phone_ask_node), so the line says no more than what was allowed.
 pub fn phone_outcome_node(
   v : @view.View,
   status : () -> String,
@@ -195,6 +197,7 @@ pub fn phone_outcome_node(
   link : () -> String,
   inline : () -> Bool,
   history? : ((@view.View) -> Unit)? = None,
+  step_here? : () -> Bool = fn() { false },
 ) -> Unit {
   let granted = fn() { status() == "granted" }
   ask_outcome_node(
@@ -202,13 +205,14 @@ pub fn phone_outcome_node(
     fn() { granted() && (link() == "" || link() == "connected") },
     fn() {
       let words = phone_outcome_words(status(), scope(), why())
-      [@ui.span(if granted() && link() != "" { words + " · " + phone_link_words(link()) } else { words })]
+      // (on the phone, a step left: its card under the line says so, the line not again, 2026-11-11)
+      [@ui.span(if granted() && link() != "" && !step_here() { words + " · " + phone_link_words(link()) } else { words })]
     },
     inline,
     history~,
   )
   // (elsewhere than on the phone: where it is paired, under the line's words where they start)
-  v.show(fn() { granted() && link() == "unpaired" }, fn(s) {
+  v.show(fn() { granted() && link() == "unpaired" && !step_here() }, fn(s) {
     @sf.style_node(s, fn() { if inline() { ask_ended_past } else { ask_ended_at } })
     @sf.words_node(s, fn() { tr("android-misc.adb.ask.link.onPhone") }, fn() { @sf.ask_note }) |> ignore
   })
