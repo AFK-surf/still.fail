@@ -122,12 +122,12 @@ export function asCoreError(error: unknown): CoreError {
   return CoreError.host(error instanceof Error ? error.message : String(error));
 }
 
-/// `span` failed with `error`: what it was (`error.type`), what the transport said (`stillfail.cause`), and the error
-/// said with when (`stamped`).
+/// `span` failed with `error`: what it was (`error.type`), what the transport said (its `cause`, an attribute of the
+/// program's own: `Span.own`), and the error said with when (`stamped`).
 export function failedIn(span: Span, error: CoreError): void {
   span.fail();
   span.set("error.type", error.code);
-  if (typeof error.cause === "string") span.set("stillfail.cause", error.cause);
+  if (typeof error.cause === "string") span.own("cause", error.cause);
   const now = span.host.nowMs();
   error.stamped(now, span.host.utcOffsetMin(now));
 }

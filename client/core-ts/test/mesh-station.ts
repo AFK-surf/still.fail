@@ -1,7 +1,7 @@
 // A station for the mesh tests (mesh.test.ts, bridge.test.ts): accepts credentials starting with "ok", echoes requests.
 // On localhost over the native addon (station/native/mesh), or on a simulated network (sim-iroh.ts: its `world`).
 import { loadAddon } from "../src/hosts/node-iroh.ts";
-import { ALPN } from "../src/mesh.ts";
+import { ALPN } from "../src/station/mesh-wire.ts";
 import { configFrame, readClientFrames, stateFrame, videoFrame } from "../src/screen-frames.ts";
 
 // deno-lint-ignore no-explicit-any

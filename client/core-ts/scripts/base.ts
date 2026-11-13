@@ -4,14 +4,21 @@
 // errors, words in a person's language, traces, wakes, the scheduler). Another program is built on these without the
 // rest (the owner, 2026-11-14), so a base file imports only base files, npm packages and Node's own: as a value or as
 // a type, `import("…")` in a type too; and the JSON of the base's own words (WORDS), no other. The set is closed:
-// through any number of imports, nothing of it reaches a file that is not of it. What still.fail gives it: the mesh
-// its use (src/station/mesh-wire.ts), the words its catalog and product (src/i18n.ts), the host its UIs' messages
-// (src/host.ts), the traces its APIs' paths (src/route.ts), the addon its places (src/hosts/node-iroh.ts).
+// through any number of imports, nothing of it reaches a file that is not of it. Nor does it say still.fail's names:
+// what is named so is given it. What still.fail gives it: the mesh its use, a station's protocol and what its hello
+// says (src/station/mesh-wire.ts), the words its catalog and product (src/i18n.ts), the host its UIs' messages and
+// the header that asks a request twice (src/host.ts), the traces their names and its APIs' paths (src/route.ts), the
+// addon its places (src/hosts/node-iroh.ts).
 //
 // Refused: an import in a file of BASE of a file that is not (STILL, what was let be till taken away, is empty and
-// stays so); an import this cannot read (an `import(…)` of what is no string, a `require`); a JSON file that is not
-// one of WORDS, and one of WORDS that nothing of the base imports; and a key of still.fail's catalog said in a base
-// file that WORDS' files lack (a base file says its words with nothing else loaded).
+// stays so); an import this cannot read (an `import(…)` of what is no string, a `require`, `createRequire`, a name
+// the app's bundler resolves: ALIASES); a JSON file that is not one of WORDS, and one of WORDS that nothing of the
+// base imports; a key of still.fail's catalog said in a base file that WORDS' files lack (a base file says its words
+// with nothing else loaded); still.fail's name in a base file but where NAMED lets it be, each as often as it says
+// and no more, which only falls; and, in the rest of src/ and in what else is built into the apps with it (CARRIED:
+// the mbui app's core entry, the web's sources), an import of src/lang.ts by any file but src/i18n.ts, however the
+// import spells it (what says a word of the catalog imports src/i18n.ts, so the catalog and the product's name are
+// given before it asks).
 //
 //   node scripts/base.ts [--check]     the faults found; --check fails on any
 // Run only as a script (nothing imports it): it checks whenever it is run, however its path was said.
@@ -57,24 +64,60 @@ const WORDS = ["zh", "en"].flatMap((lang) =>
 /// went with the words, the host's messages and `dateClockSeconds` given their own place. It stays empty.
 const STILL: [file: string, imports: string, until: string][] = [];
 
-/// A file's imports within this package (relative specifiers, and `#…` of package.json's `imports`), each as a path
-/// from the package's root: static imports and exports from, of values and of types, `import("…")` in a type and as an
-/// expression. `unread`: the imports it cannot say that of, each by its line: an `import(…)` of what is no string (a
-/// template with a part worked out, a value), and a `require`. `said`: the texts written in it that may be a key of
+/// What an import begins with that the app's bundler resolves to a directory (apps/mbui/scripts/core.sh `--alias`):
+/// which file one names is not said where it is written, so a base file imports by none. `@core` is this package's
+/// src/ (ALIAS_SRC: an import by it is read as the file it names, for what is held of the files outside the base).
+const ALIASES = ["@core", "@stillfail"];
+const ALIAS_SRC = "@core";
+
+/// The base's words, and the one file of the rest that imports them: it gives them the core's catalog and the
+/// product's name as it is first run, and says again what of them says a word and sets the language (`words` and
+/// `saidBy`, by which a program gives its catalog, are its alone to call). Any other file that imported LANG alone
+/// could say a word before that, missing or unbranded.
+const LANG = "src/lang.ts";
+const SAYS = "src/i18n.ts";
+
+/// Where the files are that are built into an app with the core's (from the package's root), each held to importing
+/// LANG through SAYS: the core's own, the mbui app's entry of it (apps/mbui/core), the web's sources.
+const CARRIED = ["src", "../../apps/mbui/core", "../../web/src"];
+
+/// Where a base file still says still.fail's name (`stillfail`, in whatever case; in its code or a comment): [file,
+/// the text it is said in, how many times the file says it, what takes it away]. The text is let be only whole (not
+/// as part of a longer name: `__stillfail_later_ms` is another), and as many times as said here: once more is
+/// refused, once fewer lowers the count. The rest was given: the mesh's protocol and its hello's `protocol`, the key
+/// its stations' addresses are kept under, the traces' names, the header that asks a request twice. This table only
+/// falls. (With its dot, still.fail, a comment says whose a thing given is: let be.)
+const NAMED: [file: string, text: string, times: number, until: string][] = [
+  ["src/mesh.ts", '"stillfail/relay-endpoint/1\\0"', 1, "the label the key of a relay's own endpoint is made under (`pinnedKey`) given as a field of `MeshEnv` by src/station/mesh-wire.ts, the same bytes: another label is another key, and every id the stations saw of a device's endpoints on a relay changes"],
+  ["src/runtime.ts", "__stillfail_later", 2, "`laterSleep` telling a function its host's clock gives it, in place of a global the mbui app's clock reads (apps/mbui/core/clock.ts, which is run before the core's modules: what the app's bundle runs first changes with it)"],
+  ["src/util.ts", "STILLFAIL_CHECK_SHARED", 2, "whether shared values are frozen (`sharedValue`) said by what starts the core (a test's setup, the web's development build), in place of a variable of the environment read here"],
+];
+
+/// A file's imports within this package (relative specifiers, `#…` of package.json's `imports`, and what ALIAS_SRC
+/// names), each as a path from the package's root, by the file it names however it is spelt (`./lang.js` and
+/// `./lang` are `./lang.ts` where that is the file there): static imports and exports from, of values and of types,
+/// `import("…")` in a type and as an expression. `unread`: the imports it cannot say that of, each by its line: an `import(…)` of what is no string (a
+/// template with a part worked out, a value), a `require` (called, or taken of a module: `module.require`,
+/// `module?.require`), `createRequire`, and a name the app's bundler resolves (ALIASES). `said`: the texts written in it that may be a key of
 /// the catalog, each with its line: a string, and (`head`) what a template with parts worked out begins with.
 function importsOf(file: string, code: string): { imports: string[]; unread: string[]; said: { text: string; head: boolean; line: number }[] } {
-  const ast = parseSync(code, { filename: file, babelrc: false, configFile: false, parserOpts: { plugins: ["typescript"] } });
+  const ast = parseSync(code, { filename: file, babelrc: false, configFile: false, parserOpts: { plugins: file.endsWith(".tsx") ? ["typescript", "jsx"] : ["typescript"] } });
   if (!ast) throw new Error(`${file}: not parsed`);
   const out = new Set<string>();
-  const add = (specifier: unknown) => {
-    if (typeof specifier !== "string") return;
-    if (specifier.startsWith("#")) out.add(specifier);
-    else if (specifier.startsWith(".")) out.add(relative(ROOT, join(ROOT, dirname(file), specifier)));
-  };
-  const unread: string[] = [];
+  const unread = new Set<string>();
   const said: { text: string; head: boolean; line: number }[] = [];
   // deno-lint-ignore no-explicit-any
-  const not = (node: any, what: string) => unread.push(`${file}:${node?.loc?.start.line ?? "?"}: ${what}`);
+  const not = (node: any, what: string) => unread.add(`${file}:${node?.loc?.start.line ?? "?"}: ${what}`);
+  // deno-lint-ignore no-explicit-any
+  const add = (specifier: unknown, at: any) => {
+    if (typeof specifier !== "string") return;
+    if (specifier.startsWith("#")) out.add(specifier);
+    else if (specifier.startsWith(".")) out.add(fileNamed(relative(ROOT, join(ROOT, dirname(file), specifier))));
+    else if (ALIASES.some((alias) => specifier === alias || specifier.startsWith(`${alias}/`))) {
+      not(at, `\`${specifier}\`, a name the app's bundler resolves`);
+      if (specifier.startsWith(`${ALIAS_SRC}/`)) out.add(fileNamed(join("src", specifier.slice(ALIAS_SRC.length + 1))));
+    }
+  };
   /// The string an `import(…)` names: a string, or a template that is all text.
   // deno-lint-ignore no-explicit-any
   const literal = (node: any): string | null => {
@@ -87,12 +130,18 @@ function importsOf(file: string, code: string): { imports: string[]; unread: str
   const dynamic = (at: any, node: any) => {
     const specifier = literal(node);
     if (specifier === null) not(at, "an `import(…)` of what is no string");
-    else add(specifier);
+    else add(specifier, at);
+  };
+  /// A `require` taken of something (`x.require`, `x["require"]`).
+  // deno-lint-ignore no-explicit-any
+  const taken = (node: any) => {
+    const of = node.property;
+    if ((!node.computed && of.type === "Identifier" && of.name === "require") || (of.type === "StringLiteral" && of.value === "require")) not(node, "a `require`");
   };
   traverse(ast, {
-    ImportDeclaration: (p) => add(p.node.source.value),
-    ExportNamedDeclaration: (p) => add(p.node.source?.value),
-    ExportAllDeclaration: (p) => add(p.node.source.value),
+    ImportDeclaration: (p) => add(p.node.source.value, p.node),
+    ExportNamedDeclaration: (p) => add(p.node.source?.value, p.node),
+    ExportAllDeclaration: (p) => add(p.node.source.value, p.node),
     TSImportType: (p) => dynamic(p.node, p.node.argument),
     ImportExpression: (p) => dynamic(p.node, p.node.source),
     TSExternalModuleReference: (p) => not(p.node, "a `require`"),
@@ -102,8 +151,38 @@ function importsOf(file: string, code: string): { imports: string[]; unread: str
       if (p.node.callee.type === "Import") dynamic(p.node, p.node.arguments[0]);
       else if (p.node.callee.type === "Identifier" && p.node.callee.name === "require") not(p.node, "a `require`");
     },
+    // (`require?.("…")`)
+    OptionalCallExpression: (p) => {
+      if (p.node.callee.type === "Identifier" && p.node.callee.name === "require") not(p.node, "a `require`");
+    },
+    Identifier: (p) => {
+      if (p.node.name === "createRequire") not(p.node, "`createRequire`");
+    },
+    MemberExpression: (p) => taken(p.node),
+    // (`module?.require`)
+    OptionalMemberExpression: (p) => taken(p.node),
   });
-  return { imports: [...out].sort(), unread: unread.sort(), said };
+  return { imports: [...out].sort(), unread: [...unread].sort(), said };
+}
+
+/// The file a path from the package's root names: itself, or where it is spelt as JavaScript's (`.js`, `.mjs`) or
+/// with no ending, the `.ts` beside it that is there.
+function fileNamed(path: string): string {
+  const bare = path.replace(/\.m?js$/, "");
+  const ts = `${bare}.ts`;
+  return (bare !== path || !existsSync(join(ROOT, path))) && existsSync(join(ROOT, ts)) ? ts : path;
+}
+
+/// Every `.ts` and `.tsx` file under `dir` (none where it is not there), each as a path from the package's root.
+function filesUnder(dir: string): string[] {
+  if (!existsSync(join(ROOT, dir))) return [];
+  return (readdirSync(join(ROOT, dir), { recursive: true }) as string[]).filter((f) => /\.tsx?$/.test(f) && !f.split(/[\\/]/).includes("node_modules")).map((f) => join(dir, f)).sort();
+}
+
+/// How many times `code` says `text` whole (not within a longer name), and `code` without those.
+function saidWhole(code: string, text: string): { times: number; rest: string } {
+  const whole = new RegExp(`(?<![A-Za-z0-9_$])${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_$])`, "g");
+  return { times: code.match(whole)?.length ?? 0, rest: code.replace(whole, (said) => " ".repeat(said.length)) };
 }
 
 /// The keys of the catalog's parts at `paths` (from the package's root); a part that is not there has none.
@@ -128,8 +207,23 @@ function found(): { refused: string[]; unused: string[] } {
       refused.push(`BASE names a file that is not there: ${file}\n  take it out of BASE, or name where it went`);
       continue;
     }
-    const { imports, unread, said } = importsOf(file, readFileSync(path, "utf8"));
-    for (const u of unread) refused.push(`a base file imports in a way this cannot read: ${u}\n  import it by a static \`import\`, or an \`import("…")\` of a string, so that what it imports is held`);
+    const code = readFileSync(path, "utf8");
+    const { imports, unread, said } = importsOf(file, code);
+    for (const u of unread) refused.push(`a base file imports in a way this cannot read: ${u}\n  import it by a static \`import\`, or an \`import("…")\` of a string, of a file by its relative path, so that what it imports is held`);
+    // What NAMED lets be is taken out first, each text whole and counted: what is left says the name nowhere.
+    let rest = code;
+    for (const [f, text, times] of NAMED) {
+      if (f !== file) continue;
+      const said = saidWhole(rest, text);
+      rest = said.rest;
+      if (said.times > times) refused.push(`a base file says still.fail's name more than NAMED lets it: ${file}: ${text}, ${said.times} times for ${times}\n  have what uses ${file} give it what is named so, with the value it had; the count in NAMED is not raised (the table only falls)`);
+      else if (said.times < times) refused.push(`NAMED names what is said less, or not any more: ${file}: ${text}, ${said.times} times for ${times}\n  lower its count in NAMED to ${said.times}${said.times === 0 ? ", which takes its entry out" : ""} (the table only falls)`);
+    }
+    const lines = code.split("\n");
+    rest.split("\n").forEach((left, i) => {
+      const line = lines[i]!;
+      if (/stillfail/i.test(left)) refused.push(`a base file says still.fail's name: ${file}:${i + 1}: ${line.trim().slice(0, 120)}\n  have what uses ${file} give it what is named so, with the value it had (a field of what it is made with: as src/station/mesh-wire.ts gives the mesh a station's protocol, src/route.ts the traces their names); a comment says whose it is as still.fail's; nothing is added to NAMED`);
+    });
     for (const to of imports) {
       if (base.has(to)) continue;
       if (to.endsWith(".json")) {
@@ -145,6 +239,14 @@ function found(): { refused: string[]; unused: string[] } {
       const lacking = head ? (text.includes(".") ? [...all].filter((key) => key.startsWith(text) && !own.has(key)) : []) : all.has(text) && !own.has(text) ? [text] : [];
       if (lacking.length > 0) refused.push(`a base file says words that are not the base's: ${file}:${line}: ${lacking.join(", ")}\n  move each key, in every language, from the core's part into the base's part its name starts with (WORDS; a new part is named by more of the key and imported by src/lang.ts), so the base says it with nothing else loaded`);
     }
+  }
+  for (const [file] of NAMED) if (!base.has(file)) refused.push(`NAMED names a file that is not of the base: ${file}\n  take its entry out of NAMED`);
+  for (const file of CARRIED.flatMap(filesUnder)) {
+    if (base.has(file) || file === SAYS) continue;
+    const code = readFileSync(join(ROOT, file), "utf8");
+    // (parsed only where it may: few files name a file called so, by any of its spellings)
+    if (!/\blang(\.[cm]?[jt]s)?["'`]/.test(code) || !importsOf(file, code).imports.includes(LANG)) continue;
+    refused.push(`a file built into the apps imports the base's words past ${SAYS}: ${file} -> ${LANG}\n  import ${SAYS} in its place (it says again what of ${LANG} says a word and sets the language: \`t\`, \`tr\`, \`has\`, \`current\`…; \`words\` and \`saidBy\` are its alone to call): it gives the words the core's catalog and the product's name as it is first run, so nothing says one of them missing or unbranded before that`);
   }
   for (const path of WORDS) if (existsSync(join(ROOT, path)) && !imported.has(path)) refused.push(`WORDS names a part nothing of the base imports: ${path}\n  import it in src/lang.ts, or take it out of WORDS and put its keys back in the core's part`);
   return { refused, unused: STILL.filter((_, i) => !used.has(i)).map(([f, i]) => `${f} -> ${i}`) };

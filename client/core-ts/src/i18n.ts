@@ -1,6 +1,7 @@
 // The still.fail core's words: the mechanism is the base's (lang.ts, which says its own words), given here the rest of
 // client/i18n/catalog and the product's name (client/i18n/brand.ts) as this module is first run: whatever says a word
-// of the catalog imports this file, so it is run before that asks. The words the base says are in parts of their own,
+// of the catalog imports this file, so it is run before that asks (scripts/base.ts refuses any other file of src/
+// outside the base that imports lang.ts itself). The words the base says are in parts of their own,
 // named by more of their keys (core-logic.mesh.json, core-misc.wake.json, …: lang.ts imports them), and in no other.
 import zh_android_chat from "../../i18n/catalog/zh/android-chat.json" with { type: "json" };
 import zh_android_misc from "../../i18n/catalog/zh/android-misc.json" with { type: "json" };

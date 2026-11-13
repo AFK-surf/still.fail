@@ -2,8 +2,8 @@
 // each request to a station on the link to its address, a read asked again on the link put in its place and on another
 // way when its own is slow, a write gone unanswered asked again with its key; the cloud's credentials as the mesh
 // presents them, the device's claim for a workspace's lock said with them (lock.ts); a station's refusals for that
-// lock; what an app's main endpoint takes (a trusted device met face to face); the core's own mesh, brought up on first
-// use.
+// lock; what an app's main endpoint takes (a trusted device met face to face); a station's protocol and what the
+// mesh is made with for it (`STATION_MESH`); the core's own mesh, brought up on first use.
 import { Deferred, Effect, Fiber, type Result } from "effect";
 import type { Credential } from "../cloud.ts";
 import type { Inner } from "../core.ts";
@@ -16,6 +16,7 @@ import { type CredentialSource, type Link, Mesh, type MeshEnv, type Presented, t
 import { PAIR_ALPN } from "../pair.ts";
 import { RELAY, type Place, type Status } from "../status.ts";
 import { route } from "../route.ts";
+import { utf8 } from "../util.ts";
 import type { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./requests.ts";
 import type { LinkNet, RequestHead, ScreenAsk, StationWire, WireReply, WireSocket } from "./wire.ts";
@@ -23,6 +24,15 @@ import { RECHECKING } from "./words.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
+
+/// The protocol a station takes a device's links on (station/src/mesh/serve.ts `ALPN`).
+export const ALPN = utf8("stillfail/admin/1");
+
+/// What a mesh to stations is made with, whatever it runs on (`meshEnv`, and a test's own mesh): their protocol; what
+/// each line of a link's control stream says after its credential (`protocol`: 2, the hello a station has always been
+/// sent); its peers looked up on the LAN and in the DHT (under still.fail's names: client/shell, station/native/mesh);
+/// the key what stations said of their addresses is kept under on the device.
+export const STATION_MESH = { alpn: ALPN, says: { protocol: 2 }, lookup: true, addressesKey: "station-addresses" } satisfies Partial<MeshEnv>;
 
 /// How often a read gone slow looks again for another way to be asked on, while there is none.
 const HEDGE_RECHECK_MS = 250;
@@ -328,11 +338,11 @@ function takes(inner: Inner): Pick<MeshEnv, "takes" | "incoming"> {
   return { takes: [PAIR_ALPN], incoming: (connection, alpn) => (alpn.length === PAIR_ALPN.length && alpn.every((b, i) => b === PAIR_ALPN[i]) ? hooks.lockPair?.(inner, connection) : connection.close(0, "no such protocol")) };
 }
 
-/// What the core gives its mesh (`Mesh.make`): the host and what runs it, what an app's endpoint takes, and what a
-/// station refuses a link for besides its credential (a workspace's lock: without it a device waiting to be confirmed
-/// is told its credential was refused, and asks the cloud for another at each try).
+/// What the core gives its mesh (`Mesh.make`): the host and what runs it, a station's protocol (`STATION_MESH`), what
+/// an app's endpoint takes, and what a station refuses a link for besides its credential (a workspace's lock: without
+/// it a device waiting to be confirmed is told its credential was refused, and asks the cloud for another at each try).
 export function meshEnv(inner: Inner, iroh: Iroh): MeshEnv {
-  return { host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes, ...takes(inner), refusal: refusedForLock };
+  return { host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes, ...STATION_MESH, ...takes(inner), refusal: refusedForLock };
 }
 
 /// The core's mesh: brought up on first use with the relays any account's `/v1/me` names, the credentials from

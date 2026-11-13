@@ -262,11 +262,21 @@ only base files and packages, as types too. `scripts/base.ts` holds it: its `BAS
 closed: nothing of it reaches, through any number of imports, a file that is not of it (its `STILL` is empty and stays
 so). The base says its own words with nothing else loaded (`src/lang.ts`: the parts of the catalog that `WORDS` names,
 apart from the core's by a longer name, `client/i18n/catalog/zh/core-misc.wake.json`). What is still.fail's is given
-to it, never imported by it: what the core does with the mesh (`src/station/mesh-wire.ts`, its `MeshEnv` and a
-`CredentialSource`: a station's requests on its links, the cloud's credentials and the lock's claim, a lock's
-refusals, what an app's endpoint takes), the rest of the catalog and the product's name (`src/i18n.ts`), the UIs'
-messages (`src/host.ts` `Host`, the base's `src/host-of.ts` of them), its APIs' paths as a span shows them
-(`src/route.ts`), where its addon is (`src/hosts/node-iroh.ts`).
+to it, never imported by it nor named in it: what the core does with the mesh (`src/station/mesh-wire.ts`, its
+`MeshEnv` and a `CredentialSource`: a station's requests on its links, the cloud's credentials and the lock's claim,
+a lock's refusals, what an app's endpoint takes; its `STATION_MESH`: a station's protocol, what its hello says after
+the credential, its peers looked up, the key its stations' addresses are kept under), the rest of the catalog and the
+product's name (`src/i18n.ts`, the one file outside the base that imports `src/lang.ts`: what says a word imports
+it), the UIs' messages and the header that asks a request twice (`src/host.ts` `Host` and `HEDGE`; the base's
+`src/host-of.ts` of them, whose `BaseHost` is all the mesh and the traces ask of a host: `src/mesh.ts`,
+`src/trace.ts` and what `src/wake.ts` and `src/error.ts` do for them take that, while `WakingHost` there wraps a
+program's whole host, `HostOf`, which is still.fail's, and is its user's choice), its traces' names, what its host is
+called where no entry said, and its APIs' paths as a span shows them (`src/route.ts`), where its addon is
+(`src/hosts/node-iroh.ts`). A mesh made without `STATION_MESH` (another program's) dials the protocol it names,
+says its own hello, looks nothing up and, where it says so, goes through relays alone; what its peer answered the
+hello is on the link whole (`Link.admitted`). The script refuses still.fail's name in a base file as well, but where
+its `NAMED` lets it be (each text whole, as often as it says), which only falls; and `src/lang.ts` imported past
+`src/i18n.ts`, however spelt, by a file here, of `apps/mbui/core` or of `web/src`.
 
 ## Contracts made from here
 

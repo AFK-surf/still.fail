@@ -9,7 +9,7 @@
 import * as clock from "./clock.ts";
 import { Deferred, Effect, Scope } from "effect";
 import { HostError } from "./error.ts";
-import type { AnyHost, ClientId, HostOf, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host-of.ts";
+import type { BaseHost, ClientId, HostOf, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host-of.ts";
 import { DROPPED, GONE, NETWORK } from "./wake-words.ts";
 
 export { DROPPED, GONE, NETWORK };
@@ -79,12 +79,12 @@ export class Wakes {
   }
 }
 
-/// What a request says to be one that may be asked twice though it is not a read. Taken off before it goes.
-export const HEDGE = "x-stillfail-hedge";
-
-export function hedgeable(request: HttpRequest): boolean {
+/// Whether a request may be asked twice: a read, or one that says so though it is none, by a header named `mark`
+/// (the program's own name for it, in lower case; the still.fail core's: host.ts `HEDGE`), taken off before it goes
+/// (`WakingHost.fetch`). No `mark`: reads alone.
+export function hedgeable(request: HttpRequest, mark?: string): boolean {
   const m = request.method.toUpperCase();
-  return m === "GET" || m === "HEAD" || request.headers.some(([k]) => k.toLowerCase() === HEDGE);
+  return m === "GET" || m === "HEAD" || (mark !== undefined && request.headers.some(([k]) => k.toLowerCase() === mark));
 }
 
 const HEDGES = 3;
@@ -92,9 +92,9 @@ const HEDGES = 3;
 /// A write sent again changes nothing the first did not, whatever became of the first: one that puts a value (PUT,
 /// PATCH: still.fail cloud's set what they are given). Not a DELETE: sent again after the first went through, it is
 /// answered "not found". (A read is asked again by what keeps it, the sync, and at a wake beside itself: `hedged`.)
-export function resendable(request: HttpRequest): boolean {
+export function resendable(request: HttpRequest, mark?: string): boolean {
   const m = request.method.toUpperCase();
-  return !hedgeable(request) && (m === "PUT" || m === "PATCH");
+  return !hedgeable(request, mark) && (m === "PUT" || m === "PATCH");
 }
 
 /// How long a request that failed with no answer waits for the network to come back before it is sent again.
@@ -118,7 +118,7 @@ export function unlessDropped<A, R>(wakes: Wakes, sent: number, pending: Effect.
 
 /// A request that may be asked twice: asked again at each wake that suspects what it went on (up to HEDGES at once),
 /// the first answer its answer; one that fails leaves it to the others.
-export function hedged<A>(wakes: Wakes, host: AnyHost, ask: Effect.Effect<A, HostError>): Effect.Effect<A, HostError> {
+export function hedged<A>(wakes: Wakes, host: Pick<BaseHost, "nowMs">, ask: Effect.Effect<A, HostError>): Effect.Effect<A, HostError> {
   return Effect.scoped(
     Effect.gen(function* () {
       const done = yield* Deferred.make<A, HostError>();
@@ -147,7 +147,7 @@ export function hedged<A>(wakes: Wakes, host: AnyHost, ask: Effect.Effect<A, Hos
 }
 
 /// A pull that ends with an error at a wake when it heard nothing while the UI was away.
-export function quietEnds<A>(host: AnyHost, wakes: Wakes, pull: Pull<A>): Pull<A> {
+export function quietEnds<A>(host: Pick<BaseHost, "nowMs">, wakes: Wakes, pull: Pull<A>): Pull<A> {
   let heard = host.nowMs();
   const gone = Effect.suspend(() => wakes.until((w) => w.dropsStream(heard))).pipe(Effect.flatMap((w) => Effect.fail(new HostError(w.reason()))));
   return {
@@ -165,10 +165,11 @@ export function quietEnds<A>(host: AnyHost, wakes: Wakes, pull: Pull<A>): Pull<A
 }
 
 /// The host the core runs on, with the rules above for its requests and streams; its UIs sent what the inner one's
-/// are (`Message`).
+/// are (`Message`). `hedge`: the header a request of its says to be asked twice by (`hedgeable`'s `mark`).
 export class WakingHost<Message = never> implements HostOf<Message> {
   readonly inner: HostOf<Message>;
   readonly wakes: Wakes;
+  readonly hedge: string | undefined;
 
   /// The inner host's record, as it is now (a test sets its own after the core starts).
   get recorder(): HostOf<Message>["recorder"] {
@@ -197,9 +198,10 @@ export class WakingHost<Message = never> implements HostOf<Message> {
   readonly ed25519Sign?: HostOf<Message>["ed25519Sign"];
   readonly verify?: HostOf<Message>["verify"];
 
-  constructor(inner: HostOf<Message>, wakes: Wakes) {
+  constructor(inner: HostOf<Message>, wakes: Wakes, hedge?: string) {
     this.inner = inner;
     this.wakes = wakes;
+    this.hedge = hedge;
     if (inner.tcp) this.tcp = (port) => inner.tcp!(port);
     this.appKeys = inner.appKeys;
     this.handOverByTests = inner.handOverByTests;
@@ -257,12 +259,12 @@ export class WakingHost<Message = never> implements HostOf<Message> {
   }
 
   fetch(request: HttpRequest): Effect.Effect<HttpResponse, HostError> {
-    if (hedgeable(request)) {
-      const r = { ...request, headers: request.headers.filter(([k]) => k.toLowerCase() !== HEDGE) };
+    if (hedgeable(request, this.hedge)) {
+      const r = { ...request, headers: request.headers.filter(([k]) => k.toLowerCase() !== this.hedge) };
       return hedged(this.wakes, this.inner, Effect.suspend(() => this.inner.fetch(r)));
     }
     const once = Effect.suspend(() => unlessDropped(this.wakes, this.inner.nowMs(), this.inner.fetch(request)));
-    return resendable(request) ? resentOnce(this.wakes, once) : once;
+    return resendable(request, this.hedge) ? resentOnce(this.wakes, once) : once;
   }
 
   fetchStream(request: HttpRequest): Effect.Effect<StreamResponse, HostError, Scope.Scope> {

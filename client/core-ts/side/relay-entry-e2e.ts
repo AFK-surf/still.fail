@@ -10,6 +10,7 @@ import { Effect } from "effect";
 import { nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh } from "../src/mesh.ts";
+import { STATION_MESH } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { readAll } from "../src/station/wire.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -126,7 +127,7 @@ try {
   const iroh = { bind: (options: Parameters<typeof rawIroh.bind>[0]) => rawIroh.bind({ ...options, lookup: false, relayOnly: true }) };
   const host = new FakeHost();
   runner = new Runner();
-  mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh, wakes: new Wakes() }, [direct]));
+  mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh, wakes: new Wakes(), ...STATION_MESH }, [direct]));
   mesh.addAddr({ id: stationId, relays: [direct] });
   const credentials = (device: string) => Effect.promise(async () => {
     const c = await api("POST", `/v1/workspaces/${ws}/credential`, { device });

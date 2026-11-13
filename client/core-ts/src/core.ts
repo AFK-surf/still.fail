@@ -21,12 +21,13 @@ import { chatDerive } from "./views/views.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
 import { DriveKept } from "./drive-kept.ts";
 import { CoreError, asCoreError, failedIn } from "./error.ts";
-import type { Host } from "./host.ts";
+import { HEDGE, type Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { markdown } from "./markdown.ts";
 import { AHEAD_AFTER_MS, MdAhead } from "./md-ahead.ts";
 import * as prefs from "./prefs.ts";
 import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
+import { TRACES } from "./route.ts";
 import { laterSleep, Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
 import { Status, Waited } from "./status.ts";
@@ -181,14 +182,14 @@ export class Core {
     return Effect.gen(function* () {
       inner.wakes = new Wakes();
       // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
-      inner.host = new WakingHost(host, inner.wakes);
+      inner.host = new WakingHost(host, inner.wakes, HEDGE);
       inner.driveKept = new DriveKept(inner.host);
       // (the files kept for messages left behind a week)
       inner.runner.fork(inner.driveKept.dropOldUploads());
       brand.setTestChannel(inner.host.testChannel());
       brand.setCloud(inner.host.cloudOrigin());
       fonts.setOrigin(inner.host.cloudOrigin(), inner.host.testChannel());
-      inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
+      inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE, TRACES);
       spentClock(() => inner.host.monotonicMs());
       // A failure let go of is a span of its own: Cloud Trace has it though nothing waited on it.
       inner.runner.onIgnored = (what, error) => {

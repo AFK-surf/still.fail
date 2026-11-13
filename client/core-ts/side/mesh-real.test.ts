@@ -10,8 +10,8 @@ import { Clock, Duration, Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, Mesh, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
-import { MeshWire } from "../src/station/mesh-wire.ts";
+import { CONNECT_TIMEOUT_MS, DEVICE_KEY, Mesh, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, MeshWire, STATION_MESH } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -70,7 +70,7 @@ function quickClock(times = new Map([[RENEW_MS, 150]])): Clock.Clock {
 
 function env(host: FakeHost, wakes = new Wakes(), clock?: Clock.Clock) {
   const runner = new Runner(clock);
-  return { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes };
+  return { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes, ...STATION_MESH };
 }
 
 async function setup(station?: Station, host = new FakeHost(), wakes = new Wakes(), clock?: Clock.Clock) {
