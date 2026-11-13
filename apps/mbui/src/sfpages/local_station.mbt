@@ -56,6 +56,35 @@ pub fn local_station_node(
 }
 
 ///|
+/// 添加这台 Mac in the card's foot corner while `adds` (it asks the cloud for this workspace's token and runs the
+/// installer with it, how far shown on this page).
+fn local_add_foot_node(
+  k : @view.View,
+  core : Core,
+  adds : () -> Bool,
+  pc : Bool,
+  asked : () -> Unit,
+) -> Unit {
+  k.show(adds, fn(f) {
+    f.box(fn(a) {
+      @sf.style_node(a, fn() { vt_actions.then(@sf.foot_across(@sf.button_height())) })
+      @sf.button_node(
+        a,
+        fn() { @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }) },
+        fn() {
+          (core.local_install)(true)
+          asked()
+        },
+        tone=Primary,
+        card_words=true,
+      )
+      |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
 /// None here (no data): the installer at work where it is, else that there is none; what went wrong; 添加这台 Mac (it
 /// downloads one, joins it and runs it as a service) in the card's foot corner where the app adds one.
 fn local_none_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, asked : () -> Unit) -> Unit {
@@ -71,33 +100,24 @@ fn local_none_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
       }
     })
     local_failed_node(k, s)
-    k.show(adds, fn(f) {
-      f.box(fn(a) {
-        @sf.style_node(a, fn() { vt_actions.then(@sf.foot_across(@sf.button_height())) })
-        @sf.button_node(
-          a,
-          fn() { @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }) },
-          fn() {
-            (core.local_install)(true)
-            asked()
-          },
-          tone=Primary,
-          card_words=true,
-        )
-        |> ignore
-      })
-      |> ignore
-    })
+    local_add_foot_node(k, core, adds, pc, asked)
   }) })
 }
 
 ///|
 /// The station's card (StationCards card): its head (its dot, its name and how it is, 启动 where it is stopped and can
-/// be, its ⋯), its facts, the installer's progress, what went wrong.
+/// be, its ⋯), its facts, the installer's progress, what went wrong, and 添加这台 Mac where unattached or removed.
 fn local_card_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, asked : () -> Unit) -> Unit {
   let doing = fn() { text(s(), "doing") }
   let working = fn() { doing() != "" }
   let running = fn() { text(s(), "runner") != "none" }
+  let adds = fn() {
+    if doing() != "" || !@settings.local_station_managed() {
+      return false
+    }
+    let ws = field(s(), "workspace")
+    !(ws is Some(Object(_))) || flag(ws, "removed")
+  }
   let act = fn(a : String) {
     let now = @signals.untracked(s)
     match a {
@@ -108,7 +128,7 @@ fn local_card_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
     asked()
   }
   b.box(fn(k) {
-    @sf.style_node(k, fn() { ls_card })
+    @sf.style_node(k, fn() { if adds() { ls_card.then(@sf.foot_pad(@sf.button_height())) } else { ls_card } })
     k.box(fn(head) {
       @sf.style_node(head, fn() { ls_head }, in_row=false)
       @sf.state_dot_node(head, fn() { if working() { "busy" } else if running() { "online" } else { "offline" } })
@@ -143,6 +163,7 @@ fn local_card_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
       local_past_dot_node(p, fn(u) { local_progress_node(u, s, doing) })
     })
     k.show(fn() { text(s(), "failed") != "" }, fn(p) { local_past_dot_node(p, fn(u) { local_failed_node(u, s) }) })
+    local_add_foot_node(k, core, adds, pc, asked)
   })
   |> ignore
 }
@@ -250,7 +271,7 @@ fn local_facts(s : Json?, pc : Bool) -> Array[String] {
     // stopped: its service's; with none, nothing runs it (this app runs none of its own)
     _ => if service { service_name(s) } else { "" }
   }
-  let place = if workspace is None {
+  let place = if !(workspace is Some(Object(_))) {
     @sf.t("web-pages.localStation.noWorkspace")
   } else {
     let ws = match text(workspace, "name") {

@@ -17,6 +17,8 @@ priv struct Adding {
   made : @signals.Signal[(String, String)?]
   /// why the command could not be made, or a station not joined
   error : @signals.Signal[String]
+  /// why adding this machine via `station.join` failed
+  here_error : @signals.Signal[String]
   /// the stations of the workspace when it opened (one not among them has joined)
   known : @signals.Signal[Array[String]]
   /// the stations of another workspace joined from the sheet: kept where they were, said so
@@ -35,6 +37,7 @@ let adding : Adding = {
   tasks: @signals.signal(false, same=fn(a, b) { a == b }),
   made: @signals.signal(None),
   error: @signals.signal("", same=fn(a, b) { a == b }),
+  here_error: @signals.signal("", same=fn(a, b) { a == b }),
   known: @signals.signal([]),
   took: @sf.LiveArray::new(),
   order: @sf.LiveMap::new(),
@@ -49,6 +52,7 @@ fn adding_reset(known : Array[String], existing : Bool, tasks? : Bool = false) -
   adding.tasks.set(tasks)
   adding.made.set(None)
   adding.error.set("")
+  adding.here_error.set("")
   adding.known.set(known)
   adding.took.clear()
   adding.order.clear()
@@ -110,12 +114,12 @@ fn open_add_station(
   tasks? : Bool = false,
   from? : @sf.Anchor = Unanchored,
 ) -> Unit {
-  // (those that only run tasks are known too: one of them there already has not just joined)
-  adding_reset([..known, ..rigs_listed(core, here).map(fn(r) { text(Some(r), "id") })], existing, tasks~)
+  let known = [..known, ..rigs_listed(core, here).map(fn(r) { text(Some(r), "id") })]
+  adding_reset(known, existing, tasks~)
   let manager = manager_of(core, here) == Some(true)
   // (whether this machine can be added here, as the host says it as the panel opens: what the panel shows, on its way
   // out too, as sfpages' 本机 Station reads the host as it is asked)
-  let here_addable = local_station_addable()
+  let here_addable = local_station_addable_in(here.workspace, known)
   @sf.panel_nodes(
     tr("android-settings.station.add"),
     fn(v, close) { add_station_body(v, core, here, manager, here_addable, close) },
@@ -193,6 +197,7 @@ fn add_station_body(
           fn(i) {
             if (i == 1) != adding.tasks.untracked() {
               adding.error.set("")
+              adding.here_error.set("")
             }
             adding.tasks.set(i == 1)
           },
@@ -210,7 +215,7 @@ fn add_station_body(
         b.show(fn() { !made() && !adding.tasks.get() }, fn(s) {
           s.box(fn(h) {
             @sf.style_node(h, fn() { @sf.panel_words_in_node(h).then(here_room) })
-            add_this_machine_node(h, core, close)
+            add_this_machine_node(h, core, here, close)
           })
           |> ignore
         })
@@ -360,6 +365,7 @@ fn join_existing_node(v : @view.View, core : Core, here : Here, rows : () -> Arr
             if !@signals.untracked(took) {
               adding.picked.set(id)
               adding.error.set("")
+              adding.here_error.set("")
             }
           },
           note=fn() { if took() { tr("web-pages.settings.stations.joinedRow") } else { text(st(), "line") } },
@@ -410,6 +416,7 @@ fn station_mark_node_of(m : @view.View, s : () -> Json?, size : Double) -> Unit 
 fn join_station(core : Core, here : Here, chosen : Json?) -> Unit {
   guard chosen is Some(s) else { return }
   adding.error.set("")
+  adding.here_error.set("")
   let station = text(Some(s), "station")
   (core.call)("station.join", obj([("station", str(station)), ("workspace", str(here.workspace))]), fn(r) {
     match r {
@@ -475,6 +482,7 @@ fn add_making(core : Core, here : Here, tasks : Bool) -> Bool {
 /// under the name.
 fn make_station_command(core : Core, here : Here, tasks : Bool, name : String) -> Unit {
   adding.error.set("")
+  adding.here_error.set("")
   (core.call)(
     if tasks { "rig.add" } else { "workspace.enroll" },
     if tasks { obj([("workspace", str(here.workspace)), ("name", str(name))]) } else { obj([("workspace", str(here.workspace)), ("name", str(name)), ("account", str(here.sub))]) },
@@ -635,20 +643,37 @@ let command_room : @ui.Style = @ui.css("row w=Full gap=S2")
 let command_words : @view.WordsLook = { size: 12.0, weight: 400, line: command_line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
 
 ///|
-/// 添加这台 Mac in node `v` (add_this_machine's): what it does, its button; pressed, the panel closed, the station added
-/// and 本机 Station opened, where how far it is shows.
-fn add_this_machine_node(v : @view.View, core : Core, close : () -> Unit) -> Unit {
+/// 添加这台 Mac in node `v` (add_this_machine's): what it does, its button; pressed, joins via `station.join` when
+/// online and joinable in the mesh, else calls `local_install(true)` and opens 本机 Station.
+fn add_this_machine_node(v : @view.View, core : Core, here : Here, close : () -> Unit) -> Unit {
   let pc = local_machine_pc()
+  let state = fn() { local_here_join_state(core, here) }
+  let joining = fn() {
+    match state().0 {
+      Some(st) => is_doing(core, ["station.join"], [("station", st), ("workspace", here.workspace)])
+      None => false
+    }
+  }
   v.box(fn(b) {
     @sf.style_node(b, fn() { here_column })
-    @sf.words_node(b, fn() { tr(if pc { "android-settings.station.addHerePc" } else { "android-settings.station.addHere" }) }, fn() { here_words })
-    |> ignore
-    @sf.button_node(b, fn() { tr(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }) }, fn() {
-      close()
-      (core.local_install)(true)
-      (core.push)(LocalStation)
+    @sf.words_node(b, fn() { add_here_note(pc) }, fn() { here_words }) |> ignore
+    b.show(fn() { state().2 != "" }, fn(w) {
+      @sf.words_node(w, fn() { state().2 }, fn() { join_soft_words }) |> ignore
     })
+    @sf.button_node(
+      b,
+      fn() { tr(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }) },
+      fn() {
+        let join_addr = @signals.untracked(fn() { state().0 })
+        press_add_here(core, here, join_addr, true, close)
+      },
+      busy=joining,
+      disabled=fn() { state().1 || joining() },
+    )
     |> ignore
+    b.show(fn() { adding.here_error.get() != "" }, fn(e) {
+      @sf.words_node(e, fn() { adding.here_error.get() }, fn() { add_error_words }) |> ignore
+    })
   })
   |> ignore
 }
@@ -842,8 +867,8 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           if !@sf.presenting() && adding.known.get().length() > 0 {
             adding_reset([], false)
           }
-          if local_station_addable() {
-            add_this_machine(c, core, fn() {  })
+          if local_station_addable_in(here.workspace, []) {
+            add_this_machine(c, core, here, fn() {  })
           }
           add_station_steps(
             c,

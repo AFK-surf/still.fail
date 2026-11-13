@@ -702,6 +702,8 @@ android-settings.slack.uploadImage
 android-settings.slack.zhipu
 android-settings.station.add
 android-settings.station.addHere
+android-settings.station.addHereExisting
+android-settings.station.addHereExistingPc
 android-settings.station.addHerePc
 android-settings.station.addNote
 android-settings.station.emoji

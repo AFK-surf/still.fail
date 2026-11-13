@@ -253,3 +253,264 @@ test "a station carried on only when still.fail's desktop app alone ran it" {
   @sfbase.local_station_carry_on()
   assert_eq(t.local_acts(), [])
 }
+
+///|
+test "添加 station's sheet offers 添加这台 Mac when local data exists but is unattached, removed, or in another workspace" {
+  let cases : Array[(String, Json)] = [
+    ("unattached", Json::null()),
+    // (taken out of this very workspace: no longer listed in it)
+    ("removed", { "id": "ws1", "name": "星火工作室", "station": "st5", "stationName": "Willow", "removed": true }),
+    ("other-ws", { "id": "ws2", "name": "个人", "station": "st99", "stationName": "Mini", "removed": false }),
+  ]
+  for one in cases {
+    let (label, ws) = one
+    let calls : Array[Made] = []
+    let t = wide_tester(calls)
+    t.set_local_station((
+      { "data": "/Users/test/.stillfail", "runner": "none", "installed": true, "workspace": ws } : Json
+    ).stringify())
+    app.nav.replace(Place("stations"))
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label="添加 station")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("把本机已有的 station 加入这个 workspace") is Some(_), msg=label)
+    t.click(Button, label="添加这台 Mac")
+    t.run_for(@ui.move_most_ms)
+    let made = calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect()
+    assert_eq(made.length(), 1, msg=label)
+    assert_true(app.nav.top() == Setting(@settings.Route::LocalStation), msg=label)
+  }
+}
+
+///|
+test "添加 station's sheet joins via station.join when this machine is online in joinable" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("home")
+  let src = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done })
+      if name == "station.join" {
+        done(Ok({ "joined": { "name": "家里的 mini" } }))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
+  t.set_local_station((
+    {
+      "data": "/Users/test/.stillfail",
+      "runner": "service",
+      "installed": true,
+      "workspace": { "id": "ws2", "name": "个人", "station": "st9", "stationName": "家里的 mini", "removed": false },
+    } : Json
+  ).stringify())
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="添加 station")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("把本机已有的 station 加入这个 workspace") is Some(_))
+  t.click(Button, label="添加这台 Mac")
+  t.run_for(@ui.move_most_ms)
+  let joins = calls.iter().filter(fn(m) { m.name == "station.join" }).collect()
+  assert_eq(joins.length(), 1)
+  assert_eq(text(Some(joins[0].params), "station"), "ws2/st9")
+  assert_eq(text(Some(joins[0].params), "workspace"), "ws1")
+  assert_eq(calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect().length(), 0)
+  assert_false(@sf.presenting())
+}
+
+///|
+test "添加 station's sheet disables 添加这台 Mac with reason when this machine's home needs security mode" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_local_station((
+    {
+      "data": "/Users/test/.stillfail",
+      "runner": "service",
+      "installed": true,
+      "workspace": { "id": "ws3", "name": "实验室", "station": "st7", "stationName": "实验机", "removed": false },
+    } : Json
+  ).stringify())
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="添加 station")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("实验室已开启安全模式，此 workspace 未开启") is Some(_))
+  let btn = t.query(Button, label="添加这台 Mac")
+  assert_true(btn is Some(_))
+  assert_true(btn.unwrap().disabled)
+}
+
+///|
+test "添加 station's sheet hides 添加这台 Mac when station id is already in this workspace" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_local_station((
+    {
+      "data": "/Users/test/.stillfail",
+      "runner": "service",
+      "installed": true,
+      "workspace": { "id": "ws2", "name": "个人", "station": "st1", "stationName": "Willow", "removed": false },
+    } : Json
+  ).stringify())
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="添加 station")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="添加这台 Mac") is None)
+}
+
+///|
+/// The host's word for this machine's station with data, the workspace its data is in `ws`, run by `runner`.
+fn local_with(ws : Json, runner? : String = "none", doing? : String = "") -> String {
+  let o : Map[String, Json] = { "data": "/Users/test/.stillfail", "runner": Json::string(runner), "installed": true, "workspace": ws }
+  if doing != "" {
+    o["doing"] = Json::string(doing)
+  }
+  Json::object(o).stringify()
+}
+
+///|
+/// The 添加 station sheet opened over `src` with the host saying `said` of this machine.
+fn add_sheet_over(src : Source, said : String, platform? : Int = 0) -> @ui.Tester raise {
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform~)
+  t.set_local_station(said)
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="添加 station")
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "添加 station's sheet: no 添加这台 Mac where it is in this workspace whatever its home says, a rig's, or one being installed" {
+  let cases : Array[(String, String)] = [
+    // its home took it out, but it joined this workspace (st1 is listed here): it is in it all the same
+    ("removed-home-joined-here", local_with({ "id": "ws2", "name": "个人", "station": "st1", "removed": true })),
+    // a machine that only runs tasks for another workspace: enrolling it as a station is refused
+    ("rig", local_with({ "id": "ws2", "name": "个人", "station": "st99", "removed": false, "rig": true })),
+    // the installer at work on it already
+    ("installing", local_with({ "id": "ws2", "name": "个人", "station": "st99", "removed": false }, doing="install")),
+  ]
+  for one in cases {
+    let (label, said) = one
+    let calls : Array[Made] = []
+    let t = wide_tester(calls)
+    t.set_local_station(said)
+    app.nav.replace(Place("stations"))
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label="添加 station")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("生成命令") is Some(_), msg=label)
+    assert_true(t.query(Button, label="添加这台 Mac") is None, msg=label)
+  }
+}
+
+///|
+test "添加 station's sheet: a rig taken out of its workspace may be added as a station" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_local_station(local_with({ "id": "ws2", "name": "个人", "station": "st99", "removed": true, "rig": true }))
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="添加 station")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="添加这台 Mac") is Some(_))
+}
+
+///|
+test "添加 station's sheet: this machine among joinable but its station not running here is added by the installer" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("home")
+  let src = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = add_sheet_over(src, local_with({ "id": "ws2", "name": "个人", "station": "st9", "removed": false }))
+  t.click(Button, label="添加这台 Mac")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(calls.iter().filter(fn(m) { m.name == "station.join" }).collect().length(), 0)
+  assert_eq(calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect().length(), 1)
+  assert_eq(local_ask_of(t.local_acts()[0]).0, "install")
+  assert_true(app.nav.top() == Setting(@settings.Route::LocalStation))
+}
+
+///|
+test "添加 station's sheet: station.join refused, said under 添加这台 Mac, the sheet kept" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("home")
+  let src = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done })
+      if name == "station.join" {
+        done(Err({ "code": "forbidden", "message": "这台 station 暂时连不上，等它上线后再试" }))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = add_sheet_over(src, local_with({ "id": "ws2", "name": "个人", "station": "st9", "removed": false }, runner="service"))
+  t.click(Button, label="添加这台 Mac")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(calls.iter().filter(fn(m) { m.name == "station.join" }).collect().length(), 1)
+  assert_true(t.find("这台 station 暂时连不上，等它上线后再试") is Some(_))
+  assert_true(@sf.presenting())
+  assert_eq(t.local_acts(), [])
+}
+
+///|
+test "添加 station's sheet on Windows and Linux: 添加这台电脑, its words for a station already there" {
+  for platform in [3, 5] {
+    let calls : Array[Made] = []
+    let t = wide_tester(calls, platform~)
+    t.set_local_station(local_with(Json::null()))
+    app.nav.replace(Place("stations"))
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label="添加 station")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("也可以直接添加这台电脑：把本机已有的 station 加入这个 workspace") is Some(_), msg="platform \{platform}")
+    assert_true(t.query(Button, label="添加这台电脑") is Some(_), msg="platform \{platform}")
+  }
+}
+
+///|
+test "a workspace's first station: 添加这台 Mac for a station here in another workspace joins it over the mesh" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      let tp = base.topic(name, params).get().snapshot()
+      if name == "stations" { { ..tp, value: Some(Json::array([])) } } else { tp }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done })
+      if name == "station.join" {
+        done(Ok({ "joined": { "name": "家里的 mini" } }))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
+  t.set_local_station(local_with({ "id": "ws2", "name": "个人", "station": "st9", "removed": false }, runner="service"))
+  app.nav.replace(Setting(@settings.Route::Stations))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("把本机已有的 station 加入这个 workspace") is Some(_))
+  t.click(Button, label="添加这台 Mac")
+  t.run_for(@ui.move_most_ms)
+  let joins = calls.iter().filter(fn(m) { m.name == "station.join" }).collect()
+  assert_eq(joins.length(), 1)
+  assert_eq(text(Some(joins[0].params), "station"), "ws2/st9")
+  assert_eq(calls.iter().filter(fn(m) { m.name == "workspace.enroll" }).collect().length(), 0)
+}

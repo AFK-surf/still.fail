@@ -729,6 +729,8 @@ INSTALL
     if kill -0 $ST 2> /dev/null; then kill $ST; echo "station contract (linux): said stopped, still running"; exit 1; fi
     # the installer's service there (its unit, where systemd looks for a user's): what runs it
     mkdir -p "$S/.config/systemd/user" && : > "$S/.config/systemd/user/stillfail-station.service"
+    # (its data now a rig's, taken out of its workspace: both said)
+    printf '{"workspace":"ws1","station":"st1","removed_at":1700000000,"rig":{"owner":"u1"}}' > "$S/.stillfail/mesh/cloud.json"
     tail -f /dev/null & ST=$!
     printf '{"pid":%d,"version":"0.1.4321"}' $ST > "$S/.stillfail/run/station.json"
     run "HOME=$S XDG_CONFIG_HOME=$S/.config MBUI_STATIONCHECK=read" $O/station-read.log || true
@@ -737,6 +739,8 @@ INSTALL
     echo "$read"
     case "$read" in *'"runner":"service"'*'"service":{"kind":"systemd","name":"stillfail-station.service"}'*) ;;
       *) echo "station contract (linux): its service not said"; exit 1 ;; esac
+    case "$read" in *'"workspace":{"id":"ws1","station":"st1","removed":true,"rig":true}'*) ;;
+      *) echo "station contract (linux): a rig taken out of its workspace not said"; exit 1 ;; esac
     echo "station contract (linux): one started by hand said and stopped; the service's said as running it" ;;
   play)
     # (a second of red, 64 × 48 at 10 frames a second, H.264: its bytes read through the app, played to its end, a frame

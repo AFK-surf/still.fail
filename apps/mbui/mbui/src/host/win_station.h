@@ -182,7 +182,10 @@ moonbit_string_t mb_host_local_station(void) {
       o += (size_t)snprintf(b + o, cap - o, "\"");
     }
     const jv *removed = jget(&cloud, "removed_at");
-    o += (size_t)snprintf(b + o, cap - o, ",\"removed\":%s}", removed && removed->kind != 'z' ? "true" : "false");
+    o += (size_t)snprintf(b + o, cap - o, ",\"removed\":%s", removed && removed->kind != 'z' ? "true" : "false");
+    // a machine that only runs tasks (enroll --rig): in that one workspace, never enrolled as a station beside it
+    const jv *rig = jget(&cloud, "rig");
+    o += (size_t)snprintf(b + o, cap - o, "%s", rig && rig->kind == 'o' ? ",\"rig\":true}" : "}");
   }
   jv_free(&cloud);
   AcquireSRWLockShared(&local_lock);

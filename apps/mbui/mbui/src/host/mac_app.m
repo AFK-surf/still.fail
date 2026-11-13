@@ -1307,6 +1307,8 @@ moonbit_string_t mb_host_local_station(void) {
       if ([c[k] isKindOfClass:NSString.class] && [c[k] length]) w[[k isEqualToString:@"workspace_name"] ? @"name" : [k isEqualToString:@"name"] ? @"stationName" : k] = c[k];
     }
     w[@"removed"] = @(c[@"removed_at"] != nil && c[@"removed_at"] != NSNull.null);
+    // a machine that only runs tasks (enroll --rig): in that one workspace, never enrolled as a station beside it
+    if ([c[@"rig"] isKindOfClass:NSDictionary.class]) w[@"rig"] = @YES;
     o[@"workspace"] = w;
   }
   if (local_doing) {

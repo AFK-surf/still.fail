@@ -135,3 +135,20 @@ test "the settings' list: how things stand at each row's end, what is wrong in r
   assert_true(t.find("更新日志") is None)
   assert_true(t.find("权限") is None)
 }
+
+///|
+test "settings list shows 本机 Station on Windows and Linux as well as Mac" {
+  for platform in [0, 3, 5] {
+    new_run()
+    let src = fixture_app("settings-home")
+    let t = @ui.Tester::new(
+      fn(c) { view(c, src) },
+      tree=app_tree(src),
+      w=390.0,
+      h=2400.0,
+      platform~,
+    )
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("本机 Station") is Some(_), msg="platform \{platform}")
+  }
+}

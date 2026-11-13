@@ -518,6 +518,8 @@
   "android-settings.station.add": "Add station",
   "android-settings.station.addNote": "A station is a machine running {app}. Name it, then run the generated command in its terminal: it installs {app} and joins.",
   "android-settings.station.addHere": "Or add this Mac itself: the station is downloaded here and joins this workspace, with no command to run.",
+  "android-settings.station.addHereExisting": "Or add this Mac itself: its existing station joins this workspace, with no command to run.",
+  "android-settings.station.addHereExistingPc": "Or add this PC itself: its existing station joins this workspace, with no command to run.",
   "android-settings.station.addHerePc": "Or add this PC itself: the station is downloaded here and joins this workspace, with no command to run.",
   "android-settings.station.first": "Add your first station",
   "android-settings.station.firstName": "Name this machine",
