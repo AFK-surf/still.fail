@@ -386,10 +386,10 @@ fn bar_middle_node(
           mid_w_sig.set(w)
         }
       })
-      mid.box(fn(t) {
-        let tp = fn() { state.open_way.shown(t) }
+      mid.box(fn(t_box) {
+        let tp = fn() { state.open_way.shown(t_box) }
         @sf.presses_node(
-          t,
+          t_box,
           fn() {
             if !expanded() && can_toggle() && tp() <= 0.0 {
               state.manual_expanded.set(true)
@@ -397,27 +397,36 @@ fn bar_middle_node(
           },
           on=fn() { !expanded() && can_toggle() && tp() <= 0.0 },
         )
-        t
-        .words(By(fn() {
-          match view() {
-            Some(v) => v.title
-            None => r.title
-          }
-        }))
-        .words_look(By(fn() {
-          let th = @sf.theme()
-          { size: th.t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
-        }))
-        .ink(By(fn() { @sf.theme().p.text }))
+        t_box
+        .lies_along(Is(Middle))
         .fit_whole(By(fn() { !expanded() }))
         .grow(By(fn() { if expanded() { 1.0 } else { 0.0 } }))
         .basis(By(fn() { if expanded() { Some(0.0) } else { None } }))
         .cuts(Is(true))
-        .allow_ellipsis(Is(true))
         .min_width(Is(Some(0.0)))
-        .padding(By(fn() { if !expanded() && can_toggle() && tp() <= 0.0 { (0.0, 10.0, 0.0, 10.0) } else { (0.0, 0.0, 0.0, 0.0) } }))
+        .min_height(By(fn() { if !expanded() && can_toggle() && tp() <= 0.0 { Some(44.0) } else { None } }))
         .alpha(By(fn() { bar_clamp01(1.0 - tp() / 0.45) }))
         .offset(By(fn() { (0.0, 5.0 * bar_clamp01(tp() / 0.5)) }))
+        |> ignore
+        t_box.box(fn(t) {
+          t
+          .words(By(fn() {
+            match view() {
+              Some(v) => v.title
+              None => r.title
+            }
+          }))
+          .words_look(By(fn() {
+            let th = @sf.theme()
+            { size: th.t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
+          }))
+          .ink(By(fn() { @sf.theme().p.text }))
+          .fit_whole(By(fn() { !expanded() }))
+          .cuts(Is(true))
+          .allow_ellipsis(Is(true))
+          .min_width(Is(Some(0.0)))
+          |> ignore
+        })
         |> ignore
       })
       |> ignore

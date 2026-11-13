@@ -236,9 +236,9 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       vw.fly.said()
       vw.fade.said()
       let t = g.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })
-      // (a film's or a song's under its player's fade too, as the old frame's preview layer laid its ground in the box
-      // it faded: its fade twice where it does not fly)
-      let under = if vw.played() { vw.fade.value_at(t) } else { 1.0 }
+      // (a flying film's under its player's fade too; a song or non-flying film fades ground-first via way_at so words
+      // never draw seen over the page's words)
+      let under = if vw.played() && vw.flies { vw.fade.value_at(t) } else { 1.0 }
       @sf.alpha(vw.ground_ink(), vw.ground_share(vw.in_at(t)) * under)
     }))
     |> ignore
@@ -1784,11 +1784,10 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
     .over(Is(true))
     .alpha(By(fn() {
       let t = at(s)
-      let bars = match vw.player_flight(src, s, t) {
-        Some((_, p)) => bars_share(p)
-        None => 1.0
+      match vw.player_flight(src, s, t) {
+        Some((_, p)) => bars_share(p) * vw.fade.value_at(t)
+        None => if vw.flies { vw.fade.value_at(t) } else { vw.words_share(vw.in_at(t)) }
       }
-      bars * vw.fade.value_at(t)
     }))
     .presses(By(fn() {
       match pv_leaving.get() {
@@ -2034,7 +2033,7 @@ fn Viewer::in_at(self : Viewer, t : Double) -> Double {
 /// `ground_first`): its ground whole by halfway, its words after it coming in and before it going out, so that no frame
 /// shows its words over the page's, both seen (words_over.mbt).
 fn Viewer::way_at(self : Viewer, p : Double) -> (Double, Double) {
-  if self.markable() || self.played() {
+  if self.markable() || (self.played() && self.flies) {
     (p, p)
   } else {
     let look = @motion.trans(fade=0.0, ground_first=true).at(p, 1.0)

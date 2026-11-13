@@ -229,3 +229,26 @@ test "小屏顶栏：大字号(1.3x)且标题缩短为短标题时自动收起�
   assert_true(short_hits[0].2 < 50.0)
   assert_eq(bar_node_audit(t), [])
 }
+
+///|
+test "小屏顶栏：有状态栏且可点展开时，第 1 行标题自身高度不被内边距撑大，并与返回键/agent/更多垂直居中对齐" {
+  let long_title = "研究执行历史页面结构与性能"
+  let (t, _) = chat_bar_node_tester(long_title, msg_count=1)
+  t.post(@hostapi.system_channel, "{\"over\":false,\"bars\":{\"top\":40,\"bottom\":0,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  let bar_ref : ChatRef = { station: "ws1/st1", session: "s-c1", title: long_title, station_name: "Willow" }
+  assert_eq(bar_extra_target(bar_ref), 0.0)
+  let title_hits = t.words().filter(fn(w) { w.0 == long_title && w.5 > 0.5 })
+  assert_eq(title_hits.length(), 1, msg="expected single Row 1 title: \{Repr(title_hits)}")
+  let (_, _, ty, _, th, _) = title_hits[0]
+  assert_true(th < 28.0, msg="words node height must not include vertical padding: h=\{th}")
+  assert_true(ty >= 50.0, msg="title must stay clear of 40pt status bar: y=\{ty}")
+  let title_mid = ty + th / 2.0
+  for label in ["返回", "Claude · Willow", "对话信息", "更多"] {
+    let found = t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Button && s.label == label })
+    guard found is Some(s) else { fail("missing button \{label}") }
+    let btn_mid = s.rect.1 + s.rect.3 / 2.0
+    assert_true((title_mid - btn_mid).abs() < 0.5, msg="title mid \{title_mid} != \{label} mid \{btn_mid}")
+  }
+  assert_eq(bar_node_audit(t), [])
+}
