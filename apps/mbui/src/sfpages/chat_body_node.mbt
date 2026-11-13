@@ -369,6 +369,8 @@ fn chat_body_node(
   match to {
     Some(r) => {
       chat_goes_to(v, r, jump, place, fn() { rows.get() }, here.view, top, ask_older, shows)
+      // (over the list: a passage a mouse picked in a message quoted by its pill)
+      chat_quote_node(v, src, r, fn() { rows.get() })
       // ⌘↓ (chat.latest, the keymap's Chat with the field empty): as the way to the newest is pressed
       v.on_action("chat.latest", fn(_) {
         chat_to_newest(src, r, jump, place, here.view)
@@ -425,6 +427,8 @@ fn chat_body_row(
   let found = fn() { find_words_in(chat) }
   slot.pick(fn() { chat_body_kind(entry()) }, fn(p, kind) {
     made(k, p)
+    // (its words, picked with the pointer, are of its key: a message's quoted by it, chat_quote_node)
+    @ui.picked_of(p, k) |> ignore
     let m0 = match @signals.untracked(entry) {
       Said(m) => m
       _ => chat_body_none

@@ -1,7 +1,7 @@
 // A chat's page made with its inside nodes (sfbase's chat_page_nodes on; chat_page_made's `body`): its messages the
 // page's list (chat_body_node), the composer in the list's foot the page's old view as yet, the way to the newest over
-// it (chat_jump_node). What else the old page floats over its list, puts over its rows and flies over it is not here
-// yet.
+// it (chat_jump_node), a passage a mouse picked in a message quoted by its pill (chat_quote_node). What else the old
+// page floats over its list, puts over its rows and flies over it is not here yet.
 
 ///|
 /// Chat `r`'s messages as `src` reads them (view_of_chat), in node `v`, growing to what the column it is in leaves
@@ -57,6 +57,10 @@ pub fn chat_page_body_node(
   )
   |> @ui.words_into(w.field)
   |> ignore
+  // its words in pieces picked with the pointer (@ui.words_picked), as the old page's in its frame are (c.selectable):
+  // nothing that holds it on any screen says so (a settings page's host does: context_node, made_at), a passage of a
+  // message quoted from there (chat_quote_node)
+  @ui.words_picked(v)
   // (its view and entries as last read: once read, never none again while the page is)
   let read : @signals.Computed[(ChatView, Array[Entry])?] = @signals.computed(
     fn(was) {
