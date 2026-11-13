@@ -5,10 +5,6 @@
 ///|
 fn init {
   @ui.words_over_known([
-    // (Android's runs played again, src/sfapp/tape.mbt)
-    // (recorded again for #2642: its run's own pairs, none of them the cards'; fewer since words sent flying and an
-    // answer coming in over the end make room for what they pass, #2674 and #2689)
-    ("src/sfreplay/flows/chat_audio_test.mbt", 1),
     // (shown as the replay gives each message at its own moment and draws on the run's display's frames, a device's
     // timing: the words sent leaving the old composer pass over its pasted card's 「6,000 字符」 at 1673.6. Goes as the
     // composer and the chat's message list are made as nodes)
