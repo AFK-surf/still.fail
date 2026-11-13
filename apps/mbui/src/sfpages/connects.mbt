@@ -433,31 +433,33 @@ fn cn_row_node(
   }
   // (its lead a 28x28 face across the row's middle; a platform's mark said once on a row, where the row leads with it,
   // else before its team)
-  @sf.link_row_node(
-    r,
-    fn() { text(cv(), "name") },
-    fn() { (core.push)(Connect(station, @signals.untracked(id))) },
-    note=how,
-    note_cut=true,
-    chevron=false,
-    lead=LeadMade(fn(l) { cn_avatar_node(l, core, cv, stint) }),
-    face=true,
-    // its Slack workspace after its name (short of room, its name kept: its team leaves its line first)
-    title_after=fn(a) {
-      a.drops(Is(cn_drop_team)) |> ignore
-      a.box(fn(t) {
-        @sf.style_node(t, fn() { cn_team })
-        t.show(fn() { opt_text(cv(), "botImage") is Some(_) }, fn(k) {
-          cn_kind_node(k, fn() { text(cv(), "kind") }, cn_team_icon)
+  r.pick(fn() { opt_text(cv(), "botImage") is Some(_) }, fn(p, pictured) {
+    @sf.link_row_node(
+      p,
+      fn() { text(cv(), "name") },
+      fn() { (core.push)(Connect(station, @signals.untracked(id))) },
+      note=how,
+      note_cut=true,
+      chevron=false,
+      lead=LeadMade(fn(l) { cn_avatar_node(l, core, cv, stint) }),
+      face=true,
+      // its Slack workspace after its name (short of room, its name kept: its team leaves its line first)
+      title_after=fn(a) {
+        a.drops(Is(cn_drop_team)) |> ignore
+        a.box(fn(t) {
+          @sf.style_node(t, fn() { cn_team })
+          if pictured {
+            cn_kind_node(t, fn() { text(cv(), "kind") }, cn_team_icon)
+          }
+          @sf.words_node(t, fn() { text(cv(), "team") }, fn() { cn_meta }) |> ignore
         })
-        @sf.words_node(t, fn() { text(cv(), "team") }, fn() { cn_meta }) |> ignore
-      })
-      |> ignore
-    },
-    title_after_shown=fn() { opt_text(cv(), "team") is Some(_) },
-    tail?=if wide { None } else { Some(end) },
-    control?=if wide { Some(end) } else { None },
-  )
+        |> ignore
+      },
+      title_after_shown=fn() { opt_text(cv(), "team") is Some(_) },
+      tail?=if wide { None } else { Some(end) },
+      control?=if wide { Some(end) } else { None },
+    )
+  })
 }
 
 ///|
