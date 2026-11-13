@@ -72,13 +72,13 @@ pub fn find_chat() -> String {
 }
 
 ///|
-/// ⌘F's bar open in the chat `key` (opened again: its field takes the keyboard again).
-pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
+/// ⌘F's bar open in the chat `key` (opened again: its field takes the keyboard again, as it comes to hold it).
+pub fn find_open(key : String) -> Unit {
   if finding.chat.untracked() != key {
     find_close()
     finding.chat.set(key)
   }
-  c.focus_field(finding.field)
+  finding.field.focus()
 }
 
 ///|

@@ -111,7 +111,7 @@ let list_head_gap : Double = 24.0
 /// Chat `r`'s messages where its page is made with its inside nodes (sfbase's chat_page_nodes: chat_page_made's
 /// `body`, `shows` whether it is drawn), in `v`, as wide as it is given: under the bar's room, `in_pane` the page a
 /// panel of its own (chat_bar_room); its composer made by `composer` in the list's foot. What the page's old view
-/// hands the system's bars said here as nodes (chat_bar_handed_node).
+/// hands the system's bars said here as nodes (chat_bar_handed_node); ⌘F its find, in its bar.
 fn chat_body_nodes(
   v : @view.View,
   src : Source,
@@ -129,6 +129,21 @@ fn chat_body_nodes(
   ) {
     held.val = Some(n)
     composer(n)
+  })
+  // ⌘F (chat.find, the keymap's Chat, taken while the tree gives the page keys): the chat's find opened in its bar
+  // (wide_bar_of's), as the old page's chat_page took it, but in a chat not made yet
+  v.on_action("chat.find", fn(_) {
+    guard view_of_chat(src, r).0 is Some({ thread: Some(_), .. }) else { return false }
+    chat_find_open(r)
+    true
+  })
+  |> ignore
+  // (another chat's find let go as this one's page is made, as chat_page did as it was built: closed, what it looked
+  // for forgotten, nothing left to go to there)
+  v.reacts(fn() { () }, fn(_) {
+    if find_chat() != "" && find_chat() != chat_key(r) {
+      find_forget()
+    }
   })
   chat_bar_handed_node(v, src, r)
   chat_drop_node(v, src, r, fn() { held.val }, shows)
