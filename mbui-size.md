@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [85e118c8d](https://github.com/AFK-surf/monoid/commit/85e118c8df152588655f5e1ebb29b27b30d73c56) mbui app: no flight on a chat's page made as nodes | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 95.57 | 108.35 |
 | [456c7fc15](https://github.com/AFK-surf/monoid/commit/456c7fc157392ed62e6305d554e5f7ca5dfa9943) mbui: what covers a list's top said once; a pictur | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.55 | 101.4 |
 | [5982f1c24](https://github.com/AFK-surf/monoid/commit/5982f1c24116c685f2c43650d0984a32984a4151) station: a connection's streams taken in the order | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.14 | 108.84 |
 | [45bffd5e1](https://github.com/AFK-surf/monoid/commit/45bffd5e15c69ea83d3e1f8d12ea186d7232f5d6) mbui: a node drawn off exactly where it says so, b | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.44 | 107.22 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [99ac449c3](https://github.com/AFK-surf/monoid/commit/99ac449c389f50bda908954c9846720ca2e0e7df) mbui: a chat's page made as nodes opens an agent's | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.39 | 149.92 |
 | [255d751f2](https://github.com/AFK-surf/monoid/commit/255d751f2bfc5644fa964c4483926b8ba287b905) station: retry a failed automatic update once (#58 | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.47 | 130.78 |
 | [c54dc28bf](https://github.com/AFK-surf/monoid/commit/c54dc28bff3f8da7e4e29253b5f1cfd09fbab15f) mbui: words a finger picked offer the page's sever | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.42 | 172.64 |
-| [f11a356e3](https://github.com/AFK-surf/monoid/commit/f11a356e3a9e0b992f5cf71c780cfc4ad26b9179) app tests: at the default rate each group's other  | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.31 | 184.88 |
