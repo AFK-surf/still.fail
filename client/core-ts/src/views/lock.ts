@@ -46,6 +46,7 @@ import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, personOf } from "../personal-lock.ts";
+import { type Folded, fold } from "../lock-moved.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -321,56 +322,13 @@ function recover(inner: Inner, id: string): void {
 /// What each workspace's lock was read at (its head's hash and the waiting count the workspace view said), per core.
 const readAt = new WeakMap<Inner, Map<string, string>>();
 
-/// What is folded from the entries, unchecked (the stations check them): who and what is in the lock.
-export type Folded = { members: Map<string, { email: string; role: string }>; devices: Map<string, J>; stations: Map<string, string>; disabled: boolean; added: Map<string, number>; persons: Map<string, string> };
+export { type Folded, fold } from "../lock-moved.ts";
 
 /// A device of the lock as it stands at `at` (unix seconds): none once its approval ran out (a web page's, after
 /// WEB_DEVICE_SECS). The stations let it in nowhere then (station/src/cloud/lock.ts `admit`): it waits and is approved
 /// again face to face, as a new one is, rather than being told a station has not heard of it yet.
 export function live<D extends { exp?: unknown }>(d: D | undefined, at: number): D | undefined {
   return d !== undefined && (typeof d.exp !== "number" || d.exp > at) ? d : undefined;
-}
-
-export function fold(entries: Entry[]): Folded {
-  const f: Folded = { members: new Map(), devices: new Map(), stations: new Map(), disabled: false, added: new Map(), persons: new Map() };
-  for (const e of entries) {
-    const b = (e.body ?? {}) as J;
-    switch (e.kind) {
-      case "genesis":
-        for (const m of arr(b.members)) f.members.set(m.sub, { email: m.email, role: m.role });
-        for (const d of arr(b.devices)) f.devices.set(d.id, d);
-        for (const s of arr(b.stations)) f.stations.set(s.key, s.name);
-        break;
-      case "member":
-        f.members.set(b.sub, { email: b.email, role: b.role });
-        break;
-      case "member.remove":
-        f.members.delete(b.sub);
-        for (const [k, d] of f.devices) if (d.sub === b.sub) f.devices.delete(k);
-        f.persons.delete(b.sub);
-        break;
-      case "person":
-        f.persons.set(b.sub, b.person);
-        break;
-      case "device":
-        if (!f.devices.has(b.id)) f.added.set(b.id, e.at);
-        f.devices.set(b.id, b);
-        break;
-      case "device.remove":
-        f.devices.delete(b.id);
-        break;
-      case "station":
-        f.stations.set(b.key, b.name);
-        break;
-      case "station.remove":
-        f.stations.delete(b.key);
-        break;
-      case "disable":
-        f.disabled = true;
-        break;
-    }
-  }
-  return f;
 }
 
 const part = (inner: Inner, ws: string): Part =>
