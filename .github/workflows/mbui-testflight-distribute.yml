@@ -27,6 +27,10 @@ on:
         description: Which run of its wait this is
         default: "1"
         type: string
+      prepare_monoid:
+        description: Fill missing monoid review contacts and feedback email from still.fail (same Apple team)
+        default: false
+        type: boolean
 # Serialize each app's rounds, including first-time creation of its external group.
 concurrency:
   group: mbui-testflight-distribute-${{ inputs.product || 'stillfail' }}
@@ -51,6 +55,7 @@ jobs:
           RELEASE_BUILD: ${{ inputs.build }}
           RELEASE_EXTERNAL: ${{ inputs.external }}
           RELEASE_ROUND: ${{ inputs.round }}
+          RELEASE_PREPARE_MONOID: ${{ inputs.prepare_monoid }}
           GH_TOKEN: ${{ github.token }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

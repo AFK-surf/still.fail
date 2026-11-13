@@ -12,7 +12,11 @@ method=GET
 for a in "$@"; do case $a in POST|PATCH) method=$a ;; esac; done
 echo "$method ${url#https://api.appstoreconnect.apple.com/v1/}" >> "$FAKE/calls"
 case $url in
-  */apps/*/betaAppLocalizations*) cat "$FAKE/localizations" ;;
+  */apps/*/betaAppLocalizations*)
+    if [[ $url = */apps/6818750243/* && $RELEASE_PRODUCT = monoid ]]; then cat "$FAKE/source-localizations"; else cat "$FAKE/localizations"; fi ;;
+  */apps/*/betaAppReviewDetail*)
+    if [[ $url = */apps/6818750243/* ]]; then cat "$FAKE/source-contact"; else cat "$FAKE/contact"; fi ;;
+  */betaAppReviewDetails/*) cat > "$FAKE/contact-write"; echo '{}' ;;
   */betaAppLocalizations|*/betaAppLocalizations/*)
     cat > "$FAKE/description"
     [ -z "${DESCRIPTION_REFUSE:-}" ] || { echo '{"errors":[{"detail":"description refused"}]}'; exit 22; }
@@ -57,6 +61,9 @@ run() {
   echo "${INTERNAL_ANSWER:-$good_internal}" > "$FAKE/internal"
   echo "${EXTERNAL_ANSWER:-$good_external}" > "$FAKE/external"
   echo "${LOCALIZATIONS:-$good_localizations}" > "$FAKE/localizations"
+  echo '{"data":[{"attributes":{"feedbackEmail":"feedback@example.com"}}]}' > "$FAKE/source-localizations"
+  echo "${CONTACT:-{\"data\":{\"id\":\"review\",\"attributes\":{\"contactFirstName\":\"Keep\"}}}}" > "$FAKE/contact"
+  echo "${SOURCE_CONTACT:-{\"data\":{\"attributes\":{\"contactFirstName\":\"Source\",\"contactLastName\":\"Person\",\"contactPhone\":\"+15555550123\",\"contactEmail\":\"review@example.com\",\"demoAccountName\":\"never-copy\"}}}}" > "$FAKE/source-contact"
   [ -z "${REFUSE:-}" ] || touch "$FAKE/refuse"
   touch "$FAKE/calls"
   RELEASE_ROUND=${ROUND:-1} RELEASE_EXTERNAL=${2:-false} bash -c '. "$1/../apps/mbui/scripts/testflight-product.sh"; export IOS_ASC_APP_ID IOS_BUNDLE_ID; bash "$1/testflight-distribute.sh"' _ "$D" > "$W/out" 2>&1
@@ -93,6 +100,14 @@ REFUSE=1 refuses VALID
 grep -q refused "$W/out"
 # monoid's build lookup and subsequent wait rounds stay on monoid; another app's record refuses before any write.
 export RELEASE_PRODUCT=monoid
+# Explicit first-time setup fills missing contact fields and feedback email only; the existing name is preserved.
+RELEASE_PREPARE_MONOID=true run VALID true
+grep -qF 'PATCH betaAppReviewDetails/review' "$FAKE/calls"
+jq -e '.data.attributes == {contactLastName:"Person",contactPhone:"+15555550123",contactEmail:"review@example.com"}' "$FAKE/contact-write" >/dev/null
+jq -e '.data.attributes == {feedbackEmail:"feedback@example.com"}' "$FAKE/description" >/dev/null
+RELEASE_PREPARE_MONOID=true SOURCE_CONTACT='{"data":{"attributes":{}}}' refuses VALID true
+expect_posts ''
+grep -q 'review contact needs configuring' "$W/out"
 # First external release: create a description for the verified app, or fill only descriptions that are missing.
 LOCALIZATIONS='{"data":[]}' run VALID true
 expect_posts 'POST betaAppLocalizations

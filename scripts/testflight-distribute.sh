@@ -12,6 +12,9 @@ fail() { echo "testflight: $*" >&2; exit 1; }
 [[ ${RELEASE_VERSION:-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'no version'
 [[ ${RELEASE_ROUND:-} =~ ^[1-9][0-9]*$ ]] || fail 'no round'
 [[ ${RELEASE_EXTERNAL:-} =~ ^(true|false)$ ]] || fail 'external is true or false'
+if [ "${RELEASE_PREPARE_MONOID:-false}" = true ]; then
+  [ "$RELEASE_PRODUCT" = monoid ] && [ "$RELEASE_EXTERNAL" = true ] || fail 'review setup is only for monoid external testing'
+fi
 [[ ${ASC_KEY_ID:-} =~ ^[A-Z0-9]{10}$ ]] || fail 'invalid ASC key ID'
 INTERNAL_GROUP='Internal Testers'
 EXTERNAL_GROUP='external default'
@@ -130,8 +133,43 @@ beta_description() {
   esac
 }
 
+# An explicit first-time setup for the two apps of the same Apple team. Copy only missing contact fields and the
+# feedback email, never demo credentials, notes, URLs or text somebody has already configured for monoid.
+prepare_monoid() {
+  local fields='["contactFirstName","contactLastName","contactPhone","contactEmail"]' missing id email row
+  asc_get 'apps/6818750243/betaAppReviewDetail?fields[betaAppReviewDetails]=contactFirstName,contactLastName,contactPhone,contactEmail' > "$T/source-review.json"
+  asc_get "apps/$APP/betaAppReviewDetail?fields[betaAppReviewDetails]=contactFirstName,contactLastName,contactPhone,contactEmail" > "$T/review.json"
+  missing=$(jq -c --argjson fields "$fields" '.data.attributes as $a | [$fields[] | select(($a[.] // "") == "")]' "$T/review.json")
+  if [ "$missing" != '[]' ]; then
+    jq -e --argjson fields "$missing" '.data.attributes as $a | all($fields[]; ($a[.] // "") != "")' "$T/source-review.json" >/dev/null ||
+      fail "review contact needs configuring: $missing (also missing from still.fail)"
+    id=$(jq -er '.data.id | select(type == "string" and length > 0)' "$T/review.json")
+    jq -cn --arg id "$id" --argjson fields "$missing" --slurpfile source "$T/source-review.json" \
+      '{data:{type:"betaAppReviewDetails",id:$id,attributes:($fields | map(. as $k | {key:$k,value:$source[0].data.attributes[$k]}) | from_entries)}}' |
+      curl --fail-with-body --silent --show-error --globoff --max-time 60 -X PATCH \
+        -H "Authorization: Bearer $ASC_TOKEN" -H 'Content-Type: application/json' --data-binary @- \
+        "https://api.appstoreconnect.apple.com/v1/betaAppReviewDetails/$id" > "$T/review-written.json"
+    summary 'Configured missing monoid beta review contact fields from still.fail.'
+  fi
+  asc_get 'apps/6818750243/betaAppLocalizations?limit=200&fields[betaAppLocalizations]=feedbackEmail' > "$T/source-feedback.json"
+  email=$(jq -r '[.data[].attributes.feedbackEmail | select(type == "string" and length > 0)] | first // empty' "$T/source-feedback.json")
+  [ -n "$email" ] || email=$(jq -r '.data.attributes.contactEmail // empty' "$T/source-review.json")
+  [ -n "$email" ] || fail 'configure a monoid beta feedback email'
+  asc_get "apps/$APP/betaAppLocalizations?limit=200" > "$T/feedback.json"
+  jq -c '.data[] | select((.attributes.feedbackEmail // "") == "")' "$T/feedback.json" > "$T/missing-feedback.jsonl"
+  while IFS= read -r row; do
+    id=$(jq -r '.id' <<< "$row")
+    jq -cn --arg id "$id" --arg email "$email" '{data:{type:"betaAppLocalizations",id:$id,attributes:{feedbackEmail:$email}}}' |
+      curl --fail-with-body --silent --show-error --globoff --max-time 60 -X PATCH \
+        -H "Authorization: Bearer $ASC_TOKEN" -H 'Content-Type: application/json' --data-binary @- \
+        "https://api.appstoreconnect.apple.com/v1/betaAppLocalizations/$id" > "$T/feedback-written.json"
+  done < "$T/missing-feedback.jsonl"
+  summary 'Configured missing monoid beta feedback email from still.fail.'
+}
+
 asc_token
 if [ "$RELEASE_EXTERNAL" = true ]; then beta_descriptions; fi
+if [ "${RELEASE_PREPARE_MONOID:-false}" = true ]; then prepare_monoid; fi
 group=$(group_id "$INTERNAL_GROUP" true)
 add_to_group "$group"
 summary "Build $RELEASE_BUILD added to \"$INTERNAL_GROUP\"."
