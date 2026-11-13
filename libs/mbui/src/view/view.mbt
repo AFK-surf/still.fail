@@ -625,6 +625,9 @@ struct Node {
   /// the box round what it and what it holds draw, where it is its own (View::scale's Drawn): worked out again once
   /// something of it changed (`drawn_stale`: what draws, where, how big), kept while nothing did
   mut drawn_box : (Double, Double, Double, Double)
+  /// how the widest words it holds whose laying shows are laid, as that box was worked out (Pivot's DrawnSide: 0 none
+  /// such, 1 from their start, 2 centred: pivot_side)
+  mut drawn_words : Int
   mut drawn_stale : Bool
   /// whether it draws, and where it is drawn off (its offset and shift), as last told: what the box round what draws in
   /// each that holds it changes by (Tree::drawn_box_of), nothing else of it
@@ -1902,6 +1905,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         lpx: 0.0,
         lpy: 0.0,
         drawn_box: (0.0, 0.0, 0.0, 0.0),
+        drawn_words: 0,
         drawn_stale: true,
         drew: false,
         drawn_off: (0.0, 0.0, 0.0, 0.0),
@@ -4852,34 +4856,40 @@ pub fn Tree::fades_of(self : Tree, id : NodeId) -> (Double, Double, Double, Doub
 ///|
 /// Where node `at` is drawn bigger or smaller about, laid out `w` by `h` (View::scale's pivot): the middle of what it
 /// and what it holds draw where it says `Drawn`; where `DrawnSide`, across the side of it what they draw is laid from, as
-/// laid out now: its start where what it draws lies nearer its start than its end, its end where nearer its end, its
-/// middle where as near both within a point (pivot_side).
+/// laid out now (pivot_side).
 fn Tree::pivot_of(self : Tree, at : Int, w : Double, h : Double) -> (Double, Double) {
   let n = self.nodes[at]
   guard n.look.pivot.drawn() else { return n.pivot_at(w, h) }
   if n.drawn_stale {
-    n.drawn_box = self.drawn_box_of(at, lines=n.look.pivot is DrawnSide(_))
+    let words = Ref((0.0, 0))
+    n.drawn_box = self.drawn_box_of(at, lines=n.look.pivot is DrawnSide(_), words~)
+    n.drawn_words = words.val.1
     n.drawn_stale = false
   }
   let (x0, y0, x1, y1) = n.drawn_box
   match n.look.pivot {
     // (DrawnSide: down, its share of its height, whatever is drawn)
-    DrawnSide(fy) => if x1 < x0 { (w / 2.0, fy * h) } else { (pivot_side(x0, x1, w), fy * h) }
+    DrawnSide(fy) => if x1 < x0 { (w / 2.0, fy * h) } else { (pivot_side(x0, x1, w, n.drawn_words), fy * h) }
     _ => if x1 < x0 { (w / 2.0, h / 2.0) } else { ((x0 + x1) / 2.0, (y0 + y1) / 2.0) }
   }
 }
 
 ///|
-/// The side across a box `w` wide that what lies from `x0` to `x1` in it is laid from (Pivot's DrawnSide): its start
-/// (`x0`) where the room before it is less than the room after it by more than a point, its end (`x1`) where the room
-/// after it is the less, else its middle: a line laid from an edge belongs to that edge, a thing centred to its middle
-/// (the coordinator of the migration, 2026-11-14).
-fn pivot_side(x0 : Double, x1 : Double, w : Double) -> Double {
+/// The side across a box `w` wide that what lies from `x0` to `x1` in it is laid from (Pivot's DrawnSide), in this
+/// order: where the room before it and the room after it differ by more than a point, the side with less room (its
+/// start, `x0`; its end, `x1`: a reply, one's own bubble); else, filling the box or standing in its middle, as its words
+/// say (`words`, the widest of the words drawn alone in it whose laying shows: several lines, or one line shorter than
+/// its node by more than a point): laid from their start (1), its start; centred (2), its middle; no such words (0),
+/// its middle (a thing centred by what holds it: a chip, a picture). A line laid from an edge belongs to that edge (the
+/// coordinator of the migration, 2026-11-14).
+fn pivot_side(x0 : Double, x1 : Double, w : Double, words : Int) -> Double {
   let (before, after) = (x0, w - x1)
   if before < after - 1.0 {
     x0
   } else if after < before - 1.0 {
     x1
+  } else if words == 1 {
+    x0
   } else {
     (x0 + x1) / 2.0
   }
@@ -4920,8 +4930,13 @@ fn words_alone(n : Node) -> Bool {
 /// edge, words, shapes, lines, a picture or an old view of their own, each where it is laid out and drawn off
 /// (View::offset, View::shift); none (its left past its right) where nothing does. `lines` (Pivot's DrawnSide): one
 /// that draws words alone across as its lines are laid out, not as its box is (a reply's words in a node as wide as its
-/// column).
-fn Tree::drawn_box_of(self : Tree, at : Int, lines? : Bool = false) -> (Double, Double, Double, Double) {
+/// column), the widest of those whose laying shows told `words` (its lines' width, how they are laid: pivot_side).
+fn Tree::drawn_box_of(
+  self : Tree,
+  at : Int,
+  lines? : Bool = false,
+  words? : Ref[(Double, Int)] = Ref((0.0, 0)),
+) -> (Double, Double, Double, Double) {
   self.work.drawn_boxes = self.work.drawn_boxes + 1
   let box = [1.0e30, 1.0e30, -1.0e30, -1.0e30]
   fn take(i : Int, ox : Double, oy : Double) -> Unit {
@@ -4937,9 +4952,14 @@ fn Tree::drawn_box_of(self : Tree, at : Int, lines? : Bool = false) -> (Double, 
       // in its middle as its words stand)
       let (x0, x1) = match (lines, m.flex.measure) {
         (true, Some(f)) if words_alone(m) => {
-          let lw = f(m.flex.width, AtMost, m.flex.height, Exactly).0
+          let (lw, lh) = f(m.flex.width, AtMost, m.flex.height, Exactly)
           let lw = if lw < m.flex.width { lw } else { m.flex.width }
           let at = if m.look.words_center { (m.flex.width - lw) / 2.0 } else { 0.0 }
+          // (the widest whose laying shows: several lines, or one shorter than its node by more than a point)
+          let line = m.look.words_look.line * (if m.words_as_said { 1.0 } else { (self.env.words_scale)() })
+          if (lw < m.flex.width - 1.0 || lh > line * 1.5) && lw > words.val.0 {
+            words.val = (lw, if m.look.words_center { 2 } else { 1 })
+          }
           (ox + at, ox + at + lw)
         }
         _ => (ox, ox + m.flex.width)
