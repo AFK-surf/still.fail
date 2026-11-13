@@ -416,12 +416,57 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
       })
     })
   }
-  // its screens; one from before them says so quietly
+  // its browser pages (user-opened vs agent-opened) and physical/simulator screens; one from before them says so quietly
   match (core.topic)("screens", { "station": str(address) }).get().value {
     Some(Object(_)) as v => {
-      let screens = items(v, "screens")
+      let all = items(v, "screens")
+      let user_tabs = all.filter(fn(sc) { is_user_screen(Some(sc)) })
+      let agent_tabs = all.filter(fn(sc) { is_agent_screen(Some(sc)) })
+      let screens = all.filter(fn(sc) { !is_browser_screen(Some(sc)) })
+      let can_open = flag(v, "browser") && flag(v, "control")
       let note = text(v, "note")
-      if screens.length() > 0 || note != "" {
+      if !user_tabs.is_empty() || can_open {
+        out.push(fn() {
+          let actions : (() -> Unit)? = if can_open {
+            Some(fn() {
+              let btn = "station-open-browser/" + address
+              let from = c.id(btn)
+              @sf.action(
+                c,
+                btn,
+                @sf.t("web-pages.screen.openBrowser"),
+                icon="plus",
+                busy=is_doing(core, ["screen.openBrowser"], [("station", address)]),
+                on_press=fn() { @settings.open_station_browser(core, address, from=Of(from)) },
+              )
+            })
+          } else {
+            None
+          }
+          st_section(c, @sf.t("web-pages.screen.userPages"), count=user_tabs.length(), actions?, fn() {
+            @sf.group(c, fn() {
+              for sc in user_tabs {
+                station_browser_row(c, core, here, address, Some(sc), true)
+              }
+              if user_tabs.is_empty() {
+                @sf.link_row(c, "", @sf.t("web-pages.screen.noUserPages"), goes=false, lead=fn() { st_row_mark(c, "web") }) |> ignore
+              }
+            })
+          })
+        })
+      }
+      if !agent_tabs.is_empty() {
+        out.push(fn() {
+          st_section(c, @sf.t("web-pages.screen.agentPages"), count=agent_tabs.length(), fn() {
+            @sf.group(c, fn() {
+              for sc in agent_tabs {
+                station_browser_row(c, core, here, address, Some(sc), false)
+              }
+            })
+          })
+        })
+      }
+      if screens.length() > 0 || (all.is_empty() && note != "") {
         out.push(fn() {
           st_section(c, @sf.t("web-pages.screen.section"), count=screens.length(), fn() {
             @sf.group(c, fn() {
@@ -439,14 +484,14 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
                   note=if own { @sf.t("android-misc.screen.here") } else { text(sv, "line") },
                   lacks=lacks && !own,
                   goes=!own,
-                  lead=fn() { st_row_mark(c, if text(sv, "kind") == "browser" { "web" } else { "monitor" }) },
+                  lead=fn() { st_row_mark(c, screen_row_icon(sv)) },
                   on_press=fn() {
                     @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title"), until_gone: false }))
                   },
                 ) |> ignore
                 screen_views(c, core, here, address, sv)
               }
-              if screens.length() == 0 {
+              if screens.length() == 0 && note != "" {
                 @sf.link_row(c, "", note, goes=false, lead=fn() { st_row_mark(c, "monitor") }) |> ignore
               }
             })
@@ -988,6 +1033,62 @@ fn grant_icon(id : String) -> String {
     "localNetwork" => "devices"
     _ => "folder"
   }
+}
+
+///|
+/// One browser tab row on a station's overview (`user_tab`: under 用户页面, offering 休眠 while idle and 关闭; else under
+/// Agent 页面, offering 关闭 when closable).
+fn station_browser_row(c : @ui.Ctx, core : Core, here : Here, address : String, sv : Json?, user_tab : Bool) -> Unit {
+  let id = text(sv, "id")
+  let can_sleep = user_tab && flag(sv, "closable") && !flag(sv, "sleeping") && items(sv, "views").is_empty()
+  let can_close = flag(sv, "closable")
+  @sf.link_row(
+    c,
+    "station-screen/" + address + "/" + id,
+    text(sv, "title"),
+    note=text(sv, "line"),
+    lead=fn() { st_row_mark(c, screen_row_icon(sv)) },
+    control?=if can_sleep || can_close {
+      Some(fn() {
+        let on = [("station", address), ("screen", id)]
+        if can_sleep {
+          let what = @sf.t("web-pages.screen.sleepWhat")
+          @sf.button(
+            c,
+            @sf.t("web-pages.screen.sleep"),
+            key="station-screen-sleep/" + address + "/" + id,
+            tone=Ghost,
+            busy=is_doing(core, ["screen.sleep"], on),
+            on_press=fn() {
+              @settings.act(core, what, "screen.sleep", obj([("station", str(address)), ("screen", str(id))]))
+            },
+          )
+          |> ignore
+        }
+        if can_close {
+          let what = @sf.t("web-pages.screen.closeTabWhat")
+          @sf.button(
+            c,
+            @sf.t("web-pages.screen.closeTab"),
+            key="station-screen-close/" + address + "/" + id,
+            tone=Ghost,
+            busy=is_doing(core, ["screen.close"], on),
+            on_press=fn() {
+              @settings.act(core, what, "screen.close", obj([("station", str(address)), ("screen", str(id))]))
+            },
+          )
+          |> ignore
+        }
+      })
+    } else {
+      None
+    },
+    on_press=fn() {
+      @sfbase.open_page(Screen({ station: address, screen: id, title: text(sv, "title"), until_gone: !user_tab }))
+    },
+  )
+  |> ignore
+  screen_views(c, core, here, address, sv)
 }
 
 ///|

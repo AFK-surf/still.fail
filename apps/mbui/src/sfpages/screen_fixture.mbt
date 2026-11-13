@@ -69,9 +69,16 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     mode
   }
   screen_fix_mode.val = m
-  app.nav.push(Screen(screen_fix_at))
+  let at = if m == "screen-user-pages" {
+    { ..screen_fix_at, screen: "browser:u_mail", title: "收件箱 - Proton Mail" }
+  } else if m == "screen-pages" {
+    { ..screen_fix_at, title: "Sign in · Anthropic" }
+  } else {
+    screen_fix_at
+  }
+  app.nav.push(Screen(at))
   // what the person did there before the picture (ScreenViewerTest's taps)
-  let u = screen_ui(screen_key(screen_fix_at.station, screen_fix_at.screen))
+  let u = screen_ui(screen_key(at.station, at.screen))
   match m {
     "screen-trackpad" | "screen-trackpad-command" => {
       // a finger moved right, slowly (ScreenViewerTest: the pointer near 0.66 of the frame)
@@ -87,6 +94,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"
+    "screen-pages" | "screen-user-pages" => u.asked_panel = "pages"
     "screen-keys" => u.asked_panel = "keys"
     "screen-stats" => u.asked_panel = "net"
     "screen-simulator-center" => u.asked_panel = "center"
@@ -351,6 +359,18 @@ pub fn screen_fixture_stream(
     "screen-files-going" | "screen-files-done" => {
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       screen_fix_drops(m == "screen-files-done")
+    }
+    "screen-pages" | "screen-user-pages" => {
+      live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
+      let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
+        Object(o) => o.copy()
+        _ => {}
+      }
+      st["openUrl"] = Json::boolean(true)
+      st["userTab"] = Json::boolean(m == "screen-user-pages")
+      st["title"] = Json::string(if m == "screen-user-pages" { "收件箱 - Proton Mail" } else { "Sign in · Anthropic" })
+      st["line"] = Json::string(if m == "screen-user-pages" { "mail.proton.me · 控制" } else { "console.anthropic.com · 控制" })
+      on_value({ "state": Json::object(st) }, None)
     }
     _ => ()
   }

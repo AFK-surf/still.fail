@@ -285,7 +285,7 @@ export function checkInput(input: unknown): J {
 
 /// What the sync holds of a station's screens (station/sync.ts): its list as last said, or that it has none to say
 /// (a station from before screens).
-export type Held = { screens: J[]; outdated: boolean };
+export type Held = { screens: J[]; outdated: boolean; browser?: boolean };
 
 /// The viewer's role in the station's workspace allows driving its screens (a read-only member only sees).
 export function mayDrive(inner: Inner, station: string): boolean {
@@ -361,12 +361,20 @@ type Kind = "desktop" | "browser" | "simulator";
 const kindOf = (v: unknown): Kind => (v === "browser" || v === "simulator" ? v : "desktop");
 const kindWords = (kind: Kind, id: string) => t(id.startsWith("android:") ? "core-views.screen.kind.android" : `core-views.screen.kind.${kind}`);
 
-/// What a screen is, in words: its kind, its size, the chat that opened it, who is on it.
+/// What a screen is, in words: its kind, its size or site, whether it sleeps, the chat that opened it, who is on it.
 function itemLine(item: J): string {
-  const parts = [kindWords(item.kind, item.id)];
-  if (item.width > 0 && item.height > 0) parts.push(`${item.width}×${item.height}`);
-  if (item.chat) parts.push(t("core-views.screen.openedBy", { title: item.chat.title }));
   const on = names(item.viewers);
+  if (item.userTab === true) {
+    const parts: string[] = [];
+    if (item.site) parts.push(item.site);
+    if (item.sleeping === true) parts.push(t("core-views.screen.sleeping"));
+    if (on.length > 0) parts.push(t("core-views.screen.on", { names: listed(on) }));
+    return parts.length > 0 ? parts.join(" · ") : kindWords(item.kind, item.id);
+  }
+  const parts = [kindWords(item.kind, item.id)];
+  if (item.site) parts.push(item.site);
+  else if (item.width > 0 && item.height > 0) parts.push(`${item.width}×${item.height}`);
+  if (item.chat) parts.push(t("core-views.screen.openedBy", { title: item.chat.title }));
   if (on.length > 0) parts.push(t("core-views.screen.on", { names: listed(on) }));
   return parts.join(" · ");
 }
@@ -413,14 +421,21 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const chat = typeof by === "string" && by !== "" ? chatOf(inner, station, by) : null;
     const controlledBy = names(get(s, "controlledBy"));
     const views = viewsOf(inner, get(s, "views"), control);
+    const site = typeof get(s, "site") === "string" && get(s, "site") !== "" ? (get(s, "site") as string) : null;
     const item = {
       id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy, ...(views.length > 0 ? { views } : {}), ...(get(s, "peek") === true ? { peek: true } : {}),
+      // A page a person opened in the station's persistent browser profile (`screen.openBrowser`), put to sleep while idle.
+      ...(get(s, "userTab") === true ? { userTab: true } : {}),
+      ...(get(s, "sleeping") === true ? { sleeping: true } : {}),
+      ...(site !== null ? { site } : {}),
       // An agent drives it now (its view among the screen's people, AGENT).
       ...(controlledBy.some((n) => n.startsWith(AGENT)) ? { agent: true } : {}),
       // Closed from here by a member who may drive it (a read-only one only looks).
       ...(get(s, "closable") === true && control ? { closable: true } : {}),
       // Its apps' logs and restart, for one who may drive it (a simulator's).
       ...(get(s, "debug") === true && control ? { debug: true } : {}),
+      // Takes an address (`screen.openUrl`): a browser tab or a simulator, for one who may drive it.
+      ...((get(s, "openUrl") === true || get(s, "debug") === true) && control ? { openUrl: true } : {}),
       // Where a file to install on it goes up to (`screen.install`).
       ...(typeof get(s, "install") === "string" && control ? { install: get(s, "install") } : {}),
       // It folds (an iPhone Duo): `screen.input` {t: "pose", name}.
@@ -440,7 +455,7 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
   });
   // The machine's own display (`desktop`) first: what a chat's screen button opens, at the head of every list of them.
   screens.sort((a, b) => Number(b.id === DESKTOP) - Number(a.id === DESKTOP));
-  return { screens, outdated: false, control, known: true };
+  return { screens, outdated: false, control, known: true, ...(held.browser === true ? { browser: true } : {}) };
 }
 
 /// What a link to one of a station's screens shows in a message (the `screenCard` topic): the screen as its station's
@@ -592,6 +607,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     // Its display's scale as the stream last said (a Windows station's desktop, to a view that drives it).
     let displayScale: { percent: number; recommended: number; steps: number[] } | null = null;
     let displaySize: { width: number; height: number; modes: Size[] } | null = null;
+    let canOpenUrl: boolean | null = null;
     let driving: string[] | null = null;
     // Every view on it as the view's own stream says (else as the station's list does).
     let onViews: unknown = null;
@@ -614,7 +630,12 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const item = listedItem();
       if (state.title === "" && typeof get(item, "title") === "string") state.title = get(item, "title");
       if (state.kind === undefined && typeof get(item, "kind") === "string") state.kind = get(item, "kind");
+      if (state.site === undefined && typeof get(item, "site") === "string" && get(item, "site") !== "") state.site = get(item, "site");
+      if (state.userTab === undefined && get(item, "userTab") === true) state.userTab = true;
       state.debug = get(item, "debug") === true && may;
+      const openUrl = state.control && (canOpenUrl ?? (get(item, "openUrl") === true || get(item, "debug") === true));
+      if (openUrl) state.openUrl = true;
+      else delete state.openUrl;
       state.install = may && typeof get(item, "install") === "string" ? get(item, "install") : "";
       state.poses = get(item, "poses") === true && may;
       state.panels = get(item, "panels") ?? [];
@@ -943,6 +964,19 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (!state.control) {
                   delete state.login;
                   delete state.passkey;
+                }
+                if (typeof s.site === "string") {
+                  if (s.site !== "" && s.site.length <= 253) state.site = s.site;
+                  else delete state.site;
+                } else if (s.site === null) delete state.site;
+                if (typeof s.userTab === "boolean") {
+                  if (s.userTab) state.userTab = true;
+                  else delete state.userTab;
+                }
+                if (typeof s.openUrl === "boolean") canOpenUrl = s.openUrl;
+                if (state.control && typeof s.childScreen === "string" && s.childScreen !== "" && s.childScreen.length <= 200) {
+                  state.childOpened = (state.childOpened ?? 0) + 1;
+                  state.childScreen = s.childScreen;
                 }
                 const access = accessOf(s.access);
                 if (access) state.access = access;

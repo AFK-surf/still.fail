@@ -5,7 +5,7 @@ import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type ChromePictures, picturesOf, toldOf } from "./sim-chrome.ts";
 import type { SimDebug } from "./sim-debug.ts";
-import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, type ViewOptions, makeScreens } from "./source.ts";
+import { type ScreenAccess, type ScreenBrowser, type ScreenSource, type ScreenView, type Screens, type ViewOptions, makeScreens } from "./source.ts";
 
 /// One view open now: whose, whether its input is taken, and how it is told its people changed. `device`: the member's
 /// device it came over (the credential's, so to be believed); `client`, `app`: the name and kind of app that device says
@@ -84,10 +84,17 @@ export class ScreenHub implements Screens {
   readonly #listeners = new Set<() => void>();
   readonly #refreshers = new Set<() => Promise<void>>();
   readonly #stopping = new Set<() => void>();
+  #browser: ScreenBrowser | null = null;
 
   constructor(options: HubOptions = {}) {
     this.#o = options;
     this.#sources.watch(() => this.#changed());
+  }
+
+  setBrowser(browser: ScreenBrowser | null) {
+    if (this.#browser === browser) return;
+    this.#browser = browser;
+    this.#changed();
   }
 
   add(source: ScreenSource): () => void {
@@ -240,6 +247,7 @@ export class ScreenHub implements Screens {
   async openAs(id: string, options: ViewOptions, who: { name: string; control: boolean }): Promise<ScreenView> {
     const source = this.get(id);
     if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.userTab) throw new ScreenRefused(403, "station.screen.userOnly");
     const view = await source.open(options);
     const leave = this.join(id, { name: who.name, control: who.control, agent: true, tell: () => {} });
     return {
@@ -272,6 +280,43 @@ export class ScreenHub implements Screens {
     await source.discard();
   }
 
+  /// POST /admin/api/screens/browser: opens a persistent user tab in the station's browser (`{ url } -> screen id`).
+  async openBrowser(url: string): Promise<string> {
+    if (this.#browser === null || !this.#browser.available()) throw new ScreenRefused(503, "station.screen.noBrowser");
+    return this.#browser.openUserTab(url);
+  }
+
+  /// POST /admin/api/screens/<id>/open-url: navigates a browser tab or opens a link on a simulator.
+  async openUrl(id: string, url: string): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.openUrl !== undefined) {
+      await source.openUrl(url);
+      return;
+    }
+    if (source.debug !== undefined) {
+      if (!(await source.debug.openUrl(url))) throw new ScreenRefused(400, "station.screen.badUrl");
+      return;
+    }
+    throw new ScreenRefused(405, "station.screen.noDebug");
+  }
+
+  /// POST /admin/api/screens/<id>/reload: reloads a browser tab.
+  async reloadScreen(id: string): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.reload === undefined) throw new ScreenRefused(405, "station.screen.notBrowser");
+    await source.reload();
+  }
+
+  /// POST /admin/api/screens/<id>/sleep: hibernates a user tab, closing its live Chrome page while keeping its saved entry.
+  async sleepScreen(id: string): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.sleep === undefined) throw new ScreenRefused(405, "station.screen.notBrowser");
+    await source.sleep();
+  }
+
   /// A screen's apps' logs and their restart (a simulator's); refused for any other.
   debugOf(id: string): SimDebug {
     const source = this.get(id);
@@ -296,20 +341,28 @@ export class ScreenHub implements Screens {
   /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had, `install` where a file to
   /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab); `since`, since when it has been up
 /// (ms: a simulator's boot, an emulator's start).
-  listed(lang: Lang): { screens: Record<string, unknown>[] } {
+  listed(lang: Lang): { browser?: boolean; screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
+    const browser = this.#browser?.available() === true;
     return {
+      ...(browser ? { browser: true } : {}),
       screens: this.list().map((s) => {
         const { width, height } = s.size();
         const access = accessShown(s.access?.(), lang);
         const clipboard = s.clipboard?.() ?? [];
         const by = s.openedBy?.();
         const since = s.since?.();
+        const site = s.site?.();
+        const sleeping = s.sleeping?.() === true;
         return {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
           ...(s.peek ? { peek: true } : {}),
           ...(s.discard ? { closable: true } : {}),
+          ...(s.userTab ? { userTab: true } : {}),
+          ...(sleeping ? { sleeping: true } : {}),
+          ...(site ? { site } : {}),
+          ...(s.openUrl ? { openUrl: true } : {}),
           ...(s.debug ? { debug: true, install: s.debug.installFolder() } : {}),
           ...(s.poses ? { poses: true } : {}),
           ...(s.panels?.length ? { panels: s.panels } : {}),

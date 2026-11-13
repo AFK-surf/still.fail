@@ -244,6 +244,25 @@ pub fn screen_page(
   if at.until_gone && s.phase() == "gone" {
     c.after_build("screen-gone/" + key, close)
   }
+  // a child popup opened from this tab while driving: follow it (returning here when its window closes)
+  if shown && s.child_screen is Some(next) {
+    s.child_screen = None
+    c.after_build("screen-child/" + key, fn() {
+      let child_at : ScreenAt = { station: s.station, screen: next, title: "", until_gone: true }
+      match @sfbase.lone_page.val {
+        Some(Screen(prev)) => {
+          screen_left(src, prev.station, prev.screen)
+          @sfbase.lone_page.val = Some(Screen({ ..child_at, until_gone: false }))
+        }
+        _ =>
+          if u.in_tab {
+            @sfbase.open_page(Screen(child_at))
+          } else {
+            @sfbase.app.nav.push(Screen(child_at))
+          }
+      }
+    })
+  }
   // over (ended, gone…): out of 全屏, the bar's × and what happened in sight
   let over = !s.open_now()
   if over && u.full.get() {
@@ -799,7 +818,7 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     }
     let live = s.phase() == "live"
     let words = c.id("screen-net")
-    let w = c.box(style=screen_bar_words, id=if live { words } else { 0 }, fn() {
+    let w = c.box(style=screen_bar_words, id=if live { words } else { 0 }, keep=true, fn() {
       let said = match opt_text(s.state, "title") {
         Some(t) if t != "" => t
         _ => if title != "" { title } else { @sf.t("android-misc.screen.title") }
@@ -812,7 +831,7 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
       let line = text(s.state, "line")
       let said_line = line != "" && s.open_now() && !s.can_take_over()
       if live {
-        c.box(style=screen_line_row, fn() {
+        c.box(style=screen_line_row, keep=true, fn() {
           signal_bars(c, text(field(screen_net(s), "rtt"), "level"))
           c.text(seen_for(u), style=screen_time_words) |> ignore
           // (short of room, the core's line leaves the row whole before it is cut to a word: how long is kept)
@@ -841,6 +860,10 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
       control_seg(c, "screen-mode/" + s.view, s.controlling(), fn(now) { control_chosen(c, s, u, now) })
     }
     paste_button(c, s, u)
+    // (short of room beside paste or at larger font sizes, 页面 leaves the bar for 控制中心)
+    if pages_shown(s) {
+      c.box(taps=false, drop=1, fn() { pages_button(c, s, u, close) }) |> ignore
+    }
     // (全屏 in 控制中心: the title keeps its room)
     if s.open_now() {
       center_button(c, s, u, close)
@@ -873,7 +896,8 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
   // (beside 接管, or beside 组合键 while driving, the figures' chip only where the bar's side has the room for it: else
   // 控制中心's 连接 row has them)
   let combos = s.driving() && !s.simulator()
-  let figures = (!s.can_take_over() && !combos) || c.window_size().0 >= 2.0 * @sf.viewer_bar_sides()
+  let shown_pages = pages_shown(s)
+  let figures = (!s.can_take_over() && !combos && !shown_pages) || c.window_size().0 >= 2.0 * @sf.viewer_bar_sides()
   @sf.viewer_bar(c, "screen-bar", @sf.t("common.back"), said, line, false, ink, fn() {
     if s.phase() == "live" && figures {
       net_chip(c, s, u)
@@ -881,6 +905,9 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
     // (组合键 while driving: the keyboard has the rest)
     if combos {
       combos_chip(c, s, u)
+    }
+    if shown_pages {
+      pages_chip(c, s, u, close)
     }
     if s.open_now() {
       center_chip(c, s, u, close)
@@ -979,6 +1006,9 @@ fn full_tools(
       if s.driving() {
         keyboard_button(c, u, catcher, catching)
       }
+      if pages_shown(s) {
+        pages_button(c, s, u, close)
+      }
       center_button(c, s, u, close)
       full_button(c, u)
     }
@@ -1042,6 +1072,9 @@ fn screen_rail(
       paste_button(c, s, u)
       if s.driving() {
         keyboard_button(c, u, catcher, catching)
+      }
+      if pages_shown(s) {
+        pages_button(c, s, u, close)
       }
       if s.open_now() {
         center_button(c, s, u, close)

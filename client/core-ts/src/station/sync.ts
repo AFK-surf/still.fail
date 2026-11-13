@@ -437,13 +437,13 @@ export class StationsSync {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/screens", null, { quiet: true, ctx }));
-      if (answer._tag === "Success") this.#heldScreens(address, { screens: Array.isArray(get(answer.success, "screens")) ? (get(answer.success, "screens") as unknown[]) : [], outdated: false });
+      if (answer._tag === "Success") this.#heldScreens(address, { screens: Array.isArray(get(answer.success, "screens")) ? (get(answer.success, "screens") as unknown[]) : [], outdated: false, ...(get(answer.success, "browser") === true ? { browser: true } : {}) });
       else if (answer.failure.status === 404) this.#heldScreens(address, { screens: [], outdated: true });
       else return yield* Effect.fail(answer.failure);
     });
   }
 
-  #heldScreens(address: string, held: { screens: unknown[]; outdated: boolean }): void {
+  #heldScreens(address: string, held: { screens: unknown[]; outdated: boolean; browser?: boolean }): void {
     const link = this.#links.get(address);
     if (!link) return;
     link.memory.set("screens", held);
@@ -451,8 +451,8 @@ export class StationsSync {
   }
 
   /// What is held of the station's screens; undefined while it has not said.
-  screens(address: string): { screens: unknown[]; outdated: boolean } | undefined {
-    return this.#links.get(address)?.memory.get("screens") as { screens: unknown[]; outdated: boolean } | undefined;
+  screens(address: string): { screens: unknown[]; outdated: boolean; browser?: boolean } | undefined {
+    return this.#links.get(address)?.memory.get("screens") as { screens: unknown[]; outdated: boolean; browser?: boolean } | undefined;
   }
 
   /// The station's screens read now, for a person waiting on them (a view of one opened before they were known).
@@ -1531,7 +1531,7 @@ export class StationsSync {
       }
       // Its screens came or went, or who is on them changed.
       case "screens":
-        this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
+        this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false, ...(get(data, "browser") === true ? { browser: true } : {}) });
         return;
       // A login of the station's.
       case "machine-logins": {

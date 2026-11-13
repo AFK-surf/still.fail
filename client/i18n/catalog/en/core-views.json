@@ -612,6 +612,7 @@
   "core-views.screen.kind.simulator": "iOS Simulator",
   "core-views.screen.on": "{names} viewing",
   "core-views.screen.openedBy": "Opened by “{title}”",
+  "core-views.screen.sleeping": "Sleeping",
   "core-views.screen.someChat": "a chat",
   "core-views.screen.outdated": "Update this station to see its screens",
   "core-views.screen.gone": "This screen is gone",
