@@ -184,27 +184,45 @@ test "narrow, crowded: the configuration used most wholly in view nearest how ha
 }
 
 ///|
-test "narrow, crowded: a configuration taken out of those used most stays where it stood, the sheet open, the rest where they were" {
+test "narrow, crowded: a configuration taken out of those used most leaves the sheet where it was as the next comes in its place, the sheet open, the rest moving to theirs" {
+  // (the user, 2026-11-13: 「去掉后要有补位（如果有的话），还要有动效」)
   let t = crowded("newchat-crowded-model-liked")
   t.run_for(@ui.move_most_ms)
   for l in ["GPT-6 Astra · 中", "DeepSeek V4.1 Flash · DSH · 高", "GPT-6 Astra · 高", "Kimi For Coding · 高"] {
     assert_true(t.query(Button, label="从常用搭配移除 " + l) is Some(_), msg="\{l} can not be taken out")
   }
-  let row = t.get(Button, label="GPT-6 Astra · 高").rect
+  assert_true(t.query(Button, label="Sonnet 5 · 中") is None, msg="a fifth used most shown")
+  let (rx, ry, rw, rh) = t.get(Button, label="GPT-6 Astra · 高").rect
+  let kimi = t.get(Button, label="Kimi For Coding · 高").rect
   t.click(Button, label="从常用搭配移除 GPT-6 Astra · 高")
-  t.run_for(@ui.move_most_ms)
-  // (where it stood, nothing to press, till the sheet opens again)
-  assert_true(t.query(@ui.Role::Dialog) is Some(_) && t.query(Button, label="从常用搭配移除 GPT-6 Astra · 高") is None)
-  assert_true(t.query(Button, label="GPT-6 Astra · 高") is None, msg="a button still")
-  let (rx, ry, rw, rh) = row
+  // (leaving: still drawn where it was, nothing to press there; the next not come yet, the rest where they were)
+  t.run_for(@sf.leave_ms / 2.0)
   assert_true(
-    t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "GPT-6 Astra" && b.x >= rx && b.x < rx + rw && b.y >= ry && b.y < ry + rh }),
-    msg="its words gone from where it stood",
+    t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "GPT-6 Astra" && b.opacity > 0.0 && b.y >= ry - 1.0 && b.y < ry + rh && b.x >= rx && b.x < rx + rw }),
+    msg="gone at once from where it was",
   )
-  // (its place pressed: nothing)
+  assert_true(t.query(Button, label="Sonnet 5 · 中") is None, msg="the next come before it has gone")
+  // (nothing to press where it leaves: what is under it, the panel's own ground)
   t.tap(rx + rw / 2.0, ry + rh / 2.0)
+  assert_true(t.query(@ui.Role::Dialog) is Some(_) && new_fix.model == "deepseek-v4-1-flash", msg="it was pressed as it left")
+  assert_eq(t.get(Button, label="Kimi For Coding · 高").rect, kimi)
+  // (gone: what was over it on its way down into its room)
+  // (where its words are drawn: the configuration's, under the starred Kimi For Coding's)
+  let kimi_drawn = fn() {
+    t.boxes().filter(fn(b) { b.kind == "text" && b.text == "Kimi For Coding" && b.y >= kimi.1 - 1.0 }).fold(init=1.0e9, fn(m, b) {
+      if b.y < m { b.y } else { m }
+    })
+  }
+  let kimi_was = kimi_drawn()
+  t.run_for(@sf.leave_ms / 2.0 + 60.0)
+  let kimi_on_way = kimi_drawn()
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="the sheet closed")
+  let kimi_there = kimi_drawn()
+  assert_true(kimi_on_way > kimi_was + 0.5 && kimi_on_way < kimi_there - 0.5, msg="\{kimi_was} \{kimi_on_way} \{kimi_there}: not on its way")
+  // (at rest: gone, the next used most in its place, the sheet open)
+  assert_true(t.query(@ui.Role::Dialog) is Some(_) && t.query(Button, label="从常用搭配移除 GPT-6 Astra · 高") is None)
+  assert_true(t.query(Button, label="GPT-6 Astra · 高") is None, msg="still in the sheet")
+  assert_true(t.query(Button, label="Sonnet 5 · 中") is Some(_), msg="none in its place")
   assert_true(t.query(Button, label="GPT-6 Astra · 中") is Some(_) && t.query(Button, label="Kimi For Coding") is Some(_))
   assert_eq(new_fix.model, "deepseek-v4-1-flash", msg="a configuration picked")
 }
@@ -414,4 +432,15 @@ test "closed capsule uses short runtime label and keeps runtime ahead of effort 
   let squeezed_model = crowded_controls(squeezed)[2]
   let squeezed_texts = runs_in(squeezed, (squeezed_model.x, squeezed_model.y, squeezed_model.w, squeezed_model.h)).map(fn(r) { r.text })
   assert_true(squeezed_texts.contains("DSH") && !squeezed_texts.contains("高"), msg="\{Repr(squeezed_texts)}")
+}
+
+///|
+test "narrower still, a station of no mark of its own: its control keeps a mark where its name gives way, never a bare chevron" {
+  // (2026-11-13 the user: 「怎么 station 还会直接挤消失」, a station named Studio of no mark, its control a chevron alone)
+  let t = crowded("newchat-crowded-unmarked", w=crowded_cramped)
+  let glass = crowded_controls(t)
+  assert_eq(glass.length(), 3)
+  let station = glass[1]
+  let shown = t.boxes().filter(fn(b) { b.parent == station.index && b.opacity > 0.0 && b.w > 0.0 })
+  assert_true(shown.length() >= 2, msg="\{Repr(shown.map(fn(b) { (b.kind, b.x, b.w) }))}")
 }
