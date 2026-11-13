@@ -413,7 +413,7 @@ fn tape_to(p : TapePane, at : Double) -> Unit {
 /// A key that asks for what is in the page (its composer: Space, 按空格输入) pressed at `at` while the tape holds the
 /// window with the page behind: the page brought over at that moment, as a press on what shows of it brings it
 /// (tape_cover), what the key asked given it as the page is in use (Ctx::focus_field's ask kept till then).
-fn tape_page_for_key(at : Double) -> Unit {
+pub fn tape_page_for_key(at : Double) -> Unit {
   if wide.tape.get() && wide.tape_at.get() != Page {
     wide.tape_ask.set(Some(Page))
     tape_take_ask(at) |> ignore

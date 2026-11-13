@@ -28,7 +28,11 @@ pub fn chat_page_body_node(
   // keys: Space with no field focused, the cursor in the composer (composer.focus, taken as it is next built); ⌘U the
   // system's file picker for its draft (composer.file) but where the chat is offline; ⌘↓ the list's (chat_body_node)
   v.key_context("Chat")
-  .on_action("composer.focus", fn(_) {
+  .on_action("composer.focus", fn(e) {
+    // (the page brought over first where the tape has it behind, at the key's moment, so that its composer takes keys;
+    // then at once where its old view's field is drawn, Field::focus; asked of it as it is next built where it is not)
+    (@sfbase.page_for_key.val)(e.at)
+    w.field.focus()
     composer_take_focus()
     @sfbase.draft_given(draft)
     true

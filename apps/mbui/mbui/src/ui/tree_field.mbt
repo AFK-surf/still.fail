@@ -246,12 +246,14 @@ pub fn field(
 
 ///|
 /// The keyboard's focus given field `self`, as Ctx::focus_editor gives an old view's editor its: where a field of the
-/// window's tree holds it, at once; else as one comes to hold it (words begun over a picture, a note opened: its node
-/// made as what says so changes).
+/// window's tree holds it, at once; where an old view's editor drawn now holds it (a composer an old view hosted in a
+/// page made as nodes draws), at once too, as Ctx::focus_field gives it, not as that old view is next built (which may
+/// be never: nothing it reads changed); else as one comes to hold it (words begun over a picture, a note opened: its
+/// node made as what says so changes).
 pub fn Field::focus(self : Field) -> Unit {
   match self.st.tree_node {
     Some(id) if tree_fields.contains(id) => tree_field_focus(id)
-    _ => self.st.focus_asked = true
+    _ => g().focus_field(self)
   }
 }
 

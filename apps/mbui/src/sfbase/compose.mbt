@@ -587,6 +587,12 @@ pub let folder_pick_asked : Ref[(Source, FolderPick) -> Unit] = Ref(fn(_, _) {  
 pub let chat_jobs_asked : Ref[(@ui.Ctx, Source, ChatRef) -> Unit] = Ref(fn(_, _, _) {  })
 
 ///|
+/// A key that is the page's (Space's composer.focus) at moment `at`: the page brought over first where the tape (中屏)
+/// has it behind the sidebar (sfdesk's tape_page_for_key), as the old page's own key did; nothing elsewhere.
+// kept across runs: what the app says once as it starts
+pub let page_for_key : Ref[(Double) -> Unit] = Ref(fn(_) {  })
+
+///|
 /// The same from what is made once (an agent's card as nodes), the window's width given (what its screen is of).
 // kept across runs: what the app says once as it starts
 pub let chat_jobs_open : Ref[(Source, ChatRef, Double) -> Unit] = Ref(fn(_, _, _) {  })
