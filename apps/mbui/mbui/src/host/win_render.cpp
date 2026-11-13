@@ -1288,6 +1288,36 @@ static int submit(const double *inst, int32_t count, double r, double g, double 
   return 1;
 }
 
+// How many of the compositor's beats a frame takes: one, or as many as keep the window to MB_FRAMES_MOST frames a
+// second where the display shows twice that or more (240 Hz: two, 120 frames a second; 360: three; 144 and 165: one,
+// each of theirs, not half of them). No more than 120 by default, as the other hosts' displays show at most (the
+// user, 2026-11-13: 「给still fail/screenreplay默认最高120就行」): what a frame costs is paid for each, and past 120 it
+// is not seen (ScreenReplay's viewer playing: 24% of a core at 240). MBUI_FRAMES_MOST says another most (0: the
+// display's every frame). Asked of the compositor again each second, a display's rate being the user's to change.
+static int frame_beats(void) {
+  static int beats = 1;
+  static ULONGLONG asked;
+  ULONGLONG now = GetTickCount64();
+  if (asked && now - asked < 1000) return beats;
+  asked = now ? now : 1;
+  static int most = -1;
+  if (most < 0) {
+    const wchar_t *said = mb_win_env(L"MBUI_FRAMES_MOST");
+    most = said && *said ? _wtoi(said) : 120;
+    if (most < 0) most = 120;
+  }
+  beats = 1;
+  DWM_TIMING_INFO ti = {};
+  ti.cbSize = sizeof ti;
+  if (most > 0 && SUCCEEDED(DwmGetCompositionTimingInfo(NULL, &ti)) && ti.rateRefresh.uiDenominator) {
+    // (a display's 239.76 is 240)
+    double hz = (double)ti.rateRefresh.uiNumerator / (double)ti.rateRefresh.uiDenominator;
+    int k = (int)((hz + 1.0) / (double)most);
+    if (k > 1) beats = k;
+  }
+  return beats;
+}
+
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
   int n = -1;
   D3D11_RECT parts[MB_PARTS];
@@ -1317,9 +1347,15 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   // ScreenReplay's viewer, an RTX 5080's machine, 2026-11-13; partly covered 461 to 484 and 212 to 217). A waitable
   // swap chain's handle held nothing there (1648 to 1691). The compositor's beat is the primary display's: a window
   // on another display of another rate draws at the primary's. Where the compositor will not say (FAILED), a
-  // millisecond's rest, so nothing spins.
+  // millisecond's rest, so nothing spins. A frame waits as many beats as frame_beats says.
   if (hr == DXGI_STATUS_OCCLUDED) Sleep(16);
-  else if (dcomp && FAILED(DwmFlush())) Sleep(1);
+  else if (dcomp) {
+    for (int i = frame_beats(); i > 0; i--)
+      if (FAILED(DwmFlush())) {
+        Sleep(1);
+        break;
+      }
+  }
 }
 
 // Without a window (mbui-render, src/render): WARP's device whatever the machine has (the same rasterizer on every
