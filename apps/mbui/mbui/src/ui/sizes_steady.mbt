@@ -204,7 +204,11 @@ let stop_jerk : Double = 1.5
 /// that only prints first): a step is said only as the middle of three frames, so one whose next frame no longer judges
 /// its node (it shows no more, a hand's frame, a gap, the window resized: its samples cleared) is never said. A bar's
 /// thumb stepping as its list was put at once passed at 60 judged where 120 failed for it, the thumb showing no more a
-/// frame of 60 later (chat_page_nodes_wbtest, #5854).
+/// frame of 60 later (chat_page_nodes_wbtest, #5854). And not said, known (the coordinator of the migration,
+/// 2026-11-14): a row of a page's list of the window's tree carried off its place in a frame is judged by nothing here
+/// (what is in such a row is measured from its top) nor by rows_steady, which walks only the old view's lists
+/// (rows_steady.mbt's rows_steady_faults: a list node of an old view's with its state); it is said today only where a
+/// drawn box round its cause steps. A round that only prints comes before the chat's page is switched.
 fn sizes_steady_fault(
   all : Array[(Double, Double, Double)],
   period : Double,
