@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e3aa11a3e](https://github.com/AFK-surf/monoid/commit/e3aa11a3efc7783d8c378014f27f9397e09d8cc0) mbui app: a 常用搭配 taken out of the model's panel cl | 1.96 | 2.63 | 11.35 | 30.88 | 40.75 | 27.51 | 52.6 | 94.55 | 105.86 |
 | [c37772e3c](https://github.com/AFK-surf/monoid/commit/c37772e3cefad21d723c7cfd59687dd9054dfb9d) core: a moved workspace's vaults go by the state i | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.6 | 94.14 | 105.45 |
 | [f467b2e01](https://github.com/AFK-surf/monoid/commit/f467b2e018cdbef1c131750017f2a43e84feaa00) mbui: a shared end that stays where it is, flown f | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.58 | 94.36 | 100.06 |
 | [ecfd590f0](https://github.com/AFK-surf/monoid/commit/ecfd590f0ba23a7cfa692ff019a0a30e2195bfb1) fix(mbui): offset slotted viewer flight from its p | 1.96 | 2.63 | 11.32 | 30.82 | 40.64 | 27.47 | 52.52 | 94.21 | 99.86 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a424a7f9a](https://github.com/AFK-surf/monoid/commit/a424a7f9a691f42d94d7afdfd1f4c6ad8ce1c0cf) station: support agy mid-turn steer and sandbox co | 1.94 | 2.6 | 11.16 | 30.57 | 40.03 | 27.23 | 52.03 | 93.44 | 116.81 |
 | [89ca87552](https://github.com/AFK-surf/monoid/commit/89ca87552673e44bc44a0d13fa4ef991320d3fd4) rules: a person's log takes web devices and a work | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.52 | 181.81 |
 | [de090a12f](https://github.com/AFK-surf/monoid/commit/de090a12f616c06e10a31e0e4e0435a3345f1433) mbui, app: open and sink touch sheets at the scree | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.65 | 149.69 |
-| [ff43bba2a](https://github.com/AFK-surf/monoid/commit/ff43bba2a4749541fecaeb70856a92354a7c04e3) core: a device's entries that lost their place tog | 1.93 | 2.59 | 11.15 | 30.55 | 39.98 | 27.22 | 51.98 | 93.32 | 134.14 |
