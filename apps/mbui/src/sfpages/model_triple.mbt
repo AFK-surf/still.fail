@@ -746,8 +746,6 @@ fn triple_body(
   // (what the first level shows of them: each drawn with how it comes or goes (triple_combos_drawn))
   let combos_drawn = triple_combos_drawn(c, contents, combos_now, v is Some(_) && !c.in_bones())
   let combos : Array[Json] = combos_drawn.filter(fn(d) { !d.2 }).map(fn(d) { d.0 })
-  // (what the first level's rows move for: the configurations it draws, by their keys)
-  let combos_by = combos_drawn.map(fn(d) { triple_combo_key(Some(d.0)) }).join(",")
   let liked : Array[Json] = items(v, "liked").filter_map(model_of)
   let kinds = items(v, "makers")
   let kind_of = fn(o : Json) -> String { text(field(Some(o), "maker"), "id") }
@@ -1040,56 +1038,87 @@ fn triple_body(
     if !all {
       // (the way to all of them under them)
       let room = c.box(style=triple_room, h?=level_h, justify?=level_ends, fn() {
-        // (each row of the first level moves to its place as one used most is taken out and the next of them comes
-        // in its place, the one taken out leaving where it was: the user, 2026-11-13, 「去掉后要有补位，还要有动效」)
-        let moving = fn(key : String, body : () -> Unit) {
-          let b = c.box(style=triple_moving, body)
-          @motion.layout(c, b, key, by=combos_by)
-          b
-        }
+        // (each row of the first level by its key, as the library's group draws them (@sf.group_rows): one taken out of
+        // those used most leaves where it was (triple_combos_drawn), then its room closes as the next of them opens its
+        // own where it comes, what is over and under them going with their rooms, the panel's edge too: the user,
+        // 2026-11-13, 「去掉后要有补位，还要有动效」. Its room given back at once as it had left, a panel opened up from its
+        // control was that much shorter at its top in one frame, what was over it drawn from where it had been, past
+        // that top, on its way down)
+        let first_rows : Array[(String, () -> Unit)] = []
         let rows = fn(of_them : Array[Json]) {
           for o in of_them {
-            moving("triple/first/model/" + text(Some(o), "model"), fn() {
-              triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
-            })
-            |> ignore
+            first_rows.push(
+              ("model/" + text(Some(o), "model"), fn() { triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close) }),
+            )
           }
         }
         // (its groups one after another, room between two that both hold something)
-        let groups : Array[(Bool, () -> Unit)] = [
+        let groups : Array[(String, Bool, () -> Unit)] = [
           (
+            "combos",
             !combos_drawn.is_empty(),
             fn() {
-              moving("triple/first/combos", fn() { triple_column_head(c, @sf.t("web-main.combos.label")) }) |> ignore
-              let combos_turned = if up { combos_drawn.rev() } else { combos_drawn }
-              for d in combos_turned {
+              first_rows.push(("combos", fn() { triple_column_head(c, @sf.t("web-main.combos.label")) }))
+              for d in (if up { combos_drawn.rev() } else { combos_drawn }) {
                 let (x, look, leaving) = d
-                let b = moving("triple/first/" + triple_combo_key(Some(x)), fn() {
-                  triple_combo_row(c, src, station, of, v, Some(x), model_of(Json::string(text(Some(x), "model"))), names_w, saved, close)
-                })
-                // (coming or going by its own motion; going, only drawn: what is pressed there is what is under it)
-                match look {
-                  Some(l) => c.look(b, l)
-                  None => ()
-                }
-                @motion.leaving(c, b, !leaving)
+                first_rows.push(
+                  (
+                    triple_combo_key(Some(x)),
+                    fn() {
+                      let b = c.box(style=triple_moving, fn() {
+                        triple_combo_row(c, src, station, of, v, Some(x), model_of(Json::string(text(Some(x), "model"))), names_w, saved, close)
+                      })
+                      // (coming or going by its own motion; going, only drawn: what is pressed there is what is under it)
+                      match look {
+                        Some(l) => c.look(b, l)
+                        None => ()
+                      }
+                      @motion.leaving(c, b, !leaving)
+                    },
+                  ),
+                )
               }
             },
           ),
-          (!starred.is_empty(), fn() { rows(starred) }),
-          (!others.is_empty(), fn() { rows(others) }),
+          ("starred", !starred.is_empty(), fn() { rows(starred) }),
+          ("others", !others.is_empty(), fn() { rows(others) }),
         ]
-        let shown = groups.filter(fn(g) { g.0 })
-        scroll("triple/first", if flat { list_most } else { list_most - row_h }, fn() {
-          // (the configurations used most nearest what opened the panel, the starred past them, the rest of a few past
-          // those)
-          let shown_turned = if up { shown.rev() } else { shown }
-          for i, g in shown_turned {
-            if i > 0 {
-              moving("triple/first/apart/" + i.to_string(), fn() { c.box(style=triple_apart, fn() {  }) |> ignore }) |> ignore
-            }
-            (g.1)()
+        let shown = groups.filter(fn(g) { g.1 })
+        // (the configurations used most nearest what opened the panel, the starred past them, the rest of a few past
+        // those; the room between two by the two it is between, whichever way the panel opened)
+        let shown_turned = if up { shown.rev() } else { shown }
+        for i, g in shown_turned {
+          if i > 0 {
+            let (a, b) = if up { (g.0, shown_turned[i - 1].0) } else { (shown_turned[i - 1].0, g.0) }
+            first_rows.push(("apart/" + a + "/" + b, fn() { c.box(style=triple_apart, fn() {  }) |> ignore }))
           }
+          (g.2)()
+        }
+        scroll("triple/first", if flat { list_most } else { list_most - row_h }, fn() {
+          // (each with the room between it and the next in its own, so that room opens and closes with it: on its side
+          // towards the panel's far end from what opened it, the row there, a model's, none past it; the panel's own rows
+          // by the panel, its bones as they are)
+          c.box(style=triple_first_rows, fn() {
+            let far = if up { 0 } else { first_rows.length() - 1 }
+            let each = first_rows.mapi(fn(i, r) {
+              let style = if i == far {
+                triple_first_rows
+              } else if up {
+                triple_first_row_up
+              } else {
+                triple_first_row
+              }
+              (r.0, fn() { c.box(style~, r.1) |> ignore })
+            })
+            if v is Some(_) && !c.in_bones() {
+              @sf.group_rows(c, triple_first_group(contents), each)
+            } else {
+              for r in each {
+                (r.1)()
+              }
+            }
+          })
+          |> ignore
         })
         if !flat {
           to_all()
@@ -1656,10 +1685,17 @@ fn triple_combo_key(x : Json?) -> String {
 }
 
 ///|
+/// The key of the group the first level of `contents` draws its rows by (@sf.group_rows): its panel's own, never one
+/// still closing as another opens.
+fn triple_first_group(contents : TriplePanel) -> String {
+  "triple/first/" + contents.serial.to_string()
+}
+
+///|
 /// The configurations used most as the first level of `contents` draws them, of those the core says now (`now`), each
 /// with how it comes or goes (its look; None, still) and whether it is leaving. One taken out stays where it was while
 /// it leaves (@sf.leave), only drawn; the core's next of them comes in its place once it has gone, as what was over
-/// it moves down into its room (they move by `@motion.layout`), coming in after them (triple_combo_in) so as never to
+/// it moves down into its room (as its room closes: @sf.group_rows), coming in after them (triple_combo_in) so as never to
 /// be drawn over one still on its way. `keep`: what it draws is the core's (not a page's bones), kept for what follows.
 fn triple_combos_drawn(c : @ui.Ctx, contents : TriplePanel, now : Array[Json], keep : Bool) -> Array[(Json, @ui.Look?, Bool)] {
   if !keep {
@@ -1720,7 +1756,8 @@ fn triple_combos_drawn(c : @ui.Ctx, contents : TriplePanel, now : Array[Json], k
 
 ///|
 /// How the next of the configurations used most comes into the room of one taken out: faded in as what was over that
-/// one has come most of its way down into its room (@motion.row_spring's), so never drawn over it.
+/// one has come most of its way down into its room (a Move as long as the room is tall: @sf.group_rows), so never drawn
+/// over it.
 // kept across runs: a value (no field of it changes)
 let triple_combo_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(@sf.enter_ms, ease=Out, delay=triple_combo_in_after))
 
@@ -2328,9 +2365,25 @@ pub let triple_models_least : Double = 200.0
 let triple_rows : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
-/// A row of the first level as it moves to its place (triple_body's `moving`): as wide as the rows.
+/// A configuration used most in the first level, coming or going by its own motion (triple_body's): as wide as the rows.
 // kept across runs: a value (no field of it changes)
 let triple_moving : @ui.Style = @ui.css("w=Full")
+
+///|
+/// The first level's rows (triple_body's), one after another, the room between them each one's own (triple_first_row).
+// kept across runs: a value (no field of it changes)
+let triple_first_rows : @ui.Style = @ui.css("w=Full")
+
+///|
+/// A row of the first level with the room under it (as far as triple_rows' rows are apart), its room opening and
+/// closing with it (@sf.group_rows).
+// kept across runs: a value (no field of it changes)
+let triple_first_row : @ui.Style = @ui.css("w=Full pb=SPx")
+
+///|
+/// A row of the first level of a panel opened up from what opened it, with that room over it (triple_first_row).
+// kept across runs: a value (no field of it changes)
+let triple_first_row_up : @ui.Style = @ui.css("w=Full pt=SPx")
 
 ///|
 /// A row's ground, concentric with its small panel as a menu's row is (panel_in): a capsule 34 high, a taller row (an
