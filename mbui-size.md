@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c37772e3c](https://github.com/AFK-surf/monoid/commit/c37772e3cefad21d723c7cfd59687dd9054dfb9d) core: a moved workspace's vaults go by the state i | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.6 | 94.14 | 105.45 |
 | [f467b2e01](https://github.com/AFK-surf/monoid/commit/f467b2e018cdbef1c131750017f2a43e84feaa00) mbui: a shared end that stays where it is, flown f | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.58 | 94.36 | 100.06 |
 | [ecfd590f0](https://github.com/AFK-surf/monoid/commit/ecfd590f0ba23a7cfa692ff019a0a30e2195bfb1) fix(mbui): offset slotted viewer flight from its p | 1.96 | 2.63 | 11.32 | 30.82 | 40.64 | 27.47 | 52.52 | 94.21 | 99.86 |
 | [39aff985b](https://github.com/AFK-surf/monoid/commit/39aff985bb774f458a8cfbe31c1fc0d7f82e7159) mbui app: quote_image's and downloads' tests walk  | 1.96 | 2.63 | 11.31 | 30.82 | 40.62 | 27.46 | 52.5 | 94.14 | 102.09 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [89ca87552](https://github.com/AFK-surf/monoid/commit/89ca87552673e44bc44a0d13fa4ef991320d3fd4) rules: a person's log takes web devices and a work | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.52 | 181.81 |
 | [de090a12f](https://github.com/AFK-surf/monoid/commit/de090a12f616c06e10a31e0e4e0435a3345f1433) mbui, app: open and sink touch sheets at the scree | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.65 | 149.69 |
 | [ff43bba2a](https://github.com/AFK-surf/monoid/commit/ff43bba2a4749541fecaeb70856a92354a7c04e3) core: a device's entries that lost their place tog | 1.93 | 2.59 | 11.15 | 30.55 | 39.98 | 27.22 | 51.98 | 93.32 | 134.14 |
-| [7ffd403c3](https://github.com/AFK-surf/monoid/commit/7ffd403c3f540c8f52a1752c4a82e798c6920685) mbui: what is let go from outside lands on the nod | 1.93 | 2.59 | 11.15 | 30.55 | 39.98 | 27.21 | 51.98 | 93.31 | 170.61 |
