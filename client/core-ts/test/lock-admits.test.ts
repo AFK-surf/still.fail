@@ -520,7 +520,7 @@ async function asking(own: "on" | "none" | "other") {
   const w = await setUp({ root: "alice", mine: "none", own });
   const ALICE_APP = key(6101).hex;
   hooks.lockRefused?.(w.inner, "ws", A, null, { left: { approvers: [ALICE_APP] } });
-  w.inner.mesh = () => Effect.succeed({ deviceId: () => ME, lockClaim: () => null, link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
+  w.inner.mesh = () => Effect.succeed({ deviceId: () => ME, sign: () => ({ publicKey: new Uint8Array(32), signature: new Uint8Array(64) }), link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
   w.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   const hellos: { workspaces?: { ws: string }[]; log?: Entry[]; personal?: unknown }[] = [];
   const dialled: string[] = [];

@@ -251,6 +251,17 @@ another; the accounts' list's merge across stations and its refills.
   their workspaces), and a person's lock begun anew, are still the cloud's to take; what was pending is brought there
   then (2026-11-13: a lock whose one station retired could never be changed again).
 
+## The base stands apart
+
+The device's mesh (`src/mesh.ts`: its iroh endpoints, the ways to a peer and the choice among them, links, the streams'
+framing) and what runs a client (the host, the runtime, errors, traces, wakes, the scheduler) are the core's base:
+another program is built on it without still.fail's business (the owner, 2026-11-14), so a base file imports only base
+files and packages, as types too. `scripts/base.ts` holds it: its `BASE` names the files, its `STILL` what they still
+import of the rest, which only falls (a base file's own imports only: what a file named there imports in turn is not
+held until its entry goes). What the still.fail core does with the mesh (a station's requests on its links, the
+cloud's credentials and the lock's claim said with them, a lock's refusals, what an app's endpoint takes) is
+`src/station/mesh-wire.ts`, given to the mesh as its `MeshEnv` and a `CredentialSource`, never imported by it.
+
 ## Contracts made from here
 
 - `src/ops.ts` `PARAMS` declares each operation's parameters; `scripts/operations.ts` writes the UIs' bindings from

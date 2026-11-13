@@ -12,7 +12,7 @@ import { hooks } from "../src/core/execute.ts";
 import type { Inner } from "../src/core.ts";
 import { type CoreError, HostError } from "../src/error.ts";
 import { type Entry, type Head, entryHash, next, signedBytes } from "../src/lock.ts";
-import { LockUnconfirmed } from "../src/mesh.ts";
+import { LockUnconfirmed } from "../src/station/mesh-wire.ts";
 import type { StationAddr } from "../src/station/addr.ts";
 import { RECONNECT_MS } from "../src/station/link.ts";
 import { HostWire, type RequestHead, type StationWire, type WireReply } from "../src/station/wire.ts";

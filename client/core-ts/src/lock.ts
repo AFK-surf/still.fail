@@ -59,6 +59,15 @@ export function lockClaim(secret: Uint8Array, ws: string, endpoint: string, host
   return { device: hex(ed25519.getPublicKey(secret)), proof: hex(ed25519.sign(message, secret)) };
 }
 
+/// What signs with a device's base key and gives that key's public half: the mesh (mesh.ts `Mesh.sign`).
+export type DeviceSigns = { sign(message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } };
+
+/// The device's claim for an endpoint (`lockClaim`), signed by what holds its base key.
+export function claimBy(device: DeviceSigns, ws: string, endpoint: string): LockClaim {
+  const signed = device.sign(endpointBytes(ws, endpoint));
+  return { device: hex(signed.publicKey), proof: hex(signed.signature) };
+}
+
 /// This app's signing key (`lock-signer`): an Ed25519 seed kept by the app, apart from the device key. Only an app keeps
 /// one (`Host.appKeys`): a web page's code is still.fail cloud's, so what it keeps signs nothing. A host that seals
 /// values (`Host.secureSet`) keeps it so, read without asking the person (`user: false`); one kept as a plain file by

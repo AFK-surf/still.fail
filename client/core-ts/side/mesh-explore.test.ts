@@ -12,9 +12,9 @@ import assert from "node:assert/strict";
 import { randomInt } from "node:crypto";
 import { test } from "node:test";
 import { Effect } from "effect";
-import type { Credential } from "../src/cloud.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, cost, EXPLORE_MS, Mesh, MeshWire, MOVE_GAIN, type CredentialSource } from "../src/mesh.ts";
+import { ALPN, cost, EXPLORE_MS, Mesh, MOVE_GAIN, type CredentialSource } from "../src/mesh.ts";
+import { MeshWire } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -35,7 +35,7 @@ const RECOVER_MS = 2 * 60_000;
 /// quicker), and the jitter of pinging (up to 3 ms each way of a round trip, a few of them).
 const slowest = (best: number) => best / (1 - MOVE_GAIN) + 12;
 
-const grants: CredentialSource = () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential);
+const grants: CredentialSource = () => Effect.succeed({ credential: "ok", also: null });
 
 function leg(rng: Rng, fast: boolean): Leg {
   const ms = rng.int(0, 150);

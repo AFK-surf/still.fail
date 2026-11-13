@@ -66,7 +66,7 @@ async function setUp(o: { named?: boolean; web?: boolean; waiting?: boolean } = 
   stationReplies(r.host, (req) => (req.url.endsWith("/v1/me/personal-lock") ? (req.method === "GET" ? { entries: [] } : { ok: true }) : r.cloud.reply(req)));
   r.cloud.chains.set("ws", [first, moved] as unknown as Entry[]);
   const inner = r.core.inner;
-  inner.mesh = () => Effect.succeed({ deviceId: () => base.hex, lockClaim: () => null, link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
+  inner.mesh = () => Effect.succeed({ deviceId: () => base.hex, sign: () => ({ publicKey: new Uint8Array(32), signature: new Uint8Array(64) }), link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
   inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   // Station A: the station's own code, the chain pinned and moved, the logs and bodies its members' devices gave it.
   const data = mkdtempSync(join(tmpdir(), "lock-left-out-"));
@@ -81,7 +81,7 @@ async function setUp(o: { named?: boolean; web?: boolean; waiting?: boolean } = 
   /// What the station does to each of its asks: `lie`, a device its refusals name to ask in place of those it would.
   const st = { lie: null as string | null, refusals: [] as J[], admitted: 0 };
   /// The link's hello to A, as the station answers it: null where it lets this device in; else its refusal, told the
-  /// core as the mesh tells it (mesh.ts `refusedFor`).
+  /// core as the mesh wire tells it (station/mesh-wire.ts `refusedFor`).
   const hello = (): CoreError | null => {
     const own = inner.adb.personal().entries("s1");
     const said = { lock: { device: base.hex, proof: viewer.lockDevice.proof, ...(own.length > 0 ? { person: own } : {}) } };

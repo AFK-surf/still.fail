@@ -319,7 +319,7 @@ class Lend {
       const [mesh, link] = opened.success;
       // `connect`: the station connects anew as adbd's port changes (adbd turned off and on, its port with it).
       const ask = { op: "share", phone: mesh.deviceId(), device: offer.device, android: offer.android, package: offer.package, adbd: offer.connect !== null, pair: offer.pair !== null && this.#env.host.adb === undefined, connect: offer.connect };
-      const replied = yield* Effect.result(link.adb(head(), ask));
+      const replied = yield* Effect.result(link.ask(head(), { adb: ask }));
       if (replied._tag === "Failure") return { lost: replied.failure.message, pause: true } as Ended;
       const reply = replied.success;
       // Dropped with the offer: the station sees it stop.
@@ -507,7 +507,7 @@ class Lend {
   askAt(station: string, ask: J): Effect.Effect<unknown, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const [mesh, link] = yield* this.#link(station);
-      const reply = yield* link.adb(head(), { ...ask, phone: mesh.deviceId() });
+      const reply = yield* link.ask(head(), { adb: { ...ask, phone: mesh.deviceId() } });
       const parts: Uint8Array[] = [];
       for (;;) {
         const chunk = yield* Effect.mapError(reply.body.take, (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.cut")));

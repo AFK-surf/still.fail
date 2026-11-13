@@ -8,6 +8,7 @@ import { Cloud } from "../src/cloud.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh, type CredentialSource } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
+import { presented } from "../src/station/mesh-wire.ts";
 import { Status } from "../src/status.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
@@ -43,7 +44,7 @@ for (const seed of [1, 2, 3, 4]) {
         if (asks === 1) return new Promise(() => {});
         return jsonResponse(200, { credential: "ok-review", issued_at: time.now() / 1000, expires_at: time.now() / 1000 + 86_400, relay_url: relay });
       });
-      const credentials: CredentialSource = (device) => cloud.credential("review", "review-workspace", device);
+      const credentials: CredentialSource = (device) => Effect.map(cloud.credential("review", "review-workspace", device), presented);
       const make = async () => {
         const mesh = await run(Mesh.make({ host: waking, runner, tracer, iroh: net.iroh(), wakes }, [relay]));
         meshes.push(mesh);

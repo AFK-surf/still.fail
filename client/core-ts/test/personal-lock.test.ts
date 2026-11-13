@@ -393,7 +393,7 @@ function phone(env: Partial<ConstructorParameters<typeof Adb>[0]>) {
   const host = new FakeHost();
   const runner = new Runner(host.time.clock);
   const store = new Store(host, runner);
-  const link = { adb: () => Effect.succeed({ status: 200, body: { take: Effect.succeed(null) } }) };
+  const link = { ask: () => Effect.succeed({ status: 200, body: { take: Effect.succeed(null) } }) };
   const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
   const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => true, ...env });
   return { host, runner, adb };
@@ -469,7 +469,7 @@ test("grants from before signatures are signed at one go, the person asked once,
   };
   const old = (id: string, chat: string) => ({ id, session: `s-${id}`, chat, scope: "hour", status: "granted", exp: 4_000_000_000, at: 1 });
   const link = {
-    adb: (_h: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+    ask: (_h: unknown, { adb: ask }: { adb: Record<string, unknown> }) => Effect.sync(() => {
       said.push(ask);
       if (ask.op === "grants") return answer({ grants: [old("g1", "c1"), old("g2", "c2")], signs: true });
       return answer({ request: { ...old(ask.request as string, ask.request === "g1" ? "c1" : "c2"), signed: ask.signed } });

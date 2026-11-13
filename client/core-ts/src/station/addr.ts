@@ -27,8 +27,5 @@ export class StationAddr {
   }
 }
 
-/// A station's id in its address.
-export function stationId(address: string): string {
-  const at = address.lastIndexOf("/");
-  return at >= 0 ? address.slice(at + 1) : address;
-}
+/// A station's id in its address: the mesh's, the endpoint a link to that address is dialled to.
+export { endpointId as stationId } from "../mesh.ts";
