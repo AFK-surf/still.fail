@@ -148,34 +148,12 @@ fn bar_trailing_width(held : @view.View, agents : Array[Agent], station : Statio
 }
 
 ///|
-fn bar_est_mid_width(bar_w : Double, read : Bool, archivable : Bool, has_jobs : Bool) -> Double {
-  let end_count = if !read {
-    0
-  } else {
-    2 + (if archivable { 1 } else { 0 }) + (if has_jobs { 1 } else { 0 })
-  }
-  let end_w = end_count.to_double() * (nav_key_side + bar_keys_apart())
-  dmax(0.0, bar_w - 4.0 - 40.0 - 16.0 - end_w)
-}
-
-///|
 /// Chat `r`'s bar (chat_bar_node) in `b`.
 fn chat_bar_of(b : @view.View, src : Source, r : ChatRef, stint : () -> Int) -> Unit {
   let state = chat_bar_state(r)
   let mid_w_sig : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
   let view = fn() { view_of_chat(src, r).0 }
   let read = fn() { view() is Some(_) }
-  let jobs = fn() { src.topic("chatJobs", chat_jobs_summary_params(r)).get().value }
-  let has_jobs = fn() {
-    let j = jobs()
-    flag(j, "hasJobs") || items(j, "jobs").length() > 0
-  }
-  let archivable = fn() {
-    match view() {
-      Some(v) => v.archivable && !v.archived
-      None => false
-    }
-  }
   let title_now = fn() {
     match view() {
       Some(v) => v.title
@@ -189,36 +167,21 @@ fn chat_bar_of(b : @view.View, src : Source, r : ChatRef, stint : () -> Int) -> 
     }
     station_marks(src, w).iter().find_first(fn(s) { s.address == r.station })
   }
-  b.by_room(fn(held, room) {
-    let bar_w = fn() {
-      let w = room.width()
-      if w > 0.0 {
-        w
-      } else {
-        held.window().0
+  b.box(fn(g) {
+    let metrics = fn() {
+      let mid_w = mid_w_sig.get()
+      if !read() || mid_w <= 0.0 {
+        return (false, false)
       }
-    }
-    let avail_no_people = fn() {
+      let th = @sf.theme()
+      let sp = @sf.node_sp(g, th.t.title)
+      let title_w = @sf.node_words_w(title_now(), sp, weight=600)
+      let three_w = dmax(44.0, @sf.node_words_w("一二三…", sp, weight=600))
       let agents = match view() {
         Some(v) => v.agents
         None => []
       }
-      let mid_w = {
-        let m = mid_w_sig.get()
-        if m > 0.0 {
-          m
-        } else {
-          bar_est_mid_width(bar_w(), read(), archivable(), has_jobs())
-        }
-      }
-      dmax(0.0, mid_w - 16.0 - bar_trailing_width(held, agents, station_now()))
-    }
-    let metrics = fn() {
-      let th = @sf.theme()
-      let sp = @sf.node_sp(held, th.t.title)
-      let title_w = @sf.node_words_w(title_now(), sp, weight=600)
-      let three_w = dmax(44.0, @sf.node_words_w("一二三…", sp, weight=600))
-      let avail = avail_no_people()
+      let avail = dmax(0.0, mid_w - 16.0 - bar_trailing_width(g, agents, station_now()))
       let overflows = title_w > avail
       let must_expand = overflows && avail < three_w
       let can_toggle = overflows && !must_expand
@@ -229,121 +192,109 @@ fn chat_bar_of(b : @view.View, src : Source, r : ChatRef, stint : () -> Int) -> 
       let (must, can) = metrics()
       must || (can && state.manual_expanded.get())
     }
-    if !state.settled_initial && @signals.untracked(expanded) {
-      state.open_way.put(1.0)
-    }
-    held.box(fn(g) {
-      // (frosted over the messages once they are read, as chat_bar's glass; on the page's ground till then)
-      g.glass(By(fn() { if read() { Some(@sf.glass_bar()) } else { None } })) |> ignore
-      g.reacts(can_toggle, fn(ok) {
-        if !ok && state.manual_expanded.get() {
-          state.manual_expanded.set(false)
+    // (frosted over the messages once they are read, as chat_bar's glass; on the page's ground till then)
+    g.glass(By(fn() { if read() { Some(@sf.glass_bar()) } else { None } })) |> ignore
+    g.reacts(can_toggle, fn(ok) {
+      if !ok && state.manual_expanded.get() {
+        state.manual_expanded.set(false)
+      }
+    })
+    g.box(fn(row) {
+      row
+      .row(Is(true))
+      .padding(By(fn() { (4.0, status_top_now(row.window().0), 16.0, 0.0) }))
+      .min_height(By(fn() { Some(status_top_now(row.window().0) + bar_h) }))
+      .lines_up(Is(Some(Middle)))
+      |> ignore
+      // back (Chat.kt BarFrame: 40 round, its chevron 22 in the accent's ink)
+      @sf.round_key_node(
+        row,
+        "chevron-left",
+        fn() { tr("common.back") },
+        fn() { @sfbase.go_back() |> ignore },
+        side=40.0,
+        icon_size=22.0,
+        ink=fn() { @sf.theme().p.accent_text },
+      )
+      // the title and what follows it, in one row
+      bar_middle_node(row, src, r, view, stint, state, expanded, can_toggle, mid_w_sig)
+      row.show(read, fn(end) { bar_end_node(end, src, r, view) })
+    })
+    |> ignore
+    g.box(fn(row2_room) {
+      let p = fn() { state.open_way.shown(row2_room) }
+      row2_room
+      .opens(
+        By(fn() {
+          let v = p()
+          if v >= 1.0 && expanded() {
+            None
+          } else {
+            Some(bar_clamp01(v))
+          }
+        }),
+        from_foot=true,
+      )
+      .clips(By(fn() { p() < 1.0 }))
+      .laid_nowhere(By(fn() { !expanded() && p() <= 0.0 }))
+      |> ignore
+      row2_room.reacts(fn() { (mid_w_sig.get() > 0.0, expanded(), state.row2_h.get()) }, fn(cur) {
+        if cur.0 && !state.settled_initial {
+          state.settled_initial = true
+          state.open_way.put(if cur.1 { 1.0 } else { 0.0 })
+          state.extra_target.set(if cur.1 { cur.2 } else { 0.0 })
+        } else if state.settled_initial {
+          if cur.1 != (state.open_way.target() >= 0.5) {
+            state.open_way.go(
+              row2_room,
+              if cur.1 { 1.0 } else { 0.0 },
+              if cur.1 { chat_bar_expand_ms } else { chat_bar_collapse_ms },
+            )
+          }
+          let target_h = if cur.1 { cur.2 } else { 0.0 }
+          if state.extra_target.get() != target_h {
+            state.extra_target.set(target_h)
+          }
         }
       })
-      g.box(fn(row) {
-        row
-        .row(Is(true))
-        .width(By(fn() { Some(bar_w()) }))
-        .padding(By(fn() { (4.0, status_top_now(row.window().0), 16.0, 0.0) }))
-        .min_height(By(fn() { Some(status_top_now(row.window().0) + bar_h) }))
-        .lines_up(Is(Some(Middle)))
-        |> ignore
-        // back (Chat.kt BarFrame: 40 round, its chevron 22 in the accent's ink)
-        @sf.round_key_node(
-          row,
-          "chevron-left",
-          fn() { tr("common.back") },
-          fn() { @sfbase.go_back() |> ignore },
-          side=40.0,
-          icon_size=22.0,
-          ink=fn() { @sf.theme().p.accent_text },
-        )
-        // the title and what follows it, in one row
-        bar_middle_node(row, src, r, view, stint, state, expanded, can_toggle, mid_w_sig)
-        row.show(read, fn(end) { bar_end_node(end, src, r, view) })
-      })
-      |> ignore
-      g.box(fn(row2_room) {
-        let p = fn() { state.open_way.shown(row2_room) }
-        row2_room
-        .width(By(fn() { Some(bar_w()) }))
-        .opens(
-          By(fn() {
-            let v = p()
-            if v >= 1.0 && expanded() {
-              None
-            } else {
-              Some(bar_clamp01(v))
-            }
-          }),
-          from_foot=true,
-        )
-        .clips(By(fn() { p() < 1.0 }))
-        .laid_nowhere(By(fn() { !expanded() && p() <= 0.0 }))
-        |> ignore
-        row2_room.reacts(fn() { (mid_w_sig.get() > 0.0, expanded(), state.row2_h.get()) }, fn(cur) {
-          if cur.0 && !state.settled_initial {
-            state.settled_initial = true
-            state.open_way.put(if cur.1 { 1.0 } else { 0.0 })
-            state.extra_target.set(if cur.1 { cur.2 } else { 0.0 })
-          } else if state.settled_initial {
-            if cur.1 != (state.open_way.target() >= 0.5) {
-              state.open_way.go(
-                row2_room,
-                if cur.1 { 1.0 } else { 0.0 },
-                if cur.1 { chat_bar_expand_ms } else { chat_bar_collapse_ms },
-              )
-            }
-            let target_h = if cur.1 { cur.2 } else { 0.0 }
-            if state.extra_target.get() != target_h {
-              state.extra_target.set(target_h)
-            }
-          }
-        })
-        row2_room.box(fn(row2_pad) {
-          row2_pad
-          .width(By(fn() { Some(bar_w()) }))
-          .padding(Is((0.0, 8.0, 0.0, 0.0)))
+      row2_room.box(fn(row2_pad) {
+        row2_pad.padding(Is((0.0, 8.0, 0.0, 0.0))) |> ignore
+        row2_pad.box(fn(row2_box) {
+          let hp = fn() { state.open_way.shown(row2_box) }
+          @sf.presses_node(
+            row2_box,
+            fn() {
+              if expanded() && can_toggle() && hp() >= 1.0 {
+                state.manual_expanded.set(false)
+              }
+            },
+            on=fn() { expanded() && can_toggle() && hp() >= 1.0 },
+          )
+          row2_box
+          .row(Is(true))
+          .min_height(By(fn() { if can_toggle() { Some(44.0) } else { None } }))
+          .padding(Is((16.0, 0.0, 16.0, 8.0)))
+          .lines_up(Is(Some(Middle)))
+          .alpha(By(fn() { bar_clamp01((hp() - 0.15) / 0.85) }))
           |> ignore
-          row2_pad.box(fn(row2_box) {
-            let hp = fn() { state.open_way.shown(row2_box) }
-            @sf.presses_node(
-              row2_box,
-              fn() {
-                if expanded() && can_toggle() && hp() >= 1.0 {
-                  state.manual_expanded.set(false)
-                }
-              },
-              on=fn() { expanded() && can_toggle() && hp() >= 1.0 },
-            )
-            row2_box
-            .row(Is(true))
-            .width(By(fn() { Some(bar_w()) }))
-            .min_height(By(fn() { if can_toggle() { Some(44.0) } else { None } }))
-            .padding(Is((16.0, 0.0, 16.0, 8.0)))
-            .lines_up(Is(Some(Middle)))
-            .alpha(By(fn() { bar_clamp01((hp() - 0.15) / 0.85) }))
-            |> ignore
-            row2_box.by_room(fn(p2, rr2) {
-              p2.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-              let t2 = p2.box(fn(t2) {
-                t2
-                .words(By(title_now))
-                .words_look(By(fn() {
-                  let th = @sf.theme()
-                  { size: th.t.title, weight: 600, line: chat_title_line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
-                }))
-                .ink(By(fn() { @sf.theme().p.text }))
-                |> ignore
-              })
-              p2.reacts(fn() { (rr2.tall(t2), can_toggle()) }, fn(cur) {
-                if cur.0 > 0.0 && (expanded() || state.row2_h.get() <= 0.0) {
-                  let box_h = if cur.1 { dmax(44.0, cur.0 + 8.0) } else { cur.0 + 8.0 }
-                  state.row2_h.set(8.0 + box_h)
-                }
-              })
+          row2_box.by_room(fn(p2, rr2) {
+            p2.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+            let t2 = p2.box(fn(t2) {
+              t2
+              .words(By(title_now))
+              .words_look(By(fn() {
+                let th = @sf.theme()
+                { size: th.t.title, weight: 600, line: chat_title_line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
+              }))
+              .ink(By(fn() { @sf.theme().p.text }))
+              |> ignore
             })
-            |> ignore
+            p2.reacts(fn() { (rr2.tall(t2), can_toggle()) }, fn(cur) {
+              if cur.0 > 0.0 && (expanded() || state.row2_h.get() <= 0.0) {
+                let box_h = if cur.1 { dmax(44.0, cur.0 + 8.0) } else { cur.0 + 8.0 }
+                state.row2_h.set(8.0 + box_h)
+              }
+            })
           })
           |> ignore
         })
@@ -424,7 +375,7 @@ fn bar_middle_node(
       .fits(Is(true))
       |> ignore
       mid.reacts(fn() { mid_room.width() }, fn(w) {
-        if w > 0.0 && mid_w_sig.get() != w {
+        if marks.shown is Some(_) && w > 0.0 && mid_w_sig.get() != w {
           mid_w_sig.set(w)
         }
       })
