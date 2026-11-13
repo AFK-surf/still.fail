@@ -55,6 +55,9 @@ pub fn local_station_node(
   )
 }
 
+///|
+/// 添加这台 Mac in the card's foot corner while `adds` (it asks the cloud for this workspace's token and runs the
+/// installer with it, how far shown on this page).
 fn local_add_foot_node(
   k : @view.View,
   core : Core,

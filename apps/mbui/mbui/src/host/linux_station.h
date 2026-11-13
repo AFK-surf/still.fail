@@ -111,7 +111,10 @@ moonbit_string_t mb_host_local_station(void) {
     for (int i = 0; i < 3; i++)
       if (*jtext(&cloud, keys[i][0])) local_field(o, keys[i][1], jtext(&cloud, keys[i][0]));
     const jv *removed = jget(&cloud, "removed_at");
-    g_string_append_printf(o, ",\"removed\":%s}", removed && removed->kind != 'z' ? "true" : "false");
+    g_string_append_printf(o, ",\"removed\":%s", removed && removed->kind != 'z' ? "true" : "false");
+    // a machine that only runs tasks (enroll --rig): in that one workspace, never enrolled as a station beside it
+    const jv *rig = jget(&cloud, "rig");
+    g_string_append(o, rig && rig->kind == 'o' ? ",\"rig\":true}" : "}");
   }
   jv_free(&cloud);
   g_mutex_lock(&local_lock);

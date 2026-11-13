@@ -3,10 +3,12 @@
 // the app opens; on which systems: settings' local_station_managed). Still.fail's desktop app ran one it carried
 // (apps/desktop/src/station.ts); this app runs the station's own installer (mac_app.m, win_station.h, linux_station.h
 // local_station_act), which makes it a service (launchd's, a scheduled task, a systemd user service):
-// - 添加这台 Mac, none here: a one-time token for the workspace (`workspace.enroll`, which the cloud gives only its owner
-//   and admins) and the installer run with it (`install`): downloaded, joined, run as a service; in safe mode with the
-//   workspace lock's hash the answer carries too (`lock`, as 添加 station's command has it), which the station pins
-//   rather than take the cloud's word for who is let in;
+// - 添加这台 Mac, none here or one not in this workspace: a one-time token for the workspace (`workspace.enroll`, which
+//   the cloud gives only its owner and admins) and the installer run with it (`install`): downloaded, joined (a
+//   station in a workspace already joins this one beside it, one removed from its own is enrolled again), run as a
+//   service; in safe mode with the workspace lock's hash the answer carries too (`lock`, as 添加 station's command has
+//   it), which the station pins rather than take the cloud's word for who is let in (one up and among `joinable` is
+//   joined over the mesh instead: settings/local_station.mbt);
 // - 更新到最新版: the installer run without a token (`update`): the station here brought up to the latest release and
 //   run as a service as it is (one still.fail's desktop app ran, with none, becomes one), in the workspaces it is in.
 // How far it is goes on 本机 Station's page as it runs (settings/local_station.mbt).

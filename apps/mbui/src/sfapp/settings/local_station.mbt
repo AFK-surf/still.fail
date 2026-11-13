@@ -10,13 +10,19 @@ pub fn local_station_managed() -> Bool {
   p == 0 || p == 3 || p == 5
 }
 
+///|
+/// What the host says of this machine's station (@ui.local_station), read as it is now.
 fn local_station_json() -> Json? {
   Some(@json.parse(@ui.local_station()) catch { _ => Json::null() })
 }
 
 ///|
 /// Whether this machine can be added to `workspace` (whose stations already present are `known`): the app manages its
-/// local station, nothing is running on it yet, and this machine is not already in `workspace` (nor attached to it).
+/// station, the installer is not at work on it, and it is not in `workspace` already. Its data being there is no
+/// reason not to (the installer joins a station already in a workspace to this one beside it, `enroll --stay`, and
+/// enrolls one removed from its own again). Not where it is in `workspace`: its home there (not removed), or listed
+/// among `known`, as one joined to it is whatever its home says (a station is one id in every workspace it is in). Not
+/// a machine that only runs tasks (a rig, `rig`): it is in one workspace, and enrolling it as a station is refused.
 pub fn local_station_addable_in(workspace : String, known : Array[String]) -> Bool {
   if !local_station_managed() {
     return false
@@ -26,14 +32,15 @@ pub fn local_station_addable_in(workspace : String, known : Array[String]) -> Bo
     return false
   }
   let ws = field(s, "workspace")
-  if ws is Some(Object(_)) && !flag(ws, "removed") {
-    let id = text(ws, "id")
-    let st = text(ws, "station")
-    if (id != "" && id == workspace) || (st != "" && known.contains(st)) {
-      return false
-    }
+  guard ws is Some(Object(_)) else { return true }
+  let st = text(ws, "station")
+  if st != "" && known.contains(st) {
+    return false
   }
-  true
+  if flag(ws, "removed") {
+    return true
+  }
+  text(ws, "id") != workspace && !flag(ws, "rig")
 }
 
 ///|
@@ -64,7 +71,11 @@ fn local_joinable_item(core : Core, here : Here) -> Json? {
 }
 
 ///|
-/// Returns `(join_station_address, needs_lock, lock_reason)` for adding this machine to `here.workspace`.
+/// Returns `(join_station_address, needs_lock, lock_reason)` for adding this machine to `here.workspace`. Joined over
+/// the mesh only where it is up and among `joinable` (the viewer manages a workspace it is in); else the installer
+/// runs, which joins it on this machine. Whether its home in safe mode keeps it out of a workspace not in it is known
+/// only from `joinable` too (the host cannot tell a lock turned off from one on): where the viewer manages none of its
+/// workspaces, the installer is run, and fails as the station refuses, said on 本机 Station.
 fn local_here_join_state(core : Core, here : Here) -> (String?, Bool, String) {
   let s = local_station_json()
   let running = text(s, "runner") != "none"
