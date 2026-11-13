@@ -807,6 +807,13 @@ fn row_side(w : Double) -> Double {
 }
 
 ///|
+/// How far in from a chat's column's left its rows' words start at width `w` (row_side): what the shell moves the
+/// column by while it is laid out at another width than it is drawn (sfbase's chat_page_made, `narrower`).
+pub fn chat_row_side(w : Double) -> Double {
+  row_side(w)
+}
+
+///|
 /// (its pictures out in that room, 29 before the words, about as far from the card's edge as the chat's title: the
 /// user, 2026-10-28, 头像都贴边了)
 let dense_row_side : Double = 48.0

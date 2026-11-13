@@ -1073,6 +1073,9 @@ pub struct Tree {
   mut bones_set : Int
   /// how many nodes are said not in use (View::in_use): none, that not asked of what holds a node
   mut behind_set : Int
+  /// the width each node that says it lays what it holds out at (View::lays_anew), by node: what a Tester's steadiness
+  /// judges take a step of as that node's own, in the frame it steps
+  laid_said : Map[Int, Double]
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -1427,6 +1430,7 @@ pub fn Tree::new(
     hand: fn(_) {  },
     bones_set: 0,
     behind_set: 0,
+    laid_said: Map([]),
     downs: [],
     changed: [],
     composed: [],
@@ -3350,6 +3354,7 @@ priv enum Prop {
   WordsBreaks
   GlyphsBy
   InUse
+  LaysAnew
 }
 
 ///|
@@ -3447,6 +3452,7 @@ impl Show for Prop with output(self, logger) {
       WordsBreaks => "WordsBreaks"
       GlyphsBy => "GlyphsBy"
       InUse => "InUse"
+      LaysAnew => "LaysAnew"
     },
   )
 }
@@ -3534,6 +3540,7 @@ fn Prop::ord(self : Prop) -> Int {
     WordsCentered => 53
     GlyphsBy => 86
     InUse => 88
+    LaysAnew => 89
     EllipsisPast => 54
     WordsBreaks => 87
     Points => 55

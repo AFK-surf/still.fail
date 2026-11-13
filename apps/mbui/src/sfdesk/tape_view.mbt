@@ -251,6 +251,19 @@ fn tape_page_at(t : Double) -> Double {
 }
 
 ///|
+/// How much narrower than it is drawn in node `n` a chat page's column in the page's panel is laid out, and how far across
+/// it is moved (chat_page_made's `narrower`, laid_across): while the tape's move takes the page's panel to another width
+/// (a side panel opened or closed beside it, another place's sidebar), as at the narrower of where it set off and where
+/// it goes; at rest none, laid out as wide as it is.
+fn tape_page_narrower(n : @view.View) -> @sfbase.ColumnLaid {
+  let t = tape_drawn_at(n)
+  if t == @double.infinity || !tape_goes.way.goes_at(t) {
+    return { by: 0.0, across: 0.0, laid: tape_page_at(t) }
+  }
+  laid_across(tape_page_at(t), dmin(tape_goes.page[0], tape_goes.page[1]), dmax(tape_goes.page[0], tape_goes.page[1]))
+}
+
+///|
 fn tape_behind_at(p : TapePane, t : Double) -> Double {
   tape_along(tape_goes.behind, tape_index(p), t)
 }

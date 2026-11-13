@@ -81,6 +81,16 @@ pub let chat_page_nodes : @signals.Signal[Bool] = @signals.signal(chat_page_node
 let chat_page_nodes_at_start : Bool = false
 
 ///|
+/// How a chat's column is laid out as the shell has it at a node's moment (chat_page_made's `narrower`): how much narrower
+/// than it is drawn (`by`), how far across it is moved (`across`), and the width it is laid out at (`laid`: where that
+/// steps, all it holds is laid out anew at once, View::lays_anew). None at rest but the width.
+pub(all) struct ColumnLaid {
+  by : Double
+  across : Double
+  laid : Double
+}
+
+///|
 /// A chat's page made once in node `v` of a stack's (entry `serial`'s: nav_view's and nav_flat_view's `made`), and the
 /// new chat that becomes it in place, the same page: what it holds its old view as yet, its island (Nav::page_island),
 /// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
@@ -92,7 +102,14 @@ let chat_page_nodes_at_start : Bool = false
 /// one in the other's place at once as it changes: a new chat its old view (what that reads let go as it goes); a chat,
 /// one made so or a new chat become it in place (Nav::become), its inside nodes, chat `r`'s messages made by `body` in
 /// a column, given what makes its composer (by `foot`, its old view in a node of its own, as tall as it is laid out) in
-/// the node it is put in, the foot of the messages' list, and whether its entry is drawn (as `drawn` says).
+/// the node it is put in, the foot of the messages' list, and whether its entry is drawn (as `drawn` says). On the
+/// page's way to another width (a side panel sliding in or out beside it), its column laid out as at the narrower of
+/// where the way set off and where it goes, from the frame it sets off till the one it is there, so that its rows are
+/// laid out anew only at those two (as the old list's laid_w had it held), and moved across by as much as its rows'
+/// words start further in at the width it is drawn at than at the one it is laid out at, so that they go across with
+/// the page, never stepping where it is laid out anew: both the shell's to say, at a node's moment (`narrower`: how much
+/// narrower, how far across; none at rest). Its composer, in the list's foot, an old view as yet, is laid out at the
+/// width the column is drawn at all the way, and goes its way to another as with_side has it, by itself.
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -104,6 +121,7 @@ pub fn chat_page_made(
   drawn? : (Int) -> Bool = fn(serial) { app.nav.shows(serial) },
   body? : (@view.View, Source, ChatRef, (@view.View) -> Unit, () -> Bool) -> Unit,
   foot? : (@ui.Ctx, Source, ChatRef) -> Unit,
+  narrower? : (@view.View) -> ColumnLaid,
 ) -> Source {
   let retained = page_entry_source(src, v, serial)
   let page_read = page_chat_reader(retained, v, serial)
@@ -137,6 +155,18 @@ pub fn chat_page_made(
               // height, its old view in a node of its own as yet (built as the stack's island is, what the page reads
               // read there)
               col.ground(By(fn() { @sf.theme().p.bg })) |> ignore
+              // (on the page's way to another width, laid out as at the narrower end the whole way, at its left, and
+              // moved across as its rows' words would be: the shell's to say, `narrower`, read as it is drawn; none at
+              // rest)
+              match narrower {
+                Some(by) =>
+                  col
+                  .padding(By(fn() { (0.0, 0.0, by(col).by, 0.0) }))
+                  .offset(By(fn() { (by(col).across, 0.0) }))
+                  .lays_anew(By(fn() { by(col).laid }))
+                  |> ignore
+                None => ()
+              }
               // (coming to need the viewer while open, felt, as its old view felt it)
               feel_needed_node(col, retained, r)
               b(col, retained, r, fn(n) {
@@ -156,6 +186,16 @@ pub fn chat_page_made(
                 // from outside)
                 |> @ui.old_takes_own
                 |> ignore
+                // (the composer as wide as the column is drawn, where it is drawn, whatever the column is laid out
+                // at: its own way to another width with_side's)
+                match narrower {
+                  Some(by) =>
+                    n
+                    .margin(By(fn() { (0.0, 0.0, -by(n).by, 0.0) }))
+                    .offset(By(fn() { (-by(n).across, 0.0) }))
+                    |> ignore
+                  None => ()
+                }
               }, fn() { drawn(serial) })
             }
             _ => {

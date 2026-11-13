@@ -50,12 +50,10 @@ fn side_whole(src : Source, n : @view.View) -> Double {
 }
 
 ///|
-/// Page `key`'s panel's column opened (`open`) or closed, as node `n` comes to have it so: from none to some tabs or back
-/// by a change asked here (side_changing's `asked`), slid in or out from where it is at that change's moment, as long as
-/// it is wide; else there at once (a page opened with its tabs as they were left). Slid out, what it showed let go of
-/// at its end.
-fn side_slides(n : @view.View, src : Source, key : String, open : Bool) -> Unit {
-  let way = match panel_own.goes.get(key) {
+/// Page `key`'s panel's column's way (panel_own's `goes`), made at rest at none the first time it is asked for: what
+/// reads it before it first slides (side_narrower) is told as it sets off.
+fn side_way(key : String) -> @motion.Way {
+  match panel_own.goes.get(key) {
     Some(w) => w
     None => {
       let w = @motion.Way::new(0.0)
@@ -63,6 +61,15 @@ fn side_slides(n : @view.View, src : Source, key : String, open : Bool) -> Unit 
       w
     }
   }
+}
+
+///|
+/// Page `key`'s panel's column opened (`open`) or closed, as node `n` comes to have it so: from none to some tabs or back
+/// by a change asked here (side_changing's `asked`), slid in or out from where it is at that change's moment, as long as
+/// it is wide; else there at once (a page opened with its tabs as they were left). Slid out, what it showed let go of
+/// at its end.
+fn side_slides(n : @view.View, src : Source, key : String, open : Bool) -> Unit {
+  let way = side_way(key)
   let target = if open { @signals.untracked(fn() { side_whole(src, n) }) } else { 0.0 }
   let was = @signals.untracked(fn() { panel_own.was.get(key) })
   match was {
@@ -105,6 +112,39 @@ fn side_col(src : Source, n : @view.View, key : String, open : Bool) -> Double {
   } else {
     0.0
   }
+}
+
+///|
+/// How much narrower than it is drawn in node `n` chat page `serial`'s column is laid out, and how far across it is moved
+/// (chat_page_made's `narrower`): while its panel's column slides, as at the narrower of where the page was as it set
+/// off and where it goes (the panel's wider end), moved across as laid_across has it; at rest, and over a page too
+/// narrow for both (the page as wide as it is), none, laid out as wide as it is.
+fn side_narrower(src : Source, n : @view.View, serial : Int) -> @sfbase.ColumnLaid {
+  let pane = pane_w_at(src, n)
+  guard app.nav.page_of(serial) is Some((Chat(r), _)) else { return { by: 0.0, across: 0.0, laid: pane } }
+  let way = side_way(chat_key(r))
+  way.said()
+  let t = n.drawn_while(fn(at) { way.goes_at(at) })
+  if pane < side_both_least {
+    return { by: 0.0, across: 0.0, laid: pane }
+  }
+  if t == @double.infinity || !way.goes_at(t) {
+    return { by: 0.0, across: 0.0, laid: pane - way.target() }
+  }
+  let ends = (way.value_at(way.starts_at()), way.target())
+  laid_across(pane - way.value_at(t), pane - dmax(ends.0, ends.1), pane - dmin(ends.0, ends.1))
+}
+
+///|
+/// A chat's column drawn `now` wide on its way between `laid` and `wide` (the narrower end it is laid out at, the
+/// wider): how much narrower it is laid out, and how far across it is moved, by as much of the way as it has come from
+/// `laid` to `wide`, as far as its rows' words start further in at `wide` than at `laid` (chat_page_made's `narrower`):
+/// none at the narrower end, all of it at the wider, so that they go across with the page all the way, never stepping
+/// where the width crosses one of row_side's (a breadth that lays them out otherwise).
+fn laid_across(now : Double, laid : Double, wide : Double) -> @sfbase.ColumnLaid {
+  let now = dmax(laid, dmin(now, wide))
+  let part = if wide > laid { (now - laid) / (wide - laid) } else { 0.0 }
+  { by: now - laid, across: part * (@sfpages.chat_row_side(wide) - @sfpages.chat_row_side(laid)), laid }
 }
 
 ///|
