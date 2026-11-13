@@ -1656,11 +1656,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let mut to_end = false
     // (asked: put there, what it was on by itself stopped; else moved by as much as the anchor says)
     let mut asked = false
+    // (the place's ask taken in this fill, as it was asked: put back at its end where this fill could not make what
+    // shows, below)
+    let mut taken : ListAsk[K]? = None
     match place {
       Some(p) =>
         match p.asked {
           Some(ToEnd) => {
             p.asked = None
+            taken = Some(ToEnd)
             to_end = true
             asked = true
           }
@@ -1673,6 +1677,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             match laid_at.get(k) {
               Some(i) => {
                 p.asked = None
+                taken = Some(ask)
                 asked = true
                 ai = i
                 follows_foot = false
@@ -1692,8 +1697,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if asked {
       s.held = false
       held = false
-      // (what it has in sight owed as of then, told once this layout is done: ListPlace::on_sight)
-      self.tree.sight_owe(self.tree.logic_said())
     }
     match (pin.val, pin_node.val) {
       (Some((_, _, over, _)), Some(v)) if !v.alive() || over.iter().any(fn(o) { !o.alive() }) => {
@@ -1885,6 +1888,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       if left < press_room.untracked() {
         press_room.set(left)
       }
+    }
+    // (an ask is taken only by a fill that could make what shows: one laid out where what shows could not be made in it
+    // (its slots not made yet: a layout asked inside a change's open batch, as a structure's first making reads where
+    // something is laid out, View::laid_window_now) measures nothing, and what it put would be held by a block only
+    // counted. The ask put back, unless another came meanwhile: the next fill takes it anew, the block it asks for held
+    // through every pass as what shows is made and measured)
+    match (taken, place) {
+      (Some(ask), Some(p)) if p.asked is None && found.iter().any(fn(k) { !showing.contains(k) }) => p.asked = Some(ask)
+      (Some(_), _) =>
+        // (what it has in sight owed as of then, told once this layout is done: ListPlace::on_sight)
+        self.tree.sight_owe(self.tree.logic_said())
+      _ => ()
     }
     // (what the last pass found, alone: what showed before and shows no more let go now, in this layout)
     show_only(found)
