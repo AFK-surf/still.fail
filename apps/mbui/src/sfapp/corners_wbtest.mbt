@@ -74,6 +74,8 @@ let corner_modes : Array[String] = {
     "settings-profile", "settings-profile-fable", "settings-profile-own3", "settings-profile-week-fable", "settings-profile-quota", "settings-profile-quota-kinds",
     "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed", "settings-profile-copy",
     "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
+    // (添加账号 with three stations up to choose from, #6030; a key's form with a region and a protocol to choose)
+    "settings-new-profile-stations", "settings-new-profile-key",
     "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
     "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
     // (a Comma connect's model step, and the pages of a Comma and a Feishu connect, none of their sessions yet)
