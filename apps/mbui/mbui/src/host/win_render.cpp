@@ -413,13 +413,135 @@ static const char *edge_src =
     "  return src.SampleLevel(samp, clamp((p - pc[0].xy) / pc[0].zw * ts, lo, hi), 0);\n"
     "}\n";
 
+// A shader's bytecode kept on disk once compiled (shader_dir: an app's own folder, or the one its program says; a
+// program that is neither, a demo, keeps none), so a run after the first takes it from there: compiling these at level
+// 3 took 2.4 to 3.6 s of a window's start on a fast machine (measured on an RTX 5080's, 2026-11-13), all of it before
+// the first frame. A file's name is of all it is compiled of (its source, entry, target, defines, the compiler's
+// version and the level), so a changed shader, or another compiler, is compiled anew and kept beside the old, and
+// programs that share a folder share what is the same. A file says how long its bytecode is and its hash before it:
+// one cut short or damaged is deleted and compiled again, never handed to the device. One that cannot be read or
+// written is compiled as before.
+struct ShaderKept {
+  char magic[4];  // "MBSH"
+  UINT32 size;
+  UINT64 hash;
+};
+
+static UINT64 shader_fnv(const void *p, size_t n, UINT64 h) {
+  const unsigned char *b = (const unsigned char *)p;
+  for (size_t i = 0; i < n; i++) {
+    h ^= b[i];
+    h *= 1099511628211ULL;
+  }
+  return h;
+}
+
+static const UINT64 shader_fnv_start = 1469598103934665603ULL;
+
+// The folder the bytecode is kept in, found once ("": none is kept). MBUI_SHADERS names it where the program says so
+// (its environment or its own: win_life.h's app_env; %NAMES% in it read of the environment), for a program that keeps
+// its shaders and is no app (an app's id brings its one instance, its tray icon and its logs with it); else it is the
+// app's own, %LOCALAPPDATA%\<the app's id>\shaders. %LOCALAPPDATA% is read of the environment, not asked of the shell:
+// shell32 loaded for it here was 0.27 s of a start that took its shaders from the folder (measured, 2026-11-13).
+static wchar_t shader_dir[MAX_PATH * 2];
+static INIT_ONCE shader_dir_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK shader_dir_find(PINIT_ONCE, PVOID, PVOID *) {
+  wchar_t dir[MAX_PATH * 2] = L"";
+  const wchar_t *said = mb_win_env(L"MBUI_SHADERS");
+  if (said && *said) {
+    DWORD n = ExpandEnvironmentStringsW(said, dir, MAX_PATH * 2);
+    if (n == 0 || n > MAX_PATH * 2) return TRUE;
+  } else {
+    const wchar_t *id = mb_win_app_id();
+    wchar_t local[MAX_PATH];
+    DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+    if (!id || !*id || n == 0 || n >= MAX_PATH) return TRUE;
+    wchar_t app[MAX_PATH * 2];
+    int m = _snwprintf(app, MAX_PATH * 2, L"%ls\\%ls", local, id);
+    if (m < 0 || m >= MAX_PATH * 2) return TRUE;
+    CreateDirectoryW(app, NULL);
+    m = _snwprintf(dir, MAX_PATH * 2, L"%ls\\shaders", app);
+    if (m < 0 || m >= MAX_PATH * 2) return TRUE;
+  }
+  // (its last folder made here; a said one's parents are the program's to have made)
+  if (!CreateDirectoryW(dir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return TRUE;
+  wcscpy(shader_dir, dir);
+  return TRUE;
+}
+
+// Where the bytecode of `key` is kept (false: nowhere).
+static bool shader_path(wchar_t *out, size_t cap, UINT64 key) {
+  InitOnceExecuteOnce(&shader_dir_once, shader_dir_find, NULL, NULL);
+  if (!*shader_dir) return false;
+  int n = _snwprintf(out, cap, L"%ls\\%016llx.cso", shader_dir, (unsigned long long)key);
+  return n > 0 && (size_t)n < cap;
+}
+
+// The bytecode kept at `path`, whole and as it was written; NULL (the file deleted where it is there and is not that).
+static ID3DBlob *shader_kept(const wchar_t *path) {
+  HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+  if (f == INVALID_HANDLE_VALUE) return NULL;
+  ShaderKept head;
+  LARGE_INTEGER size;
+  ID3DBlob *blob = NULL;
+  DWORD got = 0;
+  bool ok = GetFileSizeEx(f, &size) && ReadFile(f, &head, sizeof head, &got, NULL) && got == sizeof head &&
+            memcmp(head.magic, "MBSH", 4) == 0 && head.size > 0 && head.size < (64u << 20) &&
+            size.QuadPart == (LONGLONG)sizeof head + (LONGLONG)head.size &&
+            SUCCEEDED(D3DCreateBlob(head.size, &blob)) &&
+            ReadFile(f, blob->GetBufferPointer(), head.size, &got, NULL) && got == head.size &&
+            shader_fnv(blob->GetBufferPointer(), head.size, shader_fnv_start) == head.hash;
+  CloseHandle(f);
+  if (ok) return blob;
+  if (blob) blob->Release();
+  DeleteFileW(path);
+  return NULL;
+}
+
+static void shader_keep(const wchar_t *path, ID3DBlob *code) {
+  if (code->GetBufferSize() == 0 || code->GetBufferSize() >= (64u << 20)) return;
+  // (written whole under another name and moved into place: a run reading it meanwhile reads none or all of it; the
+  // name its thread's, the kinds' shaders being compiled on another: make_kinds)
+  wchar_t part[MAX_PATH * 2 + 32];
+  int n = _snwprintf(part, MAX_PATH * 2 + 32, L"%ls.%lu.%lu.part", path, GetCurrentProcessId(), GetCurrentThreadId());
+  if (n < 0 || n >= MAX_PATH * 2 + 32) return;
+  HANDLE f = CreateFileW(part, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+  if (f == INVALID_HANDLE_VALUE) return;
+  ShaderKept head;
+  memcpy(head.magic, "MBSH", 4);
+  head.size = (UINT32)code->GetBufferSize();
+  head.hash = shader_fnv(code->GetBufferPointer(), head.size, shader_fnv_start);
+  DWORD put = 0;
+  bool ok = WriteFile(f, &head, sizeof head, &put, NULL) && put == sizeof head &&
+            WriteFile(f, code->GetBufferPointer(), head.size, &put, NULL) && put == head.size;
+  CloseHandle(f);
+  if (!ok || !MoveFileExW(part, path, MOVEFILE_REPLACE_EXISTING)) DeleteFileW(part);
+}
+
 static ID3DBlob *compile(const char *entry, const char *target, const char *src = shader_src,
                          const D3D_SHADER_MACRO *defines = NULL) {
+  UINT64 key = shader_fnv(src, strlen(src), shader_fnv_start);
+  key = shader_fnv(entry, strlen(entry) + 1, key);
+  key = shader_fnv(target, strlen(target) + 1, key);
+  for (const D3D_SHADER_MACRO *d = defines; d && d->Name; d++) {
+    key = shader_fnv(d->Name, strlen(d->Name) + 1, key);
+    key = shader_fnv(d->Definition, strlen(d->Definition) + 1, key);
+  }
+  UINT32 made_by[2] = {D3D_COMPILER_VERSION, D3DCOMPILE_OPTIMIZATION_LEVEL3};
+  key = shader_fnv(made_by, sizeof made_by, key);
+  wchar_t path[MAX_PATH * 2 + 32];
+  bool kept = shader_path(path, MAX_PATH * 2, key);
+  if (kept) {
+    ID3DBlob *was = shader_kept(path);
+    if (was) return was;
+  }
   ID3DBlob *code = NULL, *err = NULL;
   HRESULT hr = D3DCompile(src, strlen(src), "mbui", defines, NULL, entry, target,
                           D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &err);
   if (FAILED(hr)) fprintf(stderr, "shader %s: %s\n", entry, err ? (char *)err->GetBufferPointer() : "?");
   if (err) err->Release();
+  if (code && kept) shader_keep(path, code);
   return code;
 }
 
