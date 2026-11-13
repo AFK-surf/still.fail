@@ -25,7 +25,7 @@ import {
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
-import { BOX_KEY, BOX_PUB, UNLOCK_MS, waitingAs, waitingChecks } from "../src/views/vault.ts";
+import { BOX_KEY, BOX_PUB, UNLOCK_MS, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
 import { inForceOf, read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { type Answers, base, entry, started, stationLater, stationReplies, status } from "./station-fixture.ts";
@@ -1188,6 +1188,36 @@ test("a device taken out of the lock by another device of its person's, this one
   const v = r.st.vaults.get(id)!;
   assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [1, ["ab".repeat(32)]], "keyed anew without the phone");
   assert.equal(r.st.items.get(put.id)!.epoch, 1, "its item written again under the new key");
+  r.core.close();
+});
+
+test("a device this one took out of the lock at the person's asking, two vaults of theirs holding its key and locked here: the box key read once, both keyed anew", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: first } = await r.ask("vault.setup", {});
+  const { id: second } = await r.ask("vault.create", { name: "Work" });
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  for (const id of [first, second]) assert.ok(r.st.vaults.get(id)!.keys.some((k) => k.cert.device === r.phone.hex), "the phone given each key");
+  await r.ask("vault.lock", {});
+  const asked = r.host.secureAsked.length;
+  // Taken out by this device as the person asked it to (views/lock.ts `Lock.append` in a call says so).
+  tookOut(r.core.inner, "ws", r.phone.hex);
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: r.phone.hex });
+  for (let n = 0; n < 2; n++) {
+    await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+    await r.host.time.pass(500, 10);
+  }
+  r.take();
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY], "asked once, for both");
+  for (const id of [first, second]) {
+    const v = r.st.vaults.get(id)!;
+    assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [1, ["ab".repeat(32)]], "keyed anew without the phone");
+  }
   r.core.close();
 });
 
