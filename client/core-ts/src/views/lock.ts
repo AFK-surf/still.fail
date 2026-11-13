@@ -45,7 +45,7 @@ import { tookOut, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
-import { type Device as PersonDevice, type PersonalEnv, type Stated, personOf, personRules } from "../personal-lock.ts";
+import { type ChainWeb, type Device as PersonDevice, type PersonalEnv, type Stated, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
 import { type HandOverPlan, handOverPlan } from "../lock-handover.ts";
@@ -1712,14 +1712,48 @@ function ownLocks(inner: Inner, sub: string): { ws: string; h: Held; f: Folded; 
 /// What a person's own lock reads of the workspaces' locks (personal-lock.ts `approved`, `vouchers`): the devices to
 /// put on it as it stands (`approvedIn`), this device's own id and signing key telling which is this one; the keys said
 /// up this device's lineages (`vouchersIn`).
-export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouchers"> {
+export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouchers" | "webs"> {
   return {
+    webs: (sub, genesis) => websIn(inner, sub, genesis),
     approved: (sub, chain) => approvedIn(ownLocks(inner, sub).map((l) => l.own), sub, { id: bases.get(inner) ?? null, signKey: signerOf(inner) }, chain),
     vouchers: (sub) => {
       const base = bases.get(inner) ?? null;
       return base === null ? new Set<string>() : vouchersIn(ownLocks(inner, sub).map((l) => l.own), sub, base);
     },
   };
+}
+
+/// The web pages of `sub`'s that the chains of their workspaces held here name (personal-lock.ts `#addWebs`): of each
+/// chain this device checked itself (`checkLock`, by its clock), not turned off, that binds `sub` to the lock begun by
+/// `genesis`, each `web` device of theirs it names, not run out, nor taken off it; a chain that moved too (it is
+/// frozen as it was and still names them, so a page comes back as its person next does something on their app). One
+/// a page, its `exp` the latest of the chains', `by` the key that signed the entry that named it so there. None until
+/// `web` may be written: a station or app from before `web` refuses a log holding one whole (rules/AGENTS.md: nothing
+/// writes it until its build has been out seven days), so only where a chain of theirs moved, or on a host that offers
+/// the handover (`handOverByTests`, as `handOver`), which is what moves one yet.
+export function websIn(inner: Inner, sub: string, genesis: string): ChainWeb[] {
+  const out = new Map<string, ChainWeb>();
+  const at = now(inner);
+  if (inner.host.handOverByTests !== true && !inner.workspaces.owned().some(([ws, owner]) => owner === sub && movedHere(inner, ws))) return [];
+  for (const [ws, owner] of inner.workspaces.owned()) {
+    const h = held(inner, ws);
+    if (owner !== sub || !h?.head) continue;
+    let lock: Checked;
+    try {
+      lock = checkLock([...h.entries], at);
+    } catch {
+      continue;
+    }
+    const f = fold(h.entries);
+    if (lock.disabled || f.persons.get(sub) !== genesis) continue;
+    for (const [id, d] of lock.devices) {
+      if (d.kind !== "web" || d.sub !== sub || typeof d.exp !== "number" || d.exp <= at || (out.get(id)?.exp ?? 0) >= d.exp) continue;
+      let by: string | null = null;
+      for (const e of h.entries) if (e.kind === "device" && (e.body as J)?.id === id) by = str(e.sig?.key);
+      if (by !== null) out.set(id, { id, label: str(get(f.devices.get(id), "label")) ?? "", exp: d.exp, by });
+    }
+  }
+  return [...out.values()];
 }
 
 /// Of what workspaces' locks say of `sub`'s devices (ownStandings): those to put on their own lock as it stands

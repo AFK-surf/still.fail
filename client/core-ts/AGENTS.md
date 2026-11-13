@@ -224,10 +224,16 @@ another; the accounts' list's merge across stations and its refills.
   so nobody is dropped or added by the move. A member with a device that signs and no log waits it (`lock_not_ready`);
   one with neither is not said, their role noted (`note`), and comes in as a newcomer by their first app device (the
   owner, 2026-11-13: 「开了安全模式那就需要 app」). A `moved` that lost its place is never signed again (`again`,
-  `#lost`, `deliver`): the next `handOver` works it out again. Another member's web page is out after it until their
-  own app approves it again. A member bound to a log whose app device signs on the chain and is not on that log, or
-  whose log no station gave, waits it too (`lock_not_ready`): the state names a member's devices by their log alone,
-  and nobody would approve that one again by itself. So `handOver` reads the logs the chain binds of its stations
+  `#lost`, `deliver`): the next `handOver` works it out again. Another member's web page is said on their own log by
+  their app as it next holds the seed for something they do (personal-lock.ts `#addWebs`, views/lock.ts `websIn`;
+  2026-11-14), before the move or after it from the chain as it moved, nobody approving it again: only one their own
+  device approved on the chain (by the key that signed it), not run out, off neither the chain nor their log; and,
+  as `web` may not be written yet (rules/AGENTS.md), only on a host that offers the handover or once a chain of theirs
+  moved. One not said by the move is out till then, told so and whom to ask (`left`), and in at its next hello once
+  said: a page refused is not tried again while it only waits, so it comes back as it is opened again. A member bound
+  to a log whose app device signs on the chain and is not on that log, or whose log no station gave, waits it too
+  (`lock_not_ready`): the state names a member's devices by their log alone, and nobody would approve that one again
+  by itself. So `handOver` reads the logs the chain binds of its stations
   before its plan and again before the `moved` (`readBound`; of an unmoved chain a station gives them to a device the
   chain lets in, station/src/cloud/state.ts `logsOf`), and its `guard` holds the devices too. `test/lock-handover.test.ts`
   runs it on the station's own code, `test/lock-handover-model.test.ts` holds its plan to the model's handover.

@@ -160,7 +160,7 @@ async function setUp(o: { named?: boolean; web?: boolean; waiting?: boolean } = 
   const now = () => Math.floor(r.host.nowMs() / 1000);
   /// What a failure says of where it got: the station's refusals and admissions, the page.
   const why = () => `refused ${st.refusals.length}, last left ${JSON.stringify(st.refusals.at(-1)?.left)?.slice(0, 30)} error ${String(st.refusals.at(-1)?.error).slice(0, 80)}; admitted ${st.admitted}; standing ${inner.adb.personal().standing("s1")}`;
-  return { why, r, inner, c, st, alice, bob, x, base, A, approvers, dialled, run, ask, page, bring, now };
+  return { why, r, inner, c, st, alice, bob, x, base, A, approvers, dialled, run, ask, page, bring, now, hello };
 }
 
 /// Whom the page lists: each member's sub.
@@ -232,6 +232,19 @@ test("a member's new web page: it asks that member's own app, `web` said, in", a
   const after = await w.page();
   assert.equal(after.me.confirmed, true, `in (${w.why()})`);
   assert.equal(subs(after), "r1,r2,s1");
+});
+
+test("a member's web page left out, said on their log meanwhile by their app (carried from the chain, personal-lock.ts `#addWebs`), nothing asked on the page: as it is, not tried again while it only waits (ten minutes), let in at its next hello", async () => {
+  const w = await setUp({ named: true, web: true });
+  const before = await w.page();
+  assert.deepEqual([before.me.confirmed, before.me.waiting], [false, true], "out, able to ask");
+  const refused = w.st.refusals.length;
+  w.x.add("web", { id: w.base.hex, label: "Chrome", exp: w.now() + 20 * 86400 }, w.x.app.key, w.now());
+  w.bring(w.x);
+  await w.r.host.time.pass(600_000);
+  const after = await w.page();
+  assert.deepEqual([after.me.confirmed, w.st.refusals.length - refused, w.st.admitted], [false, 0, 0], "not tried again: nothing tells a page refused that its person's log changed");
+  assert.equal(w.hello(), null, "its next hello (the page opened again) let in");
 });
 
 test("a member's own second app: the personal exchange with their app on the log, then in", async () => {
