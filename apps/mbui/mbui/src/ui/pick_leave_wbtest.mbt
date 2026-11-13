@@ -55,3 +55,25 @@ test "a pick leaving over a time along a row: its place's way and which is seen 
     assert_eq(pick_leave_seen(t, if to_wide { "宽宽" } else { "窄" }), 1.0)
   }
 }
+
+///|
+test "a pick leaving over a time reads the clock through the framework's entry (View::going by drawn_while): what it showed fading out is no read of the time by its binding, wherever it was made" {
+  let wide = @signals.signal(false)
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.pick(leave=pick_leave_test_ms, fn() { wide.get() }, fn(v, k) {
+      v.words(Is(if k { "宽宽" } else { "窄" })) |> ignore
+    })
+    |> ignore
+  })
+  t.run_for(pick_leave_test_ms)
+  wide.set(true)
+  t.run_for(pick_leave_test_ms / 2.0)
+  // (on its way out, as faded as it has gone)
+  let half = pick_leave_seen(t, "窄")
+  assert_true(half > 0.0 && half < 1.0, msg="\{half}")
+  t.run_for(2.0 * pick_leave_test_ms)
+  assert_eq(pick_leave_seen(t, "窄"), 0.0)
+  let reads = @view.clock_reads_in_bindings().filter(fn(r) { r.contains("pick_leave_wbtest.mbt") })
+  assert_eq(reads, [])
+}

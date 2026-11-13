@@ -9157,7 +9157,17 @@ pub fn View::going(self : View) -> Double {
   if n.left_at < 0.0 && n.back_at < 0.0 {
     return 0.0
   }
-  gone_at(n, self.tree.drawn_at())
+  // (the clock followed through the framework's entry while it goes (View::drawn_while: leaving, not all gone yet;
+  // coming back, not all back), its end read once it is there: no read of the time of the binding's own)
+  let t = self.drawn_while(fn(at) {
+    let f = gone_at(n, at)
+    if n.left_at >= 0.0 {
+      f < 1.0
+    } else {
+      f > 0.0
+    }
+  })
+  gone_at(n, t)
 }
 
 ///|
