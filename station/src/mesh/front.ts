@@ -31,7 +31,7 @@ export function withFront(mesh: Mesh, socket: string): Mesh {
 let opened = 0;
 
 /// One process's link to the front: its asks and answers, and the streams it is given.
-class Front {
+export class Front {
   readonly #control: Socket;
   readonly #server: Server;
   readonly streamsPath: string;
@@ -56,17 +56,19 @@ class Front {
     this.#server = server;
     this.streamsPath = streamsPath;
     this.gone = new Promise((resolve) => (this.#wentAway = resolve));
-    createInterface({ input: control }).on("line", (line) => {
-      let said: { id: number; ok?: unknown; error?: string };
-      try { said = JSON.parse(line); }
-      catch { return void log.warn("mesh", "the front said what is not JSON", { line: line.slice(0, 200) }); }
-      const asked = this.#asked.get(said.id);
-      if (!asked) return;
-      this.#asked.delete(said.id);
-      if (said.error !== undefined) asked.reject(new Error(said.error));
-      else asked.resolve(said.ok);
-    });
     const end = () => this.#end(new Error("the front is gone"));
+    createInterface({ input: control })
+      .on("error", end)
+      .on("line", (line) => {
+        let said: { id: number; ok?: unknown; error?: string };
+        try { said = JSON.parse(line); }
+        catch { return void log.warn("mesh", "the front said what is not JSON", { line: line.slice(0, 200) }); }
+        const asked = this.#asked.get(said.id);
+        if (!asked) return;
+        this.#asked.delete(said.id);
+        if (said.error !== undefined) asked.reject(new Error(said.error));
+        else asked.resolve(said.ok);
+      });
     control.on("close", end);
     control.on("error", end);
     server.on("connection", (s) => this.#took(s));

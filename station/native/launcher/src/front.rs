@@ -154,12 +154,17 @@ fn listening(out: &mut std::process::ChildStdout) -> Option<(String, u64)> {
         }
         let mut fd = libc::pollfd { fd: out.as_raw_fd(), events: libc::POLLIN, revents: 0 };
         // SAFETY: poll on one live pollfd.
-        if unsafe { libc::poll(&mut fd, 1, left.as_millis().min(i32::MAX as u128) as libc::c_int) } <= 0 {
+        let polled = unsafe { libc::poll(&mut fd, 1, left.as_millis().min(i32::MAX as u128) as libc::c_int) };
+        if polled < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+            continue;
+        }
+        if polled <= 0 {
             return None;
         }
         match out.read(&mut byte) {
             Ok(1) if byte[0] == b'\n' => break,
             Ok(1) => line.push(byte[0]),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             _ => return None,
         }
     }

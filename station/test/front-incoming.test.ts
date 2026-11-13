@@ -2,9 +2,12 @@
 // socket of its own, so they come in any order; taken in the order they were opened. 2026-11-13: a device's requests,
 // opened right after its credential stream, came first and were refused as its credential (`malformed credential`).
 import assert from "node:assert/strict";
-import type { Socket } from "node:net";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createServer, type Socket } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { Incoming } from "../src/mesh/front.ts";
+import { Front, Incoming } from "../src/mesh/front.ts";
 
 function stream(id: number, index?: number) {
   const destroyed = { yes: false };
@@ -55,4 +58,23 @@ test("the connection gone: those waiting for one before them are let go", async 
   incoming.end();
   assert.equal(waiting.destroyed.yes, true);
   assert.equal(await incoming.take(), null);
+});
+
+test("the front ending with EPIPE on its control socket settles gone without an unhandled readline error", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "front-epipe-"));
+  const sock = join(dir, "front.sock");
+  let accepted: Socket | undefined;
+  const server = createServer((s) => { accepted = s; });
+  await new Promise<void>((resolve) => server.listen(sock, resolve));
+  try {
+    const front = await Front.open(sock);
+    const pending = front.ask("endpoint.addresses");
+    accepted!.destroy();
+    await front.gone;
+    await assert.rejects(pending, /the front is gone/);
+    front.close();
+  } finally {
+    server.close();
+    await rm(dir, { recursive: true, force: true });
+  }
 });

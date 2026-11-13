@@ -2521,7 +2521,7 @@ dependencies = [
 [[package]]
 name = "noq-proto"
 version = "1.3.0"
-source = "git+https://github.com/zzj3720/noq?rev=d578f818ad7580c49691f26d5ccf8cc3afcc026a#d578f818ad7580c49691f26d5ccf8cc3afcc026a"
+source = "git+https://github.com/zzj3720/noq?rev=76344e6eab7ae651ce524e4f329a2f283f69d7ab#76344e6eab7ae651ce524e4f329a2f283f69d7ab"
 dependencies = [
  "aes-gcm",
  "bytes",
