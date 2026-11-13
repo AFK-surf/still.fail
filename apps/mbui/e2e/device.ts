@@ -360,7 +360,9 @@ export class Device {
       },
     };
   }
-  async signIn(): Promise<{ workspace: string; station: string }> {
+  /// Signed in as a person does it, until the workspace `named` (the dev cloud's "Dev", or one its person was added to)
+  /// is listed with a station in it: its id and its first station's.
+  async signIn(named = "Dev"): Promise<{ workspace: string; station: string }> {
     await this.call("client.device", this.#about());
     // (the dev cloud's sign-in: one over the account's requests a minute is a finding, not tried again)
     const r = await fetch(`${origin}/__dev/account?user=${this.user}`);
@@ -371,7 +373,7 @@ export class Device {
     const accounts = await this.until({ topic: "accounts" }, (v) => (Array.isArray(v) && v.length > 0 ? v : undefined));
     this.sub = accounts[0].sub;
     const workspace = await this.until({ topic: "workspaces" }, (v) => {
-      for (const a of v ?? []) for (const w of a.workspaces ?? []) if (w.name === "Dev") return w.id as string;
+      for (const a of v ?? []) for (const w of a.workspaces ?? []) if (w.name === named) return w.id as string;
       return undefined;
     });
     const station = await this.until({ topic: "workspace", workspace }, (v) => {

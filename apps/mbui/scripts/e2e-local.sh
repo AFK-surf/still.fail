@@ -329,11 +329,11 @@ stop() {
 down() {
   # (the station's directory another run's: only what this run started, by its own pids)
   if held_by_other; then
-    stop second; stop third; stop fourth; stop rig; stop station; stop cloud; stop relay
+    stop second; stop third; stop fourth; stop fifth; stop sixth; stop rig; stop station; stop cloud; stop relay
     say "down ($STATION left to the run of $(readlink "$HELD"))"
     return 0
   fi
-  for n in second third fourth rig; do second_down $n >/dev/null 2>&1 || true; done
+  for n in second third fourth fifth sixth rig; do second_down $n >/dev/null 2>&1 || true; done
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
@@ -399,7 +399,7 @@ kept() {
   rm -rf $KEPT && mkdir -p $KEPT || return 0
   keep $RUN/cloud.log cloud.log
   keep $RUN/relay.log relay.log
-  for n in station second third fourth rig; do
+  for n in station second third fourth fifth sixth rig; do
     if [ $n = station ]; then d=$STATION; f=enroll; else d=$(more_dir $n); f=$n-enroll; fi
     keep $RUN/$n.log $n/launcher.log
     keep $RUN/$f.log $n/enroll.log
@@ -463,9 +463,23 @@ lock_state() {
   [ -n "$f" ] || { echo "LOCK off"; return; }
   (cd $E/station && node --input-type=module -e "
 import { readFileSync } from 'node:fs';
-const { fold } = await import('./src/cloud/lock.ts');
+const { fold, state4 } = await import('./src/cloud/lock.ts');
 const j = JSON.parse(readFileSync(process.argv[1], 'utf8'));
-const s = fold(j.entries ?? j, null);
+const chain = fold(j.entries ?? j, null);
+let s = chain;
+if (chain.moved !== undefined && !chain.disabled) {
+  // (its chain moved to its people's logs: the state in force is the rules' of the logs and bodies this station keeps,
+  // by its clock, as station/src/cloud/state.ts forceOf makes it; LOCK says it on or off, MOVED the root and how)
+  const data = process.argv[1].replace(/\/mesh\/.*$/, '');
+  const read = (f, or) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return or; } };
+  const kept = read(data + '/mesh/person-chains.json', {});
+  const logs = Object.values(kept.chains ?? kept).filter((c) => Array.isArray(c));
+  const ws = (j.entries ?? j)[0].ws;
+  const bodies = (read(data + '/mesh/locks/' + ws + '.bodies.json', {}).bodies ?? []);
+  const f = state4(ws, chain.moved, logs, bodies, Math.floor(Date.now() / 1000));
+  s = { ...f.state, disabled: f.on !== 'on', seq: chain.seq, head: chain.head };
+  console.log('MOVED ' + chain.moved.slice(0, 12) + ' ' + f.on.replace(' ', '-') + ' logs=' + logs.length + ' bodies=' + bodies.length);
+}
 console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
 for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' exp=' + (d.exp ?? '-') + ' ' + (d.label ?? ''));
 console.log('STATIONS ' + s.stations.size);
