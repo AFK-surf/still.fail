@@ -207,7 +207,9 @@ export type Stated = { ws: string; bodies: readonly unknown[] };
 /// What statements of a workspace a person's act signs (`say`), made in the turn of the chain they are signed after
 /// (`after`, the chain pinned and what is pending after it): their bodies in order, each with what it does as the
 /// person knows it (`act` null: one the act says too, not shown by itself); a CoreError where it is not to be signed.
-export type Statements = (after: readonly Entry[]) => { bodies: unknown[]; shown: { act: Act | null; name: string; role?: string }[] } | CoreError;
+/// `also`: entries of the person's own that go with them in the same ask, signed before them (a handover's web pages,
+/// views/lock.ts `handOver`), no statement and no body.
+export type Statements = (after: readonly Entry[]) => { bodies: unknown[]; shown: { act: Act | null; name: string; role?: string }[]; also?: { kind: "web"; body: { id: string; label: string; exp: number } }[] } | CoreError;
 
 /// What a read made within a call's wait brings past it (`refresh`): nothing yet.
 const LATE = Symbol("late");
@@ -820,8 +822,29 @@ export class PersonalLock {
     if (d !== undefined) return void (d.again = true);
     const state = { again: true };
     this.#delivering.set(sub, state);
-    const stations = this.#env.stations;
-    const once = Effect.gen({ self: this }, function* () {
+    const once = this.#deliverOnce(sub);
+    this.#env.runner.fork(Effect.ensuring(
+      Effect.gen({ self: this }, function* () {
+        while (state.again) {
+          state.again = false;
+          yield* Effect.ignore(this.#turn(sub).withPermits(1)(once), { log: "Unhandled", message: "personal lock: pending brought" });
+        }
+      }),
+      Effect.sync(() => void this.#delivering.delete(sub)),
+    ));
+  }
+
+  /// What is pending of `sub`'s lock brought to the stations now, in its turn, and waited on: a handover called again
+  /// (views/lock.ts `handOver`) goes on only once what it said is taken.
+  deliverNow(sub: string): Effect.Effect<void> {
+    if (!(this.#pending.get(sub) ?? []).some((x) => x.state === "waiting") || this.#env.stations === undefined) return Effect.void;
+    return Effect.ignore(this.#turn(sub).withPermits(1)(this.#deliverOnce(sub)), { log: "Unhandled", message: "personal lock: pending brought" });
+  }
+
+  /// Of `#deliver`, one pass, in the turn.
+  #deliverOnce(sub: string): Effect.Effect<void, CoreError> {
+    const stations = this.#env.stations!;
+    return Effect.gen({ self: this }, function* () {
       const passes = new Map<string, number>();
       for (;;) {
         const pinned = this.#pinned.get(sub) ?? [];
@@ -870,15 +893,6 @@ export class PersonalLock {
         return;
       }
     });
-    this.#env.runner.fork(Effect.ensuring(
-      Effect.gen({ self: this }, function* () {
-        while (state.again) {
-          state.again = false;
-          yield* Effect.ignore(this.#turn(sub).withPermits(1)(once), { log: "Unhandled", message: "personal lock: pending brought" });
-        }
-      }),
-      Effect.sync(() => void this.#delivering.delete(sub)),
-    ));
   }
 
   /// In the turn: one entry signed after the chain pinned now (a genesis: none, the one pinned left), brought, and what
@@ -1293,6 +1307,13 @@ export class PersonalLock {
       if (made instanceof CoreError) return yield* Effect.fail(made);
       const root = entryHash(pinned[0]!);
       let chain = after;
+      // (what goes with them, before them: shown as nothing of its own)
+      const also: Entry[] = [];
+      for (const x of made.also ?? []) {
+        const e = this.#entry(sub, seed, this.#myKey!, x.kind, x.body, chain);
+        also.push(e);
+        chain = [...chain, e];
+      }
       const entries: Entry[] = [];
       for (const b of made.bodies) {
         // (its commitment: the workspace's tag in this log, the body's hash, rules/src/lock/body.mbt)
@@ -1302,7 +1323,7 @@ export class PersonalLock {
         entries.push(e);
         chain = [...chain, e];
       }
-      if (entries.length === 0) return Effect.succeed(null);
+      if (entries.length === 0 && also.length === 0) return Effect.succeed(null);
       if (checkChain(chain, sub) === null) return yield* Effect.fail(new CoreError("lock_invalid", t("core-misc.lock.chainInvalid")));
       this.#env.stations?.kept?.(ws, made.bodies);
       const said: [string, { act: Act | null; name: string; role?: string }][] = [];
@@ -1322,18 +1343,19 @@ export class PersonalLock {
       const taken = brought === null ? 0 : brought.success;
       if (typeof taken === "number" && taken > 0) {
         // (the entries alone, for the devices from before that read the lock there: a body never goes to the cloud)
-        this.#env.runner.fork(Effect.ignore(this.#env.cloud(sub, "POST", PATH, { entries })));
+        this.#env.runner.fork(Effect.ignore(this.#env.cloud(sub, "POST", PATH, { entries: [...also, ...entries] })));
         yield* this.#tookAll(sub, chain);
         return Effect.succeed(null);
       }
       // Pending: no station of the workspace took them by the call's wait. Each kept as an entry of this device's is;
       // the one the person meant (the last shown) is the call's answer.
       let meant: Pending | null = null;
+      for (const e of also) this.#pend(sub, e, 0, null, false);
       entries.forEach((e, i) => {
         const p = this.#pend(sub, e, 0, null, true, made.shown[i] ?? { act: null, name: "" });
         if (p.act !== null) meant = p;
       });
-      if (meant !== null) this.#acts.set((meant as Pending).id, entries.map(hashOf));
+      if (meant !== null) this.#acts.set((meant as Pending).id, [...also, ...entries].map(hashOf));
       if (typeof taken === "object" && taken !== null) {
         this.#env.runner.fork(Effect.ignore(Effect.flatMap(taken.later, (n) => (n !== null && n > 0 ? this.#turn(sub).withPermits(1)(this.#tookAll(sub, chain)) : Effect.void))));
       }
@@ -1413,6 +1435,21 @@ export class PersonalLock {
   }
 
   /// This device's key's id on the lock, read without asking anyone; none made yet.
+  /// What of a handover of `ws` (views/lock.ts `handOver`) is pending here: the row of the first of this device's
+  /// statements of `ws` or web pages that no station took yet; null where none waits.
+  waitingIn(sub: string, ws: string): PendingRow | null {
+    const pinned = this.#pinned.get(sub) ?? [];
+    if (pinned.length === 0) return null;
+    const tag = rules.ws_tag_js(ws, entryHash(pinned[0]!), crypto) as string;
+    const x = (this.#pending.get(sub) ?? []).find((p) => p.state === "waiting" && (p.entry.kind === "web" || (p.entry.kind === "ws" && (p.entry.body as J)?.t === tag)));
+    return x === undefined ? null : pendingRow(x, this.#env.stations?.wsNames?.(ws) ?? []);
+  }
+
+  /// The chain pinned and what is pending after it: what this device's next entry is signed after.
+  after(sub: string): Entry[] {
+    return [...(this.#pinned.get(sub) ?? []), ...this.#pendingTail(sub)];
+  }
+
   keyId(): string | null {
     return this.#myKey;
   }

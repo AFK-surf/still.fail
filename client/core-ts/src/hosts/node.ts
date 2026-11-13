@@ -334,6 +334,9 @@ export class NodeHost implements Host {
   }
   /// An app's: what it keeps is the device's, not code still.fail cloud serves (lock.ts). Not a page's (`page`).
   readonly appKeys: boolean;
+  /// Whether it offers `lock.handOver` (host.ts): only as `start`'s `handOverByTests` says, which the e2e device's host
+  /// alone gives (apps/mbui/e2e/device.ts).
+  handOverByTests = false;
 
   randomBytes(buf: Uint8Array): void {
     webcrypto.getRandomValues(buf);
@@ -362,10 +365,11 @@ export class NodeHost implements Host {
 /// values for it (an Electron app's main process). `page`: a web page's host for the end-to-end runs (e2e/device.ts),
 /// keeping no app's keys and sealing nothing, a `sealer` given or not. `record`: a file the core's record of what its
 /// connections do is kept in (e2e/device.ts: each device's, read after a run that failed); without, it keeps none.
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; page?: boolean; record?: string } = {}) {
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; page?: boolean; record?: string; handOverByTests?: boolean } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
   const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer, options.page === true, options.record);
+  host.handOverByTests = options.handOverByTests === true;
   const clients = new Set<number>();
   let dead = false;
   let running: Core | null = null;

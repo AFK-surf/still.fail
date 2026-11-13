@@ -173,7 +173,8 @@ if (process.argv[2] === "device") {
   // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`; `page`: a web page's
   // host, no app's keys and nothing sealed)
   // (its record goes on in the same file when started `again`, as its data does)
-  const options = process.argv[5] === "page" ? { page: true, record } : process.argv[5] === "plain" ? { record } : { sealer, record };
+  // (`handOverByTests`: the core offers `lock.handOver` to this driver, as no app's host does: views/lock.ts `handOver`)
+  const options = { handOverByTests: true, ...(process.argv[5] === "page" ? { page: true, record } : process.argv[5] === "plain" ? { record } : { sealer, record }) };
   const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, options);
   const client = core.connect();
   process.on("message", (m: J) => {
