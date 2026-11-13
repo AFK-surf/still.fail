@@ -32,7 +32,7 @@ import { Core } from "../src/core.ts";
 import { httpError } from "../src/station/requests.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { hex, utf8 } from "../src/util.ts";
-import { handOver, handOverState, held, inForceOf, notedRole, pendingHeld, read } from "../src/views/lock.ts";
+import { handOver, handOverState, held, inForceOf, lockView, notedRole, pendingHeld, read } from "../src/views/lock.ts";
 import { serveTrusted, tryOne } from "../src/views/pair.ts";
 import { grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
 
@@ -301,7 +301,7 @@ test("a member with a device that signs and no log of their own: lock_not_ready,
   const w = await setUp({ more: ["notReady"] });
   const out = await w.hand();
   assert.equal(out.error?.code, "lock_not_ready", out.error?.message);
-  assert.match(out.error?.message ?? "", /r4/);
+  assert.match(out.error?.message ?? "", /d@x\.com/);
   assert.equal(w.asked(), 0, "nobody asked");
   assert.deepEqual(w.said(), [], "nothing said");
   const bound = w.after(w.r4.app.signer, "person", { sub: "r4", person: w.r4.genesis });
@@ -410,8 +410,8 @@ test("a member bound to a log with a second app device on the chain and not on t
   for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
   const out = await w.hand();
   assert.equal(out.error?.code, "lock_not_ready", out.error?.message);
-  assert.match(out.error?.message ?? "", /r2/);
-  assert.doesNotMatch(out.error?.message ?? "", /r3/, "xena's devices are all on her log");
+  assert.match(out.error?.message ?? "", /b@x\.com/);
+  assert.doesNotMatch(out.error?.message ?? "", /c@x\.com/, "xena's devices are all on her log");
   assert.equal(w.asked(), 0, "nobody asked");
   assert.deepEqual(w.said(), [], "nothing said");
   for (const c of Object.values(w.stations)) assert.equal(c.chain(null)?.state?.moved, undefined, "nothing moved");
@@ -434,7 +434,7 @@ test("a member bound to a log no station keeps: lock_not_ready naming them, noth
   const w = await setUp({ unbrought: ["r2"] });
   const out = await w.hand();
   assert.equal(out.error?.code, "lock_not_ready", out.error?.message);
-  assert.match(out.error?.message ?? "", /r2/);
+  assert.match(out.error?.message ?? "", /b@x\.com/);
   assert.equal(w.asked(), 0, "nobody asked");
   assert.deepEqual(w.said(), [], "nothing said");
   bring(w.stations.B, w.bob, false, "ws");
@@ -454,7 +454,7 @@ test("a device approved on the chain after the statements and before the moved, 
   };
   const out = await w.hand();
   assert.equal(out.error?.code, "lock_not_ready", out.error?.message);
-  assert.match(out.error?.message ?? "", /r2/);
+  assert.match(out.error?.message ?? "", /b@x\.com/);
   assert.equal(w.asked(), 1, "asked once, for the statements");
   for (const c of Object.values(w.stations)) assert.equal(c.chain(null)?.state?.moved, undefined, "no moved at a station");
   assert.notEqual(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
@@ -611,7 +611,12 @@ for (const wins of ["bob", "this device"] as const) {
       assert.equal(f.persons.get("s1"), w.gMe, "by their own log");
       const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
       assert.equal(off.error?.code, "lock_root_only", off.error?.message);
+      assert.equal(off.error?.message, "只有 b@x.com 可以关闭或重新开启安全模式。其本人无法操作时，可在 station 所在的电脑上运行 stillfail lock reset", "who alone, and the way out");
       assert.equal(w.asked(), asked, "nobody asked for it");
+      const page = lockView(w.inner, "ws");
+      assert.equal(page.rootText, "安全模式由 b@x.com 开启，只有其本人可以关闭或重新开启。其本人无法操作时，可在 station 所在的电脑上运行 stillfail lock reset", "the page says it where off and on would be");
+      assert.equal(page.onAgainText, undefined);
+      assert.equal(page.upgrade, undefined, "moved: no upgrade to show");
     }
   });
 }
@@ -774,7 +779,7 @@ test("a station that does not say it serves bodies and logs: the statements said
   assert.deepEqual(handOverState(w.inner, "ws"), { waits: [], stations: [w.B] });
   const call = await w.hand();
   assert.equal(call.error?.code, "lock_stations_not_ready", "lock.handOver refuses so");
-  assert.match(call.error?.message ?? "", /b/);
+  assert.match(call.error?.message ?? "", /studio 2/);
   assert.deepEqual(movedAt(w), [null, null]);
   w.st.old.clear();
   await w.run(read(w.inner, "ws"));
@@ -884,4 +889,108 @@ test("the app closed between the statements and the moved: moved as it starts ag
   assert.equal(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
   assert.equal(w.asked(), 1, "no ask more");
   assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS, "nothing said twice");
+});
+
+// What the pages say of a handover (the owner, 2026-11-14: to people it is 「安全模式的升级」): the owner's device that
+// is to hand over says whom and what it waits for (the `lock` topic's `upgrade`), a sentence each, and the refusals say
+// the same; where only an ask is lacking, the button, which `lock.handOver` answers once chains are handed over by
+// themselves; a pending handover is one row of its own; after the move, off and on again are the root's person's alone.
+const TITLE = "安全模式有一项升级尚未完成";
+
+test("words: a member not ready, the owner's page names them and what to do, the refusal says the same", async () => {
+  const w = await setUp({ auto: true, more: ["notReady"] });
+  const line = "等待 d@x.com：请其在自己的受信任设备上将 still.fail 更新到最新版本并打开一次";
+  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [line] });
+  const out = await w.hand();
+  assert.equal(out.error?.code, "lock_not_ready");
+  assert.equal(out.error?.message, line);
+});
+
+test("words: a member's app device on the chain and not on their log, named; a station from before, named; the refusals the same", async () => {
+  const w = await setUp({ auto: true });
+  const phone = dev();
+  w.after(w.bob.app.signer, "device", { id: phone.base.hex, sub: "r2", kind: "app", label: "bob's phone", sign_key: phone.signer.id });
+  for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
+  await w.run(read(w.inner, "ws"));
+  const line = "等待 b@x.com 的设备「bob's phone」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除";
+  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [line] });
+  assert.equal((await w.hand()).error?.message, line);
+
+  const v = await setUp({ auto: true, old: ["B"] });
+  const lines = lockView(v.inner, "ws").upgrade?.lines as string[];
+  assert.equal(lines.length, 1);
+  assert.match(lines[0]!, /^等待 station studio 2：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」$/);
+  assert.equal((await v.askGrant()).error, undefined);
+  const call = await v.hand();
+  assert.equal(call.error?.code, "lock_stations_not_ready");
+  assert.equal(call.error?.message, lines[0], "the refusal says the line");
+});
+
+test("words: more than six waited for, six lines and how many more", async () => {
+  const w = await setUp({ auto: true, crowd: 8 });
+  for (const l of w.crowd) {
+    const d = dev();
+    w.after(l.app.signer, "device", { id: d.base.hex, sub: l.sub, kind: "app", label: `${l.sub}'s phone`, sign_key: d.signer.id });
+  }
+  for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
+  await w.run(read(w.inner, "ws"));
+  const lines = lockView(w.inner, "ws").upgrade?.lines as string[];
+  assert.equal(lines.length, 7);
+  assert.equal(lines[0], "等待 m0@x.com 的设备「m0's phone」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除");
+  assert.equal(lines[6], "以及另外 2 项");
+});
+
+test("words: only an ask lacking, the button; lock.handOver answered where chains are handed over by themselves, asked in the page's words; none once moved, none with the switch off", async () => {
+  assert.equal(lockView((await setUp()).inner, "ws").upgrade, undefined, "the switch off: nothing shown");
+  const w = await setUp({ auto: true, flag: false });
+  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [], askText: "验证并完成升级" });
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.handOver", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.r.host.secureAsked.at(-1)?.reason, "完成安全模式的升级", "the ask says what it is for");
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe]);
+  await w.run(read(w.inner, "ws"));
+  assert.equal(lockView(w.inner, "ws").upgrade, undefined, "moved: none");
+});
+
+test("words: a handover pending is one row, 完成安全模式的升级, its statements riding on it", async () => {
+  const w = await setUp();
+  w.st.silent = true;
+  const out = await w.hand();
+  assert.ok((out.ok as { pending?: unknown } | null)?.pending, JSON.stringify(out.ok));
+  const rows = lockView(w.inner, "ws").pending as { text: string }[];
+  assert.equal(rows.length, 1, JSON.stringify(rows));
+  assert.match(rows[0]!.text, /^完成安全模式的升级：已记下，等 .+ 上线后生效$/);
+});
+
+test("words: a moved signed by itself and not taken yet: its row, 完成安全模式的升级", async () => {
+  const w = await setUp({ auto: true, old: ["B"] });
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  w.st.old.clear();
+  w.st.silent = true;
+  await w.run(read(w.inner, "ws"));
+  await w.r.host.time.pass(20_000);
+  const rows = (lockView(w.inner, "ws").pending as { text: string }[]).filter((x) => x.text.startsWith("完成安全模式的升级"));
+  assert.ok(pendingHeld(w.inner, "ws").some((x) => x.entry.kind === "moved"), "the moved pending");
+  assert.equal(rows.length, 1, JSON.stringify(lockView(w.inner, "ws").pending));
+  assert.match(rows[0]!.text, /^完成安全模式的升级：已记下，等 .+ 上线后生效$/);
+});
+
+test("words: moved and turned off by the root's person: the page offers turning it on again, which asks and is pending in its own words", async () => {
+  const w = await setUp();
+  assert.equal((await w.hand()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.equal(lockView(w.inner, "ws").rootText, undefined, "the root's person: none");
+  const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(off.error, undefined, off.error?.message);
+  await w.run(read(w.inner, "ws"));
+  const page = lockView(w.inner, "ws");
+  assert.equal(inForceOf(w.inner, "ws").said, "off");
+  assert.deepEqual({ locked: page.locked, notice: page.notice, onAgainText: page.onAgainText, members: (page.members as unknown[]).length, stations: (page.stations as { protected: boolean }[]).filter((s) => s.protected).length }, { locked: false, notice: true, onAgainText: "重新开启安全模式", members: 3, stations: 2 }, "what the topic says of a moved workspace that is off");
+  w.st.silent = true;
+  const on = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.open", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(on.error, undefined, on.error?.message);
+  assert.equal(w.r.host.secureAsked.at(-1)?.reason, "重新开启安全模式");
+  const rows = (lockView(w.inner, "ws").pending as { text: string }[]).map((x) => x.text);
+  assert.ok(rows.some((x) => /^重新开启安全模式：已记下，等 .+ 上线后生效$/.test(x)), JSON.stringify(rows));
 });

@@ -1996,7 +1996,15 @@ export const SHAPES: Record<string, Shape> = {
     ["attention", "u32"],
     ["pending", vec("LockPending"), { default: true, doc: "The changes this device made that no station of the lock took yet, oldest first, then those to its person's own lock\n(one made in both once); none from a core of before." }],
     ["pendingText", opt("String"), { doc: "Their heading (以下改动还没有生效), while there are any." }],
+    ["upgrade", opt("LockUpgrade"), { doc: "The upgrade of safe mode (its chain handed over to its people's own logs) not finished, on the owner's device\nthat is to finish it: what it waits for, or its button (views/lock.ts `upgradeOf`). None elsewhere, while it is on its\nway, and once done; none from a core of before." }],
+    ["rootText", opt("String"), { said: true, doc: "An upgraded workspace, to an owner who is not the person who turned it on: that only that person turns it\noff or on again, and the way out (shown where turning it off or on would be)." }],
+    ["onAgainText", opt("String"), { doc: "An upgraded workspace that is off, to the person who turned it on: the button that turns it on again\n(`lock.open`)." }],
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts)." }),
+  LockUpgrade: struct([
+    ["titleText", "String"],
+    ["lines", vec("String"), { said: true, doc: "Whom and what it waits for, a sentence each saying what to do (six at most, then how many more)." }],
+    ["askText", opt("String"), { doc: "Where only the person's ask is lacking: the button that asks once and finishes it (`lock.handOver`)." }],
+  ], { doc: "The upgrade of safe mode on the owner's device that is to finish it (the `lock` topic's `upgrade`)." }),
   LockPromptWorkspace: struct([
     ["id", "String"],
     ["name", "String", { said: true }],
