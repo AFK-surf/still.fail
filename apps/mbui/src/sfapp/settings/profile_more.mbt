@@ -136,11 +136,12 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, logins : Array[Json
             let blocked = text(field(lv, "quota"), "state") == "blocked"
             let busy = is_doing(core, ["profile.useMachineLogin"], [("station", station), ("runtime", rt)])
             list_row(c, fn() {
-              @sf.provider_logo(c, rt, "subscription", 18.0, "")
-              // what it is and using it on its first line; how it is signed in, what is wrong and its allowance under
-              // them, each as wide as its words (lines of their own)
+              // its mark, what it is and using it on its first line (the mark on that line, never centred on the row's
+              // lines: the user, 2026-11-14); how it is signed in, what is wrong and its allowance under them, each as
+              // wide as its words (lines of their own)
               @sf.row_lines(c, fn() {
                 c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
+                  @sf.provider_logo(c, rt, "subscription", 18.0, "")
                   c.text(runtime_label(rt), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                   let plan = text(lv, "planText")
                   if plan != "" {

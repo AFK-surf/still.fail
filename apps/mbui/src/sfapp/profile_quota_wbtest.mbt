@@ -163,12 +163,16 @@ test "a profile's offline state and its three allowance windows each have room t
     let first = sidebar_runs().filter(fn(r) { r.text == "5H" })[0]
     assert_true(first.top >= state.bottom, msg="state \{Repr(state)}, first chip \{Repr(first)}")
     assert_eq(t.squeeze_faults(), [])
-    // Coming back changes the state line to where the account can be used; the allowance stays in place.
+    // Coming back takes the state line away: where the account can be used is its page's, not the row's (the user,
+    // 2026-11-14), so the allowance comes up under its name.
     online.set(true)
     t.draw()
-    assert_true(sidebar_runs().iter().any(fn(r) { r.text == "Willow 可用" }))
+    t.run_for(@ui.move_most_ms)
+    assert_true(sidebar_runs().iter().all(fn(r) { r.text != "Willow 可用" && r.text != "Willow 离线" }))
     whole("online")
-    assert_eq(sidebar_runs().filter(fn(r) { r.text == "5H" })[0].top, first.top)
+    let title = sidebar_runs().filter(fn(r) { r.text == "lin@example.com" })[0]
+    let up = sidebar_runs().filter(fn(r) { r.text == "5H" })[0]
+    assert_true(up.top < first.top && up.top >= title.bottom, msg="title \{Repr(title)}, first chip \{Repr(up)}")
     // The person's narrowest sidebar still keeps all three windows whole.
     @sfdesk.wide.side_w.set(@sfdesk.side_min)
     t.draw()
@@ -272,9 +276,9 @@ fn several_tester(platform : Int, digits : Double, row? : String = "", left? : I
 
 ///|
 /// Each row with an allowance in the sidebar of several_tester, from the top: where its first capsule starts (its box,
-/// none where it has none) and how tall it is; the words of every chip drawn in those rows; where the titles start; where
-/// each row's line under its title starts; the widest room between two capsules side by side in each row.
-fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String], Double, Array[Double], Array[Double]) raise {
+/// none where it has none) and how tall it is; the words of every chip drawn in those rows (nothing else is under a
+/// fine account's title); where the titles start; the widest room between two capsules side by side in each row.
+fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String], Double, Array[Double]) raise {
   let titles = [
     "claude1@example.com", "claude2@example.com", "claude3@example.com", "claude4@example.com", "claude5@example.com",
     "ChatGPT 团队", "备用 key",
@@ -310,17 +314,14 @@ fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String]
   let starts : Array[Double?] = []
   let heights : Array[Double] = []
   let words : Array[String] = []
-  let lines_x : Array[Double] = []
   let gaps : Array[Double] = []
   for k in 0..<(titles.length() - 1) {
     let (top, next) = (tops[k], tops[k + 1])
     heights.push(next - top)
     let in_row = runs.filter(fn(r) { r.top > top && r.top < next && r.x1 < right })
-    // (the chips' words: under its line of facts, which may end in … as it will, and not the next group's heading)
-    let facts = in_row.fold(init=next, fn(a, r) { if r.top < a { r.top } else { a } })
-    lines_x.push(in_row.filter(fn(r) { r.top == facts }).fold(init=@double.infinity, fn(a, r) { if r.x0 < a { r.x0 } else { a } }))
+    // (the chips' words, not the next group's heading)
     for r in in_row {
-      if r.top > facts && !["ChatGPT 订阅", "API key"].contains(r.text) {
+      if !["ChatGPT 订阅", "API key"].contains(r.text) {
         words.push(r.text)
       }
     }
@@ -357,7 +358,7 @@ fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String]
     }
     gaps.push(widest)
   }
-  (starts, heights, words, first_title.x0, lines_x, gaps)
+  (starts, heights, words, first_title.x0, gaps)
 }
 
 ///|
@@ -372,7 +373,7 @@ test "a list of five accounts' allowances: every row's chips start where its mar
     for side in widths {
       @sfdesk.wide.side_w.set(side)
       t.draw()
-      let (starts, heights, words, text_x, lines_x, gaps) = several_rows(t)
+      let (starts, heights, words, text_x, gaps) = several_rows(t)
       let at = "\{platform} \{digits} \{side}"
       // (a) the five Claude accounts' and ChatGPT's: one start, the mark's
       let shown = starts.filter_map(fn(s) { s })
@@ -386,8 +387,6 @@ test "a list of five accounts' allowances: every row's chips start where its mar
       // (each way of a row's chips from the start, never spread to the row's ends: no more room between two side by
       // side than a mark wider than its chip leaves)
       assert_true(gaps.iter().all(fn(g) { g < 16.0 }), msg="\{at}: room between capsules \{Repr(gaps)}")
-      // (and each row's line under its title, its facts: from the mark's edge too)
-      assert_true(lines_x.iter().all(fn(x) { (x - mark_x).abs() < 0.01 }), msg="\{at}: lines under the titles start at \{Repr(lines_x)}, the mark at \{mark_x}")
       // (b) every chip whole
       assert_true(words.iter().all(fn(w) { !w.has_suffix("…") }), msg="\{at}: \{Repr(words)}")
       assert_eq(t.squeeze_faults(), [], msg=at)
@@ -401,7 +400,7 @@ test "a list of five accounts' allowances: every row's chips start where its mar
       for i, side in widths {
         @sfdesk.wide.side_w.set(side)
         t.draw()
-        let (starts, heights, _, _, _, _) = several_rows(t)
+        let (starts, heights, _, _, _) = several_rows(t)
         let at = "\{platform} \{digits} \{side}: \{row} all \{left}"
         assert_eq(starts, seen[i].0, msg=at)
         assert_true(heights[0] == heights[1] && heights[2] == heights[3], msg="\{at}: rows \{Repr(heights)}")

@@ -321,18 +321,9 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         // needs a look in colour
         let trouble = text(field(e, "state"), "text")
         let tone = text(field(e, "state"), "tone")
-        // where it is and who uses it
-        let used = count(e, "usedCount")
-        let facts = [
-          text(p, "planText"),
-          text(e, "where"),
-          if used > 0 {
-            @sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())])
-          } else {
-            ""
-          },
-        ].filter(fn(x) { x != "" })
-        let facts = facts.join(" · ")
+        // its name and its allowance: its plan, where it can be used and which connects use it are its page's (the user,
+        // 2026-11-14: 「额度的第二行感觉现在就一个有效信息」; the plan beside the name cut the name short in the narrowest
+        // sidebar); the line under the name is only for what is wrong, and a balance where it has no windows.
         let quota = field(p, "quota")
         let ok = text(quota, "state") == "ok"
         let windows = ok && items(quota, "windows").length() > 0
@@ -346,32 +337,11 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             // (a subscription by its account, a key by its name: the core's)
             fn() { nav_title(c, if text(e, "title") == "" { text(p, "name") } else { text(e, "title") }, away=!usable) },
             lines=fn() {
-              // The state (or where the account can be used) and its allowance each have their own line: neither
-              // may take the room the other's words need. Keeping both lines also keeps the row's height as its
-              // station goes offline and comes back.
-              if windows || credits {
-                @sf.list_row_line(c, fn() {
-                  if trouble != "" {
-                    c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
-                  } else {
-                    c.text(facts, style=nav_meta().then(place_fill)) |> ignore
-                  }
-                })
+              if trouble != "" {
+                @sf.list_row_line(c, fn() { c.text(trouble, style=nav_meta().then(trouble_ink(tone)).then(place_fill)) |> ignore })
               }
-              if !windows {
-                @sf.list_row_line(c, fn() {
-                  if trouble != "" && !credits {
-                    c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
-                  }
-                  if credits {
-                    c.text(text(quota, "creditsText"), style=nav_meta()) |> ignore
-                  } else {
-                    if trouble != "" && facts != "" {
-                      c.text("·", style=nav_meta()) |> ignore
-                    }
-                    c.text(facts, style=nav_meta().then(place_fill)) |> ignore
-                  }
-                })
+              if credits {
+                @sf.list_row_line(c, fn() { c.text(text(quota, "creditsText"), style=nav_meta()) |> ignore })
               }
             },
             more~,

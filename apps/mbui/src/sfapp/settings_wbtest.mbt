@@ -415,11 +415,13 @@ test "profiles, connects, the vault: their lists" {
   assert_true(t.find("Claude 订阅") is Some(_))
   assert_true(t.find("Ultra") is Some(_), msg="the subscription's tier in its row")
   assert_true(t.find("Pro 200") is Some(_), msg="the Codex subscription's tier in its row")
-  // its allowance a line of its own under its words, at the row's start
-  let (nx, ny) = t.find("Claude 主账号").unwrap()
-  let (qx, qy) = t.find("62%").unwrap()
-  assert_true(qy > ny + 20.0)
-  assert_true(qx < nx)
+  // its allowance a line of its own under its words, at the row's start; its plan right after its name, on its line
+  let run = fn(words : String) { t.text_runs().filter(fn(r) { r.text == words })[0] }
+  let name = run("Claude 主账号")
+  let plan = run("Ultra")
+  let chips = t.text_runs().filter(fn(r) { r.top > name.bottom + 4.0 && r.top < name.bottom + 40.0 })
+  assert_true(chips.iter().any(fn(r) { r.text.has_suffix("62%") }), msg="\{Repr(chips.map(fn(r) { r.text }))}")
+  assert_true(plan.x0 > name.x1 && plan.x0 - name.x1 < 12.0, msg="name \{Repr(name)}, plan \{Repr(plan)}")
   let t2 = settings_tester("connects")
   // (its Slack workspace after its name)
   assert_true(t2.find("星火助手") is Some(_))

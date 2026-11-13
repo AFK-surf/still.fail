@@ -47,6 +47,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - Its parts are shown on their own, each beside its states, by `src/sfstories` (a story a part, `stories.mbt`), built
   for the browser by `scripts/kit-web.sh` and deployed from main to kit.monoid.zone (`cloud/wrangler.kit.jsonc`).
 
+- Beside a block of several lines, an icon, a mark, a chevron or a one-line part (a plan, a value) sits on its first
+  line, aligned with it, never centred on the block's height (the user, 2026-11-14: 「不应该一个图标或者一行内容跟多行做
+  垂直居中对齐」, said before).
+
 - A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
   as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
   worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui's ui/style.mbt). Why (2026-10-24): moonc made
