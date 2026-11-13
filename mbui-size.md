@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [9e98b2805](https://github.com/AFK-surf/monoid/commit/9e98b28053e67b8599b637dc99dd0540034f1bf2) app: 小屏's chat bar names its key to the chat's ser | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.76 | 53.23 | 96.93 | 116.85 |
 | [ab6f4880d](https://github.com/AFK-surf/monoid/commit/ab6f4880dd477b8290a50b1b392e3a3984426186) fix(mbui): a station's 设置 whole as it comes; what  | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.23 | 96.78 | 108.75 |
 | [41b38a6ec](https://github.com/AFK-surf/monoid/commit/41b38a6ecdc8183b81d040100fb94b96cef1755c) core: a workspace's chain handed over by itself, b | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.21 | 96.58 | 113.48 |
 | [d32206ba1](https://github.com/AFK-surf/monoid/commit/d32206ba19b7943c81adb9d5a561918ae1d668eb) mbui app: a chat's page made as nodes, its compose | 1.98 | 2.71 | 11.53 | 31.13 | 41.48 | 27.75 | 53.21 | 96.75 | 104.52 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [ac936000a](https://github.com/AFK-surf/monoid/commit/ac936000aa4759c093e22d31daa3811a3e03f3c4) fix(mbui): jump to the clicked tick's message on t | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.18 | 110.82 |
 | [a2045f270](https://github.com/AFK-surf/monoid/commit/a2045f270895fefe9f6726aee7854c989e72d62c) Keep the Windows renderer's compiled shaders on di | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.91 | 109.63 |
 | [4f7321711](https://github.com/AFK-surf/monoid/commit/4f732171142ecbd00650e2944a8322db69c55d8c) Fix LAN direct RTT inflation and front replacement | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 112.88 |
-| [ea62d0c05](https://github.com/AFK-surf/monoid/commit/ea62d0c05a38c28e9fce8c16eb9cc279bd87bf04) perf(mbui): enable Metal framebufferOnly, opaque l | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.7 | 95.86 | 107.28 |
