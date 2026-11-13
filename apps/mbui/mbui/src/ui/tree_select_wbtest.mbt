@@ -391,3 +391,28 @@ test "dragged over words in pieces past a block lent a picker that picks none: t
   assert_eq(picked_past_a_block(true), "before\nafter")
   assert_eq(picked_past_a_block(false), "before\nquoted\nafter")
 }
+
+///|
+test "what a finger is picking read as it goes (Tester::picking): the word held, its two handles; its end's handle taken where only it takes the finger and moved across, the end follows it, the start where it was; none once let go by a tap" {
+  let t = tree_picked_tester(true, platform=2)
+  assert_eq(t.picking(), None)
+  t.press_at(60.0, 51.0)
+  t.run_for(long_press_ms)
+  t.release(60.0, 51.0)
+  t.draw()
+  guard t.picking() is Some(first) && first.ends is [Some(_), Some((ex, ey))] else {
+    fail("no word picked with its handles: \{Repr(t.picking())}")
+  }
+  assert_eq((first.text, first.finger), ("wide", true))
+  t.press_at(ex, ey)
+  t.frame()
+  t.move_to(ex + 60.0, ey)
+  t.draw()
+  guard t.picking() is Some(now) else { fail("let go as its handle moved") }
+  assert_true(now.text.has_prefix("wide") && now.text.length() > 4, msg="\{Repr(now)}")
+  t.release(ex + 60.0, ey)
+  t.draw()
+  t.tap(200.0, 250.0)
+  t.draw()
+  assert_eq(t.picking(), None)
+}

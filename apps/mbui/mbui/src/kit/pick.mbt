@@ -174,6 +174,15 @@ pub fn Pick::handles(self : Pick, c : @ui.Ctx, words : @ui.Words, ends : Array[I
   }
   let first = lines[0]
   let last = lines[lines.length() - 1]
+  // (what a Tester reads of it as this frame paints it: its words, where a finger takes each end)
+  let n = words.text.length()
+  let a = if self.a < 0 { 0 } else if self.a > n { n } else { self.a }
+  let b = if self.b < a { a } else if self.b > n { n } else { self.b }
+  @ui.picking_painted(
+    words.text.unsafe_substring(start=a, end=b),
+    (first.0, first.1 + first.3 / 2.0),
+    (last.0 + last.2, last.1 + last.3 / 2.0),
+  )
   if pressed_now && self.handle == 0 {
     for k, id in ends {
       if pick_in(c, id, down_x, down_y) {

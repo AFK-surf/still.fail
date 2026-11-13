@@ -857,16 +857,17 @@ test "on the tape a finger held on a message's words widens them as it slides ac
   let (x, y) = (rx + 24.0, ry + 8.0)
   t.press_at(x, y)
   t.run_for(long_press_ms)
-  assert_true(pk.ts != "")
-  let first = (pk.sel.a, pk.sel.b)
+  // (what is being picked as a Tester reads it, on a page of either kind: Tester::picking)
+  guard t.picking() is Some(first) else { fail("nothing picked") }
   slide(t, x, y, x + 60.0, y, 6)
   assert_eq(@sfdesk.wide.tape_pull.get(), None)
-  assert_eq(pk.sel.a, first.0)
-  assert_true(pk.sel.b > first.1 + 2, msg="\{Repr((first, pk.sel.a, pk.sel.b))}")
+  guard t.picking() is Some(now) else { fail("let go as it slid") }
+  // (from the word first held, on by words)
+  assert_true(now.text.has_prefix(first.text) && now.text.length() > first.text.length() + 2, msg="\{Repr((first, now))}")
   t.release(x + 60.0, y)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
-  assert_true(pk.ts != "", msg="still picked")
+  assert_true(t.picking() is Some(_), msg="still picked")
 }
 
 ///|
@@ -874,15 +875,16 @@ test "on the tape a picked passage's handle moved across moves its end, no panel
   let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
   page_over(t, 720.0)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  let first = (pk.sel.a, pk.sel.b)
-  let lines = t.ctx().words_of(pk.sel.key).unwrap().rects(pk.sel.a, pk.sel.b)
-  let last = lines[lines.length() - 1]
-  let (x, y) = (last.0 + last.2, last.1 + last.3 / 2.0)
+  // (its end's handle, where a finger takes it, on a page of either kind: Tester::picking)
+  guard t.picking() is Some(first) && first.ends.get(1) is Some(Some((x, y))) else {
+    fail("no end's handle: \{Repr(t.picking())}")
+  }
   t.press_at(x, y)
   t.frame()
   slide(t, x, y, x + 60.0, y, 6)
   assert_eq(@sfdesk.wide.tape_pull.get(), None)
-  assert_true(pk.sel.b > first.1 + 2, msg="\{Repr((first, pk.sel.a, pk.sel.b))}")
+  guard t.picking() is Some(now) else { fail("let go as its handle moved") }
+  assert_true(now.text.has_prefix(first.text) && now.text.length() > first.text.length() + 2, msg="\{Repr((first, now))}")
   t.release(x + 60.0, y)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)

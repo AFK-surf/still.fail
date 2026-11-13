@@ -345,6 +345,7 @@ fn desk_reset() -> Unit {
   desk.sels = []
   select_none()
   finger_reset()
+  picking_reset()
 }
 
 ///|
@@ -383,6 +384,7 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   // (drawn where they are: none moved since)
   sel_moved.val = (0.0, 0.0)
   finger_frame_end()
+  picking_frame_end()
   if !self.down && self.px >= 0.0 {
     if pointing() is Finger {
       // a finger lifted is nowhere: what it last touched is not hovered, and the pointer is not over it (this frame,
