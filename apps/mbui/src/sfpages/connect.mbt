@@ -584,7 +584,6 @@ fn cd_session_row_node(r : @view.View, core : Core, station : String, s : () -> 
     value=fn() { text(field(field(s(), "time"), "lastActiveAt"), "ago") },
     title_cut=true,
     value_cut=true,
-    chevron=false,
     tail=fn(e) {
       // (its check or its wait before its words, and its tone: the pill made again as they change)
       let icon = fn() {

@@ -941,7 +941,7 @@ pub fn code_block_node(
         q.box(fn(w) { words(w, true) }) |> ignore
       } else {
         q.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
-          held.padding(Is((14.0, 12.0, 14.0, 12.0))).lines_up(Is(Some(Start))) |> ignore
+          held.padding(Is((14.0, 12.0, 14.0, 12.0))).min_height(By(fn() { Some(row_least()) })).lines_up(Is(Some(Start))) |> ignore
           held.box(fn(w) { words(w, false) }) |> ignore
         })
         |> ignore

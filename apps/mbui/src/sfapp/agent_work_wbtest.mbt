@@ -447,8 +447,8 @@ fn aw_audited(t : @ui.Tester, before : Array[String], at : String, open? : Bool 
 fn aw_crowded(faults : Array[String], at : String, history : Int, work : Int) -> Unit raise {
   let room = faults.filter(fn(f) { f.has_prefix("room: ") })
   let of = fn(place : String) { room.filter(fn(f) { f.contains(place) }) }
-  let h = of("sfdesk/history.mbt:397")
-  let w = of("sfpages/agent_work.mbt:352")
+  let h = of("sfdesk/history.mbt:175")
+  let w = of("sfpages/agent_work.mbt:353")
   assert_eq(h.length(), history, msg="\{at}: \{Repr(h)}")
   assert_eq(w.length(), work, msg="\{at}: \{Repr(w)}")
 }
@@ -461,9 +461,8 @@ test "its panel on each screen, at the default size of words and at 1.3: what ru
       let at = "platform \{platform} wide \{wide} at \{scale}"
       let t = aw_tester(aw_card(), platform~, wide~, scale~)
       let before = t.audit()
-      // (the details' crowded rows, on a wide window, at 1 and at 1.3 alike: 「释放进程」 48×32 or 「Profile 详情」 94×34,
-      // and 「后台 4 · 2/6」 88×32 or 110×34; known, see aw_crowded)
-      if wide {
+      // (on a wide window at 1.3, 「Profile 详情」 108×34 and 「后台 4 · 2/6」 110×34 stay under 36; at 1, they clear; known, see aw_crowded)
+      if wide && at.has_suffix("at 1.3") {
         aw_crowded(before, at, 1, 1)
       } else {
         aw_crowded(before, at, 0, 0)

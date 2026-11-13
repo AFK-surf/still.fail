@@ -120,7 +120,7 @@ pub fn agent_card_node(
     b.show(fn() { text(card(), "jobs") != "" || items(card(), "attention").length() > 0 }, fn(x) {
       @sf.style_node(x, fn() { agent_card_notes })
       x.show(fn() { text(card(), "jobs") != "" }, fn(j) {
-        agent_card_link_node(j, fn() { text(card(), "jobs") }, fn() { agent_card_line }, fn() { agent_card_now }, fn() {
+        agent_card_link_node(j, fn() { text(card(), "jobs") }, fn() { agent_card_action }, fn() { agent_card_action }, fn() {
           (@sfbase.chat_jobs_open.val)(src, r, j.window().0)
         })
       })

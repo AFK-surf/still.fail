@@ -2090,9 +2090,10 @@ pub(all) enum PillTone {
 }
 
 ///|
-/// A pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, on one line, 22 high, 9 in, round; on the quiet grey in
-/// the muted ink, or in a tone (its pale ground, its ink). `icon`: what leads it, 14, in its ink (a status's check or
-/// wait: ui.tsx StatusText), 4 before its words.
+/// A status pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, on one line, 22 high, 9 in, 4px rounded tag
+/// (Radius::Base) keeping full capsules for clickable controls; on the quiet grey in the muted ink, or in a tone
+/// (its pale ground, its ink). `icon`: what leads it, 14, in its ink (a status's check or wait: ui.tsx StatusText),
+/// 4 before its words.
 pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : String = "") -> Unit {
   let p = theme().p
   let (ground, ink) = match tone {
@@ -2186,7 +2187,7 @@ let verify_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Pos
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), gap=S1, radius=Full, align=ACenter)
+let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), gap=S1, radius=Base, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

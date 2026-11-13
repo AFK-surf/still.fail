@@ -1138,9 +1138,9 @@ let peek_add : @ui.TextStyle = @ui.text_style(size=Meta, color=Positive, wrap=fa
 let peek_del : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A state's pill: a capsule 8 (6 before its glyph) in, its glyph 4 from its name.
+/// A state's badge: 4px rounded tag (Radius::Base), keeping full capsules exclusive to clickable controls.
 // kept across runs: a value (no field of it changes)
-let peek_state : @ui.Style = @ui.css("row h=S5 gap=S1 pl=S1_5 pr=S2 radius=Full align=ACenter")
+let peek_state : @ui.Style = @ui.css("row h=S5 gap=S1 pl=S1_5 pr=S2 radius=Base align=ACenter")
 
 ///|
 let peek_glyph : Double = 12.0

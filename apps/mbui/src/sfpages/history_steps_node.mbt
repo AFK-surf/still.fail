@@ -569,10 +569,10 @@ fn item_node(
               })
           }
           if flag(content, "block") && ends == "" {
-            @sf.pill_node(l, fn() { "Block" }, tone=Blue) |> ignore
+            @sf.badge_node(l, fn() { "Block" }, tone=Blue) |> ignore
           }
           if failed {
-            @sf.pill_node(l, fn() { @sf.t("web-main.history.sendFailed") }, tone=Red) |> ignore
+            @sf.badge_node(l, fn() { @sf.t("web-main.history.sendFailed") }, tone=Red) |> ignore
           }
         })
         steps_box_node(b, if failed { h_card_failed } else { h_card }, fn(card) {
@@ -622,7 +622,7 @@ fn one_line_node(
 ) -> Unit {
   let open = fn() { steps_own.opened.contains(key) }
   v.box(fn(r) {
-    @sf.style_node(r, fn() { h_one.then(@sf.row_least_h()) })
+    @sf.style_node(r, fn() { h_one_press.then(@sf.row_least_h()) })
     @sf.presses_node(r, fn() { steps_flip(key) })
     r
     .says(By(fn() {
@@ -643,11 +643,16 @@ fn one_line_node(
       })
       |> ignore
     })
+    r.show(fn() { !open() }, fn(i) {
+      @sf.icon_node(i, "chevron-down", 12.0, By(fn() { if @sf.lit_node(r) { @sf.theme().p.blue } else { @sf.theme().p.muted } })) |> ignore
+    })
     r.show(open, fn(o) {
-      o.grow(Is(1.0)).row(Is(true)) |> ignore
+      @sf.style_node(o, fn() { h_one_open })
+      o.grow(Is(1.0)) |> ignore
       steps_box_node(o, h_grow, fn(_) {  }, in_row=true)
       @sf.words_node(o, fn() { @sf.t("web-main.fold") }, fn() { if @sf.lit_node(r) { h_one_fold_hot } else { h_one_fold } })
       |> ignore
+      @sf.icon_node(o, "chevron-up", 12.0, By(fn() { if @sf.lit_node(r) { @sf.theme().p.accent } else { @sf.theme().p.blue } })) |> ignore
     })
   })
   |> ignore
@@ -659,11 +664,12 @@ fn one_line_node(
 /// Long words folded to `lines` lines of `line` in `v`: past that cut, a button under them saying how many
 /// more lines there are; pressed, all of them, 收起 under them.
 fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@view.View) -> Unit) -> Unit {
-  let most = lines.to_double() * line + 2.0
   let open = fn() { steps_own.opened.contains(key) }
   // (by the room it is given: how tall what it holds comes to whole at that width, measured as it is laid out, what
   // shows by that laid out in that same layout)
   v.by_room(fn(v, given) {
+    let line_h = fn() { @sf.node_sp(v, line) }
+    let most = fn() { lines.to_double() * line_h() + 2.0 }
     let inner : Ref[@view.View?] = Ref(None)
     let tall = fn() {
       match inner.val {
@@ -671,7 +677,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
         None => 0.0
       }
     }
-    let long = fn() { tall() > most + 4.0 }
+    let long = fn() { tall() > most() + 4.0 }
     steps_box_node(v, h_fold, fn(f) {
       steps_box_node(f, h_fold_room, fn(room) {
         steps_box_node(room, h_fold_inner, fn(i) {
@@ -683,7 +689,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
         // tall: all of it at once was a step of that many lines in one frame, what is under it with it)
         let way = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
         room.reacts(open, fn(o) {
-          let past = dmax(0.0, @signals.untracked(tall) - most)
+          let past = dmax(0.0, @signals.untracked(tall) - most())
           way.go(if o { 1.0 } else { 0.0 }, @motion.moved().per_unit(past), at=room.cause_at())
         })
         let shown = fn() {
@@ -696,12 +702,13 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
         .holds_whole()
         .max_height(By(fn() {
           let k = shown()
+          let m = most()
           if k >= 1.0 {
             None
           } else if long() {
-            Some(most + (tall() - most) * dmax(0.0, k))
+            Some(m + (tall() - m) * dmax(0.0, k))
           } else {
-            Some(most + 4.0)
+            Some(m + 4.0)
           }
         }))
         |> ignore
@@ -711,14 +718,24 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           if open() {
             @sf.t("web-main.fold")
           } else {
-            let more = dmax(1.0, ((tall() - most) / line).round()).to_int()
+            let more = dmax(1.0, ((tall() - most()) / line_h()).round()).to_int()
             @sf.t("web-main.history.more", args=[("n", more.to_string())])
           }
         }
-        steps_box_node(t, h_fold_toggle, fn(b) {
+        t.box(fn(b) {
+          @sf.style_node(b, fn() { h_fold_toggle.then(@sf.row_least_h()) })
           steps_pressed(b, fn() { steps_flip(key) }, label=words, folds=true, open~)
           @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
+          @sf.icon_node(b, "chevron-down", 12.0, By(fn() { if @sf.lit_node(b) { @sf.theme().p.accent } else { @sf.theme().p.blue } }), name_now=fn() {
+            if open() {
+              "chevron-up"
+            } else {
+              "chevron-down"
+            }
+          })
+          |> ignore
         })
+        |> ignore
       })
     })
   })
@@ -812,7 +829,10 @@ fn place_node(v : @view.View, station : String, place : Json?) -> Unit {
     fn() { text(place, "surface") },
     fn() { text(place, "name") },
     fn(hot) { if hot { h_place_hot } else { h_place } },
-    h_place_words,
+    match press {
+      Some(_) => h_place_link_words
+      None => h_place_words
+    },
     press~,
   )
   |> ignore
@@ -856,7 +876,10 @@ fn slack_name_node(
       },
       on=fn() { !saying() },
     )
-    steps_run(p, fn() { name }, h_strong, underline=fn() { @sf.lit_node(p) && !saying() })
+    steps_run(p, fn() { name }, h_strong_link, underline=fn() { @sf.lit_node(p) && !saying() })
+    p.show(fn() { !saying() }, fn(i) {
+      @sf.icon_node(i, "chevron-down", 10.0, By(fn() { @sf.theme().p.blue })) |> ignore
+    })
     p.show(saying, fn(s) { @sf.spinner_node(s, size=12.0) |> ignore })
     p.show(fn() { !saying() && core_failed(src, ["slack.identity"], on) is Some(_) }, fn(f) {
       @sf.icon_node(f, "info", 12.0, By(fn() { @sf.theme().p.red })) |> ignore
@@ -880,7 +903,7 @@ fn task_node(v : @view.View, key : String, task : Json?, rail : Bool, rail_last 
   let agent = flag(task, "agent")
   ev_node(v, if agent { "agent" } else { "command" }, "", if failed { "red" } else { "" }, rail~, rail_last~, row=has, fn(b) {
     if !has {
-      steps_box_node(b, h_one, fn(o) { steps_words(o, fn() { text(task, "text") }, if failed { h_one_red } else { h_one_words }) })
+      steps_box_node(b, h_one_wrap, fn(o) { steps_words(o, fn() { text(task, "text") }, if failed { h_one_red_wrap } else { h_one_words_wrap }) })
     } else {
       one_line_node(b, key, fn(_) {  }, text(task, "text"), if failed { "red" } else { "" }, fn(w) {
         if agent {
@@ -987,7 +1010,15 @@ fn group_node(
     if rail {
       gv.box(fn(o) {
         o.over(Is(true)) |> ignore
-        steps_box_node(o, h_rail_room_last, fn(room) { steps_box_node(room, h_rail, fn(_) {  }) })
+        o.box(fn(room) {
+          @sf.style_node(room, fn() {
+            // (from under its chevron mark, in the middle of the group header row)
+            let under = @sf.room_of((@sf.row_least() + h_mark) / 2.0)
+            h_rail_room_last.then(@ui.style(pt=under))
+          })
+          steps_box_node(room, h_rail, fn(_) {  })
+        })
+        |> ignore
       })
       |> ignore
     }
@@ -1023,11 +1054,11 @@ fn group_node(
         |> ignore
       }, in_row=true)
       if failures > 0 {
-        @sf.pill_node(h, fn() { @sf.t("web-main.history.failures", args=[("n", failures.to_string())]) }, tone=Red)
+        @sf.badge_node(h, fn() { @sf.t("web-main.history.failures", args=[("n", failures.to_string())]) }, tone=Red)
         |> ignore
       }
       if pending > 0 {
-        @sf.pill_node(h, fn() { @sf.t("web-main.history.pending", args=[("n", pending.to_string())]) }, tone=Accented)
+        @sf.badge_node(h, fn() { @sf.t("web-main.history.pending", args=[("n", pending.to_string())]) }, tone=Accented)
         |> ignore
       }
       match text(g, "title") {
@@ -1075,7 +1106,7 @@ fn step_node(v : @view.View, src : Source, station : String, key : String, rk : 
       }
       said => steps_box_node(sum, h_grow_clip, fn(c) { steps_words(c, fn() { said }, h_step_said) }, in_row=true)
     }
-    steps_words(sum, fn() { text(step, "meta") }, if failed { h_step_meta_red } else { h_step_meta })
+    @sf.words_node(sum, fn() { text(step, "meta") }, fn() { if failed { h_step_meta_red } else { h_step_meta } }).shrink(Is(0.0)) |> ignore
   }, fn(body) { tool_body_node(body, src, rk, step) })
 }
 
@@ -1099,6 +1130,20 @@ fn opened_node(
       |> ignore
       steps_pressed(line, fn() { steps_flip(rk) }, folds=true, open~)
       summary(line)
+      @sf.icon_node(
+        line,
+        "chevron-right",
+        12.0,
+        By(fn() { if @sf.lit_in_node(line) { @sf.theme().p.blue } else { @sf.theme().p.muted } }),
+        name_now=fn() {
+          if open() {
+            "chevron-down"
+          } else {
+            "chevron-right"
+          }
+        },
+      )
+      |> ignore
     })
     |> ignore
     @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, deferred=true) |> ignore
@@ -1285,6 +1330,7 @@ fn tool_part_node(v : @view.View, part : Json?) -> Unit {
       |> ignore
     "facts" =>
       steps_box_node(v, tool_facts, fn(f) {
+        f.wraps(Is(Some(4.0))) |> ignore
         for fact in items(part, "items") {
           let fv = Some(fact)
           match field(fv, "value") {
@@ -1299,6 +1345,8 @@ fn tool_part_node(v : @view.View, part : Json?) -> Unit {
                 }))
                 .words_look(By(fn() { @ui.style_words(tool_fact) }))
                 .ink(By(fn() { @ui.style_ink(tool_fact) }))
+                .shrink(Is(1.0))
+                .min_width(Is(Some(0.0)))
                 |> ignore
               })
               |> ignore
@@ -1309,13 +1357,13 @@ fn tool_part_node(v : @view.View, part : Json?) -> Unit {
     "path" =>
       steps_box_node(v, tool_path, fn(p) {
         p.box(fn(w) {
-          w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
           steps_run(w, fn() { text(part, "path") }, tool_path_words, mono=true)
         })
         |> ignore
         match text(part, "extra") {
           "" => ()
-          e => steps_words(p, fn() { e }, tool_path_extra)
+          e => @sf.words_node(p, fn() { e }, fn() { tool_path_extra }).shrink(Is(0.0)) |> ignore
         }
       })
     "diff" =>
@@ -1746,6 +1794,10 @@ let h_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 let h_strong : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg)
 
 ///|
+// kept across runs: a value (no field of it changes)
+let h_strong_link : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Link)
+
+///|
 /// A reminder's label stays on one line; its preview gives way when the row is narrow.
 // kept across runs: a value (no field of it changes)
 let h_reminder : @ui.TextStyle = h_strong.then(@ui.text_style(wrap=false))
@@ -1770,6 +1822,10 @@ let h_place_hot : @ui.Style = h_place.then(@ui.css("bg=Hover"))
 ///|
 // kept across runs: a value (no field of it changes)
 let h_place_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_place_link_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Link)
 
 ///|
 /// A person's words (hWords: 13, the ink); a job's (hOutput: 11 mono on 1.55).
@@ -1805,15 +1861,15 @@ let h_fold_inner : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_fold_toggle : @ui.Style = @ui.css("row py=S0_5")
+let h_fold_toggle : @ui.Style = @ui.css("row py=S0_5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let h_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Link, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+let h_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Accent, wrap=false)
 
 ///|
 /// An event in one line (hOne): 20 high, 12 muted (the ink pointed at, red when it failed), 6 apart; 收起 at its end;
@@ -1823,7 +1879,23 @@ let h_one : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACenter clip
 
 ///|
 // kept across runs: a value (no field of it changes)
+let h_one_press : @ui.Style = h_one.then(@ui.css("radius=Lg hovered{bg=Hover}"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_open : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_wrap : @ui.Style = @ui.css("w=Full min_h=S5")
+
+///|
+// kept across runs: a value (no field of it changes)
 let h_one_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_words_wrap : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1835,11 +1907,15 @@ let h_one_red : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Dang
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_fold : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+let h_one_red_wrap : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_fold_hot : @ui.TextStyle = h_one_fold.then(@ui.text_style(color=Fg))
+let h_one_fold : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Link, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_fold_hot : @ui.TextStyle = h_one_fold.then(@ui.text_style(color=Accent))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1892,7 +1968,7 @@ let h_group : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_group_head : @ui.Style = @ui.css("row w=Full px=S1_5 gap=S2 align=ACenter radius=Xl hovered{bg=Hover}").then(@sf.outset(6.0))
+let h_group_head : @ui.Style = @ui.css("row w=Full px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}").then(@sf.outset(6.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1918,11 +1994,11 @@ let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1_25 px=S1_5 gap=S2 ali
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, wrap=false)
+let h_step_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_name_red : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Danger, wrap=false)
+let h_step_name_red : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Danger, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2011,7 +2087,7 @@ let tool_facts : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_fact : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
+let tool_fact : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle)
 
 ///|
 /// A path (path): 2 in, 12 mono on 1.5, the ink; what of it after, 11 subtle.
@@ -2177,6 +2253,7 @@ pub fn history_attention_node(
 ) -> Unit {
   let notes = fn() { items(a(), "attention") }
   parent.each(fn() { Array::makei(notes().length(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
+    c.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     let k = i.untracked()
     let n = fn() { notes().get(k) }
     let q = fn() { field(n(), "quota") }
@@ -2197,7 +2274,11 @@ pub fn history_attention_node(
         )
         |> ignore
       } else {
-        @sf.words_node(x, fn() { text(n(), "text") }, fn() { if text(n(), "kind") == "disk" { amber } else { red } }) |> ignore
+        x.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        @sf.words_node(x, fn() { text(n(), "text") }, fn() { if text(n(), "kind") == "disk" { amber } else { red } })
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        |> ignore
       }
     })
   })

@@ -43,6 +43,18 @@ fn history_node(
     fn() { @sfbase.go_back() |> ignore },
     top=fn() { frame().top },
     trailing=fn(e) {
+      e.gap(By(fn() { @sf.keys_apart(size=34.0, least=4.0) })) |> ignore
+      e.show(fn() { agent() is Some(_) && history_tab.get() == 0 }, fn(f) {
+        let on = fn() { @sfpages.history_only_io() }
+        @sf.round_key_node(
+          f,
+          "filter",
+          fn() { @sf.t("web-main.history.onlyIo") },
+          fn() { @sfpages.history_only_io_flip() },
+          icon_size=18.0,
+          ink=fn() { if on() { @sf.theme().p.accent } else { @sf.theme().p.text } },
+        )
+      })
       e.show(fn() { title() != "" && link() != "" }, fn(k) {
         @sf.round_key_node(k, "copy", fn() { tr("web-mobile.history.copyLink") }, fn() {
           copy_chat_link(@signals.untracked(title), @signals.untracked(link))
@@ -74,21 +86,33 @@ fn history_node(
     }, fill=true)
   })
   v.show(fn() { agent() is Some(_) }, fn(h) { history_summary_node(h, agent, tips) })
-  v.show(fn() { agent() is Some(_) && history_tab.get() == 1 }, fn(d) { history_details_node(d, src, r, key, agent, tips) })
-  // its steps, as every pane draws them (sfpages' history_steps_node.mbt), the room left; opened at an entry, brought
-  // to it once
-  v.show(fn() { agent() is Some(_) && history_tab.get() == 0 }, fn(s) {
-    s.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-    let lkey = "history/" + r.station + "/" + key
-    match entry {
-      Some(e) if !history_placed.contains(lkey) => {
-        history_placed[lkey] = true
-        @sfpages.history_focus(r.station, key, e)
-      }
-      _ => ()
-    }
-    @sfpages.history_steps_node(s, src, r.station, key, tips)
+  // kept per tab so switching 步骤 <-> 详情 preserves the steps scroll position
+  v.box(fn(tabs) {
+    tabs.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    tabs.each(
+      fn() { if agent() is Some(_) { [history_tab.get()] } else { [] } },
+      fn(k) { k },
+      keeps=fn() { if agent() is Some(_) { [0, 1] } else { [] } },
+      fn(slot, tab) {
+        slot.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+        if tab.untracked() == 1 {
+          history_details_node(slot, src, r, key, agent, tips)
+        } else {
+          let lkey = "history/" + r.station + "/" + key
+          match entry {
+            Some(e) if !history_placed.contains(lkey) => {
+              history_placed[lkey] = true
+              @sfpages.history_focus(r.station, key, e)
+            }
+            _ => ()
+          }
+          @sfpages.history_steps_node(slot, src, r.station, key, tips)
+        }
+      },
+    )
+    |> ignore
   })
+  |> ignore
 }
 
 ///|
@@ -110,9 +134,9 @@ fn history_head_node(v : @view.View, src : Source, r : ChatRef, agent : () -> Js
       @sf.words_node(n, fn() { text(s(), "agentText") }, fn() { history_name_words }) |> ignore
     })
     |> ignore
-    history_actions_node(h, src, r, agent)
     h.box(fn(e) {
-      e.row(Is(true)).gap(Is(10.0)).lines_up(Is(Some(Middle))) |> ignore
+      e.row(Is(true)).gap(By(fn() { @sf.keys_apart(size=28.0, least=10.0) })).lines_up(Is(Some(Middle))).shrink(Is(0.0)) |> ignore
+      history_actions_node(e, src, r, agent)
       @sf.seg_node(
         e,
         fn() { [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")] },
@@ -137,42 +161,43 @@ let history_name_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold,
 fn history_actions_node(v : @view.View, src : Source, r : ChatRef, agent : () -> Json?) -> Unit {
   let s = fn() { field(agent(), "session") }
   let key = fn() { text(s(), "key") }
-  let one = fn(when : () -> Bool, icon : String, done : String, call : String) {
-    v.show(when, fn(o) {
-      let dkey = fn() { call + "/" + r.station + "/" + key() }
-      @sf.disc_key_node(
-        o,
-        fn() { done },
-        fn() {
-          let dkey = @signals.untracked(dkey)
-          if !doing(dkey) {
-            act(src, done, dkey, call, { "station": Json::string(r.station), "key": Json::string(key()) }, done~)
-          }
-        },
-        side=28.0,
-        ground=fn() { @sf.theme().p.chip },
-        fn(k) {
-          k.pick(fn() { doing(dkey()) }, fn(i, busy) {
-            if busy {
-              @sf.spinner_node(i, size=12.0) |> ignore
-            } else {
-              @sf.icon_node(i, icon, 14.0, By(fn() { @sf.theme().p.text })) |> ignore
-            }
-          })
-        },
-      )
-    })
+  let has_stop = fn() {
+    let status = text(agent(), "status")
+    status == "running" || status == "queued"
   }
-  one(
-    fn() {
-      let status = text(agent(), "status")
-      status == "running" || status == "queued"
-    },
-    "stop",
-    tr("android-chat.history.stopped"),
-    "session.stop",
-  )
-  one(fn() { text(s(), "process") == "warm" }, "unplug", tr("android-chat.history.evicted"), "session.evict")
+  let has_evict = fn() { text(s(), "process") == "warm" }
+  v.show(fn() { has_stop() || has_evict() }, fn(row) {
+    @sf.style_node(row, fn() { @sf.keys_row(size=28.0) })
+    row.shrink(Is(0.0)) |> ignore
+    let one = fn(when : () -> Bool, icon : String, done : String, call : String) {
+      row.show(when, fn(o) {
+        let dkey = fn() { call + "/" + r.station + "/" + key() }
+        @sf.disc_key_node(
+          o,
+          fn() { done },
+          fn() {
+            let dkey = @signals.untracked(dkey)
+            if !doing(dkey) {
+              act(src, done, dkey, call, { "station": Json::string(r.station), "key": Json::string(key()) }, done~)
+            }
+          },
+          side=28.0,
+          ground=fn() { @sf.theme().p.chip },
+          fn(k) {
+            k.pick(fn() { doing(dkey()) }, fn(i, busy) {
+              if busy {
+                @sf.spinner_node(i, size=12.0) |> ignore
+              } else {
+                @sf.icon_node(i, icon, 14.0, By(fn() { @sf.theme().p.text })) |> ignore
+              }
+            })
+          },
+        )
+      })
+    }
+    one(has_stop, "stop", tr("android-chat.history.stopped"), "session.stop")
+    one(has_evict, "unplug", tr("android-chat.history.evicted"), "session.evict")
+  })
 }
 
 ///|

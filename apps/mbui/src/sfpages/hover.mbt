@@ -333,7 +333,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
           c.on_press(id, fn() {
             (@sfbase.chat_jobs_asked.val)(c, src, r)
           })
-          agent_card_link(c, id, text(card, "jobs"), agent_card_line)
+          agent_card_link(c, id, text(card, "jobs"), agent_card_action, hot=agent_card_action)
         }
         for i, x in attention {
           let level = text(Some(x), "level")
@@ -891,6 +891,10 @@ let agent_card_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_card_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_card_action : @ui.TextStyle = agent_card_line.then(@sf.link)
 
 ///|
 // kept across runs: a value (no field of it changes)

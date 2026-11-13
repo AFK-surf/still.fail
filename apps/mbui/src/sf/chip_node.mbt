@@ -68,9 +68,23 @@ pub fn chip_node(
 }
 
 ///|
-/// A pill (pill's) as a node in `parent`: `words` in its tone's ink on its tone's ground, a capsule pill_h high, pill_in
-/// in at either end, cut short where its row has not the room; `icon` leading it (pill_icon, its ink, 4 before its
-/// words; "" none); one piece in bones. The node.
+fn tone_colours(tone : PillTone) -> (Int64, Int64) {
+  let p = theme().p
+  match tone {
+    Neutral => (p.neutral_bg, p.muted)
+    Green => (p.green_bg, p.green_ink)
+    Blue => (p.blue_bg, p.blue)
+    Amber => (p.amber_bg, p.warn_ink)
+    Red => (p.red_bg, p.red)
+    Accented => (p.accent_bg, p.accent_text)
+  }
+}
+
+///|
+/// A status pill (pill's) as a node in `parent`: `words` in its tone's ink on its tone's ground, a 4px rounded tag
+/// (Radius::Base) pill_h high, pill_in in at either end, cut short where its row has not the room; `icon` leading it
+/// (pill_icon, its ink, 4 before its words; "" none); one piece in bones. Static display only, keeping full capsules
+/// exclusive to clickable controls. The node.
 #callsite(autofill(loc))
 pub fn pill_node(
   parent : @view.View,
@@ -79,24 +93,14 @@ pub fn pill_node(
   icon? : String = "",
   loc~ : SourceLoc,
 ) -> @view.View {
-  let colours = fn() {
-    let p = theme().p
-    match tone {
-      Neutral => (p.neutral_bg, p.muted)
-      Green => (p.green_bg, p.green_ink)
-      Blue => (p.blue_bg, p.blue)
-      Amber => (p.amber_bg, p.warn_ink)
-      Red => (p.red_bg, p.red)
-      Accented => (p.accent_bg, p.accent_text)
-    }
-  }
+  let colours = fn() { tone_colours(tone) }
   parent.box(made_for=loc, fn(b) {
     b
     .row(Is(true))
     .height(Is(Some(pill_h)))
     .padding(Is((pill_in, 0.0, pill_in, 0.0)))
-    // (round at its ends as pill_box is, radius=Full: the same capsule, the corner the old pill said)
-    .radius(Is(1.0e6))
+    // (4px rectangular tag corner so non-interactive status pills never share full-capsule form with buttons)
+    .radius(Is(4.0))
     .lines_up(Is(Some(Middle)))
     .ground(By(fn() { colours().0 }))
     .bone_whole(Is(true))
@@ -121,3 +125,107 @@ pub fn pill_node(
     |> ignore
   })
 }
+
+///|
+/// A compact inline status badge in `parent`: `words` in Caption Medium, 4px rounded tag (Radius::Base), scaling with
+/// the system's word size. Static display only, visually separated from clickable capsule buttons.
+#callsite(autofill(loc))
+pub fn badge_node(
+  parent : @view.View,
+  words : () -> String,
+  tone? : PillTone = Neutral,
+  loc~ : SourceLoc,
+) -> @view.View {
+  let colours = fn() { tone_colours(tone) }
+  parent.box(made_for=loc, fn(b) {
+    style_node(b, fn() { badge_box }, in_row=true)
+    b.shrink(Is(0.0)).ground(By(fn() { colours().0 })).bone_whole(Is(true)) |> ignore
+    b.box(fn(w) {
+      w
+      .words(By(words))
+      .words_look(By(fn() { @ui.style_words(badge_words) }))
+      .ink(By(fn() { colours().1 }))
+      |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let badge_box : @ui.Style = @ui.css("row px=S1_25 radius=Base align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let badge_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Medium, wrap=false)
+
+///|
+/// A borderless full-capsule toggle chip in `parent`: soft neutral capsule while off, accented capsule while `active`;
+/// optional leading `icon` and trailing `chevron` (flipping up/down with `active`). Used for compact switches and
+/// filter toggles so interactive controls read cleanly as buttons at rest without stiff square borders.
+#callsite(autofill(loc))
+pub fn toggle_chip_node(
+  parent : @view.View,
+  label : () -> String,
+  active : () -> Bool,
+  press : () -> Unit,
+  icon? : String = "",
+  chevron? : Bool = false,
+  loc~ : SourceLoc,
+) -> @view.View {
+  parent.box(made_for=loc, fn(b) {
+    let hand = EdgeWay::new(0.0)
+    b.reacts(fn() { lit_node(b) }, fn(on) { hand.go(b, if on { 1.0 } else { 0.0 }, dur_ms) })
+    let ink = fn() {
+      let p = theme().p
+      if active() { p.accent_text } else { p.text }
+    }
+    let ground = fn() {
+      let p = theme().p
+      let base = if active() { p.accent_bg } else { p.neutral_bg }
+      over(base, alpha(p.hover, hand.shown(b)))
+    }
+    b
+    .row(Is(true))
+    .min_height(Is(Some(toggle_chip_h)))
+    .padding(Is((10.0, 2.0, 10.0, 2.0)))
+    .gap(Is(4.0))
+    .lines_up(Is(Some(Middle)))
+    .radius(Is(1.0e6))
+    .ground(By(ground))
+    .shrink(Is(0.0))
+    .bone_whole(Is(true))
+    |> ignore
+    presses_node(b, press)
+    b.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
+    if icon != "" {
+      icon_node(b, icon, toggle_chip_icon, By(ink)) |> ignore
+    }
+    b.box(fn(w) {
+      w
+      .words(By(label))
+      .words_look(By(fn() { @ui.style_words(toggle_chip_words) }))
+      .ink(By(ink))
+      |> ignore
+    })
+    |> ignore
+    if chevron {
+      b.pick(active, fn(c, open) {
+        icon_node(c, if open { "chevron-up" } else { "chevron-down" }, toggle_chip_chevron, By(ink)) |> ignore
+      })
+    }
+  })
+}
+
+///|
+let toggle_chip_h : Double = 22.0
+
+///|
+let toggle_chip_icon : Double = 14.0
+
+///|
+let toggle_chip_chevron : Double = 12.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let toggle_chip_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)

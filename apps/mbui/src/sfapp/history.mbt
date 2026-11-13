@@ -35,7 +35,7 @@ fn history_summary_node(v : @view.View, a : () -> Json?, tips : @sf.TipLayer) ->
       return
     }
     p.box(fn(r) {
-      r.row(Is(true)).padding(Is((18.0, 6.0, 18.0, 8.0))).gap(Is(10.0)).lines_up(Is(Some(Middle))) |> ignore
+      r.row(Is(true)).wraps(Is(Some(6.0))).padding(Is((18.0, 6.0, 18.0, 8.0))).gap(Is(10.0)).lines_up(Is(Some(Start))) |> ignore
       @sfpages.history_attention_node(r, a, tips, history_note_amber, history_note_red)
     })
     |> ignore
@@ -45,11 +45,11 @@ fn history_summary_node(v : @view.View, a : () -> Json?, tips : @sf.TipLayer) ->
 ///|
 /// What needs seeing to that is no quota: the caption's, the disk amber, an account red.
 // kept across runs: a value (no field of it changes)
-let history_note_amber : @ui.TextStyle = @ui.text_style(size=Caption, color=WarnInk, wrap=false)
+let history_note_amber : @ui.TextStyle = @ui.text_style(size=Caption, color=WarnInk)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let history_note_red : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger, wrap=false)
+let history_note_red : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger)
 
 ///|
 /// How a history's steps were put in place as it opened, by its list's key: at
@@ -136,7 +136,7 @@ fn history_details_node(v : @view.View, src : Source, r : ChatRef, key : String,
             .min_width(Is(Some(0.0)))
             .fit_whole(Is(true))
             |> ignore
-            @sfpages.work_mark_node(t, src, r.station, key, details_turns_mark, details_turns_link, lead=" · ", smallest=true)
+            @sfpages.work_mark_node(t, src, r.station, key, details_turns_mark, details_turns_link, link=details_turns_link, lead=" · ", smallest=true)
           })
           |> ignore
         })
@@ -293,7 +293,7 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
             |> ignore
           })
           |> ignore
-          @sf.words_node(t, name, fn() { tile_name }) |> ignore
+          @sf.words_node(t, name, fn() { history_tile_name }) |> ignore
         })
         |> ignore
       }
@@ -339,6 +339,11 @@ let tile_figure : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, 
 ///|
 // kept across runs: a value (no field of it changes)
 let tile_figure_small : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// A tile's name under its figure: caption size, muted, allowed to wrap at large font sizes.
+// kept across runs: a value (no field of it changes)
+let history_tile_name : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted)
 
 ///|
 /// The tiles side by side across the details, 8 apart.
