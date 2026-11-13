@@ -225,7 +225,7 @@ export class Hub {
   private processJobs: ProcessJobsBuilder | null = null;
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
-  /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
+  /// Fibers of the hub's own (archive reviews): interrupted at shutdown.
   readonly fibers = new Set<Fiber.Fiber<void>>();
   /// Why turns are held (SessionDeps.held): held while any reason stands.
   private holdsNow = new Set<Hold>();
@@ -233,8 +233,6 @@ export class Hub {
   private adopted = new Set<string>();
   /// Chats made lately by session key: the key their client gave them, and when (NewChat.clientKey).
   readonly clientKeysMade = new Map<string, [string, number]>();
-  /// Titles agents gave chats someone has open, waiting until they leave (titles.ts), by thread.
-  readonly titles = new Map<number, string>();
   /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
   /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
   readonly openings = new Map<number, { session: string; ts: string; claimed?: boolean }>();

@@ -1,9 +1,6 @@
-// A chat named by its agent (chat_post's title): the first name at once, a new one only when
-// the talk has moved on (people said enough since, and it was not changed too often), never over a name people gave
-// it, and not while someone has the chat open: then it waits until they leave. Redesigned on one point: a name that
-// waits looks again when the chat would no longer count as open (its last read plus OPEN_MS), not every minute.
-import { Effect } from "effect";
-import { log } from "../ops/log.ts";
+// A chat named by its agent (chat_post's title): the first name at once, a new one when the talk
+// has moved on (people said enough since, or a watch started, and it was not changed too often), never over a name
+// people gave it.
 import type { ThreadRow } from "../store/store.ts";
 import type { Hub } from "./hub.ts";
 
@@ -13,8 +10,6 @@ const LONGEST = 30;
 const SAID_BEFORE_CHANGE = 5;
 /// Changes after the first title.
 const CHANGES = 2;
-/// A chat read this lately is taken as open.
-const OPEN_MS = 3 * 60 * 1000;
 
 /// A title as a chat shows it: one line, spaces collapsed, no closing full stop, at most LONGEST characters.
 export function cleanTitle(title: string): string {
@@ -30,21 +25,17 @@ export function nameChat(hub: Hub, thread: ThreadRow, given: string): string {
   const may = mayName(hub, thread.id, title);
   if (typeof may === "string") return ` Title not changed: ${may}.`;
   if (!may) return "";
-  if (isOpen(hub, thread.id) && hub.store.autoTitle(thread.id).title !== null) {
-    waitToName(hub, thread.id, title);
-    return ` The chat will be titled "${title}" once nobody has it open.`;
-  }
   applyTitle(hub, thread.id, title);
   return ` Titled the chat "${title}".`;
 }
 
 /// The chat session `key` last heard from, as its address, when it still has no name and nobody is at work in it:
-/// neither people nor an agent named it (nor waits to), a person has said something there, and none of its other
+/// neither people nor an agent named it, a person has said something there, and none of its other
 /// agents is running, waiting or about to be handed a message.
 export function untitledChat(hub: Hub, key: string): string | null {
   const thread = hub.store.latestThread(key)?.thread;
   if (!thread || thread.hiddenAt !== null) return null;
-  if ((thread.title !== null && thread.title.trim() !== "") || thread.autoTitle !== null || hub.titles.has(thread.id)) return null;
+  if ((thread.title !== null && thread.title.trim() !== "") || thread.autoTitle !== null) return null;
   if (hub.store.firstText(thread.id) === null) return null;
   const atWork = hub.store.threadSessions(thread.id).some(({ session }) => {
     if (session === key) return false;
@@ -73,41 +64,7 @@ function mayName(hub: Hub, thread: number, title: string): boolean | string {
 /// Whether one of the chat's agents keeps watch (a watch job of its runs).
 const watchingIn = (hub: Hub, thread: number) => hub.store.hasActiveWatch(thread);
 
-const isOpen = (hub: Hub, thread: number) => {
-  const at = hub.store.lastReadAt(thread);
-  return at !== null && hub.now() - at < OPEN_MS;
-};
-
 function applyTitle(hub: Hub, thread: number, title: string) {
   const changed = hub.store.autoTitle(thread).title !== null;
   hub.store.setAutoTitle(thread, title, changed);
-}
-
-/// Keeps `title` for when nobody has the chat open (the latest one given wins), and looks again when it would be left.
-function waitToName(hub: Hub, thread: number, title: string) {
-  const waiting = hub.titles.has(thread);
-  hub.titles.set(thread, title);
-  if (waiting) return;
-  const look: Effect.Effect<void> = Effect.suspend(() => {
-    const at = hub.store.lastReadAt(thread);
-    const left = at === null ? 0 : at + OPEN_MS - hub.now();
-    return Effect.sleep(Math.max(1, left)).pipe(
-      Effect.andThen(
-        Effect.suspend(() => {
-          if (isOpen(hub, thread)) return look;
-          const title = hub.titles.get(thread);
-          hub.titles.delete(thread);
-          if (title === undefined) return Effect.void;
-          // Looked at again: people may have named the chat meanwhile.
-          try {
-            if (mayName(hub, thread, title) === true) applyTitle(hub, thread, title);
-          } catch (error) {
-            log.warn("hub", `titling chat ${thread}: ${(error as Error).message}`);
-          }
-          return Effect.void;
-        }),
-      ),
-    );
-  });
-  hub.fork(look);
 }

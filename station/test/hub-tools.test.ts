@@ -805,7 +805,7 @@ test("naming a Slack conversation alone does not send a Slack message", async ()
   await r.close();
 });
 
-test("an agent names its chat once, and again only after people said enough; never over people's name nor while it is open", async () => {
+test("an agent names its chat once, and again immediately when allowed even while open; never over people's name", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, web("local"));
   sayIn(r.hub, thread.id, "local", "帮我看下这个");
@@ -824,40 +824,19 @@ test("an agent names its chat once, and again only after people said enough; nev
   read();
   assert.ok((await post("部署失败")).endsWith('Titled the chat "部署失败".'));
   assert.equal(r.store.autoTitle(thread.id).changes, 1);
-  // Someone has it open: the new name waits for them to leave.
+  // Someone has the chat open right now: renaming still takes effect immediately.
   for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `又一件 ${n}`);
   r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
   await settle();
   read();
-  assert.ok((await post("证书过期")).endsWith('The chat will be titled "证书过期" once nobody has it open.'));
-  assert.equal(named(), "部署失败");
+  assert.ok((await post("证书过期")).endsWith('Titled the chat "证书过期".'));
+  assert.equal(named(), "证书过期");
+  assert.equal(r.store.autoTitle(thread.id).changes, 2);
   // A name people gave stays.
   r.store.setThreadTitle(thread.id, "值班");
   assert.ok((await post("别的")).includes("Title not changed: people named this chat"));
   // No title given: the post as before.
   assert.equal(await r.call(key, "chat_post", { to, text: "ok" }), `Posted to ${to}.`);
-  await r.close();
-});
-
-test("a title that waits is given once nobody has the chat open", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
-  const r = new Rig();
-  const [key, thread] = newSession(r.hub, web("local"));
-  sayIn(r.hub, thread.id, "local", "帮我看下这个");
-  await settle();
-  const to = `CHAT/${thread.threadTs}`;
-  await r.call(key, "chat_post", { to, text: "ok", title: "登录" });
-  for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `再看 ${n}`);
-  r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
-  await settle();
-  r.claude.last().reads();
-  assert.ok((await r.call(key, "chat_post", { to, text: "ok", title: "部署" })).includes("once nobody has it open"));
-  t.mock.timers.tick(60_000);
-  await settle();
-  assert.equal(r.store.getThread(thread.id)!.autoTitle, "登录", "still open");
-  t.mock.timers.tick(3 * 60_000);
-  await settle();
-  assert.equal(r.store.getThread(thread.id)!.autoTitle, "部署");
   await r.close();
 });
 
