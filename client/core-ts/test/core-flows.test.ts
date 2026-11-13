@@ -3476,8 +3476,8 @@ test("profile_fusion_is_asked_on_demand_and_legacy_tiered_agy_picks_resolve_to_b
   const got = (await ask(host, core, ui, 1, "profile.fusion", { station: "ws/st", id: "dv" })) as J;
   assert.deepEqual(got, {
     fusion: {
-      leads: [{ id: "gpt-6-sol-max", name: "GPT-6 Sol Max", maker: { id: "openai", name: "OpenAI" }, sides: [0] }],
-      sides: [{ id: "swe-2-medium", name: "SWE-2 Medium", maker: { id: "devin", name: "Cognition" } }],
+      leads: [{ id: "gpt-6-sol", name: "GPT-6 Sol", maker: { id: "openai", name: "OpenAI" }, sides: [0] }],
+      sides: [{ id: "swe-2-medium", name: "SWE-2 · 中", maker: { id: "devin", name: "Cognition" } }],
     },
   });
 
