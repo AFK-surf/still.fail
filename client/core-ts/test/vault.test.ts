@@ -1289,6 +1289,38 @@ test("a station that held a copy of the vault taken out of the workspace and sto
   r.core.close();
 });
 
+test("a vault made on a station while it is being read (its listing asked before): its host kept, an item written in it at once (2026-11-15, the locks' end to end: `station id 无效：`)", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: first } = await r.ask("vault.setup", {});
+  // The station's listing of vaults asked now, as it stands, and answered only once let go.
+  // (and what it is asked then of a vault it no longer lists, held till the write is done)
+  const gate: { armed: boolean; letGo: (() => void) | null; latest: (() => void)[] } = { armed: true, letGo: null, latest: [] };
+  stationLater(r.host, (req) => {
+    if (req.method === "POST" && req.url.endsWith("/vault/vaults/latest")) return new Promise((resolve) => gate.latest.push(() => resolve(jsonResponse(200, r.st.reply(req)))));
+    if (!gate.armed || req.method !== "GET" || !req.url.endsWith("/vault/vaults")) return undefined;
+    gate.armed = false;
+    const then = jsonResponse(200, r.st.reply(req));
+    return new Promise((resolve) => (gate.letGo = () => resolve(then)));
+  });
+  // (a page shown has its stations read again)
+  await r.watch(1, { topic: "vaultItems", workspace: "ws", vault: first });
+  await r.host.time.pass(200, 10);
+  assert.ok(gate.letGo !== null, "the station's listing asked");
+  const { id } = await r.ask("vault.create", { name: "two" });
+  gate.letGo!();
+  await r.host.time.pass(200, 10);
+  // (its host as this device holds it: the rig's wire takes any station id, so the write alone would not show "")
+  const hv = r.core.inner.data.record("vault", "ws") as { at: Record<string, string>; on: Record<string, Record<string, unknown>> };
+  assert.deepEqual([hv.at[id], Object.keys(hv.on[id] ?? {})], ["st", ["st"]], "held on the station it was made on, as the listing asked before it came");
+  const wrote = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "npm", fields: { value: "npm_x" } }, listing: { name: "npm", kind: "token", modes: ["proxy"], hosts: ["registry.npmjs.org"] } }).then((ok) => ({ ok }), (e: Error & { code?: string }) => ({ error: `${e.code}: ${e.message}` }));
+  for (const go of gate.latest) go();
+  stationLater(r.host, () => undefined);
+  assert.equal("error" in wrote ? wrote.error : undefined, undefined, "written");
+  assert.equal(r.st.items.get((wrote as { ok: { id: string } }).ok.id)?.vault, id, "on the station it was made on");
+  r.core.close();
+});
+
 test("a device this one took out of the lock at the person's asking, two vaults of theirs holding its key and locked here: the box key read once, both keyed anew", async () => {
   const r = await rig();
   r.putLock();

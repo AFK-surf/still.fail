@@ -474,6 +474,8 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
     }
     // The requests are the keeper's (a station without one answers 404: none).
     const requests = yield* Effect.orElseSucceed(Effect.map(ask(inner, address, "GET", "/vault/requests"), (r) => arr(get(r, "requests")) as Request[]), () => [] as Request[]);
+    // (what it was held to hold as it was asked: a listing says nothing of a vault written there after it was asked)
+    const then = held(inner, ws);
     const vaults = yield* Effect.result(ask(inner, address, "GET", "/vault/vaults"));
     let list: Vault[] | null = null;
     let all: Item[] = [];
@@ -501,9 +503,13 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
         if (!h.keeps.includes(station)) h.keeps.push(station);
         const ids = new Set(list.map((v) => v.id));
         // Those it held and holds no more (one held from before copies were kept: where it was): held still here, as
-        // its not listing one says nothing of why (a station that lies hides none so); asked for below.
+        // its not listing one says nothing of why (a station that lies hides none so); asked for below. Only those it
+        // was held to hold as it was asked: a vault made or first copied there meanwhile is not in a listing asked
+        // before it (the locks' end to end, 2026-11-15: a vault made on the station as it was being read lost its
+        // host here, and the write after it went to station "" and was refused `invalid_params`).
+        const heldThen = (id: string) => then.on[id]?.[station] !== undefined || (then.on[id] === undefined && then.at[id] === station);
         for (const id of new Set([...Object.keys(h.on), ...Object.keys(h.at)])) {
-          if (!ids.has(id) && (h.on[id]?.[station] !== undefined || (h.on[id] === undefined && h.at[id] === station))) {
+          if (!ids.has(id) && heldThen(id) && (h.on[id]?.[station] !== undefined || (h.on[id] === undefined && h.at[id] === station))) {
             unheld(h, id, station);
             if (h.vaults[id] !== undefined) missing.push(id);
           }
