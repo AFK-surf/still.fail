@@ -4,6 +4,7 @@ import {
   "mbui/ui",
   "mbui/view",
   "mbui/signals",
+  "moonbitlang/core/encoding/utf8",
   "stillfail/sf",
   "stillfail/sfbase",
   "stillfail/sfkept",
@@ -11,6 +12,8 @@ import {
 
 options(
   "is-main": true,
+  // (the sources the page shows: beside its script in a browser, none elsewhere)
+  targets: { "sources_js.mbt": [ "js" ], "sources_native.mbt": [ "native", "wasm", "wasm-gc" ] },
   link: {
     "js": { "format": "iife" },
     "native": {

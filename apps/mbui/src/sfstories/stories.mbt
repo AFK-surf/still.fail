@@ -55,6 +55,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "按钮",
       name: "按钮 Button",
       file: "button_node.mbt",
+      api: [("button_node.mbt", "button_node"), ("button_node.mbt", "button_opens_node")],
+      play: Some(button_play),
       about: "页面和弹层里的按钮：六种语气，可带图标；忙时转圈，不可用时变淡。",
       cases: [
         (
@@ -104,6 +106,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "按钮",
       name: "宽按钮 WideButton",
       file: "wide_button_node.mbt",
+      api: [("wide_button_node.mbt", "wide_button_node")],
+      play: Some(wide_button_play),
       about: "登录、引导这类页面底部的一整行按钮。",
       cases: [
         (
@@ -128,6 +132,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "按钮",
       name: "图标按钮 IconButton",
       file: "icon_button_node.mbt",
+      api: [("icon_button_node.mbt", "icon_button_node")],
+      play: None,
       about: "只有图标的按钮，指针停在上面时显示名字。按的范围至少 44×44。",
       cases: [
         (
@@ -157,6 +163,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "按钮",
       name: "浮动按钮 FloatButton",
       file: "float_button_node.mbt",
+      api: [("float_button_node.mbt", "float_button_node")],
+      play: None,
       about: "浮在列表上的圆形按钮，可带计数。",
       cases: [
         (
@@ -175,6 +183,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "按钮",
       name: "链接 Link",
       file: "link_node.mbt",
+      api: [("link_node.mbt", "link_node")],
+      play: None,
       about: "文字链接，可带图标或箭头。",
       cases: [
         (
@@ -194,6 +204,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "按钮",
       name: "标签与胶囊 Chip · Pill · Badge",
       file: "chip_node.mbt",
+      api: [("chip_node.mbt", "chip_node"), ("chip_node.mbt", "toggle_chip_node"), ("chip_node.mbt", "pill_node"), ("chip_node.mbt", "badge_node")],
+      play: Some(pill_play),
       about: "可按的小标签（Chip、可切换的 ToggleChip），以及只用来显示状态的胶囊（Pill）和角标（Badge）。",
       cases: [
         (
@@ -237,6 +249,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "选择",
       name: "开关 Switch",
       file: "page_node.mbt",
+      api: [("page_node.mbt", "switch_node"), ("page_node.mbt", "switch_row_node")],
+      play: Some(switch_play),
       about: "开和关两种状态，按一下切换；拖动的手感随操控方式变。",
       cases: [
         (
@@ -269,6 +283,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "选择",
       name: "勾选 Check",
       file: "check_row_node.mbt",
+      api: [("check_node.mbt", "check_node"), ("check_row_node.mbt", "check_row_node")],
+      play: None,
       about: "多选：单个勾选框（check_node）和带说明的一行（check_row_node）。",
       cases: [
         (
@@ -301,6 +317,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "选择",
       name: "单选行 ChoiceRow",
       file: "choice_row_node.mbt",
+      api: [("choice_row_node.mbt", "choice_row_node")],
+      play: None,
       about: "几个里选一个，每个一行，可带说明。",
       cases: [
         (
@@ -322,6 +340,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "选择",
       name: "分段 Segmented",
       file: "seg_node.mbt",
+      api: [("seg_node.mbt", "seg_node"), ("seg_node.mbt", "seg_fill_node")],
+      play: None,
       about: "几个并列的选项，同时只选中一个。",
       cases: [
         (
@@ -347,6 +367,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "选择",
       name: "下拉选择 Select",
       file: "select_node.mbt",
+      api: [("select_node.mbt", "select_node")],
+      play: None,
       about: "按下后从列表里选一个：小屏从底部弹出，中屏和大屏在它旁边展开。",
       cases: [
         (
@@ -369,6 +391,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "选择",
       name: "选项卡片 OptionsCard",
       file: "options_card_node.mbt",
+      api: [("options_card_node.mbt", "options_card_node")],
+      play: None,
       about: "agent 提问时给出的几个选项：按下一个，它转圈直到答完，选中的打勾。",
       cases: [
         (
@@ -400,6 +424,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "输入",
       name: "输入框 Input",
       file: "field_node.mbt",
+      api: [("field_node.mbt", "input_node")],
+      play: Some(input_play),
       about: "一行文字的输入框：可带标签、占位、密码，或不可用。",
       cases: [
         (
@@ -422,6 +448,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "输入",
       name: "多行输入 Textarea",
       file: "field_node.mbt",
+      api: [("field_node.mbt", "textarea_node")],
+      play: None,
       about: "多行文字，随内容长高，到 most 行为止。",
       cases: [
         (
@@ -437,6 +465,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "输入",
       name: "表单项 Field",
       file: "field_node.mbt",
+      api: [("field_node.mbt", "field_node")],
+      play: None,
       about: "表单里的一项：标签、控件，下面是提示或错误。",
       cases: [
         (
@@ -462,6 +492,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "设置",
       name: "设置项 Setting",
       file: "setting_node.mbt",
+      api: [("setting_node.mbt", "setting_node"), ("setting_node.mbt", "setting_choice_node"), ("setting_node.mbt", "setting_switch_node"), ("setting_node.mbt", "setting_link_node")],
+      play: None,
       about: "设置页的一项：标题和说明，控件在旁边（宽排法）或下面（窄排法）。",
       cases: [
         (
@@ -505,6 +537,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "进度",
       name: "进度 Progress",
       file: "progress_node.mbt",
+      api: [("progress_node.mbt", "progress_node"), ("progress_ring_node.mbt", "progress_ring_node"), ("progress_spinner_node.mbt", "progress_spinner_node")],
+      play: Some(progress_play),
       about: "进度条（已知多少，或一直扫动）、圆环和转圈。",
       cases: [
         (
@@ -533,6 +567,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "标记",
       name: "头像与标记 Avatar · Mark",
       file: "mark_node.mbt",
+      api: [("mark_node.mbt", "avatar_node"), ("mark_node.mbt", "tile_avatar_node"), ("mark_node.mbt", "station_mark_node"), ("mark_node.mbt", "workspace_badge_node")],
+      play: None,
       about: "人的头像（没有图时是名字的首字）、station 和 workspace 的标记。",
       cases: [
         (
@@ -565,6 +601,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "文字",
       name: "文字样式 Type",
       file: "styles.mbt",
+      api: [("page_node.mbt", "words_node")],
+      play: None,
       about: "页面里用的文字样式，都跟着系统的字号变大。",
       cases: [
         (
@@ -592,6 +630,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "文字",
       name: "Markdown",
       file: "markdown_node.mbt",
+      api: [("markdown_node.mbt", "markdown_node")],
+      play: None,
       about: "消息里的 Markdown：标题、强调、列表、待办、引用、行内代码和链接。",
       cases: [("一条消息", fn(card) { @sf.markdown_node(card, fn() { markdown_sample }) |> ignore })],
     },
@@ -600,6 +640,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "文字",
       name: "代码块 CodeBlock",
       file: "markdown_node.mbt",
+      api: [("markdown_node.mbt", "code_block_node")],
+      play: None,
       about: "Markdown 里的代码块，按语言着色，可复制。",
       cases: [
         ("sh", fn(card) { @sf.code_block_node(card, fn() { code_sample }, fn() { "sh" }, fn() { None }) }),
@@ -610,6 +652,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "文字",
       name: "表格 Table",
       file: "table_node.mbt",
+      api: [("table_node.mbt", "table_node")],
+      play: None,
       about: "Markdown 表格：太宽时横向滚动。",
       cases: [("三列", fn(card) { @sf.table_node(card, fn() { table_sample }) })],
     },
@@ -618,6 +662,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "卡片",
       name: "文件卡片 FileCard",
       file: "file_card_node.mbt",
+      api: [("file_card_node.mbt", "file_card_node")],
+      play: None,
       about: "消息里附带的文件：名字、大小，失败时可重试。",
       cases: [
         (
@@ -658,6 +704,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "卡片",
       name: "引用卡片 QuoteCard",
       file: "quote_card_node.mbt",
+      api: [("quote_card_node.mbt", "quote_card_node")],
+      play: None,
       about: "回复时引用的那条消息。",
       cases: [
         (
@@ -683,6 +731,8 @@ fn stories(tips : @sf.TipLayer) -> Array[Story] {
       group: "弹层",
       name: "菜单与弹层 Menu · Pick · Panel",
       file: "presenters.mbt",
+      api: [("presenters.mbt", "menu"), ("presenters.mbt", "pick"), ("presenters.mbt", "confirm"), ("presenters.mbt", "ask"), ("presenters.mbt", "panel_nodes")],
+      play: None,
       about: "菜单、选择、确认、提问和面板：小屏从底部弹出，中屏和大屏在打开它的东西旁边。",
       cases: [
         (

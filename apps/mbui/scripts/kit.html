@@ -7,7 +7,7 @@
 <title>still.fail 组件</title>
 <!-- The component library's page (scripts/kit-web.sh): mbui's web host drawing src/sfstories on a canvas. The files
      the app carries (tools/assets) are given to it as globalThis.__mbassets, as web/src/mbui/core.ts gives the app's:
-     Inter before it starts, the rest as each comes, the page drawn again then. -->
+     Inter and the sources it shows before it starts, the rest as each comes, the page drawn again then. -->
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #F5F5F7; }
   @media (prefers-color-scheme: dark) { html, body { background: #161618; } }
@@ -30,9 +30,9 @@
     document.body.appendChild(s);
   });
   (async () => {
-    const inter = carried("inter.woff2");
+    const first = Promise.all([carried("inter.woff2"), carried("sources.txt")]);
     await load("host.js");
-    await inter;
+    await first;
     await load("app.js");
     for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz"])
       carried(name).then(() => globalThis.MBHost?.requestFrame?.());
