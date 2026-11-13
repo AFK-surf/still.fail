@@ -703,11 +703,33 @@ export class Hub {
     if (wanted) this.store.joinThread(thread.id, key, connect.id);
     // Its files go where a session of the thread reads them; once (Slack sends a message again it was slow to hear of).
     const into = wanted ? key : (members[0]?.session ?? key);
-    const said = this.store.messageNumberAt(thread.id, message.ts) === null ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
+    const first = this.store.messageNumberAt(thread.id, message.ts) === null;
+    let said = first ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
+    if (first && wanted) said = await this.withQuoted(chat, thread.id, here, into, message, said);
     const [n, fresh] = this.store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, ...said });
     // A message seen by a second connect is already delivered to the thread; only a session it brings in lacks it.
     const targets = fresh ? this.store.threadSessions(thread.id).map((m) => m.session) : wanted ? [key] : [];
+    // Its own words, never the quote's: a quoted `-stop` is no command.
     this.deliver(thread.id, n, targets, message.text);
+  }
+
+  /// The quoted messages already brought in, as `thread:message` (the newest; a restart forgets them, and one is brought once more).
+  private readonly quotedIn = new Set<string>();
+
+  /// A message that quotes one the conversation does not have (Feishu's 回复, `InboundMessage.quoted`) brings it in:
+  /// its words as a blockquote before the message's, its files fetched before the message's own.
+  private async withQuoted(chat: ChatSurface, thread: number, here: ThreadRef, into: string, message: InboundMessage, said: { text: string; attachments: Attachment[] }): Promise<{ text: string; attachments: Attachment[] }> {
+    if (message.quoted === undefined || !chat.quoted || this.store.messageNumberAt(thread, message.quoted) !== null) return said;
+    // Once a conversation: every reply in a Feishu thread names the thread's first message as what it replies to.
+    const once = `${thread}:${message.quoted}`;
+    if (this.quotedIn.has(once)) return said;
+    this.quotedIn.add(once);
+    if (this.quotedIn.size > 2000) this.quotedIn.delete(this.quotedIn.keys().next().value!);
+    const quoted = await chat.quoted(here, message.quoted);
+    if (quoted === null || (quoted.text === "" && (quoted.files ?? []).length === 0)) return said;
+    const its = await this.fetched(chat, into, quoted.text, quoted.files);
+    const block = its.text === "" ? "" : its.text.split("\n").map((line) => `> ${line}`).join("\n");
+    return { text: [block, said.text].filter((t) => t !== "").join("\n\n"), attachments: [...its.attachments, ...said.attachments] };
   }
 
   /// A Slack thread the station starts following. When that happens mid-thread, what was said before is recorded first

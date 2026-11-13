@@ -93,8 +93,9 @@ export class FakeFeishu {
     return id;
   }
 
-  /// Someone's message: in `chat` (a group unless `p2p`), with `text`, @ing the bot when `at`.
-  message(o: { id: string; chat?: string; user?: string; text?: string; at?: boolean; p2p?: boolean; thread?: string; root?: string; type?: string; content?: Json }) {
+  /// Someone's message: in `chat` (a group unless `p2p`), with `text`, @ing the bot when `at`, replying to (quoting)
+  /// `parent`.
+  message(o: { id: string; chat?: string; user?: string; text?: string; at?: boolean; p2p?: boolean; thread?: string; root?: string; parent?: string; type?: string; content?: Json }) {
     const text = o.text ?? "hi";
     const content = o.content ?? { text: o.at ? `@_user_1 ${text}` : text };
     return this.event("im.message.receive_v1", {
@@ -105,6 +106,7 @@ export class FakeFeishu {
         chat_type: o.p2p ? "p2p" : "group",
         message_type: o.type ?? "text",
         content: JSON.stringify(content),
+        ...(o.parent ? { parent_id: o.parent, root_id: o.root ?? o.parent } : {}),
         ...(o.thread ? { thread_id: o.thread, root_id: o.root ?? o.id } : {}),
         mentions: o.at ? [{ key: "@_user_1", id: { open_id: this.bot.open_id }, name: this.bot.app_name }] : [],
       },
