@@ -396,7 +396,20 @@ pub fn station_read(core : Core, here : Here, address : String) -> Read {
 
 ///|
 fn station_read_in(core : Core, scope : String, address : String) -> Read {
-  (core.topic)("station", { "scope": str(scope), "station": str(address) }).get()
+  let (name, params) = station_ask_in(scope, address)
+  (core.topic)(name, params).get()
+}
+
+///|
+/// What station_read asks of the core for the station at `address` (its topic and its arguments): for a press that asks
+/// it ahead of the page that reads it (sfbase's open_answered).
+pub fn station_ask(here : Here, address : String) -> (String, Map[String, Json]) {
+  station_ask_in(station_scope(here, address), address)
+}
+
+///|
+fn station_ask_in(scope : String, address : String) -> (String, Map[String, Json]) {
+  ("station", { "scope": str(scope), "station": str(address) })
 }
 
 ///|

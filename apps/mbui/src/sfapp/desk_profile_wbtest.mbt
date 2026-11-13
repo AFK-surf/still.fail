@@ -226,12 +226,115 @@ fn station_chosen(t : @ui.Tester, name : String) -> Bool {
 }
 
 ///|
-/// Another station pressed on the add page (大屏 with a mouse, 小屏 by touch), the page opened over a core answering at
-/// once and the press over one answering 0 to 700 ms late: from the press till the page is at rest, in every frame as a
-/// host draws it (each frame held steady too: sizes_steady.mbt), nothing sets out after the press's own
-/// moment (no hint squeezed shut and opened, no section going up and down), the hint drawn (Willow's page's or Maple's,
-/// never neither), no frame on the providers' bones, the choice on Maple from the press; at rest the page is Maple's,
-/// its draft opened once and its flow asked once and held (what the press asked handed to it: sfbase's open_answered).
+/// The words drawn now, each with where it is drawn (to a tenth of a point), but those of the stations' choice (each
+/// station's name alone: its own answer to the hand, aside), in the order drawn.
+fn station_press_words(t : @ui.Tester) -> Array[String] {
+  t
+  .words()
+  .filter(fn(w) { w.5 > 0.01 && !["Willow", "Maple", "Cedar"].contains(w.0) })
+  .map(fn(w) { "\{w.0} @\{(w.1 * 10.0).round() / 10.0},\{(w.2 * 10.0).round() / 10.0}" })
+}
+
+///|
+/// Station `to` (its name, its address) pressed on the add page of station `from` (its address) in `t`, over a core
+/// answering `ms` late from the press: from the press till the page is at rest, the page is drawn in two ways only: as
+/// it was at the press but for the choice, till `to`'s page comes, then as it rests, from the frame it comes in; in
+/// every frame nothing sets out after the press's own moment, the hint is drawn, no bones more than at the press, `to`
+/// shown chosen. At rest the page is `to`'s, its draft opened once and what it reads as it is first made asked once
+/// from the press and held (new_profile.mbt's new_profile_asks: its flow, its station).
+fn station_pressed(
+  t : @ui.Tester,
+  at : String,
+  heard : Array[String],
+  calls : Array[(String, Json)],
+  from : String,
+  to : (String, String),
+  ms : Double,
+) -> Unit raise {
+  let at = "\{at}, to \{to.0}"
+  let (name, address) = to
+  let bones_before = t.bones_drawn()
+  let pressed_words = station_press_words(t)
+  let target = match t.query(Radio, label=name) {
+    Some(r) => r
+    None => @halt.saying("\{at}: no \{name} to press")
+  }
+  let heard_from = heard.length()
+  let calls_from = calls.length()
+  let start = t.time()
+  t.tap(target.rect.0 + target.rect.2 / 2.0, target.rect.1 + target.rect.3 / 2.0)
+  let faults : Array[String] = []
+  let ways : Array[String] = []
+  // (each frame after the page came: when, and its words)
+  let after : Array[(Double, Array[String])] = []
+  let mut came = -1.0
+  let frames = (station_press_rest_ms(ms) / @ui.frame_period_default).ceil().to_int()
+  for i in 0..=frames {
+    if i > 0 {
+      t.run_for(@ui.frame_period_default)
+    }
+    let now = t.time() - start
+    for w in t.ways_set_out() {
+      if w.at > start + 0.5 {
+        ways.push("\{w.kind} +\{(w.at - start).round()} ms \{w.made} \{w.part}")
+      }
+    }
+    let waiting = app.nav.top() is Setting(NewProfile(f)) && f == from
+    if !waiting && came < 0.0 {
+      came = now
+    }
+    let words = station_press_words(t)
+    if waiting {
+      if words != pressed_words {
+        faults.push("+\{now.round()} ms, waiting: words not as at the press: \{Repr(words)}, then \{Repr(pressed_words)}")
+      }
+    } else {
+      after.push((now, words))
+    }
+    if t.find(station_press_hint) is None {
+      faults.push("+\{now.round()} ms: no hint drawn (\{if waiting { "waiting" } else { "come" }})")
+    }
+    if t.bones_drawn() > bones_before {
+      faults.push("+\{now.round()} ms: \{t.bones_drawn()} bones drawn, \{bones_before} before the press")
+    }
+    if !station_chosen(t, name) {
+      faults.push("+\{now.round()} ms: \{name} not shown chosen")
+    }
+  }
+  let rest = match after.last() {
+    Some((_, w)) => w
+    None => []
+  }
+  for f in after {
+    if f.1 != rest {
+      faults.push("+\{f.0.round()} ms, come: words not as at rest: \{Repr(f.1)}, at rest \{Repr(rest)}")
+    }
+  }
+  println("STATION_PRESS \{at}: the page at +\{came.round()} ms, ways after the press \{Repr(ways)}")
+  assert_eq(faults, [], msg="\{at}: every frame from the press")
+  assert_eq(ways, [], msg="\{at}: ways set out after the press")
+  assert_true(app.nav.top() is Setting(NewProfile(a)) && a == address, msg="\{at}: its page at rest")
+  let opened = calls[calls_from:].to_owned().filter(fn(c) { c.0 == "profile.flow.open" && text(Some(c.1), "station") == address })
+  assert_eq(opened.length(), 1, msg="\{at}: its draft opened: \{Repr(opened.map(fn(c) { c.1.stringify() }))}")
+  let form = text(Some(opened[0].1), "form")
+  let since = heard[heard_from:].to_owned()
+  assert_eq(
+    asked_held(since, "profileFlow", { "station": Json::string(address), "form": Json::string(form) }),
+    (1, 0),
+    msg="\{at}: its flow asked and let go",
+  )
+  assert_eq(
+    asked_held(since, "station", { "scope": Json::string("ws1"), "station": Json::string(address) }),
+    (1, 0),
+    msg="\{at}: its station asked and let go",
+  )
+}
+
+///|
+/// Another station pressed on the add page (大屏 with a mouse, 小屏 by touch), and back, the page opened over a core
+/// answering at once and each press over one answering 0 to 700 ms late, each frame held steady too
+/// (sizes_steady.mbt): from Willow, whose machine's own logins are offered over the providers, to Maple, which has
+/// none, and back to Willow (station_pressed: the page drawn as it was at the press, then as it rests, nothing else).
 test "the add page's station choice opens the other station's page whole, the page as it was meanwhile" {
   for s in [daily_large, daily_small] {
     for ms in station_press_lates {
@@ -243,53 +346,11 @@ test "the add page's station choice opens the other station's page whole, the pa
       pace.val = ms
       assert_true(station_chosen(t, "Willow"), msg="\{at}: Willow chosen at first")
       assert_true(t.find(station_press_hint) is Some(_), msg="\{at}: the hint at first")
-      let bones_before = t.bones_drawn()
-      let maple = match t.query(Radio, label="Maple") {
-        Some(r) => r
-        None => @halt.saying("\{at}: no Maple to press")
-      }
-      let from = t.time()
-      t.tap(maple.rect.0 + maple.rect.2 / 2.0, maple.rect.1 + maple.rect.3 / 2.0)
-      let faults : Array[String] = []
-      let ways : Array[String] = []
-      let mut came = -1.0
-      let frames = (station_press_rest_ms(ms) / @ui.frame_period_default).ceil().to_int()
-      for i in 0..=frames {
-        if i > 0 {
-          t.run_for(@ui.frame_period_default)
-        }
-        let now = t.time() - from
-        for w in t.ways_set_out() {
-          if w.at > from + 0.5 {
-            ways.push("\{w.kind} +\{(w.at - from).round()} ms \{w.made} \{w.part}")
-          }
-        }
-        let waiting = app.nav.top() is Setting(NewProfile("ws1/st1"))
-        if !waiting && came < 0.0 {
-          came = now
-        }
-        if t.find(station_press_hint) is None {
-          faults.push("+\{now.round()} ms: no hint drawn (\{if waiting { "waiting" } else { "Maple's page" }})")
-        }
-        if t.bones_drawn() > bones_before {
-          faults.push("+\{now.round()} ms: \{t.bones_drawn()} bones drawn, \{bones_before} before the press")
-        }
-        if !station_chosen(t, "Maple") {
-          faults.push("+\{now.round()} ms: Maple not shown chosen")
-        }
-      }
-      println("STATION_PRESS \{at}: Maple's page at +\{came.round()} ms, ways after the press \{Repr(ways)}")
-      assert_eq(faults, [], msg="\{at}: every frame from the press")
-      assert_eq(ways, [], msg="\{at}: ways set out after the press")
-      assert_true(app.nav.top() is Setting(NewProfile("ws1/st2")), msg="\{at}: Maple's page at rest")
-      let opened = calls.filter(fn(c) { c.0 == "profile.flow.open" && text(Some(c.1), "station") == "ws1/st2" })
-      assert_eq(opened.length(), 1, msg="\{at}: Maple's draft opened: \{Repr(opened.map(fn(c) { c.1.stringify() }))}")
-      let form = text(Some(opened[0].1), "form")
-      assert_eq(
-        asked_held(heard, "profileFlow", { "station": Json::string("ws1/st2"), "form": Json::string(form) }),
-        (1, 0),
-        msg="\{at}: Maple's flow asked and let go",
-      )
+      assert_true(t.find("使用此账号") is Some(_), msg="\{at}: Willow's machine's login offered")
+      station_pressed(t, at, heard, calls, "ws1/st1", ("Maple", "ws1/st2"), ms)
+      assert_true(t.find("使用此账号") is None, msg="\{at}: none of Maple's offered")
+      station_pressed(t, at, heard, calls, "ws1/st2", ("Willow", "ws1/st1"), ms)
+      assert_true(t.find("使用此账号") is Some(_), msg="\{at}: Willow's offered again")
     }
   }
 }
