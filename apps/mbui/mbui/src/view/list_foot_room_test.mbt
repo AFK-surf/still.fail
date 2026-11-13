@@ -74,8 +74,8 @@ fn lr_case(reduced? : Bool = false) -> LrCase {
         est=40.0,
         follows=fn() { true },
         place~,
-        // (the line's key: said to go leaving its room, once the list can be told so; till then as every key)
-        goes=fn(_) { true },
+        // (the line's key: said to go leaving its room)
+        leaves_room=fn(k) { k == lr_line },
         foot=fn(f) {
           f.box(fn(b) {
             b.height(By(fn() { Some(foot.get()) })).shrink(Is(0.0)) |> ignore

@@ -41,7 +41,11 @@ yet and you can add one, add it.
   those its keys bring or take by data make their way as an each's rows do, one way with all else in its column then,
   where they are seen (at its foot what is above going up with them; scrolled up, what is read staying), each key its
   page says `comes` as it appears and `goes` as it goes (View::scrolls_window; its counts how it all ends, where a block
-  is meanwhile read through Places alone); what a block holds makes its way in the list's one way, its held column's
+  is meanwhile read through Places alone); a key its page marks `leaves_room` goes, at its foot, fading where it is,
+  its room left under the last block: what comes at its foot takes that room first, what is over it up only by what it
+  needs past it, and the room goes only as the hand scrolls it off (the user, 2026-11-12: a turn that ends with no
+  answer must not carry what is read up and let it fall back; the coordinator of the migration, 2026-11-13;
+  `src/view/list_foot_room_test.mbt`); what a block holds makes its way in the list's one way, its held column's
   group, with what comes or goes down the list then (Tree::come_group_join); every list said `at_once` (keys there and
   gone at once, its blocks' insides each their own way) is a debt of 方案 A, counted (detlint's `list-comes-off`) and
   only falling, each switched on with before and after shown to the owner (the coordinator of the migration,

@@ -65,11 +65,12 @@ fn[K : Eq] ListPlace::sight_tell(self : ListPlace[K]) -> Unit {
 
 ///|
 /// What blocks `all` (as they are counted) have in sight in scroll `s` at moment `t`, the foot's room `foot` under them
-/// (Sight's); none where none is or nothing shows yet.
-fn[K] sight_counted(all : Places[K], s : Scroll, t : Double, foot : Double) -> Sight[K]? {
+/// and the room kept under the last block `room` over that (View::scrolls_window's foot_room: at its foot is at that
+/// room's foot) (Sight's); none where none is or nothing shows yet.
+fn[K] sight_counted(all : Places[K], s : Scroll, t : Double, foot : Double, room : Double) -> Sight[K]? {
   let n = all.length()
   guard n > 0 && s.seen.get() is Some((_, vh)) && vh > 0.0 else { return None }
-  let most = dmax(0.0, all.foot() + foot + s.tuck_room.get() - vh)
+  let most = dmax(0.0, all.foot() + room + foot + s.tuck_room.get() - vh)
   // (where it rests: at its foot where it follows it; where a notch eases to; else where it is now)
   let x = if s.x.get() == @double.infinity {
     most
