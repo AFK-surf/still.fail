@@ -9,9 +9,14 @@ cat > "$W/bin/curl" <<'C'
 #!/bin/bash
 url=${*: -1}
 method=GET
-for a in "$@"; do [ "$a" = POST ] && method=POST; done
+for a in "$@"; do case $a in POST|PATCH) method=$a ;; esac; done
 echo "$method ${url#https://api.appstoreconnect.apple.com/v1/}" >> "$FAKE/calls"
 case $url in
+  */apps/*/betaAppLocalizations*) cat "$FAKE/localizations" ;;
+  */betaAppLocalizations|*/betaAppLocalizations/*)
+    cat > "$FAKE/description"
+    [ -z "${DESCRIPTION_REFUSE:-}" ] || { echo '{"errors":[{"detail":"description refused"}]}'; exit 22; }
+    echo '{}' ;;
   */apps/*) echo "{\"data\":{\"type\":\"apps\",\"id\":\"${ANSWER_APP:-$IOS_ASC_APP_ID}\",\"attributes\":{\"bundleId\":\"${ANSWER_BUNDLE:-$IOS_BUNDLE_ID}\"}}}" ;;
   */builds\?*)
     n=$(cat "$FAKE/polls" 2>/dev/null || echo 0); echo $((n + 1)) > "$FAKE/polls"
@@ -44,12 +49,14 @@ export RELEASE_PRODUCT=stillfail
 export ASC_PRIVATE_KEY_B64=$(openssl ecparam -name prime256v1 -genkey -noout | openssl base64 -A)
 good_internal='{"data":[{"id":"gi","attributes":{"isInternalGroup":true}}]}'
 good_external='{"data":[{"id":"ge","attributes":{"isInternalGroup":false}}]}'
+good_localizations='{"data":[{"id":"en","attributes":{"locale":"en-US","description":"Existing description"}}]}'
 run() {
   export FAKE=$W/fake
   rm -rf "$FAKE"; mkdir "$FAKE"
   printf '%s\n' $1 > "$FAKE/states"
   echo "${INTERNAL_ANSWER:-$good_internal}" > "$FAKE/internal"
   echo "${EXTERNAL_ANSWER:-$good_external}" > "$FAKE/external"
+  echo "${LOCALIZATIONS:-$good_localizations}" > "$FAKE/localizations"
   [ -z "${REFUSE:-}" ] || touch "$FAKE/refuse"
   touch "$FAKE/calls"
   RELEASE_ROUND=${ROUND:-1} RELEASE_EXTERNAL=${2:-false} bash -c '. "$1/../apps/mbui/scripts/testflight-product.sh"; export IOS_ASC_APP_ID IOS_BUNDLE_ID; bash "$1/testflight-distribute.sh"' _ "$D" > "$W/out" 2>&1
@@ -86,6 +93,22 @@ REFUSE=1 refuses VALID
 grep -q refused "$W/out"
 # monoid's build lookup and subsequent wait rounds stay on monoid; another app's record refuses before any write.
 export RELEASE_PRODUCT=monoid
+# First external release: create a description for the verified app, or fill only descriptions that are missing.
+LOCALIZATIONS='{"data":[]}' run VALID true
+expect_posts 'POST betaAppLocalizations
+POST betaGroups/gi/relationships/builds
+POST betaGroups/ge/relationships/builds
+POST betaAppReviewSubmissions'
+jq -e '.data.attributes.locale == "en-US" and (.data.attributes.description | startswith("monoid ")) and .data.relationships.app.data.id == "6832495462"' "$FAKE/description" >/dev/null
+LOCALIZATIONS='{"data":[{"id":"en","attributes":{"locale":"en-US","description":"Existing description"}},{"id":"zh","attributes":{"locale":"zh-Hans"}}]}' run VALID true
+grep -qF 'PATCH betaAppLocalizations/zh' "$FAKE/calls"
+! grep -qF 'PATCH betaAppLocalizations/en' "$FAKE/calls"
+jq -e '.data.id == "zh" and (.data.attributes | keys) == ["description"] and (.data.attributes.description | startswith("monoid "))' "$FAKE/description" >/dev/null
+LOCALIZATIONS='{"data":[]}' DESCRIPTION_REFUSE=1 refuses VALID true
+expect_posts 'POST betaAppLocalizations'
+LOCALIZATIONS='{"data":[]}' run VALID false
+expect_posts 'POST betaGroups/gi/relationships/builds'
+! grep -q betaAppLocalizations "$FAKE/calls"
 # The first external release creates its app's group, then adds the build and submits review.
 EXTERNAL_ANSWER='{"data":[]}' run VALID true
 expect_posts 'POST betaGroups/gi/relationships/builds

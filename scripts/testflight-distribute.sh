@@ -98,7 +98,40 @@ add_to_group() {
   next_round "VALID but not yet to be added to a group"
 }
 
+# Apple requires a description for every beta localization before a build can join an external group. Fill only
+# missing descriptions with the app's basic purpose; descriptions already written in App Store Connect stay as they are.
+beta_descriptions() {
+  local locale id row description
+  asc_get "apps/$APP/betaAppLocalizations?limit=200" > "$T/localizations.json"
+  jq -e '(.data | type == "array") and .links.next == null' "$T/localizations.json" >/dev/null || fail 'invalid or incomplete beta localizations'
+  if [ "$(jq '.data | length' "$T/localizations.json")" = 0 ]; then
+    locale=$(jq -r '.data.attributes.primaryLocale // "en-US"' "$T/app.json")
+    description=$(beta_description "$locale")
+    jq -cn --arg app "$APP" --arg locale "$locale" --arg description "$description" \
+      '{data:{type:"betaAppLocalizations",attributes:{locale:$locale,description:$description},relationships:{app:{data:{type:"apps",id:$app}}}}}' |
+      asc_post betaAppLocalizations
+  else
+    jq -c '.data[] | select((.attributes.description // "") == "")' "$T/localizations.json" > "$T/missing.jsonl"
+    while IFS= read -r row; do
+      id=$(jq -r '.id' <<< "$row")
+      locale=$(jq -r '.attributes.locale' <<< "$row")
+      description=$(beta_description "$locale")
+      jq -cn --arg id "$id" --arg description "$description" '{data:{type:"betaAppLocalizations",id:$id,attributes:{description:$description}}}' |
+        curl --fail-with-body --silent --show-error --globoff --max-time 60 -X PATCH \
+          -H "Authorization: Bearer $ASC_TOKEN" -H 'Content-Type: application/json' --data-binary @- \
+          "https://api.appstoreconnect.apple.com/v1/betaAppLocalizations/$id" >&2
+    done < "$T/missing.jsonl"
+  fi
+}
+beta_description() {
+  case $1 in
+    zh-Hans) echo "$IOS_APP_NAME 让你在团队聊天中使用编程智能体。连接自己的电脑作为 station，在手机上发起和跟进任务、查看结果并批准操作。" ;;
+    *) echo "$IOS_APP_NAME lets you work with coding agents in team chats. Connect your machines as stations, start and follow coding tasks, review their results, and approve actions from your phone." ;;
+  esac
+}
+
 asc_token
+if [ "$RELEASE_EXTERNAL" = true ]; then beta_descriptions; fi
 group=$(group_id "$INTERNAL_GROUP" true)
 add_to_group "$group"
 summary "Build $RELEASE_BUILD added to \"$INTERNAL_GROUP\"."
