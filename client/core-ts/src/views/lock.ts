@@ -489,6 +489,18 @@ export function inForceOf(inner: Inner, ws: string, entries: readonly Entry[] = 
   return made;
 }
 
+/// Whether `ws` is in safe mode, by the lock this device holds there: a chain not turned off, as folded, or, moved, the
+/// state in force (`off` out; waiting in, since it lets nobody in). Only where it holds none on (none, or a chain
+/// turned off, which a lock begun anew would not be) the workspace's view's `locked`, the cloud's word: of a moved chain
+/// the cloud keeps only the chain, whose last entry is `moved` for good, and says it locked whether its root's log
+/// turned it off or not.
+export function safeMode(inner: Inner, ws: string): boolean {
+  const h = held(inner, ws);
+  if (h?.head && movedHere(inner, ws)) return inForceOf(inner, ws, h.entries).said !== "off";
+  if (h?.head && !fold(h.entries).disabled) return true;
+  return get(view(inner, ws), "locked") === true;
+}
+
 /// A workspace's name as the person knows it: as its view says, else as the account's list does.
 export const nameOf = (inner: Inner, ws: string): string =>
   inner.cloudSync?.workspaceName(ws) ?? str(inner.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === ws)?.name) ?? ws;
