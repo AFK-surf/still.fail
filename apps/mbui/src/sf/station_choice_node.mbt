@@ -39,6 +39,7 @@ pub fn station_choice_node(
     }
   }
   let several = fn() { stations().length() > 1 }
+  let opener = Opener::new()
   parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { if round { station_choice_round } else { station_choice_box } }, in_row=true)
     // (shrinking to its words' least where the line is short: its name cut short, its mark and chevron whole)
@@ -51,11 +52,12 @@ pub fn station_choice_node(
         Some(menu_item_of(s.name, fn() { if s.station != at { choose(s.station) } }, chosen=s.station == at))
       })
       present(Menu(items, title, Start), Node(b))
+      opener.mark()
     })
     b
     .says(By(fn() {
       if several() {
-        Some(@view.said(Button, label=label(now().name)))
+        Some(@view.said(Button, label=label(now().name), expanded=opener.open()))
       } else {
         None
       }

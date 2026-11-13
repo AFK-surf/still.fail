@@ -137,6 +137,7 @@ fn home_top_bar_node(
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       row.show(fn() { view().map(fn(v) { v.stations > 0 }).unwrap_or(false) }, fn(f) {
         let key : Ref[@view.View?] = Ref(None)
+        let opener = @sf.Opener::new()
         f.box(fn(k) {
           key.val = Some(k)
           @sf.round_key_node(
@@ -165,8 +166,10 @@ fn home_top_bar_node(
               guard @signals.untracked(workspace) is Some(w) else { return }
               let (x, y, wd, h) = key.val.map(fn(k) { k.placed_window_now() }).unwrap_or((0.0, 0.0, 0.0, 0.0))
               @sfpages.filter_menu(At(x, y, wd, h), filter_of(src, w.id), fn(f) { home_filter_go(src, w, f) })
+              opener.mark()
             },
             icon_size=20.0,
+            opener~,
           )
         })
         |> ignore

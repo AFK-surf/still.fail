@@ -268,6 +268,8 @@ fn lists_band_node(
           f.reacts(fn() { @sf.lit_node(f) || @sfpages.filter_menu_open() }, fn(on) {
             hot.go(f, if on { 1.0 } else { 0.0 }, @sf.dur_ms)
           })
+          // (its menu, while drawn: what it says of itself)
+          let opener = @sf.Opener::new()
           @sf.style_node(f, fn() { filter_box })
           // (round as its ground is while it shows one, as an old view's is drawn: at rest nothing of it stands in the
           // panel's corner; in the closed bar's, its corner linked, below)
@@ -288,9 +290,16 @@ fn lists_band_node(
             @sfpages.filter_menu(At(x, y, wd, h), if now == "chats" { "all" } else { now }, fn(pick) {
               rail_go_told(src, w, if pick == "all" { "chats" } else { pick }, fn(_, g) { g() })
             })
+            opener.mark()
           })
           f.says(By(fn() {
-            Some(@view.said(Button, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown()))])))
+            Some(
+              @view.said(
+                Button,
+                label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown()))]),
+                expanded=opener.open(),
+              ),
+            )
           }))
           |> ignore
           @sf.icon_node(f, "filter", side_icon, By(fn() {
