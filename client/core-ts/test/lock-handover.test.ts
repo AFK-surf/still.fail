@@ -57,6 +57,8 @@ type Opts = {
   mine?: "admin" | "otherKey" | "unpinned";
   /// The host offers `lock.handOver` (by default).
   flag?: boolean;
+  /// bob (r2) an owner, not an admin.
+  bobOwner?: boolean;
   /// The workspace's members as the cloud's view says them (none by default).
   view?: { sub: string; email: string; role: string }[];
 };
@@ -76,7 +78,7 @@ async function setUp(o: Opts = {}) {
   const appOf = (sub: string, d: Dev) => ({ id: d.base.hex, sub, kind: "app", label: `${sub}'s app`, sign_key: d.signer.id });
   const r = await rig((signer) => {
     mine = signer;
-    const members = [{ sub: "s1", email: "a@x.com", role: o.mine === "admin" ? "admin" : "owner" }, { sub: "r2", email: "b@x.com", role: "admin" }, { sub: "r3", email: "c@x.com", role: "member" }];
+    const members = [{ sub: "s1", email: "a@x.com", role: o.mine === "admin" ? "admin" : "owner" }, { sub: "r2", email: "b@x.com", role: o.bobOwner ? "owner" : "admin" }, { sub: "r3", email: "c@x.com", role: "member" }];
     const devices: Record<string, unknown>[] = [{ id: base.hex, sub: "s1", kind: "app", label: "s1's app", sign_key: o.mine === "otherKey" ? other.id : signer.id }, appOf("r2", bob.app), appOf("r3", xena.app)];
     if (o.mine === "admin") members.unshift({ sub: "s0", email: "o@x.com", role: "owner" }), devices.unshift(appOf("s0", s0));
     if (o.more?.includes("notReady")) members.push({ sub: "r4", email: "d@x.com", role: "member" }), devices.push(appOf("r4", r4.app));
@@ -122,7 +124,7 @@ async function setUp(o: Opts = {}) {
     return c;
   };
   const stations = { A: station(A), B: station(B) };
-  const st = { silent: false, asked: [] as Asked[], hook: null as null | (() => void), early: [] as string[] };
+  const st = { silent: false, down: new Set<string>(), asked: [] as Asked[], hook: null as null | (() => void), early: [] as string[] };
   const viewer = viewerOf("s1", { base }, "owner", "ws");
   const route = (c: Cloud, method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (st.silent && method === "POST") return Effect.never;
@@ -151,6 +153,7 @@ async function setUp(o: Opts = {}) {
       const at = `${ws}/${id === A ? "A" : id === B ? "B" : "D"}`;
       st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
       if (id === D || ws !== "ws") return method === "POST" ? Effect.succeed({}) : Effect.fail(httpError(404, { error: "no route" }));
+      if (st.down.has(at.slice(-1))) return Effect.fail(httpError(503, { error: "not reached" }));
       return route(id === A ? stations.A : stations.B, method, path, body);
     }
     return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
@@ -189,7 +192,7 @@ async function setUp(o: Opts = {}) {
     const code = ((await prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
     return { answer, done: await run(tryOne(inner, { id: base.hex, d: phone, workspaces: ["ws"] }, id, code)) };
   };
-  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer, firstApp };
+  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer, firstApp, g, now: () => now };
 }
 
 /// The core's state in force as the model's D4 has one (test/lock-moved-check.ts's reading).
@@ -386,3 +389,93 @@ test("the one with only a web page, not said at the move: their first app device
   const page = admitted("r5", { base: w.WEB5 }, "admin");
   assert.throws(() => inLock(w.stations.A, page as never, "admin", page.viewer.device), "their old web page out until their own app approves it");
 });
+
+/// The workspace's stations meeting: each given what the other keeps of the chain (as another keeper's, so the fork
+/// choice decides), of the person logs and of the bodies.
+function meet(a: Cloud, b: Cloud) {
+  for (const [x, y] of [[a, b], [b, a]] as const) for (const [g, es] of personChainsOf(x).every()) personChainsOf(y).keep(g, es, "ws");
+  const ka = a.lockKept(null), kb = b.lockKept(null);
+  a.keepLock(kb, null, true);
+  b.keepLock(ka, null, true);
+  const ba = [...a.bodies(null).all().values()], bb = [...b.bodies(null).all().values()];
+  a.takeBodies(null, bb);
+  b.takeBodies(null, ba);
+}
+
+for (const wins of ["bob", "this device"] as const) {
+  test(`two owners hand over at once, each at a station the other's does not reach, then the stations meet: one moved stands (${wins}'s, by the fork choice), one chain and one state in force everywhere, the list the chain had`, async () => {
+    const w = await setUp({ bobOwner: true });
+    const [a, b] = [w.stations.A, w.stations.B];
+    // xena's own new phone on the chain at one station before its owner hands over there: the fork is then between
+    // her entry (a member's, one vote) and the other owner's moved (three), so the fork choice is the test's to say
+    // (rules/src/lock/chain.mbt `lock_chain`'s weights), and the branch with her phone loses
+    const phone = dev();
+    const head = w.chain.at(-1)!;
+    const on = (parent: Entry, by: Key, kind: string, body: unknown): Entry => signed(next("ws", { seq: parent.seq, hash: entryHash(parent), genesis: entryHash(w.chain[0]!) }, Math.max(parent.at, w.now()), kind, body) as Omit<StationEntry, "sig">, by) as unknown as Entry;
+    const xenas = on(head, w.xena.app.signer, "device", { id: phone.base.hex, sub: "r3", kind: "app", label: "xena's phone", sign_key: phone.signer.id });
+    if (wins === "bob") a.takeLock([...w.chain, xenas] as unknown as StationEntry[]);
+    // bob's app hands over at B, which this device does not reach: his log says the chain's list, B takes it, then his moved
+    w.st.down.add("B");
+    const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: w.g.keys };
+    w.bob.say("open", { ...settings, email: "b@x.com" }, "ws");
+    w.bob.say("member", { sub: "s1", email: "a@x.com", lock: w.gMe, role: "owner" }, "ws");
+    w.bob.say("member", { sub: "r3", email: "c@x.com", lock: w.xena.genesis, role: "member" }, "ws");
+    w.bob.say("station", { key: w.A }, "ws");
+    w.bob.say("station", { key: w.B }, "ws");
+    personChainsOf(b).keep(w.bob.genesis, w.bob.entries, "ws");
+    assert.equal(b.takeBodies(null, [...w.bob.bodies.values()]).taken, 5, "B takes bob's five bodies");
+    const bobsAt = wins === "this device" ? on(xenas, w.bob.app.signer, "moved", { root: w.bob.genesis }) : on(head, w.bob.app.signer, "moved", { root: w.bob.genesis });
+    b.takeLock([...w.chain, ...(wins === "this device" ? [xenas] : []), bobsAt] as unknown as StationEntry[]);
+    assert.equal(b.chain(null)?.state?.moved, w.bob.genesis, "B moved to bob's log");
+    // this device hands over at A
+    const out = await w.hand();
+    assert.equal(out.error, undefined, out.error?.message);
+    assert.equal(out.ok, null, `handed over at A: ${JSON.stringify(out.ok)}`);
+    assert.equal(a.chain(null)?.state?.moved, w.gMe, "A moved to s1's log");
+    const asked = w.asked();
+    // the stations meet, and this device reaches B again
+    meet(a, b);
+    w.st.down.clear();
+    for (let n = 0; n < 3; n++) {
+      await w.run(read(w.inner, "ws"));
+      await w.run(w.inner.adb.personal().refresh("s1"));
+    }
+    const root = wins === "bob" ? w.bob.genesis : w.gMe;
+    const list = w.d4Chain(w.chain);
+    const nowS = Math.floor(w.r.host.nowMs() / 1000);
+    for (const [n, c] of [["A", a], ["B", b]] as const) {
+      assert.equal(c.chain(null)?.state?.moved, root, `${n} goes by ${wins}'s moved`);
+      assert.deepEqual(d4Diff(list, d4Station(c, root, nowS)), [], `${n}'s state in force is the list the chain had`);
+    }
+    assert.equal(stationHash(a.lockAfter(-1).at(-1)!), stationHash(b.lockAfter(-1).at(-1)!), "one chain: the same head at both");
+    const h = held(w.inner, "ws")!;
+    assert.equal(h.entries.at(-1)?.kind, "moved");
+    assert.equal((h.entries.at(-1)!.body as { root: string }).root, root, "this device goes by the same moved");
+    assert.equal(inForceOf(w.inner, "ws").root, root);
+    assert.deepEqual(d4Diff(list, d4Core(w.inner)), [], "the state in force here is the list the chain had");
+    for (const [sub, d, role] of [["s1", { base: w.base }, "owner"], ["r2", w.bob.app, "owner"], ["r3", w.xena.app, "member"]] as const) {
+      const x = admitted(sub, d, role);
+      for (const c of [a, b]) assert.equal(inLock(c, x as never, role, x.viewer.device).viewer.role, role, `${sub}'s device let in`);
+    }
+    // the moved that lost: never signed again, nothing pending, nothing said or asked again
+    const mine = (c: Cloud) => c.lockKept(null).filter((e) => e.kind === "moved" && e.sig.key === w.signer.id).length;
+    assert.deepEqual([mine(a), mine(b)], [1, 1], "this device's moved signed once");
+    assert.ok(!pendingHeld(w.inner, "ws").some((x) => x.entry.kind === "moved"), "no moved pending here");
+    const again = await w.hand();
+    assert.equal(again.error, undefined, again.error?.message);
+    assert.equal(again.ok, null, "handOver again: handed over (it moved), nothing done");
+    assert.deepEqual([mine(a), mine(b)], [1, 1], "nor signed by handOver again");
+    assert.equal(w.asked(), asked, "nobody asked again");
+    assert.equal(w.said().length, 5, "nothing said again");
+    if (wins === "bob") {
+      // this device's person: an owner of the standing state by bob's `member`; their own statements under a root
+      // nothing reads; off and on again are the root's alone
+      const f = inForceOf(w.inner, "ws").f;
+      assert.equal(f.members.get("s1")?.role, "owner", "an owner by bob's statement");
+      assert.equal(f.persons.get("s1"), w.gMe, "by their own log");
+      const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
+      assert.equal(off.error?.code, "lock_root_only", off.error?.message);
+      assert.equal(w.asked(), asked, "nobody asked for it");
+    }
+  });
+}
