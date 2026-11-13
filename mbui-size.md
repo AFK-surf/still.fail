@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [60c0f75f7](https://github.com/AFK-surf/monoid/commit/60c0f75f746c2888f76df292f7791d3ab7f7d87f) Browser and remote screens as a browser: tabs, an  | 1.98 | 2.7 | 11.49 | 31.09 | 41.37 | 27.71 | 53.13 | 95.9 | 112.49 |
 | [af1435b8b](https://github.com/AFK-surf/monoid/commit/af1435b8b340455e766882dadb33639772390ef2) app tests: answers_still in three runs; app 4/4 at | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.7 | 53.08 | 95.65 | 108.08 |
 | [34cf511f1](https://github.com/AFK-surf/monoid/commit/34cf511f1a6f8cb11487133f623df2b5491bf3f6) station, core: a handover waits for a member's app | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.69 | 53.08 | 95.96 | 113.81 |
 | [f653dbf14](https://github.com/AFK-surf/monoid/commit/f653dbf1469116310a30b12715bc6e4d64ba1ba9) test: the lock's test rigs hand a device nothing a | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.65 | 120.4 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d1b4d8c47](https://github.com/AFK-surf/monoid/commit/d1b4d8c47e09e42772987ada8c70b5704ef3cd06) mbui iOS: a chat's "…" folded into the system's "… | 1.96 | 2.63 | 11.35 | 30.88 | 40.75 | 27.51 | 52.6 | 94.42 | 109 |
 | [e5343f3ef](https://github.com/AFK-surf/monoid/commit/e5343f3efdb3bbb3d67ae91c7481ed5ec74738c2) app tests: page-seconds.txt written again from mai | 1.96 | 2.63 | 11.35 | 30.88 | 40.75 | 27.51 | 52.6 | 94.55 | 105.86 |
 | [e3aa11a3e](https://github.com/AFK-surf/monoid/commit/e3aa11a3efc7783d8c378014f27f9397e09d8cc0) mbui app: a 常用搭配 taken out of the model's panel cl | 1.96 | 2.63 | 11.35 | 30.88 | 40.75 | 27.51 | 52.6 | 94.55 | 105.86 |
-| [c37772e3c](https://github.com/AFK-surf/monoid/commit/c37772e3cefad21d723c7cfd59687dd9054dfb9d) core: a moved workspace's vaults go by the state i | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.6 | 94.14 | 105.45 |
