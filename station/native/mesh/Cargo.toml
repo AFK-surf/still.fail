@@ -59,7 +59,7 @@ tokio = { version = "1", features = ["test-util"] }
 
 # As mesh/ has them (vendor/README.md).
 [patch.crates-io]
-noq-proto = { git = "https://github.com/zzj3720/noq", rev = "d578f818ad7580c49691f26d5ccf8cc3afcc026a" }
+noq-proto = { git = "https://github.com/zzj3720/noq", rev = "76344e6eab7ae651ce524e4f329a2f283f69d7ab" }
 swarm-discovery = { path = "../../../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../../../vendor/noq-udp" }
