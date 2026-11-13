@@ -9,6 +9,7 @@
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
+import { catalog } from "../accounts/catalog.ts";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
@@ -48,7 +49,7 @@ const IDLE_MS = 60_000;
 const SLOW_MS = 2_000;
 
 /// `held`: the read it is answering, if any.
-type Slot = { worker: ReaderLike; held: Asked | null; idle?: () => void; retiring?: boolean };
+type Slot = { worker: ReaderLike; held: Asked | null; idle?: () => void; retiring?: boolean; catalogVersion: number };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
 /// session's history, where its reading stands in memory).
@@ -199,7 +200,7 @@ export class Readers {
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker: ReaderLike = (line === this.log || line === this.moved) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
       : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
-    const slot: Slot = { worker, held: null };
+    const slot: Slot = { worker, held: null, catalogVersion: 0 };
     const begun = wall.now();
     worker.on("message", (answer: Answer | Ready) => {
       // How long a reader took to start: a read given it as it starts waits on that (one read of 1.9 s took 18 s on
@@ -709,6 +710,13 @@ export class Readers {
     asked.ask.names = [...this.names];
     asked.ask.processes = [...this.processes()];
     asked.ask.clientKeys = [...this.clientKeys()];
+    if (!(slot.worker instanceof MbReader)) {
+      const current = catalog();
+      if (slot.catalogVersion !== current.version) {
+        asked.ask.catalog = current.models;
+        slot.catalogVersion = current.version;
+      }
+    }
     slot.worker.postMessage(asked.ask);
   }
 

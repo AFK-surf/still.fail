@@ -20,7 +20,7 @@ import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
 import { log } from "../ops/log.ts";
 import type { ContextCall } from "../store/usage.ts";
-import { key as modelKey } from "../../../client/core-ts/src/shapes/model.ts";
+import { key as modelKey, splitAgyTier } from "../../../client/core-ts/src/shapes/model.ts";
 import { STILLFAIL_CONNECT } from "../store/rows.ts";
 
 // ── prices (usage.rs) ──
@@ -76,16 +76,24 @@ export function priceTable(lang: Lang, models: (string | null)[] = []): Json {
 }
 
 /// What a model is, however it is spelled (the core's, client/core-ts/src/shapes/model.ts `key`).
-export { modelKey };
+export { modelKey, splitAgyTier };
 
 
-/// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m]): the model
-/// catalog's, else the station's own table's; none for a model without a list price in either.
+/// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m],
+/// gemini-4-hydrogen-high): the model catalog's, else the station's own table's; none for a model without a list price
+/// in either.
 export function price(model: string): Price | null {
   const told = facts(model)?.cost;
   if (told !== undefined) return { input: told.input, output: told.output, cacheRead: told.cacheRead ?? told.input };
   const name = modelKey(model);
-  return PRICES.find(([prefix]) => name === prefix || (name.startsWith(prefix) && name.slice(prefix.length).startsWith("[")))?.[1] ?? null;
+  const listed = (candidate: string) =>
+    PRICES.find(([prefix]) => candidate === prefix || (candidate.startsWith(prefix) && candidate.slice(prefix.length).startsWith("[")))?.[1] ?? null;
+  const direct = listed(name);
+  if (direct !== null) return direct;
+  const at = name.indexOf("[");
+  const bare = at >= 0 ? name.slice(0, at) : name;
+  const split = splitAgyTier(bare);
+  return split === null ? null : listed(at >= 0 ? `${split.model}${name.slice(at)}` : split.model);
 }
 
 /// cost: what a day's calls of one model would cost at its API prices, in dollars (in the Rust's order of operations).
