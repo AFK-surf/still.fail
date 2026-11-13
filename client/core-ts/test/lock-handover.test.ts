@@ -74,6 +74,10 @@ type Opts = {
   crowd?: number;
   /// A third station of the workspace, C.
   third?: boolean;
+  /// Stations (by name) whose GET /lock does not say they serve `bodies` and `logs` (stations from before), and those
+  /// not reached at all, from the start.
+  old?: string[];
+  down?: string[];
 };
 
 async function setUp(o: Opts = {}) {
@@ -147,7 +151,7 @@ async function setUp(o: Opts = {}) {
   };
   const stations: { A: Cloud; B: Cloud; C?: Cloud } = { A: station(A), B: station(B), ...(o.third ? { C: station(C) } : {}) };
   const nameOf = (id: string) => (id === A ? "A" : id === B ? "B" : id === C ? "C" : id === D ? "D" : null);
-  const st = { silent: false, down: new Set<string>(), asked: [] as Asked[], hook: null as null | (() => void), early: [] as string[] };
+  const st = { silent: false, down: new Set<string>(o.down ?? []), old: new Set<string>(o.old ?? []), asked: [] as Asked[], hook: null as null | (() => void), early: [] as string[] };
   const viewer = viewerOf("s1", { base }, "owner", "ws");
   const route = (c: Cloud, method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     if (st.silent && method === "POST") return Effect.never;
@@ -160,7 +164,10 @@ async function setUp(o: Opts = {}) {
     }
     const [p, q] = path.split("?") as [string, string | undefined];
     const buf = Buffer.from(body === null || body === undefined ? "" : JSON.stringify(body));
-    const [status, out] = p === "/lock" ? lockRoute(c, method, q ? [...new URLSearchParams(q)] : [], buf, viewer as never) : lockPartRoute(c, p.slice("/lock/".length), method, buf, viewer as never);
+    const [status, said] = p === "/lock" ? lockRoute(c, method, q ? [...new URLSearchParams(q)] : [], buf, viewer as never) : lockPartRoute(c, p.slice("/lock/".length), method, buf, viewer as never);
+    // (a station from before: its rules know no `moved`, and it serves none of what a moved chain is made of)
+    const from = Object.entries(stations).find(([, x]) => x === c)?.[0] ?? "";
+    const out = p === "/lock" && st.old.has(from) && status === 200 ? { ...(said as object), serves: ((said as { serves?: string[] }).serves ?? []).filter((x) => x !== "bodies" && x !== "logs") } : said;
     // (the first time statements were taken: what the test changes before the `moved`)
     if (status === 200 && p === "/lock/person" && Array.isArray((body as { bodies?: unknown })?.bodies) && st.hook) {
       const h = st.hook;
@@ -666,7 +673,7 @@ test("a member not ready: nothing said, handOverState names them; ready, said at
   const w = await setUp({ auto: true, more: ["notReady"] });
   assert.equal((await w.askGrant()).error, undefined);
   assert.deepEqual(w.said(), [], "nothing said");
-  assert.deepEqual(handOverState(w.inner, "ws"), { waits: ["r4"] });
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: ["r4"], stations: [] });
   w.after(w.r4.app.signer, "person", { sub: "r4", person: w.r4.genesis });
   for (const c of Object.values(w.stations)) {
     c.takeLock([...w.chain] as unknown as StationEntry[]);
@@ -692,7 +699,7 @@ test("a member not ready after all was said: it waits, then moves by itself once
   };
   assert.equal((await w.askGrant()).error, undefined);
   await w.run(read(w.inner, "ws"));
-  assert.deepEqual(handOverState(w.inner, "ws"), { waits: ["r3"] });
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: ["r3"], stations: [] });
   assert.deepEqual(movedAt(w), [null, null]);
   for (const c of Object.values(w.stations)) bring(c, w.xena, false, "ws");
   await w.run(read(w.inner, "ws"));
@@ -735,4 +742,59 @@ test("a workspace of 100 members and 3 stations handed over by itself in one ask
   assert.deepEqual(d4Diff(before, d4Core(w.inner)), [], "the state in force here is the chain's list before");
   assert.equal(w.asked(), 1, "one ask in all");
   assert.deepEqual(w.st.early, [], "no moved before a station held every body");
+});
+
+// The `moved` waits for every station the chain names to have said to this device that it serves `bodies` and `logs`
+// (the lead's decision, 2026-11-14): one whose rules do not know `moved` would refuse it and go on letting people in by
+// the chain of before. The statements are said meanwhile; the `moved` waits, with no deadline.
+test("a station that does not say it serves bodies and logs: the statements said, nothing moved, handOverState names it; it says so: moved by itself, no ask", async () => {
+  const w = await setUp({ auto: true, old: ["B"] });
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: [], stations: [w.B] });
+  assert.equal((await w.askGrant()).error, undefined);
+  assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS, "said all the same");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [null, null], "nothing moved");
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: [], stations: [w.B] });
+  const call = await w.hand();
+  assert.equal(call.error?.code, "lock_stations_not_ready", "lock.handOver refuses so");
+  assert.match(call.error?.message ?? "", /b/);
+  assert.deepEqual(movedAt(w), [null, null]);
+  w.st.old.clear();
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved as the lock was read");
+  assert.equal(w.asked(), 1, "no ask more");
+});
+
+test("a station never reached: the moved waits for it, moved once it is; one that said so before and is asleep now holds nothing up", async () => {
+  const w = await setUp({ auto: true, down: ["B"] });
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: [], stations: [w.B] }, "B never said it");
+  assert.equal(w.stations.A.chain(null)?.state?.moved, undefined, "nothing moved");
+  w.st.down.clear();
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved once B said so");
+  assert.equal(w.asked(), 1);
+  // (B said so as the lock was first read, then went to sleep: the moved goes at A alone)
+  const v = await setUp({ auto: true });
+  v.st.down.add("B");
+  assert.deepEqual(handOverState(v.inner, "ws"), { asks: true }, "B said so before");
+  assert.equal((await v.askGrant()).error, undefined);
+  await v.run(read(v.inner, "ws"));
+  assert.equal(v.stations.A.chain(null)?.state?.moved, v.gMe, "moved at A, B asleep");
+  assert.equal(v.asked(), 1);
+});
+
+test("a station from before taken out of the chain: no longer waited for, moved", async () => {
+  const w = await setUp({ auto: true, old: ["B"] });
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(handOverState(w.inner, "ws"), { waits: [], stations: [w.B] });
+  w.after(w.signer, "station.remove", { key: w.B });
+  for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
+  await w.run(read(w.inner, "ws"));
+  if (w.stations.A.chain(null)?.state?.moved === undefined) assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.equal(w.stations.A.chain(null)?.state?.moved, w.gMe, "moved at A");
+  assert.equal(inForceOf(w.inner, "ws").f.stations.has(w.B), false, "B not in the state in force");
 });

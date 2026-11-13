@@ -253,6 +253,15 @@ another; the accounts' list's merge across stations and its refills.
   `handOver`'s `guard`), once a station of the workspace took it all. Where no ask comes, `handOverState` says `asks`
   (the security page will offer it once). While the switch is on, an owner's device reads the logs its chain binds as
   the lock is read (views/lock.ts `readLockOnce`), so the plan never asks the stations itself.
+- A `moved` waits for every station the chain names (the lead, 2026-11-14): a station whose rules do not know `moved`
+  refuses it and goes on letting people in by the chain of before, a member taken out after the move too, and the
+  floors do not stop that (the device taken out is the one that talks to it). So `moved` is signed, by `movedBySelf`
+  and by `lock.handOver` alike (their `guard`), only once each of them said to this device in its GET /lock `serves`
+  that it serves `bodies` and `logs`, never by the version the cloud lists (the cloud is the adversary, and serves the
+  updates). What each last said is kept beside the lock as it is read (views/lock.ts `keepServes`, `lockServes`), so one
+  asleep now that said so before holds nothing up; one that never did (older, or not reached since) does, with no
+  deadline: one gone for good is taken out by an owner and is then not named. The statements are said meanwhile;
+  `handOverState` names those waited for (`{waits, stations}`) and `lock.handOver` answers `lock_stations_not_ready`.
 - Nothing the core does by itself (as a lock comes, a retry, a background writer) reads a value sealed for the
   person's presence or asks them: only what a person asked for on this device does, once for it, and what needs such
   a value otherwise waits until it is in hand for something they do (2026-11-13: `src/views/vault.ts` `rekeyGone` read
