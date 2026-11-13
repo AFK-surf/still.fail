@@ -382,7 +382,10 @@ fn pane_made(
                   chat_bar_wide_node(o, src, page, pane_chat_bar_ends(src, o), tips, stint)
                 },
                 // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
-                body=fn(col, s, r, composer, shows) { chat_body_nodes(col, s, r, tips, stint, composer, shows) },
+                body=fn(col, s, r, composer, shows) {
+                  pane_made_chat(col, src, k)
+                  chat_body_nodes(col, s, r, tips, stint, composer, shows)
+                },
                 // (the composer's old view on the page's way to another width as the side panel slides beside it, as the
                 // old page's was inside its with_side: its foot's room across the way, not stepped where it crosses its
                 // width, composer_foot_in)
@@ -490,6 +493,23 @@ fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
     .moves_window(Is(true))
     |> ignore
   })
+}
+
+///|
+/// What page_one did for a chat's page in its island, done for entry `k`'s chat made as nodes, its messages' column
+/// `col` (chat_body_nodes', the composer in it): moved aside as the folded sidebar is shown a while, where the block's
+/// move has got (its bar over it keeps its ends by the same: pane_chat_bar_ends), and what it shows across read of it as
+/// that starts, while its entry shows (fold_goes' `made`), the one kept while the one on top waits too.
+fn pane_made_chat(col : @view.View, src : Source, k : Int) -> Unit {
+  col.offset(By(fn() { (pane_aside_at(src, col), 0.0) })) |> ignore
+  fold_goes.made[k] = col
+  col.owns(fn() {
+    match fold_goes.made.get(k) {
+      Some(v) if v.id() == col.id() => fold_goes.made.remove(k)
+      _ => ()
+    }
+  })
+  |> ignore
 }
 
 ///|

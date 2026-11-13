@@ -449,6 +449,17 @@ fn wide_bar_button(t : @ui.Tester, label : String) -> (Double, Double, Double, D
 }
 
 ///|
+/// Where the bar's button `label` is drawn (wide_bar_button's), read out or not: the bar's buttons behind a popover the
+/// tree puts up over the window (a chat's page made as nodes: chat_pops_node) are none of a screen reader's while it is
+/// open, as anything behind a modal layer is.
+fn wide_bar_button_drawn(t : @ui.Tester, label : String) -> (Double, Double, Double, Double)? {
+  match t.semantics().filter(fn(b) { b.role == @ui.Role::Button && b.label == label && b.rect.1 < 90.0 && b.rect.3 < 90.0 }) {
+    [b, ..] => Some(b.rect)
+    _ => None
+  }
+}
+
+///|
 /// A press in the middle of `r`, its moment declared.
 fn wide_bar_tap(t : @ui.Tester, r : (Double, Double, Double, Double)) -> Unit {
   let (x, y, w, h) = r
@@ -614,7 +625,7 @@ test "大屏, 中屏: the bar's popovers keep by their buttons as the window cha
       // (the window wider: the button moved with the bar's end, its popover with it)
       t.resize(win.1 + 160.0, 800.0)
       t.run_for(@ui.move_most_ms)
-      guard (wide_bar_button(t, label), wide_bar_dialog(t)) is (Some(b2), Some(d2)) else {
+      guard (wide_bar_button_drawn(t, label), wide_bar_dialog(t)) is (Some(b2), Some(d2)) else {
         fail("\{win.0}: \{label} wider")
       }
       assert_true(b2.0 != b.0, msg="\{win.0}: \{label} moved: \{Repr(b)} \{Repr(b2)}")
@@ -634,7 +645,7 @@ test "大屏, 中屏: the bar's popovers keep by their buttons as the window cha
       t.run_for(@ui.move_most_ms)
       t.resize(win.1, 800.0)
       t.run_for(@ui.move_most_ms)
-      guard (wide_bar_button(t, label), wide_bar_dialog(t)) is (Some(b3), Some(d3)) else {
+      guard (wide_bar_button_drawn(t, label), wide_bar_dialog(t)) is (Some(b3), Some(d3)) else {
         fail("\{win.0}: \{label} by a key")
       }
       assert_true(wide_bar_under(d3, b3), msg="\{win.0}: \{label}'s popover by it, by a key: \{Repr(d3)} \{Repr(b3)}")

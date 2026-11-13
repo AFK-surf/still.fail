@@ -742,6 +742,17 @@ fn pane_made_shown() -> @view.View? {
 }
 
 ///|
+/// What the page that shows in the pane off the tape shows across, as the folded sidebar shown a while reads it as it
+/// starts (fold_peek_shift; for a test too): a page made once (a chat's made as nodes: its messages' column), what its
+/// tree's parts show across; else the old view's page, its bars left out.
+pub fn pane_shown_across() -> (Double, Double)? {
+  match pane_made_shown() {
+    Some(p) => p.shown_across()
+    None => @ui.current().shown_across(fold_goes.page_id, but="page-bar")
+  }
+}
+
+///|
 /// The page made once in the pane that shows, for a test: who it is (None: none shows).
 pub fn pane_made_seen() -> @view.NodeId? {
   pane_made_shown().map(fn(v) { v.id() })
@@ -752,12 +763,7 @@ pub fn pane_made_seen() -> @view.NodeId? {
 /// peek_shift: what the page showed across as the last frame laid it out: an old view's page, or one made once of the
 /// tree's), the block where it is (`at`).
 fn fold_peek_shift(at : FoldLook) -> Double {
-  let c = @ui.current()
-  // (a page made once: what its tree's parts show across; else the old view's page)
-  let shown = match pane_made_shown() {
-    Some(p) => p.shown_across()
-    None => c.shown_across(fold_goes.page_id, but="page-bar")
-  }
+  let shown = pane_shown_across()
   match fold_goes.node {
     Some(v) => {
       let s = wide.side_w.get()

@@ -81,24 +81,38 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
 /// A passage of a message picked while the page is not in use (held where it shows beside the sidebar), followed in
 /// node `v`: the page comes over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to
 /// what showed of the page and brought it over, quoting nothing). As it is picked, once (@sfbase.picked: a new
-/// identity), never as it stays picked: a passage left picked keeps nothing from being brought over after (pengxiao,
-/// 2026-10-25: the sidebar pressed or pulled over went straight back).
+/// identity; a chat's page made as nodes, its messages' words picked of the window's tree, @ui.picked_now: which
+/// selection it is), never as it stays picked: a passage left picked keeps nothing from being brought over after
+/// (pengxiao, 2026-10-25: the sidebar pressed or pulled over went straight back).
 fn tape_pick_said(v : @view.View, src : Source) -> Unit {
   // (what is picked, as told, while a workspace is in view: none taken while none is, what is picked then taken as one
-  // is again)
-  v.reacts(fn() { (@sfbase.picked.get().serial, @sfbase.workspace_in_view(src).0 is Some(_)) }, fn(now) {
-    let (serial, held) = now
-    guard held else { return }
-    let pick = if serial == 0 { "" } else { serial.to_string() }
-    if pick != "" &&
-      pick != wide.tape_pick.get() &&
-      wide.tape_at.get() != Page &&
-      wide.tape_ask.get() is None &&
-      wide.tape_pull.get() is None {
-      wide.tape_ask.set(Some(Page))
-    }
-    wide.tape_pick.set(pick)
-  })
+  // is again; of the tree's words, only what a message's are of)
+  v.reacts(
+    fn() {
+      let made = match @ui.picked_now() {
+        Some(p) if !p.of.is_empty() => Some(p.made)
+        _ => None
+      }
+      (@sfbase.picked.get().serial, made, @sfbase.workspace_in_view(src).0 is Some(_))
+    },
+    fn(now) {
+      let (serial, made, held) = now
+      guard held else { return }
+      let pick = match (serial, made) {
+        (0, Some(m)) => "words \{m}"
+        (0, None) => ""
+        _ => serial.to_string()
+      }
+      if pick != "" &&
+        pick != wide.tape_pick.get() &&
+        wide.tape_at.get() != Page &&
+        wide.tape_ask.get() is None &&
+        wide.tape_pull.get() is None {
+        wide.tape_ask.set(Some(Page))
+      }
+      wide.tape_pick.set(pick)
+    },
+  )
 }
 
 ///|
@@ -519,10 +533,17 @@ fn tape_made(
               over=fn(o, src, page, stint) { chat_bar_wide_node(o, src, page, tape_chat_bar_ends(), tips, stint) },
               // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
               // (built in the page's panel, as tape_page_one builds the page: what stands in its corners concentric with them)
-              body=fn(col, s, r, composer, shows) { chat_body_nodes(col, s, r, tips, stint, composer, shows, in_pane=true) },
+              body=fn(col, s, r, composer, shows) {
+                // (on the panel's ground, a step darker while it is behind the one in use, going with the tape's move:
+                // tape_page_ground, as the island's own was, in the place of the page's ground chat_page_made gives it)
+                col.ground(By(fn() { tape_page_ground(col) })) |> ignore
+                chat_body_nodes(col, s, r, tips, stint, composer, shows, in_pane=true)
+              },
               foot=fn(c, s, r) {
                 @sf.pane_round.val = Some(tape_page_round())
-                chat_composer_nodes(c, s, r, wide.tape.get())
+                // (behind the one in use a step darker and nothing of it read out, as tape_page_one's page is:
+                // tape_behind)
+                tape_behind(c, Page, fn() { chat_composer_nodes(c, s, r, wide.tape.get()) })
                 @sf.pane_round.val = None
               },
             )

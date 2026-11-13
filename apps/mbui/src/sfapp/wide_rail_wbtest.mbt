@@ -612,7 +612,7 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   t.move_to(1000.0, 400.0)
   t.run_for(@ui.move_most_ms)
   // folded: what the page shows across (its bar left out), and where its field is
-  let (left, right) = t.ctx().shown_across(@sfdesk.pane_page_id(), but="page-bar").unwrap()
+  let (left, right) = @sfdesk.pane_shown_across().unwrap()
   let (x0, _, _, _) = t.rect_of("发消息").unwrap()
   // the pointer on the bar: shown a while, the page moved aside as far as that needs, no further than the room on its
   // right or the sidebar's width

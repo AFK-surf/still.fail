@@ -444,8 +444,8 @@ test "中屏 to 大屏 and back while a page waits: each made waits anew from th
 fn held_let_go(
   framed : Bool,
 ) -> (
-  (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane),
-  (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane),
+  (String, String, Int, Array[@ui.Haptic], @sfdesk.TapePane),
+  (String, String, Int, Array[@ui.Haptic], @sfdesk.TapePane),
 ) {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   t.set_rows_on_pixels(true)
@@ -455,6 +455,7 @@ fn held_let_go(
   let first = Ref(true)
   let stop = @signals.effect(fn() {
     @sfbase.picked.get() |> ignore
+    @ui.picked_now() |> ignore
     if first.val {
       first.val = false
     } else {
@@ -462,8 +463,14 @@ fn held_let_go(
     }
   })
   let felt = t.haptics().length()
-  let now = fn() -> (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane) {
-    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_owned(), @sfdesk.wide.tape_at.get())
+  // (what is picked: the old view's passage, its message and where it runs; the tree's words picked, what they are of
+  // and the words)
+  let now = fn() -> (String, String, Int, Array[@ui.Haptic], @sfdesk.TapePane) {
+    let (of, words) = match @ui.picked_now() {
+      Some(p) if pk.ts == "" => (p.of.join(","), p.text)
+      _ => (pk.ts, if pk.sel.b > pk.sel.a { "\{pk.sel.a}..\{pk.sel.b}" } else { "" })
+    }
+    (of, words, told.val, t.haptics()[felt:].to_owned(), @sfdesk.wide.tape_at.get())
   }
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
@@ -488,10 +495,10 @@ fn held_let_go(
 test "中屏: a finger held on the page beside the sidebar past a long press and let go before any frame: the frame after picks the word under it, as with frames all along; told once, felt once" {
   let (along, along_later) = held_let_go(true)
   let (none, none_later) = held_let_go(false)
-  assert_true(along.0 != "" && along.2 > along.1, msg="\{Repr(along)}")
+  assert_true(along.0 != "" && along.1 != "", msg="\{Repr(along)}")
   assert_eq(none, along)
-  assert_eq(along.3, 1)
-  assert_eq(along.4.length(), 1, msg="\{Repr(along.4)}")
+  assert_eq(along.2, 1)
+  assert_eq(along.3.length(), 1, msg="\{Repr(along.3)}")
   // (nothing more after: not picked again, told again or felt again)
   assert_eq(along_later, along)
   assert_eq(none_later, none)
