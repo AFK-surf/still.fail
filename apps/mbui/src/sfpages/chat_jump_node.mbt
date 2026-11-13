@@ -9,7 +9,8 @@
 /// What a chat's list keeps of its way to the newest: whether it is away from its end (more than a corner of the screen
 /// as it was last in sight); its latest page asked (chat.latest), the list to its end as it comes; the first and the last
 /// key it had in sight (none before it was laid out: what waits to be decided is out of view only once it is); whether
-/// it stands where a go-to put it (1 brought, 2 there: the page before not asked till the reader moves it; 0 not); the
+/// it stands where a go-to put it (1 brought, 2 there: the page before not asked till the reader moves it; 0 not) and
+/// the message that go-to went to and its top under the list's (-1 none); the
 /// message ⌘F last asked the window moved about (chat.around, -1 none); the row last gone to that flashes and the moment it was gone to ("" none); the row a search opened the chat at and its words,
 /// marked there for as long as the list is.
 priv struct ChatJump {
@@ -17,6 +18,7 @@ priv struct ChatJump {
   mut latest : Bool
   sight : @signals.Signal[(String, String)?]
   put : @signals.Signal[Int]
+  mut went : (Double, Double)
   mut around : Double
   flashed : @signals.Signal[(String, Double)]
   found : @signals.Signal[(String, Array[String])]
@@ -30,6 +32,7 @@ fn ChatJump::new() -> ChatJump {
     latest: false,
     sight: @signals.signal(None, same=fn(a, b) { a == b }),
     put: @signals.signal(0, same=fn(a, b) { a == b }),
+    went: (-1.0, 0.0),
     around: -1.0,
     flashed: @signals.signal(("", -1.0), same=fn(a, b) { a == b }),
     found: @signals.signal(("", []), same=fn(a, b) { a == b }),
@@ -82,6 +85,15 @@ fn chat_goes_to(
       }
       _ => ()
     }
+    // (standing where a go-to put it: the reader at the message gone to, put under the bar, whatever of the one over
+    // it shows under the bar too: reader_top's)
+    match jump.went {
+      (seq, off) if jump.put.untracked() == 2 && seq >= 0.0 => {
+        rd.top_seq = seq
+        rd.top_off = off
+      }
+      _ => ()
+    }
     rd.far = cv.newer || (!s.at_foot && s.from_foot > s.shows)
     // (at the chat's end: what the steps to what a person said and 对话目录 take the reader to be at, outline_current)
     rd.at_end = s.at_foot && !cv.newer
@@ -118,11 +130,13 @@ fn chat_goes_to(
         @sfbase.go_back_offsets.remove(chat)
         let words = @sfbase.go_to_words.get(chat).unwrap_or([])
         @sfbase.go_to_words.remove(chat)
+        let off = match back {
+          Some(off) => off
+          None => @signals.untracked(top)
+        }
+        jump.went = (target, off)
         jump.put.set(1)
-        place.bring(k, offset=match back {
-          Some(off) => -off
-          None => -@signals.untracked(top)
-        })
+        place.bring(k, offset=-off)
         // (back where the reader was: nothing of it shown; a search's: its words marked, nothing flashing; else it
         // flashes, from now)
         if back is None {
@@ -297,15 +311,32 @@ fn chat_outline_node(
 ) -> Unit {
   let chat = r.station + "\u{1}" + r.session
   chat_float_stand(foot, width, fn() { float_above }, fn() { chat_outlines(src, jump, view) }, fn(o) {
+    // (beside the button itself, their feet together: its room, not the stand it floats in)
+    let button : Ref[@view.View] = Ref(o)
     let press = fn() {
       let cv = @signals.untracked(view)
       guard cv.thread is Some(th) else { return }
       let rd = @sfbase.reading_of(chat)
       let current = outline_current(said_in_view(cv), rd.top_seq, rd.at_end)
-      open_outline(src, r, th, current, from=Node(o), side=Left, stint=@signals.untracked(stint))
+      open_outline(src, r, th, current, from=Node(button.val), side=Left, stint=@signals.untracked(stint))
     }
-    @sf.float_button_node(o, "list", fn() { @sf.t("web-main.outline.title") }, press, tips~, shortcut="chat.outline")
-    |> ignore
+    button.val = @sf.float_button_node(o, "list", fn() { @sf.t("web-main.outline.title") }, press, tips~, shortcut="chat.outline")
+    // (a screen's fixture: the outline opened from it as it shows, its words typed, its field taking the keys, in
+    // the button's moment's turn: outline_presets)
+    match outline_presets.get(chat) {
+      Some(words) => {
+        outline_presets.remove(chat) |> ignore
+        o.at_moment(o.cause_at(), fn() {
+          let cv = @signals.untracked(view)
+          guard cv.thread is Some(th) else { return }
+          let rd = @sfbase.reading_of(chat)
+          let current = outline_current(said_now(src, r, cv), rd.top_seq, rd.at_end)
+          open_outline(src, r, th, current, from=Node(button.val), side=Left, keys=true, stint=@signals.untracked(stint), typed=words)
+        })
+        |> ignore
+      }
+      None => ()
+    }
   })
 }
 

@@ -46,10 +46,11 @@ pub let go_to_words : Map[String, Array[String]] = Map([])
 /// The chat `r` opened from a search at its message `seq`, the search's `words` marked there (Search.kt FoundRow,
 /// Switcher.tsx's found message).
 pub fn open_chat_found(r : ChatRef, seq : Double, words : Array[String]) -> Unit {
-  go_to(r, seq, keep_place=false)
+  // (the words said before the go-to, which a chat's page made as nodes and open takes as it is said)
   if words.length() > 0 {
     go_to_words[r.station + "\u{1}" + r.session] = words
   }
+  go_to(r, seq, keep_place=false)
   open_page(Chat(r))
 }
 
