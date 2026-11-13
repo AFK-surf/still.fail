@@ -222,48 +222,52 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
   let blocks : Array[() -> Unit] = []
   for g in profile_groups(list) {
     blocks.append([
-      fn() { section_header(c, g.0, mark=Some(fn() { group_mark(c, text(g.1.get(0), "group")) }), start=S6) },
+      // (its kind's name alone over its card: each account's mark is its row's, as the sidebar's rows have it; the user,
+      // 2026-11-14)
+      fn() { section_header(c, g.0, start=S6) },
       fn() {
         list_card(c, fn() {
           for e in g.1 {
             let ev = Some(e)
             let p = field(ev, "profile")
             let usable = flag(ev, "usable")
-            // how it is where that is not simply fine, as the core says it (a dot in its tone; none while fine): what
-            // needs a look said in its line
+            // how it is where that is not simply fine, as the core says it: what needs a look said in its line, in its
+            // tone
             let state = field(ev, "state")
             list_row(c, key="ws-profile/" + text(ev, "key"), fn() {
               c.box(w=Fill(1.0), opacity=if usable { 1.0 } else { 0.55 }, fn() {
                 c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-                  if state is Some(Object(_)) {
-                    presence_dot(c, tone_dot(text(state, "tone")))
-                  }
+                  // its mark as far out as its chips' capsules under it, their left edges one line (the user, 2026-11-14)
+                  c.box(style=mark_out(), fn() {
+                    @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), 18.0, text(p, "providerMark"))
+                  })
+                  |> ignore
                   // (a subscription by its account, a key by its name: the core's)
                   let title = match text(ev, "title") {
                     "" => text(p, "name")
                     x => x
                   }
-                  c.text(title, size=t.t.ui, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
+                  c.text(title, size=t.t.ui, color=t.p.text, wrap=false, w=Cut, line=21.0, allow_ellipsis=true) |> ignore
+                  // its plan right after its name: where it can be used is its page's, and the line under the name only
+                  // says what is wrong
+                  let plan = text(p, "planText")
+                  if plan != "" {
+                    c.text(plan, style=plan_words, allow_ellipsis=true) |> ignore
+                  }
+                  c.box(style=@sf.desk_grow, fn() {  }) |> ignore
+                  // the chevron on the name's line, never centred on the row's lines (the user, 2026-11-14)
+                  chevron(c)
                 })
                 |> ignore
-                let line = if flag(ev, "look") {
-                  text(state, "text")
-                } else if text(ev, "where") != "" {
-                  text(ev, "where")
-                } else {
-                  join(
-                    [
-                      text(p, "checkText"),
-                      match text(p, "usesText") {
-                        "" => text(p, "kindText")
-                        u => u
-                      },
-                    ],
-                    " · ",
-                  )
+                if flag(ev, "look") && text(state, "text") != "" {
+                  let ink = match text(state, "tone") {
+                    "red" => t.p.red
+                    "neutral" | "" => t.p.muted
+                    _ => 0xD9962BFFL
+                  }
+                  c.text(text(state, "text"), size=t.t.meta, color=ink, wrap=false, w=Fill(1.0), line=18.0) |> ignore
                 }
-                c.text(join([text(p, "planText"), line], " · "), size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
-                // its allowance a line of its own, so the name and where it is keep the row's width
+                // its allowance a line of its own, so the name keeps the row's width
                 if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                   // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
                   // (each window in words, 每周剩余 78%: a row has the room, and a touch has no tip to say what W is)
@@ -274,7 +278,6 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
                 }
               })
               |> ignore
-              chevron(c)
             }, on_press=fn() {
               // an account on several stations: its own page, each station's part under it
               (core.push)(if flag(ev, "several") { ProfileAccount(text(ev, "key")) } else { Profile(text(ev, "station"), text(p, "id")) })
@@ -535,6 +538,17 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
 /// A grouped profile's allowance, a line under its words.
 // kept across runs: a value (no field of it changes)
 let quota_line : @ui.Style = @ui.css("w=Full pt=S1_5")
+
+///|
+/// Its plan's words, after its name: cut short with the name where the row has not the room for both.
+// kept across runs: a value (no field of it changes)
+let plan_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
+
+///|
+/// Its mark, out to where its chips' capsules start (quota_line_out's start).
+fn mark_out() -> @ui.Style {
+  @ui.style(ml=@sf.room_of(@sf.corner_inset - @sf.text_in))
+}
 
 ///|
 /// Its chips, small blocks in the row's foot start corner: out from its words to the ladder's inset (8) from the row's

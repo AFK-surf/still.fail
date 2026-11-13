@@ -2,11 +2,15 @@
 // over the whole app and the settings' fixture (a profile's own page: src/sfpages accounts_wbtest.mbt).
 
 ///|
-test "wide: the profile list shows a subscription's tier" {
+test "wide: the profile list's rows say an account's name and allowance, its tier its page's" {
   let t = wide_tester([], mode="settings")
   app.nav.replace(Place("profiles"))
   t.draw()
-  assert_true(t.find("Ultra") is Some(_), msg="the subscription's tier")
+  // (the plan beside the name cut the name short in the narrowest sidebar; where it can be used and who uses it are the
+  // account's page's too: the user, 2026-11-14)
+  let side = t.text_runs().filter(fn(r) { r.x1 < 300.0 })
+  assert_true(side.iter().any(fn(r) { r.text == "Claude 主账号" }), msg="\{Repr(side.map(fn(r) { r.text }))}")
+  assert_true(side.iter().all(fn(r) { r.text != "Ultra" && !r.text.contains("可用") }), msg="\{Repr(side.map(fn(r) { r.text }))}")
 }
 
 ///|
