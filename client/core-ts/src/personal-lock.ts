@@ -181,6 +181,11 @@ export type PersonalEnv = {
     bring: (sub: string, chain: Entry[], within?: Asked, bodies?: Stated) => Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError>;
     kept?: (ws: string, bodies: readonly unknown[]) => void;
     bodyOf?: (e: Entry) => { ws: string; body: unknown } | null;
+    /// The body a statement of this device's that lost its place is signed again with after `after` (the chain pinned
+    /// and what is pending after it), and its workspace: the same where its `prev` is still a statement before it there
+    /// (the model's `reuse`), else one saying the same with its `prev` and salt anew, kept here as it is made. Null where
+    /// its body is not kept here.
+    restated?: (e: Entry, after: readonly Entry[]) => { ws: string; body: unknown } | null;
     wsNames?: (ws: string) => string[];
     answered?: (sub: string) => boolean;
     carry?: (sub: string, chain: Entry[]) => void;
@@ -234,6 +239,11 @@ export class PersonalLock {
   readonly #tries = new Map<string, number>();
   /// Of an entry signed again, the one it was signed again for, by hash: what act each of this device's is (`#actsOf`).
   readonly #again = new Map<string, string>();
+  /// What each statement this device signed this run does as the person knows it (`say`'s `shown`), by its entry's
+  /// hash: one that lost its place is told by it.
+  readonly #shown = new Map<string, { act: Act | null; name: string; role?: string }>();
+  /// The rows of statements that lost their place, not signed again yet, the person read (`dismissPending`).
+  readonly #dismissed = new Set<string>();
   /// What this device signed that no station took yet, each person's (`pendingAs`): never on the chain pinned.
   readonly #pending = new Map<string, Pending[]>();
   /// Whether what is pending is being brought to the stations now (`#deliver`), and asked again meanwhile.
@@ -664,7 +674,63 @@ export class PersonalLock {
   /// `ownPendingRows`), one done in both once.
   pendingShown(sub: string): { item: Pending; row: PendingRow }[] {
     const names = this.#env.stations?.names?.(sub) ?? [];
-    return (this.#pending.get(sub) ?? []).filter((x) => x.act !== null).map((item) => ({ item, row: pendingRow(item, this.#namesFor(item.entry) ?? names) }));
+    return [...(this.#pending.get(sub) ?? []), ...this.#lostStated(sub)].filter((x) => x.act !== null).map((item) => ({ item, row: pendingRow(item, this.#namesFor(item.entry) ?? names) }));
+  }
+
+  /// This device's statements the chain pinned left (kept aside) that are still to be signed again, the seed not in
+  /// hand since (`#signAgain` signs them with the next act that has it): told as not in effect meanwhile, in the words
+  /// of a pending one whose lock changed after it (`failedTrusted`), each by what the person did (`#shown`). One whose
+  /// subject was decided since, or said already, is not.
+  #lostStated(sub: string): Pending[] {
+    const pinned = this.#pinned.get(sub) ?? [];
+    const aside = this.#aside.get(sub) ?? [];
+    return aside.flatMap((e): Pending[] => {
+      if (e.kind !== "ws" || e.sig?.key !== this.#myKey || this.#handled.has(hashOf(e))) return [];
+      const as = this.#shownOf(e);
+      const id = this.#actsOf(e).at(-1)!;
+      if (as === null || as.act === null || this.#dismissed.has(id) || this.#how(pinned, aside, e) !== "sign") return [];
+      return [{ id, entry: e, act: as.act, name: as.name, ...(as.role !== undefined ? { role: as.role } : {}), at: e.at * 1000, state: "failed", as: "trusted" }];
+    });
+  }
+
+  /// What a statement signed here does as the person knows it, by itself or the one it was signed again for.
+  #shownOf(e: Entry): { act: Act | null; name: string; role?: string } | null {
+    for (const h of this.#actsOf(e)) {
+      const as = this.#shown.get(h);
+      if (as !== undefined) return as;
+    }
+    return null;
+  }
+
+  /// What an entry of the person's lock is about: a device's (`subjectOf`), or of a statement, by its body kept here,
+  /// the member, the station or on and off of its workspace (the model's `about`); none where its body is not kept.
+  #subject(e: Entry): string | null {
+    if (e.kind !== "ws") return subjectOf(e);
+    const of = this.#env.stations?.bodyOf?.(e);
+    const b = of?.body as J;
+    if (of === null || of === undefined || typeof b?.kind !== "string") return null;
+    if (b.kind === "member" || b.kind === "member.remove") return `member ${of.ws}|${b.sub}`;
+    if (b.kind === "station" || b.kind === "station.remove") return `station ${of.ws}|${b.key}`;
+    return b.kind === "open" || b.kind === "off" ? `open ${of.ws}` : null;
+  }
+
+  /// Whether `e` says what `lost` says: of statements, what their bodies say but for `prev` and the salt (a body kept
+  /// here; one not kept says the same only as the same commitment); else the same kind and body.
+  #same(e: Entry, lost: Entry): boolean {
+    if (e.kind !== lost.kind) return false;
+    if (e.kind !== "ws") return canonical(e.body ?? null) === canonical(lost.body ?? null);
+    const said = (x: Entry) => {
+      const b = this.#env.stations?.bodyOf?.(x)?.body as J;
+      if (b === null || b === undefined || typeof b !== "object") return `entry ${canonical(x.body ?? null)}`;
+      const { prev: _p, salt: _s, ...rest } = b;
+      return canonical(rest);
+    };
+    return said(e) === said(lost);
+  }
+
+  /// `againOf` for an entry of this device's on the person's lock, by `#subject` and `#same`.
+  #how(pinned: readonly Entry[], aside: readonly Entry[], e: Entry, before?: (x: Entry) => boolean, subject?: (x: Entry) => string | null) {
+    return againOf(pinned, aside, e, subject ?? ((x) => this.#subject(x)), before, (x, lost) => this.#same(x, lost));
   }
 
   /// The stations a statement waits for (its workspace's), by name; null for an entry of another kind (all the
@@ -685,6 +751,10 @@ export class PersonalLock {
   dismissPending(sub: string, id: string): void {
     const items = this.#pending.get(sub) ?? [];
     if (items.some((x) => x.id === id && x.state === "failed")) this.#putPending(sub, items.filter((x) => x.id !== id));
+    else if (this.#lostStated(sub).some((x) => x.id === id)) {
+      this.#dismissed.add(id);
+      this.#env.changed();
+    }
   }
 
   /// In the turn: `e` kept pending, or, signed again (`of`, the id of the one first signed), in that one's place.
@@ -747,7 +817,7 @@ export class PersonalLock {
         if (e.seq !== pinned.length || e.prev !== entryHash(pinned[pinned.length - 1]!)) {
           // (its subject decided otherwise since: that one named; else the lock moved and the seed to sign it again is not
           // in hand: what changed is their trusted devices, not it)
-          const how = againOf(pinned, this.#aside.get(sub) ?? [], e, subjectOf);
+          const how = this.#how(pinned, this.#aside.get(sub) ?? [], e);
           if (how === "done") set(null);
           else set({ state: "failed", ...(how === "otherwise" ? { what: item.name } : { as: "trusted" as const }) });
           continue;
@@ -796,13 +866,17 @@ export class PersonalLock {
   /// `tries`: how many signings again of one that lost its place this is (0: the first signing); `of`: of a pending one,
   /// its id; `from`: of one signed again, the entry it is signed again for. Pending: the entry, which the caller answers
   /// with.
-  #signHere(sub: string, seed: Uint8Array, kind: string, body: unknown, once: boolean, within: Asked | undefined, tries: number, of: string | null, from: string | null = null): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> {
+  #signHere(sub: string, seed: Uint8Array, kind: string, said: unknown, once: boolean, within: Asked | undefined, tries: number, of: string | null, from: string | null = null): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (kind === "genesis") this.#pinned.delete(sub);
       // (after what is pending here that goes on from the chain pinned, one after another: what this device does is
       // brought in the order it was done, each as if done then, the seed in hand only now; `#deliver` brings each once
       // the one before was taken)
       const after = kind === "genesis" ? [] : [...(this.#pinned.get(sub) ?? []), ...this.#pendingTail(sub)];
+      // (a statement signed again: its body as `#restated` makes it after `after`, committed to)
+      const stated = typeof said === "function" ? (said as (after: readonly Entry[]) => { ws: string; body: unknown } | null)(after) : null;
+      if (typeof said === "function" && stated === null) return yield* Effect.fail(new CoreError("lock_unkept", "the body of a statement signed again is not kept here"));
+      const body = stated === null ? said : { t: rules.ws_tag_js(stated.ws, entryHash(after[0]!), crypto) as string, h: rules.body_hash_js(stated.body, crypto) as string };
       const e = this.#entry(sub, seed, this.#myKey!, kind, body, after);
       const chain = [...(e.seq === 0 ? [] : after), e];
       // (signed again: only where the rules still take it after the head; else the lock changed meanwhile)
@@ -811,7 +885,8 @@ export class PersonalLock {
       if (from !== null) this.#again.set(hashOf(e), from);
       const toCloud = this.#env.cloud(sub, "POST", PATH, { entries: [e] });
       const cloudTakes = once ? toCloud : Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
-      const brought = this.#env.stations ? yield* Effect.result(this.#env.stations.bring(sub, chain, within)) : null;
+      // (a statement with its body, to its workspace's stations alone)
+      const brought = this.#env.stations ? yield* Effect.result(this.#env.stations.bring(sub, chain, within, stated === null ? undefined : { ws: stated.ws, bodies: [stated.body] })) : null;
       // (refused where it was heard: another device's entry at its place, at a station)
       if (brought !== null && brought._tag === "Failure") {
         if (brought.failure.code === "lock_refused") return yield* this.#lost(sub, seed, e, once, within, tries, brought.failure, true, of);
@@ -833,7 +908,9 @@ export class PersonalLock {
       }
       // Pending: none took it nor refused it by the call's wait (or TAKEN_MS). Those still answering are listened to: one
       // taking it then, it is pinned (`#tookLate`); one refusing it, decided as it is next delivered.
-      const made = this.#pend(sub, e, tries, of, !once && within !== undefined);
+      // (a statement signed again: shown as what the person did, waiting)
+      const as = kind === "ws" ? this.#shownOf(e) : null;
+      const made = as !== null ? this.#pend(sub, e, tries, of, true, as) : this.#pend(sub, e, tries, of, !once && within !== undefined);
       if (typeof taken === "object") {
         this.#env.runner.fork(Effect.ignore(Effect.flatMap(taken.later, (n) => (n !== null && n > 0 ? this.#turn(sub).withPermits(1)(this.#tookLate(sub, e, chain)) : Effect.void))));
       }
@@ -877,7 +954,7 @@ export class PersonalLock {
       if (e.seq === 0) return yield* Effect.fail(refusal);
       // (the stations as they stand, waited for: the one that refused answered just now)
       if (read) yield* Effect.ignore(this.refresh(sub), { log: "Unhandled", message: "personal lock read after a refusal" });
-      const how = againOf(this.#pinned.get(sub) ?? [], this.#aside.get(sub) ?? [], e, subjectOf);
+      const how = this.#how(this.#pinned.get(sub) ?? [], this.#aside.get(sub) ?? [], e);
       if (how === "done") {
         this.#seen.delete(sub);
         this.#env.changed();
@@ -885,8 +962,15 @@ export class PersonalLock {
       }
       if (how === "otherwise") return yield* Effect.fail(this.#changed(sub, e));
       if (how === "unmoved" || tries >= AGAIN_MOST) return yield* Effect.fail(refusal);
-      return yield* this.#signHere(sub, seed, e.kind, e.body, once, within, tries + 1, of, hashOf(e));
+      return yield* this.#signHere(sub, seed, e.kind, this.#again_(e), once, within, tries + 1, of, hashOf(e));
     });
+  }
+
+  /// What `e` is signed again with: its body, or of a statement, how `restated` makes its body after the chain it is
+  /// signed after (`#signHere`).
+  #again_(e: Entry): unknown {
+    if (e.kind !== "ws") return e.body;
+    return (after: readonly Entry[]) => this.#env.stations?.restated?.(e, after) ?? null;
   }
 
   /// An entry that lost its place not signed again, the lock having changed meanwhile: what the person is told, what to
@@ -907,9 +991,9 @@ export class PersonalLock {
   /// of its own.
   #signAgain(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      // (a statement of a workspace is not signed again here: its body names the one before it, which a place after the
-      // head may not have; until that is decided by the model's `resign`, one that lost its place is let be)
-      const lost = [...(this.#aside.get(sub) ?? [])].sort((a, b) => a.seq - b.seq).filter((e) => e.seq > 0 && e.kind !== "ws" && e.sig?.key === this.#myKey && !this.#handled.has(hashOf(e)));
+      // (a statement of a workspace too, as the model's `resign` signs one again, `again=batch`: by what its body is
+      // about, with the same body where its `prev` is still before it, `#again_`)
+      const lost = [...(this.#aside.get(sub) ?? [])].sort((a, b) => a.seq - b.seq).filter((e) => e.seq > 0 && e.sig?.key === this.#myKey && !this.#handled.has(hashOf(e)));
       for (let i = 0; i < lost.length; i++) {
         const e = lost[i]!;
         this.#handled.add(hashOf(e));
@@ -920,14 +1004,14 @@ export class PersonalLock {
           const none = Effect.succeed(Effect.succeed(null));
           const pinned = this.#pinned.get(sub) ?? [];
           const aside = this.#aside.get(sub) ?? [];
-          const how = againOf(pinned, aside, e, subjectOf, before);
+          const how = this.#how(pinned, aside, e, before);
           // (decided otherwise since by this device's own later acts alone: what the person did last stands)
-          const others = () => againOf(pinned, aside, e, (x) => (x !== e && x.sig?.key === this.#myKey ? null : subjectOf(x)), before) === "otherwise";
+          const others = () => this.#how(pinned, aside, e, before, (x) => (x !== e && x.sig?.key === this.#myKey ? null : this.#subject(x))) === "otherwise";
           if (how === "otherwise") return Effect.as(Effect.sync(() => others() && this.#letBe(sub, e, {})), Effect.succeed(null));
           if (how !== "sign") return none;
           if (tries >= AGAIN_MOST) return Effect.as(Effect.sync(() => this.#letBe(sub, e, {})), Effect.succeed(null));
-          return Effect.catch(this.#signHere(sub, seed, e.kind, e.body, true, within, tries + 1, null, hashOf(e)), (err) =>
-            Effect.as(Effect.sync(() => this.#letBe(sub, e, err.message === this.#changed(sub, e).message ? {} : { why: err.message })), Effect.succeed(null)));
+          return Effect.catch(this.#signHere(sub, seed, e.kind, this.#again_(e), true, within, tries + 1, null, hashOf(e)), (err) =>
+            Effect.as(Effect.sync(() => this.#letBe(sub, e, err.message === this.#changed(sub, e).message || err.code === "lock_unkept" ? {} : { why: err.message })), Effect.succeed(null)));
         });
         yield* Effect.ignore(Effect.flatMap(this.#turn(sub).withPermits(1)(inTurn), (rest) => rest), { log: "Unhandled", message: "personal lock: an entry that lost its place signed again" });
       }
@@ -938,11 +1022,11 @@ export class PersonalLock {
           const now = (this.#pending.get(sub) ?? []).find((x) => x.id === item.id);
           const e = now?.entry;
           if (now === undefined || now.state !== "waiting" || e === undefined || pinned.length === 0 || (e.seq === pinned.length && e.prev === entryHash(pinned[pinned.length - 1]!))) return Effect.succeed(Effect.succeed(null));
-          const how = againOf(pinned, this.#aside.get(sub) ?? [], e, subjectOf);
+          const how = this.#how(pinned, this.#aside.get(sub) ?? [], e);
           const drop = (how: Partial<Pending> | null) => Effect.sync(() => this.#putPending(sub, (this.#pending.get(sub) ?? []).flatMap((x) => (x.id !== item.id ? [x] : how === null ? [] : [{ ...x, ...how }]))));
           if (how === "done") return Effect.as(drop(null), Effect.succeed(null));
-          if (how !== "sign" || e.kind === "ws" || (now.tries ?? 0) >= AGAIN_MOST) return Effect.as(drop({ state: "failed", what: now.name }), Effect.succeed(null));
-          return Effect.catch(this.#signHere(sub, seed, e.kind, e.body, false, within, (now.tries ?? 0) + 1, item.id, hashOf(e)), (err) => Effect.as(drop({ state: "failed", what: now.name, ...(err.code === "lock_refused" ? {} : { why: err.message }) }), Effect.succeed(null)));
+          if (how !== "sign" || (now.tries ?? 0) >= AGAIN_MOST) return Effect.as(drop({ state: "failed", what: now.name }), Effect.succeed(null));
+          return Effect.catch(this.#signHere(sub, seed, e.kind, this.#again_(e), false, within, (now.tries ?? 0) + 1, item.id, hashOf(e)), (err) => Effect.as(drop({ state: "failed", what: now.name, ...(err.code === "lock_refused" || err.code === "lock_unkept" ? {} : { why: err.message }) }), Effect.succeed(null)));
         });
         yield* Effect.ignore(Effect.flatMap(this.#turn(sub).withPermits(1)(inTurn), (rest) => rest), { log: "Unhandled", message: "personal lock: a pending entry signed again" });
       }
@@ -955,13 +1039,15 @@ export class PersonalLock {
   /// own (the core's). Failed ones count apart from those waiting (`bounded`): it never holds a new change back.
   #letBe(sub: string, e: Entry, how: { why?: string }): void {
     const key = (e.body as J)?.key;
-    const act = key === this.#myKey ? null : e.kind === "device.remove" ? "removeDevice" : e.kind === "device" ? "approve" : null;
+    // (a statement, by what the person did: one said with it, a take-over's, is not told by itself)
+    const as = e.kind === "ws" ? this.#shownOf(e) : null;
+    const act = e.kind === "ws" ? (as?.act ?? null) : key === this.#myKey ? null : e.kind === "device.remove" ? "removeDevice" : e.kind === "device" ? "approve" : null;
     if (act === null) return;
     const acts = this.#actsOf(e);
     const id = acts[acts.length - 1]!;
     const label = [...this.#lastSaid(sub).values()].find((d) => d.device.key === key)?.device.label ?? (e.body as J)?.label;
-    const name = typeof label === "string" && label !== "" ? label : t("web-pages.security.appDevice");
-    const row: Pending = { id, entry: e, act, name, at: e.at * 1000, state: "failed", ...(how.why !== undefined ? { why: how.why } : { what: name }) };
+    const name = as !== null ? as.name : typeof label === "string" && label !== "" ? label : t("web-pages.security.appDevice");
+    const row: Pending = { id, entry: e, act, name, ...(as?.role !== undefined ? { role: as.role } : {}), at: e.at * 1000, state: "failed", ...(how.why !== undefined ? { why: how.why } : { what: name }) };
     const items = this.#pending.get(sub) ?? [];
     this.#putPending(sub, items.some((x) => x.id === id) ? items.map((x) => (x.id === id ? row : x)) : [...items, row]);
   }
@@ -1180,6 +1266,10 @@ export class PersonalLock {
       if (entries.length === 0) return Effect.succeed(null);
       if (checkChain(chain, sub) === null) return yield* Effect.fail(new CoreError("lock_invalid", t("core-misc.lock.chainInvalid")));
       this.#env.stations?.kept?.(ws, made.bodies);
+      entries.forEach((e, i) => {
+        const as = made.shown[i];
+        if (as !== undefined) this.#shown.set(hashOf(e), as);
+      });
       const brought = this.#env.stations === undefined ? null : yield* Effect.result(this.#env.stations.bring(sub, chain, within, { ws, bodies: made.bodies }));
       if (brought !== null && brought._tag === "Failure") return yield* Effect.fail(brought.failure);
       const taken = brought === null ? 0 : brought.success;

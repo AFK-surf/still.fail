@@ -121,8 +121,10 @@ export function keep(was: Kept, brought: readonly Entry[], rules: LogRules): Too
 /// caller's to know): looked past, as if not there, neither done nor otherwise, so what lost its place together is
 /// signed again in the order it was made, each as if made then (2026-11-13: a station taken out and put back by one
 /// device, both lost, ended out; taken out, put back, taken out, the third read as done by the first).
+/// `same`: whether an entry since says what the lost one says (by default its kind and body; a statement of a moved
+/// workspace's by what its body says, which its entry only commits to: personal-lock.ts `#same`).
 export type Again = "done" | "otherwise" | "unmoved" | "sign";
-export function againOf(chain: readonly Entry[], aside: readonly Entry[], lost: Entry, subject: (e: Entry) => string | null, before: (e: Entry) => boolean = () => false): Again {
+export function againOf(chain: readonly Entry[], aside: readonly Entry[], lost: Entry, subject: (e: Entry) => string | null, before: (e: Entry) => boolean = () => false, same?: (e: Entry, lost: Entry) => boolean): Again {
   const lostHash = hashOf(lost);
   const at = new Map(chain.map((e, i) => [hashOf(e), i]));
   if (at.has(lostHash)) return "done";
@@ -134,7 +136,7 @@ export function againOf(chain: readonly Entry[], aside: readonly Entry[], lost: 
   if (i === chain.length - 1) return "unmoved";
   const since = chain.slice(i + 1).filter((e) => !before(e));
   const meaning = canonical(lost.body ?? null);
-  if (since.some((e) => e.kind === lost.kind && canonical(e.body ?? null) === meaning)) return "done";
+  if (since.some((e) => (same !== undefined ? same(e, lost) : e.kind === lost.kind && canonical(e.body ?? null) === meaning))) return "done";
   const about = subject(lost);
   if (about !== null && since.some((e) => subject(e) === about)) return "otherwise";
   return "sign";

@@ -53,8 +53,18 @@ const SETTINGS = { origins: ["https://stillfail.test"], rp_id: "stillfail.test",
 /// What a station was brought of a person's lock: by whom it was asked (its address), the chain's length, the bodies.
 type Brought = { at: string; length: number; bodies: unknown[] | null };
 
-async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member" } = {}) {
+/// s1's other devices (`devices`): D2 and D3, put on s1's own log by this device before anything is said.
+const D2 = key(7002);
+const D3 = key(7003);
+/// An entry of s1's own log signed by `by` after `chain`, at its head's time.
+function onOwn(chain: StationEntry[], by: ReturnType<typeof key>, kind: string, body: unknown): StationEntry {
+  const last = chain[chain.length - 1]!;
+  return signed({ v: 1, ws: last.ws, seq: chain.length, prev: stationHash(last), at: last.at, kind, body } as Omit<StationEntry, "sig">, by);
+}
+
+async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devices?: boolean } = {}) {
   const me = person("s1", MINE, ME);
+  if (o.devices) for (const [k, n] of [[D2, "d2"], [D3, "d3"]] as const) me.chain.push(onOwn(me.chain, me.k, "device", { key: k.id, id: n.repeat(32), label: `s1's ${n}` }));
   const bob = person("r2", 6002, key(6102).hex);
   const xena = person("r3", 6004, key(6104).hex);
   const alice = person("r1", 6001, key(6101).hex);
@@ -119,7 +129,7 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member" } = {
   // What this device's own log says now, past what it said before: each statement's kind and whom, by its body.
   // (this device said again on it with the key it signs workspaces' locks with, as any act with the seed in hand does
   // where its entry lacks it: personal-lock.ts `#restate`; not a statement)
-  const said = () => inner.adb.personal().entries("s1").slice(me.chain.length).filter((e) => e.kind === "ws").map((e) => {
+  const said = (by?: string) => inner.adb.personal().entries("s1").slice(me.chain.length).filter((e) => e.kind === "ws" && (by === undefined || e.sig?.key === by)).map((e) => {
     const h = (e.body as { h?: string }).h;
     const b = [...st.bodies, ...(inner.data.record("lockBodies", "ws") as { bodies?: unknown[] } | null)?.bodies ?? []].find((x) => bodyHash(x) === h) as Record<string, unknown> | undefined;
     return b === undefined ? `${e.kind} (no body)` : `${b.kind} ${b.sub ?? (b.key === A ? "A" : b.key === C ? "C" : "")}${b.role ? ` ${b.role}` : ""}`.trim();
@@ -128,8 +138,43 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member" } = {
   const asked = () => r.host.secureAsked.length;
   /// Every request the cloud was sent since the start that carries a body's salt: none may.
   const cloudBodies = () => r.host.requests.filter((q) => q.body !== null && q.body !== undefined && /"salt"/.test(typeof q.body === "string" ? q.body : new TextDecoder().decode(q.body as Uint8Array)));
-  return { r, inner, st, run, said, members, asked, cloudBodies, me, bob, xena };
+  return { r, inner, st, run, said, members, asked, cloudBodies, me, bob, xena, lostOff: (more?: (lost: Record<string, unknown>[]) => Record<string, unknown>[]) => lostOff({ inner, st, run, me, r }, more) };
 }
+
+/// This device's statements past what s1's log said before, then a read that moves s1's own log off them with no seed
+/// in hand: D2 takes D3 off at the place the first hung (winning there by the rules' second step, a removal), then says
+/// `more` (what it says, as bodies but for `prev` and `salt`), their bodies at the workspace's stations. The statements
+/// lost, their entries and bodies.
+async function lostOff(w: { inner: any; st: any; run: <X>(e: Effect.Effect<X, any>) => Promise<{ ok?: X; error?: CoreError }>; me: Log; r: any }, more: (lost: Record<string, unknown>[]) => Record<string, unknown>[] = () => []) {
+  const personal = w.inner.adb.personal();
+  const own = personal.entries("s1") as unknown as StationEntry[];
+  const at = own.findIndex((e, i) => i >= w.me.chain.length && e.kind === "ws");
+  assert.ok(at > 0, "a statement pinned");
+  const base = own.slice(0, at);
+  const kept = [...w.st.bodies, ...((w.inner.data.record("lockBodies", "ws") as { bodies?: unknown[] } | null)?.bodies ?? [])];
+  const entries = own.slice(at).filter((e) => e.kind === "ws");
+  const lost = entries.map((e) => kept.find((b) => bodyHash(b) === (e.body as { h: string }).h) as Record<string, unknown>);
+  const chain = [...base, onOwn(base, D2, "device.remove", { key: D3.id })];
+  let prev: string | null = w.me.said;
+  let n = 0;
+  for (const s of more(lost)) {
+    const b = { ...s, ws: "ws", prev, salt: (0xd200 + ++n).toString(16).padStart(32, "0") };
+    prev = bodyHash(b)!;
+    chain.push(onOwn(chain, D2, "ws", { t: wsTag("ws", gOf(w.me)), h: prev }));
+    w.st.bodies.push(b);
+  }
+  w.st.own = chain as unknown as Entry[];
+  await w.run(personal.refresh("s1"));
+  await w.run(read(w.inner, "ws"));
+  await w.r.host.time.pass(1000);
+  return { lost, entries: entries as unknown as Entry[] };
+}
+
+/// What a body says, but for the one before it and its salt.
+const meaning = (b: Record<string, unknown>) => {
+  const { prev: _p, salt: _s, ...said } = b;
+  return said;
+};
 
 test("taking bob out: the person asked once, xena whom he let in said again first, the bodies at A alone, the chain at C, nothing at the cloud", async () => {
   const w = await setUp();
@@ -220,4 +265,68 @@ test("the person refusing the ask: nothing signed, nothing pending", async () =>
   assert.deepEqual(w.said(), []);
   assert.equal(w.inner.adb.personal().pending("s1").length, 0);
   assert.equal(w.st.brought.length, 0, "nothing brought");
+});
+
+/// The next act with the seed in hand: C taken in (the workspace lists it, the list does not).
+const takeC = (w: Awaited<ReturnType<typeof setUp>>) => w.run(Effect.tryPromise({ try: () => w.r.ask("lock.joinStation", { workspace: "ws", station: C }), catch: (e) => e as CoreError }));
+const hOf = (e: Entry) => (e.body as { h: string }).h;
+/// This device's statements on s1's log past what it said before.
+const mineOn = (w: Awaited<ReturnType<typeof setUp>>) => w.inner.adb.personal().entries("s1").slice(w.me.chain.length).filter((e) => e.kind === "ws" && e.sig?.key === w.me.k.id);
+
+test("a role lowered, its statements lost together with no seed in hand: told as not in effect, nobody asked; the next act signs them again first, in the order made, with the same bodies, bob ending a member", async () => {
+  const w = await setUp({ devices: true });
+  const out = await w.run(roster(w.inner, "s1", "ws", { member: "r2", role: "member" }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.deepEqual(w.said(), ["member r3 member", "member.remove r2", "member r2 member"]);
+  const asked = w.asked();
+  const { entries } = await w.lostOff();
+  assert.equal(w.asked(), asked, "nobody asked");
+  assert.deepEqual(w.said(), [], "off the chain pinned");
+  assert.equal(w.members(), "r2 admin, r3 member, s1 owner", "not in effect");
+  const rows = w.inner.adb.personal().pending("s1");
+  assert.deepEqual(rows.map((x) => x.state), ["failed"], `told as not in effect, the change meant: ${JSON.stringify(rows)}`);
+  const inC = await takeC(w);
+  assert.equal(inC.error, undefined, inC.error?.message);
+  assert.equal(w.asked() - asked, 1, "the person asked once, for C");
+  assert.deepEqual(w.said(), ["member r3 member", "member.remove r2", "member r2 member", "station C"], "signed again first, in the order made");
+  assert.deepEqual(mineOn(w).slice(0, 3).map(hOf), entries.map(hOf), "the same bodies: each one's prev still before it");
+  assert.equal(w.members(), "r2 member, r3 member, s1 owner", "bob a member, as meant");
+  assert.deepEqual(w.inner.adb.personal().pending("s1"), [], "nothing left to tell");
+  assert.deepEqual(w.cloudBodies().map((q) => q.url), [], "no body sent to the cloud");
+});
+
+test("lost, then someone else (s1's D2) says bob is an admin since: what is about bob let be and told, xena said again", async () => {
+  const w = await setUp({ devices: true });
+  await w.run(roster(w.inner, "s1", "ws", { member: "r2", role: "member" }));
+  await w.lostOff((lost) => [{ ...meaning(lost[2]!), role: "admin" }]);
+  const inC = await takeC(w);
+  assert.equal(inC.error, undefined, inC.error?.message);
+  assert.deepEqual(w.said(w.me.k.id), ["member r3 member", "station C"], "the removal and the admit of bob not signed again");
+  assert.equal(w.members(), "r2 admin, r3 member, s1 owner");
+  const rows = w.inner.adb.personal().pending("s1");
+  assert.deepEqual(rows.map((x) => x.state), ["failed"], `told: ${JSON.stringify(rows)}`);
+});
+
+test("lost, then D2 says xena otherwise since: xena let be, and the removal and the admit of bob signed again with new bodies, their prev gone", async () => {
+  const w = await setUp({ devices: true });
+  await w.run(roster(w.inner, "s1", "ws", { member: "r2", role: "member" }));
+  const { entries } = await w.lostOff((lost) => [{ ...meaning(lost[0]!), role: "admin" }]);
+  const inC = await takeC(w);
+  assert.equal(inC.error, undefined, inC.error?.message);
+  assert.deepEqual(w.said(w.me.k.id), ["member.remove r2", "member r2 member", "station C"]);
+  const again = mineOn(w).slice(0, 2).map(hOf);
+  assert.ok(again.every((h) => !entries.map(hOf).includes(h)), "new bodies");
+  assert.equal(w.members(), "r2 member, r3 admin, s1 owner");
+  assert.deepEqual(w.inner.adb.personal().pending("s1"), [], "nothing to tell: what the person meant took effect");
+});
+
+test("lost, then D2 says the same since: nothing signed again, nothing told", async () => {
+  const w = await setUp({ devices: true });
+  await w.run(roster(w.inner, "s1", "ws", { member: "r2", gone: true }));
+  await w.lostOff((lost) => lost.map(meaning));
+  const inC = await takeC(w);
+  assert.equal(inC.error, undefined, inC.error?.message);
+  assert.deepEqual(w.said(w.me.k.id), ["station C"]);
+  assert.equal(w.members(), "r3 member, s1 owner");
+  assert.deepEqual(w.inner.adb.personal().pending("s1"), []);
 });

@@ -46,8 +46,8 @@ import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, type Stated, personOf, personRules } from "../personal-lock.ts";
-import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot } from "../lock-moved.ts";
-import { type Said, bodiesOf, byHash, plan } from "../lock-statements.ts";
+import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
+import { type Said, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -1825,6 +1825,26 @@ function personStations(inner: Inner, sub: string): StationAddr[] {
   return [...out.values()];
 }
 
+/// The body of a statement `e` of a person's own log kept here, and its workspace: one of the workspaces that person
+/// is signed in to here.
+function bodyOfEntry(inner: Inner, e: Entry): { ws: string; body: unknown } | null {
+  const h = get(e.body, "h");
+  const sub = e.ws.startsWith("person:") ? e.ws.slice(7) : null;
+  for (const [ws, owner] of inner.workspaces.owned()) {
+    if (owner !== sub) continue;
+    const b = bodiesHeld(inner, ws).find((x) => bodyHash(x) === h);
+    if (b !== undefined) return { ws, body: b };
+  }
+  return null;
+}
+
+/// 16 random bytes, hex: a statement's salt.
+function saltHex(inner: Inner): string {
+  const b = new Uint8Array(16);
+  inner.host.randomBytes(b);
+  return hex(b);
+}
+
 /// The stations of `ws` a statement's body goes to (the root AGENTS.md, The cloud is the account system: a body is only
 /// its workspace's): those the list in force here names, and one a `station` body among `bodies` takes in, each one the
 /// workspace's view lists (what reaches it). Never one the view alone names: the cloud saying a station is the
@@ -1988,16 +2008,20 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
         "now" in r ? decide(r.now) : Effect.succeed({ later: Effect.flatMap(r.later, decide) }));
     },
     kept: (ws, bodies) => keepMine(inner, ws, bodies),
-    bodyOf: (e) => {
-      const h = get(e.body, "h");
-      const sub = e.ws.startsWith("person:") ? e.ws.slice(7) : null;
-      for (const [ws, owner] of inner.workspaces.owned()) {
-        if (owner !== sub) continue;
-        const b = bodiesHeld(inner, ws).find((x) => bodyHash(x) === h);
-        if (b !== undefined) return { ws, body: b };
-      }
-      return null;
+    // (the model's `resign` with `reuse`: the same body where its `prev` is a statement of its tag before it on `after`;
+    // else what it said, its cancels as signed, with `prev` as `make` names it now and a salt anew)
+    restated: (e, after) => {
+      const of = bodyOfEntry(inner, e);
+      if (of === null || after.length === 0) return null;
+      const prev = get(of.body, "prev");
+      const t = wsTag(of.ws, entryHash(after[0]!));
+      if (prev === null || after.some((x) => x.kind === "ws" && get(x.body, "t") === t && get(x.body, "h") === prev)) return of;
+      const { prev: _p, salt: _s, ...said } = of.body as Record<string, unknown>;
+      const fresh = { ...said, prev: prevOf(of.ws, after, byHash(bodiesHeld(inner, of.ws))), salt: saltHex(inner) };
+      keepMine(inner, of.ws, [fresh]);
+      return { ws: of.ws, body: fresh };
     },
+    bodyOf: (e) => bodyOfEntry(inner, e),
     wsNames: (ws) => {
       const names = arr(get(view(inner, ws), "stations"));
       return bodyStations(inner, ws, []).map((id) => str(names.find((s) => s?.id === id)?.name) || id.slice(0, 8));
@@ -2701,11 +2725,7 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     };
     const first = worked(personal.entries(sub));
     if ("why" in first) return yield* Effect.fail(notAllowed());
-    const salt = () => {
-      const b = new Uint8Array(16);
-      inner.host.randomBytes(b);
-      return hex(b);
-    };
+    const salt = () => saltHex(inner);
     const r = yield* personal.say(sub, ws, (after) => {
       const p = worked(after);
       if ("why" in p) return notAllowed();
