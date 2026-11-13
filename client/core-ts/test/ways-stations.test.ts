@@ -7,7 +7,7 @@ import { Effect } from "effect";
 import type { Inner } from "../src/core.ts";
 import { CoreError } from "../src/error.ts";
 import { handlers } from "../src/core/execute.ts";
-import { install, keptWays } from "../src/views/ways-stations.ts";
+import { cloudOp, install, keptWays } from "../src/views/ways-stations.ts";
 
 const A = "aa".repeat(32);
 const B = "bb".repeat(32);
@@ -82,14 +82,35 @@ test("a change goes to a station that keeps the ways; a refusal is said as it is
 
   // None keeps them: still.fail cloud's way, as before.
   const cloudAsked: unknown[] = [];
-  const was = handlers.op;
-  handlers.op = ((_inner: Inner, c: { op: unknown }) => (cloudAsked.push(c.op), Effect.succeed({ ok: true }))) as typeof handlers.op;
+  const was = cloudOp.run;
+  cloudOp.run = ((_inner: Inner, c: { op: unknown }) => (cloudAsked.push(c.op), Effect.succeed({ ok: true }))) as typeof cloudOp.run;
   try {
     const before = fakeInner({ [`ws/${A}`]: old, [`ws/${B}`]: old });
     assert.equal((await call(before.inner, "setWay", { way: "lan", on: false }))._tag, "Success");
     assert.equal(cloudAsked.length, 1);
     assert.match(JSON.stringify(cloudAsked[0]), /\/v1\/workspaces\/ws\/ways/);
   } finally {
-    handlers.op = was;
+    cloudOp.run = was;
+  }
+});
+
+test("where none keeps them the cloud is written by the cloud's own op, not a station's", async () => {
+  // (2026-11-14: it went to `handlers.op`, a station's, which read the cloud's request as a station's address and threw)
+  const stationOp = handlers.op;
+  let stationAsked = 0;
+  handlers.op = (() => (stationAsked++, Effect.die(new Error("a station's op asked for the cloud")))) as typeof handlers.op;
+  const ran: string[] = [];
+  const was = cloudOp.run;
+  cloudOp.run = ((_inner: Inner, c: { kind: string; op: { method: string; path: string } }) => (ran.push(`${c.kind} ${c.op.method} ${c.op.path}`), Effect.succeed({ ok: true }))) as typeof cloudOp.run;
+  try {
+    const old = () => Effect.fail(new CoreError("http_404", "no route", 404));
+    const before = fakeInner({ [`ws/${A}`]: old, [`ws/${B}`]: old });
+    const done = await run(handlers.ways!(before.inner, { kind: "ways", name: "setWay", workspace: "ws", params: { workspace: "ws", account: "s1", way: "lan", on: false } }, (() => {}) as never, ["c", 1] as never, null as never) as Effect.Effect<unknown, CoreError>);
+    assert.equal(done._tag, "Success");
+    assert.deepEqual(ran, ["op PUT /v1/workspaces/ws/ways"]);
+    assert.equal(stationAsked, 0);
+  } finally {
+    handlers.op = stationOp;
+    cloudOp.run = was;
   }
 });
