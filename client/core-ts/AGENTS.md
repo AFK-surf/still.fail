@@ -160,8 +160,10 @@ another; the accounts' list's merge across stations and its refills.
   and `lockBodies`, the person's own log the one personal-lock.ts pins), by this device's clock: every reader of who and
   what is in the lock reads `views/lock.ts` `stateOf`, what reads the chain itself (its own `disable`, its stations
   keeping it, `chosen`, `carry`) reads `fold`. Without the root's log or its `open` it waits (nobody listed, nothing
-  asked of the device). Nothing is signed on a moved chain: `Lock.append` and `roster`/`enrolled` answer `lock_moved`,
-  the background writers do nothing, until the next step makes each a statement. `test/lock-moved-state.test.ts` holds
+  asked of the device). It is made once and kept in memory while what it is made of stands (`inForceOf`). Nothing is
+  signed on a moved chain: `Lock.append` and the calls that sign answer `lock_moved` before anyone is asked, the
+  background writers do nothing, and what was pending as the chain moved is told as not taken effect, until the next
+  step makes each a statement. `test/lock-moved-state.test.ts` holds
   it to the model.
 - The cloud's taking an entry never counts (2026-11-12): what no station took nor refused by the call's wait
   (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
