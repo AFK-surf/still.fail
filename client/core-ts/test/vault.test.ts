@@ -16,7 +16,8 @@ import type { HttpRequest } from "../src/host.ts";
 import type { StationAddr } from "../src/station/addr.ts";
 import { HostWire, type RequestHead, type StationWire } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
-import { type Entry, Signer, entryHash, next } from "../src/lock.ts";
+import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
+import { bodyHash, wsTag } from "../src/lock-moved.ts";
 import { hex, utf8 } from "../src/util.ts";
 import {
   type BoxCert, type Item, type Request, type Vault, TAG, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext,
@@ -25,7 +26,7 @@ import {
 import { checkLock } from "../src/vault/lock-check.ts";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS, waitingAs, waitingChecks } from "../src/views/vault.ts";
-import { read as readLock } from "../src/views/lock.ts";
+import { inForceOf, read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { type Answers, base, entry, started, stationLater, stationReplies, status } from "./station-fixture.ts";
 // @ts-ignore: the MoonBit build's JS, untyped
@@ -303,7 +304,8 @@ function fakeStation() {
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
 /// `web`: a web page's host (no secure storage). `two`: a second station, `ws/st2` (`st2`), in the workspace too.
 /// `more`: what else the station answers (its chats' posts).
-async function rig(web = false, two = false, more: Answers = {}) {
+/// `also`: more of what the workspace's view says (its stations by other ids).
+async function rig(web = false, two = false, more: Answers = {}, also?: Record<string, unknown>) {
   const st = fakeStation();
   const st2 = fakeStation();
   const me = { signer: null as Signer | null };
@@ -319,6 +321,7 @@ async function rig(web = false, two = false, more: Answers = {}) {
     me.signer = Effect.runSync(Signer.make(x.host));
     if (web) x.host.secureGet = undefined;
     if (two) x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: true, last_seen: null }] };
+    if (also) x.cloud.also = { ...x.cloud.also, ...also };
     stationReplies(x.host, (req) => (req.headers.some(([k, v]) => k === AT && v === "st2") ? st2.reply(req) : st.reply(req)));
   });
   const genesis = lockOf({ id: me.signer!.id, signBytes: (b) => me.signer!.signBytes(b) }, phone, other);
@@ -1919,4 +1922,90 @@ test("turning the lock off: the person's own secrets opened first (asked once), 
   const back = [...r.st.plain.values()];
   assert.deepEqual(back.map((i) => [i.name, i.fields.value, i.listing?.hosts]), [["GitHub", "ghp_x", ["api.github.com"]]]);
   r.core.close();
+});
+
+// ── a workspace whose chain moved to its people's own logs ──
+
+/// The rig's workspace moved (`moved {root}`) to s1's own log, its root: this device on that log (its key's seed sealed
+/// as personal-lock.ts keeps it), the log saying the settings and the station `S` (which the workspace's view lists);
+/// that station takes the person's own log and its bodies as the real ones do.
+const S = "5a".repeat(32);
+async function movedRig(secret: boolean) {
+  const r = await rig(false, false, {}, { stations: [{ id: S, name: "studio", online: true, last_seen: null }] });
+  r.putLock();
+  if (secret) {
+    const { made } = await r.ask("vault.setup", {});
+    await r.ask("vault.putItem", { vault: made, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "GitHub", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+    await r.ask("vault.lock", {});
+  }
+  const seed = fill(0x51);
+  const k = key(seed);
+  const sign = (chain: Entry[], kind: string, body: unknown): Entry => {
+    const last = chain.at(-1);
+    const e = { v: 1 as const, ws: "person:s1", seq: chain.length, prev: last ? entryHash(last) : null, at: 1_790_000_000, kind, body };
+    return { ...e, sig: { key: k.id, alg: "Ed25519" as const, sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } };
+  };
+  let own: Entry[] = [sign([], "genesis", { sub: "s1", device: { key: k.id, id: "ab".repeat(32), label: "this" } })];
+  const g = entryHash(own[0]!);
+  const bodies: unknown[] = [];
+  let prev: string | null = null;
+  for (const [i, said] of [{ kind: "open", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: {}, email: "a@x.com" }, { kind: "station", key: S }].entries()) {
+    const b: Record<string, unknown> = { ws: "ws", ...said, prev, salt: (0x7700 + i).toString(16).padStart(32, "0") };
+    prev = bodyHash(b)!;
+    bodies.push(b);
+    own = [...own, sign(own, "ws", { t: wsTag("ws", g), h: prev })];
+  }
+  r.host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(own)));
+  r.host.storage.set("personal-signer-id", utf8(k.id));
+  r.host.secure.set("personal-signer", { value: seed, user: true });
+  stationReplies(r.host, (req) => {
+    const path = new URL(req.url).pathname;
+    if (path.endsWith("/lock/person") && req.method === "GET") return { chains: [{ genesis: g, entries: own }] };
+    if (path.endsWith("/lock/person") && req.method === "POST") {
+      const b = JSON.parse(new TextDecoder().decode(req.body!)) as { chain: Entry[]; bodies?: unknown[] };
+      if (b.chain.length > own.length) own = b.chain;
+      for (const x of b.bodies ?? []) if (!bodies.some((y) => bodyHash(y) === bodyHash(x))) bodies.push(x);
+      return { genesis: g, length: b.chain.length };
+    }
+    if (path.endsWith("/lock/bodies") && req.method === "GET") return { bodies, lacking: [] };
+    if (path.endsWith("/lock/logs")) return { chains: [] };
+    return r.st.reply(req);
+  });
+  r.core.inner.data.put("lockBodies", "ws", { bodies });
+  grow(r, "moved", { root: g });
+  // (started anew: the person's own lock read from what is kept, as an app that had it pinned)
+  await r.restart();
+  await r.core.inner.runner.run(Effect.ignore(r.core.inner.adb.personal().refresh("s1")));
+  await r.host.time.pass(500);
+  return r;
+}
+
+test("a moved workspace turned off, the person with a secret of their own: it opened first, then off signed in their own log (asked twice, in that order), the secret in the plain library after", async () => {
+  const r = await movedRig(true);
+  const f = inForceOf(r.core.inner, "ws");
+  assert.equal(f.said, "on", `the moved workspace on: ${JSON.stringify({ said: f.said, root: f.root, pinned: r.core.inner.adb.personal().pinnedOf("s1").length, owner: r.core.inner.workspaces.owner("ws"), last: (r.core.inner.data.record("lock", "ws") as { entries: Entry[] }).entries.at(-1)?.kind, why: (f as { why?: unknown }).why })}`);
+  const asked = r.host.secureAsked.length;
+  await r.ask("lock.disable", {});
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => [a.key, a.reason]), [[BOX_KEY, t("core-misc.lock.reason.disable")], ["personal-signer", t("core-misc.lock.reason.disable")]]);
+  assert.equal(inForceOf(r.core.inner, "ws").said, "off", "off");
+  await r.host.time.pass(5000, 1000);
+  assert.deepEqual([...r.st.plain.values()].map((i) => [i.name, i.fields.value]), [["GitHub", "ghp_x"]], "the secret in the plain library");
+  r.core.close();
+});
+
+test("a moved workspace turned off, the second ask turned down: not off, nothing written; with no secret of their own: asked once", async () => {
+  const r = await movedRig(true);
+  const get = r.host.secureGet!;
+  r.host.secureGet = (k, o) => (k === "personal-signer" ? Effect.fail(new HostError("user_cancelled")) : get(k, o));
+  await assert.rejects(r.ask("lock.disable", {}), "turned down");
+  assert.equal(inForceOf(r.core.inner, "ws").said, "on", "not off");
+  await r.host.time.pass(5000, 1000);
+  assert.equal(r.st.plain.size, 0, "nothing written to the plain library");
+  r.core.close();
+  const n = await movedRig(false);
+  const asked = n.host.secureAsked.length;
+  await n.ask("lock.disable", {});
+  assert.deepEqual(n.host.secureAsked.slice(asked).map((a) => a.key), ["personal-signer"], "asked once");
+  assert.equal(inForceOf(n.core.inner, "ws").said, "off");
+  n.core.close();
 });

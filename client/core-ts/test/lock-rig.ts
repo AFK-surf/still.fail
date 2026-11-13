@@ -98,7 +98,8 @@ export function lockCloud() {
 /// `station`: the id of `ws`'s station (station-fixture.ts's "st" unless given; one the lock names is an iroh id), or of
 /// each of its stations. `seen`: those of them the control plane saw just now (`last_seen` the start's time), the others
 /// never seen (`null`). `wire`: how its stations are reached (the host's fetch, HostWire, unless given).
-export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void, station?: string | string[], seen: readonly string[] = [], wire?: (host: FakeHost) => StationWire) {
+/// `w2`: the stations the account's other workspace (`w2`) lists, none by default.
+export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void, station?: string | string[], seen: readonly string[] = [], wire?: (host: FakeHost) => StationWire, w2: readonly string[] = []) {
   const ids = station === undefined ? [] : typeof station === "string" ? [station] : station;
   const cloud = lockCloud();
   const s = await started(undefined, 0, wire, (x) => {
@@ -106,7 +107,7 @@ export async function rig(locks: (signer: Signer) => Record<string, Entry>, befo
     const signer = Effect.runSync(Signer.make(x.host));
     for (const [ws, g] of Object.entries(locks(signer))) cloud.chains.set(ws, [g]);
     x.cloud.also = { name: "W", role: "owner", lock: cloud.head("ws"), lock_requests: 0, ...(ids.length > 0 ? { stations: ids.map((id, i) => ({ id, name: i === 0 ? "studio" : `studio ${i + 1}`, online: true, last_seen: seen.includes(id) ? Math.floor(x.host.nowMs() / 1000) : null })) } : {}) };
-    x.cloud.more = [{ id: "w2", name: "日常", emoji: "☀️", role: "owner", lock: cloud.head("w2"), lock_requests: 0 }];
+    x.cloud.more = [{ id: "w2", name: "日常", emoji: "☀️", role: "owner", lock: cloud.head("w2"), lock_requests: 0, ...(w2.length > 0 ? { stations: w2.map((id, i) => ({ id, name: `daily ${i + 1}`, online: true, last_seen: null })) } : {}) }];
     stationReplies(x.host, cloud.reply);
     before?.(x.host);
   });

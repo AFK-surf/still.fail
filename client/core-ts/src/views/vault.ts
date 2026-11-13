@@ -57,7 +57,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
-import { OTHERS_MS, answersOf, askPerson, tookOrRefused, deviceText, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf, stateOf } from "./lock.ts";
+import { OTHERS_MS, answersOf, askPerson, tookOrRefused, deviceText, held as lockHeld, inForceOf, lockSeen, nameOf as workspaceName, signerOf, stateOf } from "./lock.ts";
 import { workspaceIds } from "./marks.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -191,6 +191,8 @@ function lockOf(inner: Inner, ws: string): Checked | CoreError {
   const entries = isObject(h) && Array.isArray(h.entries) ? (h.entries as Entry[]) : [];
   const head = isObject(h) ? str(get(h.head, "hash")) : null;
   if (entries.length === 0 || head === null) return new CoreError("vault_needs_lock", t("core-misc.vault.needsLock"));
+  // (where the chain moved, off is a statement, not an entry of it: the workspace off, as a chain disabled is)
+  if (inForceOf(inner, ws).said === "off") return new CoreError("vault_needs_lock", t("core-misc.vault.needsLock"));
   const m = mem(inner);
   const at = `${head}/${entries.length}`;
   const had = m.checked.get(ws);
