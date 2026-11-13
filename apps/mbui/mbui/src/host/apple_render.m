@@ -31,6 +31,10 @@ static float *last_inst;
 static int32_t last_count;
 static size_t last_cap;
 static double last_bg[3];
+// The frame on the screen: its size as it was drawn (mb_render_set_size's), and whether it shows a stream (whose
+// pictures change under the same instances); its instances and ground are upload's copy (last_inst, last_bg).
+static double shown_w, shown_h, shown_scale;
+static int shown_ok, shown_streams;
 // glass (src/ui/glass.mbt): the passes that blur what is under it (into the copy, 8 bits a channel, and into the rest,
 // half floats), the copies they work in (level j is 1/2^j of the largest capture yet, the glass and the blur's margin
 // round it, not of the target: a composer's strip, not the window; tmp for a Gaussian's first half), the GPU's time of
@@ -458,7 +462,10 @@ void mb_render_set_size(double w, double h, double scale) {
   vh = h;
   vscale = scale;
   CGSize want = CGSizeMake(round(w * scale), round(h * scale));
-  if (!CGSizeEqualToSize(mlayer.drawableSize, want)) mlayer.drawableSize = want;
+  if (!CGSizeEqualToSize(mlayer.drawableSize, want)) {
+    mlayer.drawableSize = want;
+    shown_ok = 0;
+  }
 }
 
 void mb_atlas_upload(int color, int x, int y, int w, int h, const void *px) {
@@ -1003,11 +1010,6 @@ static id<MTLBuffer> upload(const double *inst, int32_t count, double r, double 
   return bufs[buf_i];
 }
 
-// The frame on the screen: its size as it was drawn (mb_render_set_size's), and whether it shows a stream (whose
-// pictures change under the same instances); its instances and ground are upload's copy (last_inst, last_bg).
-static double shown_w, shown_h, shown_scale;
-static int shown_ok, shown_streams;
-
 // Whether a frame is the one on the screen to the last number: then it draws nothing and takes no drawable (the app
 // builds a frame for what it waits on, as a clock's next second, that may show nothing new). Not one a layer presents
 // with its transaction (a resize's: mac_app.m drawWithWindow), which the window's change waits for.
@@ -1110,8 +1112,8 @@ static void present_probe(double ring, double upload_s, double drawable, double 
   memset(present_ms, 0, sizeof present_ms);
 }
 
-// What drawing holds, given back as the window stops being the one in front (mac_app.m tell_state: another app's
-// in front, the window covered, minimized or hidden): Core Animation keeps the layer's drawables (three or four, each
+// What drawing holds, given back as the window stops being shown (mac_app.m tell_state: the window covered,
+// minimized, hidden or the Mac asleep): Core Animation keeps the layer's drawables (three or four, each
 // the window's size in pixels: 22 MB at 3024 × 1890), and the glass its levels. The drawables shrink to a pixel, which
 // frees all but the one shown (Core Animation shows it on), and the levels go; a frame after makes what it needs again
 // at full size (mb_render_set_size). (The driver's own memory, 30 to 100 MB of the footprint's "owned unmapped
@@ -1127,9 +1129,11 @@ void mb_render_trim(void) {
   gtex = nil;
   lv_w = lv_h = 0;
   kept_ok = 0;
-  // (and the canvas: the next frame drawn whole into one made again)
+  // (and the canvas: the next frame drawn whole into one made again, not skipped as the same as before)
   canvas = nil;
   canvas_ok = 0;
+  shown_ok = 0;
+  dirty_told = dirty_whole = dirty_n = 0;
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   mlayer.drawableSize = CGSizeMake(1, 1);

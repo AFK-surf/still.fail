@@ -76,6 +76,9 @@ static bool down_dragged, last_down_dragged;
 static const char *shot_path;
 static void tell_state(void);
 static void bring_back(void);  // the window out again (below: the app's life on the Mac)
+// Whether the window can be seen now (tell_state's `shown`: not hidden, minimized, covered or asleep).
+static int window_seen = 1;
+static int looked_at_run(void);
 static const char *script;
 
 // A scripted run in stable mode (MBUI_SCRIPT with MBUI_BENCH=-1: screenshots) is settled, not paced: its frames are
@@ -322,7 +325,8 @@ static double record_t0 = -1;
   double scale = self.window.backingScaleFactor ?: 2.0;
   ((CAMetalLayer *)self.layer).contentsScale = scale;
   mb_text_set_scale(scale * window_content_zoom);
-  mb_render_set_size(s.width / window_content_zoom, s.height / window_content_zoom, scale * window_content_zoom);
+  if (window_seen || looked_at_run())
+    mb_render_set_size(s.width / window_content_zoom, s.height / window_content_zoom, scale * window_content_zoom);
   self.wantFrame = NO;
   lat_frame_begins();
   if (record_dir) {
@@ -1658,6 +1662,7 @@ static void window_ends_with_opener(void) {
 
 static uint64_t put_away_at;  // CLOCK_MONOTONIC's ns as the window was closed (0: it is out)
 static uint64_t asleep_at;    // as the Mac went to sleep (0: awake)
+static int screens_asleep;    // 1 while the displays are asleep
 
 static void say_shown(uint64_t since) {
   double away = (clock_gettime_nsec_np(CLOCK_MONOTONIC) - since) / 1e6;
@@ -1674,6 +1679,7 @@ static void bring_back(void) {
     say_shown(put_away_at);
     put_away_at = 0;
   }
+  tell_state();
 }
 
 @interface MBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
@@ -1687,6 +1693,7 @@ static void bring_back(void) {
   if (!in_bundle() || window_run()) return YES;
   [w orderOut:nil];
   if (!put_away_at) put_away_at = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+  tell_state();
   return NO;
 }
 - (void)windowDidFailToEnterFullScreen:(NSWindow *)w {
@@ -1744,15 +1751,34 @@ static void network_start(void) {
 }
 
 // The Mac asleep and awake again: how long, to the app (a sleep whose start was not seen is taken as a minute's, as
-// the desktop app's followSleep)
+// the desktop app's followSleep), and the window's shown state and frame with it
 static void watch_sleep(void) {
   NSNotificationCenter *ws = NSWorkspace.sharedWorkspace.notificationCenter;
   [ws addObserverForName:NSWorkspaceWillSleepNotification object:nil queue:NSOperationQueue.mainQueue
-              usingBlock:^(NSNotification *n) { asleep_at = clock_gettime_nsec_np(CLOCK_MONOTONIC); }];
+              usingBlock:^(NSNotification *n) {
+                asleep_at = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+                tell_state();
+              }];
   [ws addObserverForName:NSWorkspaceDidWakeNotification object:nil queue:NSOperationQueue.mainQueue
               usingBlock:^(NSNotification *n) {
-                say_shown(asleep_at ? asleep_at : clock_gettime_nsec_np(CLOCK_MONOTONIC) - 60000000000ull);
+                uint64_t since = asleep_at ? asleep_at : clock_gettime_nsec_np(CLOCK_MONOTONIC) - 60000000000ull;
                 asleep_at = 0;
+                mb_render_trim();
+                say_shown(since);
+                tell_state();
+                [the_view requestFrame];
+              }];
+  [ws addObserverForName:NSWorkspaceScreensDidSleepNotification object:nil queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *n) {
+                screens_asleep = 1;
+                tell_state();
+              }];
+  [ws addObserverForName:NSWorkspaceScreensDidWakeNotification object:nil queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *n) {
+                screens_asleep = 0;
+                mb_render_trim();
+                tell_state();
+                [the_view requestFrame];
               }];
 }
 
@@ -2094,9 +2120,6 @@ void mb_host_wake_after(double ms) {
   });
 }
 
-// Whether the window can be seen now (tell_state's `shown`: not hidden, minimized or covered).
-static int window_seen = 1;
-
 // Whether this run stands for someone looking at it, wherever its window is (a CI runner's is never shown): a scripted,
 // driven, recorded or settled one, a bench's (scripts/textdiff.sh's MBUI_BENCH), one that takes pictures
 // (MBUI_SHOT_DIR) or is given its window (MBUI_WIN). The app as people run it is none of these.
@@ -2268,11 +2291,12 @@ void mb_host_set_app_state(void (*f)(int32_t)) { state_cb = f; }
 static void tell_state(void) {
   NSWindow *w = the_view.window;
   if (!state_cb || !w) return;
-  int shown = w.isVisible && !w.isMiniaturized && (w.occlusionState & NSWindowOcclusionStateVisible) != 0;
+  int shown = !asleep_at && !screens_asleep && w.isVisible && !w.isMiniaturized &&
+              (w.occlusionState & NSWindowOcclusionStateVisible) != 0;
   window_seen = shown;
   int front = shown && NSApp.isActive && w.isKeyWindow;
-  // (not in front: what drawing holds given back, the frame shown kept; a frame after makes what it needs again)
-  if (!front) mb_render_trim();
+  // (not shown: what drawing holds given back, the frame shown kept; a frame after makes what it needs again)
+  if (!shown) mb_render_trim();
   // (told only as it changes: the same said again tells the app nothing, and draws nothing)
   static int told = -1;
   int s = (shown ? 1 : 0) | (front ? 2 : 0);
