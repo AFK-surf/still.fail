@@ -1089,9 +1089,15 @@ fn Client::take(self : Client, msg : Json) -> Unit {
         Some(f) if s.version == 0 => f(id, topic_name(s.topic), s.value, true)
         _ => ()
       }
+      let first = s.version == 0
       s.version += 1
       self.version += 1
-      s.changed()
+      // (its first value an answer: @signals.first_told)
+      if first {
+        @signals.first_told(fn() { s.changed() })
+      } else {
+        s.changed()
+      }
       self.end_sub_wait(id)
       self.draft_came(id)
     }

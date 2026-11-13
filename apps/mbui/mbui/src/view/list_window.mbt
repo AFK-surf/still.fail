@@ -2805,10 +2805,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                   // (still in this slot, out of sight: as it was, what it binds read again)
                   Some((v, key, wake, Some(was_in))) if v.alive() && physical_equal(was_in, slot) => {
                     showing[k] = true
-                    // (a block given another key: what that makes or lets go in it so at once, key_taken.mbt)
-                    key_taking_set(slot.tree, v.id())
-                    key.set(k)
-                    wake()
+                    // (a block given another key, woken: what that makes or lets go in it so at once, as were the
+                    // block made anew, answering.mbt)
+                    answering(within=v, fn() {
+                      key.set(k)
+                      wake()
+                    })
                     mine.val = Some((v, key))
                   }
                   // (in another's slot, out of sight there, or held by no node since that slot left what has slots: taken
@@ -2820,10 +2822,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     }
                     slot.take_in(v)
                     showing[k] = true
-                    // (a block given another key: what that makes or lets go in it so at once, key_taken.mbt)
-                    key_taking_set(slot.tree, v.id())
-                    key.set(k)
-                    wake()
+                    // (a block given another key, woken: what that makes or lets go in it so at once, as were the
+                    // block made anew, answering.mbt)
+                    answering(within=v, fn() {
+                      key.set(k)
+                      wake()
+                    })
                     mine.val = Some((v, key))
                   }
                   _ => {

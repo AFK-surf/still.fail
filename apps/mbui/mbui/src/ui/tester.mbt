@@ -258,7 +258,7 @@ fn leaked_state() -> Array[String] {
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.raised.length() + dr.carry.length())
   check("messages", fake_posted.length())
   check("inst_owners", inst_owners.owner.length())
-  check("key_taken", if @view.key_marks_left() { 1 } else { 0 })
+  check("answering", if @view.answer_marks_left() { 1 } else { 0 })
   out
 }
 
@@ -1152,9 +1152,9 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   // answered as it is asked: FakeHost::due) told as it ends, between frames, as a device's host answers after the
   // frame that asked: fake_dues_after_frame)
   fake_dues_after_frame(self.fake)
-  // (a block's key's marks put back by the change that set them: left set, every structure after them at once, unsaid)
-  if @view.key_marks_left() {
-    @halt.saying("a list's block's key mark (key_taking, key_taken) left set after a frame at \{at}")
+  // (an answer's marks put back as what told it ended: answering.mbt)
+  if @view.answer_marks_left() {
+    @halt.saying("an answer's mark (answering, answered) left set after a frame at \{at}")
   }
   // (what the window's tree keeps held to what working it out whole gives, where the frame changed it: the drawing
   // order and the boxes each node lays out as the frame was presented, kept_at_present; whether each takes input as

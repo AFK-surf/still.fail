@@ -827,8 +827,19 @@ pub let fix_done : Ref[Int] = Ref(0)
 pub fn fix_now(f : () -> Unit) -> Unit {
   f()
   fix_done.val += 1
-  @settings.fixture_changed()
+  // (a topic's first value come: told as an answer, @signals.first_told)
+  if fix_first.val {
+    fix_first.val = false
+    @signals.first_told(fn() { @settings.fixture_changed() })
+  } else {
+    @settings.fixture_changed()
+  }
 }
+
+///|
+/// Whether what is done now (fix_now) gives a topic its first value (round_trip_by's): told as an answer.
+// kept across runs: set by what is done and put back as it is told
+let fix_first : Ref[Bool] = Ref(false)
 
 ///|
 /// What was said later before the window's first frame (as the fixture is made): handed to its runtime as the

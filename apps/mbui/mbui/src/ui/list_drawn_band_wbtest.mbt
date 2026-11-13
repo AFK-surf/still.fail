@@ -2,7 +2,7 @@
 // 120 and 24 frames a second (Tester::input_at): in each frame as the host is given it, no band of where the list
 // shows is drawn by no row (the row come to meet it drawn in the frame it came, never a frame late); and at each moment
 // two rates both draw, what is drawn where the list shows is the same to the bit. Which block takes which key, and
-// which key a block is made for, may differ by rate (a block shows nothing of its last key: key_taken.mbt); that is
+// which key a block is made for, may differ by rate (a block shows nothing of its last key: answering.mbt); that is
 // printed, not held.
 
 ///|

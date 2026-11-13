@@ -62,9 +62,11 @@ yet and you can add one, add it.
   group, with what comes or goes down the list then (Tree::come_group_join); every list said `at_once` (keys there and
   gone at once, its blocks' insides each their own way) is a debt of 方案 A, counted (detlint's `list-comes-off`) and
   only falling, each switched on with before and after shown to the owner (the coordinator of the migration,
-  2026-11-12); but what a block makes or lets go because it was given another key (a block
-  put by and taken: `reused`) is so at once, as were it made anew (`src/view/key_taken.mbt`; the coordinator of the
-  migration, 2026-11-11). What holds a scroller makes its way as anything does, what it holds
+  2026-11-12); but what an answer tells comes at once, never its cause of a way: a subscription's first value, a block
+  given another key (a block put by and taken: `reused`, as were it made anew), a part woken from rest; what tells it
+  says so (`@view.answering`, `src/view/answering.mbt`; the core's first value through `@signals.first_told`), its
+  structures settled as it ends, in whatever order a cause comes with it in one change (the coordinator of the
+  migration, 2026-11-11 and 2026-11-13); `at_once` is used as before. What holds a scroller makes its way as anything does, what it holds
   laid out once at the size it comes to (a panel's capped list in a pick); a page or a pane comes and goes at once by
   being grown to what its column leaves it, not by holding a scroller (the coordinator of the migration, 2026-11-11:
   the rule that made all of them come at once was for those, and pages in a stack say at_once). What comes and goes

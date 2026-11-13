@@ -3160,28 +3160,26 @@ fn[T : Eq] Tree::structured(
 ) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
-  // (marked as a block is given another key: key_taken.mbt)
-  let by_key = Ref(false)
   // (the watch reads anew as it is told; let go as it stops)
   let watch : Ref[@signals.Watch?] = Ref(None)
   let w = @signals.watch(fn() {
     guard live.val && watch.val is Some(w) else { return }
+    // (told while an answer is: a watch woken from rest tells as it wakes, answering.mbt)
+    let quiet = answering_depth.val > 0
     // (read and done as of one moment, the change's that told it: what the read works out at the cause's moment is
     // of the same moment the change is committed at)
     self.at_cause(fn() {
       // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
       guard live.val else { return false }
       let v = w.read(read)
-      let taken = by_key.val || key_taking.val
-      by_key.val = false
       if last.val != Some(v) {
         last.val = Some(v)
         if live.val {
           self.structure_done(fn() {
-            let was = key_taken.val
-            key_taken.val = taken
+            let was = answered.val
+            answered.val = was || quiet
             then(v)
-            key_taken.val = was
+            answered.val = was
           })
         }
         draws
@@ -3191,10 +3189,36 @@ fn[T : Eq] Tree::structured(
     })
   })
   watch.val = Some(w)
-  // (marked as it is told, whatever batch that is in: told by a block given another key, its change is that one's)
+  // (settled as the answer that marked it ends, quietly: answering.mbt. Read anew and done now, its watch's own run
+  // after finding it as it is, nothing to do)
+  let queued = Ref(false)
+  let settle = fn() {
+    queued.val = false
+    guard live.val && watch.val is Some(w) else { return }
+    self.at_cause(fn() {
+      guard live.val else { return false }
+      let v = w.read(read)
+      if last.val != Some(v) {
+        last.val = Some(v)
+        if live.val {
+          self.structure_done(fn() {
+            let was = answered.val
+            answered.val = true
+            then(v)
+            answered.val = was
+          })
+        }
+        draws
+      } else {
+        false
+      }
+    })
+  }
+  // (marked as it is told by an answer: settled as that ends)
   w.on_marked(fn() {
-    if key_taking.val {
-      by_key.val = true
+    if answering_depth.val > 0 && !queued.val {
+      queued.val = true
+      answer_marked.push(settle)
     }
   })
   let v = w.read(read)
@@ -3209,11 +3233,13 @@ fn[T : Eq] Tree::structured(
   }
   // (one change, as each after it is: Tree::at_cause)
   self.committing += 1
-  let taking_was = key_taking.val
+  let held_was = answer_held.val
+  cause_open.val += 1
   @signals.start_batch()
   self.structure_done(fn() { then(v) })
   @signals.end_batch()
-  key_taking.val = taking_was
+  cause_open.val -= 1
+  answer_held.val = held_was
   self.committing -= 1
   self.modals_settled()
   if self.committing == 0 && self.cause_at < 0.0 {
@@ -3239,7 +3265,8 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   self.advance_logic(at)
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
-  let taking_was = key_taking.val
+  let held_was = answer_held.val
+  cause_open.val += 1
   @signals.start_batch()
   self.advance_clock(at)
   let was = self.cause_at
@@ -3257,15 +3284,15 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   } else {
     @signals.end_batch()
   }
-  // (a block given another key in it: told whole now, what that told made at once, key_taken.mbt; told in turn, not
-  // yet: held till the flush telling it is over, as it was while that flush ran nested in this one. Known: put back
-  // after what that flush's afters had asked before it (Tree::settle_after_change's settle_now), which ran with it put
-  // back when nested; a structure changed in such a settle is taken as given another key, at once. No test meets it
-  // yet; one that does wants a hook between the flush's loop and its afters, #5733)
-  if in_turn && key_taking.val && !taking_was {
-    @signals.after_flush(fn() { key_taking.val = false })
+  cause_open.val -= 1
+  // (an answer told in it: held till it is told whole, what that told made at once, answering.mbt; told in turn, not
+  // yet: held till the flush telling it is over, as it was while that flush ran nested in this one)
+  if in_turn && answer_held.val.length() > held_was.length() {
+    // (only what this change held let go: another's put back before it is not set again)
+    let mine = answer_held.val.filter(fn(at) { !held_was.contains(at) })
+    @signals.after_flush(fn() { answer_held.val = answer_held.val.filter(fn(at) { !mine.contains(at) }) })
   } else {
-    key_taking.val = taking_was
+    answer_held.val = held_was
   }
   self.committing -= 1
   self.modals_settled()
@@ -7937,10 +7964,13 @@ fn View::park(self : View, v : View) -> () -> Unit {
   self.tree.order_marked_in(self.at)
   self.boxes_again()
   self.tree.modals_told(within=v.at)
+  // (woken, what changed meanwhile told as an answer: at once, answering.mbt)
   fn() {
-    for w in wakes {
-      w()
-    }
+    answering(fn() {
+      for w in wakes {
+        w()
+      }
+    })
   }
 }
 
@@ -7953,10 +7983,13 @@ fn View::rests(self : View) -> () -> Unit {
   guard self.alive() else { return fn() {  } }
   let wakes : Array[() -> Unit] = []
   self.tree.rest_in(self.at, wakes)
+  // (woken, what changed meanwhile told as an answer: at once, answering.mbt)
   fn() {
-    for w in wakes {
-      w()
-    }
+    answering(fn() {
+      for w in wakes {
+        w()
+      }
+    })
   }
 }
 
@@ -8619,8 +8652,9 @@ fn View::comes(
     !@signals.untracked(tree.motion_reduced) &&
     tree.makes_way(v.at) &&
     !tree.holds_shared(v.at) &&
-    // (made or let go because its block was given another key: at once, as were the block made anew, key_taken.mbt)
-    !key_taken.val else {
+    // (made or let go as an answer told it, a block given another key or woken: at once, answering.mbt)
+    !answered.val &&
+    !tree.answer_holds(v.at) else {
     return false
   }
   let st = n.flex.style
