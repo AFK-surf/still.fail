@@ -1070,10 +1070,19 @@ impl Inner {
         };
         let up = async {
             let mut read = read.lock().await;
+            let mut reset = halves.reset.subscribe();
             let mut head = [0u8; 4];
             let mut buf = Vec::new();
+            let mut written_end = false;
             let finished = loop {
-                if read.read_exact(&mut head).await.is_err() {
+                if *reset.borrow() {
+                    break false;
+                }
+                let ok = tokio::select! {
+                    r = read.read_exact(&mut head) => r.is_ok(),
+                    _ = reset.changed() => break false,
+                };
+                if !ok {
                     break false;
                 }
                 let n = u32::from_be_bytes(head);
@@ -1084,22 +1093,33 @@ impl Inner {
                     break false;
                 }
                 buf.resize(n as usize, 0);
-                if read.read_exact(&mut buf).await.is_err() {
+                let ok = tokio::select! {
+                    r = read.read_exact(&mut buf) => r.is_ok(),
+                    _ = reset.changed() => break false,
+                };
+                if !ok {
                     break false;
                 }
                 let mut send = halves.send.lock().await;
                 let Some(send) = send.as_mut() else { break false };
-                if send.write_all(&buf).await.is_err() {
+                let sent = tokio::select! {
+                    r = send.write_all(&buf) => r.is_ok(),
+                    _ = reset.changed() => false,
+                };
+                if !sent {
                     // (reset by either end: the socket's frames go nowhere now)
-                    return;
+                    written_end = true;
+                    break false;
                 }
             };
-            let mut send = halves.send.lock().await;
-            if let Some(send) = send.as_mut() {
-                if finished {
-                    let _ = send.finish();
-                } else {
-                    let _ = send.reset(0u32.into());
+            if !written_end && !*reset.borrow() {
+                let mut send = halves.send.lock().await;
+                if let Some(send) = send.as_mut() {
+                    if finished {
+                        let _ = send.finish();
+                    } else {
+                        let _ = send.reset(0u32.into());
+                    }
                 }
             }
             halves.finished.store(true, Ordering::Relaxed);
@@ -1750,7 +1770,12 @@ impl Inner {
                 let on = id_of(&a)?;
                 let path = str_of(&a, "path")?.to_string();
                 let Handle::Conn(conn) = self.handle(on)? else { return Ok(Answer::json(json!({}))) };
-                while let Ok((send, recv)) = conn.accept_bi().await {
+                while let Ok((mut send, mut recv)) = conn.accept_bi().await {
+                    if !matches!(self.handle(on), Ok(Handle::Conn(_))) {
+                        let _ = send.reset(0u32.into());
+                        let _ = recv.stop(0u32.into());
+                        break;
+                    }
                     let halves = Arc::new(Halves {
                         conn: on,
                         ended: false.into(),
@@ -3320,6 +3345,40 @@ mod tests {
             assert_eq!(inner.run("conn.closed", json!({ "id": id }), None).await.unwrap().json, json!({ "kind": "application", "reason": "bye", "text": "closed by peer: bye (code 7)" }));
             assert!(inner.run("conn.openBi", json!({ "id": id }), None).await.is_err());
             assert_eq!(inner.run("conn.acceptBi", json!({ "id": id }), None).await.unwrap().json, json!({ "end": true }));
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn closing_a_connection_stops_a_half_open_piped_socket() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
+        let inner = shell.inner.clone();
+        shell.runtime.block_on(async move {
+            let alpn = b"stillfail/test".to_vec();
+            let bind = |alpns: Vec<Vec<u8>>| Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).alpns(alpns).bind();
+            let (a, b) = (bind(vec![]).await.unwrap(), bind(vec![alpn.clone()]).await.unwrap());
+            let port = b.bound_sockets().iter().find(|s| s.is_ipv4()).unwrap().port();
+            let addr = endpoint_addr(&json!({ "id": hex::encode(b.id().as_bytes()), "ips": [format!("127.0.0.1:{port}")] })).unwrap();
+            let taking = b.clone();
+            let taken = tokio::spawn(async move { taking.accept().await.unwrap().await.unwrap() });
+            let id = inner.keep_conn(a.connect(addr, &alpn).await.unwrap());
+            let theirs = taken.await.unwrap();
+            let stream = inner.run("conn.openBi", json!({ "id": id }), None).await.unwrap().json["id"].as_u64().unwrap();
+            let (ours, node) = tokio::net::UnixStream::pair().unwrap();
+            let (read, write) = ours.into_split();
+            let socket = inner.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
+            let piping = {
+                let inner = inner.clone();
+                tokio::spawn(async move { inner.run("istream.pipe", json!({ "id": stream, "to": socket }), None).await })
+            };
+            let (mut _node_read, mut node_write) = node.into_split();
+            node_write.write_all(&[0, 0, 0, 1, 9]).await.unwrap();
+            let _peer = theirs.accept_bi().await.unwrap();
+            // Even while Node keeps its Unix socket open, closing the connection ends the pipe.
+            theirs.close(0u32.into(), b"bye");
+            piping.await.unwrap().unwrap();
+            assert!(inner.handle(stream).is_err());
         });
     }
 }

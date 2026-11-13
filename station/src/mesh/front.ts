@@ -39,11 +39,13 @@ class Front {
   readonly #asked = new Map<number, { resolve(v: any): void; reject(e: Error): void }>();
   /// Streams whose socket came before what asked for them was answered, and asks answered before their socket came.
   readonly #sockets = new Map<number, { socket: Socket; carry: Buffer }>();
-  readonly #wanted = new Map<number, (s: { socket: Socket; carry: Buffer }) => void>();
+  readonly #wanted = new Map<number, { resolve(s: { socket: Socket; carry: Buffer }): void; reject(e: Error): void }>();
   /// The streams each connection's other end opened, as they came, till they are taken (`acceptBi`).
   readonly #incoming = new Map<number, Incoming>();
-  /// Every stream's socket open: closed with the endpoint (each a stream of a connection closed with it).
+  /// Every stream's socket open: closed with the endpoint, or ended with its connection when `forget` runs.
   readonly #open = new Set<Socket>();
+  readonly #connSockets = new Map<number, Set<Socket>>();
+  readonly #forgotten = new Set<number>();
   #gone: Error | null = null;
   /// Once the link is gone (the front ended, or it was closed here).
   readonly gone: Promise<void>;
@@ -102,10 +104,17 @@ class Front {
     return i;
   }
 
-  /// A connection gone: the streams it had and nobody took with it.
+  /// A connection gone: the streams it had and nobody took with it, plus half-open sockets still on its side.
   forget(conn: number) {
+    this.#forgotten.add(conn);
+    if (this.#forgotten.size > 1024) this.#forgotten.delete(this.#forgotten.values().next().value!);
     this.#incoming.get(conn)?.end();
     this.#incoming.delete(conn);
+    const sockets = this.#connSockets.get(conn);
+    if (sockets) {
+      this.#connSockets.delete(conn);
+      for (const s of sockets) s.end();
+    }
   }
 
   /// The socket of stream `id`, once it came.
@@ -116,7 +125,7 @@ class Front {
       return Promise.resolve(came);
     }
     if (this.#gone) return Promise.reject(this.#gone);
-    return new Promise((resolve) => this.#wanted.set(id, resolve));
+    return new Promise((resolve, reject) => this.#wanted.set(id, { resolve, reject }));
   }
 
   #took(socket: Socket) {
@@ -130,12 +139,23 @@ class Front {
       socket.pause();
       const conn = Number(head.readBigUInt64BE(0));
       const id = Number(head.readBigUInt64BE(8));
+      if (this.#forgotten.has(conn)) {
+        socket.destroy();
+        return;
+      }
+      let byConn = this.#connSockets.get(conn);
+      if (!byConn) this.#connSockets.set(conn, (byConn = new Set()));
+      byConn.add(socket);
+      socket.once("close", () => {
+        byConn.delete(socket);
+        if (byConn.size === 0) this.#connSockets.delete(conn);
+      });
       const came = { socket, carry: head.subarray(17), id };
       if (head[16] === 0) return void this.incomingOf(conn).give(came);
       const wanted = this.#wanted.get(id);
       if (wanted) {
         this.#wanted.delete(id);
-        wanted(came);
+        wanted.resolve(came);
       } else this.#sockets.set(id, came);
     };
     socket.on("data", first);
@@ -148,10 +168,14 @@ class Front {
     this.#wentAway();
     for (const a of this.#asked.values()) a.reject(error);
     this.#asked.clear();
+    for (const w of this.#wanted.values()) w.reject(error);
+    this.#wanted.clear();
     for (const i of this.#incoming.values()) i.end();
     this.#incoming.clear();
     for (const socket of this.#open) socket.destroy();
     this.#open.clear();
+    this.#connSockets.clear();
+    this.#forgotten.clear();
     this.#sockets.clear();
     this.#server.close();
     void rm(this.streamsPath, { force: true });
@@ -220,7 +244,10 @@ class FrontStream implements Stream {
     this.#socket.on("data", (d) => {
       this.#parse(d);
     });
-    this.#socket.on("end", () => this.#came(new Error("the stream's way to the front ended")));
+    this.#socket.on("end", () => {
+      if (!this.#over && !this.#socket.writableEnded) this.#socket.end();
+      this.#came(new Error("the stream's way to the front ended"));
+    });
     this.#socket.on("close", () => this.#came(new Error("the stream's way to the front ended")));
     this.#parse(carry);
     this.#socket.resume();

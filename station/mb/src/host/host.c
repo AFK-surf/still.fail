@@ -18,6 +18,7 @@ static void unlock(lock_t *l) { ReleaseSRWLockExclusive(l); }
 static void signal_one(cond_t *c) { WakeConditionVariable(c); }
 #else
 #include <pthread.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 #include <errno.h>
@@ -121,9 +122,28 @@ static void *read_input(void *arg) {
 }
 #endif
 
+#ifndef _WIN32
+// Raises the soft open-file limit from macOS launchd's 256 (even if started by an older launcher before renew).
+static void raise_nofile(void) {
+  struct rlimit limit;
+  if (getrlimit(RLIMIT_NOFILE, &limit) != 0) return;
+  rlim_t most = 65536;
+  rlim_t cap = (limit.rlim_max == RLIM_INFINITY || limit.rlim_max > most) ? most : limit.rlim_max;
+  rlim_t targets[3] = { cap, cap < 10240 ? cap : 10240, cap < 4096 ? cap : 4096 };
+  for (int i = 0; i < 3; i++) {
+    if (targets[i] <= limit.rlim_cur) return;
+    struct rlimit next = { targets[i], limit.rlim_max };
+    if (setrlimit(RLIMIT_NOFILE, &next) == 0) return;
+  }
+}
+#endif
+
 /// Starts reading stdin, and the shell keeping its own files in `dir` (none when `dir` is empty). False: the shell did not
 /// start.
 int32_t sfh_start(moonbit_bytes_t dir) {
+#ifndef _WIN32
+  raise_nofile();
+#endif
   if (Moonbit_array_length(dir) > 1) {
     shell = sf_shell_start((const char *)dir, completed, NULL);
     if (shell == NULL) return 0;

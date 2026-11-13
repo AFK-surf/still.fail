@@ -216,6 +216,7 @@ fn Mesh::taking(self : Mesh, client : Client, conn : Json) -> Unit {
       ignore(self.host.shell("conn.hand", { "id": conn, "path": Json::string(client.streams) })) catch {
         _ => ()
       }
+      client.conns.remove(conn.stringify())
     }),
   )
 }
