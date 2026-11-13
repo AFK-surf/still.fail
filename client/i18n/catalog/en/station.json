@@ -639,7 +639,7 @@
   "station.slack.newChatSubmit": "Start",
   "station.slack.newChatCancel": "Cancel",
   "station.slack.newChatModel": "Model",
-  "station.slack.newChatModelHint": "Type to search",
+  "station.slack.newChatModelHint": "Type to search all models",
   "station.slack.newChatDefaultModel": "default model",
   "station.slack.newChatWords": "Message",
   "station.slack.newChatWordsHint": "Posted in this channel as the first message of a new thread",

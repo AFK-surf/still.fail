@@ -114,7 +114,7 @@ export function makeConnections(options: SlackOptions) {
     ((c: SlackConnect, book: NameBook, web: SlackClient) =>
       new SlackSurface({
         appToken: c.appToken, botToken: c.botToken, client: web, connect: c.id, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock,
-        onWorking: () => onWorking(c.id), models: () => options.models?.(c.id) ?? [],
+        onWorking: () => onWorking(c.id), models: () => options.models?.(c.id) ?? [], modelsFirst: (user) => options.modelsFirst?.(c.id, user) ?? options.models?.(c.id) ?? [],
       }));
   const connects = makeConnects<SlackConnect>(options, {
     kind: "slack",

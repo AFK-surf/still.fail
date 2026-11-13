@@ -53,6 +53,28 @@ export function choose(cands: Candidate[], used: Used[], leads: Candidate[] = ca
   return { ask: close.sort((a, b) => b.n - a.n) };
 }
 
+/// The most models a person is offered before they type anything (as many as the app's model panel puts in one list).
+export const FEW_MOST = 12;
+
+/// Of `all` (the models a person may pick for a new chat, the one it runs unless told otherwise first), the few they
+/// are offered before they type anything (Slack's `/sf`): all of them where they are FEW_MOST or fewer; else its
+/// first, those the person started chats on lately (`used`, the most used first), then those config.json names
+/// (`named`: what the app's panel stars before anyone starred one), each once, FEW_MOST at most. The rest are found
+/// by typing. A station's profiles run every model their checks found, tens of them (the user, 2026-11-14:
+/// 「能出来，但模型太多了」).
+export function few<C extends { runtime: string; model: string | null }>(all: C[], used: Used[], named: { runtime: string; model: string | null }[]): C[] {
+  if (all.length <= FEW_MOST) return all;
+  const at = (c: { runtime: string; model: string | null }) => all.findIndex((o) => o.runtime === c.runtime && (o.model === null || c.model === null ? o.model === c.model : sameModel(o.model, c.model)));
+  const n = all.map(() => 0);
+  for (const u of used) {
+    const i = at(u);
+    if (i >= 0) n[i]! += u.n;
+  }
+  const most = all.map((_, i) => i).filter((i) => n[i]! > 0).sort((a, b) => n[b]! - n[a]! || a - b);
+  const order = [0, ...most, ...named.map(at).filter((i) => i >= 0)];
+  return [...new Set(order)].slice(0, FEW_MOST).map((i) => all[i]!);
+}
+
 /// Why no chat was opened, for the agent: the models to ask the person about.
 export function askWhich(ask: { candidate: Candidate; n: number }[], where: string): string {
   const named = ask.map(({ candidate: c, n }) => `${c.model ?? `${c.runtime}'s default`} (runtime ${c.runtime}, ${n === 0 ? "not used" : `${n} chat${n === 1 ? "" : "s"}`} in 30 days)`);
