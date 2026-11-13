@@ -119,6 +119,10 @@ static void mb_group_inst_moved(double *e, int32_t m, double dx, double dy, doub
       e[33] += dx;
       e[34] += dy;
     }
+    // (where it fades out towards a cut, 52, 54 down and 56, 58 across: what holds it inside the group said, moved
+    // with it: view_ride.mbt's ride_moves, bits 9-12)
+    for (int j = 0; j < 4; j++)
+      if (m & (512 << j)) e[52 + 2 * j] += j < 2 ? dy : dx;
   }
   if (!cut) return;
   if ((e[24] == 0.0 && e[25] == 0.0 && e[26] == 0.0 && e[27] == 0.0) ||
