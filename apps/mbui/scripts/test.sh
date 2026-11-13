@@ -352,7 +352,12 @@ for t in $targets; do
           # above, as main's runs of 2026-11-13 measured the file)
           # (the fourth's on three runners at 60 as at 120, twelve programs (mbui-check.yml's app-rates says why): the
           # other three's pages dealt fewer by as much, app 1/4 at 60 fps 288 s of its five minutes on ed9727a1)
-          60) specs="4,4,700,1 4,4,120,1 1,4,690,1 12,12,100,1" ;;
+          # (the third's answers_still five runs at 60 are some 410 s, not the 91 reckoned for them: beside kept_rows'
+          # five (some 960) its 44 pages on one program were 288-289 s, app 3/4 at 60 fps 298 and 299 s of its 5
+          # minutes on main 7b8ad5f2 43493491412 and dd870393 43496129988, where the first's was 183 and the second's
+          # 137-165. Reckoned 1000: by the table its pages all go to the others (the first +45 s on its four programs,
+          # the second +40 on its four, the fourth +131 on its twelve), which have the room)
+          60) specs="4,4,700,1 4,4,120,1 1,4,1000,1 12,12,100,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
