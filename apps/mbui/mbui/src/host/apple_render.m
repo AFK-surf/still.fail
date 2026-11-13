@@ -39,7 +39,7 @@ static int shown_ok, shown_streams;
 // half floats), the copies they work in (level j is 1/2^j of the largest capture yet, the glass and the blur's margin
 // round it, not of the target: a composer's strip, not the window; tmp for a Gaussian's first half), the GPU's time of
 // the last frame done
-static id<MTLRenderPipelineState> ppipe, ppipe_deep;
+static id<MTLRenderPipelineState> ppipe, ppipe_deep, cpipe;
 static id<MTLTexture> lv[4], ltmp;
 static int lv_w, lv_h;
 static double last_gpu = -1;
@@ -310,6 +310,9 @@ MB_CORNER_SL
 "  float2 c = float2(vid == 1 ? 3.0 : -1.0, vid == 2 ? 3.0 : -1.0);\n"
 "  return float4(c, 0.0, 1.0);\n"
 "}\n"
+"fragment float4 fcopy(float4 pos [[position]], texture2d<float, access::read> src [[texture(0)]]) {\n"
+"  return src.read(uint2(pos.xy));\n"
+"}\n"
 "fragment float4 fpost(float4 pos [[position]], texture2d<float> src [[texture(0)]], constant PU& u [[buffer(0)]]) {\n"
 "  constexpr sampler s(filter::linear, address::clamp_to_edge);\n"
 "  float2 ts = u.a.xy;\n"
@@ -426,6 +429,12 @@ static void prepare_gpu(void) {
   pd.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA16Float;
   ppipe_deep = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ppipe_deep) NSLog(@"post pipeline: %@", err);
+  MTLRenderPipelineDescriptor *cd = [MTLRenderPipelineDescriptor new];
+  cd.vertexFunction = [lib newFunctionWithName:@"vpost"];
+  cd.fragmentFunction = [lib newFunctionWithName:@"fcopy"];
+  cd.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+  cpipe = [dev newRenderPipelineStateWithDescriptor:cd error:&err];
+  if (!cpipe) NSLog(@"copy pipeline: %@", err);
   atlas = atlas_texture(0, MB_ATLAS_SIDE);
   catlas = atlas_texture(1, MB_ATLAS_COLOR_SIDE);
   inflight = dispatch_semaphore_create(3);
@@ -446,10 +455,11 @@ void mb_render_init(CAMetalLayer *layer) {
   mlayer = layer;
   layer.device = dev;
   layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-  // glass copies what is drawn so far out of the drawable
-  layer.framebufferOnly = NO;
-  // native views show under it through holes (mb_views_*); a frame clears opaque
-  layer.opaque = NO;
+  // frames are drawn into canvas (where glass copies out what is drawn so far) and copied into the drawable by a
+  // render pass, so the drawable needs no shader read or blit and keeps lossless framebuffer compression
+  layer.framebufferOnly = YES;
+  // opaque while no native view's hole shows through the canvas (glass_through); cleared only on frames with holes
+  layer.opaque = YES;
 }
 
 id<MTLDevice> mb_render_device(void) {
@@ -556,18 +566,22 @@ static int shows_of(const double *b, float r[4]) {
 // The frame's frosted glass over holes (kind 9) painted before it: its captures through, and every instance of them
 // a backdrop over the views whose holes were painted before it (the last of them: `under`), at that view's place
 // among them. Told to the views (which say whether they can frost: else none is through, the glass as before).
-static void glass_through(const double *f, int32_t count) {
+// Returns whether any hole shows in this frame.
+static int glass_through(const double *f, int32_t count) {
   // Instances are in content points; the system views underneath are placed in window points.
   double zoom = mlayer && mlayer.contentsScale > 0 ? vscale / mlayer.contentsScale : 1.0;
   float holes[MB_HOLES][4];
-  int nh = 0;
+  int nh = 0, has_hole = 0;
   through_n = 0;
   for (int32_t i = 0; i < count; i++) {
     const double *b = f + i * MB_INST;
     int kind = (int)(b[5] + 0.5);
     float r[4];
     if (kind == 9) {
-      if (nh < MB_HOLES && shows_of(b, r)) memcpy(holes[nh++], r, sizeof r);
+      if (shows_of(b, r)) {
+        has_hole = 1;
+        if (nh < MB_HOLES) memcpy(holes[nh++], r, sizeof r);
+      }
       continue;
     }
     if (kind != 5 || b[20] >= 0 || !nh || through_n >= MB_THROUGH || is_through((float)b[20]) || !shows_of(b, r))
@@ -601,6 +615,7 @@ static void glass_through(const double *f, int32_t count) {
     e[15] = under;
   }
   if (!mb_views_frost(n, frosts)) through_n = 0;
+  return has_hole;
 }
 
 // What a capture of glass is of, worked out before any of the GPU's work: its rectangle in the target's pixels, how
@@ -1140,6 +1155,20 @@ void mb_render_trim(void) {
   [CATransaction commit];
 }
 
+// Copies `src` into `dst` (a drawable's texture) with a render pass so `mlayer.framebufferOnly` stays YES.
+static void copy_to_drawable(id<MTLCommandBuffer> cb, id<MTLTexture> src, id<MTLTexture> dst) {
+  MTLRenderPassDescriptor *rp = [MTLRenderPassDescriptor renderPassDescriptor];
+  rp.colorAttachments[0].texture = dst;
+  rp.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+  rp.colorAttachments[0].storeAction = MTLStoreActionStore;
+  id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rp];
+  [e setRenderPipelineState:cpipe];
+  [e setViewport:(MTLViewport){0, 0, (double)dst.width, (double)dst.height, 0, 1}];
+  [e setFragmentTexture:src atIndex:0];
+  [e drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+  [e endEncoding];
+}
+
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
   // a frame that put a native view elsewhere (apple_views.m: a page in a message, as the list scrolls) presented in
   // the transaction that puts it there (the frame's: mac_app.m drawFrame, ios_app.m tick), so the view and the hole it
@@ -1147,45 +1176,56 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   // apart from the view's move, which the frame's transaction takes to the screen: a refresh or two apart, the page
   // out of step with its hole as the list moved
   // (the views' frost of glass over them put where it shows now, with them: glass_through)
-  glass_through(inst, count);
-  int with_views = mb_views_take_moved() && !mlayer.presentsWithTransaction;
-  if (same_as_shown(inst, count, r, g, b)) {
+  int has_hole = glass_through(inst, count);
+  BOOL want_opaque = !has_hole;
+  int opaque_changed = mlayer && mlayer.opaque != want_opaque;
+  int with_views = (mb_views_take_moved() || opaque_changed) && !mlayer.presentsWithTransaction;
+  if (!opaque_changed && same_as_shown(inst, count, r, g, b)) {
     // (what was said of it, nothing changed, not left for the next)
     dirty_told = dirty_whole = dirty_n = 0;
     return;
   }
+  if (opaque_changed) mlayer.opaque = want_opaque;
   if (with_views) mlayer.presentsWithTransaction = YES;
   double p0 = CACurrentMediaTime();
   dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
   double p1 = CACurrentMediaTime();
   id<MTLBuffer> buf = upload(inst, count, r, g, b);
+  double e0 = CACurrentMediaTime();
+  // drawn into the canvas and committed before asking for the drawable, so the GPU draws the canvas while nextDrawable
+  // waits on the swapchain and the drawable is held only for the final copy; a drawable of another size than the
+  // canvas (a resize between) redraws the canvas at that size before copying
+  int tw = (int)mlayer.drawableSize.width, th = (int)mlayer.drawableSize.height;
+  int checked = 0;
+  id<MTLCommandBuffer> cb = nil;
+  if (tw > 0 && th > 0) {
+    ensure_canvas(tw, th);
+    cb = [queue commandBuffer];
+    checked = draw_parts(cb, canvas, buf, count, r, g, b, canvas_ok);
+    canvas_ok = 1;
+    if (checked != 0) [cb commit];
+  }
   double p2 = CACurrentMediaTime();
   id<CAMetalDrawable> drawable = [mlayer nextDrawable];
   double p3 = CACurrentMediaTime();
-  id<MTLCommandBuffer> cb = [queue commandBuffer];
-  // drawn into the canvas, only the part that differs where it holds the frame before, then copied into the drawable;
-  // a drawable of another size than the canvas (a resize between) drawn into whole
-  int tw = (int)mlayer.drawableSize.width, th = (int)mlayer.drawableSize.height;
-  int checked = 0;
-  if (drawable && ((int)drawable.texture.width != tw || (int)drawable.texture.height != th)) {
-    encode(cb, drawable.texture, mpipe, buf, count, r, g, b, 1, NULL);
-    canvas_ok = 0;
-    dirty_told = dirty_whole = dirty_n = 0;
-  } else {
-    ensure_canvas(tw, th);
-    checked = draw_parts(cb, canvas, buf, count, r, g, b, canvas_ok);
-    canvas_ok = 1;
-    if (drawable) {
-      id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
-      [bl copyFromTexture:canvas sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0)
-               sourceSize:MTLSizeMake(tw, th, 1) toTexture:drawable.texture destinationSlice:0 destinationLevel:0
-        destinationOrigin:MTLOriginMake(0, 0, 0)];
-      [bl endEncoding];
+  id<MTLCommandBuffer> pcb = [queue commandBuffer];
+  if (drawable) {
+    int dw = (int)drawable.texture.width, dh = (int)drawable.texture.height;
+    if (dw != tw || dh != th) {
+      ensure_canvas(dw, dh);
+      encode(pcb, canvas, mpipe, buf, count, r, g, b, 1, NULL);
+      canvas_ok = 0;
+      dirty_told = dirty_whole = dirty_n = 0;
+      checked = 0;
     }
+    copy_to_drawable(pcb, canvas, drawable.texture);
   }
   __block dispatch_semaphore_t sem = inflight;
-  [cb addCompletedHandler:^(id<MTLCommandBuffer> done) {
-    last_gpu = (done.GPUEndTime - done.GPUStartTime) * 1000.0;
+  id<MTLCommandBuffer> ccb = checked != 0 ? cb : nil;
+  [pcb addCompletedHandler:^(id<MTLCommandBuffer> done) {
+    double g0 = ccb && ccb.GPUEndTime > ccb.GPUStartTime ? ccb.GPUEndTime - ccb.GPUStartTime : 0;
+    double g1 = done.GPUEndTime > done.GPUStartTime ? done.GPUEndTime - done.GPUStartTime : 0;
+    last_gpu = (g0 + g1) * 1000.0;
     dispatch_semaphore_signal(sem);
   }];
   shown_ok = drawable != nil;
@@ -1201,16 +1241,16 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   // (a layer that presents with its transaction: shown with the window's change it was drawn for, mac_app.m
   // drawWithWindow, or the views' moves; once its commands are scheduled, as Core Animation asks)
   if (drawable && mlayer.presentsWithTransaction) {
-    [cb commit];
-    [cb waitUntilScheduled];
+    [pcb commit];
+    [pcb waitUntilScheduled];
     [drawable present];
   } else {
-    if (drawable) [cb presentDrawable:drawable];
-    [cb commit];
+    if (drawable) [pcb presentDrawable:drawable];
+    [pcb commit];
   }
   if (with_views) mlayer.presentsWithTransaction = NO;
   through_n = 0;
-  present_probe(p1 - p0, p2 - p1, p3 - p2, CACurrentMediaTime() - p3);
+  present_probe(p1 - p0, e0 - p1, p3 - p2, (p2 - e0) + (CACurrentMediaTime() - p3));
   if (checked > 0) check_part(cb, checked);
 }
 
