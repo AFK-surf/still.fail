@@ -18,6 +18,12 @@
 - `src/main.ts` is the composition root: every part is a Layer made there and given what it needs
   (`src/services.ts`); nothing registers itself, there is no global state. Async work is Effect 4: fibers in their
   part's scope, `Schedule` for backoff, streams for what is pushed. Pure computation stays plain functions.
+- The mesh's wire and door know nothing of still.fail's admission or routes (the user, 2026-11-14: another program is
+  to be served by them with its own admission and handler): `src/mesh/wire.ts` is lines and requests on a stream,
+  `src/mesh/door.ts` the control stream's hello and renewals, then a request a stream. Who is let in (credentials,
+  locks, what closes a connection later) and what a request is answered are `src/mesh/serve.ts`'s, given to the door
+  as its `Admit`. `scripts/mesh-base.ts` (a step of `scripts/check.sh`) refuses an import of anything else of the
+  station's, a type's too, in them and in what they stand on: what one of them needs is given it as a parameter.
 - The main thread waits on nothing: every device's request and every agent's tool call waits behind it, and a call of
   microseconds took seconds on a station short of memory. No new synchronous call of node:fs, child_process or zlib
   there (fs/promises, execFile): `scripts/check.sh` refuses one a change adds unless its line says why with `sync:`

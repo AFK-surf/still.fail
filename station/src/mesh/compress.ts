@@ -8,7 +8,7 @@
 // sent it. A client from before asks nothing, and gets every answer as it was.
 import { constants, createZstdCompress, zstdCompress } from "node:zlib";
 import { promisify } from "node:util";
-import type { Answer } from "../api/request.ts";
+import type { Answer } from "./wire.ts";
 
 export const ZSTD = "zstd";
 /// A whole answer smaller than this goes as it is: compressed it would hardly be smaller.
