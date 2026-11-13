@@ -17,7 +17,7 @@ import { isMoveCall, moveApi, moving } from "./move";
 import { asProductOf } from "./here";
 import type { Env } from "./env";
 import { adminApi, api, blockAccount, FEEDBACK_REPLY_PATH, FEEDBACK_STATUS_PATH, feedbackList, liveOf, notBetaReply, onTestChannel, replyToFeedback, setFeedbackStatus } from "./api";
-import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
+import { noted, parseTraceparent, recordCall, relayToTelemetry, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
@@ -308,8 +308,8 @@ const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.andro
   },
 }));
 
-/** The relays probed (probes.ts), each probe's result a `relay probe` line of that relay in Axiom. */
+/** The relays probed (probes.ts), each probe's result a `relay probe` line of that relay in Cloud Logging. */
 async function probeAndSay(env: Env): Promise<void> {
   const found = await probeRelays(relayUrls(env), (input, init) => fetch(input, init), (ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-  for (const [relay, lines] of found) await relayToAxiom(env, relay, null, lines.map((fields) => ({ what: "relay probe", fields })));
+  for (const [relay, lines] of found) await relayToTelemetry(env, relay, null, lines.map((fields) => ({ what: "relay probe", fields })));
 }

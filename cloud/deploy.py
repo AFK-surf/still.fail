@@ -35,7 +35,8 @@ else ~/stillfail-deploy:
             stations distrust new grants until they re-enroll.
   posthog   <deploy>/posthog.json, {host, key}: PostHog's project key, built into the web app
 . Without it the web app is built without analytics.
-  axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go.
+  telemetry <deploy>/gcp-telemetry.json: the Google Cloud service account (its JSON key, with
+            roles/telemetry.writer) that writes traces to Cloud Trace and logs to Cloud Logging in its project.
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
@@ -83,7 +84,7 @@ def deploy_dir() -> Path:
 DEPLOY = deploy_dir()
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
-AXIOM = DEPLOY / "axiom.json"
+TELEMETRY = DEPLOY / "gcp-telemetry.json"
 # Push notifications: the VAPID key ({public, private, subject}), Firebase's service account
 # and the APNs key ({keyId, teamId, key, topic?}).
 VAPID = DEPLOY / "vapid.json"
@@ -288,12 +289,13 @@ def keys() -> dict:
     return value
 
 
-def axiom() -> dict:
-    if not AXIOM.exists():
-        print(f"note: {AXIOM} is missing; the cloud will take no traces")
+def telemetry() -> dict:
+    if not TELEMETRY.exists():
+        print(f"note: {TELEMETRY} is missing; the cloud will take no traces")
         return {}
-    value = json.loads(AXIOM.read_text())
-    return {"AXIOM_TOKEN": value["token"], "AXIOM_DATASET": value["dataset"]}
+    value = TELEMETRY.read_text()
+    json.loads(value)
+    return {"GCP_TELEMETRY": value}
 
 
 def push() -> dict:
@@ -511,7 +513,7 @@ def main() -> None:
         print("account", account_id())
         print("keys", "present" if KEYS.exists() else "will be created")
         print("posthog", "present" if POSTHOG.exists() else "missing: the web app will have no analytics")
-        print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
+        print("telemetry", "present" if TELEMETRY.exists() else f"missing: no traces without {TELEMETRY}")
         print("vapid", "present" if VAPID.exists() else f"missing: no Web Push without {VAPID}")
         print("fcm", "present" if FCM.exists() else f"missing: no pushes to Android without {FCM}")
         print("apns", "present" if APNS.exists() else f"missing: no pushes to iOS without {APNS}")
@@ -562,7 +564,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback(), **guests()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **telemetry(), **push(), **review(), **feedback(), **guests()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:

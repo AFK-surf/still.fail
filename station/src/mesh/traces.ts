@@ -1,7 +1,7 @@
 // The station's traces: the mesh's own spans (a request stream from accepted to fully
 // answered; an event stream's to its head), under the caller's trace when it records one. Batched, sent at most every
 // 3 s to the control plane (still.fail cloud's `/v1/telemetry/traces`, signed with the station's key; the cloud forwards
-// them to Axiom; ControlPlane.traces). A batch that cannot be sent is dropped. Off unless the config turns traces on (telemetry.traces), read at start.
+// them to Google Cloud; ControlPlane.traces). A batch that cannot be sent is dropped. Off unless the config turns traces on (telemetry.traces), read at start.
 import { randomBytes } from "node:crypto";
 import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { wall } from "../ops/fibers.ts";

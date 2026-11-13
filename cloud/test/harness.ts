@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogLevel } from "miniflare";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { exportJWK, exportPKCS8, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
 import type { MailMessage } from "../src/mail.ts";
@@ -27,6 +27,9 @@ WS.prototype.close = function (this: any, ...args: unknown[]) {
  * depends on the hour it runs at (a minute's budget turning over halfway, say). Ahead of any real one, so the alarms
  * set from it (a login limit's day, a session's end) never go off during a test.
  */
+
+/** Where the test service account of `telemetry` gets its token. */
+const TELEMETRY_TOKEN_URI = "https://oauth.example/telemetry-token";
 export const NOW_MS = Date.UTC(2030, 0, 1, 12, 0, 30);
 
 /** A request the Worker made to somewhere outside (a push service, say), as a stand-in sees it. */
@@ -71,8 +74,10 @@ export async function harness(
     oldPreviewOrigin?: string;
     /** The static sites' files (`/web/…`, `/admin/…`, `/preview/…`): a few stand-ins unless given. */
     assets?: (request: Request) => Promise<Response> | Response;
-    /** Axiom: a stand-in answering its requests, or "real" to reach it (with AXIOM_TOKEN from the environment). */
-    axiom?: ((request: Request) => Promise<Response> | Response) | "real";
+    /** Google Cloud's Telemetry API (traces and logs): a stand-in answering its requests, made as a test service
+     * account whose token is "test-telemetry-token", or "real" to reach it (with GCP_TELEMETRY, the account's JSON,
+     * from the environment). */
+    telemetry?: ((request: Request) => Promise<Response> | Response) | "real";
     /** Push notifications: the VAPID key (base64url point and scalar), the FCM service account's JSON. */
     vapid?: { publicKey: string; privateKey: string };
     fcm?: string;
@@ -122,6 +127,11 @@ export async function harness(
   };
   const codes = new Map<string, { nonce: string; challenge: string; sub: string; invalid?: string }>();
   const mails: MailMessage[] = [];
+  const telemetryAccount = options.telemetry === "real"
+    ? process.env.GCP_TELEMETRY!
+    : options.telemetry
+      ? JSON.stringify({ type: "service_account", project_id: "stillfail-test", client_email: "telemetry@stillfail-test.iam.gserviceaccount.com", private_key: await exportPKCS8((await generateKeyPair("RS256", { extractable: true })).privateKey), token_uri: TELEMETRY_TOKEN_URI })
+      : null;
   const grantPair = options.grantJwk ? null : await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
   const grantJwk = options.grantJwk ? { ...options.grantJwk, kid: "test-grant" } : { ...(await exportJWK(grantPair!.privateKey)), kid: "test-grant" };
   const { d: _d, ...grantPublicFields } = grantJwk as JsonWebKey & { kid: string };
@@ -199,7 +209,7 @@ export async function harness(
         ...(options.moving ? { MOVING: "1" } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
         ...(options.mail ? { TEST_MAIL: "1" } : {}),
-        ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
+        ...(telemetryAccount ? { GCP_TELEMETRY: telemetryAccount } : {}),
       },
       r2Buckets: ["RELEASES"],
       durableObjects: {
@@ -217,6 +227,16 @@ export async function harness(
         }
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
           return MFResponse.json({ keys: [publicJwk] }, { headers: { "cache-control": "max-age=3600" } });
+        }
+        if (options.telemetry === "real" && (url.origin === "https://telemetry.googleapis.com" || (url.href === "https://oauth2.googleapis.com/token" && new URLSearchParams(await request.clone().text()).get("grant_type") === "urn:ietf:params:oauth:grant-type:jwt-bearer"))) {
+          const answer = await globalThis.fetch(url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.arrayBuffer() });
+          return new MFResponse(await answer.arrayBuffer(), { status: answer.status, headers: { "content-type": answer.headers.get("content-type") ?? "application/json" } });
+        }
+        if (typeof options.telemetry === "function" && url.href === TELEMETRY_TOKEN_URI) {
+          return MFResponse.json({ access_token: "test-telemetry-token", expires_in: 3600, token_type: "Bearer" });
+        }
+        if (typeof options.telemetry === "function" && url.origin === "https://telemetry.googleapis.com") {
+          return options.telemetry(request as unknown as Request) as any;
         }
         if (url.href === "https://oauth2.googleapis.com/token") {
           const body = new URLSearchParams(await request.text());
@@ -245,11 +265,6 @@ export async function harness(
           if (sent !== true) return new MFResponse(sent || "E_INTERNAL_SERVER_ERROR", { status: 500 });
           mails.push(message);
           return new MFResponse(null, { status: 200 });
-        }
-        if (url.origin === "https://api.axiom.co" && options.axiom) {
-          if (options.axiom !== "real") return options.axiom(request as unknown as Request) as any;
-          const answer = await globalThis.fetch(url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.arrayBuffer() });
-          return new MFResponse(await answer.arrayBuffer(), { status: answer.status });
         }
         if (options.relay && url.origin === options.relay) {
           // Workerd networking to the real local relay uses a separate service

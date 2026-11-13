@@ -4,7 +4,7 @@
 # and a dropped connection ("fetch failed") tried again, up to three times.
 #   sh .github/deploy.sh [--dry-run] PART…
 # The secrets, each a file's content (none of them needed for --dry-run): CLOUDFLARE_API_TOKEN (without it, the
-# machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), AXIOM_JSON,
+# machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), GCP_TELEMETRY_JSON (gcp-telemetry.json),
 # VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, APNS_JSON (apns.json, the APNs key), FCM_SERVICE_ACCOUNT_MORE_JSON and APNS_MORE_JSON
 # (the other product's apps' push credentials), POSTHOG_JSON, APPLE_JSON (apple.json, Sign in with Apple), REVIEW_ACCOUNTS_JSON
 # (review-accounts.json, App Store review's password sign-in), FEEDBACK_TOKEN (feedback-token, the feedback monitor's: reads bug reports and marks their status), GUEST_GOOGLE_OAUTH_JSON, FORWARD_TO and
@@ -21,7 +21,7 @@ umask 077
 put() { if [ -n "$2" ]; then printf '%s' "$2" > "$dir/$1"; fi; }
 put keys.json "${DEPLOY_KEYS_JSON:-}"
 put google-oauth.json "${GOOGLE_OAUTH_JSON:-}"
-put axiom.json "${AXIOM_JSON:-}"
+put gcp-telemetry.json "${GCP_TELEMETRY_JSON:-}"
 put vapid.json "${VAPID_JSON:-}"
 put fcm-service-account.json "${FCM_SERVICE_ACCOUNT_JSON:-}"
 put apns.json "${APNS_JSON:-}"

@@ -3,7 +3,7 @@
 // data centres and Hong Kong, by Globalping (https://globalping.io: free, its probes run by people and hosts who
 // volunteer them). How a relay does for a network is seen before a device on it complains, and beside what devices
 // report themselves (mesh.speed): 2026-10-30 Guangzhou's China Telecom reached Hong Kong's relay in
-// 139 ms and Shenzhen's in 12. Each probe's result goes to Axiom as a `relay probe` line of that relay (tracing.ts).
+// 139 ms and Shenzhen's in 12. Each probe's result goes to Cloud Logging as a `relay probe` line of that relay (tracing.ts).
 // A round trip says nothing of how fast a line carries much: that devices tell (mesh.speed).
 
 const GLOBALPING = "https://api.globalping.io/v1/measurements";

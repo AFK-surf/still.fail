@@ -14,12 +14,12 @@ async function key() {
   return { id, sign };
 }
 
-/** Axiom as the tests see it: every request it got, and `until` one it got is so (what a Worker sends once its answer is out). */
-function fakeAxiom(status = 200) {
-  const got: { headers: Record<string, string>; body: any }[] = [];
+/** Google Cloud's Telemetry API as the tests see it: every request it got, and `until` one it got is so (what a Worker sends once its answer is out). */
+function fakeGoogle(status = 200) {
+  const got: { url: string; headers: Record<string, string>; body: any }[] = [];
   const waiting = new Set<() => void>();
   const answer = async (request: Request) => {
-    got.push({ headers: Object.fromEntries(request.headers), body: JSON.parse(await request.text()) });
+    got.push({ url: request.url, headers: Object.fromEntries(request.headers), body: JSON.parse(await request.text()) });
     for (const wake of waiting) wake();
     return new Response("{}", { status });
   };
@@ -36,13 +36,13 @@ function fakeAxiom(status = 200) {
   return { got, answer, until };
 }
 
-/** A batch as sent, without the network still.fail cloud puts on its resources (tracing.ts networkOf). */
+/** A batch as sent, without the network and the project still.fail cloud puts on its resources (tracing.ts networkOf, toGoogle). */
 const sent = (body: any, key = "resourceSpans") => ({
   ...body,
-  [key]: body[key].map((r: any) => ({ ...r, resource: { ...r.resource, attributes: r.resource.attributes.filter((a: any) => !a.key.startsWith("stillfail.net.")) } })),
+  [key]: body[key].map((r: any) => ({ ...r, resource: { ...r.resource, attributes: r.resource.attributes.filter((a: any) => !a.key.startsWith("stillfail.net.") && a.key !== "gcp.project_id") } })),
 });
 
-/** The spans' trace ids, in the order Axiom got them. */
+/** The spans' trace ids, in the order Google got them. */
 const traces = (got: { body: any }[]) => got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0].traceId);
 
 const batch = (name = "chat.open", spans = 1) => JSON.stringify({
@@ -75,18 +75,19 @@ async function signed(h: Harness, station: Awaited<ReturnType<typeof key>>, body
   return { "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-telemetry-v1:${h.origin}:${station.id}:${ts}:${digest}`) };
 }
 
-test("a signed-in client's spans go on to Axiom with still.fail cloud's token", async () => {
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+test("a signed-in client's spans go on to Google Cloud as still.fail cloud's service account, filed under its project", async () => {
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const tokens = await h.login("alice");
     const body = batch();
     const response = await post(h, body, { authorization: `Bearer ${tokens.access_token}` });
     assert.equal(response.status, 202);
-    assert.equal(axiom.got.length, 1);
-    assert.equal(axiom.got[0]!.headers.authorization, "Bearer test-axiom-token");
-    assert.equal(axiom.got[0]!.headers["x-axiom-dataset"], "ember-test");
-    assert.deepEqual(sent(axiom.got[0]!.body), JSON.parse(body));
+    assert.equal(google.got.length, 1);
+    assert.equal(google.got[0]!.url, "https://telemetry.googleapis.com/v1/traces");
+    assert.equal(google.got[0]!.headers.authorization, "Bearer test-telemetry-token");
+    assert.deepEqual(google.got[0]!.body.resourceSpans[0].resource.attributes.filter((a: any) => a.key === "gcp.project_id"), [{ key: "gcp.project_id", value: { stringValue: "stillfail-test" } }]);
+    assert.deepEqual(sent(google.got[0]!.body), JSON.parse(body));
 
     // Nobody, or a token that is no good: nothing goes on.
     assert.equal((await post(h, body)).status, 401);
@@ -94,7 +95,7 @@ test("a signed-in client's spans go on to Axiom with still.fail cloud's token", 
     // Not OTLP, or too much of it.
     assert.equal((await post(h, "[]", { authorization: `Bearer ${tokens.access_token}` })).status, 400);
     assert.equal((await post(h, batch("x", 1001), { authorization: `Bearer ${tokens.access_token}` })).status, 413);
-    assert.equal(axiom.got.length, 1);
+    assert.equal(google.got.length, 1);
   } finally {
     await h.close();
   }
@@ -103,8 +104,8 @@ test("a signed-in client's spans go on to Axiom with still.fail cloud's token", 
 // A device's ways through the relays are compared network by network (mesh.speed): its spans carry the carrier and the
 // province Cloudflare saw them come from, never the address; what the sender said of its network itself is not kept.
 test("a client's spans carry the network they came from", async () => {
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const tokens = await h.login("alice");
     const claimed = JSON.parse(batch("mesh.speed"));
@@ -116,15 +117,15 @@ test("a client's spans carry the network they came from", async () => {
       cf: { asn: 9808, asOrganization: "China Mobile", country: "CN", region: "Hunan", city: "Hengyang" },
     } as RequestInit);
     assert.equal(response.status, 202);
-    const attributes = Object.fromEntries(axiom.got[0]!.body.resourceSpans[0].resource.attributes.map((a: any) => [a.key, Object.values(a.value)[0]]));
+    const attributes = Object.fromEntries(google.got[0]!.body.resourceSpans[0].resource.attributes.map((a: any) => [a.key, Object.values(a.value)[0]]));
     assert.equal(attributes["service.name"], "ember-web");
     assert.equal(attributes["stillfail.net.asn"], "9808");
     assert.equal(attributes["stillfail.net.org"], "China Mobile");
     assert.equal(attributes["stillfail.net.country"], "CN");
     assert.equal(attributes["stillfail.net.region"], "Hunan");
     assert.equal(attributes["stillfail.net.city"], "Hengyang");
-    assert.equal(axiom.got[0]!.body.resourceSpans[0].resource.attributes.filter((a: any) => a.key === "stillfail.net.org").length, 1);
-    assert.equal(axiom.got[0]!.body.resourceSpans[0].scopeSpans[0].spans[0].name, "mesh.speed");
+    assert.equal(google.got[0]!.body.resourceSpans[0].resource.attributes.filter((a: any) => a.key === "stillfail.net.org").length, 1);
+    assert.equal(google.got[0]!.body.resourceSpans[0].scopeSpans[0].spans[0].name, "mesh.speed");
   } finally {
     await h.close();
   }
@@ -133,8 +134,8 @@ test("a client's spans carry the network they came from", async () => {
 // Which carrier and province a station is reached through decides how its ways do (2026-10-30: a few stations slow on
 // every relay pulled the devices' connects up): its log lines carry the network it sent them from, as spans do.
 test("a station's log carries the network it came from", async () => {
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const station = await enrolled(h);
     const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [{ key: "service.name", value: { stringValue: "stillfail-station" } }] }, scopeLogs: [{ scope: { name: "stillfail-station" }, logRecords: [{ timeUnixNano: "1", severityText: "INFO", body: { stringValue: "client connected" } }] }] }] });
@@ -145,9 +146,9 @@ test("a station's log carries the network it came from", async () => {
       cf: { asn: 4134, asOrganization: "Chinanet", country: "CN", region: "Guangdong", city: "Shenzhen" },
     } as RequestInit);
     assert.equal(response.status, 202);
-    const attributes = Object.fromEntries(axiom.got[0]!.body.resourceLogs[0].resource.attributes.map((a: any) => [a.key, Object.values(a.value)[0]]));
+    const attributes = Object.fromEntries(google.got[0]!.body.resourceLogs[0].resource.attributes.map((a: any) => [a.key, Object.values(a.value)[0]]));
     assert.deepEqual(attributes, {
-      "service.name": "stillfail-station", "stillfail.net.asn": "4134", "stillfail.net.org": "Chinanet",
+      "service.name": "stillfail-station", "gcp.project_id": "stillfail-test", "stillfail.net.asn": "4134", "stillfail.net.org": "Chinanet",
       "stillfail.net.country": "CN", "stillfail.net.region": "Guangdong", "stillfail.net.city": "Shenzhen",
     });
   } finally {
@@ -156,42 +157,42 @@ test("a station's log carries the network it came from", async () => {
 });
 
 test("a station's spans are signed with its key, over the body", async () => {
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const station = await enrolled(h);
     const body = batch("GET /admin/api/threads");
     assert.equal((await post(h, body, await signed(h, station, body))).status, 202);
-    assert.equal(axiom.got.length, 1);
+    assert.equal(google.got.length, 1);
     // Another body under the same signature, an old signature, or a key that is not enrolled: refused.
     assert.equal((await post(h, batch("forged"), await signed(h, station, body))).status, 401);
     assert.equal((await post(h, body, await signed(h, station, body, h.now() - 600))).status, 401);
     const stranger = await key();
     assert.equal((await post(h, body, await signed(h, stranger, body))).status, 401);
-    assert.equal(axiom.got.length, 1);
+    assert.equal(google.got.length, 1);
   } finally {
     await h.close();
   }
 });
 
-test("a station's log goes on to Axiom's logs, signed with its key; a member's account cannot send one", async () => {
+test("a station's log goes on to Cloud Logging, signed with its key; a member's account cannot send one", async () => {
   const urls: string[] = [];
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: (request) => (urls.push(request.url), axiom.answer(request)) });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: (request) => (urls.push(request.url), google.answer(request)) });
   try {
     const station = await enrolled(h);
     const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [] }, scopeLogs: [{ scope: { name: "stillfail-station" }, logRecords: [{ timeUnixNano: "1", severityText: "WARN", body: { stringValue: "no presence socket" } }] }] }] });
     const logs = (b: string, headers: Record<string, string>) => h.fetch("/v1/telemetry/logs", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: b });
     assert.equal((await logs(body, await signed(h, station, body))).status, 202);
-    assert.deepEqual(urls, ["https://api.axiom.co/v1/logs"]);
-    assert.deepEqual(sent(axiom.got[0]!.body, "resourceLogs"), JSON.parse(body));
+    assert.deepEqual(urls, ["https://telemetry.googleapis.com/v1/logs"]);
+    assert.deepEqual(sent(google.got[0]!.body, "resourceLogs"), JSON.parse(body));
     // Spans are no log, a forged body is refused, and an account is no station.
     const spans = batch();
     assert.equal((await logs(spans, await signed(h, station, spans))).status, 400);
     assert.equal((await logs(batch("x"), await signed(h, station, body))).status, 401);
     const alice = await h.login("alice");
     assert.equal((await logs(body, { authorization: `Bearer ${alice.access_token}` })).status, 401);
-    assert.equal(axiom.got.length, 1);
+    assert.equal(google.got.length, 1);
   } finally {
     await h.close();
   }
@@ -199,8 +200,8 @@ test("a station's log goes on to Axiom's logs, signed with its key; a member's a
 
 test("a signed-in client's spans use up none of its account's requests a minute, and a token not good is refused", async () => {
   // (they have their own budget, by sender: a person's devices sending theirs had the account system refuse the rest)
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const tokens = await h.login("alice");
     const alice = h.as(tokens);
@@ -214,8 +215,8 @@ test("a signed-in client's spans use up none of its account's requests a minute,
 });
 
 test("each sender has its own budget a minute", async () => {
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const alice = await h.login("alice");
     const bob = await h.login("bob");
@@ -225,13 +226,13 @@ test("each sender has its own budget a minute", async () => {
     assert.equal(refused.status, 429);
     assert.equal(refused.headers.get("retry-after"), "60");
     assert.equal((await post(h, body, { authorization: `Bearer ${bob.access_token}` })).status, 202);
-    assert.equal(axiom.got.length, BATCHES_PER_MINUTE + 1);
+    assert.equal(google.got.length, BATCHES_PER_MINUTE + 1);
   } finally {
     await h.close();
   }
 });
 
-test("without Axiom, or when it fails, a batch is refused and not retried", async () => {
+test("without Google Cloud's account, or when Google fails, a batch is refused and not retried", async () => {
   const off = await harness();
   try {
     const tokens = await off.login("alice");
@@ -239,30 +240,30 @@ test("without Axiom, or when it fails, a batch is refused and not retried", asyn
   } finally {
     await off.close();
   }
-  const axiom = fakeAxiom(500);
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle(500);
+  const h = await harness({ telemetry: google.answer });
   try {
     const tokens = await h.login("alice");
     assert.equal((await post(h, batch(), { authorization: `Bearer ${tokens.access_token}` })).status, 502);
-    assert.equal(axiom.got.length, 1);
+    assert.equal(google.got.length, 1);
   } finally {
     await h.close();
   }
 });
 
 test("a call in a recorded trace is a span of still.fail cloud's, without ids", async () => {
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const alice = await h.login("alice");
     const workspace = ((await (await h.as(alice)("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
     const trace = "4bf92f3577b34da6a3ce929d0e0e4736";
     const call = (traceparent?: string) => h.fetch(`/v1/workspaces/${workspace}`, { headers: { authorization: `Bearer ${alice.access_token}`, ...(traceparent ? { traceparent } : {}) } });
     assert.equal((await call(`00-${trace}-00f067aa0ba902b7-01`)).status, 200);
-    await axiom.until((got) => got[0]);
-    assert.equal(axiom.got.length, 1);
-    const resource = axiom.got[0]!.body.resourceSpans[0];
-    assert.deepEqual(resource.resource.attributes, [{ key: "service.name", value: { stringValue: "stillfail-cloud" } }]);
+    await google.until((got) => got[0]);
+    assert.equal(google.got.length, 1);
+    const resource = google.got[0]!.body.resourceSpans[0];
+    assert.deepEqual(resource.resource.attributes, [{ key: "service.name", value: { stringValue: "stillfail-cloud" } }, { key: "gcp.project_id", value: { stringValue: "stillfail-test" } }]);
     const span = resource.scopeSpans[0].spans[0];
     assert.equal(span.traceId, trace);
     assert.equal(span.parentSpanId, "00f067aa0ba902b7");
@@ -276,16 +277,16 @@ test("a call in a recorded trace is a span of still.fail cloud's, without ids", 
     await call();
     const next = "5ce0e9a56015fec5aadfa328ae398115";
     assert.equal((await call(`00-${next}-00f067aa0ba902b7-01`)).status, 200);
-    await axiom.until((got) => traces(got).find((t) => t === next));
-    assert.deepEqual(traces(axiom.got), [trace, next]);
+    await google.until((got) => traces(got).find((t) => t === next));
+    assert.deepEqual(traces(google.got), [trace, next]);
   } finally {
     await h.close();
   }
 });
 
 test("a traced refresh's span says what became of the session, and the answer carries no notes", async () => {
-  const axiom = fakeAxiom();
-  const h = await harness({ axiom: axiom.answer });
+  const google = fakeGoogle();
+  const h = await harness({ telemetry: google.answer });
   try {
     const alice = await h.login("alice");
     let n = 0;
@@ -298,7 +299,7 @@ test("a traced refresh's span says what became of the session, and the answer ca
       });
       assert.equal(response.headers.get("x-stillfail-span"), null);
       const body = (await response.json()) as any;
-      const span = await axiom.until((got) => got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0]).find((s: any) => s.traceId === trace));
+      const span = await google.until((got) => got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0]).find((s: any) => s.traceId === trace));
       const notes = Object.fromEntries(span.attributes.map((a: any) => [a.key, a.value.stringValue ?? Number(a.value.intValue)]));
       return { status: response.status, body, notes };
     };
