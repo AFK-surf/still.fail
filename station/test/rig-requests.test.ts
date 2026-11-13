@@ -252,19 +252,22 @@ test("security mode: a rig is the workspace's once its person signed for it with
 
 test("on a lock moved to its people's logs a rig's add is held by the state in force, made again when a body changes it", () => {
   const mw = movedWorld(WS);
-  handover(mw);
+  const said = handover(mw);
   const c = movedStation(mw);
   for (const l of [mw.alice, mw.bob, mw.carol]) bring(c, l, true, WS);
   const rig = { ...RIG, owner: "carol" };
   const adds = new RigAdds({ db: new DatabaseSync(":memory:"), cloud: c, chain: (g) => personChainsOf(c).kept(g), now: () => 3000 });
   assert.equal(adds.take(WS, rig, says("add", { v: 1 as const, sub: "carol", ws: WS, rig: rig.id, at: 2000 }, mw.carol.app.signer as unknown as Key)), null);
   assert.equal(adds.holds(WS, rig), true);
-  // bob (an admin) makes carol a viewer, who adds no rigs: a body of bob's changes the state, while the root log's
-  // head (a folded chain's word) and carol's own log do not
+  // bob (an admin) takes carol's admit back and admits her again as a viewer, who adds no rigs (a lower role given by
+  // a later admit alone changes nothing, rules/src/lock/roster.mbt): bodies of bob's change the state, while the root
+  // log's head (a folded chain's word), whose log binds carol and that log's head do not
   const head = c.locked()!.state!.head;
+  mw.bob.say("member.remove", { sub: "carol", cancels: [said.carol.h] }, WS);
   mw.bob.say("member", { sub: "carol", email: "carol@x", lock: mw.carol.genesis, role: "viewer" }, WS);
   bring(c, mw.bob, true, WS);
   assert.equal(c.locked()!.state!.head, head);
+  assert.equal(c.locked()!.state!.persons.get("carol"), mw.carol.genesis);
   assert.equal(c.locked()!.state!.members.get("carol")?.role, "viewer");
   assert.equal(adds.holds(WS, rig), false, "a viewer's rig is not held");
 });
