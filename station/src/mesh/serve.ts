@@ -300,16 +300,12 @@ function toldOut(cloud: Cloud, ws: string | null, device: string, hello: any): {
 /// person's log as kept here). A connection that brought no proof (`lock` on its hello) is given none while off. While
 /// the station waits for the root's log or its `open` (`waiting`) nobody is let in, and a connection let in before the
 /// chain moved, still open, is given none either.
-///
-/// `named`: of a chain not moved, only to a connection its chain lets in as admission would (GET /lock/logs, which
-/// gives such a chain's bound logs too, `Cloud.logsOf`): a connection opened before its lock was pinned is not one.
-function givesDevice(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"], named = false): boolean {
+function givesDevice(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"]): boolean {
   const locked = cloud.locked(ws);
-  if (locked !== null && (!named || locked.waiting === true || locked.state === null || cloud.chain(ws)?.state?.moved !== undefined)) return locked.waiting !== true;
-  const li = locked ?? cloud.list(ws);
+  if (locked !== null) return locked.waiting !== true;
+  const li = cloud.list(ws);
   const s = li?.state;
-  if (locked === null && (!s || li!.waiting === true || s.moved !== undefined || cloud.chain(ws)?.state?.moved === undefined)) return false;
-  if (!s) return false;
+  if (!s || li!.waiting === true || s.moved !== undefined || cloud.chain(ws)?.state?.moved === undefined) return false;
   try {
     const who = { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof };
     const { device } = admit(s, who, nowSecs());
@@ -545,7 +541,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     return [200, bodiesTaken(cloud, viewer, said.bodies)];
   }
   if (part === "logs" && method === "GET") {
-    if (!givesDevice(cloud, ws, viewer, true)) return [200, { chains: [] }];
+    if (!givesDevice(cloud, ws, viewer)) return [200, { chains: [] }];
     const chains = personChainsOf(cloud);
     return [200, { chains: cloud.logsOf(ws).flatMap((genesis) => {
       const entries = chains.kept(genesis);

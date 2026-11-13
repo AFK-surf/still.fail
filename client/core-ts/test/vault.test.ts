@@ -2393,8 +2393,8 @@ test("a moved workspace, this device's entry on its log from before signers were
 /// The rig's chain not moved: station `S` on it, s1 (this device, its log pinned here with it on it, saying its signer)
 /// and s2 (their app `other`, on their own log by the same id and signer) each bound to their log; `S` the station's
 /// own code (`lockStation`), the chain pinned there and both logs heard there as their devices brought them: it gives
-/// s2's log only as a station does (`/lock/logs` of an unmoved chain only those holding a statement of the workspace;
-/// `/lock/person` the asker's own). s1's vault made before the move with s2 in it, s2's device given its key.
+/// s2's log only as a station does (`/lock/logs` of an unmoved chain those it binds and those holding a statement of
+/// the workspace; `/lock/person` the asker's own). s1's vault made before the move with s2 in it, s2's device given its key.
 async function handRig() {
   const r = await rig(false, false, {}, { stations: [{ id: S, name: "studio", online: true, last_seen: null }] });
   const seed = fill(0x51);

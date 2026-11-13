@@ -12,7 +12,7 @@ import { type Entry as StationEntry, bodyHash, entryHash, wsTag } from "../src/c
 import { wall } from "../src/ops/fibers.ts";
 import { answerLock } from "../src/mesh/lock-sync.ts";
 import { bodiesSyncWith } from "../src/mesh/person-sync.ts";
-import { lockPartRoute } from "../src/mesh/serve.ts";
+import { inLock, lockPartRoute } from "../src/mesh/serve.ts";
 import { Log, WS, WS2, bring, ed, handover, signed, station, viewerOf, world } from "./lock-moved-world.ts";
 
 const NOW = 2_000_000;
@@ -177,7 +177,7 @@ test("before the chain moved, a station takes the statements' bodies of a handov
   assert.deepEqual(roles(c), ["alice owner", "bob admin", "carol member"]);
 });
 
-test("of a chain not moved, /lock/logs gives the logs its `person` entries bind, kept here, to a device the chain names: none to one it does not, none bound in another workspace", () => {
+test("of a chain not moved, /lock/logs gives the logs its `person` entries bind, kept here, to a device the chain lets in (one it does not name is not let in), none bound in another workspace", () => {
   const w = world();
   // bob and carol bind their logs on the chain (alice binds none); dan's log, of another workspace, kept here too
   const bind = (prev: StationEntry, l: Log): StationEntry => signed({ v: 1, ws: WS, seq: prev.seq + 1, prev: entryHash(prev), at: 1000, kind: "person", body: { sub: l.sub, person: l.genesis } }, l.app.signer);
@@ -191,9 +191,10 @@ test("of a chain not moved, /lock/logs gives the logs its `person` entries bind,
   const logs = (v: unknown) => ((lockPartRoute(c, "logs", "GET", Buffer.alloc(0), v as never) as any)[1].chains as { genesis: string }[]).map((x) => x.genesis).sort();
   assert.deepEqual(logs(viewerOf("alice", w.alice.app, "owner")), [w.bob.genesis, w.carol.genesis].sort(), "alice's app, named by the chain: the two bound logs");
   assert.deepEqual(logs(viewerOf("bob", w.bob.app, "admin")), [w.bob.genesis, w.carol.genesis].sort(), "bob's app, on his own log");
-  assert.deepEqual(logs(viewerOf("alice", { base: ed() }, "owner")), [], "a device the chain does not name");
-  const { lockDevice: _, ...noProof } = viewerOf("alice", w.alice.app, "owner");
-  assert.deepEqual(logs(noProof), [], "a connection that brought no proof of its base key");
+  // a device the chain does not name never reaches the route: its connection is refused (inLock, as each is let in
+  // and again as the lock changes, stillIn)
+  const stranger = viewerOf("alice", { base: ed() }, "owner");
+  assert.throws(() => inLock(c, { viewer: stranger, exp: 4102444800, iat: 0, sid: "s" } as never, "owner", stranger.device), "a device the chain does not name is not let in");
   assert.deepEqual(logs(viewerOf("dan", dan.app, "member", WS2)), [], "a device of another workspace");
   // a bound log this station keeps none of is not given
   const c2 = station(w, 1, false);
