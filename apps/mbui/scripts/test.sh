@@ -363,7 +363,10 @@ for t in $targets; do
           # program its pages are its job. By the table the first's pages go from 623 s to 485, the second's from 351
           # to 417 (on two programs, 117-131 s of 351 before), the third's from 167 to 140, the fourth's from 720 to
           # 668 beside send_steady's three)
-          *) specs="4,4,350,1 2,4,210,1 1,4,500,1 4,4,150,1" ;;
+          # (send_steady's three beside the fourth's pages were 114, 137 and 149 s, with real_size's half 78 and its
+          # pages 211, app 4/4 222-237 s of its 5 minutes on main c54dc28b 43348134004 and branches after: reckoned 300,
+          # by the table some 95 s of its pages go to the other three)
+          *) specs="4,4,350,1 2,4,210,1 1,4,500,1 4,4,300,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
