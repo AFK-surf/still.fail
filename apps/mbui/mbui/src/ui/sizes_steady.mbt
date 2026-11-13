@@ -31,6 +31,9 @@ priv struct SizesSteady {
   mut words : Double
   /// when the hand last did something (rows_steady_hand) as the last frame was judged: what it did since is this frame's
   mut hand : Double
+  /// when each column of the tree's was last put at once (Tree::scroll_put_at) as the last frame was judged, by its node:
+  /// a put since is this frame's
+  puts : Map[Int, Double]
 }
 
 ///|
@@ -44,6 +47,7 @@ let sizes_steady : SizesSteady = {
   window: (-1.0, -1.0),
   words: -1.0,
   hand: -1.0e9,
+  puts: {},
 }
 
 ///|
@@ -70,6 +74,7 @@ fn sizes_steady_begin(loc : String, held : Bool) -> Unit {
   sizes_steady.window = (-1.0, -1.0)
   sizes_steady.words = -1.0
   sizes_steady.hand = -1.0e9
+  sizes_steady.puts.clear()
   sizes_steady.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -189,6 +194,11 @@ let stop_jerk : Double = 1.5
 /// rest, going on as fast or slowing) is none: an eased way out sets out so (sf/motion.mbt). In a list's row whose way
 /// set out at `set_out` between them, as rows_steady_fault has a row's place: the speed it takes up then, from where it
 /// was, is the way's (a row joining the rows' way under way goes on its share of it as they do: list_size.mbt).
+/// Not said, known (the coordinator of the migration, 2026-11-13: taken up once the chat's page is switched, by a round
+/// that only prints first): a step is said only as the middle of three frames, so one whose next frame no longer judges
+/// its node (it shows no more, a hand's frame, a gap, the window resized: its samples cleared) is never said. A bar's
+/// thumb stepping as its list was put at once passed at 60 judged where 120 failed for it, the thumb showing no more a
+/// frame of 60 later (chat_page_nodes_wbtest, #5854).
 fn sizes_steady_fault(
   all : Array[(Double, Double, Double)],
   period : Double,
@@ -309,6 +319,11 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     // Tree::scroll_off_by), other than as the one node the column holds: its bar's thumb and what that holds, along its
     // track as the column goes, so in a frame the hand scrolled it as far in one frame as the hand did)
     let by_scroll = Array::make(k, false)
+    // (and whether that column was put at once since the frame before (Scroll::put: a page's list brought to a block or
+    // its foot): what it moves by its offset alone goes there with it in this frame, as far as the put took it, its thumb
+    // as long as what the column holds came to in the put's layout, as it does in a frame the hand scrolled it)
+    let put_now = Array::make(k, false)
+    let puts_now : Map[Int, Double] = Map([])
     // (what holds each before it: a node of the window's tree put among the frame's may come after what it holds)
     let order : Array[Int] = []
     let ordered = Array::make(k, false)
@@ -346,10 +361,21 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           (Some(tr), Some(id)) => {
             let by = tr.scroll_off_by(id)
             // (not the one node the column holds, laid out in it: what is in that is measured with the scroll taken out)
-            by >= 0 && !(tree_frame_ids.get(p) is Some(pid) && pid.at == by)
+            let moved = by >= 0 && !(tree_frame_ids.get(p) is Some(pid) && pid.at == by)
+            if moved {
+              let at = tr.scroll_put_at(by)
+              puts_now[by] = at
+              if sizes_steady.puts.get(by) is Some(was) && was != at {
+                put_now[i] = true
+              }
+            }
+            moved
           }
           _ => false
         })
+      if p >= 0 && p < k && put_now[p] {
+        put_now[i] = true
+      }
       if p >= 0 && p < k {
         let pn = self.nodes[p]
         c_top[i] = c_top[p]
@@ -396,6 +422,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         }
       }
     }
+    puts_now.each(fn(by, at) { sizes_steady.puts[by] = at })
     for i in 0..<k {
       let n = self.nodes[i]
       if count.get(n.ident).unwrap_or(0) != 1 || !n.draws_own() {
@@ -440,8 +467,9 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           }
         }
         let gap = seen.length() > 0 && now - seen[seen.length() - 1].1 > 2.5 * period
-        // (what the hand's scroll moves by its offset alone, in the frame it did: as far as the hand took it)
-        if gap || resized || !shows || self.down || view_holds() || (hand_now && by_scroll[i]) {
+        // (what the hand's scroll moves by its offset alone, in the frame it did: as far as the hand took it; and in the
+        // frame its column was put at once, as far as the put took it)
+        if gap || resized || !shows || self.down || view_holds() || (hand_now && by_scroll[i]) || put_now[i] {
           seen.clear()
           continue
         }
