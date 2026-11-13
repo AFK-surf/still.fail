@@ -3035,7 +3035,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     (0, _) => {
       // (a press of the primary button, wherever on the tree: words of its picked with the pointer let go, as an old
       // view's page's are by a press elsewhere (Ctx::select_press); on words to pick, picked anew from there below)
-      if button != 2 && tree_picking() && !picked.finger {
+      if button != 2 && tree_picking() && !picked.finger && !tree_keeps_picked_at(tree, x, y) {
         select_none()
       }
       if button != 2 {

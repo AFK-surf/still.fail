@@ -66,6 +66,7 @@ fn picked_told() -> Unit {
     }
   })
   picked_finger_said.set(picked.finger)
+  picked_now_tell()
   @signals.end_batch()
   // (what no node reads any more let go)
   if picked_spans_said.length() > 64 {
@@ -124,8 +125,11 @@ fn tree_sels(finger? : Bool = false) -> Array[SelTarget] {
             let (r, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id), kept=c.words_breaks)
             let (bx0, by0, bx1, by1) = tree.seen_bounds(c.id)
             let place = tree_place(v)
+            let base = tree_key(v)
+            // (who shows it, what it is of: what is picked of it told by them, picked_now)
+            picked_shown_by(base, v)
             out.push({
-              base: tree_key(v),
+              base,
               layer: TreeLayer(tree.stack_of(c.id)),
               island: None,
               at: place,

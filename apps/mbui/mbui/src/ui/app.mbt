@@ -1553,6 +1553,8 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     picked.dragging = false
     finger_let_go()
     select_edge_stop()
+    // (let go: what is picked of the tree's told so, picked_now)
+    picked_now_tell()
     second_ptr[2] = 0.0
   } else {
     c.press_called_off(x, y, t)
@@ -1619,6 +1621,7 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
   picked.dragging = false
   finger_let_go()
   select_edge_stop()
+  picked_now_tell()
   c.down = false
   c.dragging = false
   c.active = 0
