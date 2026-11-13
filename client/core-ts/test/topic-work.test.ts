@@ -141,7 +141,7 @@ const GROWS: Record<string, Partial<Record<Knob, number>>> = {
   connects: { profiles: 264 },
   "connects mine": { profiles: 264 },
   newChat: { profiles: 64 },
-  pick: { profiles: 264, stations: 416 },
+  pick: { profiles: 272, stations: 416 },
   settings: { profiles: 264, stations: 416 },
   history: { profiles: 72 },
   agentCard: { profiles: 72 },

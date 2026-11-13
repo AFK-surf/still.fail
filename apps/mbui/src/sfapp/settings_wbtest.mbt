@@ -1052,14 +1052,43 @@ test "a run can choose another runtime for a model available on both" {
 }
 
 ///|
-test "the run's 账号: what 自动分配 means, then 自动分配 and each account with its provider's mark and its allowance" {
-  let t = settings_tester("run:ws1/st1#s-c1", mode="settings-run-accounts", shows="settings-run-accounts")
+test "the run's 账号: what 全选 means, single-account disabled state, and 全选 <-> 全不选 + Back revert with multiple accounts" {
+  let one = settings_tester("run:ws1/st1#s-c1", mode="settings-run-accounts", shows="settings-run-accounts")
+  // (AccountList: the note, 全选, each account without a line under it, its windows as the allowance's boxes)
+  assert_true(one.find("勾选多个账号或全选时，额度用完或登录失效会自动切换") is Some(_))
+  assert_true(one.get(Button, label="全选").disabled)
+  assert_true(one.find("Claude 主账号") is Some(_), msg=one.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(one.find("38%") is Some(_))
+  assert_true(one.find("70%") is Some(_))
+
+  new_run()
+  @settings.fixture_page("settings-run-accounts") |> ignore
+  let calls : Array[Made] = []
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("run:ws1/st1#s-c1")
   t.draw()
-  // (AccountList: the note, 自动分配, each account without a line under it, its windows as the allowance's boxes)
-  assert_true(t.find("自动分配时，额度用完或登录失效会切换账号") is Some(_))
-  assert_true(t.find("Claude 主账号") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
-  assert_true(t.find("38%") is Some(_))
-  assert_true(t.find("70%") is Some(_))
+  t.run_for(@ui.move_most_ms)
+  assert_false(t.get(Button, label="全选").disabled)
+  let auto_row = t.get(Button, label="全选").rect
+  t.tap(auto_row.0 + 32.0, auto_row.1 + auto_row.3 / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(
+    named(calls, "pick.set").iter().any(fn(c) { field(Some(c.params), "profiles") == Some(Json::array([])) }),
+    msg="tapping 全选 while all checked sends profiles: []",
+  )
+  assert_eq(@sffixture.new_fix.d_none, true)
+  assert_true(t.find("请选择至少一个账号") is Some(_), msg="全不选 shows hint under 全选 on 选择账号 page")
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sffixture.new_fix.d_none, false, msg="leaving 选择账号 while in 全不选 reverts draft")
 }
 
 ///|

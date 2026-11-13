@@ -116,6 +116,10 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     const runtime = c.bind?.runtime;
     const nonEmpty = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
     const kind = typeof c.kind === "string" && c.kind !== "" ? c.kind : "slack";
+    const bindProfiles: string[] = Array.isArray(c.bind?.profiles)
+      ? [...new Set<string>(c.bind.profiles.filter((x: unknown): x is string => typeof x === "string" && x.trim() !== "").map((x: string) => x.trim()))]
+      : [];
+    const singleProfile = nonEmpty(c.bind?.profile) ?? (bindProfiles.length === 1 ? bindProfiles[0]! : null);
     const shown = {
       id: c.id,
       // What it is known by (its bot's name on its platform, and its workspace there), as its kind says: its id till then.
@@ -126,7 +130,13 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       kind,
       mode,
       requireMention: mode === "multi-session" ? true : (c.requireMention ?? true),
-      bind: { runtime, model: nonEmpty(c.bind?.model), effort: nonEmpty(c.bind?.effort), profile: nonEmpty(c.bind?.profile) },
+      bind: {
+        runtime,
+        model: nonEmpty(c.bind?.model),
+        effort: nonEmpty(c.bind?.effort),
+        profile: singleProfile,
+        ...(bindProfiles.length > 1 ? { profiles: bindProfiles } : {}),
+      },
       // Every connect has Slack's tokens for the pages (masked: connects/part.ts; none for another kind's).
       slack: { appToken: "", botToken: "" },
       connection: c.enabled === false ? { state: "disabled" } : { state: "starting" },
@@ -151,6 +161,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     profiles,
     sessionRuntimeChange: true,
     connectRuntimeChange: true,
+    accountSubsets: true,
     // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
     // clients group and mark models by them, and by the names alone where it says none.
     modelMakers: modelMakers(profiles),

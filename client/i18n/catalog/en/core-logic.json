@@ -36,13 +36,25 @@
   "core-logic.activity.remote.upload": "Uploading {what} to {station}",
   "core-logic.activity.tools": "Loading tools {names}",
   "core-logic.choose.account": "Account",
+  "core-logic.choose.account.all": "All",
   "core-logic.choose.account.auto": "Auto",
   "core-logic.choose.account.auto_note": "Switches when out of quota or signed out",
   "core-logic.choose.account.auto_on": "Auto · {name}",
   "core-logic.choose.account.auto_switch": "Auto (switch accounts)",
+  "core-logic.choose.account.count": {
+    "one": "1 account",
+    "other": "{n} accounts"
+  },
+  "core-logic.choose.account.count_on": {
+    "one": "1 account · {name}",
+    "other": "{n} accounts · {name}"
+  },
   "core-logic.choose.account.fixed": "Fixed",
+  "core-logic.choose.account.none": "None",
   "core-logic.choose.account.now": "Current: {name}",
+  "core-logic.choose.account.pick_one": "Select at least one account",
   "core-logic.choose.account.repick": "Reassign",
+  "core-logic.choose.account.subset_note": "Switches among selected accounts",
   "core-logic.choose.default_effort": "Default effort",
   "core-logic.choose.maker.other": "Other makers",
   "core-logic.choose.dropped": "The selected account can't run {model}; switched to auto",
@@ -52,6 +64,7 @@
   "core-logic.choose.error.no_stations_yet": "Stations not loaded yet",
   "core-logic.choose.error.no_such": "No such choice: {of}",
   "core-logic.choose.error.none_online": "No station is online",
+  "core-logic.choose.error.station_account_subsets": "Update this station before selecting multiple accounts",
   "core-logic.choose.force.dropped": "Account “{account}” can't run {model}; switched to auto",
   "core-logic.choose.force.moves_off": "Account “{account}” can't run {model}; will switch to one that can",
   "core-logic.choose.pick_model": "Choose a model",

@@ -8,6 +8,12 @@
 // press outside close it (its gone told); what it holds closes it with what it was given (nothing told).
 
 ///|
+/// The outer boxes of small panels drawn beside what opened them (panel_node), by their serial: what a sub-panel
+/// aligned with one (`match_panel`) goes beside while keeping its own width.
+// kept across runs: put back by presenters_reset; each let go as its layer is
+let presented_popovers : Map[Int, @view.View] = Map([])
+
+///|
 /// A panel `x` in `parent` while `open()` (going over pop_out_ms once not), beside what `anchor` makes in its layer;
 /// `key`: what its old views are named by (the presented's); `close`: what what it holds is given to close it; `cancel`
 /// as it is closed by Escape, back or a press outside. `shown`, `gone`: as dialog_layer_node's.
@@ -27,7 +33,11 @@ fn panel_node(
     open,
     fn(layer) {
       shown()
-      layer.owns(gone) |> ignore
+      layer.owns(fn() {
+        presented_popovers.remove(keyed.serial)
+        gone()
+      })
+      |> ignore
       // (how far in it is, from the moment it opened; out from the moment it closed)
       let way = EdgeWay::new(0.0)
       let leave_from = Ref(0.0)
@@ -100,8 +110,13 @@ fn panel_node(
         }
       })
       |> ignore
-      // (what opened it, where it is drawn: what its panel goes beside)
-      let at = anchor(layer)
+      // (what opened it, where it is drawn, or the small panel it stands flush with (`match_panel`): what its panel
+      // goes beside)
+      let matched = if x.match_panel > 0 { presented_popovers.get(x.match_panel) } else { None }
+      let at = match matched {
+        Some(v) => v
+        None => anchor(layer)
+      }
       // (what holds its body: what takes the focus as it opens)
       let body_box : Ref[@view.View?] = Ref(None)
       // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node,
@@ -120,6 +135,7 @@ fn panel_node(
         })
       }
       layer.box(fn(p) {
+        presented_popovers[keyed.serial] = p
         p
         .beside(at.id(), side=x.side, along=x.along, offset=x.offset, padding=8.0)
         // (`fits`: as wide as what it holds, `w` at most, never narrower than it has been: its parts each told how wide

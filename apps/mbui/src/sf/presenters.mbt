@@ -150,10 +150,12 @@ priv struct PanelOf {
   title_row : ((@ui.Ctx) -> Unit)?
   /// beside what opened it, no head: what it holds draws its own (panel's `heads_itself`)
   heads_itself : Bool
-  /// beside what opened it: on which side of it, along it where, how far from it (panel's `side`, `along`, `offset`)
+  /// beside what opened it: on which side of it, along it where, how far from it (panel's `side`, `along`, `offset`),
+  /// or flush with another small panel's outer box (`match_panel`: its serial, 0 none)
   side : @ui.Side
   along : @ui.Along
   offset : Double
+  match_panel : Int
   /// what it holds goes in steps in it (panel's `steps`: panel_go, panel_back)
   steps : Bool
   /// what back does on its first step where its steps follow a flow kept elsewhere (panel's `back`: panel_go's)
@@ -377,6 +379,7 @@ pub fn presenters_reset() -> Unit {
   took_place.clear()
   tree_presented.clear()
   tree_as_sheet.clear()
+  presented_popovers.clear()
   presented_drawn_said.set([])
   presented_items_said.clear()
   presented_told()
@@ -625,6 +628,7 @@ pub fn panel(
       side,
       along,
       offset,
+      match_panel: 0,
       steps,
       on_back: back,
       nodes: None,
@@ -637,7 +641,8 @@ pub fn panel(
 ///|
 /// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `live`, `gone`, `tall`, `focus`, `ruled`, `form`,
 /// `grows`, `side`, `along`, `offset` as there; `hugs`: one `tall` as tall as what it holds up to that share, as a sheet
-/// and a dialog in the middle of the window draw it, not that share whatever it holds), what it holds (`body`) and what
+/// and a dialog in the middle of the window draw it, not that share whatever it holds; `match_panel`: serial of a small
+/// panel whose outer box it goes beside while keeping its own width `w`), what it holds (`body`) and what
 /// is at its foot (`foot`) made once as nodes of the window's tree, each in the node the panel gives it, laid out there
 /// as the old frame's body and foot are (beside what opened it: panel_node; in the middle of the window, opened by
 /// nothing or a form: panel_centred_node), given what closes it.
@@ -663,6 +668,7 @@ pub fn panel_nodes(
   along? : @ui.Along = Start,
   offset? : Double = panel_offset,
   hugs? : Bool = false,
+  match_panel? : Int = 0,
 ) -> Unit {
   present(
     Panel({
@@ -689,6 +695,7 @@ pub fn panel_nodes(
       side,
       along,
       offset,
+      match_panel,
       steps: false,
       on_back: None,
       nodes: Some({ body, foot, hugs }),

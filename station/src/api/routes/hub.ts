@@ -394,12 +394,20 @@ export const routes = (tools: Tools): Route[] => {
         write(async (_s, a) => {
           const i = input(r);
           const given = (k: string) => (typeof i[k] === "string" && i[k] !== "" ? (i[k] as string) : null);
+          const profiles = i.profiles === undefined
+            ? undefined
+            : i.profiles === null
+              ? null
+              : Array.isArray(i.profiles) && i.profiles.every((x) => typeof x === "string")
+                ? i.profiles
+                : (() => { throw new Refused(400, "profiles must be a list of profile ids or null"); })();
           const [key, chat] = await as(400, () =>
             newSession(
               a.hub,
               {
                 runtime: runtime(r, i),
                 profile: given("profile"),
+                profiles,
                 model: given("model"),
                 effort: given("effort"),
                 fast: typeof i.fast === "boolean" ? i.fast : null,
@@ -569,8 +577,14 @@ export const routes = (tools: Tools): Route[] => {
               const effort = pick("effort");
               if (model !== undefined) change.model = model;
               if (effort !== undefined) change.effort = effort;
-              // A profile's id keeps the session to it; null gives the choice back to the station.
+              // A profile's id keeps the session to it; `profiles` keeps it to a chosen set; null gives the choice back to the station.
               if (typeof i.profile === "string" || i.profile === null) change.profile = i.profile;
+              if ("profiles" in i) {
+                if (i.profiles !== null && (!Array.isArray(i.profiles) || i.profiles.some((x) => typeof x !== "string"))) {
+                  throw new Refused(400, "profiles must be a list of profile ids or null");
+                }
+                change.profiles = i.profiles;
+              }
               // Given back to the station and its account picked again now.
               if (i.repick === true) change.repick = true;
               // Whether it goes on afresh once its cache is over: null gives it back to the station's setting.

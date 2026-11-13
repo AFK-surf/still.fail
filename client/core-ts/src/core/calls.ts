@@ -473,9 +473,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
         ["model", S, "opt"],
         ["effort", S, "opt"],
         ["profile", S, "opt"],
+        ["profiles", "value", "opt"],
       ]);
       const ask: Record<string, unknown> = { runtime: p.runtime };
       for (const k of ["model", "effort", "profile"]) if (typeof p[k] === "string" && p[k] !== "") ask[k] = p[k];
+      if (Array.isArray(p.profiles)) {
+        const ids = [...new Set(p.profiles.filter((x): x is string => typeof x === "string" && x !== ""))];
+        if (ids.length > 0) ask.profiles = ids;
+      }
       return { kind: "chatCreate", station: p.station as string, ask };
     }
   }

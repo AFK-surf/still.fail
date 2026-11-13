@@ -36,8 +36,14 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       _ => tr("android-chat.run.title")
     }
     if list != "" {
-      nav_bar(c, core, tr("android-chat.run.title"), title, on_back=fn() { run_list.remove(of) })
-      c.on_back(fn() { run_list.remove(of) })
+      let leave_list = fn() {
+        if list == "account" && field(field(v, "draft"), "profiles") is Some(Array(xs)) && xs.is_empty() {
+          pick([("open", Json::boolean(false))])
+        }
+        run_list.remove(of)
+      }
+      nav_bar(c, core, tr("android-chat.run.title"), title, on_back=leave_list)
+      c.on_back(leave_list)
     } else {
       nav_bar(c, core, tr("common.back"), title)
     }
@@ -84,7 +90,7 @@ fn run_view(
     return
   }
   if list == "account" {
-    // beside 自动分配, a chat's: the station picks its account again now (`pick.repick`), which it took said
+    // beside 全选, a chat's: the station picks its account again now (`pick.repick`), which it took said
     let repick = text(v, "repick")
     let repicking = fn() {
       let busy = is_doing(core, ["pick.repick"], [("station", station), ("of", of)])
@@ -101,16 +107,35 @@ fn run_view(
         })
       })
     }
+    let picked_ids : Array[String]? = match field(draft, "profiles") {
+      Some(Array(xs)) => {
+        let out : Array[String] = []
+        for x in xs {
+          if x is String(s) && s != "" && !out.contains(s) {
+            out.push(s)
+          }
+        }
+        Some(out)
+      }
+      _ =>
+        match text(draft, "profile") {
+          "" => None
+          id => Some([id])
+        }
+    }
     account_list(
       c,
       "run-session-accounts/" + key,
       items(v, "accounts"),
       runtime,
-      text(draft, "profile"),
-      fn(p) {
-        pick([("profile", match p { Some(id) => str(id); None => Json::null() })])
-        run_list.remove(of)
+      picked_ids,
+      fn(ids) {
+        match ids {
+          None => pick([("profiles", Json::null()), ("profile", Json::null())])
+          Some(xs) => pick([("profiles", Json::array(xs.map(fn(s) { str(s) })))])
+        }
       },
+      auto_note=if picked_ids is Some([]) { text(v, "autoNote") } else { "" },
       auto_trail?=if repick == "" { None } else { Some(repicking) },
     )
     return
@@ -1156,37 +1181,80 @@ let chip_py : Double = 9.0
 let chip_corner : Double = 18.0
 
 ///|
-/// Who runs the model picked: what 自动分配 means, then 自动分配 (none picked: the
-/// station's pick; `auto_trail` at its end) and each account it may be kept to, its provider's mark before it and its
-/// allowance after it, 18 from the sides. `pick` hears the account picked (None: 自动分配).
+/// Who runs the model picked: what 全选 and multi-account mean, then 全选 (`None`: the station's pool; `Some([])`:
+/// 全不选, waiting for one account to be tapped; `auto_trail` at 全选's end) and each account it may be kept to, its
+/// provider's mark before it and its allowance after it, 18 from the sides. `pick` hears the selection (`None`: 全选).
 fn account_list(
   c : @ui.Ctx,
   key : String,
   accounts : Array[Json],
   runtime : String,
-  picked : String,
-  pick : (String?) -> Unit,
+  picked : Array[String]?,
+  pick : (Array[String]?) -> Unit,
+  auto_note? : String = "",
   auto_trail? : () -> Unit,
 ) -> Unit {
+  let all_ids = accounts.map(fn(x) { text(Some(x), "id") }).filter(fn(x) { x != "" })
+  let single_only = accounts.length() <= 1
+  let all_on = picked is None
   scroll_page(c, key, [
     fn() {
       c.box(style=account_list_room, fn() {
         c.box(style=account_note_room, fn() { c.text(tr("android-chat.run.account.note"), style=account_note_words) |> ignore }) |> ignore
-        @sf.choice_row(c, key + "/auto", picked == "", tr("android-chat.run.account.auto"), trail?=auto_trail, on_press=fn() {
-          pick(None)
-        })
+        @sf.choice_row(
+          c,
+          key + "/auto",
+          all_on,
+          tr("android-chat.run.account.auto"),
+          note=auto_note,
+          disabled=single_only,
+          trail?=auto_trail,
+          on_press=fn() {
+            if !single_only {
+              if all_on {
+                pick(Some([]))
+              } else {
+                pick(None)
+              }
+            }
+          },
+        )
         for a in accounts {
           let av = Some(a)
           let id = text(av, "id")
           let own = text(av, "runtime")
+          let checked = match picked {
+            None => true
+            Some(xs) => xs.contains(id)
+          }
           @sf.choice_row(
             c,
             key + "/" + id,
-            picked == id,
+            checked,
             text(av, "name"),
+            disabled=single_only,
             lead=fn() { @sf.provider_logo(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
-            tag=fn() { @sf.quota_chips(c, field(av, "quota"), key=key + "/" + id) },
-            on_press=fn() { pick(Some(id)) },
+            tag=fn() { @sf.quota_chips(c, field(av, "quota"), marked=false, gap=6.0, key=key + "/" + id) },
+            on_press=fn() {
+              if single_only {
+                return
+              }
+              let cur_ids = match picked {
+                None => all_ids
+                Some(xs) => xs
+              }
+              if cur_ids.contains(id) {
+                let next = cur_ids.filter(fn(x) { x != id })
+                pick(Some(next))
+              } else {
+                let next = all_ids.filter(fn(x) { x == id || cur_ids.contains(x) })
+                if next.length() >= all_ids.length() {
+                  pick(None)
+                } else {
+                  pick(Some(next))
+                }
+              }
+            },
           )
         }
       })

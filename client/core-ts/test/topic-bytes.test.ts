@@ -134,6 +134,8 @@ const KIND = "another kind's: of a pull request (labels, its time), a text file 
 const chatEmpty = (older: boolean, compact: boolean): Record<string, string> => ({
   // (QuotaWindow's `time`: present.ts `times` makes a quota's windows anew, never into each; `refills` says `resetsAt`)
   "agents[].profile.quota.windows[].time": NEVER, "agents[].account.quota.windows[].time": NEVER,
+  // (kept to a multi-account subset: the chat weighed runs unrestricted)
+  "agents[].session.profiles": STATE,
   // (a Slack message given to the agent with files)
   "messages[].elsewhere[].attachments": STATE,
   // (what its agents said in Slack before its first message read: one read from its first message has said nothing before it)
@@ -165,15 +167,16 @@ const EMPTY: Record<string, Record<string, string>> = {
   // (the Claude one used by no chat; the ChatGPT one by three)
   "profile": { "profile.usedBy": NONE },
   "profile key": { "profile.quota.resets": NONE },
-  "connects": { "wait.failing": ERROR },
-  "connects mine": { "wait.failing": ERROR },
+  "connects": { "wait.failing": ERROR, "items[].connect.bind.profiles": STATE },
+  "connects mine": { "wait.failing": ERROR, "items[].connect.bind.profiles": STATE },
   // (asked for its last line alone, a job's row: no lines, jobs.ts log)
   "jobLog line": { lines: ASKED_SO },
   // (a single-session connect's session, and the one weighed is many sessions')
-  "connect": { "bound.efforts": STATE, "bound.time": STATE, "bound.watch.names": STATE },
+  "connect": { "connect.bind.profiles": STATE, "sessions[].profiles": STATE, "bound.profiles": STATE, "bound.efforts": STATE, "bound.time": STATE, "bound.watch.names": STATE },
+  "newChat": { "pick.value.profiles": STATE },
   // (a new chat's pick names no account's allowance, choose.ts `#now` quiet; the model it takes with nothing chosen,
   // Fable, runs on one runtime; borrow: a model only another station has, picked)
-  "pick": { "account.profile.quota.windows": ASKED_SO, runtimes: STATE, "borrow.lines": STATE },
+  "pick": { "value.profiles": STATE, "draft.profiles": STATE, "account.profile.quota.windows": ASKED_SO, runtimes: STATE, "borrow.lines": STATE },
   "chat": chatEmpty(true, false),
   "chat compact": chatEmpty(true, true),
   "chat six pages": chatEmpty(false, false),

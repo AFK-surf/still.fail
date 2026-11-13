@@ -20,6 +20,8 @@ pub fn fixture_reset() -> Unit {
   new_fix.d_effort = "high"
   new_fix.context = ""
   new_fix.d_profile = ""
+  new_fix.d_profiles.clear()
+  new_fix.d_none = false
   new_fix.made = 0
   new_fix.reading = 0
   new_fix.crowded = false

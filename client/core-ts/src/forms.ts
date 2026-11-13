@@ -757,6 +757,7 @@ export class ConnectFlows {
 function bindOf(pick: J): J {
   const bind = structuredClone(get(pick, "value") ?? {});
   for (const f of ["model", "effort"]) if (bind[f] === null || bind[f] === undefined) bind[f] = "";
+  if (!Array.isArray(bind.profiles) || bind.profiles.length <= 1) delete bind.profiles;
   return bind;
 }
 

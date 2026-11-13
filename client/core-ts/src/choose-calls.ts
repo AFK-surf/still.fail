@@ -76,7 +76,10 @@ export function installChoose(inner: Inner): Choose {
           return Effect.gen(function* () {
             const saved = yield* attempt(() => choose.save(field("station"), field("of"), params));
             if ("done" in saved) return saved.done;
-            yield* Effect.tapError(handlers.op!(inner, { kind: "op", op: saved.op }, progress, at, ctx), () => Effect.sync(() => choose.unsaved(field("station"), field("of"))));
+            yield* Effect.ensuring(
+              Effect.tapError(handlers.op!(inner, { kind: "op", op: saved.op }, progress, at, ctx), () => Effect.sync(() => choose.unsaved(field("station"), field("of")))),
+              Effect.sync(() => choose.settled(field("station"), field("of"))),
+            );
             return { saved: true };
           });
       }

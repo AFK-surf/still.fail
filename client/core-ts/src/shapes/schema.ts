@@ -147,6 +147,7 @@ export const SHAPES: Record<string, Shape> = {
     ["runtime", "RuntimeKind", { doc: "claude | codex | dsh | grok | cursor | devin" }],
     ["profile", opt("String")],
     ["profilePinned", opt("bool")],
+    ["profiles", opt(vec("String")), { doc: "The accounts it may run on when kept to chosen ones; absent: all of them (or `profile` alone when `profilePinned`)." }],
     ["model", opt("String")],
     ["effort", opt("String")],
     ["fast", opt("bool")],
@@ -566,6 +567,7 @@ export const SHAPES: Record<string, Shape> = {
     ["model", opt("String")],
     ["effort", opt("String")],
     ["profile", opt("String")],
+    ["profiles", opt(vec("String"))],
   ]),
   SlackTokens: struct([
     ["appToken", "String"],
@@ -2724,7 +2726,8 @@ export const SHAPES: Record<string, Shape> = {
     ["fast", opt("bool")],
     ["context", opt("u32"), { doc: "The most context it runs with, in tokens; none its model's whole window." }],
     ["profile", opt("String")],
-  ], { doc: "What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the\nstation's pick." }),
+    ["profiles", opt(vec("String")), { doc: "The accounts it may run on when kept to more than one; none: all of them (or `profile` alone)." }],
+  ], { doc: "What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` and\n`profiles` none the station's pick." }),
   PickCombo: struct([
     ["model", "String", { doc: "The option it runs, by its `model`." }],
     ["runtime", "RuntimeKind"],
@@ -2746,6 +2749,7 @@ export const SHAPES: Record<string, Shape> = {
     ["kind", opt("AccessKind")],
     ["mark", opt("String"), { doc: "As RunnableProfile's." }],
     ["runtime", opt("RuntimeKind")],
+    ["current", opt("bool"), { doc: "In a chat: the account it runs on now." }],
     ["quota", opt("PickQuota")],
     ["quotaLine", opt("QuotaLine"), { doc: "What is left of its allowance, in a few words (a core from before it says nothing)." }],
   ], { doc: "An account a model control offers (`PickView.accounts`) or names (`PickAccount.profile`): its name, its provider's\nmark, what is left of it as chips and in words. The core's own (RunnableProfile, views/models.ts) has more: its\nreasoning levels, whether it runs now, when it is used up till, all of its allowance." }),

@@ -21,6 +21,8 @@ pub fn choice_row_node(
   tag? : (@view.View) -> Unit,
   trail? : (@view.View) -> Unit,
   ink? : () -> Int64,
+  note_ink? : () -> Int64,
+  compact? : Bool = false,
   disabled? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> Unit {
@@ -31,8 +33,8 @@ pub fn choice_row_node(
   let card = on_card_node(parent)
   let goes = fn() { !disabled() }
   // (its words as a page's row has them: the label, what follows it on its line, a note under them, its end on that
-  // line where a note is under them)
-  let under = fn() { body is None && note() != "" }
+  // line where a note is under them unless `compact` centres it across a two-line panel row)
+  let under = fn() { body is None && !compact && note() != "" }
   let chevron = if narrow { pg_chevron } else { desk_chevron }
   // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; elsewhere a page's row's; on a
   // page's list in a panel's card its ground reaching past it over and under: link_reach)
@@ -51,7 +53,13 @@ pub fn choice_row_node(
       |> ignore
     }
     o.box(fn(r) {
-      let (side, over) = if in_panel is Some(p) {
+      let (side, over) = if compact {
+        let side = match in_panel {
+          Some(p) => p.side
+          None => if narrow && !card { pg_room_in } else { text_in }
+        }
+        (side, if narrow { @ui.Space::S2_5.px() } else { menu_row_over })
+      } else if in_panel is Some(p) {
         (p.side, if narrow { text_in } else { wide_row_over })
       } else if narrow {
         (if card { text_in } else { pg_room_in }, text_in)
@@ -71,7 +79,7 @@ pub fn choice_row_node(
       }
       r
       .row(Is(true))
-      .gap(Is(12.0))
+      .gap(Is(if compact { panel_row_gap } else { 12.0 }))
       .margin(Is((-out, 0.0, -out, 0.0)))
       .padding(Is((side, over, side, over)))
       .radius(Is(corner))
@@ -157,7 +165,7 @@ pub fn choice_row_node(
           }
           r.box(fn(words) {
             words.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-            if !narrow {
+            if !narrow || compact {
               words.gap(Is(@ui.Space::S0_5.px())) |> ignore
             }
             words.box(fn(first) {
@@ -165,11 +173,18 @@ pub fn choice_row_node(
               // (its label and what follows it on its line, 6 apart: choice_label_line)
               first.box(fn(line) {
                 line.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))).grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-                let w = words_node(line, label, fn() { (if narrow { pg_row_title } else { desk_list_title }).then(in_lines) })
+                let w = words_node(line, label, fn() {
+                  let base = if narrow { pg_row_title } else { desk_list_title }
+                  if compact {
+                    base.then(@ui.text_style(wrap=false, w=Cut))
+                  } else {
+                    base.then(in_lines)
+                  }
+                })
                 // (as wide as its line leaves it narrow, pg_row_title's w=Full; wide as its words, desk_list_title's,
                 // giving way with what follows it on its line where the row has not the room for them, its words then
-                // on more lines, as an old view's words in a row do)
-                if narrow {
+                // on more lines, as an old view's words in a row do; `compact`: always cut on one line)
+                if narrow || compact {
                   w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
                 } else {
                   w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
@@ -207,7 +222,18 @@ pub fn choice_row_node(
             })
             |> ignore
             words.show(fn() { note() != "" }, at_once=true, fn(n) {
-              words_node(n, note, fn() { if narrow { pg_link_note } else { wide_list_note } }) |> ignore
+              let nw = words_node(n, note, fn() {
+                let base = if narrow { pg_link_note } else { wide_list_note }
+                if compact {
+                  base.then(@ui.text_style(wrap=false, w=Cut))
+                } else {
+                  base
+                }
+              })
+              match note_ink {
+                Some(f) => nw.ink(By(f)) |> ignore
+                None => ()
+              }
             })
           })
           |> ignore

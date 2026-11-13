@@ -768,6 +768,8 @@
   "web-main.mode.feishu.single.description": "Every group and chat it is in shares one session. Suited to an always-on assistant.",
   "web-main.model.account": "Account",
   "web-main.model.auto": "Auto",
+  "web-main.model.current": "Current",
+  "web-main.model.selectAll": "All",
   "web-main.model.defaultEffort": "Default effort",
   "web-main.model.effort": "Effort",
   "web-main.model.context": "Context",

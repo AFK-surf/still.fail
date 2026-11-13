@@ -131,6 +131,10 @@ export function checkConfig(raw: any, _data: string): void {
     variant(c.bind.runtime, RUNTIMES, "a runtime");
     if (c.mode !== undefined && c.mode !== null) variant(c.mode, MODES, "a connect mode");
     for (const f of ["model", "effort", "profile"]) optional(c.bind[f], "string", "a string");
+    if (c.bind.profiles !== undefined && c.bind.profiles !== null) {
+      if (!Array.isArray(c.bind.profiles)) throw new Error(`invalid type: ${describe(c.bind.profiles)}, expected a sequence`);
+      for (const id of c.bind.profiles) if (typeof id !== "string") throw new Error(`invalid type: ${describe(id)}, expected a string`);
+    }
 
     if (!connectIdOk(c.id)) throw new Error(`connect id ${JSON.stringify(c.id)}: use lowercase letters, digits and dashes`);
     const kind = c.kind ?? "slack";

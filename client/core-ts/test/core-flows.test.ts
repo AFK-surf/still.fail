@@ -1554,10 +1554,16 @@ test("a_sessions_account_is_picked_again_beside_auto_and_says_which", async () =
   await host.settle();
   const values = new Map();
   apply(host, values);
-  // On p1, with p2 able to take it: picked again beside 自动.
+  // On p1, with p2 able to take it: picked again beside 全选; hidden when narrowed to 1 account.
   assert.equal(v(values, 1).repick, "重新分配");
-  // Kept to p1 in the panel, another depth too: the account gives way to the station's pick, the depth stays drafted.
-  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", profile: "p1", effort: "high" });
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", model: "claude-opus-5-5", profile: "p1", effort: "high" });
+  apply(host, values);
+  assert.equal(v(values, 1).repick ?? null, null);
+  await assert.rejects(ask(host, core, ui, 20, "pick.repick", { station: "ws/st", of: "session:k1" }));
+  // Drafted back to 全选 with another depth: repick is offered again, and the depth stays drafted.
+  await ask(host, core, ui, 21, "pick.set", { station: "ws/st", of: "session:k1", profile: null, profiles: null });
+  apply(host, values);
+  assert.equal(v(values, 1).repick, "重新分配");
   assert.deepEqual(await ask(host, core, ui, 3, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p2", said: "已改用 p2@x.com" });
   assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ profile: null, repick: true }]);
   apply(host, values);
@@ -1572,6 +1578,195 @@ test("a_sessions_account_is_picked_again_beside_auto_and_says_which", async () =
   assert.equal(v(values, 5).repick ?? null, null);
   await assert.rejects(ask(host, core, ui, 6, "pick.repick", { station: "ws/st", of: "new" }));
   core.close();
+});
+
+test("model_control_checks_multiple_accounts_collapses_all_to_select_all_and_intersects_across_models", async () => {
+  const s = { ...session("k1"), model: "claude-opus-5-5", profile: "p1" };
+  const { host, core } = await started({
+    ...base(),
+    "GET /overview": {
+      ...overview,
+      sessionRuntimeChange: true,
+      connectRuntimeChange: true,
+      accountSubsets: true,
+      connects: [{ id: "c1", name: "c1", kind: "slack", mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-opus-5-5" }, connection: { state: "connected" }, slack: { appToken: "", botToken: "" }, sessions: 0 }],
+      profiles: [
+        profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], true, 10),
+        profile("p2", "claude", ["claude-opus-5-5"], true, 20),
+        profile("p4", "claude", ["claude-opus-5-5"], true, 30),
+        profile("p3", "codex", ["gpt-6-astra"], true, 0),
+      ],
+    },
+    "GET /sessions": [s],
+    "GET /sessions/k1": { session: s, threads: [], turns: [], jobs: [] },
+    "POST /sessions": { key: "k-new", thread: { id: 99 } },
+    "POST /sessions/k1/settings": { ok: true, profile: "p2" },
+    "PUT /connects/c1": { ok: true },
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  subscribe(core, ui, 2, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(core, ui, 3, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+
+  // Unrestricted starts as 全选, and marks the active account `current: true` in a chat.
+  assert.equal(v(values, 1).who, "全选");
+  assert.deepEqual(
+    v(values, 1).accounts.map((a: J) => [a.id, a.current === true]),
+    [["p1", true], ["p2", false], ["p4", false]],
+  );
+
+  // Checking 2 of 3 accounts keeps the subset `["p1", "p2"]` and saves `profiles` to the station.
+  await ask(host, core, ui, 10, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"] });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profiles, v(values, 1).draft.profile ?? null, v(values, 1).who], [["p1", "p2"], null, "2 个账号"]);
+  assert.equal(v(values, 1).autoNote, "在已选账号间自动切换");
+  // Repicking while 2 accounts are checked keeps the 2-account pool on the station.
+  assert.deepEqual(await ask(host, core, ui, 11, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p2", said: "已改用 p2@x.com" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings").at(-1), { profiles: ["p1", "p2"], repick: true });
+  await ask(host, core, ui, 12, "pick.save", { station: "ws/st", of: "session:k1" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings").at(-1), { model: "claude-opus-5-5", effort: null, profile: null, profiles: ["p1", "p2"] });
+
+  // Checking all 3 of 3 accounts automatically collapses to unrestricted 全选 (`profiles: null`, `profile: null`).
+  await ask(host, core, ui, 13, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2", "p4"] });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profiles ?? null, v(values, 1).draft.profile ?? null, v(values, 1).who, v(values, 1).changed], [null, null, "全选", false]);
+
+  // Intersecting across models: ["p1", "p2"] moved to Sonnet (only p1 runs it) narrows cleanly to p1 without `dropped`.
+  await ask(host, core, ui, 14, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"], model: "claude-sonnet-5" });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profile, v(values, 1).draft.profiles ?? null, v(values, 1).dropped ?? null], ["p1", null, null]);
+
+  // Zero intersection: ["p2", "p4"] moved to Sonnet drops back to unrestricted with warning.
+  await ask(host, core, ui, 15, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p2", "p4"], model: "claude-sonnet-5" });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profile ?? null, v(values, 1).draft.profiles ?? null, v(values, 1).whoLevel], [null, null, "amber"]);
+  assert.ok(String(v(values, 1).dropped).includes("Sonnet 5"));
+
+  // New chat & connect also persist and send multi-account subsets.
+  await ask(host, core, ui, 16, "pick.save", { station: "ws/st", of: "new", model: "claude-opus-5-5", profiles: ["p1", "p4"] });
+  apply(host, values);
+  assert.equal(v(values, 2).account.text, "2 个账号");
+  await ask(host, core, ui, 17, "newChat.create", { station: "ws/st" });
+  await host.settle();
+  assert.deepEqual(stationPosted(host, "/sessions").at(-1)?.profiles, ["p1", "p4"]);
+
+  await ask(host, core, ui, 18, "pick.save", { station: "ws/st", of: "connect:c1", profiles: ["p2", "p4"] });
+  const put = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/admin/api/connects/c1")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
+  assert.deepEqual(put.at(-1), { bind: { model: "claude-opus-5-5", effort: "", profile: null, profiles: ["p2", "p4"] } });
+
+  // Rapidly toggling to a subset and immediately back to 全选 while the first save is still in flight sends both updates.
+  await ask(host, core, ui, 19, "pick.set", { station: "ws/st", of: "session:k1", open: true });
+  call(core, ui, 30, "pick.save", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"] });
+  call(core, ui, 31, "pick.save", { station: "ws/st", of: "session:k1", profiles: null, profile: null });
+  await host.settle();
+  assert.deepEqual(
+    stationPosted(host, "/sessions/k1/settings").slice(-2),
+    [
+      { model: "claude-opus-5-5", effort: null, profile: null, profiles: ["p1", "p2"] },
+      { model: "claude-opus-5-5", effort: null, profile: null },
+    ],
+  );
+
+  core.close();
+});
+
+test("multi_account_guards_older_stations_and_saved_subset_repick_to_all", async () => {
+  // 1) A session already saved on a subset `["p1", "p2"]`: drafting 全选 then calling `pick.repick` sends `profile: null` (not stale `["p1", "p2"]`).
+  const subSession = { ...session("k1"), model: "claude-opus-5-5", profile: "p1", profilePinned: false, profiles: ["p1", "p2"] };
+  const r1 = await started({
+    ...base(),
+    "GET /overview": {
+      ...overview,
+      sessionRuntimeChange: true,
+      accountSubsets: true,
+      profiles: [
+        profile("p1", "claude", ["claude-opus-5-5"], true, 10),
+        profile("p2", "claude", ["claude-opus-5-5"], true, 20),
+        profile("p4", "claude", ["claude-opus-5-5"], true, 30),
+      ],
+    },
+    "GET /sessions": [subSession],
+    "GET /sessions/k1": { session: subSession, threads: [], turns: [], jobs: [] },
+    "POST /sessions/k1/settings": { ok: true, profile: "p4" },
+  });
+  const ui1 = r1.core.connect();
+  subscribe(r1.core, ui1, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await r1.host.settle();
+  const vals1 = new Map();
+  apply(r1.host, vals1);
+  assert.deepEqual(v(vals1, 1).value.profiles, ["p1", "p2"]);
+  await ask(r1.host, r1.core, ui1, 2, "pick.set", { station: "ws/st", of: "session:k1", profiles: null, profile: null });
+  assert.deepEqual(await ask(r1.host, r1.core, ui1, 3, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p4", said: "已改用 p4@x.com" });
+  assert.deepEqual(stationPosted(r1.host, "/sessions/k1/settings").at(-1), { profile: null, repick: true });
+  apply(r1.host, vals1);
+  assert.equal(v(vals1, 1).who, "全选");
+  r1.core.close();
+
+  // 2) An older station (no `accountSubsets` in overview) rejects multi-account subset saves, reverts drafts, and clamps migrated newChat subsets to single-account pin so excluded accounts are never spent.
+  const oldSession = { ...session("k1"), model: "claude-opus-5-5", profile: "p1" };
+  const r2 = await started({
+    ...base(),
+    "GET /overview": {
+      ...overview,
+      sessionRuntimeChange: true,
+      profiles: [
+        profile("p1", "claude", ["claude-opus-5-5"], true, 10),
+        profile("p2", "claude", ["claude-opus-5-5"], true, 20),
+        profile("p4", "claude", ["claude-opus-5-5"], true, 30),
+      ],
+    },
+    "GET /sessions": [oldSession],
+    "GET /sessions/k1": { session: oldSession, threads: [], turns: [], jobs: [] },
+    "POST /sessions": { key: "k-new", thread: { id: 99 } },
+    "POST /sessions/k1/settings": { ok: true, profile: "p1" },
+  });
+  const ui2 = r2.core.connect();
+  subscribe(r2.core, ui2, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  subscribe(r2.core, ui2, 2, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(r2.core, ui2, 3, { topic: "newChat", scope: "ws" });
+  await r2.host.settle();
+  const vals2 = new Map();
+  apply(r2.host, vals2);
+  await assert.rejects(ask(r2.host, r2.core, ui2, 10, "pick.save", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"] }), /Station/);
+  assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), []);
+  apply(r2.host, vals2);
+  assert.equal(v(vals2, 1).who, "全选");
+  // Single-account pin (`全不选 -> 点一个`) still works on older stations, and `profiles: []` drafts 全不选 cleanly.
+  await ask(r2.host, r2.core, ui2, 20, "pick.set", { station: "ws/st", of: "session:k1", profiles: [] });
+  apply(r2.host, vals2);
+  assert.deepEqual(
+    [v(vals2, 1).draft.profiles, v(vals2, 1).who, v(vals2, 1).whoLevel, v(vals2, 1).autoNote, v(vals2, 1).repick ?? null, v(vals2, 1).changed, v(vals2, 1).accountText, v(vals2, 1).accountWarn],
+    [[], "未选择", "amber", "请选择至少一个账号", null, false, "未选择", true],
+  );
+  // Saving with 0 accounts drafted is a no-op that preserves the 0-account draft without hitting the station.
+  assert.deepEqual(await ask(r2.host, r2.core, ui2, 21, "pick.save", { station: "ws/st", of: "session:k1" }), { saved: false });
+  assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), []);
+  apply(r2.host, vals2);
+  assert.deepEqual(v(vals2, 1).draft.profiles, []);
+  // Closing the account sub-panel (`open: false`) reverts an incomplete 0-account draft back to the saved accounts.
+  await ask(r2.host, r2.core, ui2, 22, "pick.set", { station: "ws/st", of: "session:k1", open: false });
+  apply(r2.host, vals2);
+  assert.equal(v(vals2, 1).who, "全选");
+  assert.equal(v(vals2, 1).draft.profiles, undefined);
+  // Re-entering 全不选 (`profiles: []`) and tapping one account (`profiles: ["p2"]`) pins `p2` immediately.
+  await ask(r2.host, r2.core, ui2, 23, "pick.set", { station: "ws/st", of: "session:k1", profiles: [] });
+  await ask(r2.host, r2.core, ui2, 11, "pick.save", { station: "ws/st", of: "session:k1", profiles: ["p2"] });
+  assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), [{ model: "claude-opus-5-5", effort: null, profile: "p2" }]);
+  // Migrated local multi-account subset on an older station clamps to the first selected account (`p1`) instead of unrestricted pool.
+  await ask(r2.host, r2.core, ui2, 12, "newChat.migrate", { choices: { st: { model: "claude-opus-5-5", runtime: "claude", profiles: ["p1", "p2"] } } });
+  apply(r2.host, vals2);
+  assert.equal(v(vals2, 2).account.text, "p1@x.com");
+  assert.equal((r2.core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).profile, "p1");
+  assert.equal(v(vals2, 3).pick.account.text, "p1@x.com");
+  await ask(r2.host, r2.core, ui2, 13, "newChat.create", { station: "ws/st" });
+  await r2.host.settle();
+  const created = stationPosted(r2.host, "/sessions").at(-1);
+  assert.equal(created?.profile, "p1");
+  assert.equal(created?.profiles, undefined);
+  r2.core.close();
 });
 
 test("a_chat_referred_to_goes_out_as_a_link_to_it", async () => {
