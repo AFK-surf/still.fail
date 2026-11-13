@@ -2324,6 +2324,7 @@ pub fn list_after(
           go_tos.remove(gk)
           go_to_passages.remove(gk)
           go_back_offsets.remove(gk)
+          find_around.val = -1.0
           if found {
             on_found(rd)
           } else if back is None {
@@ -2338,8 +2339,9 @@ pub fn list_after(
           @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
-            // what ⌘F found, not in the chat's window: the window moved about it (chat.around), once
-            Some(thread) if finding =>
+            // what ⌘F found, or a message after an older window, not in the chat's window: the window moved about it
+            // (chat.around), once
+            Some(thread) if finding || (v.newer && (first < 0.0 || first < target)) =>
               if find_around.val != target {
                 find_around.val = target
                 c.tell("chat.around/" + gk, fn() {
@@ -2354,9 +2356,10 @@ pub fn list_after(
                   )
                 })
               }
-            Some(thread) if v.more && first > target =>
-              if rd.asked.get() != first {
-                rd.asked.set(first)
+            Some(thread) if v.more && first > target => {
+              let ask = v.first_entry.unwrap_or(first)
+              if rd.asked.get() != ask {
+                rd.asked.set(ask)
                 // (asked once the frame's builds are over)
                 c.tell("chat.older/" + gk, fn() {
                   (src.call)(
@@ -2366,6 +2369,7 @@ pub fn list_after(
                   )
                 })
               }
+            }
             _ => {
               go_tos.remove(gk)
               go_back_offsets.remove(gk)

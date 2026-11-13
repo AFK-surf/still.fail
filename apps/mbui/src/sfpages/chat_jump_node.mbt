@@ -132,6 +132,7 @@ fn chat_goes_to(
         @sfbase.go_back_offsets.remove(chat)
         let words = @sfbase.go_to_words.get(chat).unwrap_or([])
         @sfbase.go_to_words.remove(chat)
+        jump.around = -1.0
         let off = match back {
           Some(off) => off
           None => @signals.untracked(top)
@@ -151,9 +152,9 @@ fn chat_goes_to(
           }
         }
       }
-      // (what ⌘F found, not in the chat's window, while its bar is open in this chat: the window moved about it
+      // (what ⌘F found, or a message after an older window, not in the chat's window: the window moved about it
       // (chat.around), once for each)
-      None if find_chat() == chat && cv.thread is Some(_) =>
+      None if (find_chat() == chat || (cv.newer && (first < 0.0 || first < target))) && cv.thread is Some(_) =>
         if jump.around != target {
           jump.around = target
           (src.call)(

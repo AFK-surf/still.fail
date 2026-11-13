@@ -314,11 +314,11 @@ test "对话目录: a wide page's rail at the list's right, 44 wide, clear of th
 }
 
 ///|
-test "对话目录: pressed, the rail's outline beside it at its left, its days and rows from the view, the reader's in the accent, the rest of the chat read" {
+test "对话目录: opened, the rail's outline beside it at its left, its days and rows from the view, the reader's in the accent, the rest of the chat read" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)
   let (rx, _, _, _) = outline_buttons(t)[0]
-  t.click(Button, label="对话目录")
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   let panel = outline_panel(t).unwrap()
   let (px, _, pw, _) = panel
@@ -485,7 +485,7 @@ test "对话目录: a go-to in the chat far from its end keeps where the reader 
   let back = fn() { t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" }) }
   assert_false(back())
   // a row far up: 签名证书下周三过期 (seq 3)
-  t.click(Button, label="对话目录")
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
@@ -691,7 +691,7 @@ test "对话目录: beside what opened it, clear of the system's bars over the w
 test "对话目录: the reader's row in the accent's ink, it alone; each row's words drawn once" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)
-  t.click(Button, label="对话目录")
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   let (px, py, pw, ph) = outline_panel(t).unwrap()
   let accent = outline_hex(@sf.theme().p.accent_text)
@@ -799,7 +799,7 @@ test "对话目录: the rail and the steps from the outline's index alone: no ro
 test "对话目录: opened, its rows filled from the chunk the reader's is in, asked once, the reader's row in view, no bones at rest" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)
-  t.click(Button, label="对话目录")
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   let asked = outline_rows_asked(calls)
   assert_eq(asked.length(), 1, msg="\{Repr(asked)}")
@@ -893,7 +893,7 @@ test "对话目录: a person's message said while it is open adds its row, askin
   }
   let live = @signals.signal(Some(short))
   let t = outline_tester(calls, outline=live)
-  t.click(Button, label="对话目录")
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   assert_eq(outline_rows_asked(calls).length(), 1)
   let row = "还有深色模式也看一下，启动画面那张图在深色模式下边缘有一圈白，挺显眼的"
@@ -1108,7 +1108,7 @@ test "对话目录: scrolled to its end, its last row whole in the panel, over i
 }
 
 ///|
-test "对话目录: a tick of the rail pointed at says its message's first line and time, its chunk asked for then, once" {
+test "对话目录: a tick of the rail pointed at says its message's first line and time, its chunk asked for then, once; pressed, it goes to that message, which flashes" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)
   let rail = outline_buttons(t)[0]
@@ -1131,10 +1131,26 @@ test "对话目录: a tick of the rail pointed at says its message's first line 
   assert_eq(outline_rows_asked(calls).length(), asked + 1)
   let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
   assert_true(tip.length() == 1 && tip[0].has_prefix("签名证书下周三过期") && tip[0].has_suffix("09:40"), msg="\{Repr(tip)}")
-  // (pressed there, the outline as from the rail)
-  t.click(Button, label="对话目录")
+  // (pressed there, it goes to that tick's message, which flashes, without opening the outline panel)
+  t.tap(rx + rw / 2.0, ticks[1].1 + 1.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(outline_panel(t) is Some(_))
+  t.run_for(@ui.move_most_ms)
+  assert_true(outline_panel(t) is None)
+  assert_true(gone_lit(t, said_3), msg="ts3 flashing")
+  assert_true(t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" }))
+  assert_eq(outline_faults(t), [])
+  // (on the longer chat's map: a press on its first tick reads the page before and goes to the chat's first said)
+  let calls : Array[Made] = []
+  let t = outline_tester(calls, mode="chat-outline-long")
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  let (rx, _, rw, _) = outline_buttons(t)[0]
+  let first = outline_tick_places(t)
+  t.tap(rx + rw / 2.0, first[0].0 + 1.0)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(outline_panel(t) is None)
+  assert_true(gone_lit(t, "早，今天想把发布清单从头到尾过一遍"), msg="map tick 0 -> ts1 flashing")
   assert_eq(outline_faults(t), [])
 }
 

@@ -902,7 +902,7 @@ fn rail_ask(src : Source, r : ChatRef, thread : Double, said : Array[Double], at
 /// list's visible room `top` under its top and `room` over its foot: shown while the outline has three said or more;
 /// one tick for each, as long as its turn (`latest`: the chat's newest message, where the last turn ends), the one at
 /// `index` the reader's. Pointed at, a tick's tip says its message's first line and time (asked for as it is). Pressed,
-/// the outline beside it, at its left, its field taking the keys. Whether it shows.
+/// a tick goes to its message. Whether it shows.
 fn outline_rail(
   c : @ui.Ctx,
   src : Source,
@@ -924,11 +924,24 @@ fn outline_rail(
   let most = dmax(0.0, dmax(0.0, c.height - top - room) * rail_share - 2.0 * rail_pad.px())
   let shown = rail_ticks(days, at, rail_turns(said, latest), most)
   let id = c.id("chat-outline-rail")
-  let stint = c.page_stint()
   let k = chat_key(r)
-  c.on_press(id, fn() { open_outline(src, r, thread, current, from=Of(id), side=Left, along=Middle, keys=true, stint~) })
-  // (the tick pointed at: its id and the message it stands for)
+  // (the tick pointed at: its id and the message it stands for; each tick's id and message for a press on the rail)
   let pointed : Ref[(Int, Int)?] = Ref(None)
+  let ticks_at : Array[(Int, Int)] = []
+  c.on_press(id, fn() {
+    let mut best = match pointed.val {
+      Some((_, i)) => i
+      None => at
+    }
+    for t in ticks_at {
+      let (tid, tick_at) = t
+      if c.press_within(tid) || c.hovered(tid) {
+        best = tick_at
+        break
+      }
+    }
+    @sfbase.go_to(r, said[best])
+  })
   c.layer(fn() {
     c.box(style=rail_place.then(@ui.style(pt=@sf.room_of(top), pb=@sf.room_of(room))), fn() {
       let b = c.box(style=rail_press, id~, fn() {
@@ -940,6 +953,7 @@ fn outline_rail(
             for tick in ticks {
               let tid = c.id("chat-outline-tick/" + n.val.to_string())
               n.val += 1
+              ticks_at.push((tid, tick.at))
               // (only pointed at, for its tip: a press there the rail's)
               c.box(style=tick_room, id=tid, taps=false, points=true, fn() {
                 let line = if tick.reader {
@@ -1073,7 +1087,8 @@ fn outline_entries_of(
   let offered = (src.asks_outline)()
   let wide = rail_fits(lay_w)
   // where the reader is, as the list's first row in view and its end (built again only as those change)
-  let (first, at_end) = outline_place(c.list_info_as(key, outline_place))
+  let (first, list_at_end) = outline_place(c.list_info_as(key, outline_place))
+  let at_end = list_at_end && !v.newer
   let top_seq = {
     let mut s = -1.0
     if first >= 0 {
