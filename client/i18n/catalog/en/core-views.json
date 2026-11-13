@@ -534,7 +534,10 @@
   "core-views.usage.summary.stations": "Devices at work",
   "core-views.usage.summary.by_station": "Work by device",
   "core-views.usage.summary.places": "Chats from",
-  "core-views.usage.summary.chats_n": {"one": "1 chat", "other": "{n} chats"},
+  "core-views.usage.summary.chats_n": {
+    "one": "1 chat",
+    "other": "{n} chats"
+  },
   "core-views.usage.summary.feishu": "Feishu",
   "core-views.usage.summary.activity": "Token activity",
   "core-views.usage.summary.year": "Last 12 months",
@@ -612,7 +615,6 @@
   "core-views.screen.kind.simulator": "iOS Simulator",
   "core-views.screen.on": "{names} viewing",
   "core-views.screen.openedBy": "Opened by “{title}”",
-  "core-views.screen.sleeping": "Sleeping",
   "core-views.screen.someChat": "a chat",
   "core-views.screen.outdated": "Update this station to see its screens",
   "core-views.screen.gone": "This screen is gone",
@@ -681,7 +683,10 @@
   "core-views.search.offline": "Offline",
   "core-views.search.offlineStations": "{names} offline, not searched",
   "core-views.search.older": "{names} must be updated to be searched",
-  "core-views.opened": {"one": "Created 1 chat", "other": "Created {n} chats"},
+  "core-views.opened": {
+    "one": "Created 1 chat",
+    "other": "Created {n} chats"
+  },
   "core-views.opener": "Created by “{title}”",
   "core-views.search.archived": "Archived",
   "core-views.feishu": "Feishu",
@@ -758,13 +763,19 @@
   "core-views.copies.problem.old": "{name} too old",
   "core-views.copies.problem.error": "{name} failed",
   "core-views.copies.stopped": "Backups stopped: {why}; tried again by itself",
-  "core-views.copies.offer": {"one": "{name}'s chat", "other": "{name}'s {n} chats"},
+  "core-views.copies.offer": {
+    "one": "{name}'s chat",
+    "other": "{name}'s {n} chats"
+  },
   "core-views.copies.restoring.going": "Restoring: {done} of {total} files",
   "core-views.copies.restoring.starting": "The files are here; the restore finishes as the station restarts",
   "core-views.copies.restoring.restart": "The files are here; restart the station to finish the restore",
   "core-views.copies.restoring.failed": "The restore didn't work: {why}",
   "core-views.copies.restored.done": "Restored {name}'s chats ({chats}) · {ago}",
-  "core-views.copies.restored.missing": {"one": "1 attached file wasn't in the backup", "other": "{n} attached files weren't in the backup"},
+  "core-views.copies.restored.missing": {
+    "one": "1 attached file wasn't in the backup",
+    "other": "{n} attached files weren't in the backup"
+  },
   "core-views.copies.restored.failed": "The restore didn't work: {why} · {ago}",
   "core-views.copies.restored.pending": "Restored {name}'s chats; {n} attached files are placed at the next start: {why}",
   "core-views.copies.why.offline": "not reached",

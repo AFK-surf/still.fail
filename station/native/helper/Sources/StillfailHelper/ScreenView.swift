@@ -21,12 +21,19 @@
 //                                 in) or, without it, of the whole
 //        9 audio     (empty)      the next 20 ms packet of the Mac's system output (a view opened with `audio: true`:
 //                                 SystemAudio.swift), sent once there is one
-//   out  1 info      JSON     first: {width, height, encoder, codec, regions: true, audio?: true}, or {error, code: "capture"|"restart"|"display"|"encoder"};
-//                             `audio` where the system output is captured too
+//       10 window    JSON         {window: id | null}: one window shown alone from now on (its CGWindowID, one of those
+//                                 said in `windows`), or the whole display again; driven, its app comes to the front.
+//                                 The pictures are its size (fitted into the bounds), the input and the pointer's place
+//                                 0..1 of it
+//   out  1 info      JSON     first: {width, height, encoder, codec, regions: true, audio?: true, windows, window?}, or {error, code: "capture"|"restart"|"display"|"encoder"};
+//                             `audio` where the system output is captured too; `windows` the apps' windows on the
+//                             display ({id, app, title}, in the order they were opened), `window` the one shown alone
 //        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and
 //                             whenever it changes
 //        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC or HVCC, or one JPEG)
-//        4 event     JSON     {refused: "control"}: input was posted without the grant (macOS drops it)
+//        4 event     JSON     {refused: "control"}: input was posted without the grant (macOS drops it);
+//                             {windows: [...]} as the windows change (looked at each second); {window: id | null} as the
+//                             one shown alone changes (asked, or it closed: the whole display again)
 //        5 clipboard 1 byte type (1 text, 2 PNG), the bytes: what was copied, while watched
 //        6 cursor    JSON     {x, y, shape} (x, y 0..1 of the display; shape a CSS cursor's name) as it moves or
 //                             changes: a video's pictures leave the pointer out (the client draws it, or shows its own in
@@ -143,6 +150,15 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   var ended = false
   /// Keeps the display on while the view is open (0: none held).
   var awake: IOPMAssertionID = 0
+  /// The window shown alone (message 10; `window` as it opened), none: the whole display; its frame in global points as
+  /// last looked at, which the input and the pointer go by (`area`), under `areaLock` (the input's queue and the main
+  /// thread read it).
+  var windowID: CGWindowID?
+  var windowFrame: CGRect?
+  let areaLock = NSLock()
+  /// The windows said last, and what looks at them again each second while the view lasts.
+  var windowsSaid: [[String: Any]] = []
+  var windowsTimer: DispatchSourceTimer?
 
   init(channel: Channel, options: [String: Any]) {
     self.channel = channel
@@ -157,7 +173,62 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     jpeg = (options["codec"] as? String) == "jpeg"
     hevc = (options["codec"] as? String) == "h265"
     p3 = !jpeg && (options["gamut"] as? String) == "p3"
+    windowID = (options["window"] as? NSNumber).map { CGWindowID($0.uint32Value) }
     input = ScreenInput(channel: channel, displayID: displayID)
+    super.init()
+    input.area = { [weak self] in self?.area() ?? CGDisplayBounds(CGMainDisplayID()) }
+  }
+
+  /// The window shown alone and its frame as last looked at (none: the whole display).
+  func shownWindow() -> (CGWindowID?, CGRect?) {
+    areaLock.lock()
+    defer { areaLock.unlock() }
+    return (windowID, windowFrame)
+  }
+
+  /// The window shown alone moved or resized: the input and the pointer go by its new frame.
+  func moved(_ frame: CGRect) {
+    areaLock.lock()
+    windowFrame = frame
+    areaLock.unlock()
+  }
+
+  /// What the picture shows, in global points: the window shown alone, else the display.
+  func area() -> CGRect {
+    areaLock.lock()
+    defer { areaLock.unlock() }
+    return windowFrame ?? CGDisplayBounds(displayID)
+  }
+
+  /// The apps' windows a person would pick among: on screen, of an app (this one's never), in the normal layer, not a
+  /// sliver; in the order they were opened (their ids), so a list of them keeps its order as they come and go.
+  static func windows(_ content: SCShareableContent) -> [SCWindow] {
+    let own = getpid()
+    return content.windows.filter { w in
+      guard let app = w.owningApplication, app.processID != own else { return false }
+      return w.isOnScreen && w.windowLayer == 0 && w.frame.width >= 80 && w.frame.height >= 60
+    }.sorted { $0.windowID < $1.windowID }
+  }
+
+  /// The windows as they are said (`windows`): id, app, title.
+  static func said(_ windows: [SCWindow]) -> [[String: Any]] {
+    windows.map { ["id": Int($0.windowID), "app": $0.owningApplication?.applicationName ?? "", "title": String(($0.title ?? "").prefix(200))] }
+  }
+
+  /// What is captured: window `id` alone where it is one of the windows (its frame kept: `area`), else the display.
+  func filter(_ content: SCShareableContent, _ display: SCDisplay, _ id: CGWindowID?) -> SCContentFilter {
+    if let id, let w = ScreenView.windows(content).first(where: { $0.windowID == id }) {
+      areaLock.lock()
+      windowID = id
+      windowFrame = w.frame
+      areaLock.unlock()
+      return SCContentFilter(desktopIndependentWindow: w)
+    }
+    areaLock.lock()
+    windowID = nil
+    windowFrame = nil
+    areaLock.unlock()
+    return SCContentFilter(display: display, excludingWindows: [])
   }
 
   /// Until the connection ends: the capture started, the station's asks answered.
@@ -178,6 +249,10 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
           bounds(w, h, region: ScreenView.part(b["region"]))
         }
       case 9: sound?.next()
+      case 10:
+        if let b = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any] {
+          show((b["window"] as? NSNumber).map { CGWindowID($0.uint32Value) })
+        }
       case 7: if payload.count == 4 { rate(Int(payload.withUnsafeBytes { UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self)) })) }
       default: break
       }
@@ -276,10 +351,18 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     return (cropped, part)
   }
 
-  /// The display's size in its pixels.
+  /// What the picture shows, in its pixels: the display's, or the window's shown alone (its points at the display's
+  /// scale).
   func displayPixels() -> (Int, Int) {
     let display = Status.display(displayID)
-    return (display["width"] as! Int, display["height"] as! Int)
+    let (dw, dh) = (display["width"] as! Int, display["height"] as! Int)
+    areaLock.lock()
+    let frame = windowFrame
+    areaLock.unlock()
+    guard let frame else { return (dw, dh) }
+    let points = CGDisplayBounds(displayID)
+    let scale = points.width > 0 ? Double(dw) / Double(points.width) : 1
+    return (max(2, Int((Double(frame.width) * scale).rounded())), max(2, Int((Double(frame.height) * scale).rounded())))
   }
 
   /// The display's capture size for the bounds and the part asked for: fitted whole; with a part, the whole display
@@ -297,8 +380,8 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
 
   func start() {
     let display = Status.display(displayID)
-    let (width, height) = fitted(display["width"] as! Int, display["height"] as! Int)
     if let mode = synthetic {
+      let (width, height) = fitted(display["width"] as! Int, display["height"] as! Int)
       startSynthetic(width, height, moving: mode != "still")
       return
     }
@@ -312,6 +395,10 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
           channel.sendJSON(1, ["error": "no display to capture", "code": "display"])
           return
         }
+        // the window asked for alone (its size then), else the display
+        let filter = self.filter(content, shown, windowID)
+        windowsSaid = ScreenView.said(ScreenView.windows(content))
+        let (width, height) = captureSize()
         let configuration = SCStreamConfiguration()
         configuration.width = width
         configuration.height = height
@@ -331,7 +418,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
           configuration.channelCount = SystemAudio.channels
           if #available(macOS 15.0, *) { configuration.captureMicrophone = false }
         }
-        let stream = SCStream(filter: SCContentFilter(display: shown, excludingWindows: []), configuration: configuration, delegate: self)
+        let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
         var sound: SystemAudio?
         if audio {
@@ -351,6 +438,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
           self.sound = sound
           self.opened(width, height)
           if !self.jpeg { self.followCursor() }
+          self.followWindows()
         }
       } catch {
         channel.sendJSON(1, ["error": error.localizedDescription, "code": "capture", "capture": CGPreflightScreenCaptureAccess()])
@@ -378,8 +466,9 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
 
   /// What the view's first message says it is.
   func info(_ width: Int, _ height: Int) -> [String: Any] {
-    var said: [String: Any] = ["width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true]
+    var said: [String: Any] = ["width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true, "windows": windowsSaid]
     if sound != nil { said["audio"] = true }
+    if let windowID { said["window"] = Int(windowID) }
     return said
   }
 
@@ -391,6 +480,8 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       timer = nil
       cursorTimer?.cancel()
       cursorTimer = nil
+      windowsTimer?.cancel()
+      windowsTimer = nil
       if let session { VTCompressionSessionInvalidate(session) }
       session = nil
       latest = nil
@@ -696,7 +787,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       guard let self else { return }
       MainActor.assumeIsolated {
         guard let at = CGEvent(source: nil)?.location else { return }
-        let b = CGDisplayBounds(self.displayID)
+        let b = self.area()
         guard b.width > 0, b.height > 0 else { return }
         if self.cursorTicks % 6 == 0 { self.cursorShape = CursorShapes.name(of: NSCursor.currentSystem) }
         self.cursorTicks += 1
@@ -709,6 +800,66 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     }
     timer.resume()
     cursorTimer = timer
+  }
+
+  /// Window `id` shown alone from now on (nil: the whole display again; one no longer there: the whole display), said
+  /// (message 4 `window`); driven, its app brought to the front, so what is typed and clicked goes to it. The capture's
+  /// size follows (bounds), from a key frame, a part asked for let go.
+  func show(_ id: CGWindowID?) {
+    guard synthetic == nil else { return }
+    Task {
+      guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+        let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first,
+        let stream = queue.sync(execute: { self.stream })
+      else { return }
+      let filter = self.filter(content, display, id)
+      let now = shownWindow().0
+      do {
+        try await stream.updateContentFilter(filter)
+      } catch {
+        channel.sendJSON(4, ["window": error.localizedDescription])
+        return
+      }
+      channel.sendJSON(4, ["window": now.map { Int($0) as Any } ?? NSNull()])
+      if let now, let pid = ScreenView.windows(content).first(where: { $0.windowID == now })?.owningApplication?.processID, Status.inputAllowed() {
+        DispatchQueue.main.async { _ = NSRunningApplication(processIdentifier: pid)?.activate() }
+      }
+      bounds(maxWidth, maxHeight, region: nil)
+    }
+  }
+
+  /// The windows looked at each second while the view lasts (macOS tells nothing of them coming, going or moving): said
+  /// as they change (message 4 `windows`); the one shown alone followed where it moves or is resized (its capture's
+  /// size with it), the whole display again where it closed.
+  func followWindows() {
+    let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+    timer.schedule(deadline: .now() + 1, repeating: 1)
+    timer.setEventHandler { [weak self] in
+      guard let self else { return }
+      Task {
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) else { return }
+        let windows = ScreenView.windows(content)
+        let said = ScreenView.said(windows)
+        let changed = self.queue.sync { () -> Bool in
+          if NSArray(array: said).isEqual(to: self.windowsSaid) { return false }
+          self.windowsSaid = said
+          return true
+        }
+        if changed { self.channel.sendJSON(4, ["windows": said]) }
+        let (shown, frame) = self.shownWindow()
+        guard let shown else { return }
+        guard let w = windows.first(where: { $0.windowID == shown }) else {
+          self.show(nil)
+          return
+        }
+        if w.frame != frame {
+          self.moved(w.frame)
+          if frame?.size != w.frame.size { self.bounds(self.maxWidth, self.maxHeight, region: self.region) }
+        }
+      }
+    }
+    timer.resume()
+    queue.sync { windowsTimer = timer }
   }
 
   /// The pictures from now on fitted into `width`×`height`, of `region` of the display alone (nil: the whole): the

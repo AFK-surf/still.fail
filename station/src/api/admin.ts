@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { ConfigFile } from "../ops/config.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type ScreenHub, ScreenRefused } from "../screens/hub.ts";
+import { USER_TAB_ID } from "../screens/source.ts";
 import type { SimDebug } from "../screens/sim-debug.ts";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
@@ -190,6 +191,8 @@ export class Admin {
             { method: "POST", pattern: /^\/screens\/([^/]+)\/close$/, handle: async (r: Request, [raw]: string[]) => closeScreen(deps.screens!, r, raw!) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/open-url$/, handle: async (r: Request, [raw]: string[]) => openScreenUrl(deps.screens!, r, raw!) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/reload$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.reloadScreen(id)) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/back$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.historyScreen(id, -1)) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/forward$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.historyScreen(id, 1)) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/sleep$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.sleepScreen(id)) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/end$/, handle: async (r: Request, [raw]: string[]) => screenViews(r, raw!, (id) => ({ ended: deps.screens!.endViews(id, byOf(r)) })) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/end$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.endView(id, decodeURIComponent(view!), byOf(r)), {})) },
@@ -491,14 +494,17 @@ async function actScreen(screens: ScreenHub, r: Request, raw: string, act: (id: 
 
 async function openBrowserScreen(screens: ScreenHub, r: Request): Promise<Answer> {
   let url: unknown;
+  let id: unknown;
   try {
-    url = (JSON.parse(r.body.toString("utf8") || "{}") as { url?: unknown }).url;
+    ({ url, id } = JSON.parse(r.body.toString("utf8") || "{}") as { url?: unknown; id?: unknown });
   } catch {
     return error(400, tr(r.lang, "station.screen.badUrl"));
   }
   if (typeof url !== "string") return error(400, tr(r.lang, "station.screen.badUrl"));
+  // (the id the app made for it, so its view opened as it was pressed: `u_` and 12 hex digits)
+  if (id !== undefined && (typeof id !== "string" || !USER_TAB_ID.test(id))) return error(400, "id: u_ and 12 hex digits");
   try {
-    const screen = await screens.openBrowser(url);
+    const screen = await screens.openBrowser(url, id as string | undefined);
     return json(200, JSON.stringify({ screen }));
   } catch (e) {
     if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));

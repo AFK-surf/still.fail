@@ -6,7 +6,7 @@ import type { ClipType, ScreenSource, ScreenView, Screens, ViewOptions } from ".
 import { wall } from "../ops/fibers.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 import type { Owners } from "./owners.ts";
-import { normalizeBrowserUrl, siteOfBrowserUrl } from "./url.ts";
+import { addressOrSearch, siteOfBrowserUrl } from "./url.ts";
 import { TabView, viewportOf } from "./view.ts";
 
 /// `session`: the session that opened it, when known.
@@ -89,6 +89,10 @@ class Tab implements ScreenSource {
     return siteOfBrowserUrl(this.info.url);
   }
 
+  address(): string {
+    return this.info.url;
+  }
+
   size() {
     return this.#size;
   }
@@ -114,13 +118,21 @@ class Tab implements ScreenSource {
   }
 
   openUrl(rawUrl: string): Promise<void> {
-    const url = normalizeBrowserUrl(rawUrl);
+    const url = addressOrSearch(rawUrl);
     if (url === null) throw new ScreenRefused(400, "station.screen.badUrl");
     return this.#tabs.navigateTarget(this.info.targetId, url);
   }
 
   reload(): Promise<void> {
     return this.#tabs.reloadTarget(this.info.targetId);
+  }
+
+  back(): Promise<void> {
+    return this.#tabs.historyTarget(this.info.targetId, -1);
+  }
+
+  forward(): Promise<void> {
+    return this.#tabs.historyTarget(this.info.targetId, 1);
   }
 
   discard(): Promise<void> {
@@ -258,6 +270,28 @@ export class Tabs {
     this.#p.activity();
   }
 
+  /// Goes `delta` steps through a live target's history (-1 back, 1 forward), as a browser's arrows do; nothing where
+  /// its history has no page there.
+  async historyTarget(targetId: string, delta: number): Promise<void> {
+    if (this.#closed || (!this.#tabs.has(targetId) && !this.#liveTargets.has(targetId))) {
+      throw new ScreenRefused(404, "station.screen.notFound");
+    }
+    const cdp = await this.#p.connect();
+    try {
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      const history = (await cdp.send("Page.getNavigationHistory", {}, sessionId)) as { currentIndex?: unknown; entries?: unknown };
+      const entries = Array.isArray(history.entries) ? (history.entries as { id?: unknown }[]) : [];
+      const at = typeof history.currentIndex === "number" ? history.currentIndex + delta : -1;
+      const entry = entries[at];
+      if (entry === undefined || typeof entry.id !== "number") return;
+      await cdp.send("Page.navigateToHistoryEntry", { entryId: entry.id }, sessionId);
+    } finally {
+      cdp.close();
+    }
+    this.#titlesLater();
+    this.#p.activity();
+  }
+
   /// How many views of the tabs are open.
   viewing(): number {
     return this.#views.size;
@@ -369,9 +403,9 @@ export class Tabs {
         const known = info ? this.#tabs.get(info.targetId) : undefined;
         if (known === undefined) return;
         const before = known.tab.title();
-        const beforeSite = known.tab.site();
+        const beforeUrl = known.tab.info.url;
         known.tab.info = { targetId: info.targetId, title: info.title ?? "", url: info.url ?? "", attached: Boolean(info.attached) };
-        if (known.tab.title() !== before || known.tab.site() !== beforeSite) this.#retitled(known);
+        if (known.tab.title() !== before || known.tab.info.url !== beforeUrl) this.#retitled(known);
         activity();
         return;
       }
@@ -417,11 +451,11 @@ export class Tabs {
     this.#p.userTabs?.refreshTitles(infos);
     for (const info of infos) {
       const known = this.#tabs.get(info.targetId);
-      if (known === undefined || (info.title ?? "") === known.tab.info.title) continue;
+      if (known === undefined || ((info.title ?? "") === known.tab.info.title && (info.url ?? known.tab.info.url) === known.tab.info.url)) continue;
       const before = known.tab.title();
-      const beforeSite = known.tab.site();
+      const beforeUrl = known.tab.info.url;
       known.tab.info = { ...known.tab.info, title: info.title ?? "", url: info.url ?? known.tab.info.url };
-      if (known.tab.title() !== before || known.tab.site() !== beforeSite) this.#retitled(known);
+      if (known.tab.title() !== before || known.tab.info.url !== beforeUrl) this.#retitled(known);
     }
   }
 

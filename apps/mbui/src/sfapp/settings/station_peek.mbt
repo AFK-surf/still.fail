@@ -255,35 +255,87 @@ fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -
 }
 
 ///|
-/// Asks for a URL or domain and opens a persistent user tab in `address`'s browser (`screen.openBrowser`), then opens
-/// the tab in the viewer.
-pub fn open_station_browser(core : Core, address : String, from? : @sf.Anchor = Unanchored) -> Unit {
-  @sf.ask(
-    tr("web-pages.screen.openBrowserTitle"),
-    tr("web-pages.screen.openBrowserAction"),
-    fn(url) {
-      act(
-        core,
-        tr("web-pages.screen.openBrowserWhat"),
-        "screen.openBrowser",
-        obj([("station", str(address)), ("url", str(url))]),
-        then=fn(v) {
-          let next = text(Some(v), "screen")
-          if next != "" {
-            (core.open_screen)(address, next)
-          }
-        },
-      )
-    },
-    placeholder="mail.proton.me",
-    hint=tr("web-pages.screen.urlHint"),
-    from~,
-  )
+/// The tab of each station's browser a person looked at last, here (the viewer says it as it shows one): what 浏览器
+/// opens to next.
+let browser_tabs_seen : Map[String, String] = Map([])
+
+///|
+/// The viewer shows tab `screen` of station `address`'s browser: 浏览器 opens to it next.
+pub fn browser_tab_seen(address : String, screen : String) -> Unit {
+  if browser_tabs_seen.get(address) != Some(screen) {
+    browser_tabs_seen[address] = screen
+  }
 }
 
 ///|
-/// Its screens as its card's 屏幕 offers them (`screens`, the core's for it): user pages (with 打开网页…), agent pages,
-/// and physical/simulator screens; none, why (the core's note) or that it has none, not to be chosen.
+/// How many tabs this run made (one more each): a new tab's id is worked out of it with the station's tabs.
+let tabs_made : Ref[Int] = Ref(0)
+
+///|
+/// A new tab of station `address`'s browser (＋, ⌘T, 浏览器 with none open): its id made here (`u_` and 12 hex digits,
+/// a hash of the station, the tabs it has (`listed`, their screen ids: none of them again) and this run's count),
+/// asked of the station by it (`screen.openBrowser` with `id`), and its
+/// screen (`browser:<id>`) answered at once, so its view opens as it is pressed, the core listing it till its station
+/// does (the user, 2026-11-13: 「会等 station 开了这边才开，点个按钮要半天」).
+pub fn new_browser_tab(
+  call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit,
+  address : String,
+  listed : Array[String],
+  done : (Result[Json, Json]) -> Unit,
+) -> String {
+  let digits = "0123456789abcdef"
+  let made = fn() {
+    tabs_made.val += 1
+    let n = @ui.stable_hash(address + "|" + listed.join(",") + "|\{tabs_made.val}")
+    let hex = StringBuilder()
+    for i = 11; i >= 0; i = i - 1 {
+      hex.write_char(digits[((n >> (i * 4)) & 0xFL).to_int()].unsafe_to_char())
+    }
+    "u_" + hex.to_string()
+  }
+  let mut id = made()
+  while listed.contains("browser:" + id) {
+    id = made()
+  }
+  call("screen.openBrowser", obj([("station", str(address)), ("url", str("")), ("id", str(id))]), done)
+  "browser:" + id
+}
+
+///|
+/// 浏览器 (the station's page, its card's 屏幕, a chat's screens): the station's browser opened at once on the tab looked
+/// at last, else its newest, else a new one; never a question first.
+pub fn open_station_browser(core : Core, address : String, from? : @sf.Anchor = Unanchored) -> Unit {
+  ignore(from)
+  let listed = items((core.topic)("screens", { "station": str(address) }).get().value, "screens").filter(fn(sc) {
+    flag(Some(sc), "userTab") || text(Some(sc), "id").has_prefix("browser:u_")
+  }).map(fn(sc) { text(Some(sc), "id") })
+  let screen = match browser_tab_to_open(address, listed) {
+    Some(screen) => screen
+    None =>
+      new_browser_tab(core.call, address, listed, fn(r) {
+        if r is Err(e) {
+          (core.say)(fill("android-misc.act.failed", [("what", tr("web-pages.screen.openBrowserWhat")), ("error", error_text(e))]))
+        }
+      })
+  }
+  (core.open_screen)(address, screen)
+}
+
+///|
+/// Of station `address`'s tabs (`listed`, its screen ids in the order opened), the one its browser opens to: the one looked
+/// at last, else the newest; none where it has none.
+pub fn browser_tab_to_open(address : String, listed : Array[String]) -> String? {
+  let seen = browser_tabs_seen.get(address).unwrap_or("")
+  if seen != "" && listed.contains(seen) {
+    Some(seen)
+  } else {
+    listed.last()
+  }
+}
+
+///|
+/// Its screens as its card's 屏幕 offers them (`screens`, the core's for it): its browser (a person's own pages there, one
+/// item opening it), agent pages, and physical/simulator screens; none, why (the core's note) or that it has none, not to be chosen.
 fn peek_screen_items(core : Core, address : String, screens : Json?, close : () -> Unit) -> Array[@sf.MenuItem?] {
   let screen_items : Array[@sf.MenuItem?] = []
   let user_tabs : Array[Json] = []
@@ -321,28 +373,10 @@ fn peek_screen_items(core : Core, address : String, screens : Json?, close : () 
     if !screen_items.is_empty() {
       screen_items.push(None)
     }
-    if groups > 1 {
-      screen_items.push(Some(@sf.menu_item_of(tr("web-pages.screen.userPages"), heading=true, fn() { })))
-    }
-    for screen in user_tabs {
-      let sc = Some(screen)
-      let sleeping = flag(sc, "sleeping")
-      let label = if sleeping {
-        text(sc, "title") + " · " + tr("core-views.screen.sleeping")
-      } else {
-        text(sc, "title")
-      }
-      screen_items.push(Some(@sf.menu_item_of(label, icon=if sleeping { "moon" } else { "web" }, fn() {
-        close()
-        (core.open_screen)(address, text(sc, "id"))
-      })))
-    }
-    if can_open {
-      screen_items.push(Some(@sf.menu_item_of(tr("web-pages.screen.openBrowser"), icon="plus", fn() {
-        close()
-        open_station_browser(core, address)
-      })))
-    }
+    screen_items.push(Some(@sf.menu_item_of(tr("web-pages.screen.browser"), icon="web", fn() {
+      close()
+      open_station_browser(core, address)
+    })))
   }
   if !agent_tabs.is_empty() {
     if !screen_items.is_empty() {

@@ -40,10 +40,10 @@ fn row_drags(t : @ui.Tester, what : String, from : Double, y? : Double = 22.0, k
 ///|
 /// Where a press in a page's top row is neither a control's nor the window's as the page is now, its own (each a
 /// segmented choice's 2 of padding past its first or last choice, a box that takes the press and does nothing with it:
-/// 文件's 显示方式 at 922, a station's screen's 只看 / 控制 at 1266), found as the press's judgment came to be the hit
+/// 文件's 显示方式 at 922), found as the press's judgment came to be the hit
 /// test's (Tester::press_lands_at). Only falls.
 // kept across runs: a value (no field of it changes)
-let row_dead_known : Map[String, Array[Double]] = { "文件": [922.0], "a window of its own": [1266.0] }
+let row_dead_known : Map[String, Array[Double]] = { "文件": [922.0] }
 
 ///|
 test "a Mac's window: the top row drags it on every page, with a bar there or not, but for what is pressed there" {

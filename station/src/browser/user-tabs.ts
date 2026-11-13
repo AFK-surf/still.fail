@@ -11,7 +11,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { ScreenRefused } from "../screens/hub.ts";
 import type { ClipType, ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
 import type { TargetSnapshot, Tabs } from "./tabs.ts";
-import { normalizeBrowserUrl, persistableBrowserUrl, siteOfBrowserUrl } from "./url.ts";
+import { addressOrSearch, BLANK_PAGE, persistableBrowserUrl, siteOfBrowserUrl } from "./url.ts";
 
 /// Unviewed this long, a live user tab closes its Chrome target and sleeps until opened again.
 export const USER_TAB_IDLE_MS = 10 * 60_000;
@@ -74,8 +74,15 @@ class UserTab implements ScreenSource {
     return this.targetId === null;
   }
 
+  /// Its page's title; "" on a new tab's blank page (the app names that 新标签页 in the viewer's words).
   title(): string {
+    if (this.url === BLANK_PAGE) return this.savedTitle;
     return this.savedTitle || siteOfBrowserUrl(this.url) || this.url;
+  }
+
+  /// Its whole address, as an address bar shows it.
+  address(): string {
+    return this.url;
   }
 
   site(): string | undefined {
@@ -110,6 +117,14 @@ class UserTab implements ScreenSource {
 
   reload(): Promise<void> {
     return this.#owner.reload(this);
+  }
+
+  back(): Promise<void> {
+    return this.#owner.history(this, -1);
+  }
+
+  forward(): Promise<void> {
+    return this.#owner.history(this, 1);
   }
 
   sleep(): Promise<void> {
@@ -155,12 +170,16 @@ export class UserTabs {
     this.#o.screens?.changed?.();
   }
 
-  /// Opens a new persistent user page at `rawUrl` and returns its stable screen id (`browser:u_<id>`).
-  async openNew(rawUrl: string): Promise<string> {
+  /// Opens a new persistent user page at `rawUrl` (an address or words searched for; none, a new tab's blank page) and
+  /// returns its stable screen id (`browser:u_<id>`).
+  /// `asked`: the key the app made for it (`USER_TAB_ID`), so its view was opened as it was pressed; asked again (the
+  /// app's call retried), the tab it named already.
+  async openNew(rawUrl: string, asked?: string): Promise<string> {
     await this.#ready;
-    const url = normalizeBrowserUrl(rawUrl);
+    if (asked !== undefined && this.#byKey.has(asked)) return `browser:${asked}`;
+    const url = rawUrl.trim() === "" ? BLANK_PAGE : addressOrSearch(rawUrl);
     if (url === null) throw new ScreenRefused(400, "station.screen.badUrl");
-    const key = this.#freshKey();
+    const key = asked ?? this.#freshKey();
     const tab = new UserTab(this, { key, url, title: "", popup: false });
     this.#byKey.set(key, tab);
     tab.removeScreen = this.#o.screens?.add(tab) ?? (() => {});
@@ -212,14 +231,12 @@ export class UserTabs {
   async navigate(tab: UserTab, rawUrl: string): Promise<void> {
     await this.#ready;
     if (tab.discarded || this.#closed) throw new ScreenRefused(404, "station.screen.notFound");
-    const url = normalizeBrowserUrl(rawUrl);
+    const url = addressOrSearch(rawUrl);
     if (url === null) throw new ScreenRefused(400, "station.screen.badUrl");
-    const beforeTitle = tab.title();
-    const beforeSite = tab.site();
     tab.url = url;
     tab.savedTitle = "";
     this.#save();
-    if (tab.title() !== beforeTitle || tab.site() !== beforeSite) this.notifyScreens();
+    this.notifyScreens();
     if (tab.targetId !== null && this.#tabs !== null) {
       tab.pendingNavigateUrl = null;
       await this.#tabs.navigateTarget(tab.targetId, url);
@@ -250,6 +267,18 @@ export class UserTabs {
       return;
     }
     await this.#ensureLive(tab);
+    if (tab.views === 0) this.#armIdle(tab);
+  }
+
+  /// Goes `delta` steps through its history (-1 back, 1 forward); a sleeping tab kept no history, so it only wakes.
+  async history(tab: UserTab, delta: number): Promise<void> {
+    await this.#ready;
+    if (tab.discarded || this.#closed) throw new ScreenRefused(404, "station.screen.notFound");
+    if (tab.targetId !== null && this.#tabs !== null) {
+      await this.#tabs.historyTarget(tab.targetId, delta);
+    } else {
+      await this.#ensureLive(tab);
+    }
     if (tab.views === 0) this.#armIdle(tab);
   }
 
@@ -491,6 +520,7 @@ export class UserTabs {
   #applyInfo(tab: UserTab, info: TargetSnapshot, forceNotify: boolean) {
     const beforeTitle = tab.title();
     const beforeSite = tab.site();
+    const beforeUrl = tab.url;
     let persist = false;
     const nextUrl = typeof info.url === "string" ? persistableBrowserUrl(info.url) : null;
     if (tab.pendingNavigateUrl !== null && nextUrl !== tab.pendingNavigateUrl) {
@@ -510,7 +540,7 @@ export class UserTabs {
       persist = true;
     }
     if (persist && !tab.popup) this.#save();
-    if (forceNotify || tab.title() !== beforeTitle || tab.site() !== beforeSite) this.notifyScreens();
+    if (forceNotify || tab.title() !== beforeTitle || tab.site() !== beforeSite || tab.url !== beforeUrl) this.notifyScreens();
   }
 
   #armIdle(tab: UserTab) {
@@ -543,7 +573,7 @@ export class UserTabs {
       if (item === null || typeof item !== "object") continue;
       const rec = item as Partial<StoredTab>;
       if (typeof rec.id !== "string" || !/^u_[a-z0-9_-]{1,40}$/i.test(rec.id) || this.#byKey.has(rec.id)) continue;
-      const url = typeof rec.url === "string" ? persistableBrowserUrl(rec.url) : null;
+      const url = rec.url === BLANK_PAGE ? BLANK_PAGE : typeof rec.url === "string" ? persistableBrowserUrl(rec.url) : null;
       if (url === null) continue;
       const title = typeof rec.title === "string" ? rec.title.trim().slice(0, 512) : "";
       const resumeTargetId = typeof rec.targetId === "string" && rec.targetId !== "" ? rec.targetId : undefined;

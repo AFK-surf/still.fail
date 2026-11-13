@@ -2268,6 +2268,11 @@ export const SHAPES: Record<string, Shape> = {
     ["agent", "bool", { default: true, doc: "An agent's: not ended from here." }],
     ["may", "bool", { default: true, doc: "The viewer may end it or make it only look (a member who may drive the screen; a person's view)." }],
   ], { doc: "One view of a screen, for a person to see where it is open and let it go ( \"Who is on a screen\")." }),
+  ScreenWindow: struct([
+    ["id", "u32", { doc: "The system's id of it (a CGWindowID)." }],
+    ["app", "String", { doc: "Its app's name." }],
+    ["title", "String", { doc: "Its title, empty where it has none." }],
+  ], { doc: "One of a desktop's windows, which a view may show alone (`ScreenViewState.window`)." }),
   ScreenPanel: struct([
     ["width", "f64", { doc: "As wide as its mask, whose height says which panel a picture is of." }],
     ["height", "f64", { doc: "As high." }],
@@ -2391,6 +2396,9 @@ export const SHAPES: Record<string, Shape> = {
     ["title", "String"],
     ["kind", opt("String")],
     ["site", opt("String"), { doc: "The site's host (`mail.proton.me`) on a browser tab." }],
+    ["address", opt("String"), { doc: "A browser tab's whole address, as its address bar shows it (`about:blank` on a new tab's page); none from a station before it." }],
+    ["windows", opt(vec("ScreenWindow")), { doc: "A desktop's windows (the viewer's tabs), in the order they were opened; none from a source that shows none alone." }],
+    ["window", opt("u32"), { doc: "The one of `windows` shown alone (`screen.input` `{t: \"window\", id}`); none: the whole display." }],
     ["userTab", opt("bool"), { doc: "A page a person opened (`ScreenItem.userTab`)." }],
     ["debug", "bool", { default: true, doc: "May read its apps' logs and restart them (`ScreenItem.debug`)." }],
     ["openUrl", opt("bool"), { doc: "While driving it: may send an address to it (`screen.openUrl`)." }],

@@ -97,6 +97,11 @@ let screen_bar_in_tabs : @ui.Style = @ui.css("row w=Full h=S11 pl=S10 pr=S6 gap=
 let screen_bar_words : @ui.Style = @ui.css("w=Full")
 
 ///|
+/// A browser tab's ← and address bar in the upright bar's name's place (screen_browser.mbt's browser_tools).
+// kept across runs: a value (no field of it changes)
+let screen_bar_tools : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+
+///|
 /// The title (15 on 20, semibold), the line under it (12 on 16, muted); one line each, cut short where the bar's
 /// buttons leave them less (a window's name, the core's line of who is on it: a bar has no second line to give them).
 // kept across runs: a value (no field of it changes)
@@ -174,6 +179,22 @@ let rail_say_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color
 /// Upright, under the frame: 56 high, 8 from the sides, 6 between.
 // kept across runs: a value (no field of it changes)
 let screen_foot : @ui.Style = @ui.css("row w=Full h=S14 px=S2 gap=S1_5 align=ACenter")
+
+///|
+/// The foot's large actions (not typing): a row of them, each its share of it.
+// kept across runs: a value (no field of it changes)
+let screen_foot_actions : @ui.Style = @ui.css("row w=Full px=S2 py=S1 gap=S1 align=ACenter")
+
+///|
+/// One of them: its mark over its name, 56 high at least, its share of the row, lit pressed and while it is on.
+// kept across runs: a value (no field of it changes)
+let foot_action_box : @ui.Style = @ui.style(w=@sf.grow).then(
+  @ui.css("min_h=S14 gap=S0_5 radius=Xl align=ACenter justify=JCenter pressed{bg=Hover} selected{bg=A(Fg,O10)}"),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_action_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -530,10 +551,6 @@ let soft_button_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold,
 
 // ── how the view goes (screen_panel.mbt) ─────────────────────────────────
 
-///|
-/// Under the title, live: the signal mark, how long it has been seen, the core's line, 6 apart.
-// kept across runs: a value (no field of it changes)
-let screen_line_row : @ui.Style = @ui.css("row w=Full h=S4 gap=S1_5 align=ACenter")
 
 ///|
 /// How long it has been seen (12 on 16, muted, its figures as wide as each other).
@@ -753,3 +770,69 @@ let screen_whole : @ui.Style = @ui.css("w=Full h=Full")
 /// What its frame leaves it.
 // kept across runs: a value (no field of it changes)
 let screen_within : @ui.Style = @ui.style(w=Full, h=@sf.grow)
+
+// ── a tab of the station's browser (screen_browser.mbt) ───────────────────
+
+///|
+/// How wide the window is at least for the tabs to be a row over the page (else folded into a button counting them).
+let browser_wide_at : Double = 640.0
+
+///|
+/// The browser's bar: its row of tabs over its tools' row, a line under it, the page's ground.
+// kept across runs: a value (no field of it changes)
+let browser_bar_box : @ui.Style = @ui.css("w=Full pb=S1 gap=S0_5 bg=Bg")
+
+///|
+/// Its tabs in a row, the canvas's ground under them; what has not the room cut short (each tab's words first).
+// kept across runs: a value (no field of it changes)
+let browser_tabs_row : @ui.Style = @ui.css("row w=Full h=S11 px=S2 gap=S1 align=ACenter")
+
+///|
+/// ← → ⟳, the address bar grown between them and the tabs' button.
+// kept across runs: a value (no field of it changes)
+let browser_tools_row : @ui.Style = @ui.css("row w=Full h=S12 pl=S2 pr=S5 gap=S1 align=ACenter")
+
+///|
+/// A tab: a capsule, its words then its ×, the one shown on the ink's tint; at most 224 wide, cut short past that.
+// kept across runs: a value (no field of it changes)
+let browser_tab_box : @ui.Style = @ui.css(
+  "row h=S9 max_w=S56 pl=S3_5 pr=S1 gap=S1 radius=Full align=ACenter hovered{bg=Hover} selected{bg=A(Fg,O10)}",
+)
+
+///|
+/// A tab with no × (a desktop's whole screen, one of its windows): its words as far in at both ends.
+// kept across runs: a value (no field of it changes)
+let browser_tab_box_kept : @ui.Style = @ui.css(
+  "row h=S9 max_w=S56 px=S3_5 radius=Full align=ACenter hovered{bg=Hover} selected{bg=A(Fg,O10)}",
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let browser_tab_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
+
+///|
+/// A tab's ×: a round 28 at its end.
+// kept across runs: a value (no field of it changes)
+let browser_tab_close_box : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
+
+///|
+let browser_tab_close_icon : Double = 14.0
+
+///|
+/// The address bar, grown to what the row leaves it.
+// kept across runs: a value (no field of it changes)
+let browser_address_box : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+/// The tabs' button where the page is narrow: 40 square, holding a rounded square with their count, as a phone's
+/// browser's.
+// kept across runs: a value (no field of it changes)
+let browser_count_box : @ui.Style = @ui.css("w=S10 h=S10 align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let browser_count_square : @ui.Style = @ui.css("w=S5 h=S5 radius=Sm border=B1_5 border_color=Fg align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let browser_count_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Semibold, color=Fg, wrap=false)

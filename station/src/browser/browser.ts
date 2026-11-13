@@ -197,8 +197,8 @@ export class StationBrowser implements ScreenBrowser {
   }
 
   /// Opens a persistent user page (`browser:u_<id>`) in Chrome's default profile, recycled to sleep when idle.
-  openUserTab(url: string): Promise<string> {
-    return this.#userTabs.openNew(url);
+  openUserTab(url: string, id?: string): Promise<string> {
+    return this.#userTabs.openNew(url, id);
   }
 
   async #createDefaultTarget(

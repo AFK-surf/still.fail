@@ -538,6 +538,8 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  browser_tabs_seen.clear()
+  tabs_made.val = 0
   page_rows.clear()
   page_keys.clear()
   vault_ask_reset()

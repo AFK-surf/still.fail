@@ -67,6 +67,18 @@ export function normalizeBrowserUrl(raw: string): string | null {
   return parsed.toString();
 }
 
+/// Where an address bar's words go, as a browser's own bar takes them: a web address as `normalizeBrowserUrl` reads one,
+/// else the words searched for (Google's search, Chrome's default); null for none.
+export function addressOrSearch(raw: string): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed === "" || trimmed.length > MAX_URL_LENGTH) return null;
+  return normalizeBrowserUrl(trimmed) ?? `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+}
+
+/// The blank page a new tab opens on (what a browser's ＋ opens), its address bar waiting.
+export const BLANK_PAGE = "about:blank";
+
 /// The site (`hostname[:port]`) of a browser tab's URL, without path, query or hash; undefined for `about:blank`.
 export function siteOfBrowserUrl(raw: string): string | undefined {
   const u = validHttpUrl(raw);

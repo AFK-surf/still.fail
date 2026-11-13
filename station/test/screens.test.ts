@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import { Events } from "../src/api/events.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, asked, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
+import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, asked, frame, parseClip, parseInput, parseWindowPick } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { Desktop, HelperView, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
@@ -2391,4 +2391,44 @@ test("a source's codec: the best of its own the view takes; a preview's JPEG whe
   assert.equal(codecFor({ codecs: ["h264"], peek: true }, own), "h264");
   assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, ["h264"]), "h264");
   assert.equal(codecFor({ codecs: ["jpeg"] }, ["h264"]), undefined);
+});
+
+test("a desktop's windows: as the helper says them (its info, then as they change), bounded; one picked asked of it by its id, one it did not say never", () => {
+  const written: Buffer[] = [];
+  const listeners: Record<string, ((chunk: Buffer) => void)[]> = {};
+  const pipe = {
+    write: (b: Buffer) => written.push(b),
+    destroy: () => {},
+    on: (event: string, f: any) => {
+      (listeners[event] ??= []).push(f);
+    },
+  };
+  const say = (kind: number, payload: object) => listeners.data!.forEach((f) => f(helperMessage(kind, Buffer.from(JSON.stringify(payload)))));
+  const view = new HelperView("h264", pipe, () => {});
+  const heard: unknown[] = [];
+  view.watchWindows((w) => heard.push(w));
+  say(1, { width: 1920, height: 1080, encoder: "e", codec: "h264", windows: [{ id: 101, app: "访达", title: "下载" }, { id: -1, app: "x" }, { id: 214, app: "Chrome", title: "t".repeat(300) }] });
+  // (told as it is heard after the info: one who starts to hear is told the last at once)
+  const late: unknown[] = [];
+  view.watchWindows((w) => late.push(w));
+  assert.deepEqual(late, [{ windows: [{ id: 101, app: "访达", title: "下载" }, { id: 214, app: "Chrome", title: "t".repeat(200) }], window: null }]);
+  view.window(214);
+  view.window(999);
+  view.window(null);
+  const asked = written.filter((b) => b[0] === TO_HELPER.window).map((b) => JSON.parse(b.subarray(5).toString()));
+  assert.deepEqual(asked, [{ window: 214 }, { window: null }]);
+  say(4, { window: 214 });
+  say(4, { windows: [{ id: 214, app: "Chrome", title: "t" }] });
+  say(4, { window: null });
+  assert.deepEqual(late.slice(1), [
+    { windows: [{ id: 101, app: "访达", title: "下载" }, { id: 214, app: "Chrome", title: "t".repeat(200) }], window: 214 },
+    { windows: [{ id: 214, app: "Chrome", title: "t" }], window: 214 },
+    { windows: [{ id: 214, app: "Chrome", title: "t" }], window: null },
+  ]);
+  view.close();
+  // what a client may ask: a window's id, or the whole display
+  assert.equal(parseWindowPick({ t: "window", id: 214 }), 214);
+  assert.equal(parseWindowPick({ t: "window" }), null);
+  assert.equal(parseWindowPick({ t: "window", id: -3 }), undefined);
+  assert.equal(parseWindowPick({ t: "key" }), undefined);
 });

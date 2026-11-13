@@ -10,17 +10,8 @@ fn chat_screen_user_tab(s : ChatScreen) -> Bool {
 }
 
 ///|
-/// Whether `s` is a sleeping user tab (`line` carries `已休眠` / `Sleeping`).
-fn chat_screen_sleeping(s : ChatScreen) -> Bool {
-  chat_screen_user_tab(s) && s.line.contains(@sf.t("core-views.screen.sleeping"))
-}
-
-///|
-/// A screen's mark by its kind: a sleeping user tab, a tab of the station's browser, a simulator, else its display.
+/// A screen's mark by its kind: a tab of the station's browser, a simulator, else its display.
 pub fn chat_screen_icon(s : ChatScreen) -> String {
-  if chat_screen_sleeping(s) {
-    return "moon"
-  }
   match s.kind {
     "browser" => "web"
     "simulator" => "phone"
@@ -29,12 +20,10 @@ pub fn chat_screen_icon(s : ChatScreen) -> String {
 }
 
 ///|
-/// A screen's words in a menu of them: its title, and that an agent drives it while one does (or that it is sleeping).
+/// A screen's words in a menu of them: its title, and that an agent drives it while one does.
 pub fn chat_screen_label(s : ChatScreen) -> String {
   if s.agent {
     s.title + " · " + @sf.t("web-pages.chat.screenAgent")
-  } else if chat_screen_sleeping(s) {
-    s.title + " · " + @sf.t("core-views.screen.sleeping")
   } else {
     s.title
   }
@@ -56,8 +45,9 @@ pub fn chat_screen_first(r : ChatRef, screens : Array[ChatScreen]) -> Unit {
 }
 
 ///|
-/// The chat's screens from what was pressed (`from`): the one alone opened, else a menu of them grouped into user pages,
-/// agent pages and physical/simulator screens when more than one group is present.
+/// The chat's screens from what was pressed (`from`): the one alone opened, else a menu of them: the station's screens,
+/// its browser (a person's own pages there, one item opening the tab looked at last: @settings.browser_tab_to_open),
+/// the agents' pages, under headings where more than one of those is there.
 pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.Beside, along? : @ui.Along = Start) -> Unit {
   match screens {
     [] => ()
@@ -85,7 +75,13 @@ pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.B
         }
       }
       add_group(@sf.t("web-pages.screen.section"), other_screens)
-      add_group(@sf.t("web-pages.screen.userPages"), user_tabs)
+      if !user_tabs.is_empty() {
+        if !items.is_empty() {
+          items.push(None)
+        }
+        let to = @settings.browser_tab_to_open(r.station, user_tabs.map(fn(s) { s.id })).unwrap_or(user_tabs[0].id)
+        items.push(Some(@sf.menu_item_of(@sf.t("web-pages.screen.browser"), icon="web", fn() { open_screen(r.station, to, None) })))
+      }
       add_group(@sf.t("web-pages.screen.agentPages"), agent_tabs)
       @sf.menu(items, from~, title=@sf.t("web-pages.chat.screen"), along~)
     }

@@ -207,6 +207,17 @@ function resolutionOf(v: unknown): { width: number; height: number; modes: Size[
   return { width: v.width, height: v.height, modes: modes.map((m: Size) => ({ width: m.width, height: m.height })) };
 }
 
+/// A desktop's windows as its station said them, bounded: at most 60, each an id, its app's name and its title (200).
+function windowsSaid(v: unknown[]): J[] {
+  const out: J[] = [];
+  for (const w of v) {
+    if (out.length >= 60) break;
+    if (!isObject(w) || typeof w.id !== "number" || !Number.isInteger(w.id) || w.id <= 0) continue;
+    out.push({ id: w.id, app: typeof w.app === "string" ? w.app.slice(0, 200) : "", title: typeof w.title === "string" ? w.title.slice(0, 200) : "" });
+  }
+  return out;
+}
+
 export function checkInput(input: unknown): J {
   const bad = () => CoreError.invalid(t("core-misc.screen.badInput"));
   if (!isObject(input)) throw bad();
@@ -243,6 +254,12 @@ export function checkInput(input: unknown): J {
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };
+    // One of a desktop's windows shown alone (one its state says in `windows`), or without `id` the whole display: the
+    // view's own, looking or driving.
+    case "window":
+      if (input.id === undefined || input.id === null) return { t: "window" };
+      if (!finite(input.id) || !Number.isInteger(input.id) || input.id <= 0) throw bad();
+      return { t: "window", id: input.id };
     // The display's scale, one of its steps (a screen whose state says `scale`).
     case "scale":
       if (!finite(input.percent) || !Number.isInteger(input.percent) || input.percent < 100 || input.percent > 500) throw bad();
@@ -361,13 +378,13 @@ type Kind = "desktop" | "browser" | "simulator";
 const kindOf = (v: unknown): Kind => (v === "browser" || v === "simulator" ? v : "desktop");
 const kindWords = (kind: Kind, id: string) => t(id.startsWith("android:") ? "core-views.screen.kind.android" : `core-views.screen.kind.${kind}`);
 
-/// What a screen is, in words: its kind, its size or site, whether it sleeps, the chat that opened it, who is on it.
+/// What a screen is, in words: its kind, its size or site, the chat that opened it, who is on it (a tab asleep is the
+/// station's own: never said).
 function itemLine(item: J): string {
   const on = names(item.viewers);
   if (item.userTab === true) {
     const parts: string[] = [];
     if (item.site) parts.push(item.site);
-    if (item.sleeping === true) parts.push(t("core-views.screen.sleeping"));
     if (on.length > 0) parts.push(t("core-views.screen.on", { names: listed(on) }));
     return parts.length > 0 ? parts.join(" · ") : kindWords(item.kind, item.id);
   }
@@ -621,6 +638,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     // The stream open now: where acks, key frames and input go (in order, one writer); null between streams.
     let out: Queue.Queue<Uint8Array> | null = null;
     let reopen: Deferred.Deferred<void> | null = null;
+    // Done as the station's list changes, while the view waits for a tab this device is opening to be listed.
+    let relisted: Deferred.Deferred<void> | null = null;
 
     const listedItem = (): J => {
       const held = inner.stations.screens(station);
@@ -736,9 +755,9 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
         soundOn = on;
         write(soundFrame(on));
       },
-      // Only while driving: what the view only looks at takes no input.
+      // Only while driving: what the view only looks at takes no input (but which of a desktop's windows it shows).
       input: (input) => {
-        if (state.control) write(inputFrame(input));
+        if (state.control || input.t === "window") write(inputFrame(input));
       },
       clipboard: (type, data, paste) => {
         if (!state.control || out === null) return new CoreError("invalid_params", t("core-misc.screen.notDriving"));
@@ -770,7 +789,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
         bounds = next;
         if (reopen !== null) Deferred.doneUnsafe(reopen, Effect.void);
       },
-      listed: () => tell(),
+      listed: () => {
+        tell();
+        if (relisted !== null) Deferred.doneUnsafe(relisted, Effect.void);
+      },
     });
     yield* Effect.addFinalizer(() => Effect.sync(() => open.delete(name)));
 
@@ -783,6 +805,15 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       tell();
       return null;
     }
+    // A tab this device is opening (`screen.openBrowser` with its id): the view is there at once, connecting, while its
+    // station makes it; opened once the station lists it (gone, if it refused it).
+    for (;;) {
+      relisted = yield* Deferred.make<void>();
+      if (get(listedItem(), "opening") !== true) break;
+      tell();
+      yield* Deferred.await(relisted);
+    }
+    relisted = null;
     // A view is opened only of a screen the station listed: not listed as it was held, its
     // list is read again first.
     if (listedItem() === undefined) yield* Effect.ignore(inner.stations.readScreens(station), { log: "Unhandled", message: "screens read" });
@@ -919,6 +950,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (typeof s.title === "string" && s.title !== "") state.title = s.title;
                 // How a simulator's picture is turned: its case is drawn turned with it.
                 if (s.turn === 0 || s.turn === 1 || s.turn === 2 || s.turn === 3) state.turn = s.turn;
+                // A desktop's windows (the viewer's tabs), and the one shown alone (none: the whole display).
+                if (Array.isArray(s.windows)) state.windows = windowsSaid(s.windows);
+                if (s.window === null) delete state.window;
+                else if (typeof s.window === "number" && Number.isInteger(s.window) && s.window > 0) state.window = s.window;
                 // The login field in focus, while driving it: this device's password manager may fill it (`fill`).
                 if (s.login === null) delete state.login;
                 else if (state.control && isObject(s.login) && typeof s.login.host === "string" && s.login.host !== "" && s.login.host.length <= 253 && (s.login.field === "username" || s.login.field === "password")) {
@@ -969,6 +1004,11 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                   if (s.site !== "" && s.site.length <= 253) state.site = s.site;
                   else delete state.site;
                 } else if (s.site === null) delete state.site;
+                // (its whole address, as a browser's bar shows it: the station says none longer than 2048)
+                if (typeof s.address === "string") {
+                  if (s.address !== "" && s.address.length <= 2048) state.address = s.address;
+                  else delete state.address;
+                }
                 if (typeof s.userTab === "boolean") {
                   if (s.userTab) state.userTab = true;
                   else delete state.userTab;

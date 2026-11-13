@@ -350,15 +350,33 @@ fn ScreenRig::tap_label(self : ScreenRig, label : String) -> Unit {
 /// Key `label` of the keys row pressed: in the row, else (the row short of room for it) the row turned to it by its
 /// ⋯, then on round to its first face (Esc in it).
 fn ScreenRig::press_key(self : ScreenRig, label : String) -> Unit {
+  // (a key on a turned face pressed there, the row turned back round to its first, Esc in it)
   if self.labelled(label) is Some(_) {
     self.tap_label(label)
+    let mut back = 0
+    while self.labelled("Esc") is None && self.labelled(tr("common.more")) is Some(_) && back < 12 {
+      back += 1
+      self.tap_label(tr("common.more"))
+    }
     return
   }
+  // (the keys row shows while typing, since 2026-11-13: the keyboard raised first from the foot)
+  if self.labelled("Esc") is None && self.labelled(tr("android-misc.screen.keyboard")) is Some(_) {
+    self.tap_label(tr("android-misc.screen.keyboard"))
+  }
+  // (turned at most a few times: a key never shown says so, not a test that never ends)
+  let mut turns = 0
   while self.labelled(label) is None {
+    turns += 1
+    if turns > 12 {
+      @halt.saying("no key \"\{label}\" on the keys row")
+    }
     self.tap_label(tr("common.more"))
   }
   self.tap_label(label)
-  while self.labelled("Esc") is None {
+  turns = 0
+  while self.labelled("Esc") is None && turns < 12 {
+    turns += 1
     self.tap_label(tr("common.more"))
   }
 }
@@ -678,6 +696,8 @@ test "only looking, a double tap zooms in where it is and another back to fitted
 test "the keys row short of room on a phone: Esc and the arrows in it, the least used out; its ⋯ turns it to them, a modifier held there stays in it once back" {
   let r = screen_rig()
   r.live(others=[])
+  // (the row is the keyboard's, since 2026-11-13: raised from the foot)
+  r.tap_label(tr("android-misc.screen.keyboard"))
   assert_true(r.labelled("Esc") is Some(_))
   assert_true(r.labelled(tr("android-misc.screen.key.left")) is Some(_))
   assert_true(r.labelled(tr("android-misc.screen.key.option")) is None)
@@ -700,7 +720,9 @@ test "the keys row turned on a narrow phone: what was out does not all fit eithe
   for w in [390.0, 360.0, 320.0] {
     let r = screen_rig(w~)
     r.live(others=[])
-    let names = screen_row_keys().map(fn(k) { k.name })
+    // (the row is the keyboard's, since 2026-11-13: raised from the foot; the mouse's buttons are the foot's)
+    r.tap_label(tr("android-misc.screen.keyboard"))
+    let names = screen_row_keys().filter(fn(k) { k.button == 0 }).map(fn(k) { k.name })
     let reached : Array[String] = []
     let seen = fn() {
       for n in names {
@@ -822,7 +844,8 @@ test "made to only look from elsewhere: 只看 chosen for it, input not sent, �
   assert_true(r.t.find("只看 · 还开在 still.fail iOS") is Some(_))
   r.tap_at(0.5, 0.5)
   assert_eq(r.inputs().length(), 0)
-  r.t.tap_text("控制")
+  // 只看 turned off in 控制中心 (off the bar since 2026-11-13)
+  look_switch(r)
   let asked = r.told("screen.control")
   assert_eq(asked.length(), 1)
   assert_eq(field(Some(asked[0]), "control"), Some(Json::boolean(true)))
@@ -1472,6 +1495,8 @@ test "the keys row's mouse buttons click where the pointer is: 右键 a right cl
   assert_eq(r.t.haptics(), [@ui.ContextClick])
   // ⌘ held, then 左键: ⌘ down, the click, ⌘ up; ⌘ let go after it
   r.press_key("Command")
+  // (⌘ on the keyboard's row, 左键 on the foot once the keyboard is put away: what is held stays)
+  r.tap_label(tr("android-misc.screen.keyboard"))
   r.press_key(tr("android-misc.screen.key.mouseLeft"))
   let left = r.inputs()[2:].to_owned()
   assert_eq(left.length(), 4)
@@ -1770,10 +1795,10 @@ test "a modifier held on the keys row is let go as the view stops driving: 只�
   r.live(others=[])
   r.press_key("Command")
   assert_eq(r.ui().held.mods, mod_meta)
-  r.t.tap_text("只看")
+  look_switch(r)
   r.state("live", control=false, others=[])
   assert_eq(r.ui().held.mods, 0)
-  r.t.tap_text("控制")
+  look_switch(r)
   r.state("live", control=true, others=[])
   r.t.draw()
   assert_true(pressed_of(r, tr("android-misc.screen.key.command")) != Some(true))
@@ -1836,7 +1861,9 @@ test "左键 driven directly with no pointer said by the station: clicks where t
   r.tap_at(0.25, 0.75)
   r.t.run_for(screen_double_tap_ms)
   let from = r.inputs().length()
-  r.press_key(tr("android-misc.screen.key.mouseLeft"))
+  // (directly, the foot has no 左键 since 2026-11-13: a tap clicks; the floating buttons, sideways, click so)
+  button_clicked(r.sess(), r.ui(), btn_primary)
+  r.t.draw()
   let left = r.inputs()[from:].to_owned()
   assert_eq(left.length(), 2)
   assert_true(close_to(number(Some(left[0]), "x"), 0.25), msg="\{number(Some(left[0]), "x")}")
@@ -1872,4 +1899,15 @@ test "sideways, the rail's people button only while others are on it, named so; 
   assert_true(r.t.find("控制 · 李雷也在看") is Some(_))
   r.t.run_for(rail_say_ms)
   screen_done(r.t)
+}
+
+///|
+/// 只看 turned the other way in 控制中心 (where it is since 2026-11-13: off the viewer's bar), the panel closed again.
+fn look_switch(r : ScreenRig) -> Unit raise {
+  r.tap_label(tr("web-pages.screen.panel"))
+  r.t.run_for(@sf.later_ms)
+  r.t.click(Switch, label=tr("android-misc.screen.look"))
+  r.t.draw()
+  r.t.key(@ui.key_escape)
+  r.t.run_for(@sf.later_ms)
 }

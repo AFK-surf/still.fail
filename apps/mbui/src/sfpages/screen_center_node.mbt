@@ -35,8 +35,14 @@ fn center_node(
     if s.open_now() {
       ts.push("full")
     }
-    if s.opens_url() {
+    // (a simulator's: a browser's tab has its address bar and ⟳ over its page, screen_browser.mbt)
+    if s.opens_url() && !browser_shown(s) {
       ts.push("go")
+      ts.push("reload")
+    }
+    // a browser's tab where its bar is narrow: → and ⟳ here, ← and the address bar on it
+    if browser_shown(s) && u.narrow_bar {
+      ts.push("forward")
       ts.push("reload")
     }
     if s.pastes() {
@@ -77,6 +83,11 @@ fn center_node(
               quick_tile_node(row, fn() { @sf.t("web-pages.screen.goUrlShort") }, fn() { "link" }, fn() { false }, fn() {
                 done()
                 go_url_asked(c, s, from)
+              })
+            "forward" =>
+              quick_tile_node(row, fn() { @sf.t("web-pages.screen.forward") }, fn() { "arrow-right" }, fn() { false }, fn() {
+                browser_act(s, "screen.forward", @sf.t("web-pages.screen.forwardWhat"))
+                done()
               })
             "reload" =>
               quick_tile_node(row, fn() { @sf.t("web-pages.screen.reloadShort") }, fn() { "refresh" }, fn() { false }, fn() {
@@ -276,17 +287,13 @@ fn center_node(
     })
   })
   @sf.panel_group_node(v, fn() { "" }, fn(g) {
-    g.show(fn() { state() |> ignore; pages_shown(s) }, fn(p) {
-      @sf.panel_row_node(
-        p,
-        fn() { @sf.t("web-pages.screen.pages") },
-        fn() {
-          done()
-          pages_open(c, s, u, from, close, stepped=true)
-        },
-        icon=fn() { "view-columns" },
-        end="chevron-right",
-      )
+    // 只看: off the viewer's bar (the user, 2026-11-13), the view drives it unless this is on; while someone else drives
+    // it, 接管 on the bar instead
+    g.show(fn() { state() |> ignore; s.choosable() && !s.can_take_over() }, fn(m) {
+      @sf.panel_switch_row_node(m, fn() { @sf.t("android-misc.screen.look") }, fn() {
+        state() |> ignore
+        !s.controlling()
+      }, fn(on) { control_chosen(c, s, u, !on) })
     })
     // how the view goes: live, its round trip and how long it has been seen; pressed, its figures a step further in;
     // who else is on it, as the core says it, its note

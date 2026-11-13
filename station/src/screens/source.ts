@@ -124,6 +124,11 @@ export interface ScreenView {
   /// Hears how far a device's picture is turned clockwise, in quarter turns, as it changes and at once, until the returned
   /// function: a simulator's, whose case is drawn turned with it.
   watchTurn?(heard: (turn: number) => void): () => void;
+  /// Hears a desktop's windows and the one shown alone as they change and at once, until the returned function: a
+  /// source that shows one window alone (still.fail Helper's), where `window` picks one.
+  watchWindows?(heard: (windows: ScreenWindows) => void): () => void;
+  /// One window shown alone from now on (one of those `watchWindows` said), or the whole display again (null).
+  window?(id: number | null): void;
   /// Shows a file in the machine's file manager (a file dropped into the view, put on the machine): the source's
   /// `reveal` says it can.
   reveal?(path: string): Promise<void>;
@@ -171,6 +176,33 @@ export type ScreenVideo = { capture: string; encoder?: string; hardware?: boolea
 /// Where a screen's pointer is, 0..1 of the screen, and its shape as CSS names it.
 export type ScreenCursor = { x: number; y: number; shape: string };
 
+/// The key an app makes for a person's tab of the station's browser it opens (`browser:<key>`), as the browser's
+/// user-tabs.ts `#freshKey` makes them.
+export const USER_TAB_ID = /^u_[0-9a-f]{12}$/;
+
+/// An app's window on a desktop, as a view may show it alone (`ScreenView.window`): its id (the system's), its app's
+/// name and its title.
+export type ScreenWindow = { id: number; app: string; title: string };
+/// A desktop's windows as its view says them, and the one it shows alone (null: the whole display).
+export type ScreenWindows = { windows: ScreenWindow[]; window: number | null };
+/// The most windows said (the rest left out), and the longest app's name or title (cut there).
+export const WINDOWS_MOST = 60;
+export const WINDOW_WORDS_MOST = 200;
+
+/// A desktop's windows as a helper said them, checked: at most WINDOWS_MOST, each with a whole id, words cut.
+export function windowsOf(v: unknown): ScreenWindow[] {
+  if (!Array.isArray(v)) return [];
+  const out: ScreenWindow[] = [];
+  for (const w of v) {
+    if (out.length >= WINDOWS_MOST) break;
+    if (w === null || typeof w !== "object") continue;
+    const { id, app, title } = w as Record<string, unknown>;
+    if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) continue;
+    out.push({ id, app: typeof app === "string" ? app.slice(0, WINDOW_WORDS_MOST) : "", title: typeof title === "string" ? title.slice(0, WINDOW_WORDS_MOST) : "" });
+  }
+  return out;
+}
+
 /// A display's scale as its system has it (Windows' Settings › Display › Scale): now, the one recommended, and the
 /// steps it takes, in percent.
 export type ScreenScale = { percent: number; recommended: number; steps: number[] };
@@ -210,10 +242,15 @@ export interface ScreenSource {
   sleeping?(): boolean;
   /// The site (`hostname[:port]`) of a browser tab, without path, query or hash.
   site?(): string | undefined;
-  /// Navigates a browser tab to `url`.
+  /// A browser tab's whole address, as its address bar shows it (`about:blank` on a new tab's page).
+  address?(): string;
+  /// Navigates a browser tab to `url` (an address, or words searched for, as a browser's address bar takes them).
   openUrl?(url: string): Promise<void>;
   /// Reloads a browser tab.
   reload?(): Promise<void>;
+  /// Goes back, or forward, a page in a browser tab's history (nothing where it has none that way).
+  back?(): Promise<void>;
+  forward?(): Promise<void>;
   /// Hibernates a user tab now, closing its underlying Chrome page while keeping its saved address and title.
   sleep?(): Promise<void>;
   /// Closes it for good (a tab of the browser, a simulator shut down); none: it is not closed from a person's app (the
@@ -248,7 +285,7 @@ export interface ScreenSource {
 /// The station's browser as `ScreenHub` reaches it without importing `browser/`.
 export interface ScreenBrowser {
   available(): boolean;
-  openUserTab(url: string): Promise<string>;
+  openUserTab(url: string, id?: string): Promise<string>;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.

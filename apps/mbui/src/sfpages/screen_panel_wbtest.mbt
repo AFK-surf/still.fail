@@ -418,17 +418,22 @@ test "no 缩放 from a station that does not change it" {
 }
 
 ///|
-test "the bar says how long it has been seen; pressed, the view's figures, and 复制诊断 copies them" {
+test "控制中心 says how long it has been seen; its 连接 row pressed, the view's figures, and 复制诊断 copies them" {
   let r = screen_rig()
   r.live()
-  assert_true(r.t.find("00:00:00") is Some(_))
+  // (off the bar since 2026-11-13: how long, how the link goes are 控制中心's, the bar says only a poor link)
+  assert_eq(seen_for(r.ui()), "00:00:00")
+  // 控制中心's 连接 row: the view's figures (open while they are counted)
+  open_center(r)
+  r.t.tap_text(tr("web-pages.screen.stats"))
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
   // frames over the next second: 帧率 and 带宽占用 counted from them
   r.t.run_for(second_ms)
   for ts in [1033.0, 1066.0, 1100.0] {
     r.frame(ts)
   }
   r.t.run_for(second_ms)
-  assert_true(r.t.find("00:00:02") is Some(_))
   r.state(
     "live",
     more={
@@ -436,15 +441,13 @@ test "the bar says how long it has been seen; pressed, the view's figures, and �
       "video": { "capture": "ScreenCaptureKit", "encoder": "VideoToolbox", "hardware": true },
     },
   )
-  r.tap_label(tr("web-pages.screen.stats"))
-  r.t.run_for(@sf.later_ms)
+  r.t.draw()
   assert_true(r.t.find("48 ms") is Some(_))
   assert_true(r.t.find("12 ms") is Some(_))
   assert_true(r.t.find("1280×720") is Some(_))
   assert_true(r.t.find("JPEG") is Some(_))
   assert_true(r.t.find("ScreenCaptureKit") is Some(_))
   assert_true(r.t.find(tr("web-pages.screen.stat.hardware")) is Some(_))
-  assert_true(r.t.find("3") is Some(_))
   r.tap_label(tr("web-pages.screen.stat.copy"))
   r.t.draw()
   let said = @json.parse(r.t.clipboard()) catch { _ => @halt.saying("not JSON") }
@@ -831,32 +834,35 @@ test "重启 App: the list the first time, and the app chosen at one press after
 }
 
 ///|
-test "页面 switcher separates user pages from agent pages, refreshes the current page, and switches pages in place" {
-  let screens : Json = {
+/// What the address bar of tab `screen` holds (the fixture station's).
+fn address_of(screen : String) -> String {
+  match screen_ui(screen_key("ws-1/st-1", screen)).address {
+    Some((_, f)) => f.text()
+    None => ""
+  }
+}
+
+///|
+/// A station's screens with a person's two pages on its browser, an agent's tab and its desktop.
+fn browser_screens() -> Json {
+  {
     "browser": true,
     "control": true,
     "known": true,
     "outdated": false,
     "screens": [
-      {
-        "id": "desktop",
-        "kind": "desktop",
-        "title": "Willow 的屏幕",
-        "width": 1920.0,
-        "height": 1080.0,
-        "line": "1920 × 1080",
-        "link": "",
-      },
+      { "id": "desktop", "kind": "desktop", "title": "Willow 的屏幕", "width": 1920.0, "height": 1080.0, "line": "1920 × 1080", "link": "" },
       {
         "id": "browser:u_mail",
         "kind": "browser",
         "userTab": true,
-        "sleeping": false,
         "closable": true,
+        "openUrl": true,
+        "site": "mail.proton.me",
         "title": "收件箱 - Proton Mail",
         "width": 1280.0,
         "height": 800.0,
-        "line": "mail.proton.me · 1280 × 800",
+        "line": "mail.proton.me",
         "link": "",
       },
       {
@@ -865,16 +871,19 @@ test "页面 switcher separates user pages from agent pages, refreshes the curre
         "userTab": true,
         "sleeping": true,
         "closable": true,
+        "openUrl": true,
+        "site": "github.com",
         "title": "GitHub",
         "width": 0.0,
         "height": 0.0,
-        "line": "已休眠 · github.com",
+        "line": "github.com",
         "link": "",
       },
       {
         "id": "browser:tab-1",
         "kind": "browser",
         "closable": true,
+        "openUrl": true,
         "title": "Sign in · Anthropic",
         "width": 1280.0,
         "height": 720.0,
@@ -883,44 +892,117 @@ test "页面 switcher separates user pages from agent pages, refreshes the curre
       },
     ],
   }
-  for (w, h, platform) in [(390.0, 844.0, 2), (1280.0, 800.0, 0)] {
-    let r = screen_rig(w~, h~, platform~, screens~)
-    r.state("live", more={ "openUrl": Json::boolean(true), "title": Json::string("Sign in · Anthropic") })
-    r.config()
-    r.frame(1000.0)
-    assert_true(r.labelled(tr("web-pages.screen.pages")) is Some(_), msg="pages button at \{w}")
-    r.tap_label(tr("web-pages.screen.pages"))
-    r.t.run_for(@sf.later_ms)
-    to_sheet_rest(r.t)
-    assert_true(r.t.find(tr("web-pages.screen.goUrl")) is Some(_), msg="goUrl at \{w}")
-    assert_true(r.t.find(tr("web-pages.screen.reload")) is Some(_), msg="reload at \{w}")
-    assert_true(r.t.find(tr("web-pages.screen.userPages")) is Some(_), msg="userPages at \{w}")
-    assert_true(r.t.find(tr("web-pages.screen.agentPages")) is Some(_), msg="agentPages at \{w}")
-    assert_true(r.t.find("收件箱 - Proton Mail") is Some(_), msg="user mail tab at \{w}")
-    assert_true(r.t.find("GitHub") is Some(_), msg="sleeping user tab at \{w}")
-    assert_true(r.t.find(tr("web-pages.screen.openBrowser")) is Some(_), msg="openBrowser at \{w}")
-    assert_eq(r.t.audit(), [], msg="audit at \{w}")
-    // refresh the current browser page
-    r.t.tap_text(tr("web-pages.screen.reload"))
-    r.t.run_for(@sf.later_ms)
-    to_sheet_rest(r.t)
-    assert_eq(r.told("screen.reload").length(), 1, msg="reload called at \{w}")
-    assert_eq(text(Some(r.told("screen.reload")[0]), "screen"), "browser:tab-1")
-    // open 页面 again and switch directly to the user's Proton Mail page
-    r.tap_label(tr("web-pages.screen.pages"))
-    r.t.run_for(@sf.later_ms)
-    to_sheet_rest(r.t)
-    r.t.tap_text("收件箱 - Proton Mail")
-    r.t.run_for(@ui.move_most_ms)
-    to_sheet_rest(r.t)
-    match app.nav.top() {
-      Screen(at) => assert_eq(at.screen, "browser:u_mail")
-      _ => fail("expected Screen(browser:u_mail) at \{w}")
-    }
-    let views = r.told("screen.view")
-    assert_eq(text(Some(views[views.length() - 1]), "screen"), "browser:u_mail")
-    screen_done(r.t)
+}
+
+///|
+test "a person's page as a browser shows it: its tabs over it, ← → ⟳ and its address; pressed, a tab is shown in place" {
+  let r = screen_rig(w=1280.0, h=800.0, platform=0, screen="browser:u_mail", screens=browser_screens())
+  r.state(
+    "live",
+    more={
+      "kind": Json::string("browser"),
+      "openUrl": Json::boolean(true),
+      "userTab": Json::boolean(true),
+      "title": Json::string("收件箱 - Proton Mail"),
+      "address": Json::string("https://mail.proton.me/u/0/inbox"),
+    },
+  )
+  r.config()
+  r.frame(1000.0)
+  // its tabs, a sleeping one as any other; the agent's tab and the desktop not among them
+  assert_true(r.labelled("收件箱 - Proton Mail") is Some(_))
+  assert_true(r.labelled("GitHub") is Some(_))
+  assert_true(r.labelled("Sign in · Anthropic") is None)
+  assert_true(r.t.find("已休眠") is None, msg="a tab's sleep is the station's own")
+  assert_eq(address_of("browser:u_mail"), "https://mail.proton.me/u/0/inbox", msg="its whole address in its bar")
+  for label in ["web-pages.screen.back", "web-pages.screen.forward", "web-pages.screen.reload", "web-pages.screen.newTab"] {
+    assert_true(r.labelled(tr(label)) is Some(_), msg=label)
   }
+  assert_true(r.labelled("页面") is None, msg="no 页面 menu any more")
+  assert_eq(r.t.audit(), [])
+  // ← → ⟳, each one press
+  r.tap_label(tr("web-pages.screen.back"))
+  r.tap_label(tr("web-pages.screen.forward"))
+  r.tap_label(tr("web-pages.screen.reload"))
+  r.frame(1100.0)
+  for call in ["screen.back", "screen.forward", "screen.reload"] {
+    assert_eq(r.told(call).length(), 1, msg=call)
+    assert_eq(text(Some(r.told(call)[0]), "screen"), "browser:u_mail")
+  }
+  // another tab, one press: shown in place
+  r.tap_label("GitHub")
+  r.t.run_for(@ui.move_most_ms)
+  match app.nav.top() {
+    Screen(at) => assert_eq(at.screen, "browser:u_gh")
+    _ => fail("expected the GitHub tab shown")
+  }
+  screen_done(r.t)
+}
+
+///|
+test "＋ opens a new tab at once, by an id made here, before its station answers; its address bar takes the keys" {
+  let r = screen_rig(w=1280.0, h=800.0, platform=0, screen="browser:u_mail", screens=browser_screens())
+  r.state("live", more={ "kind": Json::string("browser"), "openUrl": Json::boolean(true), "userTab": Json::boolean(true) })
+  r.config()
+  r.frame(1000.0)
+  r.tap_label(tr("web-pages.screen.newTab"))
+  r.t.run_for(@ui.move_most_ms)
+  let asked = r.told("screen.openBrowser")
+  assert_eq(asked.length(), 1)
+  let id = text(Some(asked[0]), "id")
+  assert_true(id.has_prefix("u_") && id.length() == 14, msg=id)
+  assert_eq(text(Some(asked[0]), "url"), "")
+  match app.nav.top() {
+    Screen(at) => assert_eq(at.screen, "browser:" + id)
+    _ => fail("expected the new tab shown at once")
+  }
+  screen_done(r.t)
+}
+
+///|
+test "words typed in the address bar go to the tab on Enter" {
+  let r = screen_rig(w=1280.0, h=800.0, platform=0, screen="browser:tab-1", screens=browser_screens())
+  r.state("live", more={ "kind": Json::string("browser"), "openUrl": Json::boolean(true), "address": Json::string("https://console.anthropic.com/login") })
+  r.config()
+  r.frame(1000.0)
+  // an agent's tab: its address and ← → ⟳, no tabs of a person's
+  assert_true(r.labelled("收件箱 - Proton Mail") is None)
+  assert_eq(address_of("browser:tab-1"), "https://console.anthropic.com/login")
+  // the keys given it (as ⌘L gives them), its words written over
+  screen_ui(screen_key("ws-1/st-1", "browser:tab-1")).address_asked = true
+  r.frame(1050.0)
+  r.t.type_text("proton mail")
+  r.t.enter()
+  r.frame(1100.0)
+  let went = r.told("screen.openUrl")
+  assert_eq(went.length(), 1)
+  assert_eq(text(Some(went[0]), "url"), "proton mail")
+  assert_eq(text(Some(went[0]), "screen"), "browser:tab-1")
+  screen_done(r.t)
+}
+
+///|
+test "narrow, the tabs fold into a button counting them; its panel lists them and opens a new one" {
+  let r = screen_rig(w=390.0, h=844.0, platform=2, screen="browser:u_mail", screens=browser_screens())
+  r.state("live", more={ "kind": Json::string("browser"), "openUrl": Json::boolean(true), "userTab": Json::boolean(true) })
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.labelled(tr("web-pages.screen.tabs") + " 2") is Some(_))
+  assert_true(r.labelled("GitHub") is None, msg="no row of tabs where it is narrow")
+  r.tap_label(tr("web-pages.screen.tabs") + " 2")
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  assert_true(r.t.find("GitHub") is Some(_))
+  assert_true(r.t.find(tr("web-pages.screen.newTab")) is Some(_))
+  assert_eq(r.t.audit(), [])
+  r.t.tap_text("GitHub")
+  r.t.run_for(@ui.move_most_ms)
+  to_sheet_rest(r.t)
+  match app.nav.top() {
+    Screen(at) => assert_eq(at.screen, "browser:u_gh")
+    _ => fail("expected the GitHub tab shown")
+  }
+  screen_done(r.t)
 }
 
 ///|
@@ -952,4 +1034,41 @@ test "driving a browser page follows a child OAuth popup and returns when the po
     _ => fail("expected parent tab after child popup closed")
   }
   screen_done(r.t)
+}
+
+///|
+test "a desktop's windows as its tabs: the whole screen and each window; pressed, that window shown alone, looking or driving" {
+  let windows : Json = [
+    { "id": 101.0, "app": "访达", "title": "下载" },
+    { "id": 214.0, "app": "Google Chrome", "title": "发布清单" },
+  ]
+  // with keyboard and mouse: in the bar's middle
+  let r = screen_rig(w=1280.0, h=800.0, platform=0, screen="desktop")
+  r.state("live", control=false, more={ "kind": Json::string("desktop"), "windows": windows })
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.labelled(tr("web-pages.screen.wholeScreen")) is Some(_))
+  assert_true(r.labelled("Google Chrome – 发布清单") is Some(_))
+  assert_eq(r.t.audit(), [])
+  r.tap_label("Google Chrome – 发布清单")
+  r.t.draw()
+  let picks = r.inputs().filter(fn(i) { text(Some(i), "t") == "window" })
+  assert_eq(picks.length(), 1)
+  assert_eq(number(Some(picks[0]), "id"), 214.0)
+  // shown alone: its tab pressed; the whole screen again
+  r.state("live", control=false, more={ "kind": Json::string("desktop"), "windows": windows, "window": Json::number(214.0) })
+  r.tap_label(tr("web-pages.screen.wholeScreen"))
+  r.t.draw()
+  let again = r.inputs().filter(fn(i) { text(Some(i), "t") == "window" })
+  assert_eq(again.length(), 2)
+  assert_true(field(Some(again[1]), "id") is None)
+  screen_done(r.t)
+  // upright: folded into the button counting them
+  let p = screen_rig(screen="desktop")
+  p.state("live", more={ "kind": Json::string("desktop"), "windows": windows })
+  p.config()
+  p.frame(1000.0)
+  assert_true(p.labelled(tr("web-pages.screen.windows") + " 3") is Some(_))
+  assert_eq(p.t.audit(), [])
+  screen_done(p.t)
 }
