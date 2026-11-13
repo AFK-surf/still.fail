@@ -529,3 +529,41 @@ test("people added to a locked workspace are in its lock with the role given: by
   assert.equal(named(), 0);
   assert.equal(r.cloud.chains.get("ws")!.length, 1);
 });
+
+test("safe mode on, not upgraded: a web page whose person has no app is told the upgrade will need one, and owners and admins see who; nobody else, nor once off", async () => {
+  // This device s1's web page (the owner's); s2 a web page alone too, then an app of s2's.
+  const page = { id: ME, sub: "s1", kind: "web", label: "Chrome", exp: 4_000_000_000 };
+  const theirs = { id: "ee".repeat(32), sub: "s2", kind: "web", label: "Chrome", exp: 4_000_000_000 };
+  const lockOf = async (more: (me: Signer) => Record<string, unknown>[], role = "owner") => {
+    let signer: Signer | null = null;
+    const r = await rig((me) => {
+      signer = me;
+      return { ws: genesis("ws", elsewhere(), false, [], {}, ME, more(me)) };
+    }, (host) => void (host.appKeys = false), undefined, [], undefined, [], { role });
+    const lock = await r.watch({ topic: "lock", workspace: "ws" });
+    return { r, lock, v: await lock(), signer: signer! as Signer };
+  };
+  const texts = (v: any) => [v.appText ?? null, ...["s1", "s2"].map((s) => v.members.find((m: { sub: string }) => m.sub === s)?.appText ?? null)];
+  const soon = "安全模式即将要求每位成员至少有一台客户端。请安装桌面或手机客户端并登录，否则此网页版届时将无法访问此 workspace";
+  const webOnly = "仅使用网页版，需安装客户端";
+  const both = await lockOf(() => [page, theirs]);
+  assert.equal(both.v.locked, true);
+  assert.deepEqual(texts(both.v), [soon, webOnly, webOnly], "this page told, both shown to the owner");
+  // s2 with an app as well: only s1.
+  const app = await lockOf(() => [page, theirs, { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8" }]);
+  assert.deepEqual(texts(app.v), [soon, webOnly, null]);
+  // A member's page: told itself, nobody's shown it.
+  const member = await lockOf(() => [page, theirs], "member");
+  assert.deepEqual(texts(member.v), [soon, null, null]);
+  // s1 with an app too: this page is not told.
+  const own = await lockOf(() => [page, theirs, { id: "fa".repeat(32), sub: "s1", kind: "app", label: "Mac" }]);
+  assert.deepEqual(texts(own.v), [null, null, webOnly]);
+  // Turned off (by s2's app): nobody.
+  const off = await lockOf((me) => [page, theirs, { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", sign_key: me.id }]);
+  const chain = off.r.cloud.chains.get("ws")!;
+  chain.push(off.signer.sign(next("ws", off.r.cloud.head("ws"), 2000, "disable", {})));
+  off.r.core.inner.runner.fork(Effect.ignore(read(off.r.core.inner, "ws")));
+  await off.r.host.time.pass(2_000);
+  const offV = await off.lock();
+  assert.deepEqual([offV.locked, ...texts(offV)], [false, null, null, null]);
+});

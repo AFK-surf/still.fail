@@ -224,7 +224,9 @@ another; the accounts' list's merge across stations and its refills.
   took them all it signs `moved` by `Lock.append`'s path, the target made again in the turn from the head (`guard`):
   so nobody is dropped or added by the move. A member with a device that signs and no log waits it (`lock_not_ready`);
   one with neither is not said, their role noted (`note`), and comes in as a newcomer by their first app device (the
-  owner, 2026-11-13: 「开了安全模式那就需要 app」). A `moved` that lost its place is never signed again (`again`,
+  owner, 2026-11-13: 「开了安全模式那就需要 app」); so from before the move, whatever the switch, a web page on the chain
+  whose person has no app there is told it will need one (the `lock` topic's `appText`), and owners and admins see
+  such a member so (`LockPerson.appText`; views/lock.ts `webOnlyIn`). A `moved` that lost its place is never signed again (`again`,
   `#lost`, `deliver`): the next `handOver` works it out again. Another member's web page is said on their own log by
   their app as it next holds the seed for something they do (personal-lock.ts `#addWebs`, views/lock.ts `websIn`;
   2026-11-14), before the move or after it from the chain as it moved, nobody approving it again: only one their own

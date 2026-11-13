@@ -2425,12 +2425,19 @@ export function lockView(inner: Inner, ws: string): J {
   const stations = arr(get(v, "stations")).map((s) => ({
     id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id) && keeps(inner, ws, s.id),
   }));
+  // Safe mode on and its chain not moved, whatever the switch: the members with a web page on it and no app (the owner,
+  // 2026-11-13: 「开了安全模式那就需要 app」; once moved a web page is approved by its person's own app alone). Said
+  // before the move, so that they have the days before it to install one: to the member on that page (`appText`), and
+  // beside them to owners and admins.
+  const webOnly = locked && !movedHere(inner, ws) ? webOnlyIn(f.devices.values(), at) : null;
   // (those added who have not signed in yet are the workspace page's, `added`: no one here to show devices of)
   const members = [...f.members].filter(([s]) => !isPending(s)).map(([s, m]) => ({
     sub: s, email: m.email, name: str(get(people.get(s), "name")) ?? "", role: m.role, you: s === sub,
     nameText: str(get(people.get(s), "name")) || m.email, roleText: roleText(m.role),
     groups: byApp([...f.devices.values()].filter((d) => d.sub === s).map(device)),
+    ...(manages && webOnly?.has(s) ? { appText: t("core-misc.lock.webOnly") } : {}),
   }));
+  const appText = webOnly !== null && sub !== null && !inner.host.appKeys && mine?.kind === "web" && webOnly.has(sub) ? t("core-misc.lock.appSoon") : null;
   const renew = members.flatMap((m) => (m.you ? m.groups.flatMap((g) => g.devices).filter((d) => d.renewSoon) : []));
   const dismissed = get(get(inner.data.shared({ topic: "prefs" }), "lockNotice"), ws) === true;
   // An app in the lock that does not sign with its key (let in before it kept one, as the devices there when the lock
@@ -2503,7 +2510,22 @@ export function lockView(inner: Inner, ws: string): J {
     // it is off, the button that turns it on again (`lock.open`).
     ...(rootText !== null ? { rootText } : {}),
     ...(onAgain ? { onAgainText: t("core-misc.lock.reason.enable") } : {}),
+    // This web page's person has no app in safe mode, which its upgrade will need (`webOnlyIn`).
+    ...(appText !== null ? { appText } : {}),
   };
+}
+
+/// Of a chain's devices, the people with a web page on it and no app: those the upgrade of safe mode would leave
+/// with no device of theirs to approve a web page by (their first app comes in as a newcomer's, approved by an owner's
+/// or admin's).
+function webOnlyIn(devices: Iterable<J>, at: number): Set<string> {
+  const web = new Set<string>(), app = new Set<string>();
+  for (const d of devices) {
+    if (live(d, at) === undefined || typeof d.sub !== "string") continue;
+    (d.kind === "web" ? web : app).add(d.sub);
+  }
+  for (const s of app) web.delete(s);
+  return web;
 }
 
 /// A workspace's `lock` topic's `pending`: what this device did in the workspace's lock that no station took yet, then
