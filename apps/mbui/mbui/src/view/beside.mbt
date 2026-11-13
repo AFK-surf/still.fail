@@ -27,7 +27,8 @@ pub(all) enum Along {
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in a window `vw` by `vh`), Radix's Popper: on `side`,
 /// `offset` away, lined up `along` it (moved `along_offset` further), kept `padding` inside the window (`flip`: to the
 /// other side when it does not fit on its own and fits better there; moved along the side to stay in, and over the
-/// anchor where it fits on neither: Radix's shift on both axes); `rtl`: right to left, a start the right; `clear`: how
+/// anchor where it fits on neither: Radix's shift on both axes); `on`: the side it is on now, where it stays as long
+/// as it has the room there (else as `side` and `flip` say); `rtl`: right to left, a start the right; `clear`: how
 /// far in from the window's top, right, foot and left the system's bars reach (their safe area: the status bar, an
 /// iPhone Duo's bars of the app's actions and tabs, the home indicator), kept clear as the window's own edges are. Its
 /// top left, and the side it went on.
@@ -43,6 +44,7 @@ pub fn place_beside(
   along_offset? : Double = 0.0,
   padding? : Double = 8.0,
   flip? : Bool = true,
+  on? : Side,
   rtl? : Bool = false,
   clear? : (Double, Double, Double, Double) = (0.0, 0.0, 0.0, 0.0),
 ) -> (Double, Double, Side) {
@@ -71,10 +73,15 @@ pub fn place_beside(
       Left | Right => w
     }
   }
-  let side = if flip && room(side) < need(side) && room(opposite(side)) > room(side) {
-    opposite(side)
-  } else {
-    side
+  let side = match on {
+    // (on that side still, where it has the room there: kept there, never back to its own for having the room again)
+    Some(s) if room(s) >= need(s) => s
+    _ =>
+      if flip && room(side) < need(side) && room(opposite(side)) > room(side) {
+        opposite(side)
+      } else {
+        side
+      }
   }
   // right to left, a start is the right
   let across = side == Top || side == Bottom
@@ -129,8 +136,8 @@ pub(all) struct Beside {
   at_pointer : Bool
   width : BesideWidth
   along_offset : Double
-  /// on the side it first went on for as long as it is shown (View::beside's `keeps_side`)
-  keeps_side : Bool
+  /// on the side it is on while it has the room there (View::beside's `holds_side`)
+  holds_side : Bool
 }
 
 ///|
@@ -165,12 +172,11 @@ pub(all) enum BesideWidth {
 /// out or placed again. So it reads the anchor's words as they are laid out, nothing else. `along_offset`: moved
 /// that much further along its side (Ctx::place's): right, or down, beside a side across the anchor; right to left, the
 /// other way; from all of the anchor, or from its `piece` where it has one; in its own points, drawn as it is; kept in
-/// the window as ever (`padding`). `keeps_side`: on the side it first went on (its own, or the other where that had not
-/// the room) for as long as it is shown, never to the other however tall or wide what it holds comes to be: grown or
-/// shrunk, only its edge away from its anchor moves (above it, its top; below it, its foot). Where that side comes to
-/// have not the room for it (the window made smaller), it stays on it and is moved along and over its anchor to stay
-/// in the window, as one on neither side with the room is (place_beside's shift); made anew (shown again), it goes on
-/// whichever side has the room then.
+/// the window as ever (`padding`). `holds_side`: on the side it is on for as long as it has the room there, to the other only for want of it there
+/// (where its own has not the room, as ever), never back for its own having the room again: grown or shrunk, only its
+/// edge away from its anchor moves while it stays (above it, its top; below it, its foot). Where the side it is on
+/// comes to have not the room (it grew, the window was made smaller), placed as one placed afresh (its own side,
+/// flipped where it has not the room there).
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -182,7 +188,7 @@ pub fn View::beside(
   width? : BesideWidth = Own,
   piece? : (Double, Double) -> (Double, Double, Double, Double)?,
   along_offset? : Double = 0.0,
-  keeps_side? : Bool = false,
+  holds_side? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.beside_piece = piece
@@ -193,7 +199,7 @@ pub fn View::beside(
     Some(_) => ()
     None => self.tree.beside_widths.remove(self.at)
   }
-  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, width, along_offset, keeps_side })
+  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, width, along_offset, holds_side })
   if !self.tree.besides_at.contains(self.at) {
     self.tree.besides_at.push(self.at)
   }
@@ -342,19 +348,16 @@ fn Tree::besides_placed(self : Tree) -> Unit {
         _ => (ax, ay, aw, ah)
       }
     }
-    // (keeping the side it first went on: placed on it again, never flipped; first, on whichever has the room)
-    let (side, flip) = match (b.keeps_side, n.went) {
-      (true, Some(w)) => (w, false)
-      _ => (b.side, true)
-    }
+    // (holding the side it is on: kept there while it has the room there)
+    let on = if b.holds_side { n.went } else { None }
     let (x, y, went) = place_beside(
       rect,
       n.lw * hs,
       n.lh * hs,
       self.last_w,
       self.last_h,
-      side~,
-      flip~,
+      side=b.side,
+      on?,
       along=b.along,
       offset=b.offset,
       along_offset=b.along_offset * hs,

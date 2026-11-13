@@ -423,11 +423,11 @@ test "beside: moved along its side by along_offset, either way, from its anchor'
 }
 
 ///|
-test "beside keeping its side: above its anchor where it had not the room below, kept above as it comes to fit below, only its top moving; shown again, below; one not keeping it goes below at once" {
+test "beside holding its side: above its anchor where it had not the room below, kept above as it comes to fit below, only its top moving; shown again, below; one not holding it goes below at once" {
   let h = @signals.signal(200.0, same=fn(a, b) { a == b })
   let on = @signals.signal(true, same=fn(a, b) { a == b })
   let ids : Map[String, @view.NodeId] = Map([])
-  let make = fn(keeps : Bool) {
+  let make = fn(holds : Bool) {
     @view.Tree::new(
       fn(root) {
         root.box(fn(a) {
@@ -440,7 +440,7 @@ test "beside keeping its side: above its anchor where it had not the room below,
           b
           .width(Is(Some(60.0)))
           .height(By(fn() { Some(h.get()) }))
-          .beside(ids["a"], side=Bottom, offset=6.0, keeps_side=keeps)
+          .beside(ids["a"], side=Bottom, offset=6.0, holds_side=holds)
           |> ignore
         })
       },
@@ -465,12 +465,76 @@ test "beside keeping its side: above its anchor where it had not the room below,
   t.event(30.0, fn() { on.set(true) })
   t.frame(400.0, 400.0) |> ignore
   assert_eq(at(), (276.0, 80.0), msg="shown again: below")
-  // (one not keeping its side: below as soon as it fits)
+  // (one not holding its side: below as soon as it fits)
   h.set(200.0)
   on.set(true)
   let u = make(false)
   u.frame(400.0, 400.0) |> ignore
   u.event(10.0, fn() { h.set(80.0) })
   u.frame(400.0, 400.0) |> ignore
-  assert_eq(u.drawn_of(ids["b"]).map(fn(d) { d.y }), Some(276.0), msg="not keeping it: below")
+  assert_eq(u.drawn_of(ids["b"]).map(fn(d) { d.y }), Some(276.0), msg="not holding it: below")
+}
+
+///|
+test "beside holding its side: short below its anchor, grown past the room below: above, for want of it; shrunk again: kept above; shown below and the window made too short below: placed afresh, above" {
+  let h = @signals.signal(80.0, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = Map([])
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(Is((100.0, 250.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b.width(Is(Some(60.0))).height(By(fn() { Some(h.get()) })).beside(ids["a"], side=Bottom, offset=6.0, holds_side=true)
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  let at = fn() { t.drawn_of(ids["b"]).map(fn(d) { d.y }) }
+  t.frame(400.0, 400.0) |> ignore
+  assert_eq(at(), Some(276.0), msg="short: below")
+  // (200 tall: 116 below, 236 above: above for want of room below)
+  t.event(10.0, fn() { h.set(200.0) })
+  t.frame(400.0, 400.0) |> ignore
+  assert_eq(at(), Some(44.0), msg="grown: above")
+  // (80 tall again: room below too; kept above, only its top moved)
+  t.event(20.0, fn() { h.set(80.0) })
+  t.frame(400.0, 400.0) |> ignore
+  assert_eq(at(), Some(164.0), msg="shrunk: kept above")
+  // (a 400 high window, the anchor at 250, one 30 tall: kept above as it has the room; the window 300 high as it is
+  // above: kept above, the room there as it was)
+  t.event(30.0, fn() { h.set(30.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), Some(214.0), msg="above still: room there")
+}
+
+///|
+test "beside holding its side: below its anchor, the window made too short below: placed afresh, above" {
+  let ids : Map[String, @view.NodeId] = Map([])
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(Is((100.0, 250.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b.width(Is(Some(60.0))).height(Is(Some(80.0))).beside(ids["a"], side=Bottom, offset=6.0, holds_side=true) |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  let at = fn() { t.drawn_of(ids["b"]).map(fn(d) { d.y }) }
+  t.frame(400.0, 400.0) |> ignore
+  assert_eq(at(), Some(276.0), msg="below")
+  // (300 high: 16 below, 236 above: not the room below any more, placed afresh: above)
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), Some(164.0), msg="window too short below: above")
 }
