@@ -35,7 +35,22 @@ fn outside_came() -> Unit {
 /// What came from outside that is no signal (a made-up core answering a call at once, as a core's message is): taken
 /// as an event from outside, what is kept built anew for it (outside_came).
 pub fn came_from_outside() -> Unit {
-  outside_came()
+  answered_from_outside(fn() {  })
+}
+
+///|
+/// A made-up core's answer given at once (`answer`, a call's: what it hands the one that asked), as a core's message
+/// gives it: taken as an event from outside where `told` (what it changes is no signal), then given. One asked as a
+/// computed works its value out (a page's read asking the core) is kept and given once that is over, as a device hears
+/// its core only between what the app runs: given in the getter, what it tells ran what reads that computed, which read
+/// it again half made (`@signals.after_computing`; a sweep's 已归档 press on the screens' round, 2026-11-14).
+pub fn answered_from_outside(answer : () -> Unit, told? : Bool = true) -> Unit {
+  @signals.after_computing(fn() {
+    if told {
+      outside_came()
+    }
+    answer()
+  })
 }
 
 ///|

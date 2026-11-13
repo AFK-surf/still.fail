@@ -23,6 +23,8 @@ pub fn after_frame(() -> Unit) -> Unit
 
 pub fn alpha(Int64, Double) -> Int64
 
+pub fn answered_from_outside(() -> Unit, told? : Bool) -> Unit
+
 pub fn app_awake() -> Bool
 
 pub fn app_focused() -> Bool
