@@ -701,11 +701,13 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
 /// has read already), in place of the row's. What shares it or takes it elsewhere (复制会话链接, 接力到频道 for a thread with an
 /// agent, and share_items: 分享给其他 workspace, 分享图片, 在 Slack／飞书打开) is one item, 分享…, its own menu from
 /// `share_from` (where the menu was opened), where there are two or more of them (左子健, 2026-11-09: 菜单有点太多了，只把分享收进一个).
+/// `here`: a row's of a list made once, its 归档 said where the row was (archive_row's `here`).
 fn chat_menu_items(
   src : Source,
   item : ChatItem,
   share_from~ : () -> @sf.Beside,
   page? : Array[@sf.MenuItem?],
+  here? : Bool = false,
 ) -> Array[@sf.MenuItem?] {
   let r = row_ref(item)
   let items : Array[@sf.MenuItem?] = []
@@ -811,7 +813,7 @@ fn chat_menu_items(
   }
   // with the chat's own state (pinned, kept), not last: a sheet's last row is over the screen's foot, where a thumb
   // going home or back lands on it
-  items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
+  items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item, here~) })))
   // (a line between the groups: the chat itself; where else it is and goes)
   rule_after(items)
   // the chat an agent opened it from: gone to (its own page, its row as it is)
@@ -1039,12 +1041,14 @@ let listed : Ref[Array[ChatItem]] = Ref([])
 ///|
 /// Archives a row's chat: its 归档 key, its menu's, its swipe;
 /// one keeping watch only once asked, in the core's words (its swipe also one at work: `ask`, the core's swipeAsk). Its chat in view goes to
-/// the chat after it in the list (else before it; else the list alone) at once. Said at once, by its title (the core's
-/// list has it gone); why not, when not (`failed` told then).
+/// the chat after it in the list (else before it; else the list alone) at once. `here` (from a row of a list made
+/// once): said where its row was, by what its swipe uncovers there, with its 撤销 (archived_here: the core's list has it
+/// gone), felt as something done; else said at once in a toast with its 撤销. Why not, when not (`failed` told then).
 fn archive_row(
   src : Source,
   item : ChatItem,
   ask? : String? = item.watch_ask,
+  here? : Bool = false,
   then? : () -> Unit = fn() {  },
   failed? : () -> Unit = fn() {  },
 ) -> Unit {
@@ -1060,6 +1064,36 @@ fn archive_row(
   let run = fn() {
     then()
     leave_archived(item)
+    if here {
+      // (one at a time: another's 撤销 over as this one is said)
+      archived_n.val += 1
+      let n = archived_n.val
+      // (its 撤销 asks it back and says nothing more: its row coming back over its tray says it; why not, act's toast)
+      let undo = fn() {
+        let back = params.copy()
+        back["archived"] = Json::boolean(false)
+        act(src, @sf.t("android-misc.archive.restoreWhat"), "", "chat.archive", Json::object(back))
+      }
+      // (its line not kept, a toast in its place: as from anywhere else)
+      let toast = fn() {
+        @sfbase.toast_later(
+          @sf.t("web-main.chat.archivedNamed", args=[("title", item.title)]),
+          action=@sf.t("android-chat.archived.undo"),
+          run=@sfbase.archive_undo(src, params),
+        )
+      }
+      archived_here.set(Some({ name: @sfbase.row_name(item), n, undo, toast, undone: false }))
+      @ui.haptic(Confirm)
+      act(src, @sf.t("android-chat.archive.verb"), "", "chat.archive", Json::object(params), failed=fn() {
+        // (why not is act's toast; its row back in its place, nothing said there)
+        match archived_here.untracked() {
+          Some(a) if a.n == n => archived_here.set(None)
+          _ => ()
+        }
+        failed()
+      })
+      return
+    }
     act(
       src,
       @sf.t("android-chat.archive.verb"),
@@ -1079,6 +1113,35 @@ fn archive_row(
     None => run()
   }
 }
+
+///|
+/// A chat archived from a list's row while what its row uncovered stays in its place saying so (chat_row_node's tray):
+/// the row's name, which archive it is (archived_n's), what asks it back, what says it in a toast with its 撤销 where
+/// its list keeps no line for it (RowsMotion::said), whether 撤销 was pressed (its row on its way back over it).
+priv struct ArchivedHere {
+  name : String
+  n : Int
+  undo : () -> Unit
+  toast : () -> Unit
+  undone : Bool
+}
+
+///|
+/// The chat archived last from a row, its 撤销 offered where its row was till that is pressed, its time is out
+/// (toast_action_ms: chats_lists_node) or another is archived so (one at a time).
+// kept across runs: put back by sidebar_reset
+let archived_here : @signals.Signal[ArchivedHere?] = @signals.signal(None, same=fn(a, b) {
+  match (a, b) {
+    (Some(x), Some(y)) => x.n == y.n && x.undone == y.undone
+    (None, None) => true
+    _ => false
+  }
+})
+
+///|
+/// How many chats were archived from a row so far (which one archived_here says).
+// kept across runs: put back by sidebar_reset
+let archived_n : Ref[Int] = Ref(0)
 
 ///|
 /// Away from an archived chat's page if it is the one in view: to its neighbour in the list, else the list alone.

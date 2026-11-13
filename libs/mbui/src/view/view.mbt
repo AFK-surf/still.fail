@@ -3192,6 +3192,10 @@ fn[T : Eq] Tree::structured(
   let watch : Ref[@signals.Watch?] = Ref(None)
   let w = @signals.watch(fn() {
     guard live.val && watch.val is Some(w) else { return }
+    // (the tree let go, or being so (Tree::dispose: what its nodes' going writes tells the watches of those not let go
+    // yet): nothing more made in it. What one made then was held by a node already gone, so never let go, its
+    // bindings told on by what outlives the tree (an app's state) and read against nodes that are no more)
+    guard !self.gone else { return }
     // (told while an answer is: a watch woken from rest tells as it wakes, answering.mbt)
     let quiet = answering_depth.val > 0
     // (read and done as of one moment, the change's that told it: what the read works out at the cause's moment is
@@ -3223,6 +3227,7 @@ fn[T : Eq] Tree::structured(
   let settle = fn() {
     queued.val = false
     guard live.val && watch.val is Some(w) else { return }
+    guard !self.gone else { return }
     self.at_cause(fn() {
       guard live.val else { return false }
       let v = w.read(read)
