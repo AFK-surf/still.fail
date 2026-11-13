@@ -383,7 +383,15 @@ fn pane_made(
                 },
                 // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
                 body=fn(col, s, r, composer, shows) { chat_body_nodes(col, s, r, tips, stint, composer, shows) },
-                foot=fn(c, s, r) { chat_composer_nodes(c, s, r, wide.tape.get()) },
+                // (the composer's old view on the page's way to another width as the side panel slides beside it, as the
+                // old page's was inside its with_side: its foot's room across the way, not stepped where it crosses its
+                // width, composer_foot_in)
+                foot=fn(c, s, r) {
+                  match @sfbase.workspace_in_view(s).0 {
+                    Some(w) => with_side(c, s, w, r, fn() { chat_composer_nodes(c, s, r, wide.tape.get()) })
+                    None => chat_composer_nodes(c, s, r, wide.tape.get())
+                  }
+                },
               )
             })
             |> ignore

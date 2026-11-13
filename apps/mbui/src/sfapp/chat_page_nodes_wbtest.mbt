@@ -1066,9 +1066,10 @@ test "a chat's page made with its inside nodes, on 小屏: words sent read up th
 test "大屏, a chat's page made with its inside nodes: a 文件 tab's row carried over its messages frosts them with 松开以添加到消息, not over the composer, gone as it leaves; let go on a message or on the composer, into the draft once by its path" {
   let calls : Array[(String, Json)] = []
   let (t, src) = chat_nodes_calling(1280.0, 800.0, 0, calls)
-  // (the press on the tab's row takes the focus from the composer, and 300 ms later its old view lets it go
-  // (composer.mbt's `composer/let-go`): its field, col "发消息", steps 694 to 702 in one frame at about 1600, judged
-  // at 60 and 120 frames a second (sizes steady). The old composer's own; not judged here till it is made as nodes)
+  // (the 文件 tab's panel sliding in narrows the chat: a message row of its list, made as nodes, comes out 8 shorter in
+  // one frame at about 1650 as the panel's way ends (chat_jump_node's flash over it, sizes steady at 60 and 120 frames a
+  // second), where the old list kept its rows at the narrower width all the way (chat_list's laid_w by page_way). The
+  // list's own; not judged here till its rows go so. The composer under it goes its way with the page, with_side)
   t.motion_unjudged(true)
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
