@@ -32,7 +32,7 @@ test "81-station-mark" {
     f.run_to(@sf.presented_rest)
     f.tap("=图标")
     f.run_to(@sf.presented_rest)
-    // 不使用图标 is under the icons: a search that finds none brings it up
+    // 不使用图标 the grid's first cell, there whatever the words find (none, here)
     f.tap("=图标")
     f.tap("搜索图标")
     f.type_text("zzzz")

@@ -727,6 +727,7 @@ android-settings.station.joined
 android-settings.station.make
 android-settings.station.name
 android-settings.station.namePlaceholder
+android-settings.station.pictures
 android-settings.station.remove
 android-settings.station.removeRow
 android-settings.station.removeText

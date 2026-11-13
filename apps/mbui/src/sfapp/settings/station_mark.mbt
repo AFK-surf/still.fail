@@ -20,8 +20,8 @@ let mark_colors : Array[String] = ["red", "orange", "amber", "green", "teal", "b
 ///|
 /// The picker as it is while up, its own each time it opens (what reads it told as it changes).
 priv struct MarkPick {
-  /// the emoji's side (else the icons')
-  emojis : @signals.Signal[Bool]
+  /// the side shown: the icons' (0), the emoji's (1), a picture's (2)
+  side : @signals.Signal[Int]
   /// the icons' colour ("": the words')
   color : @signals.Signal[String]
   /// a picture picked too large to put up as it is, being read to make it small (its key), "" none
@@ -199,7 +199,7 @@ pub fn open_mark_pick(
     icon.has_prefix("https://") ||
     icon.has_prefix("http://")
   let st : MarkPick = {
-    emojis: @signals.signal(glyph is None && !picture && emoji != ""),
+    side: @signals.signal(if picture { 2 } else if glyph is None && emoji != "" { 1 } else { 0 }),
     color: @signals.signal(match glyph {
       Some((_, col)) => col
       None => ""
@@ -270,19 +270,32 @@ fn mark_pick_body(
   // (filling its share, it lays out its own sides: a page's room)
   v.box(fn(b) {
     @sf.style_node(b, fn() { mark_body })
-    mark_head_node(b, st, pick)
-    // the icons' colour: the words' own first, then the marks'; the one picked ringed; it colours the grid, and the
-    // icon it has, at once
-    b.show(fn() { !st.emojis.get() }, fn(row) { mark_colours_node(row, st, glyph, set) })
-    mark_grid_node(b, core, st, emoji, icon, glyph, picture, pick)
+    mark_head_node(b, st)
+    // each side all of what is under the sides, one in the other's place at once (a tab's): its field, the icons'
+    // colours, the grid; a picture's its own. A picture its own side, as the icons and the emoji are; none the grid's
+    // first cell, on both of theirs: neither at the end of the hundreds of icons, scrolled to, nor a card under the
+    // grid taking its room (the user, 2026-11-13: 要翻很久, 整体重新设计一下布局)
+    b.pick(fn() { st.side.get() }, fn(room, side) {
+      room.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+      if side == 2 {
+        mark_picture_node(room, core, st, icon, picture, pick)
+        return
+      }
+      mark_field_node(room, st, side == 1, pick)
+      // the icons' colour: the words' own first, then the marks'; the one picked ringed; it colours the grid, and the
+      // icon it has, at once
+      if side == 0 {
+        room.box(fn(row) { mark_colours_node(row, st, glyph, set) }) |> ignore
+      }
+      mark_grid_node(room, st, emoji, icon, glyph, picture, pick)
+    })
   })
   |> ignore
 }
 
 ///|
-/// The icons' side or the emoji's, and its field, in node `v`: an emoji pasted or typed (picked as it is), or words to
-/// find an icon by (the one not shown keeps its own).
-fn mark_head_node(v : @view.View, st : MarkPick, pick : (String, String) -> Unit) -> Unit {
+/// The sides across node `v`: the icons', the emoji's, a picture's.
+fn mark_head_node(v : @view.View, st : MarkPick) -> Unit {
   v.box(fn(h) {
     @sf.style_node(h, fn() { mark_head })
     h.box(fn(line) {
@@ -290,30 +303,38 @@ fn mark_head_node(v : @view.View, st : MarkPick, pick : (String, String) -> Unit
       line.box(fn(slot) {
         @sf.segmented_node(
           slot,
-          fn() { [tr("android-settings.station.glyphs"), "Emoji"] },
-          fn() { if st.emojis.get() { 1 } else { 0 } },
-          fn(i) { st.emojis.set(i == 1) },
+          fn() { [tr("android-settings.station.glyphs"), "Emoji", tr("android-settings.station.pictures")] },
+          fn() { st.side.get() },
+          fn(i) { st.side.set(i) },
         )
       })
       |> ignore
     })
     |> ignore
-    h.pick(fn() { st.emojis.get() }, fn(f, emojis) {
-      if emojis {
-        @sf.input_node(f, st.typed, placeholder=tr("android-settings.station.emojiPaste"), edited=fn(words) {
-          match first_emoji(words) {
-            Some(e) => {
-              st.typed.set("")
-              pick(e, "")
-            }
-            None => ()
+  })
+  |> ignore
+}
+
+///|
+/// A side's field in node `v`: the emoji's (`emojis`) an emoji pasted or typed (picked as it is), the icons' words to
+/// find an icon by; each keeps its own as the other is shown.
+fn mark_field_node(v : @view.View, st : MarkPick, emojis : Bool, pick : (String, String) -> Unit) -> Unit {
+  v.box(fn(f) {
+    @sf.style_node(f, fn() { mark_field })
+    if emojis {
+      @sf.input_node(f, st.typed, placeholder=tr("android-settings.station.emojiPaste"), edited=fn(words) {
+        match first_emoji(words) {
+          Some(e) => {
+            st.typed.set("")
+            pick(e, "")
           }
-        })
-        |> ignore
-      } else {
-        @sf.input_node(f, st.query, placeholder=tr("android-settings.station.glyphSearch")) |> ignore
-      }
-    })
+          None => ()
+        }
+      })
+      |> ignore
+    } else {
+      @sf.input_node(f, st.query, placeholder=tr("android-settings.station.glyphSearch")) |> ignore
+    }
   })
   |> ignore
 }
@@ -355,12 +376,12 @@ fn mark_colours_node(row : @view.View, st : MarkPick, glyph : (String, String)?,
 }
 
 ///|
-/// What scrolls, in node `v`: the grid's rows, then a picture or none (a @sf.panel_list_node in what is left of it: the
-/// sheet as tall as it comes to, up to its share). Its rows are those of the side shown and the words typed: either
-/// changed, they are other rows, the old let go and the new made at once, as the list's are as it scrolls.
+/// What scrolls, in node `v` (all of what is left: the sheet as tall as it comes to, up to its share): the grid's rows
+/// in a @sf.panel_list_node, its first cell none (on the accent's wash where the mark has none), then the side's own.
+/// Its rows are those of the side shown and the words typed: either changed, they are other rows, the old let go and
+/// the new made at once, as the list's are as it scrolls.
 fn mark_grid_node(
   v : @view.View,
-  core : Core,
   st : MarkPick,
   emoji : String,
   icon : String,
@@ -368,9 +389,11 @@ fn mark_grid_node(
   picture : Bool,
   pick : (String, String) -> Unit,
 ) -> Unit {
-  // the one it has, on the accent's wash
+  // the one it has, on the accent's wash; none's cell where it has none
   let kept = fn(emojis : Bool) {
-    if emojis {
+    if !@sf.has_station_mark(emoji, icon) {
+      mark_none_cell
+    } else if emojis {
       if glyph is None && !picture && emoji != "" { bare_emoji(emoji) } else { "" }
     } else {
       match glyph {
@@ -379,52 +402,54 @@ fn mark_grid_node(
       }
     }
   }
-  // the icons found by every word typed (in their names, English or Chinese); all of them for none; the emoji, the
-  // mark's own first where it is none of them
+  // none first; then the icons found by every word typed (in their names, English or Chinese), all of them for none;
+  // the emoji, the mark's own first where it is none of them
   let offered = @signals.computed(fn(_) {
-    let emojis = st.emojis.get()
+    let emojis = st.side.get() == 1
     let k = kept(emojis)
+    let l = [mark_none_cell]
     if !emojis {
       let terms = st.query.text().to_lower().split(" ").map(fn(x) { x.to_owned() }).filter(fn(x) { x != "" }).collect()
-      glyph_list.filter(fn(g) { terms.iter().all(fn(term) { g.2.contains(term) }) }).map(fn(g) { g.0 })
-    } else if k != "" && !station_emoji.iter().any(fn(e) { bare_emoji(e) == k }) {
-      let l = [emoji]
+      for g in glyph_list {
+        if terms.iter().all(fn(term) { g.2.contains(term) }) {
+          l.push(g.0)
+        }
+      }
+    } else if k != "" && k != mark_none_cell && !station_emoji.iter().any(fn(e) { bare_emoji(e) == k }) {
+      l.push(emoji)
       for i in 0..<(station_emoji.length() - 1) {
         l.push(station_emoji[i])
       }
-      l
     } else {
-      station_emoji
+      for e in station_emoji {
+        l.push(e)
+      }
     }
+    l
   })
-  // (a block's key: what it shows of, the side and the words typed, then which; the foot alike whatever shows)
-  let of = fn() { if st.emojis.get() { "e//" } else { "g/" + st.query.text() + "/" } }
+  // (a block's key: what it shows of, the side and the words typed, then which; under none alone, that none was found)
+  let of = fn() { if st.side.get() == 1 { "e//" } else { "g/" + st.query.text() + "/" } }
   let keys = fn() {
     let at = of()
     let n = offered.get().length()
     let l : Array[String] = []
-    if n == 0 {
-      l.push(at + "none")
-    }
     for r in 0..<((n + mark_across - 1) / mark_across) {
       l.push(at + r.to_string())
     }
-    l.push("foot")
+    if n == 1 {
+      l.push(at + "none")
+    }
     l
   }
   v.box(fn(room) {
     @sf.style_node(room, fn() { mark_grid_room })
     // (the other side's list another, from its top, as the old one's key was the side's)
-    room.pick(fn() { st.emojis.get() }, fn(list, _) {
+    room.pick(fn() { st.side.get() == 1 }, fn(list, _) {
       list.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
       @sf.panel_list_node(
         list,
         keys,
         fn(r, k) {
-          if k == "foot" {
-            mark_foot_node(r, core, st, emoji, icon, picture, pick)
-            return
-          }
           if k.has_suffix("/none") {
             @sf.page_note_node(r, fn() { tr("android-settings.station.glyphNone") })
             return
@@ -451,8 +476,12 @@ fn mark_grid_node(
 }
 
 ///|
+/// The key of none's cell, the grid's first: no icon's or emoji's, nor the "" of the one a side's grid does not have.
+let mark_none_cell : String = "none:"
+
+///|
 /// A row of the grid in node `v`: `cells` six to it, each as wide as a sixth of it (a thumb's), square, the one the mark
-/// has (`kept`) on the accent's wash; pressed, picked (an icon in the colour picked).
+/// has (`kept`) on the accent's wash; pressed, picked (an icon in the colour picked; none, the mark taken away).
 fn mark_row_node(
   v : @view.View,
   st : MarkPick,
@@ -469,20 +498,31 @@ fn mark_row_node(
         continue
       }
       let key = cells[k]
-      let on = (if emojis { bare_emoji(key) } else { key }) == kept
+      let none = key == mark_none_cell
+      let on = (if emojis && !none { bare_emoji(key) } else { key }) == kept
       let press = fn() {
-        if emojis {
+        if none {
+          pick("", "")
+        } else if emojis {
           pick(key, "")
         } else {
           let col = st.color.get()
           pick(glyph_emoji(key), "glyph:" + key + (if col == "" { "" } else { ":" + col }))
         }
       }
+      let label = if none { tr("android-settings.station.emojiClear") } else { key }
       row.box(fn(cell) {
         @sf.style_node(cell, fn() { if on { mark_cell_on } else { mark_cell } }, in_row=true)
         // (square: as tall as it is wide)
         cell.aspect(Is(1.0)) |> ignore
-        if emojis {
+        if none {
+          // (a cross in the muted ink: no mark; the accent's where it is the one the mark has)
+          @sf.icon_node(cell, "close", mark_glyph, By(fn() {
+            let t = @sf.theme()
+            if on { t.p.accent_text } else { t.p.muted }
+          }))
+          |> ignore
+        } else if emojis {
           @sf.words_node(cell, fn() { key }, fn() { mark_emoji_words }) |> ignore
         } else {
           @sf.station_mark_node(cell, fn() { "" }, fn() { "glyph:" + key }, mark_glyph, fn() {
@@ -491,8 +531,8 @@ fn mark_row_node(
           }, fn() { 0 })
         }
         // (a finger's press rippling over it, as an old row's: square outside a card)
-        @sf.rippled_node(cell, press, 0.0, fn() { key })
-        cell.says(By(fn() { Some(@view.said(Button, label=key, selected=on)) })) |> ignore
+        @sf.rippled_node(cell, press, 0.0, fn() { label })
+        cell.says(By(fn() { Some(@view.said(Button, label~, selected=on)) })) |> ignore
       })
       |> ignore
     }
@@ -501,64 +541,57 @@ fn mark_row_node(
 }
 
 ///|
-/// Under the grid, in node `v`: a picture put up (the system's picker's answer; one too large made small first), or
-/// none.
-fn mark_foot_node(
+/// A picture's side, in node `v` (what is left, its things in its middle): the picture the mark has, large, or the
+/// upload's icon where it has none; under it 上传图片 (更换图片 where it has one): the system's picker's answer put up, one
+/// too large read and made small first.
+fn mark_picture_node(
   v : @view.View,
   core : Core,
   st : MarkPick,
-  emoji : String,
   icon : String,
   picture : Bool,
   pick : (String, String) -> Unit,
 ) -> Unit {
-  v.box(fn(f) {
-    @sf.style_node(f, fn() { mark_foot })
-    @sf.group_node(f, fn(g) {
-      @sf.link_row_node(
-        g,
-        fn() { tr(if picture { "android-settings.station.imageAnother" } else { "android-settings.station.image" }) },
-        fn() {
-          // the picture the system's picker answers with put up as the mark, while the picker is up
-          let asked = (core.pick_picture)(fn(bytes) {
-            guard st.up.val else { return }
-            match bytes {
-              Some(b) =>
-                match picture_mark(b) {
-                  Some(url) => pick("", url)
-                  None => {
-                    mark_pictures.val += 1
-                    let key = "mem:station-mark/\{mark_pictures.val}"
-                    @ui.add_image(key, b)
-                    st.reading.set(key)
-                  }
-                }
-              None => ()
+  let up = fn() {
+    // the picture the system's picker answers with put up as the mark, while the picker is up
+    let asked = (core.pick_picture)(fn(bytes) {
+      guard st.up.val else { return }
+      match bytes {
+        Some(b) =>
+          match picture_mark(b) {
+            Some(url) => pick("", url)
+            None => {
+              mark_pictures.val += 1
+              let key = "mem:station-mark/\{mark_pictures.val}"
+              @ui.add_image(key, b)
+              st.reading.set(key)
             }
-          })
-          if !asked {
-            (core.say)(tr("android-settings.station.imageFailed"))
           }
-        },
-        chevron=false,
-        lead=LeadMade(fn(l) {
-          if picture {
-            @sf.station_mark_node(l, fn() { "" }, fn() { icon }, mark_row_mark, fn() { @sf.theme().p.text }, fn() { 0 })
-          } else {
-            @sf.icon_node(l, "image-upload", mark_row_mark, By(fn() { @sf.theme().p.text })) |> ignore
-          }
-        }),
-      )
-      if @sf.has_station_mark(emoji, icon) {
-        @sf.link_row_node(
-          g,
-          fn() { tr("android-settings.station.emojiClear") },
-          fn() { pick("", "") },
-          chevron=false,
-          lead=LeadMade(fn(l) { @sf.icon_node(l, "close", mark_row_mark, By(fn() { @sf.theme().p.text })) |> ignore }),
-        )
+        None => ()
       }
     })
+    if !asked {
+      (core.say)(tr("android-settings.station.imageFailed"))
+    }
+  }
+  v.box(fn(side) {
+    @sf.style_node(side, fn() { mark_picture_side })
+    side.box(fn(shown) {
+      @sf.style_node(shown, fn() { mark_picture_shown })
+      if picture {
+        @sf.station_mark_node(shown, fn() { "" }, fn() { icon }, mark_picture, fn() { @sf.theme().p.text }, fn() { 0 })
+      } else {
+        @sf.icon_node(shown, "image-upload", mark_picture_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+      }
+    })
+    |> ignore
+    @sf.button_node(
+      side,
+      fn() { tr(if picture { "android-settings.station.imageAnother" } else { "android-settings.station.image" }) },
+      up,
+      icon="image-upload",
+    )
+    |> ignore
   })
   |> ignore
 }
@@ -573,9 +606,14 @@ let mark_body : @ui.Style = @sf.pg_room.then(@ui.style(h=@sf.grow))
 let mark_tall : Double = 0.78
 
 ///|
-/// The side and its field over the grid, 10 apart, 10 under them.
+/// The sides, 10 under them.
 // kept across runs: a value (no field of it changes)
-let mark_head : @ui.Style = @ui.css("w=Full pb=S2_5 gap=S2_5")
+let mark_head : @ui.Style = @ui.css("w=Full pb=S2_5")
+
+///|
+/// A side's field, 10 under it.
+// kept across runs: a value (no field of it changes)
+let mark_field : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 /// The colours across, as far apart as they go, 10 under them; each 32 round, ringed 2 in itself where picked, its
@@ -598,7 +636,7 @@ let mark_dot : Double = 18.0
 let mark_ring : Double = 2.0
 
 ///|
-/// What scrolls: the grid's rows, then a picture or none, in what is left of it (its grid a @sf.panel_list: the sheet
+/// What scrolls: the grid's rows, in what is left of it (its grid a @sf.panel_list: the sheet
 /// as tall as it comes to, up to its share).
 // kept across runs: a value (no field of it changes)
 let mark_grid_room : @ui.Style = @ui.style(w=Full, h=@sf.grow)
@@ -635,12 +673,21 @@ let mark_emoji_words : @ui.TextStyle = @ui.text_style(size=Heading, wrap=false)
 let mark_glyph : Double = 24.0
 
 ///|
-/// A picture or none under the grid, 6 over them, 24 under.
+/// A picture's side: what is left, its picture (or the upload's icon) and its button in its middle, 16 apart, a little
+/// over its middle (24 under).
 // kept across runs: a value (no field of it changes)
-let mark_foot : @ui.Style = @ui.css("w=Full pt=S1_5 pb=S6")
+let mark_picture_side : @ui.Style = @ui.css("w=Full gap=S4 pb=S6 align=ACenter justify=JCenter").then(@ui.style(h=@sf.grow))
 
 ///|
-let mark_row_mark : Double = 20.0
+/// The picture shown: a square of a large block's corner, the canvas's raised ground.
+// kept across runs: a value (no field of it changes)
+let mark_picture_shown : @ui.Style = @ui.css("w=S24 h=S24 radius=Xl2 bg=Surface align=ACenter justify=JCenter")
+
+///|
+let mark_picture : Double = 96.0
+
+///|
+let mark_picture_icon : Double = 32.0
 
 ///|
 /// The emoji a glyph keeps beside it.
