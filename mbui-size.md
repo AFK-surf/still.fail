@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [34cf511f1](https://github.com/AFK-surf/monoid/commit/34cf511f1a6f8cb11487133f623df2b5491bf3f6) station, core: a handover waits for a member's app | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.69 | 53.08 | 95.96 | 113.81 |
 | [f653dbf14](https://github.com/AFK-surf/monoid/commit/f653dbf1469116310a30b12715bc6e4d64ba1ba9) test: the lock's test rigs hand a device nothing a | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.65 | 120.4 |
 | [ed9727a1e](https://github.com/AFK-surf/monoid/commit/ed9727a1ec8e87888480d7b2a01ac2bdc6c8cf14) mbui: account rows say name, plan and allowance; m | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.95 | 108.32 |
 | [e5c9cd7ec](https://github.com/AFK-surf/monoid/commit/e5c9cd7ec832482cc1a59cdeecccc05d55117308) app: a chat's picture opened and read whole shows  | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.98 | 108.71 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e3aa11a3e](https://github.com/AFK-surf/monoid/commit/e3aa11a3efc7783d8c378014f27f9397e09d8cc0) mbui app: a 常用搭配 taken out of the model's panel cl | 1.96 | 2.63 | 11.35 | 30.88 | 40.75 | 27.51 | 52.6 | 94.55 | 105.86 |
 | [c37772e3c](https://github.com/AFK-surf/monoid/commit/c37772e3cefad21d723c7cfd59687dd9054dfb9d) core: a moved workspace's vaults go by the state i | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.6 | 94.14 | 105.45 |
 | [f467b2e01](https://github.com/AFK-surf/monoid/commit/f467b2e018cdbef1c131750017f2a43e84feaa00) mbui: a shared end that stays where it is, flown f | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.58 | 94.36 | 100.06 |
-| [ecfd590f0](https://github.com/AFK-surf/monoid/commit/ecfd590f0ba23a7cfa692ff019a0a30e2195bfb1) fix(mbui): offset slotted viewer flight from its p | 1.96 | 2.63 | 11.32 | 30.82 | 40.64 | 27.47 | 52.52 | 94.21 | 99.86 |
