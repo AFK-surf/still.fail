@@ -39,11 +39,13 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   let t = chat_tester("chat")
   t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
-  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
-  assert_true(rd.jump)
+  let jumps = fn(t : @ui.Tester) {
+    t.semantics().iter().any(fn(s) { s.role == Button && s.label == @sf.t("web-main.chat.toLatest") })
+  }
+  assert_true(jumps(t))
   assert_true(t.find("做完了：列表、跳到最新的按钮") is None)
-  // it comes up growing (its presence, "chat-jump"): tapped once it is there, as a person can only tap what shows
-  t.run_for(t.rest_of("chat-jump") - t.time())
+  // it comes up growing: tapped once it is there, as a person can only tap what shows
+  t.run_for(@ui.move_most_ms)
   // over the send button, the composer's room under it
   t.click(Button, label=@sf.t("web-main.chat.toLatest"))
   // back at its end by the list's own rest (mbui's list_to_end: a glide solved in time, or at once from further than
@@ -53,8 +55,9 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   if rest > t.time() {
     t.run_for(rest - t.time())
   }
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
-  assert_true(!rd.jump)
+  assert_true(!jumps(t))
   // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
@@ -327,25 +330,30 @@ test "a file card in the chat opens its preview" {
 test "what waits to be decided and is out of view: a bell over the way to the end; tapped, the first one's post" {
   let t = chat_tester("chat")
   t.draw()
-  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  let shows = fn(t : @ui.Tester, label : String) {
+    t.semantics().iter().any(fn(s) { s.role == Button && s.label == label })
+  }
+  let bell = @sf.t("web-main.chat.asks.go")
   // both cards in view at the end: no bell
-  assert_true(!rd.ask)
+  assert_true(!shows(t, bell))
   // dragged down (a finger's: no easing to wait for), the cards below what shows
   t.drag(195.0, 150.0, 195.0, 750.0)
   t.drag(195.0, 150.0, 195.0, 750.0)
-  assert_true(rd.ask)
-  assert_true(rd.jump)
+  assert_true(shows(t, bell))
+  assert_true(shows(t, @sf.t("web-main.chat.toLatest")))
   // over the way to the end, once it has risen (the list, still flung, is stopped by a tap first: it takes that one)
   t.run_for(ask_lift_ms)
-  let bell = @sf.t("web-main.chat.asks.go")
-  if t.list_moving() {
+  let k = "ws1/st1\u{1}s-c1"
+  t.click(Button, label=bell)
+  // (the list, still flung, stopped by that tap where it takes it: the next one the bell's)
+  if @sfpages.ask_turns.get(k) is None {
     t.click(Button, label=bell)
   }
-  assert_true(!t.list_moving())
-  t.click(Button, label=bell)
-  assert_eq(rd.flash, "ts8")
+  // (its post lit as it is gone to, from the middle of its hold)
+  t.run_for((flash_in_ms + flash_held_ms) / 2.0)
+  assert_true(lit_over(t, "高度先按 90 估") > 0.99)
   // the next tap goes to the next one's
-  assert_eq(@sfpages.ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
+  assert_eq(@sfpages.ask_turns.get(k), Some(1))
 }
 
 ///|

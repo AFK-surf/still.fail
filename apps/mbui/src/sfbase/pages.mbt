@@ -1051,6 +1051,8 @@ pub fn reset() -> Unit {
   places_back.clear()
   go_back_offsets.clear()
   places_back_said.set(0)
+  // when the flash of a message gone to on a page made as nodes is over (chat_list.mbt)
+  flash_rest_nodes.val = -1.0
   // a new chat while it is made (fresh.mbt)
   fresh_reset()
   // how times are said (message_words.mbt)

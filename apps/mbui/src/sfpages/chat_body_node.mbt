@@ -6,10 +6,9 @@
 // the list's width lays it out (row_side), narrow or wide by that width alone.
 // Not here, each where it comes in: what moves (a row coming in or going on the list's way, words sent flying in, a
 // message coming out of its agent's picture, the room an agent's line leaves; the list's line's), the composer and
-// what floats over the list (the bell, the outline; the way to the newest and a message gone to are chat_jump_node's,
-// the page's), what is laid over a row (words picked,
-// words found marked, the flash of one gone to, the band of one whose menu is open: the overlays' line's, through each
-// row's `over`), where the list opens (chat_open_place, asked here once as it is made) and what the core is told of
+// what floats over the list (the bell, 对话目录's button, the way to the newest) and what a message gone to shows of
+// it (its flash through each row's `over`, a search's words marked in it) are chat_jump_node's, the page's; what else
+// is laid over a row (words picked, the band of one whose menu is open: the overlays' line's), where the list opens (chat_open_place, asked here once as it is made) and what the core is told of
 // what is read: those the page's, whether the list is at its foot read of its scroll (Scroll::at_foot_now), which rows
 // show and how far down one is, which the list does not say yet.
 
@@ -295,13 +294,16 @@ fn chat_body_node(
   let side = fn() { row_side(width()) }
   // the page before asked of the core as the list nears its top (list_after's: once for each first entry it has, not
   // while the core reads one, nor while it waits after a read that failed: it says when to ask again; asked again
-  // where the read failed)
+  // where the read failed), chat_grow_rows more each time; not while it stands where a go-to put it (ChatJump's
+  // `put`: only once the reader moves it)
   let wants_older = fn() {
     let now = (here.view)()
-    now.more && now.older == "" && now.thread is Some(_)
+    now.more && now.older == "" && now.thread is Some(_) && jump.put.get() == 0
   }
   let asked_from : Ref[Double?] = Ref(None)
-  let ask_older = fn() {
+  // (a read that failed asked again a while after, longer each time it fails again, while it is still wanted)
+  let older_fails = Ref(0)
+  fn ask_older(grow : Bool) -> Unit {
     let now = @signals.untracked(here.view)
     guard now.thread is Some(thread) else { return }
     let first = match now.first_entry {
@@ -314,9 +316,58 @@ fn chat_body_node(
     }
     guard asked_from.val != Some(first) else { return }
     asked_from.val = Some(first)
-    (src.call)("chat.older", { "station": Json::string(here.station), "thread": Json::number(thread) }, fn(res) {
+    let params : Map[String, Json] = { "station": Json::string(here.station), "thread": Json::number(thread) }
+    if grow {
+      params["rows"] = Json::number(@sfbase.chat_grow_rows.to_double())
+    }
+    (src.call)("chat.older", Json::object(params), fn(res) {
       if res is Err(_) {
         asked_from.val = None
+        v.at_moment(v.cause_at() + ask_again_ms(older_fails.val), fn() {
+          if @signals.untracked(wants_older) {
+            ask_older(grow)
+          }
+        })
+        |> ignore
+        older_fails.val += 1
+      } else {
+        older_fails.val = 0
+      }
+    })
+  }
+  // the page after asked as the list nears its foot while the window is short of the chat's end (list_after's: once
+  // for each last entry it has; asked again where the read failed)
+  let wants_newer = fn() {
+    let now = (here.view)()
+    now.newer && now.thread is Some(_)
+  }
+  let asked_after : Ref[Double?] = Ref(None)
+  let newer_fails = Ref(0)
+  fn ask_newer() -> Unit {
+    let now = @signals.untracked(here.view)
+    guard now.thread is Some(thread) else { return }
+    let last = match now.last_entry {
+      Some(l) => l
+      None =>
+        match now.messages.last() {
+          Some(m) => m.seq
+          None => -1.0
+        }
+    }
+    guard asked_after.val != Some(last) else { return }
+    asked_after.val = Some(last)
+    (src.call)("chat.newer", { "station": Json::string(here.station), "thread": Json::number(thread) }, fn(res) {
+      if res is Err(_) {
+        asked_after.val = None
+        v.at_moment(v.cause_at() + ask_again_ms(newer_fails.val), fn() {
+          if @signals.untracked(wants_newer) {
+            ask_newer()
+          }
+        })
+        |> ignore
+        newer_fails.val += 1
+      } else {
+        newer_fails.val = 0
       }
     })
   }
@@ -336,7 +387,11 @@ fn chat_body_node(
       },
       foot=fn(f) {
         match to {
-          Some(r) => chat_to_newest_node(f, src, r, jump, place, here.view, width, here.tips)
+          Some(r) => {
+            chat_to_newest_node(f, src, r, jump, place, here.view, width, here.tips)
+            chat_outline_node(f, src, r, jump, here.view, width, here.tips, here.stint)
+            chat_ask_node(f, r, src, jump, here.view, fn() { rows.get() }, width, here.tips)
+          }
           None => ()
         }
         f.box(fn(g) { g.height(By(fn() { Some(foot()) })) |> ignore }) |> ignore
@@ -351,8 +406,9 @@ fn chat_body_node(
       holds=fn(k) { k != "older" },
       from_end=true,
       place~,
-      near_top=(1.0, wants_older, ask_older),
-      fn(slot, k) { chat_body_row(slot, src, here, k, rows, side, top, core, keeps, made) },
+      near_top=(1.0, wants_older, fn() { ask_older(true) }),
+      near_foot=(1.0, wants_newer, ask_newer),
+      fn(slot, k) { chat_body_row(slot, src, here, k, rows, side, top, core, keeps, made, jump) },
     )
     |> ignore
   })
@@ -368,7 +424,7 @@ fn chat_body_node(
   }
   match to {
     Some(r) => {
-      chat_goes_to(v, r, jump, place, fn() { rows.get() }, here.view, top, ask_older, shows)
+      chat_goes_to(v, src, r, jump, place, fn() { rows.get() }, here.view, top, fn() { ask_older(false) }, shows)
       // (over the list: a passage a mouse picked in a message quoted by its pill)
       chat_quote_node(v, src, r, fn() { rows.get() })
       // ⌘↓ (chat.latest, the keymap's Chat with the field empty): as the way to the newest is pressed
@@ -376,6 +432,14 @@ fn chat_body_node(
         chat_to_newest(src, r, jump, place, here.view)
         true
       })
+      // ⌘G 对话目录, ⌥⇧↑ and ⌥⇧↓ the message a person said before and after the reader's (outline_entries_of's keys;
+      // none in a replay of a run from before the outline, Source's `asks_outline`)
+      .on_action("chat.outline", fn(_) {
+        (src.asks_outline)() &&
+        outline_open_keys(src, r, @signals.untracked(here.view), stint=@signals.untracked(here.stint))
+      })
+      .on_action("chat.said.prev", fn(_) { (src.asks_outline)() && said_go(src, r, @signals.untracked(here.view), -1) })
+      .on_action("chat.said.next", fn(_) { (src.asks_outline)() && said_go(src, r, @signals.untracked(here.view), 1) })
       |> ignore
     }
     None => ()
@@ -401,7 +465,7 @@ fn chat_body_node(
 ///|
 /// Row `k` of a chat's list in `slot` (entry_row's, its row's room round it: message_row_frame_node), as its kind's
 /// row draws it, reading what it is by its key in `rows` as that changes; made again only as it comes to be another
-/// kind.
+/// kind. What it shows of being gone to (its flash, a search's words marked in it) as `jump` says.
 fn chat_body_row(
   slot : @view.View,
   src : Source,
@@ -413,6 +477,7 @@ fn chat_body_row(
   core : @settings.Core?,
   keeps : ChatBodyKeeps,
   made : (String, @view.View) -> Unit,
+  jump : ChatJump,
 ) -> Unit {
   let first = @signals.untracked(fn() { rows.get().rows.get(k) })
   guard first is Some(first) else { return }
@@ -422,9 +487,23 @@ fn chat_body_row(
   let row = fn() { now.get() }
   let entry = fn() { row().entry }
   let top = fn() { chat_body_gap_room(row().gap, (here.width)()) }
-  // (the words ⌘F found, bold in a message's words while its bar is open in this chat: find_words_in)
+  // (the words ⌘F found, bold in a message's words while its bar is open in this chat: find_words_in; a search's in
+  // the message it opened the chat at)
   let chat = here.station + "\u{1}" + here.session
-  let found = fn() { find_words_in(chat) }
+  let found = fn() {
+    let words = find_words_in(chat)
+    match jump.found.get() {
+      (at, marked) if at == k && marked.length() > 0 => {
+        let all = words.copy()
+        all.append(marked)
+        all
+      }
+      _ => words
+    }
+  }
+  // (a message gone to: its row lit across the list, a notice's pill alone)
+  let over = fn(row : @view.View, key : String) { chat_flash_node(row, key, jump) }
+  let pill_over = fn(pill : @view.View, key : String) { chat_flash_node(pill, key, jump, round=true) }
   slot.pick(fn() { chat_body_kind(entry()) }, fn(p, kind) {
     made(k, p)
     // (its words, picked with the pointer, are of its key: a message's quoted by it, chat_quote_node)
@@ -456,11 +535,13 @@ fn chat_body_row(
       KEmpty => frame(fn(b) { chat_empty_node(b) |> ignore })
       KLine => frame(fn(b) { unread_line_node(b) |> ignore })
       KNewer => frame(fn(b) { pages_coming_node(b, fn() { false }) |> ignore })
-      KMine => mine_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m)) |> ignore
-      KNotice => notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied) |> ignore
-      KPerson => person_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m)) |> ignore
+      KMine =>
+        mine_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), over~) |> ignore
+      KNotice => notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied, pill_over~) |> ignore
+      KPerson =>
+        person_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), over~) |> ignore
       KAgent =>
-        agent_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), core~, code=fn(lang) {
+        agent_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), core~, over~, code=fn(lang) {
           if lang == "mermaid" {
             Some(fn(b, code) { @sfbase.viz_mermaid_node(b, src, here.station, code, fn() { @sf.theme().p.subtle }, here.tips) })
           } else {
@@ -561,4 +642,18 @@ let chat_body_no_out : Outgoing = {
   uploads: [],
   created_at: 0.0,
   refused: false,
+}
+
+///|
+/// How long after a read of the pages before or after failed (its `fails`th in a row, from 0) it is asked again: 300 ms,
+/// twice as long each time it fails again, 30 s at most.
+fn ask_again_ms(fails : Int) -> Double {
+  let mut ms = 300.0
+  for _ in 0..<fails {
+    ms = ms * 2.0
+    if ms >= 30000.0 {
+      return 30000.0
+    }
+  }
+  ms
 }

@@ -137,11 +137,12 @@ test "a message found opens its chat at it, with the words to mark there" {
     Chat(r) => {
       assert_eq(r.session, "s-c1")
       t.run_for(@ui.move_most_ms)
-      // gone to (seq 5), its words to mark there, nothing flashing
-      let rd = reading_of("ws1/st1\u{1}s-c1")
-      assert_eq(rd.found_at, "ts5")
-      assert_eq(rd.found_words, ["签名"])
-      assert_eq(rd.flash, "")
+      // gone to (seq 5): its words in view under the bar, nothing flashing (its words marked where it has them: a
+      // chat opened from a found message, below)
+      let words = "改好后的样子："
+      guard t.drawn_of(words) is Some((_, y)) else { fail("the message gone to is not drawn") }
+      assert_true(y > bar_foot() && y < 844.0, msg="the message gone to at \{y}")
+      assert_eq(lit_over(t, words), 0.0)
     }
     _ => fail("not a chat")
   }

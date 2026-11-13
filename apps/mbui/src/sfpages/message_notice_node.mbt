@@ -4,8 +4,7 @@
 // that changes; whether it is open, and when its 复制 was pressed, kept by the message (`opened`, `copied`: the
 // caller's, by its ts), not on the nodes.
 // Its 取消 makes its way along the row as a retry begins or ends (the framework's, along_row), the pill moved aside by
-// as much. Not here yet: which node lights as the notice is gone to is the line drawing what is laid over rows'
-// (`pill_over`).
+// as much. What lights the pill as the notice is gone to is hung on it by its page (`pill_over`).
 
 ///|
 /// What still.fail said (system_notice's) in its row's room (message_row_frame_node: `key`, its list's Entry::id; `side`,
@@ -13,7 +12,8 @@
 /// pressed, open (`opened`, by its ts: all its words, what failed said of it with 复制, its time under it) or closed again.
 /// One about a profile, what went wrong leads to the profile's page; one saying the station lacks the chat's runtime
 /// ends in · 安装; a failure the station takes reports of in · 上报 (asked first); one whose agent waits to retry, 取消
-/// after the pill. `pill_over`, told the pill's node and `key` once as it is made: what lights it as it is gone to.
+/// after the pill. `pill_over`, told the pill's node and `key` once as it is made, before what it holds: what lights it
+/// as it is gone to.
 // the chat's page as nodes: held by its tests, not used by the app yet
 #warnings("-unused_value")
 fn notice_said_node(
@@ -147,8 +147,10 @@ fn notice_pill_node(
 ) -> Unit {
   let failed = fn() { m().notice_failed }
   let ink = fn() -> @ui.Color { if failed() { Danger } else { Fg } }
-  let pill = v.box(fn(p) {
+  v.box(fn(p) {
     @sf.style_node(p, fn() { notice_pill_of(failed(), open()) }, in_row=true)
+    // (what lights it as it is gone to, under its words)
+    pill_made(p)
     @sf.presses_node(p, fn() {
       let ts = @signals.untracked(m).ts
       opened[ts] = !opened.get(ts).unwrap_or(false)
@@ -198,7 +200,7 @@ fn notice_pill_node(
       notice_copy_node(d, m, ink, copied)
     })
   })
-  pill_made(pill)
+  |> ignore
 }
 
 ///|

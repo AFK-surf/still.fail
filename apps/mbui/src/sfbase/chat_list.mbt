@@ -1858,10 +1858,16 @@ pub let flash_ms : Double = 1700.0
 /// given, Anim::ended_at; -1: none has flashed): a test
 /// runs to it after opening a chat at a message (a notification tapped, a decision's post).
 pub fn flash_rest() -> Double {
-  let mut end = -1.0
+  let mut end = flash_rest_nodes.val
   readings.each(fn(_, rd) { if rd.flash_lit.ended_at() > end { end = rd.flash_lit.ended_at() } })
   end
 }
+
+///|
+/// When the flash of the message last gone to on a chat's page made as nodes is over (sfpages' chat_flash_node: its
+/// go-to's moment and flash_ms; -1 none): flash_rest's as well.
+// kept across runs: put back by the package's reset (pages.mbt)
+pub let flash_rest_nodes : Ref[Double] = Ref(-1.0)
 
 ///|
 /// The flash of the message gone to, all of its way said as it starts.
