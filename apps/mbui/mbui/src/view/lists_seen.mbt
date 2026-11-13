@@ -81,6 +81,30 @@ pub fn Tree::lists_seen(self : Tree) -> Array[ListSeen] {
 }
 
 ///|
+/// The page's list a test reads where it names none (Tester::visible, scroll_to, at_end, rows): of those drawn now
+/// (Tree::lists_seen), the main one of the page in front: one no modal layer is over and in use (Tree::takes_keys: not a
+/// page behind a sheet or a dialog, nor one behind the page come over it), the widest of the window it shows over (a
+/// chat's beside the sidebar's list of chats, not that list, made after it), the one made last of those as wide (a page
+/// pushed over another as big). Where none is so (all behind something), the one made last, as before.
+pub fn Tree::list_in_front(self : Tree) -> ListSeen? {
+  let seen = self.lists_seen()
+  let mut best : ListSeen? = None
+  let mut most = -1.0
+  for l in seen {
+    guard self.takes_keys(l.list) && self.drawn_of(l.list) is Some(d) else { continue }
+    let area = d.w * d.h
+    if area >= most {
+      most = area
+      best = Some(l)
+    }
+  }
+  match best {
+    Some(_) => best
+    None => seen.last()
+  }
+}
+
+///|
 /// Page's list `list`'s row `order` (where it is among its keys) brought to its top, as its ListPlace::bring is: done as
 /// the list is next laid out. Nothing where it is no page's list or has no such row.
 pub fn Tree::list_bring(self : Tree, list : NodeId, order : Int) -> Unit {
