@@ -89,7 +89,8 @@ pub fn fill_chip_node(
     |> ignore
   })
   match (tips, said) {
-    (Some(t), Some(s)) => tip_node(t, chip, s) |> ignore
+    // (shown by the pointer within it: a chip takes no press, so is never pointed at itself, tip_node's `within`)
+    (Some(t), Some(s)) => tip_node(t, chip, s, within=true) |> ignore
     _ => ()
   }
   chip

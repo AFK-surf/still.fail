@@ -133,3 +133,33 @@ pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.R
   }
   out
 }
+
+///|
+/// What a chat's find marks of words in pieces (`runs`, as View::runs_marks says them) where it found `words` in them:
+/// each match coloured in (the old page's highlighter: yellow on the light theme, orange in the dark, translucent so the
+/// words' own ink stays legible, search_marks.mbt), the `at`-th of them in their order (-1 none: the reader is at
+/// another) with the accent's line at its foot, as thick as a message's stroke. None where nothing is found in them.
+pub fn found_marks(runs : Array[@ui.Run], words : Array[String], at : Int) -> Array[@view.RunsMark] {
+  if words.is_empty() {
+    return []
+  }
+  let t = theme()
+  let ground = if t.dark { 0xFF700047L } else { 0xFFCC00D9L }
+  find_words(runs_text(runs), words).mapi(fn(i, r) {
+    if i == at {
+      { from: r.0, to: r.1, ground, line: t.p.accent, line_w: message_stroke.width }
+    } else {
+      { from: r.0, to: r.1, ground, line: 0L, line_w: 0.0 }
+    }
+  })
+}
+
+///|
+/// The text of words in pieces, all of it in order (the terms a mark of them is said in).
+fn runs_text(runs : Array[@ui.Run]) -> String {
+  let sb = StringBuilder()
+  for r in runs {
+    sb.write_string(r.text)
+  }
+  sb.to_string()
+}

@@ -114,6 +114,17 @@ pub fn find_words_in(key : String) -> Array[String] {
 }
 
 ///|
+/// Which time of what ⌘F found in message `seq` of chat `key` the reader is at (0 the first; -1 none: they are at
+/// another message, or its bar is not open in the chat).
+pub fn find_at_in(key : String, seq : Double) -> Int {
+  let at = finding.at.get()
+  match finding.found.get() {
+    Some(f) if finding.chat.get() == key && at >= 0 && at < f.hits.length() && f.hits[at].0 == seq => finding.k.get()
+    _ => -1
+  }
+}
+
+///|
 /// Which time in the message gone to the reader is at (0 the first).
 pub fn find_k() -> Int {
   finding.k.get()
