@@ -29,7 +29,8 @@
 // it (covering, contained) in the box the way has, so it is as that end draws it at that end and as the other draws it
 // at the other. One that stays that is drawn nowhere (no layout placed it, scrolled out of the window, cut to nothing)
 // pairs with nothing: the other comes or goes as it would have. A change of the id of one that moves pairs nothing:
-// what stays of its old id is drawn again at once, what stays of its new one drawn nowhere.
+// what stays of its old id is drawn again at once, what stays of its new one drawn nowhere; nor does one that moves let
+// go of and another made in one change by other ids (a picture stepped to the one beside it, one in the other's place).
 // Not yet: what the new one holds laid out again at each size on its way (it is drawn grown as it is laid out at its
 // end), its words morphing glyph by glyph, its scale and turn mixed, a way going on as fast as it went.
 
@@ -617,6 +618,11 @@ fn Tree::pairs_now(self : Tree) -> Unit {
   }
   // (what was let go of with what flies from it: kept as its old copy, the rest let go of already)
   let flown : Array[NodeId] = []
+  // (those that move made or let go of alone of their ids, where one of the id stays)
+  let from_stays : Array[(Int, NodeId)] = []
+  let to_stays : Array[(Departure, Int)] = []
+  let came_alone = Ref(false)
+  let went_alone = Ref(false)
   for id in ids {
     let gone = deps.filter(fn(d) { d.id == id })
     let come = made.filter(fn(a) { self.nodes[a.at].share == Some(id) })
@@ -637,16 +643,32 @@ fn Tree::pairs_now(self : Tree) -> Unit {
         flown.push(gone[0].held)
       }
     } else if come.length() == 1 && gone.length() == 0 {
-      // (one that moves made where one of its id stays: from that one)
+      came_alone.val = true
+      // (one that moves made where one of its id stays: from that one, below)
       match self.stays_end(id) {
-        Some(st) => self.from_stays(st, come[0])
+        Some(st) => from_stays.push((st, come[0]))
         None => ()
       }
     } else if gone.length() == 1 && come.length() == 0 && living == 0 {
-      // (the last that moves let go of where one of its id stays: back to that one, the one let go of drawn no more)
+      went_alone.val = true
+      // (the last that moves let go of where one of its id stays: back to that one, below)
       match self.stays_end(id) {
-        Some(st) => if self.to_stays(gone[0], st) { flown.push(gone[0].held) }
+        Some(st) => to_stays.push((gone[0], st))
         None => ()
+      }
+    }
+  }
+  // (one that moves let go of and another made in the same change, by other ids, is one in the other's place (a
+  // picture stepped to the one beside it): neither flies to or from what stays, what stays of either id drawn again or
+  // nowhere at once, as where the id of one changes; else each flies)
+  let swapped = came_alone.val && went_alone.val
+  if !swapped {
+    for e in from_stays {
+      self.from_stays(e.0, e.1)
+    }
+    for e in to_stays {
+      if self.to_stays(e.0, e.1) {
+        flown.push(e.0.held)
       }
     }
   }

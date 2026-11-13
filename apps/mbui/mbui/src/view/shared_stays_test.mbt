@@ -187,3 +187,58 @@ test "motion reduced: the picture there at once, the thumbnail drawn nowhere; cl
   assert_false(thumb.flies())
   assert_eq(drawn_as(p.tree, thumb), Some((10.0, 10.0, 40.0, 40.0, 1.0, red)))
 }
+
+///|
+test "the picture made anew for another thumbnail's in one change (stepped to the one beside it): none flies; the first drawn again at once, the other drawn nowhere" {
+  let open = @signals.signal("", same=fn(a, b) { a == b })
+  let thumbs : Map[String, @view.View] = Map([])
+  let big : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(p) {
+      p.grow(Is(1.0)) |> ignore
+      p.box(fn(list) {
+        list.height(Is(Some(100.0))).row(Is(true)).padding(Is((10.0, 10.0, 10.0, 10.0))).clips(Is(true)) |> ignore
+        for id in ["a", "b"] {
+          list.box(fn(t) {
+            thumbs[id] = t
+            t.width(Is(Some(40.0))).height(Is(Some(40.0))).ground(Is(red)).shared(Is(id), straight, stays=true) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+      // (a picture a key, made anew as it steps)
+      p.pick(at_once=true, fn() { open.get() }, fn(o, id) {
+        if id != "" {
+          o.over(Is(true)) |> ignore
+          o.box(fn(b) {
+            big.val = Some(b)
+            b
+            .offset(Is((50.0, 300.0)))
+            .width(Is(Some(300.0)))
+            .height(Is(Some(200.0)))
+            .ground(Is(blue))
+            .shared(Is(id), straight)
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+    })
+    |> ignore
+  })
+  tree.frame(400.0, 800.0, now=0.0) |> ignore
+  tree.event(1000.0, fn() { open.set("a") })
+  tree.frame(400.0, 800.0, now=1500.0) |> ignore
+  let (a, b) = (thumbs["a"], thumbs["b"])
+  assert_eq((alpha_of(tree, a), alpha_of(tree, b)), (0.0, 1.0))
+  tree.event(2000.0, fn() { open.set("b") })
+  tree.frame(400.0, 800.0, now=2000.0) |> ignore
+  assert_false(big.val.unwrap().flies() || a.flies() || b.flies())
+  assert_eq((alpha_of(tree, a), alpha_of(tree, b)), (1.0, 0.0))
+  // (closed then: back to the one it shows)
+  tree.event(3000.0, fn() { open.set("") })
+  tree.frame(400.0, 800.0, now=3000.0) |> ignore
+  assert_true(b.flies())
+  assert_false(a.flies())
+}
