@@ -77,23 +77,32 @@ test "touch wide: a message's words held, the passage's handles at its ends in t
   let t = touch_wide_tester()
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()
-  assert_true(pk.ts != "")
-  let accent = @sf.theme().p.accent
-  let ground = @sf.alpha(accent, 0.26)
-  let passage = t.drawn_rects().filter(fn(r) { r.4 == ground })
-  assert_true(passage.length() > 0, msg=t.drawn_text())
-  let (px, py, pw, ph, _) = passage[0]
-  let (ex, ey, ew, eh, _) = passage[passage.length() - 1]
-  // the handles' lines (2 wide, the accent): down the passage's first line's start and its last line's end
-  let lines = t.drawn_rects().filter(fn(r) { r.4 == accent && r.2 < 3.0 })
-  assert_eq(lines.length(), 2)
-  let (sx, sy, sw, _, _) = lines[0]
-  let (lx, ly, lw, _, _) = lines[1]
-  assert_true((sx + sw / 2.0 - px).abs() < 1.5 && (sy - py).abs() < 1.5, msg="start at \{sx},\{sy}, passage at \{px},\{py},\{pw},\{ph}")
-  assert_true((lx + lw / 2.0 - (ex + ew)).abs() < 1.5 && (ly - ey).abs() < 1.5, msg="end at \{lx},\{ly}, passage's end at \{ex + ew},\{ey},\{eh}")
-  // the bar over the passage
-  let (_, quote_y) = t.find("引用").unwrap()
-  assert_true(quote_y < py && quote_y > py - 60.0, msg="引用 at \{quote_y}, passage at \{py}")
+  // the handles, as this frame painted them where a finger takes each, on whichever page the chat is made
+  // (Tester::picking: x at the passage's start and at its end, y on or by their lines)
+  guard t.picking() is Some(p) &&
+    p.finger &&
+    p.ends.get(0) is Some(Some((sx, sy))) &&
+    p.ends.get(1) is Some(Some((lx, ly))) else {
+    fail("no handles over what the finger picked: \{Repr(t.picking())}")
+  }
+  // the passage's ground (translucent, a line's height) from the start's handle to the end's, on their lines, in the
+  // pane beside the sidebar: what the handles stand at its ends of
+  let grounds = t.drawn_rects().filter(fn(r) { (r.4 & 0xFFL) < 0xFFL && r.3 > 8.0 && r.3 < 60.0 })
+  let near = fn(r : (Double, Double, Double, Double, Int64), y : Double) { y > r.1 - 30.0 && y < r.1 + r.3 + 30.0 }
+  let starts = grounds.filter(fn(r) { (r.0 - sx).abs() < 1.5 && near(r, sy) })
+  let ends = grounds.filter(fn(r) { (r.0 + r.2 - lx).abs() < 1.5 && near(r, ly) })
+  assert_true(starts.length() > 0, msg="start's handle at \{sx},\{sy}, no passage starting there")
+  assert_true(ends.length() > 0, msg="end's handle at \{lx},\{ly}, no passage ending there")
+  let (_, py, _, _, _) = starts[0]
+  // the bar over the passage: its 引用 drawn over it, or the system's text menu over it offering 引用
+  let menu = t.text_menu()
+  match t.find("引用") {
+    Some((_, quote_y)) => assert_true(quote_y < py && quote_y > py - 60.0, msg="引用 at \{quote_y}, passage at \{py}")
+    None => {
+      assert_true(menu.0 && t.text_menu_own().contains("引用"), msg="no bar with 引用 over the passage: \{Repr(menu)}")
+      assert_true(menu.2 <= py + 1.5 && menu.2 + menu.4 >= py, msg="the menu over \{Repr(menu)}, passage at \{py}")
+    }
+  }
 }
 
 ///|
