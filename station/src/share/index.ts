@@ -1214,8 +1214,14 @@ export class Sharing {
 
   // ── what the pages ask (this station hosting) ──
 
-  /// A profile shared (with who may use it: null, every station), its stations changed, or no longer shared.
-  async shareProfile(profileId: string, on: boolean, allow: string[] | null) {
+  /// A profile shared (with who may use it: null, every station), its stations changed, or no longer shared. `among`:
+  /// the stations a person chose from (a page lists those of the workspace it is in, not every one the profile reaches
+  /// where this station is in several): `allow` says which of them may use it (none said: all of them) and the others
+  /// keep what they had (allowAmong), so a choice made in one workspace never undoes one made in another, as a list made
+  /// of one workspace's stations and written whole did (the user, 2026-11-13: 「我明明关掉对几个特定机子的 Profile 分享了，
+  /// 但老是莫名其妙就重置了」).
+  /// `by`: who asked (said in the log, which is where a change nobody remembers making is found).
+  async shareProfile(profileId: string, on: boolean, allow: string[] | null, among: string[] | null = null, by: string | null = null) {
     const p = this.profiles().find((x) => x.id === profileId);
     if (!p) throw new Error(`unknown profile ${profileId}`);
     if (isObject(p.share) && p.share.borrowed === true) throw new Error("this profile is another station's");
@@ -1230,14 +1236,44 @@ export class Sharing {
     // Nor a Kimi sign-in (its token is renewed every few minutes here, accounts/kimi.ts).
     if (on && p.access?.provider === "kimi-code" && p.access?.login === true) throw new Error("a Kimi Code sign-in cannot be shared with other stations yet");
     const had = isObject(p.share) && typeof p.share.id === "string" ? (p.share.id as string) : null;
+    // (the stations it reaches are said by the cloud: a station just started waits for them, as a login wanted does)
+    if (on && among !== null) await this.rosterSaid();
+    const stored: { allow: string[] | null } = { allow: null };
     this.deps.config.update((raw) => {
       for (const x of raw.profiles ?? []) {
         if (x.id !== profileId) continue;
-        if (on) x.share = { id: had ?? newId(), allow };
-        else delete x.share;
+        if (!on) {
+          delete x.share;
+          continue;
+        }
+        stored.allow = among === null ? allow : this.allowAmong(x, allow, among);
+        x.share = { id: had ?? newId(), allow: stored.allow };
       }
     });
+    const who = stored.allow === null ? "every station" : stored.allow.map((s) => s.slice(0, 8)).join(",");
+    log.info("share", "who may use a shared profile changed", { profile: profileId, shared: on, allow: on ? who : null, by });
     await this.reconcile();
+  }
+
+  /// Who may use profile `p` once a person chose among stations `among` (shareProfile): those of them `allow` names
+  /// (null: all of them), and every other station as it was. Every station it reaches allowed so (those of the workspaces
+  /// it is shared in, as the cloud said last) is every station again (null: those to come too), as all of them ticked in
+  /// a station's one workspace says; one left out where there were none makes the others it reaches a list, which needs
+  /// them said (refused till they are).
+  private allowAmong(p: Json, allow: string[] | null, among: string[]): string[] | null {
+    const me = this.me();
+    const shown = new Set(among);
+    const yes = new Set(allow ?? among);
+    const before: string[] | null = isObject(p.share) && Array.isArray(p.share.allow) ? p.share.allow : null;
+    const rosters = this.rosters();
+    const reached = rosters === null ? null : [...rosters.keys()].filter((peer) => this.reach({ kind: "profile", profile: p }, peer, rosters) !== null);
+    if (before === null && among.every((s) => s === me || yes.has(s))) return null;
+    if (before === null && reached === null) throw new Said(tr(stationLang(), "station.share.stationsUnknown"));
+    const next = new Set((before ?? reached!).filter((s) => !shown.has(s)));
+    if (me !== null) next.add(me);
+    for (const s of among) if (yes.has(s)) next.add(s);
+    if (reached !== null && reached.every((s) => next.has(s))) return null;
+    return [...next];
   }
 
   /// A skill shared, its stations changed, or no longer shared.

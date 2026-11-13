@@ -80,7 +80,7 @@ export interface OperationParams {
   "profile.put": { id: string; input?: unknown };
   "profile.addModel": { id: string; model: string };
   "profile.delete": { id: string };
-  "profile.share": { id: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
+  "profile.share": { id: string; on?: boolean | null | undefined; allow?: string[] | null | undefined; among?: string[] | null | undefined };
   "profile.move": { id: string; to: string };
   "skill.share": { name: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
   "profile.resetQuota": { id: string; reset?: string | null | undefined };

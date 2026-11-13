@@ -654,6 +654,7 @@
   "station.failure.other": "未知错误",
   "station.context.tooShort": "对话内容太少",
   "station.share.notLent": "登录此订阅的 station 未能借出它，可能已离线",
+  "station.share.stationsUnknown": "这台 station 还没收到它所在的各个 workspace 里都有哪些 station，过一会儿再改",
   "station.claudeAuth.machineRunsOut": "此 station 的 Claude 登录即将过期，需要重新登录",
   "station.notice.denied": "模型服务拒绝了请求（403），未说明原因",
   "station.failure.denied": "模型服务拒绝了请求",

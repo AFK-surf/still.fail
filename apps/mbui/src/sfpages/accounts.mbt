@@ -1541,7 +1541,9 @@ fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit
 
 ///|
 /// Which stations may use a share (PickStations), ticked in a panel: every one (those to come too), or those ticked;
-/// the one that has it always.
+/// the one that has it always. Those listed are the workspace's, not every one the share reaches where its station is
+/// in several: they are said as what it was chosen among (`among`), so that only theirs change and a choice made in
+/// another workspace stands (share/index.ts shareProfile).
 fn pick_stations(core : Core, address : String, id : String, stations : Array[Json], own : String, allowed : Array[String]?) -> Unit {
   let ticked : Map[String, Bool] = Map([])
   for x in stations {
@@ -1590,6 +1592,7 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
           }
           params.push(("allow", Json::array(allow)))
         }
+        params.push(("among", Json::array(stations.map(fn(x) { str(text(Some(x), "id")) }))))
         @settings.act(core, @sf.t("web-pages.profiles.share.stations"), "profile.share", obj(params))
       }) |> ignore
     },

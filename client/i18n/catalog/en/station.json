@@ -663,6 +663,7 @@
   "station.failure.other": "Unknown error",
   "station.context.tooShort": "there isn't enough in the conversation yet",
   "station.share.notLent": "The station this subscription is signed in on couldn't lend it; it may be offline",
+  "station.share.stationsUnknown": "This station hasn't heard yet which stations its workspaces have; try again in a moment",
   "station.claudeAuth.machineRunsOut": "This station's Claude sign-in is about to expire; sign in again",
   "station.notice.denied": "The provider refused the request (403) without saying why",
   "station.failure.denied": "The provider refused the request",

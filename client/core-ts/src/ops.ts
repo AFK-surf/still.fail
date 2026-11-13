@@ -142,7 +142,7 @@ export const PARAMS: Record<string, string> = {
   "profile.put": "id:string input?:json",
   "profile.addModel": "id:string model:string",
   "profile.delete": "id:string",
-  "profile.share": "id:string on?:boolean allow?:strings",
+  "profile.share": "id:string on?:boolean allow?:strings among?:strings",
   "profile.move": "id:string to:string",
   "skill.share": "name:string on?:boolean allow?:strings",
   "profile.resetQuota": "id:string reset?:string",
@@ -564,8 +564,9 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.delete":
       return op("DELETE", () => `/profiles/${p.at("id")}`, null, OVERVIEW);
     // Shared with the workspace's other stations (absent `allow`: every one), or not; moved to another station.
+    // `among`: the stations it was chosen among (a page's, of one workspace): only theirs change on the station.
     case "profile.share":
-      return op("POST", () => `/profiles/${p.at("id")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null }, OVERVIEW);
+      return op("POST", () => `/profiles/${p.at("id")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null, ...(p.has("among") ? { among: p.v.among } : {}) }, OVERVIEW);
     case "profile.move":
       return op("POST", () => `/profiles/${p.at("id")}/move`, { station: p.word("to") ?? "" }, OVERVIEW);
     case "skill.share":

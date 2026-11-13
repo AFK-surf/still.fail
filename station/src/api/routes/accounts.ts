@@ -176,14 +176,17 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         }
       }),
     ),
-    // Shared with the workspace's other stations (on, and which may use it), or no longer; moved to another station.
+    // Shared with the workspace's other stations (on, and which may use it, of those it chose from), or no longer; moved
+    // to another station.
     route("POST", /^\/*profiles\/+([^/]+)\/+share\/*$/, (r, [id]) =>
       answer(async () => {
         if (!sharing) return error(503, "station starting");
         manager(r.viewer, r.lang);
         const body = input(r);
+        // `among`: the stations the page chose from (a workspace's): only theirs change (share/index.ts shareProfile).
+        const among = body.among === undefined || body.among === null ? null : stations(body.among);
         try {
-          await sharing.shareProfile(segment(id!), body.on !== false, stations(body.allow));
+          await sharing.shareProfile(segment(id!), body.on !== false, stations(body.allow), among, r.viewer.email);
         } catch (e) {
           if (e instanceof Refusal) throw e;
           throw new Refusal(409, (e as Error).message);
