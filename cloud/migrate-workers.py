@@ -74,7 +74,7 @@ def main():
     if args.part == 'api':
         oauth = json.loads((deploy.DEPLOY / 'google-oauth.json').read_text())['web']
         config['vars'] = {**config['vars'], 'GOOGLE_CLIENT_ID': oauth['client_id']}
-        secrets = {**secrets, 'GOOGLE_CLIENT_SECRET': oauth['client_secret'], **deploy.axiom(), **deploy.push()}
+        secrets = {**secrets, 'GOOGLE_CLIENT_SECRET': oauth['client_secret'], **deploy.telemetry(), **deploy.push()}
         jwk = json.loads(secrets['GRANT_SIGNING_JWK'])
         req = urllib.request.Request(config['vars']['PUBLIC_ORIGIN'] + '/.well-known/stillfail-grant-keys', headers={'user-agent': 'stillfail-worker-migration'})
         with urllib.request.urlopen(req, timeout=30) as response: deployed_keys = json.load(response)['keys']

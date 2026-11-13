@@ -34,7 +34,7 @@ jobs:
           STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
           DEPLOY_KEYS_JSON: ${{ secrets.DEPLOY_KEYS_JSON }}
           GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
-          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
           APNS_JSON: ${{ secrets.APNS_JSON }}
@@ -68,7 +68,7 @@ jobs:
           GUEST_GOOGLE_OAUTH_JSON: ${{ inputs.step != 'back' && secrets.GOOGLE_OAUTH_JSON || '' }}
           FORWARD_SECRET: ${{ inputs.step != 'back' && secrets.CLOUD_FORWARD_SECRET || '' }}
           MOVING: ${{ inputs.step == 'freeze' && '1' || '' }}
-          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
           APNS_JSON: ${{ secrets.MONOID_APNS_JSON }}

@@ -4,7 +4,7 @@
 // scrubbed: no home directories, emails, things shaped like keys or tokens, or quoted text, and fields that can carry
 // what people wrote (a notice's text, a job's or skill's name) not at all. Batched every few seconds as OpenTelemetry
 // logs to the control plane (still.fail cloud's `/v1/telemetry/logs`, signed with the station's key; the cloud passes
-// them on to Axiom). A batch that cannot get there waits for the next round: what goes wrong between a station and
+// them on to Google Cloud). A batch that cannot get there waits for the next round: what goes wrong between a station and
 // still.fail cloud is said most while the way there is broken (2026-11-03: a station's 43 minutes without a presence
 // socket left no line of why). One the cloud refuses is dropped, and lines past what is kept waiting are counted, not
 // kept.

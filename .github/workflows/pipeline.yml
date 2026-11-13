@@ -475,7 +475,7 @@ jobs:
           STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
           DEPLOY_KEYS_JSON: ${{ secrets.DEPLOY_KEYS_JSON }}
           GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
-          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
           APNS_JSON: ${{ secrets.APNS_JSON }}
@@ -545,7 +545,7 @@ jobs:
   # monoid's cloud (deploy.py CLOUDS: monoid.build, its test channel monoid.zone), in the company's Cloudflare account:
   # the same API and static parts, after still.fail's, as their own jobs (each fits its 5 minutes on its own). Its
   # secrets are its own token, keys.json, Google client and FCM service account (monoid-build's); APNs, PostHog and
-  # Axiom are still.fail's. Its test channel's site (monoid.zone: website/ named monoid.zone; monoid.build's with the stable release),
+  # the Google Cloud telemetry account are still.fail's. Its test channel's site (monoid.zone: website/ named monoid.zone; monoid.build's with the stable release),
   # not still.fail's status page, nor its relay (by hand, as ours).
   # monoid's jobs (monoid-*) run only while the repository's variable MONOID_CI is on (turned off 2026-11-04, as asked).
   monoid-api:
@@ -568,7 +568,7 @@ jobs:
           FORWARD_SECRET: ${{ vars.CLOUD_MOVED == 'on' && secrets.CLOUD_FORWARD_SECRET || '' }}
           GUEST_GOOGLE_OAUTH_JSON: ${{ vars.CLOUD_MOVED == 'on' && secrets.GOOGLE_OAUTH_JSON || '' }}
           GOOGLE_OAUTH_JSON: ${{ secrets.MONOID_GOOGLE_OAUTH_JSON || secrets.GOOGLE_OAUTH_JSON }}
-          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
           APNS_JSON: ${{ secrets.MONOID_APNS_JSON }}

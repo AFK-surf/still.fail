@@ -188,7 +188,7 @@ export class Core {
       fonts.setOrigin(inner.host.cloudOrigin(), inner.host.testChannel());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
       spentClock(() => inner.host.monotonicMs());
-      // A failure let go of is a span of its own: Axiom has it though nothing waited on it.
+      // A failure let go of is a span of its own: Cloud Trace has it though nothing waited on it.
       inner.runner.onIgnored = (what, error) => {
         const span = inner.tracer.root("ignored", Kind.Internal);
         span.set("stillfail.ignored", what);

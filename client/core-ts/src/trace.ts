@@ -48,7 +48,7 @@ export type Kind = (typeof Kind)[keyof typeof Kind];
 /// Sends a batch; failing, it is kept to be sent again (one the cloud will never take is to succeed instead).
 export type Export = (body: Uint8Array) => Effect.Effect<void, unknown>;
 
-/// What a host is, for Axiom's `service.name` and `os.type` (set by the host's entry).
+/// What a host is, for the traces' `service.name` and `os.type` (set by the host's entry).
 export const service = { name: "stillfail-native", os: "macos" };
 
 export class Tracer {
@@ -61,7 +61,7 @@ export class Tracer {
   /// Batches in a row that did not go out.
   #failed = 0;
   #export: Export | null = null;
-  /// The app's build, once its UI has said it (`client.device`): Axiom's `service.version`, which tells what an
+  /// The app's build, once its UI has said it (`client.device`): the traces' `service.version`, which tells what an
   /// update changed from what older builds still running do.
   #version = "";
 
@@ -151,7 +151,7 @@ export class Tracer {
   }
 
   /// A batch that did not go out waits for the next, ahead of what came since. 2026-11-07: a phone whose network
-  /// went every few minutes had 40% of its failed reconnects never reach Axiom, nor anything else that ended as they
+  /// went every few minutes had 40% of its failed reconnects never reach the traces, nor anything else that ended as they
   /// did: each was sent as the network was down, and let go.
   #unsent(spans: unknown[]): void {
     this.#failed++;

@@ -2,7 +2,7 @@
 // counters (relay-metrics.ts Load) about a minute apart, kept a week. The relays on machines of their own send theirs
 // (POST /v1/relays/load, relay-load.sh run by a timer there, believed by the address they send from); Cloudflare's is read by this Worker's cron from the
 // relay process (index.ts). What is shown is worked out from the counters when asked (relay-load-view.ts). What each did
-// in the minute between two samples goes to Axiom as well (a `relay minute` log line), beside the
+// in the minute between two samples goes to Cloud Logging as well (a `relay minute` log line), beside the
 // devices' and stations' records of the same minutes.
 import { DurableObject } from "cloudflare:workers";
 import { nowSeconds, reply } from "./auth";
@@ -11,7 +11,7 @@ import type { Env } from "./env";
 import { LIMITS } from "./limits";
 import { relayConns, relayLoad, type Load } from "./relay-metrics";
 import { GAP, relayLoadView, relayMinute, type RelayLoadView, type RelayMinute } from "./relay-load-view";
-import { relayToAxiom } from "./tracing";
+import { relayToTelemetry } from "./tracing";
 import { relayUrls, sameUrl } from "./relays";
 
 /** How long samples are kept: the week the console shows, and a day more. */
@@ -74,13 +74,13 @@ export async function receiveLoad(request: Request, env: Env): Promise<Response>
   const text = await request.text();
   if (text.length > MAX_METRICS) return reply({ error: "too_large" }, 413);
   const minute = await env.RELAY_LOAD.getByName("primary").record(url, relayLoad(text));
-  await relayToAxiom(env, url, minute, relayConns(text).map((fields) => ({ what: "relay conn", fields })));
+  await relayToTelemetry(env, url, minute, relayConns(text).map((fields) => ({ what: "relay conn", fields })));
   return reply({ ok: true });
 }
 
 /**
  * still.fail's own relay's counters (the cron's, a minute apart): none while its process is not running. Its minute in
- * Axiom says how near it is to each of its budget's limits (relay.ts admit: LIMITS), and which it has reached
+ * Cloud Logging says how near it is to each of its budget's limits (relay.ts admit: LIMITS), and which it has reached
  * (`full`): 2026-10-30 it answered every new connection 429 from 12:22 in Beijing, and nothing said whether the day's
  * bytes or the connections held had run out. Said while the process is not running too (the budget run out stops it).
  * Gives those it has reached, for still.fail/status (status.ts).
@@ -101,7 +101,7 @@ export async function sampleOwnRelay(env: Env): Promise<string[]> {
     ...(open >= LIMITS.connections ? ["connections"] : []),
     ...(connects !== null && connects >= LIMITS.connectsPerMinute ? ["connects"] : []),
   ];
-  await relayToAxiom(env, url, {
+  await relayToTelemetry(env, url, {
     ...(minute ?? {}),
     running: text !== null,
     open,

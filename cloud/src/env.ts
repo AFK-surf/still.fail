@@ -93,9 +93,8 @@ export interface Env {
   ACCESS_AUD?: string;
   /** Ed25519 private JWK (JSON) that signs station grants. */
   GRANT_SIGNING_JWK: string;
-  /** Axiom's ingest token and dataset for traces (tracing.ts); without a token nothing is sent. */
-  AXIOM_TOKEN?: string;
-  AXIOM_DATASET?: string;
+  /** The Google Cloud service account (its JSON) that writes traces and logs to its project (tracing.ts); without it nothing is sent. */
+  GCP_TELEMETRY?: string;
   /** still.fail cloud's VAPID key for Web Push (webpush.ts): the P-256 public point and private scalar, base64url. Without them there is no Web Push. */
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;

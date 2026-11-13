@@ -304,7 +304,7 @@ test("spans_nest_and_go_out_in_one_batch", async () => {
   assert.equal(context.traceparent(), `00-${r.traceId}-${r.spanId}-01`);
 });
 
-/// 2026-11-07: a phone's failed reconnects, sent as its network was down, never reached Axiom.
+/// 2026-11-07: a phone's failed reconnects, sent as its network was down, never reached the traces.
 test("a_batch_that_did_not_go_out_goes_with_the_next", async () => {
   const host = new FakeHost();
   const tracer = new Tracer(host, new Runner(host.time.clock), 1);

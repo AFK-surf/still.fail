@@ -76,11 +76,11 @@ const pushes = pushLog ? {
   },
 } : {};
 
-// With AXIOM_TOKEN (and AXIOM_DATASET) in the environment, traces go to Axiom as they would from Cloudflare.
+// With GCP_TELEMETRY (a service account's JSON) in the environment, traces and logs go to Google Cloud as they would from Cloudflare.
 const persisted = process.env.PERSIST ? join(process.env.PERSIST, "dev.json") : "";
 const resumed: { grantJwk: JsonWebKey; workspace: string } | null =
   process.env.RESUME && persisted ? JSON.parse(await readFile(persisted, "utf8").catch(() => "null")) : null;
-const h = await harness({ clock: "real", ...(resumed ? { grantJwk: resumed.grantJwk } : {}), ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", ...(process.env.RELAY_URLS ? { relayUrls: process.env.RELAY_URLS } : {}), ...(process.env.RELAY_NAMES ? { relayNames: JSON.parse(process.env.RELAY_NAMES) } : {}), adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.MAIL ? { mail: (m: { to: string; subject: string }) => (console.log(`mail to ${m.to}: ${m.subject}`), true) } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
+const h = await harness({ clock: "real", ...(resumed ? { grantJwk: resumed.grantJwk } : {}), ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", ...(process.env.RELAY_URLS ? { relayUrls: process.env.RELAY_URLS } : {}), ...(process.env.RELAY_NAMES ? { relayNames: JSON.parse(process.env.RELAY_NAMES) } : {}), adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.GCP_TELEMETRY ? { telemetry: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.MAIL ? { mail: (m: { to: string; subject: string }) => (console.log(`mail to ${m.to}: ${m.subject}`), true) } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
 const aliceTokens = await h.login("alice");
 const alice = h.as(aliceTokens);
 // alice may use the test channel (the console's switch does the same).

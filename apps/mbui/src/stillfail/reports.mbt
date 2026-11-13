@@ -25,7 +25,7 @@ fn reports_start() -> Unit {
   // what a call in flight as the core failed says (StillFailCore.restartedText)
   @core.restarted_text.val = @sfapp.tr("android-misc.core.restarted")
   if host_tell("hello", "", "", 0, 0) == 0 {
-    // (no host's error report: what the UI could not do as asked goes as the core's `client.error` span, to Axiom
+    // (no host's error report: what the UI could not do as asked goes as the core's `client.error` span, to Cloud Trace
     // with the rest of its traces, and to the host's log; a page showing 这部分显示出错了 said nothing otherwise)
     @view.fault_told.val = Some(fn(said) {
       let category = ui_fault_category(said)

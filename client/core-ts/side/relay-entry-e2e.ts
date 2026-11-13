@@ -95,7 +95,7 @@ try {
   const port = await cloudPort();
   const origin = `http://127.0.0.1:${port}`;
   const cloudLog = openSync(join(work, "cloud.log"), "a");
-  cloud = spawn("pnpm", ["exec", "tsx", "test/dev.ts"], { cwd: join(ROOT, "cloud"), detached: process.platform !== "win32", env: { ...process.env, PORT: String(port), RELAY: direct, AXIOM_TOKEN: "" }, stdio: ["ignore", cloudLog, cloudLog] });
+  cloud = spawn("pnpm", ["exec", "tsx", "test/dev.ts"], { cwd: join(ROOT, "cloud"), detached: process.platform !== "win32", env: { ...process.env, PORT: String(port), RELAY: direct, GCP_TELEMETRY: "" }, stdio: ["ignore", cloudLog, cloudLog] });
   const alice = await until(async () => {
     const r = await fetch(`${origin}/__dev/account?user=alice`);
     return r.ok ? await r.json() as { access: string } : null;
