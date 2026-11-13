@@ -352,7 +352,12 @@ for t in $targets; do
           # second is reckoned 150, as at 60 for what runs beside its pages, and the third 500: by the table some 70 s
           # of the second's pages at each rate go to the third's program and the fourth's)
           24 | 7) specs="4,4,300,2 4,4,150,2 1,4,500,2 4,4,120,1" ;;
-          *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
+          # (at the default rate each group's other runs reckoned as they now run, branch pushes of 2026-11-13
+          # (mbui-chat-made-always 43343545286): the first's real_size half 190 s and preview_tree's halves 61 and 97
+          # beside its pages, some 350 s of its cores where they were reckoned 80, its pages 215-229 s, app 1/4 209-242 s
+          # of its 5 minutes; the second's sweeps some 210, the third's kept_rows five some 390, the fourth's
+          # real_size half 42. By the table the first's pages go from 623 s to 500, the fourth's from 720 to 758)
+          *) specs="4,4,350,1 2,4,210,1 1,4,390,1 4,4,40,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
