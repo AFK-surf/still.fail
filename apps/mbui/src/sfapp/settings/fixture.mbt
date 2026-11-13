@@ -42,6 +42,8 @@ priv struct SettingsFixture {
   mut login_station : Bool
   /// a new profile's page at an Anthropic plan's sign-in, waiting for the code (settings-new-profile-login…)
   mut new_login : Bool
+  /// a new profile's draft at a key's form with a region and a protocol to choose (settings-new-profile-key)
+  mut new_key : Bool
   /// Claude 主账号's trouble: "" none, "quota" its allowance unreadable (settings-profile-quota-failed), "blocked"
   /// its allowance used up (settings-profile-blocked), "login" to be signed in to again (settings-profile-signin)
   mut trouble : String
@@ -151,6 +153,7 @@ let fx : SettingsFixture = {
   login: "",
   login_station: false,
   new_login: false,
+  new_key: false,
   trouble: "",
   vault_off: false,
   plain_left: 0,
@@ -320,6 +323,7 @@ fn fixture_reset() -> Unit {
   fx.login = ""
   fx.login_station = false
   fx.new_login = false
+  fx.new_key = false
   fx.trouble = ""
   fx.vault_off = false
   fx.plain_left = 0
@@ -626,6 +630,9 @@ pub fn fixture_page(mode : String) -> String {
       up("", "settings/profile/ws1/st1/cc", 0)
     }
     "settings-new-profile-login" => fx.new_login = true
+    // a key's form for a provider with a choice of region and of protocol (Kimi's: 中国 / 国际, OpenAI / Anthropic
+    // 兼容)
+    "settings-new-profile-key" => fx.new_key = true
     // three stations online to add it on (Willow, Maple, Cedar): the add page's choice of them
     // (desk_profile_wbtest.mbt's station pressed)
     "settings-new-profile-stations" => {
@@ -714,7 +721,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
-    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-stations" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
+    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-stations" | "settings-new-profile-login" | "settings-new-profile-login-station" | "settings-new-profile-key" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
     "settings-connect-run" | "settings-connect-switch" | "settings-slack-app" => "connect:ws1/st1#k1"
     // the page of a connect of another kind, none of its sessions yet
@@ -2438,6 +2445,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ]),
       )
     "profileFlow" if fx.new_login => Some(fx_profile_flow_plan())
+    "profileFlow" if fx.new_key => Some(fx_profile_flow_key())
     "profileFlow" => Some(fx_profile_flow(hermes=mode == "settings-new-profile-hermes"))
     "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => {
       let v = fx_session_pick()
@@ -3432,6 +3440,36 @@ fn fx_profile_flow_plan() -> Json {
     ("canSubmit", Json::boolean(false)),
     ("pending", Json::boolean(false)),
     ("submitLabel", str("")),
+    ("usesLine", str("")),
+  ])
+}
+
+///|
+/// A new profile's draft at a key's form (`profileFlow`, settings-new-profile-key): Kimi's, a region and a protocol to
+/// choose, the key not typed yet.
+fn fx_profile_flow_key() -> Json {
+  let pair = fn(id : String, label : String) { obj([("id", str(id)), ("label", str(label))]) }
+  obj([
+    ("step", str("connect")),
+    ("station", str("ws1/st1")),
+    ("title", str("连接 Kimi")),
+    ("hint", str("")),
+    ("method", str("key")),
+    ("tile", obj([("id", str("kimi")), ("name", str("Kimi")), ("kind", str("api-provider")), ("runtime", str("")), ("mark", str("kimi"))])),
+    ("groups", []),
+    ("choices", []),
+    ("showEndpoint", Json::boolean(false)),
+    ("endpoint", str("")),
+    ("regions", [pair("cn", "中国"), pair("global", "国际")]),
+    ("region", str("cn")),
+    ("protocols", [pair("openai", "OpenAI 兼容"), pair("anthropic", "Anthropic 兼容")]),
+    ("protocol", str("openai")),
+    ("showKey", Json::boolean(true)),
+    ("key", str("")),
+    ("keyLabel", str("API key")),
+    ("canSubmit", Json::boolean(false)),
+    ("pending", Json::boolean(false)),
+    ("submitLabel", str("验证并添加")),
     ("usesLine", str("")),
   ])
 }
