@@ -172,6 +172,13 @@ let mark_picture_read : Int = 768
 let mark_pictures : Ref[Int] = Ref(0)
 
 ///|
+/// Said in the place of the picker or the rename while station `name` is offline: its name and mark are the station's
+/// own, changed only on it (the core's views/station-marks.ts; the user, 2026-11-14).
+pub fn mark_offline(core : Core, name : String) -> Unit {
+  (core.say)(fill("android-settings.station.markOffline", [("name", name)]))
+}
+
+///|
 /// The mark picker (openMarkPick) for `name`, whose mark is `emoji` and `icon` now: `save(emoji, icon)` sets one,
 /// `what` naming it should it fail ("" and "" take it away). What it holds is nodes of the window's tree, made once as it
 /// opens (@sf.panel_nodes).

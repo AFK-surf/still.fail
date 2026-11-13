@@ -550,6 +550,7 @@
   "android-settings.station.image": "Upload image",
   "android-settings.station.imageAnother": "Another image",
   "android-settings.station.imageFailed": "Couldn't read this image or make it small enough",
+  "android-settings.station.markOffline": "{name} is offline: its name and icon can be changed once it is back online",
   "android-settings.station.emojiWhat": "set the icon",
   "android-settings.station.emojiSet": "Icon set",
   "android-settings.station.renamePlaceholder": "e.g. willow",

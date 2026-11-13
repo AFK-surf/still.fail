@@ -719,6 +719,7 @@ let zh : Map[String, String] = {
   "android-settings.station.emojiPaste": "粘贴或输入任意 emoji",
   "android-settings.station.emojiSet": "已设置图标",
   "android-settings.station.emojiTitle": "为 {name} 选择图标",
+  "android-settings.station.markOffline": "「{name}」离线，等它上线后才能修改名字和图标",
   "android-settings.station.emojiWhat": "设置图标",
   "android-settings.station.first": "添加第一台 station",
   "android-settings.station.firstName": "为此机器命名",

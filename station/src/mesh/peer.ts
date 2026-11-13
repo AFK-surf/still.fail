@@ -12,6 +12,7 @@ import { type Cloud, NOT_GIVEN, UNPROTECTED } from "../cloud/state.ts";
 import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
+import { answerMarks, stationMarksOf } from "./station-marks.ts";
 import { answerWays, waysOf } from "./ways.ts";
 import { Reader } from "./serve.ts";
 
@@ -380,6 +381,8 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
         result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace, peer)
           // The workspace's ways (mesh/ways.ts), kept level between its stations.
           : typeof method === "string" && method.startsWith("ways.") ? answerWays(waysOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")
+          // The stations' names and marks (mesh/station-marks.ts), a copy of each kept by the others.
+          : typeof method === "string" && method.startsWith("stationMarks.") ? answerMarks(stationMarksOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")
           : await remote.handle(envelope.workspace, peer, envelope.request ?? null);
       } else {
         if (cloud.membership(envelope.workspace) === null) throw new Error("station is outside this workspace");

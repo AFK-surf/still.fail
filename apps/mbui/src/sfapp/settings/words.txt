@@ -712,6 +712,7 @@ android-settings.station.emojiClear
 android-settings.station.emojiPaste
 android-settings.station.emojiSet
 android-settings.station.emojiTitle
+android-settings.station.markOffline
 android-settings.station.emojiWhat
 android-settings.station.first
 android-settings.station.firstName

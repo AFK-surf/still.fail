@@ -736,6 +736,7 @@ let en : Map[String, String] = {
   "android-settings.station.emojiPaste": "Paste or type any emoji",
   "android-settings.station.emojiSet": "Icon set",
   "android-settings.station.emojiTitle": "Icon for {name}",
+  "android-settings.station.markOffline": "{name} is offline: its name and icon can be changed once it is back online",
   "android-settings.station.emojiWhat": "set the icon",
   "android-settings.station.first": "Add your first station",
   "android-settings.station.firstName": "Name this machine",
