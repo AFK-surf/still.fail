@@ -7,6 +7,7 @@ import { CoreError } from "../src/error.ts";
 import type { HttpRequest } from "../src/host.ts";
 import type { StationWire } from "../src/station/wire.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
+import { type InForce, bodyHash, inForce, made, wsTag } from "../src/lock-moved.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { base64url as toB64url, hex, utf8 } from "../src/util.ts";
 import type { Duplex } from "../src/views/pair.ts";
@@ -173,4 +174,32 @@ export async function pipe(): Promise<[Duplex, Duplex]> {
     close: () => void Queue.offerUnsafe(theirs, null),
   });
   return [end(a, b), end(b, a)];
+}
+
+/// What a station of a moved workspace gives a device (station/src/mesh/serve.ts `givesDevice`, cloud/state.ts
+/// `givenTo`), for a fake station's `/lock/logs` and `/lock/bodies`: only where the state in force made of what it keeps
+/// (`chain` its chain, `logs` the person logs, `bodies`) names the device (`base`, its base key), on or off; none while
+/// it waits, nor to a device it does not name (that one is refused at its hello, `leftOf`). A chain not moved: true.
+export function givesTo(ws: string, chain: readonly Entry[], logs: readonly (readonly Entry[])[], bodies: readonly unknown[], nowMs: number, base: string): boolean {
+  const f = stationState(ws, chain, logs, bodies, nowMs);
+  return f.said === "chain" || ((f.said === "on" || f.said === "off") && f.f.devices.has(base));
+}
+
+/// Whether a station keeping the person logs `logs` takes the body `b` of `ws` (station/src/cloud/lock-bodies.ts: only
+/// against an entry kept that commits to it under the workspace's tag).
+export function committed(ws: string, logs: readonly (readonly Entry[])[], b: unknown): boolean {
+  const h = bodyHash(b);
+  if (h === null || (b as { ws?: unknown } | null)?.ws !== ws) return false;
+  return logs.some((l) => l.length > 0 && l.some((e) => e.kind === "ws" && (e.body as { t?: unknown; h?: unknown } | null)?.h === h && (e.body as { t?: unknown }).t === wsTag(ws, entryHash(l[0]!))));
+}
+
+/// The state in force a fake station keeps (the rules' own, as src/lock-moved.ts `inForce` makes it), not counted as
+/// this device's making of it (`made`, which tests of the core's own making read).
+export function stationState(ws: string, chain: readonly Entry[], logs: readonly (readonly Entry[])[], bodies: readonly unknown[], nowMs: number): InForce {
+  const n = made.count;
+  try {
+    return inForce(ws, chain, new Map(logs.filter((l) => l.length > 0).map((l) => [entryHash(l[0]!), l])), bodies, nowMs);
+  } finally {
+    made.count = n;
+  }
 }

@@ -3,10 +3,16 @@
 // calls against a station that keeps what it is given, on the testing host's secure storage; and turning the lock off,
 // on the same rig, asking the person first. Its time is the test clock.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mock, test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
+import { type Entry as StationEntry } from "../../../station/src/cloud/lock.ts";
+import { Cloud, personChainsOf, writeState } from "../../../station/src/cloud/state.ts";
+import { wall } from "../../../station/src/ops/fibers.ts";
+import { lockPartRoute, lockRoute } from "../../../station/src/mesh/serve.ts";
 import { Core } from "../src/core.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { HostError } from "../src/error.ts";
@@ -2049,13 +2055,55 @@ test("turning the lock off: the person's own secrets opened first (asked once), 
 
 // ── a workspace whose chain moved to its people's own logs ──
 
+/// Station `S` of the rig's workspace, the station's own code (station/src cloud/state.ts `Cloud`, its routes mesh/serve.ts
+/// `lockRoute`, `lockPartRoute`) answering every `/lock` route as a station does to s1's device ("ab…"), the vault's routes
+/// still the fake's: the chain held pinned there. What it gives and takes of logs and bodies is what a station gives and
+/// takes (a body only against an entry kept that commits to it, the logs the state is made of), so the device takes them
+/// by its own read (views/lock.ts `readLockOnce`), as it would of a station. `take` keeps entries of the chain; `keepLog`
+/// a person's log as their device brings it (POST /lock/person); `takeBodies` s1's statements' bodies brought with s1's
+/// log as kept there.
+let clock = () => 0;
+mock.method(wall, "now", () => clock());
+function lockStation(r: Awaited<ReturnType<typeof rig>>) {
+  clock = () => r.host.nowMs();
+  const data = mkdtempSync(join(tmpdir(), "vault-lock-"));
+  writeState(data, { origin: "https://stillfail.test", station: S, workspace: "ws", workspace_name: "W", name: "studio", relay_url: "", relay_urls: [], grant_keys: { keys: [] }, peers: [{ id: S, name: "studio" }], revocations: [] } as never);
+  const c = new Cloud(data, false);
+  c.takeLock(r.lock.entries as unknown as StationEntry[]);
+  const viewer = { sub: "s1", email: "a@x.com", name: "s1", role: "owner", workspace: "ws", device: "ab".repeat(32) };
+  const routed = (req: HttpRequest): unknown => {
+    const url = new URL(req.url);
+    const path = url.pathname.replace("/admin/api", "");
+    if (url.pathname.startsWith("/v1/") || !(path === "/lock" || path.startsWith("/lock/"))) return undefined;
+    const buf = Buffer.from(req.body ?? new Uint8Array());
+    const [code, out] = path === "/lock" ? lockRoute(c, req.method, [...url.searchParams], buf, viewer as never) : lockPartRoute(c, path.slice("/lock/".length), req.method, buf, viewer as never);
+    return code === 200 ? out : status(code, out);
+  };
+  return {
+    c, routed,
+    take: () => void c.takeLock(r.lock.entries as unknown as StationEntry[]),
+    keepLog: (entries: readonly Entry[]) => {
+      const sub = String((entries[0]!.body as { sub?: unknown }).sub);
+      const [code, out] = lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify({ chain: entries })), { ...viewer, sub } as never);
+      assert.equal(code, 200, `the station took ${sub}'s log: ${JSON.stringify(out)}`);
+    },
+    takeBodies: (bodies: unknown[]) => {
+      const [code, out] = lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify({ chain: personChainsOf(c).of("s1")[0]?.[1] ?? [], bodies })), viewer as never);
+      assert.equal(code, 200, JSON.stringify(out));
+      return out as { taken: number; refused?: unknown[] };
+    },
+  };
+}
+
 /// The rig's workspace moved (`moved {root}`) to s1's own log, its root: this device on that log (its key's seed sealed
 /// as personal-lock.ts keeps it, the signer it signs the workspace's things with said there, as personal-lock.ts says
 /// it; `signKey` false: an entry from before signers were said), the log saying the settings and the station `S` (which
-/// the workspace's view lists); that station takes the person's own log and its bodies as the real ones do, and gives
-/// the logs of others put with `putLog`. `phone`: the phone given the vault's key before the move, and on s1's log by a
-/// key of its own there (`PHONE_LOG`), saying its signer. `say` puts a statement in s1's log, `own` an entry, each
-/// read as personal-lock.ts reads its stations.
+/// the workspace's view lists). `S` is the station's own code (`lockStation`): it keeps s1's log and the bodies of its
+/// statements as brought, and the logs of others as heard; the device takes what it gives as it reads the lock
+/// (`settle`), nothing put in its records past that read. `phone`: the phone given the vault's key before the move, and
+/// on s1's log by a key of its own there (`PHONE_LOG`), saying its signer. `say` puts a statement in s1's log (made on
+/// another device of s1's: its entry and body brought to `S`), `own` an entry, each read as personal-lock.ts reads its
+/// stations.
 const S = "5a".repeat(32);
 const PHONE_LOG = key(fill(0x52));
 const signOn = (seed: Uint8Array, ws: string, chain: Entry[], kind: string, body: unknown): Entry => {
@@ -2085,65 +2133,57 @@ async function movedRig(secret: boolean, o: { signKey?: boolean; phone?: boolean
   let own: Entry[] = [sign1([], "genesis", { sub: "s1", device: { key: k.id, id: "ab".repeat(32), label: "this", ...(o.signKey === false ? {} : { sign_key: r.me.signer!.id }) } })];
   if (o.phone) own = [...own, sign1(own, "device", { key: PHONE_LOG.id, id: r.phone.hex, label: "phone", sign_key: r.phone.id })];
   const g = entryHash(own[0]!);
-  const bodies: unknown[] = [];
+  const st = lockStation(r);
   let prev: string | null = null;
   let salt = 0x7700;
+  /// A statement of s1's: its entry on their log, its body; both brought to the station (the entry first, which the
+  /// body is taken against).
   const said = (what: Record<string, unknown>): string => {
     const b: Record<string, unknown> = { ws: "ws", ...what, prev, salt: (salt++).toString(16).padStart(32, "0") };
     prev = bodyHash(b)!;
-    bodies.push(b);
     own = [...own, sign1(own, "ws", { t: wsTag("ws", g), h: prev })];
+    st.keepLog(own);
+    const t = st.takeBodies([b]);
+    assert.equal(t.taken, 1, `the station took the body: ${JSON.stringify(t.refused)}`);
     return prev;
   };
   said({ kind: "open", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: {}, email: "a@x.com" });
   said({ kind: "station", key: S });
-  const logs: { genesis: string; entries: Entry[] }[] = [];
   r.host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(own)));
   r.host.storage.set("personal-signer-id", utf8(k.id));
   r.host.secure.set("personal-signer", { value: seed, user: true });
   stationReplies(r.host, (req) => {
-    const path = new URL(req.url).pathname;
-    if (path.endsWith("/lock/person") && req.method === "GET") return { chains: [{ genesis: g, entries: own }] };
-    if (path.endsWith("/lock/person") && req.method === "POST") {
-      const b = JSON.parse(new TextDecoder().decode(req.body!)) as { chain: Entry[]; bodies?: unknown[] };
-      if (b.chain.length > own.length) own = b.chain;
-      for (const x of b.bodies ?? []) if (!bodies.some((y) => bodyHash(y) === bodyHash(x))) bodies.push(x);
-      return { genesis: g, length: b.chain.length };
-    }
-    if (path.endsWith("/lock/bodies") && req.method === "GET") return { bodies, lacking: [] };
-    if (path.endsWith("/lock/logs")) return { chains: logs };
     if (req.url.includes("/v1/workspaces/ws/lock")) return r.lock;
-    return r.st.reply(req);
+    return st.routed(req) ?? r.st.reply(req);
   });
-  r.core.inner.data.put("lockBodies", "ws", { bodies });
   grow(r, "moved", { root: g });
+  st.take();
   // (started anew: the person's own lock read from what is kept, as an app that had it pinned)
   await r.restart();
   const settle = async () => {
     await r.core.inner.runner.run(Effect.ignore(r.core.inner.adb.personal().refresh("s1")));
+    await r.core.inner.runner.run(Effect.ignore(readLock(r.core.inner, "ws")));
     await r.host.time.pass(500, 10);
     r.take();
   };
   await settle();
   return {
-    ...r, root: g, settle,
-    /// A statement of s1's (the root's) in their log, its body kept here and at the station; its body's hash.
+    ...r, root: g, settle, station: st,
+    /// A statement of s1's (the root's) in their log, made on another device of theirs, its entry and body at the
+    /// station; its body's hash.
     say: async (what: Record<string, unknown>): Promise<string> => {
       const h = said(what);
-      r.core.inner.data.put("lockBodies", "ws", { bodies: [...bodies] });
       await settle();
       return h;
     },
-    /// An entry of s1's log signed by its key there (a device put on or taken off).
+    /// An entry of s1's log signed by its key there (a device put on or taken off), at the station.
     own: async (kind: string, body: unknown) => {
       own = [...own, sign1(own, kind, body)];
+      st.keepLog(own);
       await settle();
     },
-    /// Another person's log, as the workspace's stations give it, kept here.
-    putLog: (entries: Entry[]) => {
-      logs.push({ genesis: entryHash(entries[0]!), entries });
-      r.core.inner.data.put("lockLogs", "ws", { logs: logs.map((l) => ({ ...l })) });
-    },
+    /// Another person's log, as their device brought it to the station (given on as the state is made of it).
+    putLog: (entries: Entry[]) => st.keepLog(entries),
   };
 }
 
@@ -2351,54 +2391,34 @@ test("a moved workspace, this device's entry on its log from before signers were
 // ── a vault across the handover: made before the chain moved, by the state in force after (views/lock.ts `handOver`) ──
 
 /// The rig's chain not moved: station `S` on it, s1 (this device, its log pinned here with it on it, saying its signer)
-/// and s2 (their app `other`, on their own log by the same id and signer) each bound to their log; `S` a station that
-/// takes entries going on from the head, the person's own log and its bodies, and gives s2's log. s1's vault made
-/// before the move with s2 in it, s2's device given its key.
+/// and s2 (their app `other`, on their own log by the same id and signer) each bound to their log; `S` the station's
+/// own code (`lockStation`), the chain pinned there and both logs heard there as their devices brought them: it gives
+/// s2's log only as a station does (`/lock/logs` of an unmoved chain only those holding a statement of the workspace;
+/// `/lock/person` the asker's own). s1's vault made before the move with s2 in it, s2's device given its key.
 async function handRig() {
   const r = await rig(false, false, {}, { stations: [{ id: S, name: "studio", online: true, last_seen: null }] });
   const seed = fill(0x51);
   const k = key(seed);
-  let own: Entry[] = [signOn(seed, "person:s1", [], "genesis", { sub: "s1", device: { key: k.id, id: "ab".repeat(32), label: "this", sign_key: r.me.signer!.id } })];
+  const own: Entry[] = [signOn(seed, "person:s1", [], "genesis", { sub: "s1", device: { key: k.id, id: "ab".repeat(32), label: "this", sign_key: r.me.signer!.id } })];
   const g = entryHash(own[0]!);
   let s2log = [signOn(S2_LOG, "person:s2", [], "genesis", { sub: "s2", device: { key: key(S2_LOG).id, id: r.other.hex, label: "b", sign_key: r.other.id } })];
   const g2 = entryHash(s2log[0]!);
-  const bodies: unknown[] = [];
   r.host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(own)));
   r.host.storage.set("personal-signer-id", utf8(k.id));
   r.host.secure.set("personal-signer", { value: seed, user: true });
-  const headOf = () => r.lock.head;
+  grow(r, "station", { key: S, name: "studio" });
+  grow(r, "person", { sub: "s1", person: g });
+  grow(r, "person", { sub: "s2", person: g2 }, r.other);
+  const st = lockStation(r);
+  st.keepLog(own);
+  st.keepLog(s2log);
   const seen: string[] = [];
   stationReplies(r.host, (req) => {
     const path = new URL(req.url).pathname;
     if (path.includes("/lock")) seen.push(`${req.method} ${req.url.includes("/v1/") ? "cloud " : ""}${path.slice(path.indexOf("/lock"))}`);
-    const body = req.body ? JSON.parse(new TextDecoder().decode(req.body)) : null;
     if (req.url.includes("/v1/workspaces/ws/lock")) return req.method === "GET" ? r.lock : { ok: true };
-    if (path.endsWith("/lock") && req.method === "GET") return { head: headOf(), entries: r.lock.entries, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
-    if (path.endsWith("/lock") && req.method === "POST") {
-      let taken = 0;
-      for (const e of (body?.entries ?? []) as Entry[]) {
-        if (e.prev !== r.lock.head.hash) continue;
-        r.lock.entries.push(e);
-        r.lock.head = { seq: e.seq, hash: entryHash(e), genesis: r.lock.head.genesis };
-        taken++;
-      }
-      return { taken, head: headOf() };
-    }
-    if (path.endsWith("/lock/person") && req.method === "GET") return { chains: [{ genesis: g, entries: own }] };
-    if (path.endsWith("/lock/person") && req.method === "POST") {
-      const b = body as { chain: Entry[]; bodies?: unknown[] };
-      if (b.chain.length > own.length) own = b.chain;
-      for (const x of b.bodies ?? []) if (!bodies.some((y) => bodyHash(y) === bodyHash(x))) bodies.push(x);
-      return { genesis: g, length: b.chain.length };
-    }
-    if (path.endsWith("/lock/bodies") && req.method === "GET") return { bodies, lacking: [] };
-    if (path.endsWith("/lock/logs")) return { chains: [{ genesis: g2, entries: s2log }] };
-    if (path.endsWith("/lock/devices")) return { devices: [] };
-    return r.st.reply(req);
+    return st.routed(req) ?? r.st.reply(req);
   });
-  grow(r, "station", { key: S, name: "studio" });
-  grow(r, "person", { sub: "s1", person: g });
-  grow(r, "person", { sub: "s2", person: g2 }, r.other);
   await r.restart();
   // (this device's base key, as its mesh's: the rig reaches its station another way)
   r.core.inner.mesh = () => withoutMesh("ab".repeat(32));
@@ -2439,10 +2459,11 @@ async function handRig() {
     return out;
   };
   return {
-    ...r, root: g, id: made, items, settle, answer, seen, bodies,
+    ...r, root: g, id: made, items, settle, answer, seen, station: st,
     /// An entry of s2's own log signed by its key there, as the stations give it.
     s2Own: async (kind: string, body: unknown) => {
       s2log = [...s2log, signOn(S2_LOG, "person:s2", s2log, kind, body)];
+      st.keepLog(s2log);
       await settle();
     },
   };
@@ -2454,7 +2475,7 @@ test("a vault made before the move, s2 in it: after handOver, by the state in fo
   // (s1's phone, on the chain and not on s1's own log, taken off the chain by this device by itself first, as any
   // device of its person's not on their log is, views/lock.ts `keepToPerson`: settled before the handover begins)
   await r.settle();
-  assert.deepEqual(r.lock.entries.map((e) => e.kind), ["genesis", "station", "person", "person", "device.remove"]);
+  assert.deepEqual(r.station.c.lockAfter(-1, null).map((e) => e.kind), ["genesis", "station", "person", "person", "device.remove"], "the station took the removal");
   assert.deepEqual(pendingHeld(inner, "ws"), [], "nothing pending as it begins");
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
   const asked = r.host.secureAsked.length;
@@ -2462,7 +2483,7 @@ test("a vault made before the move, s2 in it: after handOver, by the state in fo
   assert.equal(out.error, undefined, out.error?.message);
   assert.equal(out.ok, null, `handed over: ${JSON.stringify(out.ok)} (the station asked ${r.seen.slice(-12).join(", ")})`);
   assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), ["personal-signer"], "the person asked once, for their log");
-  assert.equal(r.lock.entries.at(-1)?.kind, "moved", "the station took the moved");
+  assert.equal(r.station.c.lockAfter(-1, null).at(-1)?.kind, "moved", "the station took the moved");
   for (let n = 0; n < 2; n++) await r.settle();
   const f = inForceOf(inner, "ws");
   assert.deepEqual([f.said, f.root], ["on", r.root], "in force: rooted in s1's log");

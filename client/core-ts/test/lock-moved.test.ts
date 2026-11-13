@@ -2,7 +2,8 @@
 // `inForceOf`): the stations serve the logs and the statements' bodies (`serves` `logs`, `bodies`: GET /lock/logs,
 // GET /lock/bodies), and every reader of the lock goes by what they say. The world: `ws`, its station A, its chain the
 // rig's genesis (this device the owner's app) and a `moved` to alice's log; alice (r1) states the settings (`open`),
-// bob (r2) a member and A a station; bob's log has a second app device and a web page of his.
+// s1 a member (this device on s1's own log: a station gives those only to a device the state names), bob (r2) a member
+// and A a station; bob's log has a second app device and a web page of his.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
@@ -13,7 +14,7 @@ import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
 import { bodyHash, made, wsTag } from "../src/lock-moved.ts";
 import { Lock, bindPerson, deliver, held, inForceOf, keepToPerson, lockSeen, ownLockFor, pendingHeld, read } from "../src/views/lock.ts";
 import { jsonResponse } from "../src/testing.ts";
-import { ME, elsewhere, genesis, grant, rig, unhex } from "./lock-rig.ts";
+import { ME, elsewhere, genesis, givesTo, grant, rig, unhex } from "./lock-rig.ts";
 import { utf8 } from "../src/util.ts";
 import { stationLater } from "./station-fixture.ts";
 
@@ -62,7 +63,12 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
   const alice = person("r1", 6001, "alice's app");
   const bob = person("r2", 6002, "bob's app");
   const bob2 = key(6003);
+  // (this device's person s1, a member by their own log, this device on it: a station gives a moved workspace's logs
+  // and bodies only to a device its state names, and refuses any other at its hello)
+  const mine: Log = { sub: "s1", k: key(7001), chain: [], said: null, n: 0 };
+  mine.chain.push(signed({ v: 1, ws: "person:s1", seq: 0, prev: null, at: T, kind: "genesis", body: { sub: "s1", device: { key: mine.k.id, id: ME, label: "this", sign_key: signer.id } } } as Omit<StationEntry, "sig">, mine.k));
   const open = say(alice, "open", { ...SETTINGS, email: "alice@x" });
+  const meIn = say(alice, "member", { sub: "s1", email: "a@x.com", lock: gOf(mine), role: "member" });
   const member = say(alice, "member", { sub: "r2", email: "bob@x", lock: gOf(bob), role: "member" });
   const station = say(alice, "station", { key: A });
   add(bob, "device", { key: bob2.id, id: key(6103).hex, label: "bob's laptop" });
@@ -72,7 +78,7 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
   const byOther = (e: Omit<Entry, "sig">): Entry => ({ ...e, sig: { key: other.id, alg: "Ed25519", sig: other.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e as Entry))])) } });
   const sign = (e: Omit<Entry, "sig">): Entry => (opts.other ? byOther(e) : signer.sign(e));
   const moved = sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(alice) }));
-  const st: Served = { chain: [g0, moved], logs: [alice, bob], bodies: [open, member, station], posted: [], given: [], lacking: [], silent: false, brought: [] };
+  const st: Served = { chain: [g0, moved], logs: [alice, bob, mine], bodies: [open, meIn, member, station], posted: [], given: [], lacking: [], silent: false, brought: [] };
   first(st, { alice, bob, member, open });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
@@ -81,8 +87,10 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
       const after = path === "/lock" ? -1 : Number(path.split("=")[1]);
       return Effect.succeed({ head: headOf(c), entries: c.filter((e) => e.seq > after), ...(after >= 0 && c[after] ? { after_hash: entryHash(c[after]!) } : {}), ...serves });
     }
-    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: st.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) });
-    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: st.bodies, lacking: st.lacking });
+    // (to this device only where the state its logs and bodies make names it, as a station gives them)
+    const gives = givesTo("ws", c, st.logs.map((l) => l.chain as unknown as Entry[]), st.bodies, r.host.nowMs(), ME);
+    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: gives ? st.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) : [] });
+    if (method === "GET" && path === "/lock/bodies") return Effect.succeed(gives ? { bodies: st.bodies, lacking: st.lacking } : { bodies: [], lacking: [] });
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
     if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [] });
     st.posted.push(`${method} ${path}`);
@@ -120,7 +128,9 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
   return { r, inner, st, alice, bob, bob2, g0, moved, run, told, who, member, open, signer, sign, headOf };
 }
 
-const bobs = (w: { bob: Log }, web: boolean) => `r1 owner: ${key(6101).hex.slice(0, 4)}; r2 member: ${[key(6102).hex.slice(0, 4), key(6103).hex.slice(0, 4), ...(web ? [WEB.slice(0, 4)] : [])].sort().join(",")}`;
+const bobs = (w: { bob: Log }, web: boolean) => `r1 owner: ${key(6101).hex.slice(0, 4)}; r2 member: ${[key(6102).hex.slice(0, 4), key(6103).hex.slice(0, 4), ...(web ? [WEB.slice(0, 4)] : [])].sort().join(",")}; ${S1}`;
+/// This device's person, as the lock lists them: a member, this device theirs.
+const S1 = `s1 member: ${ME.slice(0, 4)}`;
 
 test("a moved chain: the lock lists the members, roles, devices and stations its people's logs say, and a web page until its exp by this device's clock", async () => {
   const w = await setUp();
@@ -147,13 +157,13 @@ test("a member's device taken off its log is gone after the station's lock event
   assert.equal((await w.who()).members, bobs(w, true));
   add(w.bob, "device.remove", { key: w.bob2.id });
   await w.told();
-  assert.equal((await w.who()).members, `r1 owner: ${key(6101).hex.slice(0, 4)}; r2 member: ${[key(6102).hex.slice(0, 4), WEB.slice(0, 4)].sort().join(",")}`);
+  assert.equal((await w.who()).members, `r1 owner: ${key(6101).hex.slice(0, 4)}; r2 member: ${[key(6102).hex.slice(0, 4), WEB.slice(0, 4)].sort().join(",")}; ${S1}`);
 });
 
 test("a body lacking: its statement not in force; in force once a station gives it", async () => {
   const w = await setUp((st, x) => void (st.bodies = st.bodies.filter((b) => b !== x.member)));
   await w.run(read(w.inner, "ws"));
-  assert.equal((await w.who()).members, `r1 owner: ${key(6101).hex.slice(0, 4)}`, "bob not in without his admit's body");
+  assert.equal((await w.who()).members, `r1 owner: ${key(6101).hex.slice(0, 4)}; ${S1}`, "bob not in without his admit's body");
   w.st.bodies = [...w.st.bodies, w.member];
   await w.told();
   assert.equal((await w.who()).members, bobs(w, true));

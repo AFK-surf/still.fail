@@ -23,7 +23,7 @@ import { held, inForceOf, read, roster } from "../src/views/lock.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { HostWire } from "../src/station/wire.ts";
-import { ME, genesis, grant, rig, withoutMesh } from "./lock-rig.ts";
+import { ME, committed, genesis, givesTo, grant, rig, stationState, withoutMesh } from "./lock-rig.ts";
 import { stationLater } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
@@ -108,9 +108,17 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked"> = st): Effect.Effect<unknown, CoreError> => {
     st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
-    if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) return Effect.succeed({ head: headOf(x.chain), entries: x.chain, ...serves });
-    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: x.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) });
-    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: x.bodies, lacking: [] });
+    // (what the station keeps as a station does: the lock only where its list names it, a station the list does not
+    // name keeping none, as one the chain never named (`keeps`); the logs and bodies given only to a device that list names)
+    const logs = [st.own, ...x.logs.map((l) => l.chain as unknown as Entry[])];
+    const id = at.endsWith("/A") ? A : at.endsWith("/C") ? C : at.endsWith("/B") ? B : D;
+    const f = stationState(at.split("/")[0]!, x.chain, logs, x.bodies, r.host.nowMs());
+    // (A and B pinned their chain, whose genesis names them; C and D keep it only once its list names them)
+    const keeps = id === A || id === B || f.f.stations.has(id);
+    const gives = keeps && givesTo(at.split("/")[0]!, x.chain, logs, x.bodies, r.host.nowMs(), ME);
+    if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) return Effect.succeed(keeps ? { head: headOf(x.chain), entries: x.chain, ...serves } : { head: null, entries: [], ...serves });
+    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: gives ? x.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) : [] });
+    if (method === "GET" && path === "/lock/bodies") return Effect.succeed(gives ? { bodies: x.bodies, lacking: [] } : { bodies: [], lacking: [] });
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
     if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [{ genesis: entryHash(st.own[0]!), entries: st.own }] });
     if (x.silent && method === "POST") return Effect.never;
@@ -119,7 +127,9 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
       const chain = b.chain ?? [];
       x.brought.push({ at, length: chain.length, bodies: b.bodies ?? null });
       if (chain.length > st.own.length) st.own = chain;
-      for (const n of b.bodies ?? []) if (!x.bodies.some((y) => bodyHash(y) === bodyHash(n))) x.bodies.push(n);
+      // (a body taken only by a station keeping the workspace's lock, against an entry kept that commits to it)
+      const kept = [st.own, ...x.logs.map((l) => l.chain as unknown as Entry[])];
+      for (const n of b.bodies ?? []) if (keeps && committed(at.split("/")[0]!, kept, n) && !x.bodies.some((y) => bodyHash(y) === bodyHash(n))) x.bodies.push(n);
       return Effect.succeed({ genesis: entryHash(chain[0]!), length: chain.length });
     }
     if (method === "POST") return Effect.succeed({ taken: 1, head: headOf(x.chain) });

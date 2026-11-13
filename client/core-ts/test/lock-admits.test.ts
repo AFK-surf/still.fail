@@ -20,7 +20,7 @@ import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
 import { added, enrolled, held, inForceOf, outOf, read, roster } from "../src/views/lock.ts";
 import { hooks } from "../src/core/execute.ts";
 import { dialer, ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
-import { ME, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { ME, committed, genesis, grant, pipe, rig } from "./lock-rig.ts";
 
 const A = "aa".repeat(32);
 const B = "bb".repeat(32);
@@ -110,7 +110,9 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
       const chain = b.chain ?? [];
       x.brought.push({ at, length: chain.length, bodies: b.bodies ?? null });
       if (chain.length > st.own.length) st.own = chain;
-      for (const n of b.bodies ?? []) if (!x.bodies.some((y) => bodyHash(y) === bodyHash(n))) x.bodies.push(n);
+      // (a body taken against an entry kept that commits to it, as a station takes one)
+      const kept = [st.own, ...x.logs.map((l) => l.chain as unknown as Entry[])];
+      for (const n of b.bodies ?? []) if (committed(at.split("/")[0]!, kept, n) && !x.bodies.some((y) => bodyHash(y) === bodyHash(n))) x.bodies.push(n);
       return Effect.succeed({ genesis: entryHash(chain[0]!), length: chain.length });
     }
     if (method === "POST") return Effect.succeed({ taken: 1, head: headOf(x.chain) });

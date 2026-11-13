@@ -15,10 +15,10 @@ import { join } from "node:path";
 import { mock, test } from "node:test";
 import { Effect } from "effect";
 import { type Entry as StationEntry, LockRefusal, entryHash as stationHash } from "../../../station/src/cloud/lock.ts";
-import { Cloud, personChainsOf, writeState } from "../../../station/src/cloud/state.ts";
+import { Cloud, writeState } from "../../../station/src/cloud/state.ts";
 import { wall } from "../../../station/src/ops/fibers.ts";
 import { inLockBringing, lockPartRoute, lockRoute, refusalOf } from "../../../station/src/mesh/serve.ts";
-import { Log, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
+import { Log, bring as brought, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
 import { hooks } from "../src/core/execute.ts";
 import { CoreError } from "../src/error.ts";
 import type { Entry } from "../src/lock.ts";
@@ -74,10 +74,8 @@ async function setUp(o: { named?: boolean; web?: boolean; waiting?: boolean } = 
   const c = new Cloud(data, false);
   c.takeLock([first]);
   c.takeLock([first, moved], null, true);
-  const bring = (l: Log) => {
-    personChainsOf(c).keep(l.genesis, l.entries, "ws");
-    c.takeBodies(null, [...l.bodies.values()]);
-  };
+  // (as each member's app device brings them, POST /lock/person)
+  const bring = (l: Log) => void brought(c, l, true, "ws");
   for (const l of o.waiting ? [bob] : o.named ? [alice, bob, x] : [alice, bob]) bring(l);
   const viewer = viewerOf("s1", { base }, "member", "ws");
   /// What the station does to each of its asks: `lie`, a device its refusals name to ask in place of those it would.
