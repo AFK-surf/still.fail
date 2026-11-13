@@ -1715,57 +1715,20 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
-static NSRange ime_clamp_sel(NSString *text, NSInteger a, NSInteger b) {
-  NSUInteger start = MIN((NSUInteger)MAX(0, a), text.length);
-  NSUInteger end = MIN((NSUInteger)MAX(a, b), text.length);
-  return NSMakeRange(start, end - start);
-}
+#include "ios_ime.h"
 
-static void ime_clear_marked(MBView *v, NSString *text, NSRange sel) {
-  [v.inputDelegate textWillChange:v];
-  v.marked = NSMakeRange(NSNotFound, 0);
-  v.doc = text;
-  v.sel = sel;
-  [v.inputDelegate textDidChange:v];
-}
+@interface MBView (IME) <MBImeView>
+@end
 
-static void ime_resign_if_idle(void) {
-  MBView *v = the_view;
-  if (!v || v.imeActive || !v.isFirstResponder) return;
-  if (v.marked.location != NSNotFound) {
-    NSString *doc = v.doc ?: @"";
-    ime_clear_marked(v, doc, ime_clamp_sel(doc, (NSInteger)v.sel.location, (NSInteger)(v.sel.location + v.sel.length)));
-  }
-  [v resignFirstResponder];
-}
+@implementation MBView (IME)
+- (id<MBImeDelegate>)imeInputDelegate { return (id<MBImeDelegate>)self.inputDelegate; }
+@end
+
+static void ime_resign_if_idle(void) { mb_ime_resign_if_idle(the_view); }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,
                      int32_t a, int32_t b) {
-  MBView *v = the_view;
-  BOOL was = v.imeActive;
-  v.imeActive = active != 0;
-  v.caretRect = CGRectMake(x, y, w, h);
-  // the field's text and selection as it has them: the keyboard told only of what differs from what it did itself
-  // (MBView's echo), a change of the field's own (a tap, a paste, a send); when leaving IME with marked composition
-  // still open (e.g. Pinyin), discard marked text first so UIKit finishes composition cleanly on resign.
-  NSString *t = mb_ns_from_string(text);
-  NSRange sel = ime_clamp_sel(t, a, b);
-  if ((!v.imeActive || !was) && v.marked.location != NSNotFound) {
-    ime_clear_marked(v, t, sel);
-  } else if (v.marked.location == NSNotFound) {
-    if (![t isEqualToString:v.doc]) {
-      [v.inputDelegate textWillChange:v];
-      v.doc = t;
-      v.sel = sel;
-      [v.inputDelegate textDidChange:v];
-    } else if (!NSEqualRanges(sel, v.sel)) {
-      [v.inputDelegate selectionWillChange:v];
-      v.sel = sel;
-      [v.inputDelegate selectionDidChange:v];
-    }
-  }
-  if (v.imeActive && !was) [v becomeFirstResponder];
-  if (!v.imeActive && (was || v.isFirstResponder)) [v resignFirstResponder];
+  mb_ime_set(the_view, active != 0, CGRectMake(x, y, w, h), mb_ns_from_string(text), a, b);
 }
 
 // The system's floating edit menu over a field's words (@hostapi.text_menu, as Android's ActionMode.TYPE_FLOATING):
