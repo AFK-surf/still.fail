@@ -1403,9 +1403,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
         let most = dmax(0.0, whole_now() - vh)
         let to = match ask {
+          // (its offset from under what covers its top, as the fill's)
           Bring(k, off) =>
             match laid_at.get(k) {
-              Some(i) if i < all.length() => Some(all.top(i) + off)
+              Some(i) if i < all.length() => Some(all.top(i) + off - @signals.untracked(fn() { s.top_covered() }))
               _ => None
             }
           ToEnd => Some(most)
@@ -2004,7 +2005,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 ai = i
                 follows_foot = false
                 match off {
-                  Some(off) => aoff = off
+                  // (from under what covers its top: as far under that edge as `off` says, as what is in sight
+                  // tells `into`)
+                  Some(off) => aoff = off - @signals.untracked(fn() { s.top_covered() })
                   None => centring = true
                 }
               }
@@ -2123,7 +2126,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       }
       if centring {
-        aoff = counted(laid.untracked()).h(ai) / 2.0 - vh / 2.0
+        // (its middle at the middle of what shows between what covers its top and its pinned foot's top)
+        let (cover, under) = @signals.untracked(fn() { (s.top_covered(), s.foot_covered_now()) })
+        aoff = counted(laid.untracked()).h(ai) / 2.0 - (cover + vh - under) / 2.0
       }
       let most = dmax(0.0, whole_now() - vh)
       top = if follows_foot || to_end { most } else { dclamp(all.top(ai) + aoff, 0.0, most) }
@@ -3006,8 +3011,10 @@ pub fn[K] ListPlace::new() -> ListPlace[K] {
 }
 
 ///|
-/// Block `key` brought to the top of where the list shows (`offset` above it: its top that far over the list's, under
-/// it where less than 0), as far as the list goes (Ctx::list_scroll_to's): gliding there where `glide` and it is near.
+/// Block `key` brought to the top of where the list shows, under what covers its top (Scroll::top_covered: the bar it
+/// runs under; none, its own top), `offset` above that edge (its top that far over it, under it where less than 0: what
+/// is in sight told as `first` and `into`, `first` brought with `into` is where it was), as far as the list goes
+/// (Ctx::list_scroll_to's): gliding there where `glide` and it is near.
 pub fn[K] ListPlace::bring(self : ListPlace[K], key : K, offset? : Double = 0.0, glide? : Bool = false) -> Unit {
   self.from = None
   if glide && (self.glide)(Bring(key, offset)) {
@@ -3019,8 +3026,8 @@ pub fn[K] ListPlace::bring(self : ListPlace[K], key : K, offset? : Double = 0.0,
 }
 
 ///|
-/// Block `key` brought to the middle of where the list shows, its middle there as tall as it is counted then (an entry
-/// gone to).
+/// Block `key` brought to the middle of where the list shows, between what covers its top (Scroll::top_covered) and its
+/// pinned foot's top, its middle there as tall as it is counted then (an entry gone to).
 pub fn[K] ListPlace::centre(self : ListPlace[K], key : K) -> Unit {
   self.from = None
   self.asked = Some(Centre(key))

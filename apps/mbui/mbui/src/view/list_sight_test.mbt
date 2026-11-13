@@ -26,9 +26,17 @@ priv struct SgCase {
 
 ///|
 /// A page's list 300 by 200 of `n` blocks 40 tall (words 行k at each one's top, the whole block pressed), following
-/// its foot where `follows`; a head and a foot as tall as `head` and `foot` where they are more than 0; told what is in
-/// sight where `listens`. Drawn once, at 0.
-fn sg_case(n : Int, follows? : Bool = true, head? : Double = 0.0, foot? : Double = 0.0, listens? : Bool = true) -> SgCase {
+/// its foot where `follows`; a head and a foot as tall as `head` and `foot` where they are more than 0; `cover` of its
+/// top covered (View::scrolls_window's `top_covered`: a bar it runs under); told what is in sight where `listens`.
+/// Drawn once, at 0.
+fn sg_case(
+  n : Int,
+  follows? : Bool = true,
+  head? : Double = 0.0,
+  foot? : Double = 0.0,
+  cover? : Double = 0.0,
+  listens? : Bool = true,
+) -> SgCase {
   let scroll = @view.Scroll::list()
   let place : @view.ListPlace[Int] = @view.ListPlace::new()
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { a == b })
@@ -52,6 +60,7 @@ fn sg_case(n : Int, follows? : Bool = true, head? : Double = 0.0, foot? : Double
           fn() { keys.get() },
           est=sg_tall,
           follows=fn() { follows },
+          top_covered=fn() { cover },
           place~,
           head?=if head > 0.0 { Some(fn(h : @view.View) { h.box(fn(b) { b.height(Is(Some(head))) |> ignore }) |> ignore }) } else { None },
           foot?=if foot > 0.0 { Some(fn(f : @view.View) { f.box(fn(b) { b.height(Is(Some(foot))) |> ignore }) |> ignore }) } else { None },
@@ -268,4 +277,88 @@ test "telling what is in sight lays out and measures nothing: the same work with
     (w.computes - w0.computes, w.laid - w0.laid, w.measured - w0.measured)
   }
   assert_eq(run(true), run(false))
+}
+
+///|
+test "with its top covered 0, 44 and 52: the first key the first with something showing under what covers it, how far into it against that edge; the last wholly shown and the last as against its foot, how tall it shows as it is" {
+  for cover in [0.0, 44.0, 52.0] {
+    // (at its top: block 0 at 0 to 40, wholly under a cover of 44 or 52, block 1 from 40 the first showing under it)
+    let c = sg_case(30, follows=false, cover~)
+    let at_top = c.told[c.told.length() - 1].1
+    let (first, into) = if cover >= sg_tall { (1, cover - sg_tall) } else { (0, cover) }
+    assert_eq(
+      at_top,
+      { first, into, last: 4, whole: Some(4), from_foot: c.scroll.most(), shows: sg_shows, at_foot: false },
+      msg="covered \{cover}, at its top",
+    )
+    // (at its foot: block 25 at the top of what shows, under the cover where it is 40 or more)
+    let f = sg_case(30, cover~)
+    let at_foot = f.told[f.told.length() - 1].1
+    let (first, into) = if cover >= sg_tall { (26, cover - sg_tall) } else { (25, cover) }
+    assert_eq(
+      at_foot,
+      { first, into, last: 29, whole: Some(29), from_foot: 0.0, shows: sg_shows, at_foot: true },
+      msg="covered \{cover}, at its foot",
+    )
+  }
+}
+
+///|
+test "a block brought to its middle with its top covered and a foot: its middle at the middle of what shows between them, at every rate" {
+  for case in [(0.0, 0.0), (44.0, 0.0), (0.0, 30.0), (44.0, 30.0), (52.0, 30.0)] {
+    let (cover, foot) = case
+    for rate in rc_rates {
+      let c = sg_case(30, follows=false, foot~, cover~)
+      let at = rc_at
+      c.tree.event(at, fn() { c.place.centre(15) })
+      sg_walk(c, at, at + @flex.move_most_ms + 100.0, rate)
+      let middle = rc_y(c.tree, "行15") + sg_tall / 2.0
+      let want = (cover + sg_shows - foot) / 2.0
+      assert_true(
+        (middle - want).abs() < 1.0e-6,
+        msg="covered \{cover}, a foot \{foot}, at \{rate} a second: its middle at \{middle}, the middle of what shows \{want}",
+      )
+    }
+  }
+}
+
+///|
+test "with its top covered 44 and 52, a row partly under the cover and ending over the foot's top is not wholly in what shows; with none covered it is" {
+  // (at its top, a foot of 110: its top at 90. Block 1 from 40 to 80: under a cover of 44 or 52 in part, over the foot's
+  // top; block 0 wholly under the cover; block 2 cut by the foot)
+  for cover in [0.0, 44.0, 52.0] {
+    let c = sg_case(30, follows=false, foot=110.0, cover~)
+    let told = c.told[c.told.length() - 1].1
+    let whole = if cover > sg_tall { None } else { Some(1) }
+    assert_eq((told.first, told.whole), (if cover >= sg_tall { 1 } else { 0 }, whole), msg="covered \{cover}")
+  }
+}
+
+///|
+test "with its top covered 0, 44 and 52: a block brought with no offset has its top at the cover's edge; the first in sight brought with how far into it the edge was is where it was, nothing moving, at every rate" {
+  for cover in [0.0, 44.0, 52.0] {
+    for rate in rc_rates {
+      let c = sg_case(30, follows=false, cover~)
+      let at = rc_at
+      c.tree.event(at, fn() { c.place.bring(10) })
+      sg_walk(c, at, at + @flex.move_most_ms + 100.0, rate)
+      let y = rc_y(c.tree, "行10")
+      assert_true((y - cover).abs() < 1.0e-6, msg="covered \{cover}, at \{rate} a second: brought to \{y}")
+      // (read 70 further by the wheel: what is in sight told, and brought back by it)
+      let wheel_at = at + @flex.move_most_ms + 200.0
+      c.tree.at(wheel_at)
+      c.tree.wheel_at(150.0, 100.0, 0.0, 70.0, 0, wheel_at) |> ignore
+      sg_walk(c, wheel_at, wheel_at + 1000.0, rate)
+      let seen = c.place.sight_now().unwrap()
+      let was = rc_y(c.tree, "行\{seen.first}")
+      let back_at = wheel_at + 1100.0
+      c.tree.event(back_at, fn() { c.place.bring(seen.first, offset=seen.into) })
+      sg_walk(c, back_at, back_at + @flex.move_most_ms + 100.0, rate)
+      let now = rc_y(c.tree, "行\{seen.first}")
+      assert_true(
+        (now - was).abs() < 1.0e-6 && (now - (cover - seen.into)).abs() < 1.0e-6,
+        msg="covered \{cover}, at \{rate} a second: \{seen.first} at \{was}, \{seen.into} into it, back at \{now}",
+      )
+    }
+  }
 }

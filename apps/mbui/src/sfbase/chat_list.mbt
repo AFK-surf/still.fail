@@ -338,6 +338,24 @@ pub(all) struct KeptPlace {
 ///|
 pub let kept_places : Map[String, KeptPlace] = Map([])
 
+///|
+/// A place as it is kept (KeptPlace's `offset`, `chat.place`'s and so the core's `at_offset`: how far a message's top is
+/// under the top of its list's window, what the old page counts and every other device tells) of one told under what
+/// covers the list's top (`cover` tall, the chat's bar): its top `under` below that edge (a page made as nodes: what is
+/// in sight's `-into`). What is kept and told keeps that meaning, and a page made as nodes says and reads it through this
+/// pair alone (kept_place_under is the way back); it stays when the old page is gone, the core's and other devices'
+/// numbers no different then (the coordinator of the migration, 2026-11-14).
+pub fn kept_place_of(under : Double, cover : Double) -> Double {
+  cover + under
+}
+
+///|
+/// ListPlace::bring's offset (from under what covers the list's top, `cover` tall: over that edge) of a place as it is
+/// kept, `kept` (kept_place_of's): its message's top where the place had it in the list's window.
+pub fn kept_place_under(kept : Double, cover : Double) -> Double {
+  cover - kept
+}
+
 
 ///|
 /// The key of where a chat stands among its list's rows (Entry::id): one at a time, at its end.

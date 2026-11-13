@@ -461,17 +461,18 @@ test "a chat's page made with its inside nodes tells the core what is read and w
 /// The long chat (chat_window_wbtest's) opened on screen `s` with its page's inside nodes, at rest (the Tester's screen:
 /// 2 pixels a point); the core saying where it was left (`at`: the message's seq, its top under the list's in pixels, if
 /// said) and its unread line at message `line` (none at 0) as it is read; `before` done as the run begins, before the chat
-/// is opened (a message it is to go to).
+/// is opened (a message it is to go to). Its page the old one where `nodes` is false.
 fn place_long_open(
   l : LongChat,
   s : (String, Double, Double, Int),
+  nodes? : Bool = true,
   at? : (Double, Double?)? = None,
   line? : @signals.Signal[Int] = @signals.signal(0),
   before? : () -> Unit = fn() {  },
 ) -> @ui.Tester {
   let (_, w, h, platform) = s
   new_run()
-  @sfbase.chat_page_nodes.set(true)
+  @sfbase.chat_page_nodes.set(nodes)
   before()
   let base = long_source(l)
   let src : Source = {
@@ -516,6 +517,42 @@ fn place_left_and_opened(t : @ui.Tester, l : LongChat, meanwhile? : () -> Unit =
   open_chat(long_ref)
   @ui.came_from_outside()
   long_run(t, l, long_opened_ms)
+}
+
+///|
+test "where a chat was left as one page keeps it, the other opens at the same messages as far down, either way, on 小屏 and 大屏: the old page's kept place on the page made as nodes and the page made as nodes' on the old" {
+  let k = long_ref.station + "\u{1}" + long_ref.session
+  for s in long_screens {
+    let (name, w, h, _) = s
+    for old_keeps in [true, false] {
+      let at = if old_keeps { "\{name}: kept by the old page" } else { "\{name}: kept by the page made as nodes" }
+      // read up on the one, left: the place it keeps, the messages in the middle of what showed and where
+      let l = long_chat()
+      let t = place_long_open(l, s, nodes=!old_keeps)
+      t.move_to(w / 2.0, h / 2.0)
+      t.wheel(w / 2.0, h / 2.0, -600.0)
+      long_run(t, l, long_rest_ms)
+      let seen : Array[(Int, Double)] = []
+      for n in l.first.get()..=l.last.get() {
+        if t.rect_of("第\{n}条：") is Some((_, y, _, _)) && y > h / 4.0 && y < h * 0.75 {
+          seen.push((n, y))
+        }
+      }
+      assert_true(seen.length() > 0, msg="\{at}: nothing read in the middle of the list")
+      home()
+      @ui.came_from_outside()
+      long_run(t, l, long_opened_ms)
+      guard @sfbase.kept_places.get(k) is Some(kept) else { fail("\{at}: no place kept") }
+      // opened on the other, given that place as kept
+      let l = long_chat()
+      let o = place_long_open(l, s, nodes=old_keeps, before=fn() { @sfbase.kept_places[k] = kept })
+      let wrong = seen.filter(fn(p) { !(o.rect_of("第\{p.0}条：") is Some((_, y, _, _)) && (y - p.1).abs() <= 1.0) })
+      assert_true(
+        wrong.is_empty(),
+        msg="\{at}: read at \{Repr(seen)}, kept \{kept.top} at \{kept.offset}, opened at \{Repr(wrong.map(fn(p) { o.rect_of("第\{p.0}条：").map(fn(r) { r.1 }) }))}",
+      )
+    }
+  }
 }
 
 ///|
