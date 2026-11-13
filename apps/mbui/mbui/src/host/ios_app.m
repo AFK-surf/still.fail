@@ -449,7 +449,7 @@ static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
 
 // ---- UITextInput ----
 
-- (BOOL)canBecomeFirstResponder { return YES; }
+- (BOOL)canBecomeFirstResponder { return self.imeActive; }
 // (a key catcher has none, but says it has: the keyboard's delete then deletes, as Backspace, on the screen it types into)
 - (BOOL)hasText { return key_catching || self.doc.length > 0; }
 
@@ -1022,6 +1022,7 @@ static double ime_over(void) {
 
 static BOOL ime_moving(void) { return the_controller.kbMark.layer.animationKeys.count > 0; }
 
+static void ime_resign_if_idle(void);
 // the system's own bars, the app's tabs and actions in them (@hostapi.nav_bar): an iPhone Duo's alone, ios_nav.h
 #include "ios_nav.h"
 
@@ -1714,6 +1715,30 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
+static NSRange ime_clamp_sel(NSString *text, NSInteger a, NSInteger b) {
+  NSUInteger start = MIN((NSUInteger)MAX(0, a), text.length);
+  NSUInteger end = MIN((NSUInteger)MAX(a, b), text.length);
+  return NSMakeRange(start, end - start);
+}
+
+static void ime_clear_marked(MBView *v, NSString *text, NSRange sel) {
+  [v.inputDelegate textWillChange:v];
+  v.marked = NSMakeRange(NSNotFound, 0);
+  v.doc = text;
+  v.sel = sel;
+  [v.inputDelegate textDidChange:v];
+}
+
+static void ime_resign_if_idle(void) {
+  MBView *v = the_view;
+  if (!v || v.imeActive || !v.isFirstResponder) return;
+  if (v.marked.location != NSNotFound) {
+    NSString *doc = v.doc ?: @"";
+    ime_clear_marked(v, doc, ime_clamp_sel(doc, (NSInteger)v.sel.location, (NSInteger)(v.sel.location + v.sel.length)));
+  }
+  [v resignFirstResponder];
+}
+
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,
                      int32_t a, int32_t b) {
   MBView *v = the_view;
@@ -1721,10 +1746,13 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   v.imeActive = active != 0;
   v.caretRect = CGRectMake(x, y, w, h);
   // the field's text and selection as it has them: the keyboard told only of what differs from what it did itself
-  // (MBView's echo), a change of the field's own (a tap, a paste, a send)
-  if (v.marked.location == NSNotFound) {
-    NSString *t = mb_ns_from_string(text);
-    NSRange sel = NSMakeRange(a, b - a);
+  // (MBView's echo), a change of the field's own (a tap, a paste, a send); when leaving IME with marked composition
+  // still open (e.g. Pinyin), discard marked text first so UIKit finishes composition cleanly on resign.
+  NSString *t = mb_ns_from_string(text);
+  NSRange sel = ime_clamp_sel(t, a, b);
+  if ((!v.imeActive || !was) && v.marked.location != NSNotFound) {
+    ime_clear_marked(v, t, sel);
+  } else if (v.marked.location == NSNotFound) {
     if (![t isEqualToString:v.doc]) {
       [v.inputDelegate textWillChange:v];
       v.doc = t;
@@ -1737,7 +1765,7 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
     }
   }
   if (v.imeActive && !was) [v becomeFirstResponder];
-  if (!v.imeActive && was) [v resignFirstResponder];
+  if (!v.imeActive && (was || v.isFirstResponder)) [v resignFirstResponder];
 }
 
 // The system's floating edit menu over a field's words (@hostapi.text_menu, as Android's ActionMode.TYPE_FLOATING):
@@ -1896,6 +1924,7 @@ static void tell_state(void) {
   UIApplicationState a = UIApplication.sharedApplication.applicationState;
   int shown = a != UIApplicationStateBackground;
   int front = a == UIApplicationStateActive;
+  if (front) ime_resign_if_idle();
   static int told = -1;
   if (((shown ? 1 : 0) | (front ? 2 : 0)) != told) {
     told = (shown ? 1 : 0) | (front ? 2 : 0);
@@ -1952,6 +1981,17 @@ static void kb_rested(CGRect end) {
 }
 
 static void watch_keyboard(void) {
+  [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillShowNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+    (void)n;
+    ime_resign_if_idle();
+  }];
+  [NSNotificationCenter.defaultCenter addObserverForName:UIWindowDidBecomeKeyNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+    if (n.object == the_view.window) ime_resign_if_idle();
+  }];
   [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillHideNotification object:nil
                                                    queue:NSOperationQueue.mainQueue
                                               usingBlock:^(NSNotification *n) {
@@ -1962,6 +2002,7 @@ static void watch_keyboard(void) {
                                                    queue:NSOperationQueue.mainQueue
                                               usingBlock:^(NSNotification *n) {
     kb_rested([n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue]);
+    ime_resign_if_idle();
   }];
   // The soft keyboard put away by the person (an iPad's key, a hardware keyboard come, dragged down), not by the app:
   // what was typed into lets go of the focus, as Android's (MainActivity: Native.text 7); the app's own hiding comes
@@ -1982,6 +2023,7 @@ static void watch_keyboard(void) {
   [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardDidShowNotification object:nil
                                                    queue:NSOperationQueue.mainQueue
                                               usingBlock:^(NSNotification *n) {
+    ime_resign_if_idle();
     MBController *c = the_controller;
     UIView *root = c.view;
     if (!root.window) return;

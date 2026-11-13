@@ -3476,6 +3476,19 @@ pub fn old(
       match old_islands.search_by(fn(o) { o.id == id }) {
         Some(i) => {
           let o = old_islands.remove(i)
+          let c = g()
+          if c.focus != 0 {
+            let focus_island = match c.dev.catchers.get(c.focus) {
+              Some(st) => st.island
+              None => c.island_of_id(c.focus)
+            }
+            if focus_island == Some(id) {
+              c.focus = 0
+              c.focus_returned = false
+              hand_focus_said(c)
+              h_frame_owed()
+            }
+          }
           // (what is made once of it among the old frame's let go; what it made, followed and kept went with its
           // scope, as its node did)
           let keys = made_roots.iter().filter(fn(e) { physical_equal(e.1, o.made) }).map(fn(e) { e.0 }).collect()

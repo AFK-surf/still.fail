@@ -319,6 +319,7 @@ static void nav_put(UIViewController *slot) {
   [slot.view addSubview:c.view];
   [c didMoveToParentViewController:slot];
   [slot setNeedsStatusBarAppearanceUpdate];
+  ime_resign_if_idle();
   [the_view requestFrame];
 }
 
