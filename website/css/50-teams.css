@@ -130,10 +130,10 @@ img.sl-av { background: none; }
    the dots and count follow it, as the devices swiper's do (60-devices.css). ---- */
 .tm-nav { display: none; }
 @media (max-width: 899px) {
-  .rails { margin-inline: calc(-1 * var(--gl)) calc(-1 * var(--gr)); }
+  .rails { margin-inline: calc(-1 * var(--pl)) calc(-1 * var(--pr)); }
   .rails::before { display: none; }
-  .rails > .cells { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(calc(100vw - var(--gl) - var(--gr) - 28px), 380px); gap: 12px;
-    margin: 0; padding: 2px var(--gr) 4px var(--gl); scroll-padding-inline: var(--gl); overflow-x: auto; overscroll-behavior-x: contain;
+  .rails > .cells { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(calc(100vw - var(--pl) - var(--pr) - 28px), 380px); gap: 12px;
+    margin: 0; padding: 2px var(--pr) 4px var(--pl); scroll-padding-inline: var(--pl); overflow-x: auto; overscroll-behavior-x: contain;
     scroll-snap-type: x mandatory; touch-action: pan-x pan-y; scrollbar-width: none; align-items: stretch; }
   .rails > .cells::-webkit-scrollbar { display: none; }
   .rails > .cells:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 18px; }
@@ -141,7 +141,7 @@ img.sl-av { background: none; }
   .cell .vis { border-radius: 6px; }
   .cell h3 { margin: 18px 8px 0; font-size: 16px; }
   .cell > p { margin: 6px 8px 0; font-size: 15px; line-height: 1.55; }
-  .tm-nav { display: flex; align-items: center; gap: 12px; margin: 8px var(--gr) 0 var(--gl); }
+  .tm-nav { display: flex; align-items: center; gap: 12px; margin: 8px var(--pr) 0 var(--pl); }
   .tm-dots { position: relative; display: flex; margin-left: -4px; } /* the pill, 4 px into its button, on the gutter */
   .tm-dots button { all: unset; box-sizing: border-box; position: relative; width: 26px; height: 44px; cursor: pointer;
     -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }

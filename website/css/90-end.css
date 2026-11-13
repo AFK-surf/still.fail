@@ -7,7 +7,7 @@
   padding-top: clamp(72px, 8.4vw, 128px); padding-bottom: clamp(48px, 5vw, 80px); }
 .band.end h2 { font-size: var(--t-cta); line-height: 1.08; letter-spacing: -.015em; max-width: 13ch; }
 .band.end .lead { color: var(--mut); margin-top: clamp(14px, 1.4vw, 20px); text-wrap: balance; }
-.band.end .actions { justify-content: flex-end; padding-right: 12px; } /* the filled buttons off the guide (as the bar's, 10-nav.css) */
+.band.end .actions { justify-content: flex-end; }
 .band.end .field-wrap { height: calc(var(--fc) * 3); }
 
 @media (min-width: 641px) and (max-width: 1023px) {
@@ -15,7 +15,7 @@
 }
 @media (max-width: 720px) {
   .end-in { grid-template-columns: minmax(0, 1fr); }
-  .band.end .actions { justify-content: flex-start; padding-right: 0; }
+  .band.end .actions { justify-content: flex-start; }
 }
 @media (max-width: 640px) {
   .band.end { --cols: 12; }

@@ -6,8 +6,8 @@
 .dv-swipe .fpanels {
   --peek: 32px;
   display: grid; grid-auto-flow: column; grid-auto-columns: calc(100% - var(--peek)); gap: 12px; align-items: stretch;
-  margin-left: calc(-1 * var(--gl)); margin-right: calc(-1 * var(--gr)); padding: 2px var(--gr) 2px var(--gl);
-  scroll-padding-inline: var(--gl) var(--gr); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+  margin-left: calc(-1 * var(--pl)); margin-right: calc(-1 * var(--pr)); padding: 2px var(--pr) 2px var(--pl);
+  scroll-padding-inline: var(--pl) var(--pr); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
   overscroll-behavior-x: contain; /* a swipe past the last card never turns into the browser's back gesture */
   touch-action: pan-x pan-y; scrollbar-width: none; -webkit-tap-highlight-color: transparent; outline: none;
 }
