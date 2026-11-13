@@ -11,7 +11,7 @@
 // it was asking on the old one goes with it.
 import type { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import type { Connection, Traffic } from "./native.ts";
+import type { Connection, Traffic } from "./endpoint.ts";
 
 /// Packets a second coming on one connection from which it is looked at.
 export const STORM_PACKETS = 1000;

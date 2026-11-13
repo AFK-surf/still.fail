@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,9 @@ import { Effect, Fiber, Layer, Stream, SubscriptionRef } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
 import { Net } from "../src/jobs/load.ts";
 import { AdminApi, ControlPlane, Events, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
-import type { Mesh } from "../src/mesh/native.ts";
+import type { Endpoint, Mesh } from "../src/mesh/native.ts";
+import { ALPN } from "../src/mesh/serve.ts";
+import { hearLines, type Line } from "../src/ops/log.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { StationParts } from "../src/parts.ts";
 import { settle } from "./hub-fakes.ts";
@@ -35,7 +38,10 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
   let boundCongestion: string | undefined;
   // The cloud's state as the mesh reads it once bound: a workspace, no relays, no other stations.
   // (`data`: where it keeps what the mesh keeps of the locks, mesh/person-chains.ts)
-  const cloud = { state: { workspace_name: "ws" }, data: mkdtempSync(join(tmpdir(), "mesh-handover-")), relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
+  const cloud = { state: { workspace_name: "ws" }, data: mkdtempSync(join(tmpdir(), "mesh-handover-")), relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null, removed: () => false };
+  // The mesh it is bound on: what a test binds there too reaches it.
+  const mesh = memoryMesh();
+  let station: Endpoint | null = null;
   const inputs = Layer.mergeAll(
     Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [], device: null }),
     Layer.succeed(Previous)({ pid: scenario.front ? 123 : null, gone: previous.promise, exited: exited.promise }),
@@ -56,7 +62,8 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
       boundCongestion = options.congestion;
       binding.resolve();
       if (calls <= (scenario.failures ?? 0)) throw new Error("port is held by the previous station");
-      const endpoint = await memoryMesh().bind(options);
+      const endpoint = await mesh.bind(options);
+      station = endpoint;
       // Its relay link never up: no real sockets or timers in this scheduling regression.
       endpoint.online = () => new Promise<void>(() => {});
       const accept = endpoint.accept.bind(endpoint);
@@ -74,7 +81,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
     built.resolve();
     yield* Effect.never;
   })));
-  return { previous, exited, built, binding, accepting, running, calls: () => calls, presence: () => presence, congestion: () => boundCongestion };
+  return { previous, exited, built, binding, accepting, running, mesh, station: () => station!, calls: () => calls, presence: () => presence, congestion: () => boundCongestion };
 }
 
 test("the mesh starts with its saved controller, cubic when no choice was made", async (t) => {
@@ -85,6 +92,32 @@ test("the mesh starts with its saved controller, cubic when no choice was made",
       assert.equal(s.congestion(), choice ?? "cubic");
     } finally { await Effect.runPromise(Fiber.interrupt(s.running)); }
   }
+});
+
+test("a connection is served as it comes beside the others, said as its serving fails, and closed as that ends or the station stops", async (t) => {
+  const lines: Line[] = [];
+  hearLines((l) => void (l.at === "mesh" && l.message === "connection ended" && lines.push(l)));
+  t.after(() => hearLines(null));
+  const s = startup(t, undefined);
+  let stopped = false;
+  const stop = () => (stopped ? Promise.resolve() : ((stopped = true), Effect.runPromise(Fiber.interrupt(s.running))));
+  try {
+    await s.accepting.promise;
+    const device = await s.mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [] });
+    t.after(() => device.close());
+    // Two at once: neither waits for the other's hello.
+    const [quiet, wordless] = await Promise.all([device.connect({ id: s.station().id() }, ALPN), device.connect({ id: s.station().id() }, ALPN)]);
+    await quiet.openBi();
+    // One whose control stream ends with no hello: its serving fails, which is said, and it is closed.
+    await (await wordless.openBi()).finish();
+    assert.equal(await wordless.closed(), "station stopping");
+    assert.deepEqual(lines.map((l) => [l.level, l.fields]), [["INFO", { error: "Error: no credential" }]]);
+    assert.equal(quiet.isClosed(), false);
+    // The station stops: the one still being served is closed by it, before its endpoint is.
+    await stop();
+    assert.equal(await quiet.closed(), "station stopping");
+    assert.equal(lines.length, 1);
+  } finally { await stop(); }
 });
 
 test("a station takes its members' connections before its relay link is up, and goes online at the cloud only after", { timeout: 10_000 }, async (t) => {

@@ -9,7 +9,7 @@
 // A connection that answers is left alone: one key may be several live clients at once (Chrome on Android has no
 // SharedWorker, so each tab runs a core of its own with the device's key), and none of them is put off by another.
 import { log } from "../ops/log.ts";
-import type { Connection } from "./native.ts";
+import type { Connection } from "./endpoint.ts";
 
 /// How long a connection has to answer once a newer one of its endpoint came: a relay's round trip from a phone
 /// on a poor network is under a second; asked three times within it.

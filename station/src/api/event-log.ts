@@ -19,6 +19,9 @@ export const KEPT_MS = 3_600_000;
 export const KEPT_MOST = 20_000;
 export const KEPT_BYTES = 8 * 1024 * 1024;
 
+/// How long, how many and how much a log keeps. The station's is the three above; another program's log says its own.
+export type Keeps = { ms: number; most: number; bytes: number };
+
 /// An event of the log: its number, whom it was for (`to`, as the teller says it), as it goes out ("": it said a thing
 /// whole, and the thing was said again since), and the thing it says whole (`of`).
 export type Logged<To> = { n: number; to: To; text: string; at: number; of?: string };
@@ -39,16 +42,20 @@ export class EventLog<To> {
   /// What is kept that says a thing whole, by the thing.
   #latest = new Map<string, Logged<To>>();
 
-  constructor(run = randomBytes(4).toString("hex")) {
+  /// What it keeps at most: what is not said is the station's (KEPT_MS, KEPT_MOST, KEPT_BYTES).
+  readonly keeps: Keeps;
+
+  constructor(run = randomBytes(4).toString("hex"), keeps: Partial<Keeps> = {}) {
     this.run = run;
+    this.keeps = { ms: keeps.ms ?? KEPT_MS, most: keeps.most ?? KEPT_MOST, bytes: keeps.bytes ?? KEPT_BYTES };
   }
 
   /// The log `kept` says (another process's, handed over), at `now`: the same run, numbered on from where it was, what it
-  /// keeps bounded as by `append`. Throws on what is no log.
-  static from<To>(kept: Kept<To>, now: number): EventLog<To> {
+  /// keeps bounded as by `append`, by `keeps` as a new log's is. Throws on what is no log.
+  static from<To>(kept: Kept<To>, now: number, keeps: Partial<Keeps> = {}): EventLog<To> {
     const { run, seq, forgotten, events } = kept;
     if (typeof run !== "string" || !/^[0-9a-f]+$/.test(run) || !Number.isSafeInteger(seq) || !Number.isSafeInteger(forgotten) || forgotten > seq || !Array.isArray(events)) throw new Error("not a log");
-    const log = new EventLog<To>(run);
+    const log = new EventLog<To>(run, keeps);
     log.#seq = seq;
     log.#forgotten = forgotten;
     let last = forgotten;
@@ -89,10 +96,11 @@ export class EventLog<To> {
     return logged;
   }
 
-  /// Lets go of the oldest kept, while it keeps more than it may or they are older than KEPT_MS at `now`.
+  /// Lets go of the oldest kept, while it keeps more than it may or they are older than it keeps them at `now`.
   #letGo(now: number) {
+    const { ms, most, bytes } = this.keeps;
     let gone = 0;
-    while (gone < this.#kept.length && (this.#kept.length - gone > KEPT_MOST || this.#bytes > KEPT_BYTES || now - this.#kept[gone]!.at > KEPT_MS)) {
+    while (gone < this.#kept.length && (this.#kept.length - gone > most || this.#bytes > bytes || now - this.#kept[gone]!.at > ms)) {
       this.#bytes -= this.#kept[gone]!.text.length;
       gone++;
     }

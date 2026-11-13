@@ -16,7 +16,7 @@ import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import { LOCAL_NETWORK_SETTINGS, lanReach, localNetworkName } from "../mesh/lan.ts";
+import { LOCAL_NETWORK_SETTINGS, lanReach } from "../mesh/lan.ts";
 import { platform } from "../platform/index.ts";
 import type { HelperApp } from "./app.ts";
 
@@ -63,6 +63,13 @@ export type HelperStatus = {
 /// and whether the screen can be seen and driven (a person can then grant the rest from wherever they are).
 /// `localNetworkName`: what System Settings' Local Network list names the station by, with `localNetwork` among them.
 export type GrantsView = { grants: { grant: GrantId; state: GrantState }[]; asking: GrantId[]; screen: boolean; localNetworkName?: string };
+
+/// What System Settings' Local Network list names the station by: the app it runs in (the desktop app's station runs on
+/// its Node, `STILLFAIL_NODE`), else its launcher, which launchd starts and Node is part of.
+export function localNetworkName(execPath = process.execPath): string {
+  const app = /([^/]+)\.app\/Contents\//.exec(execPath);
+  return app ? app[1]! : "stillfail-station";
+}
 
 /// A grant that cannot be asked for now, and why (`key` of the station's words).
 export class GrantRefused extends Error {

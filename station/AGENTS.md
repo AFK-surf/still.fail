@@ -22,8 +22,12 @@
   to be served by them with its own admission and handler): `src/mesh/wire.ts` is lines and requests on a stream,
   `src/mesh/door.ts` the control stream's hello and renewals, then a request a stream. Who is let in (credentials,
   locks, what closes a connection later) and what a request is answered are `src/mesh/serve.ts`'s, given to the door
-  as its `Admit`. `scripts/mesh-base.ts` (a step of `scripts/check.sh`) refuses an import of anything else of the
-  station's, a type's too, in them and in what they stand on: what one of them needs is given it as a parameter.
+  as its `Admit`. So with what is under them: `src/mesh/endpoint.ts` is the endpoint as the addon gives it and the
+  addon's loading from where its caller says (where the station's is, `STILLFAIL_MESH_NATIVE`, and what else it
+  offers are `src/mesh/native.ts`'s), `src/mesh/accept.ts` the taking of an endpoint's connections, each served by
+  what it is given (`src/mesh/mesh.ts` gives the station's protocols). `scripts/mesh-base.ts` (a step of
+  `scripts/check.sh`) refuses an import of anything else of the station's, a type's too, in them and in what they
+  stand on, and still.fail's name in their code: what one of them needs is given it as a parameter.
 - The main thread waits on nothing: every device's request and every agent's tool call waits behind it, and a call of
   microseconds took seconds on a station short of memory. No new synchronous call of node:fs, child_process or zlib
   there (fs/promises, execFile): `scripts/check.sh` refuses one a change adds unless its line says why with `sync:`

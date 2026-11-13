@@ -379,8 +379,8 @@ if part ts; then
     step "no tunnel into a station" sh -c '! git grep -niE "tailcat|ngrok|cloudflared|localtunnel|trycloudflare|tailscale (funnel|serve)" -- station/src station/native cloud/src'
   fi
   # The mesh's base (station/AGENTS.md, Its shape): its wire and door, and what they stand on, serve another program
-  # without the station's business, so none of them imports a file outside their own set, a type's either
-  # (scripts/mesh-base.ts lists the set and the leaves it may import).
+  # without the station's business, so none of them imports a file outside their own set, a type's either, nor says
+  # still.fail's name in its code (scripts/mesh-base.ts lists the set and the leaves it may import).
   if touches '^station/src/|^scripts/mesh-base\.ts$'; then
     step "the mesh's base imports nothing of the station's business" node scripts/mesh-base.ts
   fi

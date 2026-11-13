@@ -7,11 +7,12 @@
 // could run one.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Cause, Context, Effect, FiberSet, Layer, Option, Stream, SubscriptionRef } from "effect";
+import { Cause, Context, Effect, Layer, Option, Stream, SubscriptionRef } from "effect";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { measure } from "../jobs/load.ts";
 import { liveMemory } from "../jobs/memory.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
+import { accept } from "../mesh/accept.ts";
 import { lanAddrs } from "../mesh/lan.ts";
 import { applyNetwork } from "../mesh/mesh.ts";
 import { bindStation } from "../mesh/native.ts";
@@ -237,25 +238,16 @@ export const RigMeshLive = Layer.effectDiscard(
       // What it tells the stations (rig/module.ts), and nothing it asks of them.
       peers.attach(peerCall(endpoint, cloud));
       stationLog.sendWith((body) => Effect.runPromise(plane.logs(body)));
-      const connections = yield* FiberSet.make();
-      for (;;) {
-        const conn = yield* Effect.promise(() => endpoint.accept());
-        if (!conn) return;
-        yield* FiberSet.run(
-          connections,
-          Effect.tryPromise(() =>
-            conn.alpn().equals(PEER_HTTP_ALPN)
-              ? serveHttp(conn, cloud, {
-                  allowed: (peer, workspace) => rig.current?.stationRefusal(peer, workspace) ?? "the rig is starting",
-                  device: (peer, workspace, session, device, probe) => rig.current === null ? Promise.reject(new DeviceRefused(503, "the rig is starting")) : rig.current.device(peer, workspace, session, device, probe),
-                })
-              : servePeer(conn, cloud, peers),
-          ).pipe(
-            Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
-            Effect.ensuring(Effect.sync(() => conn.close(0, "rig stopping"))),
-          ),
-        );
-      }
+      yield* accept(endpoint, {
+        serve: (conn) =>
+          conn.alpn().equals(PEER_HTTP_ALPN)
+            ? serveHttp(conn, cloud, {
+                allowed: (peer, workspace) => rig.current?.stationRefusal(peer, workspace) ?? "the rig is starting",
+                device: (peer, workspace, session, device, probe) => rig.current === null ? Promise.reject(new DeviceRefused(503, "the rig is starting")) : rig.current.device(peer, workspace, session, device, probe),
+              })
+            : servePeer(conn, cloud, peers),
+        closing: "rig stopping",
+      });
     });
     yield* Effect.forkScoped(Effect.scoped(run).pipe(Effect.tapCause((cause) => Effect.sync(() => {
       if (!Cause.hasInterruptsOnly(cause)) log.error("mesh", "mesh stopped", { error: Cause.pretty(cause) });

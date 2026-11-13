@@ -106,10 +106,3 @@ export async function lanReach(neighbours = lanNeighbours(), send: (ip: string) 
 /// System Settings' Local Network list, where an app is let reach the LAN (macOS asks once, as the app first reaches it;
 /// refused then, it is switched on there).
 export const LOCAL_NETWORK_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
-
-/// What System Settings' Local Network list names the station by: the app it runs in (the desktop app's station runs on
-/// its Node, `STILLFAIL_NODE`), else its launcher, which launchd starts and Node is part of.
-export function localNetworkName(execPath = process.execPath): string {
-  const app = /([^/]+)\.app\/Contents\//.exec(execPath);
-  return app ? app[1]! : "stillfail-station";
-}
