@@ -395,6 +395,8 @@ fn pane_made(
                     None => chat_composer_nodes(c, s, r, wide.tape.get())
                   }
                 },
+                // (its column on the page's way as the side panel slides beside it: laid out as at its narrower end)
+                narrower=fn(n) { side_narrower(src, n, k) },
               )
             })
             |> ignore

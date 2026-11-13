@@ -8,7 +8,8 @@
 // hidden, not made another size), words by their place only (how tall they are is how many lines they take); by who it is
 // in the frame (its ident, a tree node's id) and what it is (its kind, its ground): one made in another's place is
 // another. Only while some of it shows. Not across a gap of more than a few frames,
-// the window made another size (or words by the system's setting), a frame with the pointer down, whoever holds the
+// the window made another size (or words by the system's setting), what a node of the tree's lays out anew at another
+// width in the frame it says so (View::lays_anew: what it holds), a frame with the pointer down, whoever holds the
 // press (the old frame's, Ctx::down, or a node of the window's tree, view_holds: what the hand moves goes as it goes),
 // nor, in a frame the hand did something since the one before (the wheel, a key: rows_steady_hand), what a column of the
 // tree's moves by how far it is scrolled alone other than what it holds (its bar's thumb): a trackpad's wheel or a page
@@ -34,6 +35,9 @@ priv struct SizesSteady {
   /// when each column of the tree's was last put at once (Tree::scroll_put_at) and its list's keys last changed by data
   /// (Tree::scroll_keys_at) as the last frame was judged, by its node: either since is this frame's
   puts : Map[Int, (Double, Double)]
+  /// the width each node of the tree's that says it lays what it holds out at (View::lays_anew) as the last frame was
+  /// judged, by its node: another now is this frame's step of what it holds, laid out anew at it at once
+  laids : Map[Int, Double]
 }
 
 ///|
@@ -48,6 +52,7 @@ let sizes_steady : SizesSteady = {
   words: -1.0,
   hand: -1.0e9,
   puts: {},
+  laids: {},
 }
 
 ///|
@@ -75,6 +80,7 @@ fn sizes_steady_begin(loc : String, held : Bool) -> Unit {
   sizes_steady.words = -1.0
   sizes_steady.hand = -1.0e9
   sizes_steady.puts.clear()
+  sizes_steady.laids.clear()
   sizes_steady.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -326,6 +332,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     // 2026-11-13: a thumb says where the reader is in what the column holds, which the keys changing changes at once))
     let put_now = Array::make(k, false)
     let puts_now : Map[Int, (Double, Double)] = Map([])
+    let laids_now : Map[Int, Double] = Map([])
     // (what holds each before it: a node of the window's tree put among the frame's may come after what it holds)
     let order : Array[Int] = []
     let ordered = Array::make(k, false)
@@ -375,6 +382,21 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           }
           _ => false
         })
+      // (a node that lays what it holds out at another width than when the last frame was judged (View::lays_anew):
+      // what it holds laid out anew at once, its step in this frame its own, as the window made another size is)
+      match (tree, tree_frame_ids.get(i)) {
+        (Some(tr), Some(id)) =>
+          match tr.laid_said_of(id.at) {
+            Some(w) => {
+              laids_now[id.at] = w
+              if sizes_steady.laids.get(id.at) is Some(was) && was != w {
+                put_now[i] = true
+              }
+            }
+            None => ()
+          }
+        _ => ()
+      }
       if p >= 0 && p < k && put_now[p] {
         put_now[i] = true
       }
@@ -425,6 +447,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       }
     }
     puts_now.each(fn(by, at) { sizes_steady.puts[by] = at })
+    laids_now.each(fn(at, w) { sizes_steady.laids[at] = w })
     for i in 0..<k {
       let n = self.nodes[i]
       if count.get(n.ident).unwrap_or(0) != 1 || !n.draws_own() {
