@@ -137,11 +137,14 @@ type Mem = {
   /// Each vault's giving under way (one at a time); the version of each a station refused as no vault (not given
   /// again until it moves on).
   giving: Map<string, ReturnType<typeof Semaphore.makeUnsafe>>; refused: Map<string, number>;
+  /// By workspace, the devices and members this device took out of its lock in this run at a person's asking
+  /// (`tookOut`): a vault waiting to be keyed anew for one of them may read the box key to be keyed anew (`rekeyGone`).
+  out: Map<string, Set<string>>;
 };
 const mems = new WeakMap<Inner, Mem>();
 const mem = (inner: Inner): Mem => {
   let m = mems.get(inner);
-  if (!m) mems.set(inner, (m = { keys: new Map(), checked: new Map(), box: undefined, giving: new Map(), refused: new Map() }));
+  if (!m) mems.set(inner, (m = { keys: new Map(), checked: new Map(), box: undefined, giving: new Map(), refused: new Map(), out: new Map() }));
   return m;
 };
 
@@ -854,6 +857,16 @@ export function vaultCome(inner: Inner, ws: string): void {
   lockSeen(inner).touch("prompts");
 }
 
+/// A device (its id) or a member (their sub) this device takes out of workspace `ws`'s lock as a person asked it to, here
+/// and now (views/lock.ts `Lock.append`, a call's): keying anew the vaults that held a key for them is part of what they
+/// did, so the box key may be read for it once, the person asked (`rekeyGone`). Nothing else keys a vault anew by asking.
+export function tookOut(inner: Inner, ws: string, id: string): void {
+  const out = mem(inner).out;
+  let at = out.get(ws);
+  if (at === undefined) out.set(ws, (at = new Set()));
+  at.add(id);
+}
+
 /// The keys unsealed here given to the members' devices set up that have none (the vaults of this person's own):
 /// forked, nothing asked of the person (`Vaults.giveKept`).
 function giveKept(inner: Inner, ws: string): void {
@@ -1270,6 +1283,8 @@ class Vaults {
         const key = yield* Effect.try({ try: () => openSeal(priv, mine.wrapped, keyContext(ws, v.id, v.epoch)), catch: asCoreError });
         unsealed?.(priv);
         self_.#keep(v, key);
+        // (in hand for what the person does: a vault of theirs waiting to be keyed anew is keyed anew with it now)
+        inner.runner.fork(Effect.ignore(self_.rekeyGone(), { log: "Unhandled", message: "vaults keyed anew" }));
         return key;
       }),
       (key) => Effect.sync(() => void (give && inner.runner.fork(Effect.ignore(self_.#give(v.id, v.epoch, key, null), { log: "Unhandled", message: "vault key given" })))),
@@ -1377,7 +1392,11 @@ class Vaults {
   /// sealed to the members' devices the lock still vouches for, and each item written again under it, the one taken
   /// out holding no key to any of it. Only a version the lock took before (a prefix of the chain vouching for it,
   /// `waitingAs`) is so carried on, and only its items that held then. The key unsealed here, or read with this
-  /// device's box key (the person asked). As the lock comes; nothing done when nothing was taken out.
+  /// device's box key, the person asked, only where this device took out who it waits for at their asking (`tookOut`,
+  /// once for that: what is done by itself asks no one). Otherwise it waits for the key unsealed here for something the
+  /// person does (`#key`, which runs this then). As the lock comes; nothing done when nothing was taken out. (The locks'
+  /// end to end, round 7b, the side run of 2026-11-13: a device started anew, doing nothing, read the box key each time
+  /// the lock came, the vault's station not taking the write: its person asked seven times.)
   rekeyGone(): Effect.Effect<void, CoreError> {
     const self = this;
     return Effect.gen(function* () {
@@ -1386,12 +1405,26 @@ class Vaults {
       if (lock instanceof CoreError) return;
       const who = me(lock, signerOf(inner));
       if (who === null) return;
-      for (const v of Object.values(held(inner, self.ws).vaults)) {
-        if (v.deleted || v.owner !== who.sub || trusted(lock, v) || !v.keys.some((k) => k.cert.device === who.device)) continue;
-        // (waiting to be keyed anew: a version the lock took before, a prefix of the chain vouching for it)
-        if (waitingAs(inner, self.ws, lock, v) === null) continue;
-        yield* Effect.ignore(self.#rekey(v.id, v.seq), { log: "Unhandled", message: "vault keyed anew" });
+      // (waiting to be keyed anew: a version the lock took before, a prefix of the chain vouching for it)
+      const waiting = Object.values(held(inner, self.ws).vaults).filter((v) => !v.deleted && v.owner === who.sub && !trusted(lock, v) && v.keys.some((k) => k.cert.device === who.device) && waitingAs(inner, self.ws, lock, v) !== null);
+      // Those waiting for one this device took out at the person's asking, their keys not in hand: the box key read
+      // once for all of them (the person asked once), each one's key unsealed with it and kept, and what they wait
+      // for asked for no more (taken from `out` before the prompt, so a second keying anew as the lock comes again
+      // does not ask too).
+      const out = mem(inner).out.get(self.ws);
+      const goneOf = (v: Vault) => [...v.keys.map((k) => k.cert.device).filter((d) => !lock.devices.has(d)), ...v.members.filter((m) => !lock.members.has(m))];
+      const inHand = (v: Vault) => (mem(inner).keys.get(keyOf(v))?.until ?? 0) > inner.host.nowMs();
+      const asked = out === undefined ? [] : waiting.filter((v) => !inHand(v) && goneOf(v).some((x) => out.has(x)));
+      if (asked.length > 0) {
+        for (const v of asked) for (const x of goneOf(v)) out!.delete(x);
+        const priv = yield* self.#boxKey(t("core-misc.vault.reason.rekey", { name: asked[0]!.name }));
+        for (const v of asked) {
+          const mine = v.keys.find((k) => k.cert.device === who.device)!;
+          const key = yield* Effect.result(Effect.try({ try: () => openSeal(priv, mine.wrapped, keyContext(self.ws, v.id, v.epoch)), catch: asCoreError }));
+          if (key._tag === "Success") self.#keep(v, key.success);
+        }
       }
+      for (const v of waiting) yield* Effect.ignore(self.#rekey(v.id, v.seq), { log: "Unhandled", message: "vault keyed anew" });
     });
   }
 
@@ -1404,12 +1437,10 @@ class Vaults {
         const v = held(inner, self.ws).vaults[id];
         // (written anew meanwhile, by another of the person's devices: nothing left to do here)
         if (!v || v.seq !== seq || trusted(lock, v)) return;
-        const mine = v.keys.find((k) => k.cert.device === who.device)!;
+        // (the key unsealed here only: `rekeyGone` says when the box key is read for it)
         const kept = mem(inner).keys.get(keyOf(v));
-        const old = kept && kept.until > inner.host.nowMs()
-          ? kept.key
-          : yield* Effect.flatMap(self.#boxKey(t("core-misc.vault.reason.rekey", { name: v.name })), (priv) =>
-            Effect.try({ try: () => openSeal(priv, mine.wrapped, keyContext(self.ws, v.id, v.epoch)), catch: asCoreError }));
+        if (!kept || kept.until <= inner.host.nowMs()) return;
+        const old = kept.key;
         const members = v.members.filter((m) => lock.members.has(m));
         const to = certs(inner, self.ws, lock).filter((c) => members.includes(c.sub));
         const epoch = v.epoch + 1;

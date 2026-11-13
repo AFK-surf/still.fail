@@ -104,7 +104,7 @@ try {
     let said = "";
     await whenChanged([stationData], () => /^PERSONS 1$/m.test((said = stationSays("lock-state"))), 60_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
     log(`  A on alice's own lock after ${t2 - t1} ms, bound at the station ${Date.now() - t2} ms later`);
-    if (a.asked() !== 0) throw new Error(`A's sealer asked the person ${a.asked()} times`);
+    if (a.asked() !== 0) throw new Error(`A's sealer asked the person ${a.asked()} times: ${a.askedWhat().join("; ")}`);
   });
 
   let vault = "";
@@ -602,6 +602,7 @@ try {
   const forkB = await baseOf(b);
   const forkE = await baseOf(e);
   const askedBefore = [b.asked(), e.asked()];
+  const round7b = new Date().toISOString();
   stationDo("cloud-freeze");
   try {
     await must("the cloud frozen, the second station stopped and A installed anew closed: B renews itself at the first", async () => {
@@ -659,7 +660,7 @@ try {
         for (const id of [station.split("/")[1]!, secondId]) await stationIn(x, id, (st) => st.state === "online", 60_000);
       }
       const asked = [b.asked(), e.asked()];
-      if (asked.some((n, i) => n !== askedBefore[i])) throw new Error(`asked the person: B ${asked[0]! - askedBefore[0]!}, A installed anew ${asked[1]! - askedBefore[1]!} times`);
+      if (asked.some((n, i) => n !== askedBefore[i])) throw new Error(`asked the person: B ${asked[0]! - askedBefore[0]!}, A installed anew ${asked[1]! - askedBefore[1]!} times (from ${round7b}): B ${b.askedWhat(askedBefore[0]).join("; ") || "-"}; A installed anew ${e.askedWhat(askedBefore[1]).join("; ") || "-"}`);
     });
   } finally {
     stationDo("cloud-thaw");
@@ -698,7 +699,7 @@ try {
   // here)
   await check("H, once approved, began bob's own lock by itself, nobody asked", async () => {
     await h.personal((p) => p.standing === "member", 90_000);
-    if (h.asked() !== 0) throw new Error(`H's sealer asked the person ${h.asked()} times`);
+    if (h.asked() !== 0) throw new Error(`H's sealer asked the person ${h.asked()} times: ${h.askedWhat().join("; ")}`);
   });
   await must("H sets up the vault, keeps an item in a vault of bob's own, opens it", async () => {
     await h.call("vault.setup", { workspace });
@@ -1064,7 +1065,7 @@ try {
   // is not what is counted here)
   await check("nobody asked for anything on L, M or N", async () => {
     const asked = lDev.asked() + mDev.asked() + nDev.asked();
-    if (asked !== 0) throw new Error(`asked: L ${lDev.asked()}, M ${mDev.asked()}, N ${nDev.asked()}`);
+    if (asked !== 0) throw new Error(`asked: L ${lDev.asked()}, M ${mDev.asked()}, N ${nDev.asked()}: ${[lDev, mDev, nDev].flatMap((x) => x.askedWhat().map((w) => `${x.name} ${w}`)).join("; ")}`);
   });
   await must("L sets up the vault, keeps an item in a vault of carol's own, opens it", async () => {
     await lDev.call("vault.setup", { workspace });
@@ -1209,7 +1210,7 @@ try {
     await e1.personal((p) => p.standing === "none", 30_000);
     const said = stationSays("lock-state");
     if (personsIn(said) !== before15) throw new Error(`persons ${personsIn(said)}, not ${before15}`);
-    if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times`);
+    if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times: ${e1.askedWhat().join("; ")}`);
   });
   stationDo("second-again", "third");
   await check("Two's station on again: E1 began erin's own lock by itself, she is bound (one person more), nobody asked", async () => {
@@ -1218,7 +1219,7 @@ try {
     log(`  E1 on erin's own lock ${Date.now() - t1} ms after the station was on again`);
     let said = "";
     await whenChanged([stationData], () => personsIn((said = stationSays("lock-state"))) === before15 + 1, 90_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
-    if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times`);
+    if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times: ${e1.askedWhat().join("; ")}`);
   });
 
   // ── round 16: a web page of alice's, W, in the first workspace, where her own lock is bound. A page keeps no keys (its

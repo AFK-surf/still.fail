@@ -41,7 +41,7 @@ import type { SpanContext } from "../trace.ts";
 import { get, hex, isObject, sha256, utf8 } from "../util.ts";
 import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
 import { AGAIN_MOST, againOf, hashOf, keep, links } from "../lock-keep.ts";
-import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
+import { tookOut, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
@@ -3232,6 +3232,10 @@ export class Lock {
       if (movedHere(self.#inner, self.ws)) return yield* Effect.fail(lockMoved());
       const signer = yield* Signer.load(self.#inner.host);
       if (signer === null) return yield* Effect.fail(new CoreError("lock_no_signer", "this device signs nothing for the workspace lock"));
+      // (a device or a member taken out at a person's asking: the vaults that held a key for them keyed anew as part of
+      // it, the box key read if it must be; views/vault.ts `tookOut`)
+      const out = kind === "device.remove" ? get(body, "id") : kind === "member.remove" ? get(body, "sub") : null;
+      if (self.#within !== null && typeof out === "string") tookOut(self.#inner, self.ws, out);
       const after = yield* self.#before();
       if (self.#within !== null) yield* self.#within.begin();
       const rest = yield* part(self.#inner, self.ws).turn.withPermits(1)(Effect.suspend(() => self.#ahead(kind, body) ?? self.#signed(signer, kind, body, waitFor, after ?? self.#mine, 0, null, viaCloud)));
