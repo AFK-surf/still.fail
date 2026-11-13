@@ -284,29 +284,60 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
 }
 
 ///|
-test "a row archived: it closes where it was, the row under it coming up whole, laid out where it is drawn" {
-  // (2026-10-31: a row gone closes its room where it was, the rows under it coming up as it closes, mbui's view/list_motion.mbt;
-  // before it, Home.kt's animateItem moved the whole of SwipeToArchive, its clip with it)
+test "a row archived from its menu: what it uncovers stays in its place with 撤销, the rows under it still; its time out, the line closes, the row under coming up whole" {
+  // (2026-11-13: the archive's 撤销 where the row was, what its swipe uncovers, not a toast at the window's foot; once
+  // that is over its line closes as a row gone does, the rows under it coming up as it closes, mbui's
+  // view/list_motion.mbt)
   let t = tester("home")
   let under = "把旧的截图都换成新的"
   let (_, y_was, _, h) = t.rect_of(under).unwrap()
-  assert_false(t.locate("=Slack 里问的报销流程").is_empty())
   let (_, y_gone, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
   hold_row(t, "Slack 里问的报销流程")
   // the menu's 归档 (its last item)
   let (lx, ly) = t.find_last("归档").unwrap()
   t.tap(lx, ly)
-  // on its way up as the room over it closes, all of it, drawn where it is laid out
-  t.run_for(@ui.row_size_ms / 2.0)
+  // gone off to the left, its tray in its place: 撤销 there, said so, nothing under it moved, no toast
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_undo(t, y_gone), msg="撤销 in its place")
+  assert_true(t.query(Status, label="已归档") is Some(_))
+  let (_, y_now, _, _) = t.rect_of(under).unwrap()
+  assert_true((y_now - y_was).abs() < 0.5, msg="\{y_now}, from \{y_was}")
+  assert_eq(app.toast.get().words, "")
+  let undo_y = t.words().filter(fn(w) { w.0 == "撤销" }).map(fn(w) { w.2 })
+  assert_eq(undo_y.length(), 1)
+  // its time out: on its way up as the line over it closes, all of it, drawn where it is laid out
+  t.run_for(@sf.toast_action_ms - @ui.move_most_ms + @ui.row_size_ms / 2.0)
+  // (the tray a recess the list closes over: where it stood, whole, or cut away; never going up with the room)
+  for y in t.words().filter(fn(w) { w.0 == "撤销" }).map(fn(w) { w.2 }) {
+    assert_true((y - undo_y[0]).abs() < 0.5, msg="撤销 at \{y}, at rest \{undo_y[0]}")
+  }
   let (_, y1, _, _) = t.rect_of(under).unwrap()
   let (_, d1) = t.drawn_of(under).unwrap()
   assert_true(y1 < y_was - 1.0 && y1 > y_gone - 1.0, msg="\{y1}, from \{y_was}")
   assert_true((d1 - y1).abs() < 0.5, msg="drawn at \{d1}, laid out at \{y1}")
   let (_, _, _, s1) = t.shown_of(under).unwrap()
   assert_true((s1 - h).abs() < 0.5, msg="\{s1} of \{h} shown on its way")
-  // closed: the archived row out of the list
+  // closed: its line out of the list, the row under where it stood, 撤销 gone
   t.run_for(@ui.row_size_ms)
-  assert_true(t.locate("=Slack 里问的报销流程").is_empty())
+  let (_, y2, _, _) = t.rect_of(under).unwrap()
+  assert_true((y2 - y_gone).abs() < 0.5, msg="\{y2}, its place \{y_gone}")
+  assert_true(t.query(Button, label="撤销") is None)
+  assert_true(t.locate("=撤销").is_empty())
+  assert_eq(app.toast.get().words, "")
+}
+
+///|
+/// The words exactly `s` drawn across the band of a row whose title's top is at `y` (from a little over it to its foot):
+/// where each starts across.
+fn row_words_x(t : @ui.Tester, s : String, y : Double) -> Array[Double] {
+  t.words().filter(fn(w) { w.0 == s && w.2 + w.4 / 2.0 >= y - 20.0 && w.2 + w.4 / 2.0 < y + 46.0 }).map(fn(w) { w.1 })
+}
+
+///|
+/// Whether 撤销 is offered as a button in the band of the row whose title's top was at `y`, one alone on the screen.
+fn row_undo(t : @ui.Tester, y : Double) -> Bool {
+  let all = t.semantics().filter(fn(s) { !s.hidden && s.role is Button && s.label == "撤销" })
+  all.length() == 1 && all[0].rect.1 + all[0].rect.3 / 2.0 >= y - 20.0 && all[0].rect.1 + all[0].rect.3 / 2.0 < y + 46.0
 }
 
 ///|
@@ -865,47 +896,77 @@ test "a finger swiping a chat someone else started asks first, archiving it bein
 }
 
 ///|
-test "a chat archived from its row says so with 撤销, which asks it back into the list (chat.archive, archived false)" {
+test "a chat archived from its row's menu says so in its place with 撤销, which asks it back into the list (chat.archive, archived false), the row back where it was" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
-  hold_row(t, "夜里的构建又失败了")
+  let title = "夜里的构建又失败了"
+  let (x0, y0, _, _) = t.rect_of(title).unwrap()
+  hold_row(t, title)
   let (lx, ly) = t.find_last("归档").unwrap()
   t.tap(lx, ly)
   assert_eq(named(calls, "chat.archive").length(), 1)
+  // (said at once, the tray out as the row sets off)
   t.draw()
-  assert_true(t.locate("=夜里的构建又失败了").is_empty())
-  // (said at once: read out as it comes in; its first frame draws it at none of its opacity, as the old view's did,
-  // so it is seen, and found, as it has come in)
-  assert_true(t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_))
-  // (come in)
-  t.run_for(@kit.presence_in_ms)
-  t.tap_text("撤销")
+  assert_true(t.query(Status, label="已归档") is Some(_))
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_undo(t, y0))
+  assert_eq(app.toast.get().words, "")
+  let (bx, by, bw, bh) = t.query(Button, label="撤销").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
   let asked = named(calls, "chat.archive")
   assert_eq(asked.length(), 2)
   assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
   assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
-  t.draw()
-  // the toast goes, said again once it is done (read out at once; its first frame at none of its opacity, as the old
-  // view's, seen as it has come in)
-  assert_true(t.find("撤销") is None)
-  assert_true(t.query(Status, label="已恢复到列表") is Some(_))
-  t.run_for(@kit.presence_in_ms)
-  assert_true(t.find("已恢复到列表") is Some(_))
+  // its row back over its tray from the left, where it was; nothing of the tray left, nothing said
+  t.run_for(@ui.move_most_ms)
+  let (x1, y1, _, _) = t.rect_of(title).unwrap()
+  assert_true((x1 - x0).abs() < 0.5 && (y1 - y0).abs() < 0.5, msg="\{Repr((x1, y1))} from \{Repr((x0, y0))}")
+  assert_true(t.locate("=撤销").is_empty() && t.locate("=归档").is_empty())
+  assert_true(t.query(Status, label="已归档") is None)
+  assert_true(t.query(Status, label="已恢复到列表") is None)
+  assert_eq(app.toast.get().words, "")
+}
+
+///|
+test "a second chat archived while the first's 撤销 is offered: the first's line leaves, the second's tray in its place, one 撤销" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let first = "把旧的截图都换成新的"
+  let second = "Slack 里问的报销流程"
+  let (_, y_second, _, _) = t.rect_of(second).unwrap()
+  for title in [first, second] {
+    hold_row(t, title)
+    // (the menu's 归档, its last item: over the first's tray, which the menu's scrim covers)
+    let (lx, ly) = t.reachable("=归档").last().unwrap()
+    t.tap(lx, ly)
+    t.run_for(@ui.move_most_ms)
+  }
+  t.run_for(@ui.row_size_ms)
+  assert_eq(named(calls, "chat.archive").length(), 2)
+  // (the second is over the first: where it stood is as it was, the first's line gone under it)
+  assert_true(row_undo(t, y_second))
+  assert_eq(t.locate("=撤销").length(), 1)
+  assert_eq(app.toast.get().words, "")
 }
 
 ///|
 test "a toast with 撤销 stays its longer time; one without, its 2.6 s" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
-  hold_row(t, "夜里的构建又失败了")
-  let (lx, ly) = t.find_last("归档").unwrap()
-  t.tap(lx, ly)
+  // (a row's archive says so in its place now, not in a toast: what still toasts with 撤销, a row menu's 隐藏, offered
+  // once its 提醒 is off, as "hiding a running chat…" walks to it)
+  let t = tester("home-hide")
+  hold_row(t, "整理发布清单")
+  t.frame()
+  t.tap_text("关闭提醒")
+  t.run_for(@sf.toast_ms + @kit.presence_out_ms)
+  hold_row(t, "整理发布清单")
+  t.frame()
+  t.tap_text("隐藏")
   t.draw()
-  t.run_for(toast_ms + 100.0)
-  assert_true(t.find("撤销") is Some(_))
+  assert_eq(app.toast.get().action, "撤销")
+  t.run_for(@sf.toast_ms + 100.0)
+  assert_true(t.query(Button, label="撤销") is Some(_))
   t.run_for(@sf.toast_action_ms)
-  assert_true(t.find("撤销") is None)
-  assert_eq(named(calls, "chat.archive").length(), 1)
+  assert_true(t.query(Button, label="撤销") is None)
 }
 
 ///|
@@ -942,7 +1003,7 @@ test "a toast is a capsule while its words fit a line; its 撤销 a capsule in i
 }
 
 ///|
-test "a chat archived from its row: said at once by its title, its station not answered yet; why not once it says no" {
+test "a chat archived from its row: its tray at once, its station not answered yet; refused, the row back and why said" {
   let calls : Array[Made] = []
   new_run()
   let base = fixture("home")
@@ -957,20 +1018,25 @@ test "a chat archived from its row: said at once by its title, its station not a
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  hold_row(t, "夜里的构建又失败了")
+  let title = "夜里的构建又失败了"
+  let (x0, y0, _, _) = t.rect_of(title).unwrap()
+  hold_row(t, title)
   let (lx, ly) = t.find_last("归档").unwrap()
   t.tap(lx, ly)
   t.draw()
-  // (said at once: read out as it comes in; its first frame draws it at none of its opacity, as the old view's did,
-  // so it is seen, and found, as it has come in)
-  assert_true(t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_))
-  assert_true(t.query(Button, label="撤销") is Some(_))
-  t.run_for(@kit.presence_in_ms)
-  assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_) && t.find("撤销") is Some(_))
-  // no: why, in its place
+  assert_true(t.query(Status, label="已归档") is Some(_))
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_undo(t, y0))
+  assert_eq(app.toast.get().words, "")
+  // no: why, in the toast; the row back where it was, its tray gone
   (named(calls, "chat.archive")[0].done)(Err({ "message": "坏了" }))
   t.draw()
   assert_true(app.toast.get().words.contains("坏了"), msg=app.toast.get().words)
+  t.run_for(@ui.move_most_ms)
+  let (x1, y1, _, _) = t.rect_of(title).unwrap()
+  assert_true((x1 - x0).abs() < 0.5 && (y1 - y0).abs() < 0.5, msg="\{Repr((x1, y1))} from \{Repr((x0, y0))}")
+  assert_true(t.query(Button, label="撤销") is None)
+  assert_true(t.locate("=撤销").is_empty() && t.locate("=归档").is_empty())
 }
 
 ///|
@@ -1061,26 +1127,32 @@ test "a toast naming a title that wraps: its 撤销 whole, as wide as beside a s
 }
 
 ///|
-test "wide: a chat archived from its row with a mouse says so with 撤销 too, which asks it back (archived false)" {
+test "wide: a chat archived from its row with a mouse says so in its place with 撤销 too, which asks it back (archived false)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  let title = "夜里的构建又失败了"
+  let (x0, y0, _, _) = t.rect_of(title).unwrap()
+  let (x, y) = t.find(title).unwrap()
   t.move_to(x, y)
   t.frame()
   let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   assert_eq(named(calls, "chat.archive").length(), 1)
-  t.draw()
-  // (said at once: read out as it comes in; its first frame draws it at none of its opacity, as the old view's did,
-  // so it is seen, and found, as it has come in)
-  assert_true(t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_))
-  // (come in)
-  t.run_for(@kit.presence_in_ms)
-  t.tap_text("撤销")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Status, label="已归档") is Some(_))
+  assert_true(row_undo(t, y0))
+  assert_eq(app.toast.get().words, "")
+  let (bx, by, bw, bh) = t.query(Button, label="撤销").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
   let asked = named(calls, "chat.archive")
   assert_eq(asked.length(), 2)
   assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
   assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
+  t.run_for(@ui.move_most_ms)
+  let (x1, y1, _, _) = t.rect_of(title).unwrap()
+  assert_true((x1 - x0).abs() < 0.5 && (y1 - y0).abs() < 0.5, msg="\{Repr((x1, y1))} from \{Repr((x0, y0))}")
+  assert_true(t.locate("=撤销").is_empty())
+  assert_eq(app.toast.get().words, "")
 }
 
 ///|
@@ -1113,28 +1185,170 @@ test "the wide frame's first page: shown once its pane has landed on what the co
 }
 
 ///|
-test "a row swiped off and archived, then asked back with 撤销, is back where it rests, not off to the left" {
+test "a row swiped off and archived: its tray in its place with 撤销, no toast, the rows under it still; 撤销 brings it back where it rests" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
-  list_down(t, 12)
-  t.draw()
-  let before = t.locate("=把旧的截图都换成新的")
-  let (_, y) = before[0]
-  t.drag(340.0, y, 120.0, y)
+  let title = "夜里的构建又失败了"
+  let (x0, y0, _, _) = t.rect_of(title).unwrap()
+  // (the words nearest under it: the row under it)
+  let under = t.words().filter(fn(w) { w.2 > y0 + 40.0 })
+  under.sort_by(fn(a, b) { a.2.compare(b.2) })
+  assert_true(under.length() > 0)
+  let (under_words, under_x, under_y, _, _, _) = under[0]
+  t.drag(340.0, y0 + 4.0, 120.0, y0 + 4.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
-  t.draw()
-  assert_true(t.locate("=把旧的截图都换成新的").is_empty())
-  t.run_for(@kit.presence_in_ms)
-  t.tap_text("撤销")
-  assert_eq(named(calls, "chat.archive").length(), 2)
-  list_down(t, 12)
-  t.draw()
-  // where it rests, its 归档 under it covered: nothing of the swipe left
-  let after = t.locate("=把旧的截图都换成新的")
-  assert_eq(after.length(), 1)
-  assert_eq(after[0].0, before[0].0)
-  assert_true(t.locate("=归档").is_empty())
+  assert_eq(app.toast.get().words, "")
+  assert_true(row_undo(t, y0))
+  assert_true(t.query(Status, label="已归档") is Some(_))
+  // (归档 docked where the row's title started, its check in the row's mark's column)
+  let docked = row_words_x(t, "归档", y0)
+  assert_true(docked.length() == 1 && (docked[0] - x0).abs() < 0.5, msg="\{Repr(docked)} \{x0}")
+  let still = t.words().filter(fn(w) { w.0 == under_words })
+  assert_true(still.length() == 1 && (still[0].1 - under_x).abs() < 0.5 && (still[0].2 - under_y).abs() < 0.5, msg="\{Repr(still)}")
+  let (bx, by, bw, bh) = t.query(Button, label="撤销").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  let asked = named(calls, "chat.archive")
+  assert_eq(asked.length(), 2)
+  assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
+  assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
+  t.run_for(@ui.move_most_ms)
+  // where it rests, nothing of its tray left
+  let (x1, y1, _, _) = t.rect_of(title).unwrap()
+  assert_true((x1 - x0).abs() < 0.5 && (y1 - y0).abs() < 0.5, msg="\{Repr((x1, y1))} from \{Repr((x0, y0))}")
+  assert_true(t.locate("=撤销").is_empty() && t.locate("=归档").is_empty())
+  assert_eq(app.toast.get().words, "")
+}
+
+///|
+test "a row going off to be archived: 归档 never moves right nor further than the row's end, docked at last; 撤销 comes in only leftwards" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  for wide in [false, true] {
+    let calls : Array[Made] = []
+    let t = if wide { wide_tester(calls) } else { wide_tester(calls, w=390.0, h=844.0, platform=2) }
+    let title = "夜里的构建又失败了"
+    let (x0, y0, _, _) = t.rect_of(title).unwrap()
+    if wide {
+      // its 归档 key under the pointer
+      let (x, y) = t.find(title).unwrap()
+      t.move_to(x, y)
+      t.frame()
+      let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
+      t.tap(bx + bw / 2.0, by + bh / 2.0)
+    } else {
+      t.drag(340.0, y0 + 4.0, 120.0, y0 + 4.0)
+    }
+    let title_x = fn() { t.words().filter(fn(w) { w.0 == title }).map(fn(w) { w.1 }).get(0) }
+    let mut was : (Double?, Double?, Double?) = (title_x(), row_words_x(t, "归档", y0).get(0), row_words_x(t, "撤销", y0).get(0))
+    let until = t.time() + @ui.move_most_ms
+    while t.time() < until {
+      t.frame()
+      let now = (title_x(), row_words_x(t, "归档", y0).get(0), row_words_x(t, "撤销", y0).get(0))
+      let msg = "\{wide} at \{t.time()}: \{Repr(was)} -> \{Repr(now)}"
+      match (was, now) {
+        ((Some(r0), Some(l0), _), (Some(r1), Some(l1), _)) => {
+          assert_true(l1 <= l0 + 0.5, msg~)
+          assert_true(l0 - l1 <= r0 - r1 + 0.5, msg~)
+        }
+        _ => ()
+      }
+      match (was.2, now.2) {
+        (Some(u0), Some(u1)) => assert_true(u1 <= u0 + 0.5, msg~)
+        _ => ()
+      }
+      was = now
+    }
+    let docked = row_words_x(t, "归档", y0)
+    // (docked where the row's title stood: its mark's column the check's)
+    assert_true(docked.length() == 1 && (docked[0] - x0).abs() < 0.5, msg="\{wide} \{Repr(docked)} \{x0}")
+    // (there: no further on)
+    t.run_for(@ui.move_most_ms)
+    let rest = row_words_x(t, "归档", y0)
+    assert_true(rest.length() == 1 && (rest[0] - docked[0]).abs() < 0.5, msg="\{wide} \{Repr(rest)} \{Repr(docked)}")
+  }
+}
+
+///|
+test "a row's tray parked: its ground the slot's whole, 撤销 inside it in from the slot's end as a row's key is; on its way, the tray from the row's end on, 归档 never over the row" {
+  for wide in [false, true] {
+    let calls : Array[Made] = []
+    let t = if wide { wide_tester(calls) } else { wide_tester(calls, w=390.0, h=844.0, platform=2) }
+    let title = "夜里的构建又失败了"
+    // (the row's box, its slot's: before it is archived)
+    let (sx, sy, sw, _) = t.query(Link, label=title).unwrap().rect
+    if wide {
+      let (x, y) = t.find(title).unwrap()
+      t.move_to(x, y)
+      t.frame()
+      let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
+      t.tap(bx + bw / 2.0, by + bh / 2.0)
+      // on its way (a moment of it): nothing of the tray before the row's end, 归档's words after it
+      t.run_for(@sf.dur_ms / 2.0)
+      let (rx, _, rw, _) = t.query(Link, label=title).unwrap().rect
+      let end = rx + rw
+      assert_true(end > sx + 1.0 && end < sx + sw - 1.0, msg="on its way: its end \{end} in \{sx}..\{sx + sw}")
+      let (tx, _, _, _) = t.query(Status, label="已归档").unwrap().rect
+      assert_true((tx - end).abs() < 0.5, msg="tray from \{tx}, the row's end \{end}")
+      for x in row_words_x(t, "归档", sy + 10.0) {
+        assert_true(x >= end - 0.5, msg="归档 at \{x}, the row's end \{end}")
+      }
+    } else {
+      hold_row(t, title)
+      let (lx, ly) = t.find_last("归档").unwrap()
+      t.tap(lx, ly)
+    }
+    t.run_for(@ui.move_most_ms)
+    let msg = "\{wide}"
+    let (tx, _, tw, _) = t.query(Status, label="已归档").unwrap().rect
+    assert_true((tx - sx).abs() < 0.5 && (tw - sw).abs() < 0.5, msg="\{msg}: tray \{tx} \{tw}, slot \{sx} \{sw}")
+    let (bx, _, bw, _) = t.query(Button, label="撤销").unwrap().rect
+    assert_true(bx >= tx - 0.5 && bx + bw <= tx + tw + 0.5, msg="\{msg}: 撤销 \{bx} \{bw}")
+    // (大屏: as a row's 归档 key, 24 across (sfpages' row_key_side); 小屏: its words where 归档 stood at first, 12 in
+    // its capsule (sfpages' undo_in))
+    let inset = if wide { @ui.capsule_in(@sf.row_corner, 24.0) } else { @sf.phone_row_in.px() - 12.0 }
+    assert_true((sx + sw - (bx + bw) - inset).abs() < 0.5, msg="\{msg}: 撤销 \{sx + sw - (bx + bw)} in, \{inset}")
+  }
+}
+
+///|
+test "the only row of the list in view archived from its row: no line kept for its tray, said in a toast with 撤销 instead, which asks it back" {
+  // (a list of one row: 已隐藏 once 整理发布清单 is hidden, as "hiding a running chat…" walks to it)
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="home-hide", w=390.0, h=844.0, platform=2)
+  hold_row(t, "整理发布清单")
+  t.frame()
+  t.tap_text("关闭提醒")
+  t.run_for(@sf.toast_ms + @kit.presence_out_ms)
+  hold_row(t, "整理发布清单")
+  t.frame()
+  t.tap_text("隐藏")
+  t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
+  tap_home_filter(t)
+  t.tap_text("已隐藏")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.locate("=整理发布清单 · 已隐藏").length(), 1)
+  hold_row(t, "整理发布清单 · 已隐藏")
+  // (the menu's 归档: its last item)
+  let (lx, ly) = t.reachable("=归档").last().unwrap()
+  t.tap(lx, ly)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  t.run_for(@ui.move_most_ms)
+  // no tray: its list kept no line for it; the toast says it, with 撤销
+  assert_true(t.query(Status, label="已归档") is None)
+  let said = app.toast.get()
+  assert_true(said.words.contains("整理发布清单") && said.words.contains("已归档"), msg=said.words)
+  assert_eq(said.action, "撤销")
+  let (bx, by, bw, bh) = t.query(Button, label="撤销").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  let asked = named(calls, "chat.archive")
+  assert_eq(asked.length(), 2)
+  assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
+  assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.locate("=整理发布清单 · 已隐藏").length(), 1)
 }
 
 ///|

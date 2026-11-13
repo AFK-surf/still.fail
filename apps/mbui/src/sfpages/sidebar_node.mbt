@@ -55,6 +55,24 @@ pub fn chats_lists_node(
     (due.val)()
     due.val = v.at_moment(at.end(), fn() { rest.set(k) })
   })
+  // a chat archived from its row: its 撤销 offered there toast_action_ms, as a toast's, then over (archived_here: its
+  // line leaves the list, RowsMotion::undo_over); timed here, where a row's block made again does not take it along
+  let undo_due = Ref(fn() {  })
+  v.reacts(fn() { archived_here.get().map(fn(a) { a.n }) }, fn(n) {
+    (undo_due.val)()
+    undo_due.val = fn() {  }
+    guard n is Some(n) else { return }
+    undo_due.val = v.at_moment(
+      v.cause_at() + @sf.toast_action_ms,
+      fn() {
+        match archived_here.untracked() {
+          Some(a) if a.n == n && !a.undone => archived_here.set(None)
+          _ => ()
+        }
+      },
+      later=true,
+    )
+  })
   // the search's page open over them (search.mbt: from a list's field, or by ⌘K laid out Small): the lists up and away
   // under it
   let away = search_away_node(v)
@@ -183,6 +201,7 @@ fn chats_pane_node(
         v,
         shown,
         by_name,
+        @signals.untracked(current),
         @signals.untracked(current) && @signals.untracked(frame.watched),
         at.2,
         @sfbase.chats_window_asked(id, filter),
@@ -251,11 +270,16 @@ fn chats_pane_node(
   })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   // (a chat's row in line `line`, its key as it is now (`key`: "r/" and its name, another's as the row is taken for
-  // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list)
+  // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list (its
+  // archive's 撤销 offered in its line, made again as that is scrolled back to))
   let row_line = fn(line : @view.View, key : () -> String) {
-    motion.line_node(line, key)
+    let open = motion.line_node(line, key)
     let name = fn() { key().exact_view(start=2).to_owned() }
-    guard @signals.untracked(fn() { item_of(name()) }) is Some(first) else { return }
+    let found = match @signals.untracked(fn() { item_of(name()) }) {
+      Some(i) => Some(i)
+      None => motion.gone_item(@signals.untracked(key))
+    }
+    guard found is Some(first) else { return }
     // (looked up once as its key or the days change, not by each of what of the row reads it: the last it was where it
     // is gone)
     let now = @signals.computed(fn(was : ChatItem?) {
@@ -271,12 +295,37 @@ fn chats_pane_node(
         None => false
       }
     }
-    // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found)
-    line.show(fn() { !motion.going_now(key()) }, leave=row_size_ms, fn(r) {
-      chat_row_node(r, src, tips, item, @signals.untracked(lead), on, frame.at, stint, list_ground=frame.ground, more=true)
+    // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found; archived from it,
+    // its line kept, the row's own node showing its tray there, till that is over and its room closes so)
+    line.show(fn() { !motion.going_now(key()) || motion.undo_line(key()) }, leave=row_size_ms, fn(r) {
+      // (its tray's line closing: held at its top, the room's foot coming up over it (line_node), half of what has
+      // closed back down from the middle the room lays it out in)
+      r
+      .shift(By(fn() {
+        match open() {
+          Some(p) if motion.undo_line(key()) => (0.0, (1.0 - p) / 2.0)
+          _ => (0.0, 0.0)
+        }
+      }))
+      |> ignore
+      chat_row_node(
+        r,
+        src,
+        tips,
+        item,
+        @signals.untracked(lead),
+        on,
+        frame.at,
+        stint,
+        list_ground=frame.ground,
+        more=true,
+        kept=fn() { motion.going_now(key()) },
+      )
       |> ignore
     })
   }
+  // (an archive's 撤销 over, or another's said: the line of the one before leaves)
+  v.reacts(fn() { archived_here.get().map(fn(a) { a.n }) }, fn(_) { motion.undo_over(v, archived_here.untracked()) }, at_start=false)
   // (its bar along its right, clear of what is over its top and at its foot: the band, the bars)
   v.scrolls_window(
     scroll,
@@ -329,19 +378,24 @@ fn chats_pane_node(
           }
         }
         _ if k.has_prefix("h/") => {
-          motion.line_node(line, fn() { k })
+          motion.line_node(line, fn() { k }) |> ignore
           @sf.list_heading_node(line, fn() { k.exact_view(start=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
         }
         _ => {
           // (a row gone, or the copy of one gone ahead of others where it was: as it was, drawn only)
           match motion.gone_item(k) {
+            // (archived from its row: its line kept, its own row showing its tray, its 撤销 there)
+            Some(_) if @signals.untracked(fn() { motion.undo_line(k) }) => {
+              row_line(line, fn() { k })
+              return
+            }
             // (swiped off: out of sight already, its room closing alone)
             Some(gone) if swiped_gone(gone) => {
-              motion.line_node(line, fn() { k })
+              motion.line_node(line, fn() { k }) |> ignore
               return
             }
             Some(gone) => {
-              motion.line_node(line, fn() { k })
+              motion.line_node(line, fn() { k }) |> ignore
               line.box(fn(o) {
                 o.presses(Is(false)) |> ignore
                 chat_row_node(o, src, tips, fn() { gone }, @signals.untracked(lead), fn() { false }, frame.at, stint, list_ground=frame.ground, more=true)
@@ -375,7 +429,7 @@ fn chats_pane_node(
       b.box(fn(line) {
         @sf.style_node(line, fn() { @sf.list_line(frame.at) })
         if @signals.untracked(key).has_prefix("h/") {
-          motion.line_node(line, key)
+          motion.line_node(line, key) |> ignore
           @sf.list_heading_node(line, fn() { key().exact_view(start=2).to_owned() }, frame.at)
         } else {
           row_line(line, key)
@@ -568,12 +622,26 @@ priv struct RowsMotion {
   mut held : Int
   going : Map[String, (ChatItem?, String)]
   moving : Map[String, (Bool, Double)]
+  // (rows gone from it that were archived from their rows (archived_here's): kept among its lines, going, their room
+  // whole (no way of theirs in `moving`) while their 撤销 is offered; closing as a row gone does once that is over
+  // (undo_over), or the list's again as their chat comes back)
+  undo_lines : Set[String]
   told : @signals.Signal[Int]
 }
 
 ///|
 fn RowsMotion::new() -> RowsMotion {
-  { last: [], last_items: {}, had: false, stint: 0, held: 0, going: {}, moving: {}, told: @signals.signal(0) }
+  {
+    last: [],
+    last_items: {},
+    had: false,
+    stint: 0,
+    held: 0,
+    going: {},
+    moving: {},
+    undo_lines: Set([]),
+    told: @signals.signal(0),
+  }
 }
 
 ///|
@@ -590,8 +658,8 @@ fn day_keys(days : Array[ChatDay]) -> Array[String] {
 }
 
 ///|
-/// The list's days now said (`shown`, its rows `by_name`) in node `v`'s timeline, `watched` whether it is the list
-/// shown, in its page's stay on top `stint`, the window its list was last told it grows to `asked` (chats_window_asked):
+/// The list's days now said (`shown`, its rows `by_name`) in node `v`'s timeline, `current` whether it is the list in view,
+/// `watched` whether it is the list shown, in its page's stay on top `stint`, the window its list was last told it grows to `asked` (chats_window_asked):
 /// what came, went and went ahead set off from the cause's moment. What changed while its page was off the top (on 小屏
 /// kept on the stack's shelf at rest, its list said again only as it is taken back: a new stint) is there at once, as on
 /// a page made anew; so are the rows a page more brings (its rows held grown within a window asked past what it held,
@@ -603,12 +671,26 @@ fn RowsMotion::said(
   v : @view.View,
   shown : Array[ChatDay],
   by_name : Map[String, ChatItem],
+  current : Bool,
   watched : Bool,
   stint : Int,
   asked : Int,
 ) -> Unit {
   let lines = day_keys(shown)
   let was = self.last
+  // (archived here and come back (撤销, or its archive refused): the list's again, in the line it kept, no way in)
+  let back : Set[String] = Set([])
+  for k in lines {
+    if self.undo_lines.contains(k) {
+      back.add(k)
+      self.undo_lines.remove(k)
+      self.going.remove(k)
+      self.moving.remove(k)
+    }
+  }
+  if !back.is_empty() {
+    self.told.set(self.told.untracked() + 1)
+  }
   // (a page more come: more rows held than before, a window past what it held asked)
   let held = by_name.length()
   let paged = held > self.held && asked > self.held
@@ -631,7 +713,7 @@ fn RowsMotion::said(
       _ => None
     }
     for i, k in lines {
-      if !before.contains(k) && !(past is Some(p) && i > p) {
+      if !before.contains(k) && !back.contains(k) && !(past is Some(p) && i > p) {
         self.moving[k] = (true, now)
       }
       self.going.remove(k)
@@ -658,6 +740,7 @@ fn RowsMotion::said(
     }
     // (gone, and the copies of those gone ahead where they were: each after the line it came after)
     let mut prev = ""
+    let mut kept_after = ""
     for k in was {
       if ahead.contains(k) {
         let copy = k + moved_mark
@@ -668,8 +751,20 @@ fn RowsMotion::said(
       }
       if !here.contains(k) && !self.going.contains(k) {
         let name = k.exact_view(start=2).to_owned()
-        self.going[k] = (if k.has_prefix("r/") { self.last_items.get(name) } else { None }, prev)
-        self.moving[k] = (false, now)
+        match archived_here.untracked() {
+          // (archived from its row: its line kept whole after the last line before it that stays, its 撤销 there)
+          Some(a) if k.has_prefix("r/") && a.name == name && !a.undone => {
+            self.going[k] = (self.last_items.get(name), kept_after)
+            self.undo_lines.add(k)
+          }
+          _ => {
+            self.going[k] = (if k.has_prefix("r/") { self.last_items.get(name) } else { None }, prev)
+            self.moving[k] = (false, now)
+          }
+        }
+      }
+      if here.contains(k) {
+        kept_after = k
       }
       prev = k
     }
@@ -688,6 +783,20 @@ fn RowsMotion::said(
     })
     |> ignore
     self.told.set(self.told.untracked() + 1)
+  }
+  // (archived from its row in the list in view, its line not kept (the list's last row gone with it, or its page not
+  // on top as the core said it gone): said in a toast with its 撤销 as from anywhere else, never left unsaid)
+  if current {
+    match archived_here.untracked() {
+      Some(a) if !a.undone => {
+        let k = "r/" + a.name
+        if was.contains(k) && !lines.contains(k) && !self.undo_lines.contains(k) {
+          archived_here.set(None)
+          (a.toast)()
+        }
+      }
+      _ => ()
+    }
   }
   self.had = self.had || !lines.is_empty()
   self.last = lines
@@ -720,6 +829,46 @@ fn RowsMotion::lines(self : RowsMotion, days : Array[ChatDay]) -> Array[String] 
 }
 
 ///|
+/// Whether line `key` is a row archived from it whose line is kept (its 撤销 offered there, or its room closing once that
+/// is over), followed.
+fn RowsMotion::undo_line(self : RowsMotion, key : String) -> Bool {
+  self.told.get() |> ignore
+  self.undo_lines.contains(key)
+}
+
+///|
+/// The lines of rows archived from them whose 撤销 is over (all but the one `here` says, while it is offered): each
+/// leaves now as a row gone does, its room closing over row_size_ms from `v`'s cause's moment.
+fn RowsMotion::undo_over(self : RowsMotion, v : @view.View, here : ArchivedHere?) -> Unit {
+  let over = self.undo_lines
+    .to_array()
+    .filter(fn(k) { !self.moving.contains(k) && !(here is Some(a) && "r/" + a.name == k) })
+  if over.is_empty() {
+    return
+  }
+  let now = v.cause_at()
+  for k in over {
+    self.moving[k] = (false, now)
+  }
+  let end = now + row_size_ms
+  if end > rows_rest_at.val {
+    rows_rest_at.val = end
+  }
+  v.at_moment(end, fn() {
+    for k in over {
+      if self.moving.get(k) is Some((false, _)) {
+        self.moving.remove(k)
+        self.going.remove(k)
+        self.undo_lines.remove(k)
+      }
+    }
+    self.told.set(self.told.untracked() + 1)
+  })
+  |> ignore
+  self.told.set(self.told.untracked() + 1)
+}
+
+///|
 /// Whether line `key` is on its way out of the list (gone from it, its room closing), followed.
 fn RowsMotion::going_now(self : RowsMotion, key : String) -> Bool {
   self.told.get() |> ignore
@@ -738,8 +887,10 @@ fn RowsMotion::gone_item(self : RowsMotion, key : String) -> ChatItem? {
 ///|
 /// Line `key`'s (its key as it is now) node `line` coming or going (ListRows::enter, leave): its room opening or closing from its cause's
 /// moment over row_size_ms, what it holds in the middle of it, as big as it is open and faded in from row_gone_at, cut
-/// softly at both ends.
-fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : () -> String) -> Unit {
+/// softly at both ends. A row archived from it (its tray there: undo_lines) is a recess the list closes over: its room
+/// closes as a row's does, what it holds neither shrunk nor faded, cut hard at the room's foot (kept at its top by
+/// what holds it: row_line). How open it is (None: neither coming nor going).
+fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : () -> String) -> () -> Double? {
   let way = @sf.EdgeWay::new(1.0)
   let state = fn() {
     self.told.get() |> ignore
@@ -758,17 +909,20 @@ fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : () -> Strin
       None => None
     }
   }
+  let recess = fn() { self.undo_line(key()) }
   line
   .opens(By(open))
-  .cuts_softly(By(fn() { open() is Some(_) }))
+  .cuts_softly(By(fn() { open() is Some(_) && !recess() }))
+  .clips(By(fn() { open() is Some(_) && recess() }))
   .alpha(By(fn() {
     match open() {
-      Some(p) => dmax(0.0, (p - @ui.row_gone_at) / (1.0 - @ui.row_gone_at))
-      None => 1.0
+      Some(p) if !recess() => dmax(0.0, (p - @ui.row_gone_at) / (1.0 - @ui.row_gone_at))
+      _ => 1.0
     }
   }))
-  .scale(By(fn() { open().unwrap_or(1.0) }))
+  .scale(By(fn() { if recess() { 1.0 } else { open().unwrap_or(1.0) } }))
   |> ignore
+  open
 }
 
 ///|

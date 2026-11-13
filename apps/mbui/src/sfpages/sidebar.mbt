@@ -33,6 +33,8 @@ fn sidebar_reset() -> Unit {
   list_scrolls.clear()
   rows_rest_at.val = -1.0
   filter_menu_serial.val = -1
+  archived_here.set(None)
+  archived_n.val = 0
 }
 
 ///|
