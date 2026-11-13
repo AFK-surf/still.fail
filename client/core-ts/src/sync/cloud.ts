@@ -188,7 +188,10 @@ export class CloudSync {
   /// What a write of `sub`'s to still.fail cloud changed that no event tells, read again, waited on (core/execute.ts
   /// answers the call once it is). What it changed in a workspace or in the account's list the cloud tells every device
   /// of its members, this one too (`workspace`, `workspaces` on `/v1/events`), read as it is told like another device's
-  /// change; so here only: the workspace's view the write answered with, held at once with no request; the account's
+  /// change; so here only: the workspace's view the write answered with, held at once with no request, or, where a
+  /// write in a workspace answered otherwise (people added, a station taken out), that one workspace read again: what
+  /// the core does next goes by it (the people just added are signed into its lock by their subs), and its event
+  /// alone would bring it only as the socket opens again where it is down; the account's
   /// `/v1/me` where the write changes which workspaces it reaches or the account itself (a workspace made, deleted or
   /// left, an invitation taken: the page that goes there next reads which account reaches it); its sign-ins and an
   /// operator's lists, which no event tells. Until 2026-11-15 every account was read whole after every write (`/v1/me`,
@@ -212,6 +215,10 @@ export class CloudSync {
       const viewOf = view === null ? null : made || joined ? (view.id as string) : id;
       if (viewOf !== null && view!.id === viewOf && core.workspaces.owner(viewOf) === sub) this.#took(viewOf, view);
       const reads: Effect.Effect<void>[] = [];
+      // (a write inside a workspace still this account's that did not answer with its view; a bug report's answer is
+      // read by its own path, core/execute.ts)
+      const inside = ws !== null && ws[2] !== undefined && ws[2] !== "feedback" && view === null && !reaches && core.workspaces.owner(id!) === sub;
+      if (inside) reads.push(Effect.ignore(scheduler.ask("cloud", `workspace/${id}`, Priority.asked, this.#workspace(id!)), { log: "Unhandled", message: "workspace read" }));
       if (at.startsWith("/v1/auth/") && core.provider.supports("loginSessions")) reads.push(Effect.ignore(scheduler.ask("cloud", `sessions/${sub}`, Priority.asked, this.#loginSessions(sub)), { log: "Unhandled", message: "login sessions read" }));
       if (at.startsWith("/v1/admin/") && this.#admins.has(sub)) reads.push(Effect.ignore(scheduler.ask("cloud", `admin/${sub}`, Priority.asked, this.#admin(sub)), { log: "Unhandled", message: "admin read" }));
       yield* Effect.all(reads, { concurrency: "unbounded", discard: true });

@@ -35,6 +35,8 @@ async function device() {
   stationReplies(s.host, (req) => {
     if (req.method === "PATCH" && req.url.endsWith("/v1/workspaces/ws/members/s2")) return { ...view, members: [view.members[0], { sub: "s2", role: "admin" }] };
     if (req.method === "POST" && req.url.endsWith("/v1/invitations/preview")) return { workspace: { id: "w3", name: "别处" }, role: "member" };
+    // (people added: answered with who was added, not with the workspace's view)
+    if (req.method === "POST" && req.url.endsWith("/v1/workspaces/ws/members")) return { added: [{ sub: "s3", email: "c@x.com", role: "member" }] };
     return undefined;
   });
   await s.host.time.pass(2_000, 100);
@@ -74,6 +76,11 @@ test("what a device asks the cloud for: a change another device made, one it mad
       await answered(s, ui, 1, "workspace.setRole", { account: "s1", workspace: "ws", member: "s2", role: "admin" });
       event({ type: "workspace", id: "ws" });
     }),
+    // (ii) People added by this device: a write the cloud does not answer with the workspace's view, then its event.
+    ownAdded: await count(s, async () => {
+      await answered(s, ui, 3, "workspace.addMembers", { account: "s1", workspace: "ws", role: "member", emails: ["c@x.com"] });
+      event({ type: "workspace", id: "ws" });
+    }),
     // (iii) An invitation looked at: a write that changes nothing the device holds, and that the cloud tells nobody.
     nothing: await count(s, () => answered(s, ui, 2, "invitation.preview", { account: "s1", token: "t" })),
   };
@@ -83,6 +90,7 @@ test("what a device asks the cloud for: a change another device made, one it mad
   assert.deepEqual(counts.otherRequest, {}, "an ask to be let in of an app from before: nothing read");
   assert.deepEqual(counts.otherRoster, { "GET /v1/me": 1, "GET /v1/workspaces/ws": 1 }, "the list and the workspace, each once");
   assert.deepEqual(counts.ownRoster, { "PATCH /v1/workspaces/ws/members/s2": 1, "GET /v1/workspaces/ws": 1 }, "the write, and the workspace as its event says");
+  assert.deepEqual(counts.ownAdded, { "POST /v1/workspaces/ws/members": 1, "GET /v1/workspaces/ws": 2 }, "the write, that workspace read before it answers, and again as its event says: never the account, the other workspace or the sign-ins");
   assert.deepEqual(counts.nothing, { "POST /v1/invitations/preview": 1 }, "the write alone");
   s.core.close();
 });
@@ -95,5 +103,14 @@ test("a role changed on this device shows as the cloud answered it, before any e
   const held = s.core.inner.data.shared({ topic: "workspace", workspace: "ws" }) as { members?: { sub: string; role: string }[] };
   assert.deepEqual(held.members?.find((m) => m.sub === "s2")?.role, "admin");
   assert.deepEqual(asked(s.host, from), { "PATCH /v1/workspaces/ws/members/s2": 1 });
+  s.core.close();
+});
+
+test("a write in a workspace the cloud does not answer with its view: that workspace is read before the call answers, no event needed", async () => {
+  const s = await device();
+  const ui = s.core.connect();
+  const from = s.host.requests.length;
+  await answered(s, ui, 1, "workspace.addMembers", { account: "s1", workspace: "ws", role: "member", emails: ["c@x.com"] });
+  assert.deepEqual(asked(s.host, from), { "POST /v1/workspaces/ws/members": 1, "GET /v1/workspaces/ws": 1 }, "read as the call answers, with no event of the cloud's");
   s.core.close();
 });
