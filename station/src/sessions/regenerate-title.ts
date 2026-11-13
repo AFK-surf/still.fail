@@ -95,7 +95,6 @@ export async function regenerateTitle(hub: Hub, thread: number, members: Session
     const timeout = new Promise<never>((_, reject) => { stopTimer = wall.after(TIMEOUT_MS, () => reject(new TitleError("timeout"))); });
     const title = await Promise.race([work, timeout]);
     if (pending.get(thread) !== id || hub.store.titleRevision(thread) !== revision || hub.store.getThread(thread) === null) throw new TitleError("changed");
-    hub.titles.delete(thread);
     hub.store.setGeneratedTitle(thread, title);
     return title;
   } catch (error) {
