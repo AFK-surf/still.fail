@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [575f2825c](https://github.com/AFK-surf/still.fail/commit/575f2825c1ddc0ab53784b3f3aa414415b2f028a) mbui app: ⌘F finds in a chat's page made as nodes  | 1.94 | 2.6 | 11.19 | 30.6 | 40.13 | 27.26 | 52.1 | 93.18 | 191.58 |
 | [6c24acc3b](https://github.com/AFK-surf/still.fail/commit/6c24acc3bc659f48458a0cbc15d32ca96e937420) mbui: words a finger picked of the tree's offer th | 1.94 | 2.6 | 11.19 | 30.6 | 40.12 | 27.26 | 52.1 | 93.31 | 181.32 |
 | [7fe6262c0](https://github.com/AFK-surf/still.fail/commit/7fe6262c05e64cb406596a2cd6bb0278c5d26400) mbui: 添加这台 Mac where this machine's station is alr | 1.94 | 2.6 | 11.18 | 30.6 | 40.12 | 27.26 | 52.08 | 93.29 | 131.22 |
 | [2deb3715e](https://github.com/AFK-surf/still.fail/commit/2deb3715e3a9317abd6496747106ecc33713833f) station, mbui: centralize local Claude subscriptio | 1.94 | 2.6 | 11.17 | 30.58 | 40.07 | 27.24 | 52.05 | 93.29 | 131.22 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6c3e51a27](https://github.com/AFK-surf/still.fail/commit/6c3e51a270589e5f7729072390b5ac758fefe4b5) station: read Antigravity CLI plan usage via agy / | 1.93 | 2.58 | 11.11 | 30.16 | 39.8 | 26.84 | 51.11 | 94.82 | 137.5 |
 | [20e1f4048](https://github.com/AFK-surf/still.fail/commit/20e1f40485b521fc6ef9135ae9cd1129d3725a91) Pin iroh to zzj3720/iroh d349d3ce, the commit Comm | 1.93 | 2.58 | 11.1 | 30.15 | 39.8 | 26.83 | 51.11 | 94.88 | 133.5 |
 | [fe1e8989d](https://github.com/AFK-surf/still.fail/commit/fe1e8989d56857f59dcdfb47b11a554b7c70b7b5) app: Home taken back on 小屏 shows its lists as it l | 1.93 | 2.58 | 11.1 | 30.16 | 39.8 | 26.83 | 51.11 | 94.47 | 166.3 |
-| [fe6d90f2b](https://github.com/AFK-surf/still.fail/commit/fe6d90f2b3cc730886b022bcd142baf4f17ee3dd) mbui-ci: the macos job takes the C units main's la | 1.93 | 2.58 | 11.1 | 30.16 | 39.8 | 26.83 | 51.11 | 94.34 | 157.09 |
