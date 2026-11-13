@@ -168,17 +168,18 @@ pub fn picked_end_piece(p : WordsPicked) -> (Double, Double) -> (Double, Double,
 
 ///|
 /// What a node offers to do with words a finger picked in what it holds, in the system's floating text menu
-/// (picked_menu): its item's words and what choosing it does.
+/// (picked_menu): its item's words for what is picked (none: no item for it), and what choosing it does.
 // kept across runs: what each node lends (View::lends), let go with it
-let picked_menus : @view.Lent[(String, () -> Unit)] = @view.Lent::new()
+let picked_menus : @view.Lent[((WordsPicked) -> String?, () -> Unit)] = @view.Lent::new()
 
 ///|
-/// Words a finger picked in what node `v` holds (the node they end in, or what holds it) offer `words` in the system's
-/// floating text menu over them, after its copy and select all (@hostapi.text_menu_own: Android's text toolbar, iOS's
-/// edit menu, the web's bar); chosen, `take` is done (a quote of them, reading picked_now; letting them go with
-/// picked_let_go), the menu then gone. A mouse's pick offers none: no such menu comes over it (what a page shows by it
-/// is its own). `v`.
-pub fn picked_menu(v : @view.View, words : String, take : () -> Unit) -> @view.View {
+/// Words a finger picked in what node `v` holds (the node they end in, or what holds it) offer what `words` says for
+/// them in the system's floating text menu over them, after its copy and select all (@hostapi.text_menu_own: Android's
+/// text toolbar, iOS's edit menu, the web's bar); None, no item for them (picked across messages, where only one's are
+/// quoted). Asked, untracked, as the menu is put up and as what is picked changes. Chosen, `take` is done (a quote of
+/// them, reading picked_now; letting them go with picked_let_go), the menu then gone. A mouse's pick offers none: no
+/// such menu comes over it (what a page shows by it is its own). `v`.
+pub fn picked_menu(v : @view.View, words : (WordsPicked) -> String?, take : () -> Unit) -> @view.View {
   v.lends(picked_menus, (words, take))
 }
 
@@ -188,9 +189,10 @@ pub fn picked_menu(v : @view.View, words : String, take : () -> Unit) -> @view.V
 /// old view's.
 fn picked_menu_own() -> (String, () -> Unit)? {
   guard picked.finger && picked_now_worked() is Some(p) && view_app.val is Some(tree) else { return None }
-  match tree.view_of(p.ends_in) {
-    Some(v) => v.lent(picked_menus)
-    None => None
+  guard tree.view_of(p.ends_in) is Some(v) && v.lent(picked_menus) is Some((words, take)) else { return None }
+  match @signals.untracked(fn() { words(p) }) {
+    Some(w) if w != "" => Some((w, take))
+    _ => None
   }
 }
 

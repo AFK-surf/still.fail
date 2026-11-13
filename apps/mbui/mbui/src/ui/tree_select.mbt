@@ -348,8 +348,9 @@ let tree_finger_hold : Ref[(() -> Unit)?] = Ref(None)
 /// A finger down at (x, y) at `at` on the window's tree: where words of its that are picked with the pointer are
 /// there, at a long press's moment after (the tree's timeline: whatever frames are drawn), held still on them all the
 /// while and nothing of the tree's having taken it for its own hold, what held it lets go of it (a column scrolled by
-/// it: called off) and it is the old frame's from then, the word there picked (Ctx::finger_pick), slid on from and let
-/// go as an old view's words a finger held are (finger_select.mbt).
+/// it, an old view under the words that took the press: called off) and it is the old frame's from then, the word
+/// there picked (Ctx::finger_pick), slid on from and let go as an old view's words a finger held are
+/// (finger_select.mbt).
 fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> Unit {
   tree_finger_off()
   // (what is under it looked for at the hold's moment alone, as the tree is then: nothing laid out for it as it goes
@@ -365,15 +366,19 @@ fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> U
       if downs_made.val != down {
         return
       }
+      let words = tree_sel_at(x, y, finger=true)
       match view_held.val {
         // (a column it scrolls held it: called off, as a hold handed on calls its cover's off)
         Some(Dragging(id)) if tree.claims_scroll(id) =>
           tree.drag_at(id, Off, x, y, view_moment(), finger=view_fingers[0]) |> ignore
         Some(Nowhere) => ()
+        // (an old view under them held it, the words of the tree's that take no press drawn over it there (a page's
+        // messages over 小屏's shell): its press called off, as a hold of the old frame's own on words it drew is its)
+        Some(Old(_, _)) if words is Some(t) && tree_words_over(tree, t, x, y) => g().press_called_off(x, y, at)
         // (a node's own press, its own hold: its)
         _ => return
       }
-      guard tree_sel_at(x, y, finger=true) is Some(t) else { return }
+      guard words is Some(t) else { return }
       view_down.val = None
       view_held.val = Some(Old(-1, None))
       view_input_went(-1)
@@ -381,6 +386,16 @@ fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> U
       g().finger_pick(t, x, y)
     }),
   )
+}
+
+///|
+/// Whether paragraph `t` of the window's tree (its node's words) is what is drawn topmost at (x, y): over what else is
+/// there (an old view hosted under it, which a press there reaches as its words take none: Tree::drop_at).
+fn tree_words_over(tree : @view.Tree, t : SelTarget, x : Double, y : Double) -> Bool {
+  match (tree.drop_at(x, y), t.node) {
+    (Some(OnNode(id)), Some(n)) => id == n
+    _ => false
+  }
 }
 
 ///|
