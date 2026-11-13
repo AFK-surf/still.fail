@@ -8,13 +8,12 @@
 // words flying in from the composer (the list's flight).
 
 ///|
-/// What is under `o` now (outbox_row's order): what did not go, nothing (followed), its time (the station has it),
-/// 正在发送; as what is under the viewer's message is said (mine_said_node's).
+/// What is under `o` now, where anything is (outbox_row's order; nothing while it is followed and went, which its row
+/// says apart: mine_said_node's `lone`): what did not go, its time (the station has it), 正在发送; as what is under the
+/// viewer's message is said (mine_said_node's).
 fn outbox_mine_under(o : Outgoing) -> MineUnder {
   if o.state == "failed" {
     MineUnsent
-  } else if o.followed {
-    MineNothing
   } else if o.state == "sent" {
     MineTime
   } else {
