@@ -37,8 +37,14 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
 
   let streamsPath = "";
   let nextStream = 20;
-  const pendingClosed = new Map<number, (ok: unknown) => void>();
-  let resolveAccept: ((ok: unknown) => void) | undefined;
+  const pendingClosed = new Map<number, PromiseWithResolvers<(ok: unknown) => void>>();
+  const closedFor = (conn: number) => {
+    let pending = pendingClosed.get(conn);
+    if (!pending) pendingClosed.set(conn, pending = Promise.withResolvers());
+    return pending.promise;
+  };
+  let nextAccept = Promise.withResolvers<(ok: unknown) => void>();
+  const openBiReplied = Promise.withResolvers<void>();
   const server = createServer((c) => {
     createInterface({ input: c }).on("line", (line) => {
       const msg = JSON.parse(line) as { id: number; op: string; conn?: number; streams?: string };
@@ -48,11 +54,14 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
       } else if (msg.op === "relayStatus") {
         c.write(JSON.stringify({ id: msg.id, ok: [] }) + "\n");
       } else if (msg.op === "accept") {
-        resolveAccept = (ok) => c.write(JSON.stringify({ id: msg.id, ok }) + "\n");
+        nextAccept.resolve((ok) => c.write(JSON.stringify({ id: msg.id, ok }) + "\n"));
       } else if (msg.op === "openBi") {
         c.write(JSON.stringify({ id: msg.id, ok: { stream: nextStream++ } }) + "\n");
+        openBiReplied.resolve();
       } else if (msg.op === "conn.closed") {
-        pendingClosed.set(msg.conn!, (ok) => c.write(JSON.stringify({ id: msg.id, ok }) + "\n"));
+        let pending = pendingClosed.get(msg.conn!);
+        if (!pending) pendingClosed.set(msg.conn!, pending = Promise.withResolvers());
+        pending.resolve((ok) => c.write(JSON.stringify({ id: msg.id, ok }) + "\n"));
       } else if (msg.op === "close") {
         c.write(JSON.stringify({ id: msg.id, ok: null }) + "\n");
       }
@@ -66,9 +75,8 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   t.after(() => endpoint.close().catch(() => {}));
 
   const waitAccept = async () => {
-    while (!resolveAccept) await new Promise((r) => setImmediate(r));
-    const fn = resolveAccept;
-    resolveAccept = undefined;
+    const fn = await nextAccept.promise;
+    nextAccept = Promise.withResolvers();
     return fn;
   };
   const accepting = endpoint.accept();
@@ -96,8 +104,7 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   assert.equal((await st11.read())?.toString(), "ok");
   assert.equal(await st11.read(), null);
 
-  while (!pendingClosed.has(1)) await new Promise((r) => setImmediate(r));
-  pendingClosed.get(1)!({ kind: "peer", reason: "idle", text: "idle" });
+  (await closedFor(1))({ kind: "peer", reason: "idle", text: "idle" });
   await conn.closed();
   await s11EndedFromNode;
   await s11Closed;
@@ -109,7 +116,7 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   late.write(Buffer.concat([streamHead(1, 12, 0), frame(Buffer.from("late"))]));
   await lateClosed;
 
-  // 4. Closing a connection rejects pending openBi() in #wanted and destroys unclaimed #sockets entries.
+  // 4. Closing a connection rejects pending openBi() and closes an unclaimed stream.
   const accepting2 = endpoint.accept();
   (await waitAccept())({ conn: 2, remote: "22".repeat(32), alpn: "74657374", via: null, paths: [], stats: { txBytes: 0, rxBytes: 0 } });
   const conn2 = (await accepting2)!;
@@ -117,11 +124,10 @@ test("Front closes half-open stream sockets on abrupt end and connection close, 
   const orphanClosed = new Promise<void>((resolve) => orphan.once("close", () => resolve()));
   await new Promise<void>((resolve) => orphan.once("connect", resolve));
   orphan.write(streamHead(2, 99, 1));
-  const pendingOpen = conn2.openBi();
-  while (!pendingClosed.has(2)) await new Promise((r) => setImmediate(r));
-  await new Promise((r) => setTimeout(r, 20));
-  pendingClosed.get(2)!({ kind: "peer", reason: "idle", text: "idle" });
+  const pendingOpen = assert.rejects(conn2.openBi(), /connection is closed/);
+  await openBiReplied.promise;
+  (await closedFor(2))({ kind: "peer", reason: "idle", text: "idle" });
   await conn2.closed();
-  await assert.rejects(pendingOpen, /connection is closed/);
+  await pendingOpen;
   await orphanClosed;
 });

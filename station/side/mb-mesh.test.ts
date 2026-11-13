@@ -186,6 +186,45 @@ test("a front can bind a fixed port after an older endpoint releases it", { skip
   }
 });
 
+test("the front rebinds its fixed port when the previous endpoint has open streams", { skip }, async () => {
+  const addon = loadMesh();
+  const f = await front();
+  const reservation = createSocket("udp4");
+  await new Promise<void>((resolve) => reservation.bind(0, "127.0.0.1", resolve));
+  const address = `127.0.0.1:${reservation.address().port}`;
+  await new Promise<void>((resolve) => reservation.close(resolve));
+  const key = randomBytes(32);
+  const options = { secretKey: key, alpns: [ALPN], relayUrls: [], discovery: false, bindAddr: address };
+  const mesh = withFront(addon, f.socket);
+  const first = await mesh.bind(options);
+  const device = await bindOn(addon, randomBytes(32));
+  let second: Endpoint | undefined;
+  try {
+    const accepting = first.accept();
+    const outgoing = await device.connect(addrOf(first), ALPN);
+    const incoming = (await accepting)!;
+    for (let i = 0; i < 10; i++) {
+      const opened = await outgoing.openBi();
+      await opened.write(Buffer.from("x"));
+      const received = (await incoming.acceptBi())!;
+      assert.equal((await received.read())?.toString(), "x");
+    }
+
+    // A changed bind replaces the old endpoint. Its still-open streams must not retain the fixed port.
+    second = await mesh.bind({ ...options, alpns: [ALPN, Buffer.from("stillfail/test/2")] });
+    assert.ok(second.sockets().includes(address));
+    const next = second.accept();
+    const dialed = await device.connect(addrOf(second), ALPN);
+    assert.equal((await next)!.remoteId(), device.id());
+    dialed.close(0, "");
+  } finally {
+    await second?.close();
+    await device.close();
+    await first.close();
+    await f.stop();
+  }
+});
+
 test("a front that ended, another in its place: the Node links to it again and takes what comes", { skip }, async () => {
   const addon = loadMesh();
   const dir = mkdtempSync(join(tmpdir(), "mbm-"));
