@@ -821,7 +821,7 @@ fn sheet_node(
           sheet.pick(at_once=true, fn() { covered_by() is Some(_) }, fn(g, covered) {
             g.over(Is(true)).radius(Is(pane_corner)) |> ignore
             if !covered {
-              g.height(By(fn() { Some((win_h() + layer.keyboard_inset()) * 2.0) })) |> ignore
+              g.height(By(fn() { Some(layer.window().1 * 2.0) })) |> ignore
             }
             make(g)
           })

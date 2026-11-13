@@ -26,7 +26,6 @@ fn init {
     "src/sfapp/home_wbtest.mbt",
     "src/sfapp/kept_rows_kinds_wbtest.mbt",
     "src/sfapp/menu_node_wbtest.mbt",
-    "src/sfapp/menu_told_wbtest.mbt",
     "src/sfapp/motion_wbtest.mbt",
     "src/sfapp/place_first_wbtest.mbt",
     "src/sfapp/preview_tree_wbtest.mbt",

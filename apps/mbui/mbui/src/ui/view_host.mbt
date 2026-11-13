@@ -5698,7 +5698,30 @@ fn Ctx::id_old_layer(self : Ctx, id : Int) -> Int {
 }
 
 ///|
-/// Whether `target` does not currently have `self.focus`, yet closing the open modal layers (`self.layer_return` and
+/// Whether old-frame layer `id` is still open and holds a focus target to return to when it closes.
+fn Ctx::old_return_active(self : Ctx, id : Int) -> Bool {
+  self.layer_gen.contains(id) &&
+  !self.layer_retired_now(id) &&
+  !self.layers_gone.contains(id) &&
+  !self.layers.iter().any(fn(x) { x.id == id && x.inert }) &&
+  self.layer_return.get(id).unwrap_or(0) != 0
+}
+
+///|
+/// Topmost open old-frame layer that would return focus when closed while `self.focus == 0` (`Ctx::layers_focus`).
+fn Ctx::top_old_return_layer(self : Ctx) -> Int {
+  match self.layers.filter(fn(l) { !l.inert && !self.last_layers.iter().any(fn(x) { x.id == l.id }) && self.old_return_active(l.id) }).last() {
+    Some(l) => l.id
+    None =>
+      match self.last_layers.filter(fn(l) { !l.inert && self.old_return_active(l.id) }).last() {
+        Some(l) => l.id
+        None => 0
+      }
+  }
+}
+
+///|
+/// Whether `target` does not currently have `self.focus`, yet closing the open layers (`self.layer_return` and
 /// `layer_focus_open`) would return `self.focus` to `target`.
 fn Ctx::focus_parked(self : Ctx, target : Int) -> Bool {
   if target == 0 || self.focus == target {
@@ -5708,17 +5731,25 @@ fn Ctx::focus_parked(self : Ctx, target : Int) -> Bool {
   let seen : Array[Int] = [cur]
   for _ in 0..<16 {
     let mut next : Int? = None
-    let ol = self.id_old_layer(cur)
+    let ol = if cur != 0 {
+      self.id_old_layer(cur)
+    } else {
+      let top = self.top_old_return_layer()
+      match (top, view_app.val, layer_focus_open.last()) {
+        (id, Some(t), Some(tl)) if id != 0 => {
+          let ts = @signals.untracked(fn() { t.stack_of(tl.layer) })
+          if ts > self.last_stacks.get(id).unwrap_or(-1) { 0 } else { id }
+        }
+        (id, _, _) => id
+      }
+    }
     if ol != 0 {
       let mut at = ol
       for _ in 0..<16 {
         if at == 0 {
           break
         }
-        if self.layer_gen.contains(at) &&
-          !self.layer_retired_now(at) &&
-          !self.layers_gone.contains(at) &&
-          self.layer_return.get(at) is Some(back) {
+        if self.old_return_active(at) && self.layer_return.get(at) is Some(back) {
           next = Some(back)
           break
         }
@@ -5765,7 +5796,19 @@ fn Ctx::focus_parked(self : Ctx, target : Int) -> Bool {
             } else {
               let node = match focus_node_of(cur) {
                 Some(nd) => Some(nd)
-                None => editor_node_of(self, cur)
+                None =>
+                  match editor_node_of(self, cur) {
+                    Some(nd) => Some(nd)
+                    None =>
+                      match self.focusables.iter().find_first(fn(f) { f.id == cur }) {
+                        Some({ island: Some(isl), .. }) => Some(isl)
+                        _ =>
+                          match self.last_focusables.iter().find_first(fn(f) { f.id == cur }) {
+                            Some({ island: Some(isl), .. }) => Some(isl)
+                            _ => None
+                          }
+                      }
+                  }
               }
               match node {
                 Some(nd) => {

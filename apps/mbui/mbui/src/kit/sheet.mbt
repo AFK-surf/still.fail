@@ -449,12 +449,15 @@ pub fn sheet_grabber(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// How far a sheet's default look reaches on under the window's foot (its foot's corners out of sight).
+let sheet_under : Double = 26.0
+
+///|
 /// A sheet's default look (still.fail's phone sheets): the theme's surface, its top corners 26 round (26 more of it
 /// under the window's foot), a shadow; its grabber, then what it holds.
 pub fn sheet_look(c : @ui.Ctx, s : SheetState, body : () -> Unit) -> Unit {
   let t = c.theme()
-  let under = 26.0 + dmax(c.ime_inset(), -s.below)
-  c.box(w=Fill(1.0), h=Px(s.h + under), radius=26.0, bg=t.surface, shadow=24.0, shadow_color=t.shadow, clip=true, pb=under, fn() {
+  c.box(w=Fill(1.0), h=Px(s.h + sheet_under), radius=26.0, bg=t.surface, shadow=24.0, shadow_color=t.shadow, clip=true, pb=sheet_under, fn() {
     sheet_grabber(c)
     body()
   })
