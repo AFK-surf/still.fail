@@ -78,8 +78,9 @@ test "what a chat's agent needs is said under its last message" {
   // its bell's middle the middle of the words' first line: the bell's column as high as their line, whatever line the
   // theme gives them (on 18 the bell stood a point under the words, 2026-10-27)
   let run = t.text_runs().filter(fn(r) { need.has_prefix(r.text) })[0]
+  // (the window's tree's boxes among the old view's: on whichever page the chat is made)
   let bell = t
-    .boxes()
+    .boxes_held()
     .filter(fn(b) {
       (b.w - 14.0).abs() < 0.01 && (b.h - 14.0).abs() < 0.01 && b.x + b.w <= run.x0 && b.x > run.x0 - 30.0
     })
