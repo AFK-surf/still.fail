@@ -1951,6 +1951,7 @@ export const SHAPES: Record<string, Shape> = {
     ["nameText", "String", { said: true, doc: "Their name, or their email." }],
     ["roleText", "String", { doc: "Their role as the security pages name it." }],
     ["groups", vec("LockGroup")],
+    ["appText", opt("String"), { doc: "To owners and admins, safe mode on and not upgraded yet: this member has a web page in it and no app, which\nthe upgrade will need (views/lock.ts `webOnlyIn`)." }],
   ], { doc: "A member in the workspace's lock, with their devices by app." }),
   LockStation: struct([
     ["id", "String"],
@@ -2000,6 +2001,7 @@ export const SHAPES: Record<string, Shape> = {
     ["upgrade", opt("LockUpgrade"), { doc: "The upgrade of safe mode (its chain handed over to its people's own logs) not finished, on the owner's device\nthat is to finish it: what it waits for, or its button (views/lock.ts `upgradeOf`). None elsewhere, while it is on its\nway, and once done; none from a core of before." }],
     ["rootText", opt("String"), { said: true, doc: "An upgraded workspace, to an owner who is not the person who turned it on: that only that person turns it\noff or on again, and the way out (shown where turning it off or on would be)." }],
     ["onAgainText", opt("String"), { doc: "An upgraded workspace that is off, to the person who turned it on: the button that turns it on again\n(`lock.open`)." }],
+    ["appText", opt("String"), { doc: "Safe mode on and not upgraded yet, on a web page in it whose person has no app in it: that the upgrade will\nneed one, and to install one (views/lock.ts `webOnlyIn`)." }],
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts)." }),
   LockUpgrade: struct([
     ["titleText", "String"],
