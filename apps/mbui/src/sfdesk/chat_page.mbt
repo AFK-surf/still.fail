@@ -439,27 +439,28 @@ fn jobs_toggle() -> Unit {
 let screen_driven_dot : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn border=B2 border_color=Bg")
 
 ///|
-/// Where the count stands: on the button's top right corner, the icon's corner under its ring.
+/// Where the count stands: out past the button's top right corner by 4 (2 above it), over as little of the icon's
+/// corner as a count can (the user, 2026-11-13: a 16 high pill hid the monitor's corner).
 // kept across runs: a value (no field of it changes)
-let screen_count_room : @ui.Style = @ui.css("w=S8 h=S8 align=AEnd")
+let screen_count_room : @ui.Style = @ui.css("w=Full h=Full pt=S0_5 align=AEnd").then(@sf.oversize(4.0))
 
 ///|
-/// How many screens there are, a pill 16 high as 待处理's (todo_count), ringed 2 in the page's ground: quiet, amber
-/// while an agent drives one.
+/// How many screens there are, a pill 14 high (smaller than 待处理's todo_count: it is a count, not a call), ringed
+/// 1.5 in the page's ground: quiet, amber while an agent drives one.
 // kept across runs: a value (no field of it changes)
 let screen_count : @ui.Style = @ui.css(
-  "min_w=S4 h=S4 px=S1 align=ACenter justify=JCenter radius=Full bg=Muted border=B2 border_color=Bg",
+  "min_w=S3_5 h=S3_5 px=S0_5 align=ACenter justify=JCenter radius=Full bg=Muted border=B1_5 border_color=Bg",
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
 let screen_count_driven : @ui.Style = @ui.css(
-  "min_w=S4 h=S4 px=S1 align=ACenter justify=JCenter radius=Full bg=Warn border=B2 border_color=Bg",
+  "min_w=S3_5 h=S3_5 px=S0_5 align=ACenter justify=JCenter radius=Full bg=Warn border=B1_5 border_color=Bg",
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_count_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Bg, wrap=false)
+let screen_count_words : @ui.TextStyle = @ui.text_style(size=Xs3, weight=Semibold, color=Bg, wrap=false)
 
 ///|
 /// What opens under the chat's bar: its info's popover (ChatInfo) and its services' (JobsPanel), each by its button.
