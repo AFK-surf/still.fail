@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b3c2b2bae](https://github.com/AFK-surf/monoid/commit/b3c2b2bae4e12ffd6295fc0904429be99449462c) ci: the station's longest test files one to a slic | 1.95 | 2.62 | 11.29 | 30.78 | 40.53 | 27.42 | 52.42 | 94.13 | 109.53 |
 | [bb2b49a24](https://github.com/AFK-surf/monoid/commit/bb2b49a240c764e8bc5fd48e8dac06f1b744ea94) mbui: a key a page's list's page marks goes leavin | 1.95 | 2.62 | 11.29 | 30.77 | 40.51 | 27.42 | 52.42 | 94.09 | 104.7 |
 | [c238c1155](https://github.com/AFK-surf/monoid/commit/c238c11553e588e8328c87d886b72d768307cd41) fix(station): a Feishu reply brings the message it | 1.95 | 2.62 | 11.24 | 30.7 | 40.37 | 27.36 | 52.32 | 93.91 | 105.18 |
 | [9128d4550](https://github.com/AFK-surf/monoid/commit/9128d4550f4d88bf161c1601baf5baed744ed8ed) Point repository references at AFK-surf/monoid (#5 | 1.95 | 2.62 | 11.24 | 30.7 | 40.37 | 27.36 | 52.3 | 93.98 | 100.45 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [af0bd99e7](https://github.com/AFK-surf/monoid/commit/af0bd99e70a42ce10c951c587e0c467baeef20fd) core tests: the rig tells a change of a station's  | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 94.47 | 186.2 |
 | [4988be2af](https://github.com/AFK-surf/monoid/commit/4988be2af51e93ce98203f122a34f5d290570ee3) core: a change of one row of the list a station ma | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 94.6 | 137.26 |
 | [2e2fd4a7d](https://github.com/AFK-surf/monoid/commit/2e2fd4a7d021777f3973ff9121767738dd04cdec) core: a station's chat list made again only where  | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.19 | 51.92 | 94.42 | 178.9 |
-| [c9847417a](https://github.com/AFK-surf/monoid/commit/c9847417a98223dfe0fc08b1854e36b6ca51a911) core: a document written reads none of itself back | 1.93 | 2.59 | 11.13 | 30.51 | 39.9 | 27.18 | 51.92 | 94.47 | 157.59 |
