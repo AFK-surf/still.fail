@@ -16,7 +16,8 @@ LIMIT = 5
 # TestFlight's release (330-550 s), both to be made faster; the stable Windows app's, from a later commit's cached build
 # when the day before's main has none (2026-11-11: 3m44s, monoid's pack after it) and
 # its Android app's with monoid's after it (2026-11-11: cut at 5); the stable station's three platforms, built and signed
-# on a shared Mac (2026-11-13: cut at 5 twice on mini1-2, 3m48s on mini1-3); the side run's station part, its simulators one at a time
+# on a shared Mac (2026-11-13: cut at 5 twice on mini1-2, 3m48s on mini1-3); the stable Mac app's, its build and notary with no warm build
+# (2026-11-12: 4m59s; 2026-11-13: cut at 5); the side run's station part, its simulators one at a time
 LONGER = {
     ("mbui-ci.yml", "android-devices"): 10,
     ("mbui-ci.yml", "android-oldest"): 10,
@@ -37,6 +38,7 @@ LONGER = {
     ("stable.yml", "desktop-win"): 10,
     ("stable.yml", "android"): 10,
     ("stable.yml", "station"): 10,
+    ("stable.yml", "desktop"): 10,
 }
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 bad = []
