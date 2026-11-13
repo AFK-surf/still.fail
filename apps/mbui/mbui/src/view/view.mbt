@@ -8102,7 +8102,8 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
 ///|
 /// View::each, each row made or let go by a change making its way or not as `way_of` says of its key, the row, and
 /// whether it comes (else goes), asked of it then (a page's list's own rules: View::scrolls_window); none, as the
-/// each's `at_once` says of all of them.
+/// each's `at_once` says of all of them. `from_of`: how tall a row that comes making its way sets out from (none: from
+/// nothing), asked of its key and its row as it sets out (a page's list's room under its last block taken first by it).
 #callsite(autofill(loc))
 fn[T : Eq, K : Hash + Eq] View::each_by(
   self : View,
@@ -8113,11 +8114,16 @@ fn[T : Eq, K : Hash + Eq] View::each_by(
   at_once? : Bool = false,
   along_row? : Bool = false,
   way_of? : (K, View, Bool) -> Bool,
+  from_of? : (K, View) -> Double,
   keeps? : () -> Array[K],
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot(loc)
+  let from = match from_of {
+    Some(f) => f
+    None => fn(_, _) { 0.0 }
+  }
   slot.along_row_said(along_row, at_once, "each", loc)
   let rows : Map[K, (View, @signals.Signal[T])] = Map([])
   // (the rows leaving, by key: one whose key comes back as it leaves is the same row, come back)
@@ -8133,7 +8139,7 @@ fn[T : Eq, K : Hash + Eq] View::each_by(
   }
   let kept : EachKept[K, T]? = keeps.map(EachKept::new)
   let change = fn(all) {
-    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, ways, loc, kept) })
+    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, ways, from, loc, kept) })
   }
   let stop = match kept {
     None => slot.tree.structured(items, change)
@@ -8165,6 +8171,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   row : (View, @signals.Signal[T]) -> Unit,
   leave : Double,
   way : (K, View, Bool) -> Bool,
+  from : (K, View) -> Double,
   loc : SourceLoc,
   kept : EachKept[K, T]?,
 ) -> Unit {
@@ -8208,7 +8215,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
             }, loc~)
             let none = slot.tree.structural(v, said)
             if !none && way(k, v, true) {
-              slot.comes(v, 0.0, 1.0) |> ignore
+              slot.comes(v, from(k, v), 1.0) |> ignore
             }
             rows[k] = (v, item)
             made_now.push(v.at)
