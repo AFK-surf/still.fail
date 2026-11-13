@@ -188,9 +188,12 @@ another; the accounts' list's merge across stations and its refills.
   view's, shows no code. So someone added as an admin on one device and approved from another comes in a member, and an
   owner makes them an admin by changing their role. Adding a member is the cloud's part alone there (`added`: nothing
   signed, the role noted), and so is changing the role of one not let in yet (`rosterMoved`: the note the new role, an
-  owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`); but the
-  vaults go by the chain held (vault.ts `lockOf`, which a moved chain leaves as it was at the move), so none is keyed
-  anew for someone a statement took out, at the asking or after (not built). A device taken out
+  owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`). The vaults
+  go by the state in force (vault.ts `lockOf`: `inForceOf`'s `checked`, as a station's do; waiting, one naming nobody):
+  a vault keyed for someone a statement, or their own log, took out waits, read by what of the state took its version
+  (kept beside the vaults, `vaultTook`, as the vaults held change and as the state is made anew, never as a topic is
+  answered; a device begun anew since kept none and shows it not), and is keyed anew by its owner's device as its key
+  is next unsealed for something the person does. A device taken out
   takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
   `outOf` says who took it out and when (no words for the page yet). One that lost its
   place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:

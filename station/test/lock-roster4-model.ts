@@ -842,7 +842,9 @@ export class World4 extends World3 {
       // (each app by the signer its log says, as the product's state names it: rules/src/lock/state4.mbt)
       const apps = k && k.rules.state(m.lock).sub === sub ? [...k.headState().devices.values()].flatMap((d) => (d.sign_key === undefined ? [] : [d.sign_key])).sort() : [];
       // (the root has no admit: no statement says its person's email)
-      members.set(sub, { role: m.role, email: (m.admit === "" ? oo.settings?.email : f.stmts.get(m.admit)?.email) ?? "-", lock: m.lock, apps, webs: apps.length > 0 ? this.websAt(h, m.lock) : [] });
+      // (their web pages where the log that binds them has any device, one saying no signer too, as the rules list them)
+      const devices = k && k.rules.state(m.lock).sub === sub ? k.headState().devices.size : 0;
+      members.set(sub, { role: m.role, email: (m.admit === "" ? oo.settings?.email : f.stmts.get(m.admit)?.email) ?? "-", lock: m.lock, apps, webs: devices > 0 ? this.websAt(h, m.lock) : [] });
     }
     const s = oo.settings;
     return { on: oo.newest === "open" ? "on" : "not on", settings: s ? canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys }) : "-", members, stations: [...r.stations].sort() };
@@ -1374,6 +1376,22 @@ export function m5Clock(seed: number, skew: number, webAt: boolean): M5Clock {
   }
   w.t = start;
   return { skew, webAt, at, tooLong, removed, signerGone, lifeDays, farTaken, farNow, farDays };
+}
+
+/// A member whose only device's log entry says no signer (said again without one, as an entry from before signers were
+/// said is), with a web page it let in: the member listed, their app signing nothing, the web page let in, as the
+/// rules list them (rules/src/lock/state4.mbt: a member's web pages where the log that binds them has any device).
+export function unsigned(seed: number): { listed: boolean; apps: number; webs: number } {
+  const w = new World4(seed, VON, "free");
+  const C = w.dev("carol's app");
+  w.sign(C, "device", { key: C.signer.id, id: C.base.hex, label: C.name });
+  w.level();
+  w.sign(C, "web", { id: webKey("carol").hex, label: "carol's browser", exp: w.t + 1 + WEB_DEVICE_SECS });
+  w.level();
+  look4.at?.(w, `a member whose device says no signer, with a web page, seed ${seed}`);
+  const d = w.d4(w.stations[0]);
+  const m = typeof d === "string" ? undefined : d.members.get("carol");
+  return { listed: m !== undefined, apps: m?.apps.length ?? -1, webs: m?.webs.length ?? -1 };
 }
 
 export type RevokedOut = {

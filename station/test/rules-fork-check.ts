@@ -15,7 +15,7 @@ import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { type Entry, canonical, endpointProof, sigValid, validKeyId } from "../src/cloud/lock.ts";
 import { type Family, type Keeper, type Variant, World, drawSteps, hashOf, signed, variantName } from "./lock-fork-choice-model.ts";
 import { type Holder, V3, type V3v, drawSteps3, effect, spec, stationKeys3, v3Name } from "./lock-roster-model.ts";
-import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, tagOf, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, revoked } from "./lock-roster4-model.ts";
+import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, tagOf, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, revoked, unsigned } from "./lock-roster4-model.ts";
 import { Rng, WS } from "./lock-world-sim.ts";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../rules/js/rules.js";
@@ -372,6 +372,9 @@ export function scriptedWorlds(from: number, to: number): Out {
       m6(seed);
       for (const m of [{}, { away: true }, { attack: "same" as const }, { attack: "any" as const }]) m7(seed, m);
       misshapen(o, seed, r);
+      // (one whose device says no signer: listed, signing nothing, its web page let in)
+      const u = unsigned(seed);
+      if (!u.listed || u.apps !== 0 || u.webs !== 1) o.differ.push(`a member whose device says no signer, seed ${seed}: ${JSON.stringify(u)}`);
       o.worlds += 1;
     }
   } finally {

@@ -476,6 +476,9 @@ export function inForceOf(inner: Inner, ws: string, entries: readonly Entry[] = 
   const names = arr(listed);
   const made = inForce(ws, entries, chains, bodiesHeld(inner, ws), inner.host.nowMs(), (key) => str(names.find((s) => s?.id === key)?.name) || undefined);
   p.force = { entries, logs, bodies, own, listed, ...goodFor(chains.values(), at), made };
+  // (the vaults follow the state as it is made anew, whatever made it so: a person's log, a body, the clock; in a turn
+  // of their own, never on the read that made it, views/vault.ts vaultCome)
+  if (entries === held(inner, ws)?.entries) inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
   return made;
 }
 
@@ -1480,7 +1483,9 @@ function signKeysElsewhere(inner: Inner, ws: string, sub: string): Map<string, {
   const at = now(inner);
   for (const [other, owner] of inner.workspaces.owned()) {
     const h = held(inner, other);
-    if (other === ws || owner !== sub || !h?.head || !stateOf(inner, other, h.entries).persons.has(sub)) continue;
+    // (one whose chain moved says no key of its own: its state names each device by the key its person's log says,
+    // which `personal.signKeys` gives; its chain is as it was at the move, a key there perhaps one said again since)
+    if (other === ws || owner !== sub || !h?.head || movedHere(inner, other) || !stateOf(inner, other, h.entries).persons.has(sub)) continue;
     let lock: Checked;
     try {
       lock = checkLock(h.entries, at);
