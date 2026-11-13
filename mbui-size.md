@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0b5cc31fb](https://github.com/AFK-surf/still.fail/commit/0b5cc31fb1051a500d5d41b135e46a2bcbca9560) app tests: at the default rate the fourth group re | 1.94 | 2.61 | 11.21 | 30.62 | 40.21 | 27.29 | 52.18 | 93.39 | 179.53 |
 | [99ac449c3](https://github.com/AFK-surf/still.fail/commit/99ac449c389f50bda908954c9846720ca2e0e7df) mbui: a chat's page made as nodes opens an agent's | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.39 | 149.92 |
 | [255d751f2](https://github.com/AFK-surf/still.fail/commit/255d751f2bfc5644fa964c4483926b8ba287b905) station: retry a failed automatic update once (#58 | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.47 | 130.78 |
 | [c54dc28bf](https://github.com/AFK-surf/still.fail/commit/c54dc28bff3f8da7e4e29253b5f1cfd09fbab15f) mbui: words a finger picked offer the page's sever | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.42 | 172.64 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [3e8f43a25](https://github.com/AFK-surf/still.fail/commit/3e8f43a25998ec1f2f0d867dad19e9c162cad87c) mbui: a chat's page made as nodes holds its compos | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.18 | 156.38 |
 | [5ffe54e22](https://github.com/AFK-surf/still.fail/commit/5ffe54e22b7147c31ab5d34060d2d252b8c92f4c) app tests: page-seconds.txt written again from mai | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.24 | 178.87 |
 | [58efd9ace](https://github.com/AFK-surf/still.fail/commit/58efd9ace270f41d6109c3bb392ef52d3e649726) mbui: a shared node no layout ever placed is no de | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.57 | 94.67 | 154.42 |
-| [96748db6b](https://github.com/AFK-surf/still.fail/commit/96748db6be2c0d801d2e9fc545d8faea1e61b4e0) station: the copies' export and restore run in the | 1.93 | 2.59 | 11.12 | 30.33 | 39.86 | 27.01 | 51.56 | 94.78 | 132.46 |
