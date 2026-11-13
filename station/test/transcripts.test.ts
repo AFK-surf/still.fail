@@ -432,6 +432,57 @@ test("where a reading stands goes to another thread: a tail made from it reads o
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a line written a part at a time is joined once: what reading it copies is its own size, not its square", (t) => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  // One line of 8 MB that comes 64 KB at a time, read after each part, as a transcript followed while it is written is.
+  const long = said("z".repeat(8 << 20), "m2");
+  const part = 64 * 1024;
+  writeFileSync(path, said("one", "m1"));
+  const tail = new TranscriptTail("claude", path);
+  assert.deepEqual(tail.read()[1].map((e) => e.text), ["one"]);
+  const [concat, from] = [Buffer.concat, Buffer.from];
+  let copied = 0;
+  Buffer.concat = ((list: readonly Uint8Array[], length?: number) => {
+    const joined = concat(list, length);
+    copied += joined.length;
+    return joined;
+  }) as typeof Buffer.concat;
+  Buffer.from = ((value: unknown, ...rest: unknown[]) => {
+    const made = (from as (...args: unknown[]) => Buffer)(value, ...rest);
+    if (value instanceof Uint8Array) copied += made.length;
+    return made;
+  }) as typeof Buffer.from;
+  let state: unknown;
+  try {
+    for (let at = 0; at < long.length - 1; at += part) {
+      appendFileSync(path, long.slice(at, Math.min(at + part, long.length - 1)));
+      assert.deepEqual(tail.read(), [1, []], "a line not ended yet gives nothing");
+      // Half way, where its reading stands is taken, as a station handing over takes it.
+      if (state === undefined && at >= long.length / 2) state = JSON.parse(JSON.stringify(tail.snapshot()));
+    }
+    assert.equal(tail.readBytes, Buffer.byteLength(said("one", "m1")), "only whole lines count as read");
+    appendFileSync(path, "\n" + said("three", "m3"));
+    const [start, entries] = tail.read();
+    Buffer.concat = concat;
+    Buffer.from = from;
+    const whole = readTimeline("claude", path).map((e) => e.text);
+    assert.equal(whole.length, 3);
+    assert.deepEqual([start, entries.map((e) => e.text)], [1, whole.slice(1)]);
+    assert.equal(tail.readBytes, statSync(path).size);
+    t.diagnostic(`copied ${copied} bytes for a line of ${long.length}`);
+    assert.ok(copied <= 3 * long.length, `copied ${copied} bytes for a line of ${long.length}`);
+    // One that goes on from the half-way place reads the same.
+    const here = TranscriptTail.from("claude", state as Parameters<typeof TranscriptTail.from>[1]);
+    const [startHere, entriesHere] = here.read();
+    assert.deepEqual([startHere, entriesHere.map((e) => e.text), here.readBytes], [1, whole.slice(1), statSync(path).size]);
+  } finally {
+    Buffer.concat = concat;
+    Buffer.from = from;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a chain that keeps nothing tells all that follows one of its transcripts that changed, numbered on", () => {
   const dir = temp();
   const [a, b] = ["a", "b"].map((n) => join(dir, `${n}.jsonl`));
