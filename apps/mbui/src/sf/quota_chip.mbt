@@ -138,9 +138,10 @@ let quota_chips_part_lines : Double = 6.0
 /// A sidebar row's allowance starts under the mark, in every row of every list (the user, 2026-11-10: 「全跟 logo
 /// 对齐」, after rows of one list started some at the mark and some at the text). It takes the first way it has the
 /// room for: full chips in a line; each window's mark over its figure, keeping the figures together in one line; more
-/// windows in balanced rows, each still whole. A list's rows take one way: `widest`, the room the list's widest
-/// line of full chips needs (nav_quota_line of each row's, the most), so no row of it is laid out another way than
-/// the rest (the user, 2026-11-10: rows of one list laid out each its own way read as a fault). Every way stands from the start, its chips the same gap apart, never
+/// windows in balanced rows, each still whole. A provider's rows take one way: `widest`, the room that provider's
+/// widest line of full chips needs (nav_quota_line of each row's, the most), so no row of a provider's is laid out
+/// another way than the rest, while another provider's takes its own (the user, 2026-11-10: rows of one list laid out
+/// each its own way read as a fault; 2026-11-13: 「按账号类型来搞，不要所有全用同一种」「相同供应商的账号用同一种就行」). Every way stands from the start, its chips the same gap apart, never
 /// spread to the row's ends (the user, 2026-11-10: 「怎么一会儿左对齐一会儿两端对齐」). Its nav_item gives it the whole row as `foot` and says
 /// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot. `at`: where its row's list
 /// stands (its words' room: band_pad_in).
@@ -202,7 +203,7 @@ pub fn nav_quota_chips(
     }) |> ignore
   }
   c.box(style=quota_chips_line, one_of=true, fn() {
-    // (as wide as the list's widest needs, so a list's rows take one way, not each its own)
+    // (as wide as its provider's widest needs, so a provider's rows take one way, not each its own)
     let line = dmax(widest, nav_quota_line(c, q)) + clear
     c.box(style=@ui.style(row=true, min_w=Fixed(line), ml=room(inset - side), pr=room(clear), gap=S1), keep=true, fn() {
       for i in 0..<windows.length() {
