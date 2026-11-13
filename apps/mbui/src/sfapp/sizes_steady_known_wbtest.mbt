@@ -34,9 +34,10 @@ fn init {
     // begins now, a frame sooner, so its end is among the frames judged. Taken away with the old chat's page: the row
     // made as nodes goes there by the list's own way)
     ("src/sfapp/viz_wbtest.mbt", 2),
-    // (大屏 over a core answering late, at 60 and 120: a column's place goes 24 in a frame, 用量's card -5 in height, as
-    // their answers come; the framework's change for answers)
-    ("src/sfapp/ways_told_wbtest.mbt", 1),
+    // (大屏 over a core answering late, at 60 and 120: a column's place goes 24 in a frame, 用量's card -5 in height,
+    // 「3 个对话正在运行」 +45 in height (since the framework's change for answers: at once, where it made its way in
+    // before), as their answers come; the steadiness exemption's change, then the pages')
+    ("src/sfapp/ways_told_wbtest.mbt", 2),
     ("src/sfapp/wide_rail_wbtest.mbt", 4),
     ("src/sfapp/wide_wbtest.mbt", 5),
   ])

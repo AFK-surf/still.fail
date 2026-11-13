@@ -224,7 +224,7 @@ test "scrolls_window reused: blocks taken for other keys by a wheel, the mark pu
     tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, t) |> ignore
     tree.frame(390.0, 844.0) |> ignore
   }
-  assert_true(!@view.key_marks_left())
+  assert_true(!@view.answer_marks_left())
   more.set(true)
   tree.frame(390.0, 844.0) |> ignore
   let came = match shown.val {

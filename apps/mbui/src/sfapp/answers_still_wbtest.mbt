@@ -15,20 +15,7 @@
 /// The cells that set out a way after their step's moment now, `screen mode step`, which of the two they are (`B`: only
 /// as an answer comes late; `C`: the page's own) and how many ways they set out at all the paces together. What and where is printed as each test runs
 /// (ANSWERS_STILL).
-let answers_still_known : Array[(String, String, Int)] = [
-  // (usage_node.mbt:1003, 用量's days as its answer comes: one at each late pace)
-  ("小屏 home to usage", "B", 5),
-  ("小屏 chat-preview-named to usage", "B", 5),
-  ("中屏 home to usage", "B", 5),
-  ("中屏 chat-preview-named to usage", "B", 5),
-  ("大屏 home to usage", "B", 5),
-  ("大屏 chat-preview-named to usage", "B", 5),
-  // (chat_bar_wide_node.mbt:225, the chat's bar as the chat's answer comes)
-  ("中屏 chat-preview-named another chat", "B", 6),
-  ("中屏 chat-preview-named back to its chat", "B", 4),
-  ("大屏 chat-preview-named another chat", "B", 6),
-  ("大屏 chat-preview-named back to its chat", "B", 5),
-]
+let answers_still_known : Array[(String, String, Int)] = []
 
 ///|
 /// The core's answers in each cell (ms after they are asked).

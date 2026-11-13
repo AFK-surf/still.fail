@@ -77,7 +77,7 @@ test "words picked over two rows of a page's list, scrolled a thousand rows away
 
 ///|
 /// A page as row_picked_tester's whose blocks are all of one kind another may take (`reused`): each put by as it no
-/// more shows and taken by the next to show, given that one's key (key_taken.mbt), its words by its key.
+/// more shows and taken by the next to show, given that one's key (answering.mbt), its words by its key.
 fn row_picked_reused_tester(n : Int, made : Ref[Int]) -> Tester {
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   t.check_looks(false)

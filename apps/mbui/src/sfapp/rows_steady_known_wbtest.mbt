@@ -17,6 +17,10 @@ fn init {
     // 2.8, at 60 and 120)
     ("src/sfapp/daily_paths_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
+    // (小屏, a place's first list after a wait: 工作站's foot goes -176 in a frame as its answer comes, 共享调试's heading
+    // +136, at 60 and 120. Before the framework's change for answers these made their way in with no cause; now they
+    // are at once and push what is under them: the steadiness exemption's change, then the pages')
+    ("src/sfapp/place_first_wbtest.mbt", 1),
     // (大屏 over a core answering late: a chat's rows go -73 to -82 in a frame as its answer comes, 归档's second row -4,
     // at 60 and 120)
     ("src/sfapp/ways_told_wbtest.mbt", 3),

@@ -1542,7 +1542,10 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
         Some(false) => { value: None, error: None, version: -1 }
         None => {
           read[k] = false
-          fix_later(ms(), fn() { read[k] = true })
+          fix_later(ms(), fn() {
+            read[k] = true
+            fix_first.val = true
+          })
           { value: None, error: None, version: -1 }
         }
       }
