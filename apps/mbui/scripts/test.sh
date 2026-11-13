@@ -330,7 +330,13 @@ for t in $targets; do
           # 43118127081, the packages' programs 242 s, its 81 pages' files 237 (462 s of them by the table), preview_tree's
           # halves 180 and 125, so some 500 s of its cores beside its pages, as it was reckoned before; the second's
           # job was 115 s, the third's 140, the fourth's two 127 and 180. 520 again: its pages 279 s by the table)
-          60) specs="4,4,520,1 4,4,20,1 1,4,600,1 8,8,0,1" ;;
+          # (the second's pages at 60 893-1008 s of its four programs where the table said 836-862, beside its other
+          # run's 17-20, app 2/4 at 60 fps 252-263 s of its 5 minutes on main 7ffd403c, 01816ca5, e21b10c4, 2026-11-12;
+          # the first's beside the packages' programs, two processes each since #5844 (213 s), and preview_tree's halves
+          # (216 and 152) some 700 s of its cores, its job 245 s; the fourth's two parts 150-171 s. So the second is
+          # reckoned 120 and the first 700: by the table some 60 s of the second's pages and 30 of the first's go to the
+          # fourth's eight programs, the third's to them too)
+          60) specs="4,4,700,1 4,4,120,1 1,4,600,1 8,8,0,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
