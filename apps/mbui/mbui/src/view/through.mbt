@@ -59,6 +59,14 @@ pub fn Tree::holder(self : Tree) -> NodeId? {
 }
 
 ///|
+/// Whether node `id` holds the finger now and a still hold of it is what lies under it's (View::gesture's `through`):
+/// where nothing of the tree's under it takes a hold (its words, which a host picks: none of the tree's targets), what a
+/// host holds still there may end its hold (Off, as one handed through is ended) and take the finger itself.
+pub fn Tree::hold_goes_through(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.held == Some(id) && self.through_cover == Some(id)
+}
+
+///|
 /// Node `id` held down by `finger` at (x, y) in the window at `t`, its hold to go through: what lies under it there
 /// found now, kept by who it is (none there: its hold its own).
 fn Tree::through_found(self : Tree, id : NodeId, x : Double, y : Double, t : Double, finger : Int) -> Unit {

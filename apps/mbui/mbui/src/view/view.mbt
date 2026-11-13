@@ -905,6 +905,9 @@ pub struct Tree {
   /// a finger held on a node a still hold of which is what lies under it's (View::holds_through): what lies there, as it
   /// was found as the finger went down, its hold's moment set going
   mut through : Through?
+  /// the node a finger is held on whose still hold is what lies under it's (View::gesture's `through`), as the finger
+  /// went down on it: what a host's own hold on words under it asks (Tree::hold_goes_through)
+  mut through_cover : NodeId?
   /// a hold waited for on a gesture that answers a hold alone, the finger another's till then (hold_in.mbt), and how
   /// its moment is called off
   mut hold_in : HoldIn?
@@ -1358,6 +1361,7 @@ pub fn Tree::new(
     gesture_tapped: false,
     held_tracks: {},
     through: None,
+    through_cover: None,
     hold_in: None,
     hold_in_off: fn() {  },
     on_through: fn(_, _, _, _, _) {  },
@@ -7162,6 +7166,9 @@ pub fn View::gesture(
           return
         }
         // (going through: what lies under it found now, kept by who it is)
+        if through is Some(_) {
+          self.tree.through_cover = Some(id)
+        }
         if through is Some(_) || first.val {
           self.tree.through_found(id, d.wx, d.wy, d.since, d.finger)
         }

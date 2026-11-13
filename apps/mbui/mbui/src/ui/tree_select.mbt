@@ -375,6 +375,11 @@ fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> U
         // (an old view under them held it, the words of the tree's that take no press drawn over it there (a page's
         // messages over 小屏's shell): its press called off, as a hold of the old frame's own on words it drew is its)
         Some(Old(_, _)) if words is Some(t) && tree_words_over(tree, t, x, y) => g().press_called_off(x, y, at)
+        // (a cover held over them whose still hold goes through to what lies under it (View::gesture's `through`: the
+        // page beside 中屏's sidebar), which nothing of the tree's under it took: its hold ended, as one handed through
+        // is, the words under it the hold's)
+        Some(Dragging(id)) if words is Some(_) && tree.hold_goes_through(id) =>
+          tree.drag_at(id, Off, x, y, view_moment(), finger=view_fingers[0]) |> ignore
         // (a node's own press, its own hold: its)
         _ => return
       }
