@@ -630,17 +630,18 @@ let outline_count_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted,
 // ── What opens it on the chat's page (an old view's, as the way to the newest beside it) ──────────────────────────
 
 ///|
-/// The chats whose page shows a way into the outline now, by the chat's key: what (its id, to stand beside) and whether
-/// it is the rail (its outline held then: what the steps' keys go along). ⌘G opens it there.
+/// The chats whose page shows a way into the outline now, by the chat's key: what (its id, to stand beside), whether
+/// its rail shows (its outline held then: what the steps' keys go along), and whether it stands beside the rail's
+/// middle (when the round button does not show). ⌘G opens it there.
 // kept across runs: said as each page is built, let go of by the package's reset (pages.mbt)
-let outline_entries : Map[String, (Int, Bool)] = Map([])
+let outline_entries : Map[String, (Int, Bool, Bool)] = Map([])
 
 ///|
 /// What people said in chat `r` (its view `v`), oldest first, as a key's handler finds it: its outline where its rail
 /// holds it, else what its window holds.
 fn said_now(src : Source, r : ChatRef, v : ChatView) -> Array[Double] {
   match (outline_entries.get(chat_key(r)), v.thread) {
-    (Some((_, true)), Some(th)) =>
+    (Some((_, true, _)), Some(th)) =>
       match src.topic("chatOutline", outline_params(r, th)).get().value {
         Some(_) as o => outline_seqs(o)
         None => said_in_view(v)
@@ -650,7 +651,7 @@ fn said_now(src : Source, r : ChatRef, v : ChatView) -> Array[Double] {
 }
 
 ///|
-/// The outline of chat `r` (its view `v`) opened from the keys or ⌘K: beside its rail or its round button where one
+/// The outline of chat `r` (its view `v`) opened from the keys or ⌘K: beside its round button or its rail where one
 /// shows (a page made as nodes: its round button's node `button`, while it shows), else as the presenters put what
 /// nothing opened (a dialog; a sheet on Small); its field taking the keys.
 pub fn outline_open_keys(
@@ -669,8 +670,8 @@ pub fn outline_open_keys(
     return true
   }
   match outline_entries.get(chat_key(r)) {
-    Some((id, true)) => open_outline(src, r, th, current, from=Of(id), side=Left, along=Middle, keys=true, stint~, typed~)
-    Some((id, false)) => open_outline(src, r, th, current, from=Of(id), side=Left, keys=true, stint~, typed~)
+    Some((id, _, true)) => open_outline(src, r, th, current, from=Of(id), side=Left, along=Middle, keys=true, stint~, typed~)
+    Some((id, _, false)) => open_outline(src, r, th, current, from=Of(id), side=Left, keys=true, stint~, typed~)
     None => open_outline(src, r, th, current, from=Unanchored, keys=true, stint~, typed~)
   }
   true
@@ -1111,24 +1112,24 @@ fn outline_entries_of(
     }
     _ => false
   }
-  let floated = offered && !wide && jump && v.thread is Some(_)
+  let floated = offered && jump && v.thread is Some(_)
+  if floated {
+    outline_entries[k] = (c.id("chat-outline"), railed, false)
+  } else if railed {
+    outline_entries[k] = (c.id("chat-outline-rail"), true, true)
+  } else {
+    outline_entries.remove(k) |> ignore
+  }
   outline_float(
     c,
     src,
     r,
     v.thread,
-    fn() { outline_current(said_in_view(v), top_seq, at_end) },
+    fn() { outline_current(said_now(src, r, v), top_seq, at_end) },
     floated,
     float_right(c),
     room + float_lift + float_above,
   )
-  if railed {
-    outline_entries[k] = (c.id("chat-outline-rail"), true)
-  } else if floated {
-    outline_entries[k] = (c.id("chat-outline"), false)
-  } else {
-    outline_entries.remove(k) |> ignore
-  }
   // (a screen's fixture: opened from what shows, once the frame's builds are over)
   match outline_presets.get(k) {
     Some(words) if railed || floated => {
