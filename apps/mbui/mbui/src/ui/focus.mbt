@@ -512,22 +512,27 @@ fn Ctx::focus_frame_end(self : Ctx) -> Unit {
   if code_fields.contains(self.focus) && !self.focusables.iter().any(fn(f) { f.id == self.focus }) {
     self.focus_moved(0)
   }
-  // A field or key catcher with the focus whose old view built again without it (an `if` around it now false), or
-  // whose hosting old view was disposed and no other built it: the focus is only in what shows (Ctx::focus_taken_under's
-  // one rule), so none has it; one under a page put over its page (one whose old view stays in old_islands, not built
-  // now) is the stack's to put aside and give back (Nav::told_focus).
-  if self.focus != 0 && (self.editors.contains(self.focus) || self.dev.catchers.contains(self.focus)) {
-    let island = match self.dev.catchers.get(self.focus) {
-      Some(st) => st.island
-      None => match self.last_focusables.iter().find_first(fn(f) { f.id == self.focus }) {
+  // A field with the focus whose old view built again without it (an `if` around it now false), or a field or key
+  // catcher whose hosting old view was disposed and no other built it: the focus is only in what shows
+  // (Ctx::focus_taken_under's one rule), so none has it; one under a page put over its page (one whose old view stays
+  // in old_islands, not built now) is the stack's to put aside and give back (Nav::told_focus).
+  if self.focus != 0 {
+    if self.editors.contains(self.focus) {
+      let island = match self.last_focusables.iter().find_first(fn(f) { f.id == self.focus }) {
         Some(f) => f.island
         None => self.island_of_id(self.focus)
       }
-    }
-    match island {
-      Some(i) if (islands_built.contains(i) || !old_islands.iter().any(fn(o) { o.id == i })) &&
-        !self.focusables.iter().any(fn(f) { f.id == self.focus }) => self.focus_moved(0)
-      _ => ()
+      match island {
+        Some(i) if (islands_built.contains(i) || !old_islands.iter().any(fn(o) { o.id == i })) &&
+          !self.focusables.iter().any(fn(f) { f.id == self.focus }) => self.focus_moved(0)
+        _ => ()
+      }
+    } else {
+      match self.dev.catchers.get(self.focus) {
+        Some({ island: Some(i), .. }) if !old_islands.iter().any(fn(o) { o.id == i }) =>
+          self.focus_moved(0)
+        _ => ()
+      }
     }
   }
   // what has it now is what the next frame's keys and presses move it from (Ctx::focus_gained)
