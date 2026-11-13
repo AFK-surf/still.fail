@@ -13,11 +13,12 @@ import { wall } from "../src/ops/fibers.ts";
 import { answerLock } from "../src/mesh/lock-sync.ts";
 import { bodiesSyncWith } from "../src/mesh/person-sync.ts";
 import { lockPartRoute } from "../src/mesh/serve.ts";
-import { WS, WS2, bring, handover, station, viewerOf, world } from "./lock-moved-world.ts";
+import { WS, WS2, bring, ed, handover, station, viewerOf, world } from "./lock-moved-world.ts";
 
 const NOW = 2_000_000;
 mock.method(wall, "now", () => NOW * 1000);
 const SALT = "ab".repeat(16);
+const roles = (c: Cloud) => [...c.locked()!.state!.members].map(([sub, m]) => `${sub} ${m.role}`).sort();
 
 test("a body is taken only for its commitment: each of the rules' refusals", () => {
   const w = world();
@@ -117,4 +118,49 @@ test("a restart keeps the bodies, and the state they make", () => {
   const again = new Cloud(c.data, false);
   assert.deepEqual([...again.bodies(null).all().keys()].sort(), [...c.bodies(null).all().keys()].sort());
   assert.deepEqual([...again.locked()!.state!.members.keys()].sort(), ["alice", "bob", "carol"]);
+});
+
+test("bodies are given by the list on or off: the root's off reaching one station alone is brought to the other, then its open", async () => {
+  const w = world();
+  handover(w);
+  const s = [station(w, 0), station(w, 1)];
+  for (const c of s) for (const l of [w.alice, w.bob, w.carol]) bring(c, l);
+  const keyOf = (c: Cloud) => c.state!.station;
+  const call = (from: Cloud) => async (peer: string, ws: string | null, request: unknown) => answerLock(s.find((x) => keyOf(x) === peer)!, request, ws ?? WS, keyOf(from));
+  const level = async () => {
+    for (let round = 0; round < 2; round++) for (const i of [0, 1]) await bodiesSyncWith(s[i]!, call(s[i]!), keyOf(s[1 - i]!), WS);
+  };
+  const off = w.alice.say("off", {});
+  for (const c of s) personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
+  s[0]!.takeBodies(null, [off.body]);
+  assert.equal(s[0]!.locked(), null);
+  assert.notEqual(s[1]!.locked(), null, "s1 has not its body yet");
+  // a station the control plane lists and the list does not: none, off
+  assert.deepEqual(answerLock(s[0]!, { method: "lock.bodies.kept" }, WS, w.stations[2]!.hex), { hashes: [] });
+  await level();
+  assert.equal(s[1]!.locked(), null, "brought the off by s0, which is off");
+  const open = w.alice.say("open", { ...w.settings, email: "alice@x" });
+  for (const c of s) personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
+  s[1]!.takeBodies(null, [open.body]);
+  await level();
+  for (const c of s) assert.deepEqual(roles(c), ["alice owner", "bob admin", "carol member"]);
+  assert.deepEqual(answerLock(s[0]!, { method: "lock.bodies.kept" }, WS, w.stations[2]!.hex), { hashes: [] });
+});
+
+test("while off, a device is given bodies and logs only where the list names that very device", () => {
+  const w = world();
+  handover(w);
+  const c = station(w);
+  for (const l of [w.alice, w.bob, w.carol]) bring(c, l);
+  w.alice.say("off", {});
+  bring(c, w.alice);
+  assert.equal(c.locked(), null);
+  const get = (v: any) => (lockPartRoute(c, "bodies", "GET", Buffer.alloc(0), v) as any)[1].bodies.length;
+  assert.equal(get(viewerOf("carol", w.carol.app)), c.bodies(null).all().size, "carol's app, named by the list");
+  const stranger = { signer: ed(), base: ed() };
+  assert.equal(get(viewerOf("carol", stranger)), 0, "a device the list does not name");
+  const { lockDevice: _, ...noProof } = viewerOf("carol", w.carol.app);
+  assert.equal(get(noProof), 0, "a connection that brought no proof of its base key");
+  assert.equal((lockPartRoute(c, "logs", "GET", Buffer.alloc(0), viewerOf("carol", stranger)) as any)[1].chains.length, 0);
+  assert.ok((lockPartRoute(c, "logs", "GET", Buffer.alloc(0), viewerOf("carol", w.carol.app)) as any)[1].chains.length >= 3);
 });
