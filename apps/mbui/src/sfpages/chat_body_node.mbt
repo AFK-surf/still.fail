@@ -426,7 +426,7 @@ fn chat_body_node(
     Some(r) => {
       chat_goes_to(v, src, r, jump, place, fn() { rows.get() }, here.view, top, fn() { ask_older(false) }, shows)
       // (over the list: a passage a mouse picked in a message quoted by its pill)
-      chat_quote_node(v, src, r, fn() { rows.get() })
+      chat_quote_node(v, src, r, here, fn() { rows.get() })
       // something sent from here into the chat (words, an answer picked on a card: sfbase's sent_here_told), read up
       // the list: it goes to its end as it is sent (where the window is short of the chat's end, as its latest page,
       // asked by the send, comes in: chat_jump_node's)
@@ -533,6 +533,12 @@ fn chat_body_row(
       }
     }
     let frame = fn(body : (@view.View) -> Unit) { message_row_frame_node(p, k, side, top, body) |> ignore }
+    // (a message's: under its flash, its band while its menu shows, right clicked or its ⋯'s, as the row says that)
+    let more : Ref[() -> Bool] = Ref(fn() { false })
+    let over = fn(row : @view.View, key : String) {
+      over(row, key)
+      message_menu_band_node(row, key, more)
+    }
     match kind {
       KTop => p.box(fn(b) { b.height(By(fn() { Some(list_top()) })) |> ignore }) |> ignore
       KOlder => frame(fn(b) { pages_coming_node(b, fn() { true }) |> ignore })
@@ -550,19 +556,18 @@ fn chat_body_row(
       KLine => frame(fn(b) { unread_line_node(b) |> ignore })
       KNewer => frame(fn(b) { pages_coming_node(b, fn() { false }) |> ignore })
       KMine =>
-        mine_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), over~) |> ignore
+        more.val = mine_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), over~).menu_on
       KNotice => notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied, pill_over~) |> ignore
       KPerson =>
-        person_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), over~) |> ignore
+        more.val = person_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), over~).menu_on
       KAgent =>
-        agent_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), core~, over~, code=fn(lang) {
+        more.val = agent_said_node(p, src, here, k, side, top, m, found~, share=message_share_of(src, here, m), core~, over~, code=fn(lang) {
           if lang == "mermaid" {
             Some(fn(b, code) { @sfbase.viz_mermaid_node(b, src, here.station, code, fn() { @sf.theme().p.subtle }, here.tips) })
           } else {
             None
           }
-        })
-        |> ignore
+        }).menu_on
       KSent => {
         let s0 = match @signals.untracked(entry) {
           Sent(s) => s

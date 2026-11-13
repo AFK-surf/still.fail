@@ -138,6 +138,37 @@ fn chat_body_nodes(
     true
   })
   |> ignore
+  // the rest of the chat's own keys that act beyond its list, as the old page's chat_keys took them and by what it
+  // did: ⌘⇧E into the archive, ⌘⇧H its first agent's history beside it, ⌘. its agents at work stopped, ⌘⇧J its
+  // services and jobs, ⌘⇧D its station's own display; what it cannot do now passes the key on
+  let chat_view = fn() { view_of_chat(src, r).0 }
+  v.on_action("chat.archive", fn(_) {
+    guard chat_view() is Some(cv) && !cv.archived && !cv.offline else { return false }
+    guard @sfbase.workspace_in_view(src).0 is Some(w) else { return false }
+    archive_asked(src, w, r, cv, src.topic("chat", chat_params(r)).get().value)
+    true
+  })
+  .on_action("chat.history", fn(_) {
+    guard chat_view() is Some(cv) && cv.agents.length() > 0 else { return false }
+    history_toggle(src, r, cv)
+    true
+  })
+  .on_action("chat.stop", fn(_) {
+    guard chat_view() is Some(cv) else { return false }
+    stop_agents(src, r, cv)
+    true
+  })
+  .on_action("chat.jobs", fn(_) {
+    guard chat_view() is Some(_) else { return false }
+    toggle_jobs_pop()
+    true
+  })
+  .on_action("chat.screen", fn(_) {
+    guard chat_view() is Some(cv) else { return false }
+    chat_screen_first(r, cv.screens)
+    true
+  })
+  |> ignore
   // (another chat's find let go as this one's page is made, as chat_page did as it was built: closed, what it looked
   // for forgotten, nothing left to go to there)
   v.reacts(fn() { () }, fn(_) {

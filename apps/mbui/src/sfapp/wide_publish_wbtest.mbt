@@ -313,9 +313,22 @@ test "touch: the message header has neither; the held bar copies its position li
   let t = fake_core(calls)
   assert_true(t.query(Button, label="分享图片") is None)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  assert_true(t.query(Button, label="多选") is Some(_))
-  t.click(Button, label="复制链接")
+  // (the bar over what is held, its buttons, where the old page draws the chat; where it is made as nodes, the
+  // system's text menu over it, the page's own items after its copy and select all)
+  match t.query(Button, label="复制链接") {
+    Some(_) => {
+      assert_true(t.query(Button, label="多选") is Some(_))
+      t.click(Button, label="复制链接")
+    }
+    None => {
+      let own = t.text_menu_own()
+      assert_true(own.contains("多选"), msg="\{Repr(own)}")
+      guard own.search("复制链接") is Some(k) else { fail("no 复制链接 over what is held: \{Repr(own)}") }
+      t.key(@hostapi.key_menu_own + k)
+    }
+  }
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
   assert_eq(pk.ts, "")
+  assert_eq(@ui.picked_now(), None)
   assert_eq(named(calls, "chat.publishPreview").length(), 0)
 }

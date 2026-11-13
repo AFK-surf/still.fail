@@ -17,11 +17,18 @@ fn message_menu_tester() -> @ui.Tester {
 }
 
 ///|
+/// Whether a menu is open now, whichever page has the chat: the old row's ⋯ is the library's menu_of (its key), the
+/// rows made as nodes' the presenters' menu (@sf.presenting: open, not going out).
+fn message_menu_open() -> Bool {
+  @sf.menu_open_key() != "" || @sf.presenting()
+}
+
+///|
 /// The message's ⋯ menu opened, then dismissed by `how` (as the host hands it on, no frame after it): whether a menu
 /// is open then, as it is dismissed, and once a frame is drawn.
 fn message_menu_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
   let t = message_menu_tester()
-  let open = fn() { @sf.menu_open_key() != "" }
+  let open = fn() { message_menu_open() }
   t.click(Button, label="更多操作")
   t.run_for(@ui.move_most_ms)
   let shown = t.find("复制消息链接") is Some(_)
@@ -44,7 +51,7 @@ test "大屏: a message's ⋯ menu dismissed by a press beside it: closed as it 
   let down : Array[Bool] = []
   let seen = message_menu_dismissed(fn(t) {
     t.touch_at(0, 600.0, 300.0, t.time())
-    down.push(@sf.menu_open_key() != "")
+    down.push(message_menu_open())
     t.touch_at(2, 600.0, 300.0, t.time())
   })
   assert_eq((down, seen), ([false], [true, false, false]))
@@ -52,7 +59,7 @@ test "大屏: a message's ⋯ menu dismissed by a press beside it: closed as it 
 
 ///|
 test "大屏: a message's ⋯ pressed again with its menu open, then Escape at once: closed as it is let go, and stays closed, a frame between or none" {
-  let open = fn() { @sf.menu_open_key() != "" }
+  let open = fn() { message_menu_open() }
   let none = button_then_escape(message_menu_tester(), "更多操作", open, false)
   let framed = button_then_escape(message_menu_tester(), "更多操作", open, true)
   assert_eq((none, framed), ([false, false, false], [false, false, false]))
@@ -63,10 +70,10 @@ test "大屏: a message's ⋯ menu, a key it does not take then Escape, no frame
   let t = message_menu_tester()
   t.click(Button, label="更多操作")
   t.run_for(@ui.move_most_ms)
-  assert_true(@sf.menu_open_key() != "", msg="opened")
+  assert_true(message_menu_open(), msg="opened")
   t.key_told(@ui.key_code_left, 0, t.time())
   t.key_told(@ui.key_escape, 0, t.time())
-  assert_eq(@sf.menu_open_key(), "")
+  assert_false(message_menu_open())
 }
 
 ///|
@@ -77,7 +84,7 @@ test "大屏: a message's ⋯ menu, two keys then a press beside it, no frame be
   t.key_told(@ui.key_code_left, 0, t.time())
   t.key_told(@ui.key_code_right, 0, t.time())
   t.touch_at(0, 600.0, 300.0, t.time())
-  let down = @sf.menu_open_key()
+  let down = message_menu_open()
   t.touch_at(2, 600.0, 300.0, t.time())
-  assert_eq(down, "")
+  assert_false(down)
 }
