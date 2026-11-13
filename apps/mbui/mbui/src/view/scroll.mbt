@@ -113,6 +113,9 @@ pub struct Scroll {
   /// under its last block: View::scrolls_window's), what a part brought into sight comes to rest over (View::scrolls'
   /// `shows`)
   priv mut foot_covered : () -> Double
+  /// how tall what lies over its top covers what it shows (the bar a page's list runs under: View::scrolls'
+  /// `top_covered`), read through Scroll::top_covered
+  priv mut top_cover : () -> Double
   /// the logic's moment it was last put at once (Scroll::put: a page's list brought to a block or to its foot, the
   /// app's put), for the Tester's judges: what it moves by its offset alone (its bar's thumb) goes there with it in the
   /// frame that takes it (Tree::scroll_put_at)
@@ -183,6 +186,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     pressed_said: fn(_) { fn() {  } },
     at_foot_said: None,
     foot_covered: fn() { 0.0 },
+    top_cover: fn() { 0.0 },
     put_at: -1.0e9,
     keys_at: -1.0e9,
   }
@@ -773,8 +777,10 @@ pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
 /// laid out as wide as it is, given way to nothing across where what holds it is narrower; a hold its own once it moves
 /// across past the slop; its bar along its foot, `bar_in` in from either end (under what it is for, where what it holds
 /// reaches past that: Ctx::sideways's), room under what it holds for it while it can go (its bar never over what it
-/// holds' last line), none while it cannot. `bar_clear`: down a column, how much of its top and its foot its bar keeps
-/// clear of, as it is now (what lies over them: a bar the list runs under), as an old view's list's bar does.
+/// holds' last line), none while it cannot. `top_covered`: down a column, how tall what lies over its top is now (the
+/// bar a page's list runs under: its room), a live value its page says once (Scroll::top_covered); what is brought into
+/// sight comes to rest under it. `bar_clear`: down a column, how much of its top and its foot its bar keeps clear of,
+/// as it is now (by default what covers its top), as an old view's list's bar does.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
@@ -782,9 +788,15 @@ pub fn View::scrolls(
   slop? : Double,
   bar? : ScrollBar,
   bar_in? : Double = 0.0,
-  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  top_covered? : () -> Double = fn() { 0.0 },
+  bar_clear? : () -> (Double, Double),
 ) -> View {
   guard self.live() is Some(_) else { return self }
+  let bar_clear = match bar_clear {
+    Some(f) => f
+    None => fn() { (top_covered(), 0.0) }
+  }
+  s.top_cover = if s.across { fn() { 0.0 } } else { top_covered }
   // (a page's list's as its platform's is as it is held: what hosts the tree may say it after it is made)
   let slop = fn() {
     match slop {
@@ -1211,6 +1223,7 @@ pub fn View::scrolls(
     s.seen.set(None)
     s.tall = fn() { 0.0 }
     s.foot_covered = fn() { 0.0 }
+    s.top_cover = fn() { 0.0 }
     s.host = None
     match self.tree.scrolls_at.get(self.at) {
       Some(o) if physical_equal(o, s) => self.tree.scrolls_at.remove(self.at)
@@ -1327,13 +1340,13 @@ pub fn View::scrolls(
     let t = self.tree.logic_said()
     // (across: its start and its end, as wide as it is)
     // (down, less what is pinned over its foot: what is brought comes to rest over that, not under it; and under what
-    // floats over its top, as its bar keeps clear of it (`bar_clear`'s top end, what its page says lies there))
+    // floats over its top (`top_covered`, what its page says lies there))
     let vh = if across {
       self.tree.nodes[self.at].flex.width
     } else {
       self.tree.nodes[self.at].flex.height - dmax(0.0, @signals.untracked(s.foot_covered))
     }
-    let tc = if across { 0.0 } else { dmax(0.0, @signals.untracked(fn() { bar_clear().0 })) }
+    let tc = if across { 0.0 } else { dmax(0.0, @signals.untracked(fn() { (s.top_cover)() })) }
     // (where it is, read: stopped and sent only where something of it has to move. In sight already, it is left as it
     // is, on its way or at its foot following it, nothing written of it)
     let x = @signals.untracked(fn() { s.where_at(t) })
@@ -1351,7 +1364,7 @@ pub fn View::scrolls(
     Some(fn() {
       (
         self.tree.nodes[self.at].flex.height,
-        dmax(0.0, bar_clear().0),
+        dmax(0.0, (s.top_cover)()),
         dmax(0.0, (s.foot_covered)()),
       )
     })
@@ -1495,4 +1508,19 @@ pub fn Tree::scroll_keys_at(self : Tree, at : Int) -> Double {
     Some(s) => s.keys_at
     None => -1.0e9
   }
+}
+
+///|
+/// How tall what lies over its top covers what it shows now (View::scrolls' `top_covered`: the bar a page's list runs
+/// under; 0 where its page says none, and across), read as it is said: followed where it is read tracked. Only what lies
+/// over its own top edge: what scrolls with what it holds (a page's list's head) is none of it.
+pub fn Scroll::top_covered(self : Scroll) -> Double {
+  dmax(0.0, (self.top_cover)())
+}
+
+///|
+/// How tall what is pinned over its foot covers what it shows now (a page's list's foot: View::scrolls_window's), read
+/// as it is said.
+pub fn Scroll::foot_covered_now(self : Scroll) -> Double {
+  dmax(0.0, (self.foot_covered)())
 }

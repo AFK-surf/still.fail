@@ -49,7 +49,7 @@ fn ff_case(follows? : Bool = true, block_field? : Int = -1, top_cover? : Double 
         fn() { Array::makei(count.get(), fn(i) { i }) },
         est=ff_tall,
         follows=fn() { follows },
-        bar_clear=fn() { (top_cover, 0.0) },
+        top_covered=fn() { top_cover },
         foot=fn(f) {
           f.box(fn(b) {
             if block_field < 0 {
