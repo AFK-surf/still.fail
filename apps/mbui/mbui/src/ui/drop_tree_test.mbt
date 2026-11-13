@@ -195,3 +195,41 @@ test "words let go on a page's words, which take no press, over an old view: int
   t.frame()
   assert_eq(f.text(), "abcd")
 }
+
+///|
+test "files let go on a page that takes them by their paths only while it says so: taken so then; else their paths into the field it takes words for" {
+  let f = @ui.Field::new(text="")
+  let by_path = @signals.signal(true, same=fn(a, b) { a == b })
+  let taken : Array[String] = []
+  let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=300.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.over(Is(true)).width(Is(Some(300.0))).height(Is(Some(150.0))) |> ignore
+      p.box(fn(w) { w.words(Is("a message")).height(Is(Some(20.0))) |> ignore }) |> ignore
+      @ui.field(p, f, placeholder="the field", font_size=10.0, max_lines=1) |> ignore
+      @ui.paths_into(
+        p,
+        f,
+        fn(ps) {
+          for x in ps {
+            taken.push(x.path)
+          }
+        },
+        takes=fn() { by_path.get() },
+      )
+      |> @ui.words_into(f)
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let (wx, wy, _, wh) = t.rect_of("a message").unwrap()
+  t.drop_files(wx + 5.0, wy + wh / 2.0, [("a.txt", b"x")], paths=["/a.txt"])
+  t.frame()
+  let first = (taken.copy(), f.text())
+  by_path.set(false)
+  t.drop_files(wx + 5.0, wy + wh / 2.0, [("b.txt", b"x")], paths=["/b.txt"])
+  t.frame()
+  assert_eq((first, (taken, f.text())), ((["/a.txt"], ""), (["/a.txt"], "/b.txt")))
+}

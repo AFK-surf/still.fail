@@ -952,3 +952,133 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: a placed p
     assert_false(viz_nodes_covered(t, back), msg="\{name}: shown as it was, nothing over it")
   }
 }
+
+///|
+/// The lowest field drawn (the composer's), if any.
+fn composer_field(t : @ui.Tester) -> (Double, Double, Double, Double)? {
+  let mut at : (Double, Double, Double, Double)? = None
+  for s in t.semantics() {
+    if s.role == @ui.Role::TextField && (at is None || at.unwrap().1 < s.rect.1) {
+      at = Some(s.rect)
+    }
+  }
+  at
+}
+
+///|
+/// The names of what is in the fixture's chat s-c1's draft now, and how each goes (its `ref`'s mode).
+fn draft_files() -> String {
+  @sfbase.writings
+  .get("ws1/st1:s-c1")
+  .map(fn(d) { d.files.get() })
+  .unwrap_or([])
+  .map(fn(f) { text(Some(f), "name") + "/" + text(field(Some(f), "ref"), "mode") })
+  .join(" ")
+}
+
+///|
+/// The composer's capsule (the smallest glass drawn round its field's middle), if any.
+fn composer_capsule(t : @ui.Tester) -> (Double, Double, Double, Double)? {
+  guard composer_field(t) is Some((fx, fy, fw, fh)) else { return None }
+  let (x, y) = (fx + fw / 2.0, fy + fh / 2.0)
+  let mut at : (Double, Double, Double, Double)? = None
+  for g in t.drawn_glass() {
+    let (gx, gy, gw, gh, _, _) = g
+    if x >= gx && x < gx + gw && y >= gy && y < gy + gh && (at is None || at.unwrap().2 * at.unwrap().3 > gw * gh) {
+      at = Some((gx, gy, gw, gh))
+    }
+  }
+  at
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: files from this machine's Finder let go over the composer, on a message, beside it or on the composer go into its draft once each, by their path; words let go on a message into the composer's field" {
+  for screen in [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)] {
+    let (name, w, h, platform) = screen
+    let calls : Array[(String, Json)] = []
+    let (t, _) = chat_nodes_calling(w, h, platform, calls)
+    @sfbase.machine_here.val = Some("ws1/st1")
+    // (its last message where it is now: the composer grows by each file it takes, the list at its foot with it)
+    let last = fn() raise {
+      guard t.rect_of("做完了：列表、跳到最新的按钮") is Some((mx, my, mw, mh)) else { fail("\{name}: its last message not drawn") }
+      (mx, my + mh / 2.0, mw)
+    }
+    // (in the list's foot just over the composer's capsule: its room there the page's, as what the foot holds takes
+    // nothing there)
+    guard composer_capsule(t) is Some((cx, cy, cw, _)) else { fail("\{name}: no composer's capsule") }
+    t.drop_files(cx + cw / 2.0, cy - 6.0, [("纪要.txt", b"txt")], paths=["/Users/lin/纪要.txt"])
+    t.run_for(@ui.move_most_ms)
+    assert_eq(draft_files(), "纪要.txt/path", msg="\{name}: over the composer")
+    let (mx, my, mw) = last()
+    t.drop_files(mx + mw / 2.0, my, [("报告.pdf", b"%PDF")], paths=["/Users/lin/报告.pdf"])
+    t.run_for(@ui.move_most_ms)
+    assert_eq(draft_files(), "纪要.txt/path 报告.pdf/path", msg="\{name}: on a message")
+    // (beside its words, on the page's ground)
+    let (mx, my, _) = last()
+    t.drop_files(mx - 6.0, my, [("清单.md", b"#")], paths=["/Users/lin/清单.md"])
+    t.run_for(@ui.move_most_ms)
+    assert_eq(draft_files(), "纪要.txt/path 报告.pdf/path 清单.md/path", msg="\{name}: beside a message")
+    guard composer_field(t) is Some((fx, fy, fw, fh)) else { fail("\{name}: no composer's field") }
+    t.drop_files(fx + fw / 2.0, fy + fh / 2.0, [("图.png", b"PNG")], paths=["/Users/lin/图.png"])
+    t.run_for(@ui.move_most_ms)
+    assert_eq(draft_files(), "纪要.txt/path 报告.pdf/path 清单.md/path 图.png/path", msg="\{name}: on the composer")
+    @sfbase.machine_here.val = None
+    // words from another app let go on a message: in the composer's field, drawn there (the words composer_wbtest's
+    // drop, whose answers to what the field asks of them are kept)
+    let words = "对话 ID：c1"
+    let (mx, my, mw) = last()
+    t.drop_words(mx + mw / 2.0, my, words)
+    t.run_for(@ui.move_most_ms)
+    let typed = @sfbase.writings.get("ws1/st1:s-c1").map(fn(d) { d.field.text() }).unwrap_or("")
+    assert_eq(typed, words, msg="\{name}: the composer's field")
+    // (an old view's field draws what it holds as its own runs: Tester::text_runs)
+    guard composer_field(t) is Some((nx, ny, nw, nh)) else { fail("\{name}: no composer's field") }
+    let drawn = t.text_runs().filter(fn(r) { r.text.contains(words) })
+    assert_true(
+      drawn.iter().any(fn(r) { r.top < ny + nh && r.bottom > ny && r.x0 >= nx && r.x0 < nx + nw }),
+      msg="\{name}: the words drawn in the field at \{Repr((nx, ny, nw, nh))}: \{Repr(drawn.map(fn(r) { (r.x0, r.top, r.bottom) }))}",
+    )
+  }
+}
+
+///|
+test "大屏, a chat's page made with its inside nodes: a 文件 tab's row carried over its messages frosts them with 松开以添加到消息, not over the composer, gone as it leaves; let go on a message or on the composer, into the draft once by its path" {
+  let calls : Array[(String, Json)] = []
+  let (t, src) = chat_nodes_calling(1280.0, 800.0, 0, calls)
+  // (the press on the tab's row takes the focus from the composer, and 300 ms later its old view lets it go
+  // (composer.mbt's `composer/let-go`): its field, col "发消息", steps 694 to 702 in one frame at about 1600, judged
+  // at 60 and 120 frames a second (sizes steady). The old composer's own; not judged here till it is made as nodes)
+  t.motion_unjudged(true)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  @sfdesk.side_change(src, r, "open", Some("files"))
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  let hint = "松开以添加到消息"
+  guard t.find("首页截图.png") is Some((x, y)) else { fail("no tab row") }
+  guard t.rect_of("做完了：列表、跳到最新的按钮") is Some((mx, my, mw, mh)) else { fail("its last message not drawn") }
+  guard composer_field(t) is Some((fx, fy, fw, fh)) else { fail("no composer's field") }
+  assert_true(t.find(hint) is None, msg="before")
+  t.hold_drag(x, y, mx + mw / 2.0, my + mh / 2.0)
+  assert_true(t.find(hint) is Some(_), msg="over a message")
+  t.hold_move(fx + fw / 2.0, fy + fh / 2.0)
+  assert_true(t.find(hint) is None, msg="over the composer")
+  t.hold_move(mx + mw / 2.0, my + mh / 2.0)
+  assert_true(t.find(hint) is Some(_), msg="over a message again")
+  t.hold_move(x, y)
+  assert_true(t.find(hint) is None, msg="back over the tab")
+  t.hold_move(mx + mw / 2.0, my + mh / 2.0)
+  t.release(mx + mw / 2.0, my + mh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(hint) is None, msg="let go")
+  assert_eq(draft_files(), "首页截图.png/path")
+  assert_eq(calls.filter(fn(c) { c.0 == "composer.add" }).length(), 1)
+  // another row let go on the composer (its old view, in the page): into the draft too, once
+  guard t.find("季度数据.csv") is Some((x, y)) else { fail("no second tab row") }
+  guard composer_field(t) is Some((fx, fy, fw, fh)) else { fail("no composer's field with a file") }
+  t.hold_drag(x, y, fx + fw / 2.0, fy + fh / 2.0)
+  t.release(fx + fw / 2.0, fy + fh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(draft_files(), "首页截图.png/path 季度数据.csv/path", msg="on the composer")
+  assert_eq(calls.filter(fn(c) { c.0 == "composer.add" }).length(), 2, msg="on the composer")
+}

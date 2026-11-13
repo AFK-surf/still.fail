@@ -39,6 +39,24 @@ pub fn chat_page_body_node(
     true
   })
   |> ignore
+  // what is let go on it from outside, wherever (a message, its ground; mbui's Tree::drop_at), but on a field (a field
+  // takes words where they were let go) or on the composer (its old view's capsule takes them itself): files from this
+  // machine's Finder, where it is a station, into the draft by their station and path, as a row of the 文件 tab put
+  // there (its composer takes them, files_taken); words dragged in from another app into the composer's field at its
+  // caret, as a paste's
+  // (by where they are only where this machine is a station, finder_by_station: elsewhere their paths, as words)
+  @ui.paths_into(
+    v,
+    w.field,
+    fn(paths) {
+      for d in @sfbase.finder_dragged(src, paths) {
+        @sfbase.files_into(draft, d)
+      }
+    },
+    takes=fn() { @sfbase.finder_by_station() },
+  )
+  |> @ui.words_into(w.field)
+  |> ignore
   // (its view and entries as last read: once read, never none again while the page is)
   let read : @signals.Computed[(ChatView, Array[Entry])?] = @signals.computed(
     fn(was) {
