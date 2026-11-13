@@ -43,3 +43,27 @@ test("lines before a place, whole, across parts and longer than a part, without 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a line longer than many parts is joined once: what it copies is its own size, not its square", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "lines-"));
+  const real = Buffer.concat;
+  let copied = 0;
+  try {
+    const file = join(dir, "long.out");
+    const long = Buffer.alloc(8 << 20, "x".charCodeAt(0));
+    writeFileSync(file, Buffer.concat([Buffer.from("a\n"), long, Buffer.from("\nb\n")]));
+    Buffer.concat = ((list: readonly Uint8Array[], length?: number) => {
+      const joined = real(list, length);
+      copied += joined.length;
+      return joined;
+    }) as typeof Buffer.concat;
+    const got = await all(linesWithin(file, 0, long.length + 5, 64 * 1024));
+    Buffer.concat = real;
+    assert.deepEqual(got.map((l) => [l.text.length, l.at]), [[1, 0], [long.length, 2], [1, long.length + 3]]);
+    t.diagnostic(`copied ${copied} bytes for a line of ${long.length}`);
+    assert.ok(copied <= 2 * long.length, `copied ${copied} bytes for a line of ${long.length}`);
+  } finally {
+    Buffer.concat = real;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

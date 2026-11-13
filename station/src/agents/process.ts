@@ -12,7 +12,7 @@ import { createConnection } from "node:net";
 import { join } from "node:path";
 import { keyPart } from "./sandbox.ts";
 import { log } from "../ops/log.ts";
-import { RunnerConnection, leave, listening, listeningSoon, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { Lines, RunnerConnection, leave, listening, listeningSoon, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import type { RuntimeKind } from "./runtime.ts";
 
@@ -298,12 +298,19 @@ export async function* linesBefore(file: string, end: number, chunk = READ_CHUNK
 /// the station's thread: what a station taking up its runners reads, up to hundreds of MB, held it 33 s on one
 /// (2026-11-06).
 export async function* linesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): AsyncGenerator<{ text: string; at: number }> {
+  for await (const line of bytesWithin(file, start, end, chunk)) yield { text: line.bytes.toString("utf8"), at: line.at };
+}
+
+/// `linesWithin`'s lines as their bytes, not decoded: what reads only some of them tells the rest by how they begin
+/// (codex.ts `takeUp`), and most of an app-server's output is lines it passes over, MBs each.
+export async function* bytesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): AsyncGenerator<{ bytes: Buffer; at: number }> {
   if (end <= start) return;
   const fd = await open(file, "r");
   try {
-    let carry = Buffer.alloc(0);
+    // A line longer than a chunk is held a part at a time and joined once, at its end.
+    const lines = new Lines();
     let at = start;
-    // Where the first byte of `carry` is in the file.
+    // Where the line held (or the next) begins in the file.
     let base = start;
     while (at < end) {
       const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
@@ -314,21 +321,15 @@ export async function* linesWithin(file: string, start: number, end: number, chu
       let skip = 0;
       if (buf[0] === 0) {
         while (skip < n && buf[skip] === 0) skip++;
-        carry = Buffer.alloc(0);
+        lines.drop();
         base = at + skip;
       }
       at += n;
-      const bytes = carry.length === 0 ? buf.subarray(skip, n) : Buffer.concat([carry, buf.subarray(0, n)]);
-      let from = 0;
-      for (let i = bytes.indexOf(0x0a); i >= 0; i = bytes.indexOf(0x0a, from)) {
-        const line = bytes.toString("utf8", from, i);
-        const lineAt = base + from;
-        from = i + 1;
-        yield { text: line.endsWith("\r") ? line.slice(0, -1) : line, at: lineAt };
+      for (const line of lines.take(buf.subarray(skip, n))) {
+        const lineAt = base;
+        base += line.length + 1;
+        yield { bytes: line.at(-1) === 0x0d ? line.subarray(0, -1) : line, at: lineAt };
       }
-      // A line longer than a chunk is carried whole into the next read.
-      carry = Buffer.from(bytes.subarray(from));
-      base += from;
     }
   } finally {
     await fd.close();

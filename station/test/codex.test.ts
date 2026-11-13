@@ -464,6 +464,8 @@ describe("the Codex driver", { concurrency: true }, () => {
     await session.prompt("mcp");
     await until(ended(1));
     assert.deepEqual(deltas(events), ["connected"]);
+    // Both times without the thread's history, which the reply would otherwise carry whole.
+    assert.deepEqual(stdin(p.dump).filter((m) => m.method === "thread/resume").map((m) => m.params.excludeTurns), [true, true]);
   });
 
   test("a thread whose station tools failed starts no turn: opened again, resuming, it has them", async () => {
@@ -1053,6 +1055,23 @@ describe("the Codex driver", { concurrency: true }, () => {
       await d.shutdown();
     }
     assert.deepEqual(said, [0, 1], "once per 4096 lines, the main thread let go after each");
+  });
+
+  test("an app-server's output of long lines read again after a crash says it gets on with it by the bytes gone by", async () => {
+    let said = 0;
+    const d = driver({ taking: () => void said++, takeUpBytes: 2 << 20 });
+    const p = profile();
+    const id = "codex-reread-long";
+    mkdirSync(dirname(outFile(data, id)), { recursive: true });
+    // Four lines of 2 MB each, what a station passes over: far fewer than 4096 lines, four times the step.
+    const line = `{"method":"turn/diff/updated","params":{"threadId":"t","diff":"${"x".repeat((2 << 20) - 64)}"}}\n`;
+    writeFileSync(outFile(data, id), line.repeat(4));
+    try {
+      await (d as any).takeUp(p, { id, socket: join(data, "no-such.sock"), args: [] }).catch(() => {});
+    } finally {
+      await d.shutdown();
+    }
+    assert.ok(said >= 2, `told ${said} times over ${line.length * 4} bytes`);
   });
 
   test("shutdown ends the app-servers and their runners", async () => {

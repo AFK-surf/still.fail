@@ -15,7 +15,7 @@ import { rememberCodexRollout } from "../read/transcript.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
 import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
-import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, runnerId } from "./process.ts";
+import { AgentProcess, ackedOffset, bytesWithin, debug, findRunner, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { liveRunners, listening, type RunnerInfo } from "./runner.ts";
@@ -491,6 +491,8 @@ export type CodexDriverOptions = {
   takenUp?: Promise<unknown>;
   /// Another stretch of an app-server's output read again: the launcher hears the station gets on with it.
   taking?: () => void;
+  /// Bytes of an app-server's output read again between two of them (TAKE_UP_BYTES).
+  takeUpBytes?: number;
 };
 
 /// An app-server's runner keeps all it wrote (every diff and command output of every thread on it, hundreds of MB in a
@@ -498,14 +500,19 @@ export type CodexDriverOptions = {
 /// once no turn runs on it, as one Codex was updated under is, and its runner's file goes with it.
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 
-/// What an app-server writes most of and that says nothing of where a thread stands (LiveFromCodex keeps no state of
-/// either): not parsed again when its output is read after a crash.
 /// Lines of an app-server's output read again at a time before the main thread is let go (`takeUp`): three hosts of
 /// 172 to 291 MB held it up to 32 s at a time on a loaded station, and six starts in a row took up at most one session
 /// in the launcher's 90 s (2026-11-06).
 const TAKE_UP_LINES = 4096;
+/// Or bytes of it, whichever comes first: its lines can be MBs each, and 4096 of them were tens of GB between two tells
+/// to the launcher. An output of 77 GB, a line of it 160 MB: the launcher's 90 s ran out under every station getting on
+/// with it, and the next began from the same place, killed some 20 times in 35 minutes (2026-11-13).
+const TAKE_UP_BYTES = 16 * 1024 * 1024;
 
-const UNTOLD = ['{"method":"turn/diff/updated"', '{"method":"item/commandExecution/outputDelta"'];
+/// What an app-server writes most of and that says nothing of where a thread stands (LiveFromCodex keeps no state of
+/// either): not decoded or parsed again when its output is read after a crash, told by how its line begins.
+const UNTOLD = ['{"method":"turn/diff/updated"', '{"method":"item/commandExecution/outputDelta"'].map((m) => Buffer.from(m));
+const untold = (line: Buffer) => UNTOLD.some((m) => line.length >= m.length && line.compare(m, 0, m.length, 0, m.length) === 0);
 
 /// A borrowed login this close to its end is replaced in its home's auth.json, under the app-server running on it: Codex
 /// reads that file again when it is refused (UnauthorizedRecovery's first step) and
@@ -859,16 +866,21 @@ export class CodexDriver implements AgentDriver {
     const { at, keep } = await ackedOffset(info, out);
     const recovered = new Map<string, Recovered>();
     const began = new Map<string, number>();
+    const step = this.options.takeUpBytes ?? TAKE_UP_BYTES;
+    // Since the last tell: lines read, and where it was.
     let read = 0;
-    for await (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
-      if (++read % TAKE_UP_LINES === 0) {
+    let told = keep ?? 0;
+    for await (const { bytes, at: lineAt } of bytesWithin(out, keep ?? 0, at)) {
+      if (++read === TAKE_UP_LINES || lineAt - told >= step) {
+        read = 0;
+        told = lineAt;
         this.options.taking?.();
         await new Promise((resolve) => setImmediate(resolve));
       }
-      if (UNTOLD.some((m) => line.startsWith(m))) continue;
+      if (untold(bytes)) continue;
       let msg: Json;
       try {
-        msg = JSON.parse(line);
+        msg = JSON.parse(bytes.toString("utf8"));
       } catch {
         continue;
       }
@@ -994,13 +1006,18 @@ export class CodexDriver implements AgentDriver {
     if (options.resume !== undefined) {
       await this.releasedElsewhere(options.profile, host.key, options.resume, host);
       common.threadId = options.resume;
-      opened = await host.request("thread/resume", common);
+      // Without the thread's history: the reply would carry every turn of it, which the station never reads (only the
+      // thread's id and path), on one line of the app-server's output, read again whole after a crash. Its size grew
+      // with the thread: 16.7 MB for a rollout of 54 MB, 3,975 bytes without (Codex 0.167.0); a station's 160 MB
+      // reply was one line of an output of 77 GB that no station could take up again (2026-11-13).
+      const resume = { ...common, excludeTurns: true };
+      opened = await host.request("thread/resume", resume);
       // A thread still loaded is rejoined as it is, with the MCP connection it had: one that failed (the station's
       // door was closed then) stays failed, and its turns have no station tools. Unloaded, it is loaded again with them.
       if (await stationToolsFailed(host, options.resume)) {
         log.warn("agents::codex", "a thread's station tools had failed; loading it again", { thread: options.resume });
         await host.request("thread/unsubscribe", { threadId: options.resume });
-        opened = await host.request("thread/resume", common);
+        opened = await host.request("thread/resume", resume);
       }
     } else {
       opened = await host.request("thread/start", common);
