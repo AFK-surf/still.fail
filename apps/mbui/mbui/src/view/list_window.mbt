@@ -1106,6 +1106,21 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         true
       }
       p.laid_again = laid_again
+      // (what a test reads of it and asks of it, as of an old view's list: Tree::lists_seen)
+      let asked_tree = self.tree
+      let asked_at = self.at
+      asked_tree.lists_asked[asked_at] = {
+        scroll: s,
+        count: fn() { @signals.untracked(keys).length() },
+        bring: fn(i) {
+          let ks = @signals.untracked(keys)
+          if i >= 0 && i < ks.length() {
+            p.bring(ks[i])
+          }
+        },
+        to_end: fn() { p.to_end(glide=false) },
+      }
+      self.owns(fn() { asked_tree.lists_asked.remove(asked_at) }) |> ignore
       // (what it has in sight, counted by its keys' blocks as they come to rest: their heights as counted, not as a way
       // has them, the scroll where it rests (at its foot where it follows it, where a notch eases to; where it is as a
       // fling goes), and told to the place's handlers at the hand's moments (Tree::sights_now), as that differs)

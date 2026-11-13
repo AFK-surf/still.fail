@@ -1819,7 +1819,8 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
 }
 
 ///|
-/// Visible list rows: (item, y, height), top to bottom.
+/// Visible list rows: (item, y, height), top to bottom. An old view's lists' rows; where none is on screen, a page's
+/// list's of the window's tree (tree_lists: each row by where it is among its keys, as an old list's by its item).
 pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
   self.reads_own()
   let c = g()
@@ -1834,7 +1835,36 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
       }
     }
   }
+  if !old_list_on() {
+    for l in tree_lists() {
+      for r in l.rows {
+        out.push((r.0, (r.2).1, (r.2).3))
+      }
+    }
+  }
   out
+}
+
+///|
+/// Whether an old view's list is on screen (what Tester's readings of a list read first).
+fn old_list_on() -> Bool {
+  let c = g()
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_list {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// The page's lists of the window's tree drawn now (@view.Tree::lists_seen), in the order they were made: what a
+/// Tester reads of a list where no old view's is on screen.
+fn tree_lists() -> Array[@view.ListSeen] {
+  match view_app.val {
+    Some(tree) => tree.lists_seen()
+    None => []
+  }
 }
 
 ///|
@@ -1854,6 +1884,11 @@ pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Dou
         r = n.next
       }
       out.push(rows)
+    }
+  }
+  if out.is_empty() {
+    for l in tree_lists() {
+      out.push(l.rows.map(fn(r) { r.2 }))
     }
   }
   out
@@ -1941,19 +1976,43 @@ pub fn Tester::move_to(self : Tester, x : Double, y : Double) -> Unit {
 }
 
 ///|
+/// The (first) old view's list on screen, for what reads its own state (a wbtest's); a page's list of the window's tree
+/// is no such list.
+// (its tests alone read it: a wbtest's own state of an old list)
+#warnings("-unused_value")
 fn Tester::list_state(self : Tester) -> ListState {
+  match self.list_on() {
+    Old(st) => st
+    Tree(_) => @halt.saying("no old view's list on screen (a page's list of the window's tree: Tester::visible, rows)")
+  }
+}
+
+///|
+/// The (first) list a Tester reads: an old view's, else the page's list of the window's tree made last (tree_lists: the
+/// page on top).
+priv enum ListOn {
+  Old(ListState)
+  Tree(@view.ListSeen)
+}
+
+///|
+fn Tester::list_on(self : Tester) -> ListOn {
   ignore(self)
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.kind == kind_list {
       match c.lists.get(n.id) {
-        Some(st) => return st
+        Some(st) => return Old(st)
         None => ()
       }
     }
   }
-  @halt.saying("no list on screen")
+  // (a page's list of the tree's: the one made last, the page on top, as an old view's frame has one list on screen)
+  match tree_lists().last() {
+    Some(l) => Tree(l)
+    None => @halt.saying("no list on screen")
+  }
 }
 
 ///|
@@ -1969,38 +2028,43 @@ pub fn Tester::ctx(self : Tester) -> Ctx {
 /// Scrolls the (first) list so that row `item` starts at its top, from the
 /// next frame on.
 pub fn Tester::scroll_to(self : Tester, item : Int) -> Unit {
-  self.list_state().scroll_to(item)
+  match self.list_on() {
+    Old(st) => st.scroll_to(item)
+    // (a page's list: that row brought to its top as its ListPlace brings it, as it is next laid out)
+    Tree(l) => view_app.val.unwrap().list_bring(l.list, item)
+  }
   // (the list put there by the test, no hand on it: taken at the next frame as a step of the test's, built whole)
   test_stepped()
 }
 
 ///|
 pub fn Tester::scroll_to_end(self : Tester) -> Unit {
-  self.list_state().scroll_to_end()
+  match self.list_on() {
+    Old(st) => st.scroll_to_end()
+    Tree(l) => view_app.val.unwrap().list_to_end(l.list)
+  }
   test_stepped()
 }
 
 ///|
 /// The first and last rows of the list in view (-1, -1 when none).
 pub fn Tester::visible(self : Tester) -> (Int, Int) {
-  let st = self.list_state()
-  (st.vis_first, st.vis_last)
+  match self.list_on() {
+    Old(st) => (st.vis_first, st.vis_last)
+    Tree(l) =>
+      match (l.rows, l.rows.last()) {
+        ([first, ..], Some(last)) => (first.0, last.0)
+        _ => (-1, -1)
+      }
+  }
 }
 
 ///|
-/// Whether the list is at its end: the old view's list where one is drawn, else the window's tree's page list made last
-/// (View::scrolls_window's, at its foot: Tree::lists_at_foot).
+/// Whether the (first) list is at its end (an old view's; a page's list at its foot).
 pub fn Tester::at_end(self : Tester) -> Bool {
-  self.reads_own()
-  let c = g()
-  for i in 0..<c.count {
-    if c.nodes[i].kind == kind_list && c.lists.get(c.nodes[i].id) is Some(_) {
-      return self.list_state().at_end
-    }
-  }
-  match view_tree().map(fn(tree) { tree.lists_at_foot() }) {
-    Some(feet) if feet.length() > 0 => feet[feet.length() - 1]
-    _ => self.list_state().at_end
+  match self.list_on() {
+    Old(st) => st.at_end
+    Tree(l) => l.at_foot
   }
 }
 
@@ -2020,6 +2084,16 @@ pub fn Tester::row(self : Tester, item : Int) -> (Double, Double, Double, Double
           return Some((n.x, n.y, n.fw, n.fh))
         }
         ch = c.nodes[ch].next
+      }
+    }
+  }
+  // (a page's list's, by where it is among its keys, where none of an old view's is on screen)
+  if !old_list_on() {
+    for l in tree_lists() {
+      for r in l.rows {
+        if r.0 == item {
+          return Some(r.2)
+        }
       }
     }
   }
@@ -2051,7 +2125,11 @@ pub fn Tester::check_rows(self : Tester, top : Double, bottom : Double) -> Unit 
       None => fail("row \{i} in view was not built")
     }
   }
-  if last < self.list_state().count - 1 && end < bottom - 0.01 {
+  let count = match self.list_on() {
+    Old(st) => st.count
+    Tree(l) => l.count
+  }
+  if last < count - 1 && end < bottom - 0.01 {
     fail("row \{last}, the last in view, ends at \{end}, above the bottom \{bottom}")
   }
 }
@@ -2174,22 +2252,30 @@ pub fn Tester::time(self : Tester) -> Double {
 /// The (first) list's scroll position: how far its top is from its first
 /// row's.
 pub fn Tester::list_offset(self : Tester) -> Double {
-  self.list_state().offset()
+  match self.list_on() {
+    Old(st) => st.offset()
+    Tree(l) => l.at
+  }
 }
 
 ///|
 /// How far the (first) list is pulled past an end: positive at the top,
 /// negative at the bottom (Android: in the list's heights; iOS: points).
 pub fn Tester::list_overscroll(self : Tester) -> Double {
-  let st = self.list_state()
-  st.over * st.over_edge.to_double()
+  match self.list_on() {
+    Old(st) => st.over * st.over_edge.to_double()
+    Tree(l) => l.past
+  }
 }
 
 ///|
 /// Whether the (first) list moves on its own (a fling, an overscroll going
 /// back).
 pub fn Tester::list_moving(self : Tester) -> Bool {
-  self.list_state().moving()
+  match self.list_on() {
+    Old(st) => st.moving()
+    Tree(l) => l.moving
+  }
 }
 
 ///|
@@ -2597,6 +2683,38 @@ pub fn Tester::glyphs_seen(self : Tester) -> Array[(Double, Double, Double, Doub
 pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double)? {
   self.reads_own()
   ignore(self)
+  match old_rich_of(s) {
+    Some(r) => return Some(r)
+    None => ()
+  }
+  // (or a node of the window's tree's words in pieces (View::words_runs), laid out as it draws them (view_runs_laid),
+  // where it is drawn: the first that holds them)
+  match view_app.val {
+    Some(tree) => {
+      tree.laid_as_now()
+      let found : Ref[(RichLayout, Double, Double)?] = Ref(None)
+      tree.each_drawn_scaled(fn(c, x, y, a, _) {
+        guard found.val is None && !c.runs.is_empty() && a > 0.0 && c.bones == 0L else { return }
+        let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id), kept=c.words_breaks)
+        if lay.text.contains(s) {
+          // (where it is drawn in the window, as Tree::drawn_of has it: a page's list's rows' too)
+          found.val = Some(
+            match tree.drawn_of(c.id) {
+              Some(d) => (lay, d.x, d.y)
+              None => (lay, x, y)
+            },
+          )
+        }
+      })
+      found.val
+    }
+    None => None
+  }
+}
+
+///|
+/// An old view's rich paragraph whose text contains `s`, as laid out, and where its content's top left is.
+fn old_rich_of(s : String) -> (RichLayout, Double, Double)? {
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -2615,7 +2733,8 @@ pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double
 /// (x, y, w, h). An old view's paragraph, else a node of the window's tree's words in pieces (View::words_runs: laid
 /// out as it draws them, view_runs_laid; as big as it is drawn), the first that holds them.
 pub fn Tester::run_rects(self : Tester, s : String) -> Array[(Double, Double, Double, Double)] {
-  match self.rich_of(s) {
+  self.reads_own()
+  match old_rich_of(s) {
     Some((rl, x, y)) =>
       match rl.text.find(s) {
         Some(a) =>

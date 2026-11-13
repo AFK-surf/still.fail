@@ -1137,6 +1137,8 @@ pub struct Tree {
   /// a page's list's scroll by the node it scrolls in (View::scrolls): how far it was put for what came out another
   /// height over what shows, as what is drawn is held steady (Tree::scroll_corrected)
   lists_scrolled : Map[Int, Scroll]
+  /// a page's list by its node (View::scrolls_window), what a test reads of it and asks of it (Tree::lists_seen)
+  priv lists_asked : Map[Int, ListAsked]
   /// the node whose room is being told as it is laid out (View::by_room: -1, none), and how many of what it holds were
   /// marked laid out again meanwhile (Tree::room_marked_at)
   mut rooming : Int
@@ -1453,6 +1455,7 @@ pub fn Tree::new(
     alone_asks: {},
     rows_named: {},
     lists_scrolled: {},
+    lists_asked: {},
     rooming: -1,
     room_marks: 0,
     room_spill: [],
