@@ -398,8 +398,7 @@ fn bar_middle_node(
           on=fn() { !expanded() && can_toggle() && tp() <= 0.0 },
         )
         t_box
-        .row(Is(true))
-        .lines_up(Is(Some(Middle)))
+        .lies_along(Is(Middle))
         .fit_whole(By(fn() { !expanded() }))
         .grow(By(fn() { if expanded() { 1.0 } else { 0.0 } }))
         .basis(By(fn() { if expanded() { Some(0.0) } else { None } }))
@@ -422,6 +421,7 @@ fn bar_middle_node(
             { size: th.t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { @sf.theme().p.text }))
+          .fit_whole(By(fn() { !expanded() }))
           .cuts(Is(true))
           .allow_ellipsis(Is(true))
           .min_width(Is(Some(0.0)))
