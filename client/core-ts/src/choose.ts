@@ -780,6 +780,12 @@ export class Choose implements Owner {
       case "connectNew": {
         const ov = overview();
         if (ov === undefined) return undefined;
+        if (o.form === "preset") {
+          const [options, base] = this.#onStation(station);
+          const saved = this.#adding.get(`${station}\u0001preset`);
+          const r = saved !== undefined ? resolve(options, saved, get(ov, "accountSubsets") === true) : base;
+          return [options, saved !== undefined ? picked(r) : { ...picked(r), model: null }, null, false, true, 0];
+        }
         const options = models(ov, now);
         const r = resolve(options, this.#adding.get(`${station}\u0001${o.form}`) ?? {}, get(ov, "accountSubsets") === true);
         return [options, picked(r), null, false, false, 0];
@@ -871,9 +877,10 @@ export class Choose implements Owner {
     if (now === undefined) return undefined;
     const [own, value, current, fixed, quiet, runnable] = now;
     const options = this.#withWorkspace(station, own, fixed && typeof value.runtime === "string" ? value.runtime : null);
+    const isPreset = o.kind === "connectNew" && o.form === "preset";
     const draft = this.#drafts.get(topicKey(topic)) ?? {};
     const pickedOf = (field: string) => text(field in draft ? draft[field] : get(value, field));
-    const m = pickedOf("model");
+    const m = pickedOf("model") ?? (isPreset ? (text(get(this.#onStation(station)[1].entry, "model")) ?? text(get(options[0], "model"))) : null);
     const runtime = pickedOf("runtime");
     const nonePicked = "profiles" in draft && Array.isArray(draft.profiles) && normProfiles(draft.profiles) === null;
     const draftedAccounts = (): { asked: string[]; multi: boolean } => {
@@ -918,7 +925,7 @@ export class Choose implements Owner {
     const effort = e !== null && efforts.some((x) => x === e) ? e : null;
     // How much less context than its whole window it can be kept to: a new chat's and a chat's (a connect's sessions
     // are made by the station, as it is set).
-    const contexts: number[] = option !== undefined && (o.kind === "new" || o.kind === "session")
+    const contexts: number[] = option !== undefined && (o.kind === "new" || o.kind === "session" || isPreset)
       ? arr(get(get(option, "contexts"), onName)).filter((n): n is number => typeof n === "number")
       : [];
     const cPicked = contextOf("context" in draft ? draft.context : get(value, "context"));
@@ -928,7 +935,7 @@ export class Choose implements Owner {
     const allowedIds: string[] | null = profiles ?? (profile !== null ? [profile] : null);
     const fastAvailable =
       fastRuntime(onName) &&
-      (o.kind === "new" || o.kind === "session") &&
+      (o.kind === "new" || o.kind === "session" || isPreset) &&
       arr(get(overview, "profiles")).some((p) => typeof p.fast === "boolean" && (allowedIds === null || allowedIds.includes(p.id)) && accounts.some((a) => a.id === p.id));
     // How fast it runs where none is picked: its account's own (the one drafted, else the one it is on), said as what
     // it is rather than as 跟随订阅 (2026-11-02 用户「谁知道订阅是什么，应该直接显示具体值」).
@@ -941,7 +948,7 @@ export class Choose implements Owner {
     const next = { model: nextModel, runtime: on ?? null, effort, profile, ...(profiles !== null ? { profiles } : {}), fast, context };
     const changed = !nonePicked && FIELDS.some((f) => !equal((next as J)[f] ?? null, value[f] ?? null));
     const { kept, keptProfiles, low, account: accountView } = named(value, valueOption, current, quiet);
-    const effectiveFast = (o.kind === "new" || o.kind === "session") && runsFast(overview, value, current);
+    const effectiveFast = (o.kind === "new" || o.kind === "session" || isPreset) && value.model !== null && runsFast(overview, value, current);
     const drafted = account(profile);
     const who = nonePicked
       ? t("core-logic.choose.account.none")
@@ -1042,7 +1049,7 @@ export class Choose implements Owner {
         runtime: rt,
         effort: e !== null && has("efforts").some((x) => x === e) ? e : null,
         fast: typeof hand.fast === "boolean" && fastRuntime(at) ? hand.fast : null,
-        context: c !== null && (o.kind === "new" || o.kind === "session") && has("contexts").some((n) => n === c) ? c : null,
+        context: c !== null && (o.kind === "new" || o.kind === "session" || isPreset) && has("contexts").some((n) => n === c) ? c : null,
       };
       return took.runtime === null && took.effort === null && took.fast === null && took.context === null ? undefined : took;
     };
@@ -1063,13 +1070,13 @@ export class Choose implements Owner {
         }
         if (r.effort !== null) parts.push(format.effortLabel(r.effort));
         if (r.fast === true) parts.push("Fast");
-        if (r.context !== null && (o.kind === "new" || o.kind === "session")) parts.push(format.compactNumber(r.context));
+        if (r.context !== null && (o.kind === "new" || o.kind === "session" || isPreset)) parts.push(format.compactNumber(r.context));
       } else if (!fixed && rts.length > 1) {
         parts.push(rts.map((rt) => format.runtimeShort(String(rt))).join(" · "));
       } else if (multiRuntime && rts.length === 1) {
         parts.push(format.runtimeShort(String(rts[0])));
       }
-      const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" ? r.context : null };
+      const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" || isPreset ? r.context : null };
       return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, liked: likedKeys.includes(model.key(id)) };
     });
     // Two things, apart (the user, 2026-11-10: 「收藏跟常用不一样」「常用包括了思考深度和速度还有上下文长度」「是一种
@@ -1077,8 +1084,8 @@ export class Choose implements Owner {
     // run two ways two of them, starred or not), a chat's or a new chat's, of its runtime alone where that is fixed;
     // and the starred models (`liked`), in the order they were starred, every one of them, one of those used most or
     // not. Then every model, by its maker (`makers`).
-    const draftNow: Resolved = { entry: option ?? null, runtime: typeof on === "string" ? on : null, effort, fast, context, profile, profiles, efforts, contexts, accounts };
-    const combos = o.kind === "new" || o.kind === "session"
+    const draftNow: Resolved = { entry: value.model !== null || "model" in draft ? (option ?? null) : null, runtime: typeof on === "string" ? on : null, effort, fast, context, profile, profiles, efforts, contexts, accounts };
+    const combos = o.kind === "new" || o.kind === "session" || isPreset
       ? frequentCombos(history, options, draftNow, fixed && typeof value.runtime === "string" ? value.runtime : null, multiRuntime).map((c: J) => ({
           model: c.model,
           runtime: c.runtime,
@@ -1317,7 +1324,7 @@ export class Choose implements Owner {
       return { done: { saved: false } };
     }
     const textOf = (field: string) => (typeof next[field] === "string" ? next[field] : "");
-    if (o.kind === "new" || o.kind === "session") this.#keepUsual(ofAddress(station), next);
+    if (o.kind === "new" || o.kind === "session" || (o.kind === "connectNew" && o.form === "preset")) this.#keepUsual(ofAddress(station), next);
     let saved: Saved;
     switch (o.kind) {
       case "new":

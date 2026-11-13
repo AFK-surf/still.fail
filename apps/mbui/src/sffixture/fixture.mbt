@@ -1429,6 +1429,31 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" || f.mode == "settings-run-runtime" =>
       @settings.fixture_topic(f.mode, name, params)
     "pick" if params.get("of") is Some(String(o)) && o.has_prefix("session:") => Some(fix_session_pick())
+    "pick" if params.get("of") is Some(String("connect-new:preset")) && preset_model_cleared.val =>
+      match fix_pick() {
+        Object(o) => {
+          let m = o.copy()
+          m["value"] = { "model": Json::null(), "runtime": Json::string(new_fix.runtime), "effort": Json::string(new_fix.effort) }
+          m["valueOption"] = Json::null()
+          m["changed"] = Json::boolean(true)
+          if m.get("combos") is Some(Array(cs)) {
+            m["combos"] = Json::array(
+              cs.map(fn(c) {
+                match c {
+                  Object(co) => {
+                    let cm = co.copy()
+                    cm["selected"] = Json::boolean(false)
+                    Json::object(cm)
+                  }
+                  other => other
+                }
+              }),
+            )
+          }
+          Some(Json::object(m))
+        }
+        other => Some(other)
+      }
     "presets" =>
       if new_fix.presets_late && !text(Some(Json::object(params)), "station").has_suffix("st2") {
         None

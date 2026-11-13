@@ -35,6 +35,7 @@ pub fn fixture_reset() -> Unit {
   fix_forgotten.clear()
   new_fix.providers = false
   new_fix.borrow = false
+  preset_model_cleared.val = false
   fix_presets_said.val = 0
   fix_job_more.val = 0
   new_fix.presets.clear()
