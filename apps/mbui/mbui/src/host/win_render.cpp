@@ -12,6 +12,7 @@
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <dcomp.h>
+#include <dwmapi.h>
 #include <d3dcompiler.h>
 #include <wincodec.h>
 #include <math.h>
@@ -26,6 +27,7 @@
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dcomp.lib")
+#pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "windowscodecs.lib")
@@ -1308,7 +1310,16 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     hr = chain->Present(1, 0);
   }
   commit_presented();
+  // A composition's swap chain is not held to the display by its Present, so each frame waits here for the compositor
+  // to compose (DwmFlush): a frame for each of the display's, none between that no one sees. Without it a window that
+  // moves something every frame (a playhead going, a motion) drew as many as the machine could: 1759 to 1794 a second
+  // whole in view on a 240 Hz display, 118% of a core, and 238 to 240 a second, 24% of one, waiting so (measured on
+  // ScreenReplay's viewer, an RTX 5080's machine, 2026-11-13; partly covered 461 to 484 and 212 to 217). A waitable
+  // swap chain's handle held nothing there (1648 to 1691). The compositor's beat is the primary display's: a window
+  // on another display of another rate draws at the primary's. Where the compositor will not say (FAILED), a
+  // millisecond's rest, so nothing spins.
   if (hr == DXGI_STATUS_OCCLUDED) Sleep(16);
+  else if (dcomp && FAILED(DwmFlush())) Sleep(1);
 }
 
 // Without a window (mbui-render, src/render): WARP's device whatever the machine has (the same rasterizer on every

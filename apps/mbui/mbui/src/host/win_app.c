@@ -952,7 +952,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       want_frame = 1;
     }
     if (want_frame) {
-      draw_frame();  // Present waits for vsync
+      draw_frame();  // its present waits for the display (win_render.cpp mb_render_present)
       continue;
     }
     DWORD timeout = wake_at < 0 ? INFINITE : (DWORD)ceil(wake_at - now);
