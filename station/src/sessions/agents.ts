@@ -273,6 +273,7 @@ export const AgentsLive = (control: Control) =>
           new ClaudeDriver({
             data,
             machineToken: (env, rejected) => accounts.machineToken(env, rejected),
+            subscriptionToken: (p, rejected) => accounts.claudeToken(p, rejected),
             lent: {
               borrowed: (p) => borrowed(p) || (lentToSandbox(p) && p.machine !== true),
               token: (p, rejected) => (borrowed(p) ? sharing!.lendClaude(p, rejected) : accounts.claudeToken(p, rejected)),

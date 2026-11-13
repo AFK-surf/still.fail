@@ -8,7 +8,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { WINDOWS, platform } from "../src/platform/index.ts";
-import { LoginPages, type PagesBrowser } from "../src/logins/pages.ts";
+import { LoginPages, type OpenTabOptions, type PagesBrowser } from "../src/logins/pages.ts";
 
 /// A stand-in's test that a variable names a path under its HOME: `sameAs("CODEX_HOME", "cx")`. Git's sh (Windows)
 /// has HOME in a form of its own (/tmp/…, /c/…), so both are compared as Windows has them there.
@@ -193,13 +193,15 @@ export const idToken = (claims: unknown) => `x.${Buffer.from(JSON.stringify(clai
 /// person would.
 export function fakeBrowser(visit: (url: string) => void = () => {}, available = true) {
   const tabs = new Map<string, string>();
+  const options = new Map<string, OpenTabOptions | undefined>();
   let next = 0;
   let changed = () => {};
   const browser: PagesBrowser = {
     available: () => available,
-    async openTab(url) {
+    async openTab(url, opts) {
       const id = `T${++next}`;
       tabs.set(id, url);
+      options.set(id, opts);
       changed();
       visit(url);
       return id;
@@ -216,6 +218,7 @@ export function fakeBrowser(visit: (url: string) => void = () => {}, available =
   return {
     pages,
     tabs,
+    options,
     gone: (id: string) => {
       tabs.delete(id);
       changed();

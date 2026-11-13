@@ -71,12 +71,11 @@ test "returning to a Claude account's open login page does not ask again" {
         },
       }
     })
-    t.click(Button, label="其他方式")
-    presented_in(t)
-    t.tap_text("回到 Willow 的浏览器")
-    t.run_for(@kit.presence_out_ms)
+    t.click(Button, label="回到 Willow 的浏览器")
+    t.frame()
     assert_eq(calls, ["profile.loginBrowser"])
     assert_false(@sf.presenting())
+    assert_true(t.audit().is_empty())
   }
 }
 

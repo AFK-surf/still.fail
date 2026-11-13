@@ -41,6 +41,7 @@ export function sitePasskeys(all: Passkey[], sites: string[]): Passkey[] {
 export class Authenticators {
   readonly #cdp: Cdp;
   readonly #chat: (ctx: string) => boolean;
+  readonly #onChanged: ((ctx: string) => void) | undefined;
   /// Each tab with an authenticator: its context, its session on the station's connection, its authenticator.
   readonly #tabs = new Map<string, { ctx: string; session: string; id: string }>();
   // (`id` "" until it has one)
@@ -51,9 +52,10 @@ export class Authenticators {
   #unlisten: () => void = () => {};
   #closed = false;
 
-  constructor(cdp: Cdp, chat: (ctx: string) => boolean) {
+  constructor(cdp: Cdp, chat: (ctx: string) => boolean, onChanged?: (ctx: string) => void) {
     this.#cdp = cdp;
     this.#chat = chat;
+    this.#onChanged = onChanged;
   }
 
   /// Starts: every chat's tab there now, and each after, given an authenticator.
@@ -95,6 +97,7 @@ export class Authenticators {
         log.info("browser", "a passkey made in a chat's tab", { rpId: p.rpId });
         void this.#everywhere(tab.ctx, [p], tab.session);
       }
+      this.#onChanged?.(tab.ctx);
     }
   }
 
@@ -163,8 +166,8 @@ export class Authenticators {
     }
   }
 
-  /// The passkeys of `sites` in `ctx`, as they are now (their counts read again).
-  async read(ctx: string, sites: string[]): Promise<Passkey[]> {
+  /// The passkeys of `sites` (or all, when `sites` is omitted) in `ctx`, as they are now (their counts read again).
+  async read(ctx: string, sites?: string[]): Promise<Passkey[]> {
     await Promise.all([...this.#making.values()]);
     const keys = this.#keys.get(ctx) ?? new Map<string, Passkey>();
     for (const t of this.#tabs.values()) {
@@ -178,7 +181,8 @@ export class Authenticators {
       }
     }
     this.#keys.set(ctx, keys);
-    return sitePasskeys([...keys.values()], sites);
+    const all = [...keys.values()];
+    return sites === undefined ? all : sitePasskeys(all, sites);
   }
 
   /// `keys` put into `ctx`: kept for it, in each of its tabs.

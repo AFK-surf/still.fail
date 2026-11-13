@@ -18,13 +18,15 @@ import { mkdirSync } from "node:fs";
 import { link, mkdir, readdir, realpath, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { REPO_RULES_COMMAND } from "./repo-rules.ts";
+import { RenewRefused } from "../accounts/console.ts";
+import { claudeToken as claudeFileToken } from "../accounts/oauth.ts";
 import { log } from "../ops/log.ts";
 import { claudeProject } from "../read/transcript.ts";
 import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
-import { fileCredentials, takeBack } from "./no-keychain.ts";
+import { fileCredentials, takeBack, takeBackMissing } from "./no-keychain.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
-import { expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
+import { accessKind, expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { OVERLOADED, TOOL_SERVERS, cleanEnv, failureRest, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
@@ -178,10 +180,11 @@ export const backgroundOf = (turn: Turn): BackgroundTask[] =>
     .filter((t) => t.background)
     .map(({ id, kind, description, startedAt }) => (startedAt === undefined ? { id, kind, description } : { id, kind, description, startedAt }));
 
-/// A token handed to the process (a machine login's, a lent one) is renewed while it runs: started with these, Claude
-/// Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and retries with it, so the
-/// process, its background tasks and subagents go on. It honours them only for a few entrypoints; claude-desktop
-/// changes neither its prompt nor its tools (only the entrypoint named in its requests), as checked on 2.1.299.
+/// A token handed to the process (a machine login's, a local subscription's, a lent one) is renewed while it runs:
+/// started with these, Claude Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and
+/// retries with it, so the process, its background tasks and subagents go on without racing on `.credentials.json`. It
+/// honours them only for a few entrypoints; claude-desktop changes neither its prompt nor its tools (only the entrypoint
+/// named in its requests), as checked on 2.1.299.
 const RENEWED = { CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: "1", CLAUDE_CODE_ENTRYPOINT: "claude-desktop" };
 /// A CLI that does not ask (one too old) retries a 401 on its own: past this attempt it is stopped as before.
 const RENEW_ATTEMPTS = 2;
@@ -231,6 +234,9 @@ export type ClaudeDriverOptions = {
   /// The machine login's current token, renewed when about to run out or when it is `rejected` (claude_oauth.rs; the
   /// accounts module's).
   machineToken?: (env: Env, rejected?: string) => Promise<MachineToken>;
+  /// A local subscription profile's current token, renewed under one lock by the station so concurrent `claude -p`
+  /// processes neither race on a single-use refresh token nor delete `.credentials.json` on failure.
+  subscriptionToken?: (profile: Profile, rejected?: string) => Promise<MachineToken>;
   /// Another station's subscription, borrowed (share/index.ts): a token lent by the station signed in on it, handed
   /// to the process as the machine's is.
   lent?: { borrowed(profile: Profile): boolean; token(profile: Profile, rejected?: string): Promise<MachineToken> };
@@ -307,6 +313,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   private readonly command: string;
   private readonly env: Env;
   private readonly machineToken: (env: Env, rejected?: string) => Promise<MachineToken>;
+  private readonly subscriptionToken: ClaudeDriverOptions["subscriptionToken"];
   private readonly lent: ClaudeDriverOptions["lent"];
 
   constructor(options: ClaudeDriverOptions) {
@@ -314,6 +321,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     this.command = options.command ?? "claude";
     this.env = options.env ?? process.env;
     this.machineToken = options.machineToken ?? machineClaudeToken;
+    this.subscriptionToken = options.subscriptionToken;
     this.lent = options.lent;
   }
 
@@ -372,17 +380,41 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
     // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
     env.STILLFAIL_RUNTIME_SESSION_ID = sessionId;
-    // A machine profile runs on the machine's own login, handed over as its current token.
-    // Another station's subscription the same way, with the token that station lends.
+    const localSub = !isMachine(options.profile) && !this.lent?.borrowed(options.profile) && accessKind(options.profile) === "subscription";
+    if (!isMachine(options.profile)) fileCredentials(env);
+    // A machine profile runs on the machine's own login, handed over as its current token; a local subscription on its
+    // own login renewed here under one lock; another station's subscription on the token that station lends.
     const renew = this.renewer(options.profile);
-    const machine = renew ? await renew() : undefined;
+    let machine: MachineToken | undefined;
+    let renews = renew !== null;
+    if (renew) {
+      try {
+        machine = await renew();
+      } catch (error) {
+        if (!localSub) throw error;
+        // A local subscription whose refresh failed (or a test home with no token yet): never throw in open(), which
+        // actor.ts treats as a broken --resume or a broken startup without rechecking or failing over. Hand over any
+        // kept access token so Claude Code never touches or deletes .credentials.json itself.
+        const kept = await claudeFileToken(home);
+        if (kept !== undefined) {
+          if (error instanceof RenewRefused) {
+            env.CLAUDE_CODE_OAUTH_TOKEN = kept;
+            renews = false;
+          } else {
+            machine = { token: kept, expiresAt: 0 };
+          }
+        } else {
+          await takeBackMissing(home);
+          renews = false;
+        }
+      }
+    } else if (!isMachine(options.profile)) {
+      // Its own login stays in its home's file when it refreshes it.
+      await takeBack(home);
+    }
     if (machine) {
       env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
       Object.assign(env, RENEWED);
-    } else {
-      // Its own login stays in its home's file when it refreshes it.
-      await takeBack(home);
-      fileCredentials(env);
     }
     // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
     // session, they took up to 36 s before a new session could start. One the user chose wins.
@@ -393,19 +425,23 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
 
     // Renewed while it runs, it is never started again for its token; one read from a file again after a 401 is not
     // stopped at the first.
-    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
+    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: (machine !== undefined && renews) || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renews ? renew : null, machine?.token ?? null);
     session.toolsUrl = options.mcpUrl;
     session.fast = fast;
     await this.start(session, options, this.command, args, env);
     return session;
   }
 
-  /// Where a profile whose token is handed to the process gets a current one (null for a profile with its own login):
-  /// the machine login's, or the one lent by the station a borrowed subscription is signed in on.
+  /// Where a profile whose token is handed to the process gets a current one (null for a profile without one):
+  /// the machine login's, a local subscription's renewed here, or the one lent by the station a borrowed subscription
+  /// is signed in on.
   private renewer(profile: Profile): Renew | null {
     if (isMachine(profile)) return (rejected) => this.machineToken(this.env, rejected);
     const lent = this.lent;
     if (lent?.borrowed(profile)) return (rejected) => lent.token(profile, rejected);
+    if (accessKind(profile) === "subscription" && this.subscriptionToken) {
+      return (rejected) => this.subscriptionToken!(profile, rejected);
+    }
     return null;
   }
 

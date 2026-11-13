@@ -3,14 +3,16 @@
 // after a long idle. It outlives a station process, as jobs do: the next one (a handover, a restart) finds it by its
 // DevToolsActivePort and takes it up, its tabs and logins as they were.
 import type { Clock } from "effect";
+import { open, readFile, rename, unlink } from "node:fs/promises";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Screens } from "../screens/source.ts";
-import type { Cdp } from "./cdp.ts";
+import type { Cdp, CdpEvent } from "./cdp.ts";
 import { type ChromeHost, type Running, readState, writeState } from "./chrome.ts";
 import { Owners } from "./owners.ts";
 import { Authenticators } from "./passkeys.ts";
 import { BEHIND } from "./gate.ts";
+import { allCookies, keptOf, stateOf } from "./signins.ts";
 import { type TabInfo, Tabs } from "./tabs.ts";
 
 /// Unused this long (no agent asking for it, no tab coming, going or navigated, no one watching), it is closed.
@@ -53,12 +55,72 @@ export type BrowserOptions = {
   usedTab?: (session: string, targetId: string) => void;
 };
 
-type Up = { running: Running; cdp: Cdp; tabs: Tabs; keys: Authenticators; since: number };
+export type OpenTabOptions = {
+  /// Where this tab's isolated browser context keeps its cookies and passkeys across sign-ins (null when gone).
+  stateFile?: () => string | null;
+};
+
+type LoginTab = {
+  ctx: string;
+  stateFile: () => string | null;
+  ending: Promise<void> | null;
+  saving: Promise<void>;
+};
+
+type Up = {
+  running: Running;
+  cdp: Cdp;
+  tabs: Tabs;
+  keys: Authenticators;
+  loginContexts: Set<string>;
+  loginTabs: Map<string, LoginTab>;
+  unlisten: () => void;
+  since: number;
+};
+
+let loginStateSeq = 0;
+
+/// Writes `content` to `resolvePath()` (mode 0600) only when its parent directory exists: never recreates a dropped
+/// pending login's home, and follows a new login's home if `pendingChanged` just renamed it.
+async function writeLoginState(resolvePath: () => string | null, content: string): Promise<void> {
+  let tried: string | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const path = resolvePath();
+    if (path === null || path === tried) return;
+    tried = path;
+    const tmp = `${path}.${process.pid}.${++loginStateSeq}.tmp`;
+    let handle;
+    try {
+      handle = await open(tmp, "w", 0o600);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw e;
+    }
+    try {
+      await handle.writeFile(content, { encoding: "utf8" });
+      await handle.datasync();
+    } catch (e) {
+      await handle.close().catch(() => {});
+      await unlink(tmp).catch(() => {});
+      throw e;
+    }
+    await handle.close();
+    try {
+      await rename(tmp, path);
+      return;
+    } catch (e) {
+      await unlink(tmp).catch(() => {});
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw e;
+    }
+  }
+}
 
 export class StationBrowser {
   readonly #o: BrowserOptions;
   readonly #fibers: Fibers;
   readonly #idleMs: number;
+  readonly #flushing = new Set<Promise<void>>();
   #up: Up | null = null;
   /// A start under way: whoever asks meanwhile waits for it.
   #starting: Promise<Up> | null = null;
@@ -119,13 +181,51 @@ export class StationBrowser {
 
   /// A tab of the station's own (no session's) at `url`, in a window of its own opened behind the others (as a
   /// session's: proxy.ts), the browser started if it is not running: its target id, once it is among the screens.
-  async openTab(url: string): Promise<string> {
+  /// With `options.stateFile`, opened in a browser context of its own whose cookies and passkeys are read from and
+  /// saved back to that file (and disposed when the tab closes).
+  async openTab(url: string, options?: OpenTabOptions): Promise<string> {
     this.used();
     const up = await this.#ensure();
-    const { targetId } = await up.cdp.send("Target.createTarget", { url, ...BEHIND });
-    if (typeof targetId !== "string" || targetId === "") throw new Error("Chrome opened no tab.");
-    await up.tabs.arrived(targetId);
-    return targetId;
+    if (!options?.stateFile) {
+      const { targetId } = await up.cdp.send("Target.createTarget", { url, ...BEHIND });
+      if (typeof targetId !== "string" || targetId === "") throw new Error("Chrome opened no tab.");
+      await up.tabs.arrived(targetId);
+      return targetId;
+    }
+    const { browserContextId } = await up.cdp.send("Target.createBrowserContext", { disposeOnDetach: false });
+    if (typeof browserContextId !== "string" || browserContextId === "") throw new Error("Chrome made no browser context.");
+    up.loginContexts.add(browserContextId);
+    const initialPath = options.stateFile();
+    if (initialPath !== null) {
+      const kept = await readFile(initialPath, "utf8").catch(() => null);
+      if (kept !== null) {
+        const state = stateOf(kept);
+        const cookies = allCookies(state.cookies);
+        if (cookies.length > 0) {
+          await up.cdp.send("Storage.setCookies", { browserContextId, cookies }).catch(async () => {
+            for (const cookie of cookies) {
+              await up.cdp.send("Storage.setCookies", { browserContextId, cookies: [cookie] }).catch(() => {});
+            }
+          });
+        }
+        if (state.passkeys.length > 0) await up.keys.put(browserContextId, state.passkeys);
+      }
+    }
+    let targetId = "";
+    try {
+      const created = await up.cdp.send("Target.createTarget", { url, browserContextId, ...BEHIND });
+      targetId = typeof created?.targetId === "string" ? created.targetId : "";
+      if (targetId === "") throw new Error("Chrome opened no tab.");
+      up.loginTabs.set(targetId, { ctx: browserContextId, stateFile: options.stateFile, ending: null, saving: Promise.resolve() });
+      await up.tabs.arrived(targetId);
+      return targetId;
+    } catch (e) {
+      if (targetId !== "") up.loginTabs.delete(targetId);
+      up.loginContexts.delete(browserContextId);
+      up.keys.forget(browserContextId);
+      await up.cdp.send("Target.disposeBrowserContext", { browserContextId }).catch(() => {});
+      throw e;
+    }
   }
 
   /// A command on the browser's own DevTools connection (its cookies: browsers.ts), the browser started if it is not
@@ -171,8 +271,18 @@ export class StationBrowser {
   /// Closes tab `targetId`, if it is there.
   async closeTab(targetId: string): Promise<void> {
     const up = this.#up;
-    if (up === null || !up.tabs.has(targetId)) return;
+    if (up === null) return;
+    if (up.loginTabs.has(targetId)) {
+      await this.#trackFlush(this.#endLoginTab(up, targetId, true));
+      return;
+    }
+    if (!up.tabs.has(targetId)) return;
     await up.tabs.closeTab(targetId).catch(() => {});
+  }
+
+  /// Waits for any in-flight login-context saves and disposals to finish.
+  async flushed(): Promise<void> {
+    while (this.#flushing.size > 0) await Promise.all([...this.#flushing]);
   }
 
   /// Tab `targetId` was opened by `session` (on its own connection, proxy.ts).
@@ -218,9 +328,16 @@ export class StationBrowser {
     const up = this.#up;
     this.#up = null;
     if (up) {
+      for (const tab of up.loginTabs.values()) {
+        if (tab.ending === null) this.#trackFlush(this.#saveLoginTab(up, tab));
+      }
+      await this.flushed();
+      up.unlisten();
       up.tabs.close();
       up.keys.close();
       up.cdp.close();
+    } else {
+      await this.flushed();
     }
     this.#note();
     await this.#fibers.close();
@@ -262,9 +379,16 @@ export class StationBrowser {
   async #take(running: Running): Promise<Up> {
     const { chrome, screens } = this.#o;
     const cdp = await chrome.connect(running.ws);
-    // (each chat's tab its authenticator: passkeys.ts; the station's own context has none)
+    // (each chat's tab and each isolated login tab its authenticator: passkeys.ts; the station's shared context has none)
     const owner = this.#o.contextOwner;
-    const keys = new Authenticators(cdp, (ctx) => owner?.(ctx) !== undefined);
+    const loginContexts = new Set<string>();
+    const loginTabs = new Map<string, LoginTab>();
+    let current: Up | null = null;
+    const keys = new Authenticators(
+      cdp,
+      (ctx) => owner?.(ctx) !== undefined || loginContexts.has(ctx),
+      (ctx) => this.#loginContextChanged(current, ctx),
+    );
     const tabs = new Tabs({
       cdp, screens, connect: () => chrome.connect(running.ws), now: () => this.#fibers.now(), activity: () => this.used(), later: this.#o.later,
       owners: this.#owners, ...(owner ? { contextOwner: owner } : {}),
@@ -274,22 +398,26 @@ export class StationBrowser {
       },
       usedTab: (session, targetId) => this.#o.usedTab?.(session, targetId),
     });
+    const unlisten = cdp.on((e) => this.#heardLogin(current, e));
     try {
       await keys.start();
       await tabs.start();
     } catch (e) {
+      unlisten();
       keys.close();
       tabs.close();
       cdp.close();
       throw e;
     }
     if (this.#closed) {
+      unlisten();
       keys.close();
       tabs.close();
       cdp.close();
       throw new Error("The station is stopping.");
     }
-    const up: Up = { running, cdp, tabs, keys, since: this.#fibers.now() };
+    const up: Up = { running, cdp, tabs, keys, loginContexts, loginTabs, unlisten, since: this.#fibers.now() };
+    current = up;
     this.#up = up;
     this.#leaving = false;
     void cdp.closed.then(() => this.#lost(up));
@@ -301,6 +429,7 @@ export class StationBrowser {
   #lost(up: Up) {
     if (this.#up !== up) return;
     this.#up = null;
+    up.unlisten();
     up.tabs.close();
     up.keys.close();
     this.#idle();
@@ -344,6 +473,11 @@ export class StationBrowser {
     this.#idle();
     this.#restart();
     log.info("browser", "closing Chrome", { why, pid: up.running.pid });
+    for (const tab of up.loginTabs.values()) {
+      if (tab.ending === null) this.#trackFlush(this.#saveLoginTab(up, tab));
+    }
+    await this.flushed();
+    up.unlisten();
     up.tabs.close();
     up.keys.close();
     await up.cdp.send("Browser.close").catch(() => {});
@@ -352,6 +486,70 @@ export class StationBrowser {
     await this.#o.chrome.kill(up.running);
     this.#pause = 0;
     this.#note();
+  }
+
+  #trackFlush(p: Promise<void>): Promise<void> {
+    const tracked = p.then(() => {}, () => {});
+    this.#flushing.add(tracked);
+    void tracked.then(() => this.#flushing.delete(tracked));
+    return p;
+  }
+
+  #heardLogin(up: Up | null, e: CdpEvent) {
+    if (up === null || e.sessionId !== undefined) return;
+    if (e.method === "Target.targetInfoChanged") {
+      const targetId = e.params?.targetInfo?.targetId;
+      const tab = typeof targetId === "string" ? up.loginTabs.get(targetId) : undefined;
+      if (tab && tab.ending === null) void this.#trackFlush(this.#saveLoginTab(up, tab));
+    } else if (e.method === "Target.targetDestroyed") {
+      const targetId = e.params?.targetId;
+      const tab = typeof targetId === "string" ? up.loginTabs.get(targetId) : undefined;
+      if (tab && tab.ending === null) void this.#trackFlush(this.#endLoginTab(up, targetId, false));
+    }
+  }
+
+  #loginContextChanged(up: Up | null, ctx: string) {
+    if (up === null) return;
+    for (const tab of up.loginTabs.values()) {
+      if (tab.ctx === ctx && tab.ending === null) void this.#trackFlush(this.#saveLoginTab(up, tab));
+    }
+  }
+
+  #saveLoginTab(up: Up, tab: LoginTab): Promise<void> {
+    const next = tab.saving.then(async () => {
+      const path = tab.stateFile();
+      if (path === null) return;
+      const got = await up.cdp.send("Storage.getCookies", { browserContextId: tab.ctx }).catch(() => null);
+      if (got === null) return;
+      const cookies = allCookies(got.cookies);
+      const passkeys = await up.keys.read(tab.ctx).catch(() => []);
+      if (cookies.length === 0 && passkeys.length === 0) {
+        const target = tab.stateFile();
+        if (target !== null) await unlink(target).catch(() => {});
+        return;
+      }
+      await writeLoginState(tab.stateFile, keptOf({ cookies, passkeys }));
+    }).catch((e) => {
+      log.warn("browser", "could not save a login tab's state", { error: (e as Error).message });
+    });
+    tab.saving = next;
+    return next;
+  }
+
+  #endLoginTab(up: Up, targetId: string, closeTarget: boolean): Promise<void> {
+    const tab = up.loginTabs.get(targetId);
+    if (!tab) return Promise.resolve();
+    if (tab.ending) return tab.ending;
+    const ending = (async () => {
+      await this.#saveLoginTab(up, tab);
+      if (closeTarget && up.tabs.has(targetId)) await up.tabs.closeTab(targetId).catch(() => {});
+      up.loginTabs.delete(targetId);
+      up.loginContexts.delete(tab.ctx);
+      up.keys.forget(tab.ctx);
+      await up.cdp.send("Target.disposeBrowserContext", { browserContextId: tab.ctx }).catch(() => {});
+    })();
+    tab.ending = ending;
+    return ending;
   }
 
   #note() {

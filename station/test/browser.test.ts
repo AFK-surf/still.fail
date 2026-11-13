@@ -3,7 +3,7 @@
 // the browser kept (started once, closed when idle, started again when it dies in use) on a test clock. The real
 // Chrome is side/browser.test.ts's.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -669,6 +669,108 @@ test("a tab of the station's own: opened at a page in a window of its own behind
   await b.close();
   const none = new StationBrowser({ later: () => () => {}, dir: scratch(), chrome: { ...chrome.host, installed: () => false }, clock: c });
   assert.equal(none.available(), false);
+});
+
+test("profile sign-in tabs use isolated browser contexts, persist cookies and passkeys privately, follow moved homes, and never recreate deleted ones", async () => {
+  const chrome = fakeChrome();
+  const { clock: c } = clock();
+  const dir = scratch();
+  const homeA = join(dir, "homes", "sub-a");
+  const homeB = join(dir, "homes", "sub-b");
+  mkdirSync(homeA, { recursive: true });
+  mkdirSync(homeB, { recursive: true });
+  const fileA = join(homeA, ".stillfail-login-state.json");
+  const fileB = join(homeB, ".stillfail-login-state.json");
+
+  const b = new StationBrowser({ later: () => () => {}, dir: scratch(), chrome: chrome.host, clock: c });
+  await b.endpoint();
+  const cdp = chrome.made[0]!;
+  cdp.answers["Target.attachToTarget"] = (p) => ({ sessionId: `S-${p.targetId}` });
+  cdp.answers["WebAuthn.addVirtualAuthenticator"] = () => ({ authenticatorId: "auth-1" });
+
+  // 1. Two profiles open in distinct contexts (neither the default context nor each other's).
+  const tabA = await b.openTab("https://claude.ai/login", { stateFile: () => fileA });
+  const tabB = await b.openTab("https://claude.ai/login", { stateFile: () => fileB });
+  await turn();
+  const created = cdp.of("Target.createTarget").map((x) => x.params);
+  assert.equal(created.length, 2);
+  const ctxA = created[0]!.browserContextId as string;
+  const ctxB = created[1]!.browserContextId as string;
+  assert.ok(ctxA && ctxB && ctxA !== ctxB);
+
+  // Set different cookies in each context, and emit a WebAuthn passkey in ctxA.
+  await cdp.send("Storage.setCookies", {
+    browserContextId: ctxA,
+    cookies: [{ name: "sessionKey", value: "acct-a", domain: ".claude.ai", path: "/", secure: true, httpOnly: true, expires: 4_000_000_000 }],
+  });
+  await cdp.send("Storage.setCookies", {
+    browserContextId: ctxB,
+    cookies: [{ name: "sessionKey", value: "acct-b", domain: ".claude.ai", path: "/", secure: true, httpOnly: true, expires: 4_000_000_000 }],
+  });
+  const passkey = { credentialId: "AQID", rpId: "claude.ai", privateKey: "MIGHAgEA", userHandle: "BQ", signCount: 1 };
+  cdp.emit("WebAuthn.credentialAdded", { authenticatorId: "auth-1", credential: passkey }, `S-${tabA}`);
+  await b.flushed();
+
+  // Closing tabA saves its cookies + passkey privately and disposes ctxA; closing tabB via Target.targetDestroyed does the same for ctxB.
+  await b.closeTab(tabA);
+  cdp.emit("Target.targetDestroyed", { targetId: tabB });
+  await b.flushed();
+
+  assert.deepEqual(cdp.of("Target.disposeBrowserContext").map((x) => x.params.browserContextId).sort(), [ctxA, ctxB].sort());
+  const savedA = stateOf(readFileSync(fileA, "utf8"));
+  const savedB = stateOf(readFileSync(fileB, "utf8"));
+  assert.deepEqual(savedA.cookies.map((k: any) => k.value), ["acct-a"]);
+  assert.deepEqual(savedA.passkeys, [passkey]);
+  assert.deepEqual(savedB.cookies.map((k: any) => k.value), ["acct-b"]);
+  assert.deepEqual(savedB.passkeys, []);
+  if (process.platform !== "win32") assert.equal(statSync(fileA).mode & 0o777, 0o600);
+
+  // 2. Reopening sub-a in a fresh context loads its saved cookies and passkeys into the new context.
+  const tabA2 = await b.openTab("https://claude.ai/oauth/authorize", { stateFile: () => fileA });
+  await turn();
+  const ctxA2 = cdp.of("Target.createTarget").at(-1)!.params.browserContextId as string;
+  assert.notEqual(ctxA2, ctxA);
+  assert.deepEqual([...chrome.jars.get(ctxA2)!.values()].map((k) => k.value), ["acct-a"]);
+  assert.deepEqual(
+    cdp.of("WebAuthn.addCredential").filter((x) => x.sessionId === `S-${tabA2}`).map((x) => x.params.credential.credentialId),
+    ["AQID"],
+  );
+  await b.closeTab(tabA2);
+
+  // 3. A pending newLogin home renamed during closeTab (ENOENT on first path) retries with the updated stateFile().
+  let pendingHome = join(dir, "homes", "login-temp");
+  const finalHome = join(dir, "homes", "created-sub");
+  mkdirSync(pendingHome, { recursive: true });
+  let moved = false;
+  const tabNew = await b.openTab("https://claude.ai/login", {
+    stateFile: () => join(moved ? finalHome : pendingHome, ".stillfail-login-state.json"),
+  });
+  const ctxNew = cdp.of("Target.createTarget").at(-1)!.params.browserContextId as string;
+  const origGetCookies = cdp.answers["Storage.getCookies"]!;
+  cdp.answers["Storage.getCookies"] = (p) => {
+    if (p.browserContextId === ctxNew && !moved) {
+      // Simulate pendingChanged renaming homes/login-temp -> homes/created-sub right after stateFile() was first read.
+      renameSync(pendingHome, finalHome);
+      moved = true;
+      return { cookies: [{ name: "sessionKey", value: "new-sub", domain: ".claude.ai", path: "/" }] };
+    }
+    return origGetCookies(p);
+  };
+  await b.closeTab(tabNew);
+  assert.equal(existsSync(pendingHome), false, "login-temp is not recreated");
+  assert.deepEqual(stateOf(readFileSync(join(finalHome, ".stillfail-login-state.json"), "utf8")).cookies.map((k: any) => k.value), ["new-sub"]);
+
+  // 4. A dropped login whose directory was removed and stateFile returns null (or points to a removed dir) never recreates the dir.
+  const droppedHome = join(dir, "homes", "login-dropped");
+  mkdirSync(droppedHome, { recursive: true });
+  const tabDrop = await b.openTab("https://claude.ai/login", { stateFile: () => join(droppedHome, ".stillfail-login-state.json") });
+  const ctxDrop = cdp.of("Target.createTarget").at(-1)!.params.browserContextId as string;
+  await cdp.send("Storage.setCookies", { browserContextId: ctxDrop, cookies: [{ name: "a", value: "1", domain: ".claude.ai", path: "/" }] });
+  rmSync(droppedHome, { recursive: true, force: true });
+  await b.closeTab(tabDrop);
+  assert.equal(existsSync(droppedHome), false, "dropped login directory stays gone");
+
+  await b.close();
 });
 
 test("a chat archived closes the tabs it opened, and only those", async () => {

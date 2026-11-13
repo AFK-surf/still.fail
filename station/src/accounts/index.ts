@@ -47,7 +47,7 @@ import { checkAutomaticDecisions } from "./check.ts";
 import { CONSOLE_FILE, consoleIn, readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
 import { CURSOR, authFile as cursorAuthFile, cursorIn } from "./cursor.ts";
 import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
-import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
+import { LOGIN_BROWSER_FILE, type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexAccountIdentity, codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
 import { facts } from "./catalog.ts";
 import { uncheckOutdated } from "./models.ts";
@@ -58,9 +58,12 @@ import { claudeResetWith } from "./claude-reset.ts";
 import { Refused as Refusal } from "../api/request.ts";
 
 export { checkConfig } from "./check.ts";
+export { LOGIN_BROWSER_FILE };
 export type { LoginJob, MachineLogin, ProfileCheck, ProfileQuota };
 
 type Json = any;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /// How often allowances are asked again while someone follows.
 const QUOTA_EVERY_MS = 5 * 60_000;
@@ -260,6 +263,7 @@ export class Accounts {
     this.urls = deps.urls ?? URLS;
     // A Cursor sign-in's key is named for this machine in the person's Cursor dashboard (accounts/cursor.ts).
     this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console, this.urls.cursor ?? CURSOR, () => `still.fail · ${hostname()}`, this.urls.kimi ?? KIMI_AUTH);
+    this.logins.setStateFile((id) => this.loginStateFile(id));
     this.machine =
       deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls), undefined, deps.clock);
     this.checkFn =
@@ -417,7 +421,8 @@ export class Accounts {
     return { token, expiresAt };
   }
 
-  /// A Claude profile's current token, renewed when about to run out: what a station sharing it lends.
+  /// A Claude profile's current token, renewed when about to run out: handed to its local sessions (`subscriptionToken`)
+  /// and lent when another station shares it.
   async claudeToken(profile: Json, rejected?: string): Promise<MachineToken> {
     if (profile.machine === true) return this.machineToken(this.env, rejected);
     const home = String(profile.home ?? "");
@@ -720,6 +725,22 @@ export class Accounts {
 
   // ── sign-ins ──
 
+  /// Where `id`'s isolated sign-in browser context keeps its cookies and passkeys: inside the profile's own home, or
+  /// the pending login's (following its rename once `pendingChanged` creates the profile; null once dropped or failed).
+  private loginStateFile(id: string): string | null {
+    const profile = this.profile(id);
+    if (profile) return profile.machine === true || borrowed(profile) ? null : join(profile.home, LOGIN_BROWSER_FILE);
+    const pending = this.pending.get(id);
+    if (!pending) return null;
+    if (pending.created !== null) {
+      const made = this.profile(pending.created);
+      return made ? join(made.home, LOGIN_BROWSER_FILE) : null;
+    }
+    const state = this.logins.get(id)?.state;
+    if (state === "failed" || state === "cancelled") return null;
+    return join(pending.home, LOGIN_BROWSER_FILE);
+  }
+
   /// POST /profiles/:id/login: a subscription profile signed in (again).
   async startLogin(id: string, viewer: Viewer, lang: Lang = stationLang()): Promise<LoginJob> {
     const profile = this.profile(id);
@@ -734,7 +755,14 @@ export class Accounts {
     if (kind === "opencode-go") return this.logins.startConsole({ id, home: profile.home }, lang);
     if (kimi) return this.logins.startKimi({ id, home: profile.home }, lang);
     if (profile.runtime === "cursor") return this.logins.startCursor({ id, home: profile.home }, lang);
-    return this.logins.start({ id, runtime: profile.runtime, home: profile.home }, lang);
+    let email: string | null = null;
+    if (profile.runtime === "claude") {
+      const fromHome = await accountEmailSoon("claude", profile.home);
+      const fallback = EMAIL_RE.test(profile.name.trim()) ? profile.name.trim() : null;
+      const candidate = (fromHome ?? fallback)?.trim() ?? "";
+      email = EMAIL_RE.test(candidate) ? candidate : null;
+    }
+    return this.logins.start({ id, runtime: profile.runtime, home: profile.home, ...(email ? { email } : {}) }, lang);
   }
 
   /// POST /logins: signing a subscription in before there is a profile; the profile is made once it succeeds.
