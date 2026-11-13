@@ -229,8 +229,8 @@ another; the accounts' list's merge across stations and its refills.
   2026-11-14), before the move or after it from the chain as it moved, nobody approving it again: only one their own
   device approved on the chain (by the key that signed it), not run out, off neither the chain nor their log. One not
   said by the move is out till then, told so and whom to ask (`left`), and in at its next hello once said: a page
-  refused is not tried again while it only waits, so it comes back as it is opened again. A member bound to a log whose app device signs on the chain and is not on that log, or
-  whose log no station gave, waits it too (`lock_not_ready`): the state names a member's devices by their log alone,
+  refused is not tried again while it only waits, so it comes back as it is opened again. A member bound to a log
+  whose app device signs on the chain and is not on that log, or whose log no station gave, waits it too (`lock_not_ready`): the state names a member's devices by their log alone,
   and nobody would approve that one again by itself. So `handOver` reads the logs the chain binds of its stations
   before its plan and again before the `moved` (`readBound`; of an unmoved chain a station gives them to a device the
   chain lets in, station/src/cloud/state.ts `logsOf`), and its `guard` holds the devices too. `test/lock-handover.test.ts`
