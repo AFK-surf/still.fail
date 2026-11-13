@@ -8,6 +8,7 @@ rename to still.fail, as do their Durable Objects, bucket and secrets: renaming 
   admin     stillfail-admin     the admin's console, static (wrangler.admin.jsonc)
   preview   stillfail-preview   the preview host, static (wrangler.preview.jsonc)
   status    still-fail-status   still.fail/status, static (wrangler.status.jsonc)
+  kit       stillfail-kit       the component library's page, static (wrangler.kit.jsonc): monoid's alone, kit.monoid.zone
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
 The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
@@ -125,11 +126,12 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
-# What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's site.
-DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta")]
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc", "kit": "wrangler.kit.jsonc"}
+# What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's
+# site, nor the component library's page (monoid's alone, named by CI: wrangler.kit.jsonc).
+DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta", "kit")]
 # The test channel's parts, on its own domain (youdid.wtf): deployed only once that zone is on Cloudflare (beta_zone()).
-BETA_PARTS = ("web-beta", "site-beta")
+BETA_PARTS = ("web-beta", "site-beta", "kit")
 # The web app's builds deployed to the test channel, by commit, for promote-web.
 BUILDS = DEPLOY / "builds"
 KEEP_BUILDS = 10
@@ -556,6 +558,12 @@ def main() -> None:
             print("note: no moon; building without the app (no web app deployed)", flush=True)
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
         rebrand_static()
+    # The component library's page (apps/mbui/scripts/kit-web.sh into dist/kit): as it is when it is there (CI's has it
+    # from mbui-web), else built where MoonBit is.
+    if not args.skip_build and "kit" in parts and not (REPO / "dist" / "kit" / "app.js").exists():
+        if not shutil.which("moon"):
+            sys.exit("no moon and no dist/kit/app.js: the component library's page is built by apps/mbui/scripts/kit-web.sh")
+        subprocess.run(["bash", "apps/mbui/scripts/kit-web.sh", "dist/kit"], cwd=REPO, check=True)
     # The official sites (website/build.mjs SITES): this cloud's (still.fail, monoid.build) into dist/site, its test
     # channel's (youdid.wtf, monoid.zone) into dist/site-beta.
     for part, site in (("site", rehost("still.fail")), ("site-beta", beta_zone())):
@@ -622,6 +630,7 @@ def main() -> None:
         "status": ["https://still.fail/status"],
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],
+        "kit": [f"https://kit.{beta_zone()}/"],
     }
     for part in [] if args.dry_run else parts:
         for url in dict.fromkeys(rehost(u) for u in checks[part] if not dropped(u)):

@@ -44,6 +44,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
   both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
   what it needs of the app is given to it as the app starts.
+- Its parts are shown on their own, each beside its states, by `src/sfstories` (a story a part, `stories.mbt`), built
+  for the browser by `scripts/kit-web.sh` and deployed from main to kit.monoid.zone (`cloud/wrangler.kit.jsonc`).
 
 - A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
   as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
