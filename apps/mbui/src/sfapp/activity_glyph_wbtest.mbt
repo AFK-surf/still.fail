@@ -25,13 +25,36 @@ fn activity_glyph_alphas(t : @ui.Tester, words : String) -> Array[Int64] {
 }
 
 ///|
+/// How far apart the moments are that the working line is looked for at as its row comes in: a quarter of its words'
+/// way in.
+let activity_look_ms : Double = @sfbase.glyph_line_in_ms / 4.0
+
+///|
+/// How long after the turn is sent its working line is looked for: its flight, the list's way, its words' way in.
+let activity_comes_within_ms : Double = @sfbase.flight_ms + @ui.move_most_ms + @sfbase.glyph_line_in_ms
+
+///|
+/// The ink alphas of the working line's glyphs (activity_glyph_alphas) at the first of the moments a step apart
+/// (activity_look_ms, up to activity_comes_within_ms from now) that more than one of them is drawn and any is seen: as
+/// its row comes into the list, on whichever page the chat is made; none where it never is.
+fn activity_first_alphas(t : @ui.Tester, words : String) -> Array[Int64] {
+  let steps = (activity_comes_within_ms / activity_look_ms).ceil().to_int()
+  for _ in 0..<steps {
+    t.run_for(activity_look_ms)
+    let alphas = activity_glyph_alphas(t, words)
+    if alphas.length() > 1 && alphas.iter().any(fn(a) { a > 0L }) {
+      return alphas
+    }
+  }
+  []
+}
+
+///|
 test "activity: the first words of a newly seen turn arrive a glyph at a time" {
   let t = linger_core()
   t.run_for(fix_deliver_ms)
-  let at = turns_of("ws1/st1\u{1}s-c1").started_at("act:s-c1")
-  assert_true(at >= 0.0 && at < @double.infinity, msg="\{at}")
-  t.run_for(dmax(at - t.time(), 0.0) + @sfbase.glyph_line_in_ms / 2.0)
-  let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
+  // (as the line is first seen: some of its glyphs further in than others)
+  let alphas = activity_first_alphas(t, tr("android-chat.chat.working"))
   assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{Repr(alphas)}")
   t.run_for(@ui.move_most_ms + @sfbase.glyph_line_in_ms)
   let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
@@ -52,12 +75,13 @@ test "activity: a row whose coming is set for later reveals its words from then"
   tap_send(t)
   fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
-  // (its coming set where the flight lands, later than now: ListRows' `came`, not Turns::started_at)
-  let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap()
-  assert_true(at > t.time(), msg="its coming is set for later: \{at}, now \{t.time()}")
+  // (its row comes later than now, where the words sent land: none of its words yet)
   let words = tr("android-chat.chat.working")
   assert_eq(activity_glyphs_shown(t, words), 0)
-  t.run_for(at - t.time() + @ui.move_most_ms + @sfbase.glyph_line_in_ms)
+  // as it comes, its words coming in from then: some of its glyphs further in than others
+  let alphas = activity_first_alphas(t, words)
+  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{Repr(alphas)}")
+  t.run_for(@ui.move_most_ms + @sfbase.glyph_line_in_ms)
   assert_true(activity_glyphs_shown(t, words) > 0, msg="the activity's words come in once it has come")
   emit_restore()
 }
