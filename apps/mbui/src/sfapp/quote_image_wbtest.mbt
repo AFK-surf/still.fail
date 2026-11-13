@@ -4,24 +4,45 @@
 
 ///|
 /// The chat open at its end (on `platform`'s screen: Android's, a finger), then a row up at a time until the image
-/// `name` is drawn; where it is.
+/// `name` is drawn (walk_to_image); where it is.
 fn image_in_chat(name : String, platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double, Double) {
   new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
   nav_rested(t)
-  let mut tries = 0
-  while t.locate("img:" + name).length() == 0 && tries < 12 {
-    let (first, _) = t.visible()
-    t.scroll_to(if first > 0 { first - 1 } else { 0 })
-    t.draw()
-    tries += 1
-  }
+  walk_to_image(t, name)
   let at = t.locate("img:" + name)
   assert_true(at.length() > 0) catch { _ => () }
   let (x, y) = at[0]
   (t, x, y)
+}
+
+///|
+/// The chat's list walked up from where it is, a row at a time, till the image `name` is drawn; where a step does not
+/// show it, each other row then in sight brought to the top in turn (a tall one's picture may lie under the window's
+/// foot while its top shows, as a chat's page made as nodes lays a message out on a wide screen), and back.
+fn walk_to_image(t : @ui.Tester, name : String) -> Unit {
+  let found = fn() { t.locate("img:" + name).length() > 0 }
+  let mut tries = 0
+  while !found() && tries < 12 {
+    let (first, _) = t.visible()
+    t.scroll_to(if first > 0 { first - 1 } else { 0 })
+    t.draw()
+    tries += 1
+    if found() {
+      break
+    }
+    let (top, last) = t.visible()
+    for k = top + 1; k <= last && !found(); k = k + 1 {
+      t.scroll_to(k)
+      t.draw()
+    }
+    if !found() {
+      t.scroll_to(top)
+      t.draw()
+    }
+  }
 }
 
 ///|
@@ -566,6 +587,16 @@ test "the same picture quoted twice flies to each quote's own place" {
 }
 
 ///|
+/// Where the agent's video 演示录屏.mp4 of chat-download is pressed: by its name where that is drawn by it, else its
+/// picture's middle (a chat's page made as nodes draws no name over its still: the capsule says its length).
+fn demo_video_at(t : @ui.Tester) -> (Double, Double) raise {
+  let named = t.reachable("演示录屏.mp4")
+  let at = if named.length() > 0 { named } else { t.reachable("img:演示录屏.mp4") }
+  assert_true(at.length() > 0, msg="the video 演示录屏.mp4 is not drawn where a press reaches")
+  at[0]
+}
+
+///|
 test "a video quoted: its still in its card in the composer; sent, it grows from there to its box in the message, never there at once" {
   // what was seen: its box in the message drawn whole as it set out from the composer, its card's ground still growing
   // round it on its way up
@@ -574,7 +605,7 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
-  let (x, y) = t.reachable("演示录屏.mp4")[0]
+  let (x, y) = demo_video_at(t)
   t.right_click(x, y)
   t.draw()
   t.tap_text("引用")
@@ -608,7 +639,7 @@ test "a video quoted and sent: its still in its card in the message concentric w
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
-  let (x, y) = t.reachable("演示录屏.mp4")[0]
+  let (x, y) = demo_video_at(t)
   t.right_click(x, y)
   t.draw()
   t.tap_text("引用")
@@ -630,7 +661,7 @@ test "an agent's video and file card right clicked: 引用 quotes each, its file
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
   // (the video in its middle, nothing over it naming it; the card on its name)
-  let (x, y) = t.reachable("演示录屏.mp4")[0]
+  let (x, y) = demo_video_at(t)
   let card = t.words().filter(fn(w) { w.0.has_prefix("发布包") })
   assert_true(card.length() > 0)
   for at in [(x, y), (card[0].1 + 4.0, card[0].2 + 4.0)] {
