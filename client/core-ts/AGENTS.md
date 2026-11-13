@@ -180,10 +180,12 @@ another; the accounts' list's merge across stations and its refills.
   admin's device once the code is proved, `lock` the log of their own its hello brought (checked as the credential's
   person's, the asking device on it; `admitOf`), the role the workspace's view gives them as the rules let this signer
   give it, and the removal of an older binding first where their lock was begun anew; a person's own new device goes
-  on their log alone. Adding a member is the cloud's part alone there (`added`: nothing signed). One that lost its
+  on their log alone. Adding a member is the cloud's part alone there (`added`: nothing signed). A device taken out
+  takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
+  `outOf` says who took it out and when (no words for the page yet). One that lost its
   place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:
-  judged with the others lost with it in the order made by what its body is about (`src/personal-lock.ts` `#how`), the same body where its `prev` still stands before it, else one made anew
-  (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,
+  judged with the others lost with it in the order made by what its body is about (`src/personal-lock.ts` `#how`), the
+  same body where its `prev` still stands before it, else one made anew (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,
   as `lockAsked` is), told as not in effect. One pending whose act's cloud write then fails is dropped and its bodies
   let go of, as a pending chain entry is (`dropStated`); one taken stays. Its row is on its own workspace's lock topic
   alone. Turning a moved workspace off asks twice (2026-11-13, the lead's: two asks taken over secrets left sealed

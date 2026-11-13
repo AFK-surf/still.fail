@@ -17,7 +17,8 @@ import { key, signed } from "../../../station/test/lock-world-sim.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, shortCode } from "../src/lock.ts";
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
-import { added, enrolled, held, inForceOf, read } from "../src/views/lock.ts";
+import { added, enrolled, held, inForceOf, outOf, read } from "../src/views/lock.ts";
+import { hooks } from "../src/core/execute.ts";
 import { ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
 import { ME, genesis, grant, pipe, rig } from "./lock-rig.ts";
 
@@ -173,7 +174,7 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
     return b === undefined ? "(no body)" : [b.kind, b.sub ?? "", b.role ?? "", typeof b.lock === "string" ? b.lock.slice(0, 6) : ""].join(" ").trim();
   });
   const members = () => [...inForceOf(inner, "ws").f.members].map(([sub, m]) => `${sub} ${m.role}`).sort().join(", ");
-  return { r, inner, st, st2, run, ask, said, own, asked, hello, prove, lets, me, prompts, helloApp, proveApp, stated, members, xena };
+  return { r, inner, st, st2, run, ask, said, own, asked, hello, prove, lets, me, prompts, helloApp, proveApp, stated, members, xena, alice, bodies };
 }
 
 test("a web page approved face to face where the chain moved: a `web` entry of the person's own log, the person asked once, let in until its `exp`", async () => {
@@ -377,4 +378,20 @@ test("a person's own new app device (the personal exchange) where the chains mov
   assert.equal(held(w.inner, "ws")!.entries.length, chains.ws, "nothing on ws's chain");
   assert.equal(held(w.inner, "w2")!.entries.length, chains.w2, "nor on w2's");
   assert.equal(w.r.cloud.posted.filter((p) => p.ws === "ws" || p.ws === "w2").length, 0, "nothing sent to the chains' cloud");
+});
+
+test("a device whose person was taken out where the chain moved: the refusal's removal and the log entry that commits to it taken, and who took it out and when said", async () => {
+  const w = await setUp({ root: "alice", mine: "member" });
+  assert.equal(outOf(w.inner, "ws"), null, "in the list: nobody took it out");
+  const admit = w.bodies.find((b) => (b as { kind: string; sub?: string }).kind === "member" && (b as { sub: string }).sub === "s1")!;
+  const removal = say(w.alice, "member.remove", { sub: "s1", cancels: [bodyHash(admit)!] });
+  const out = { bodies: [removal], logs: [{ genesis: gOf(w.alice), entries: w.alice.chain }] };
+  hooks.lockRefused?.(w.inner, "ws", A, null, { out });
+  await w.r.host.time.pass(100);
+  assert.equal(inForceOf(w.inner, "ws").f.members.has("s1"), false, "the list made here no longer names it");
+  assert.deepEqual(outOf(w.inner, "ws"), { by: "r1", at: w.alice.chain.at(-1)!.at }, "taken out by alice, at her entry's time");
+  const other = await setUp({ root: "alice", mine: "member" });
+  hooks.lockRefused?.(other.inner, "ws", A, null, { out: { bodies: [removal], logs: [] } });
+  assert.equal(inForceOf(other.inner, "ws").f.members.has("s1"), true, "a body no log kept commits to is not taken");
+  assert.equal(outOf(other.inner, "ws"), null);
 });

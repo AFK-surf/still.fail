@@ -1101,11 +1101,12 @@ export function refusedAgain(inner: Inner, ws: string): void {
 
 /// A station refused this device for the lock: noted, not asked again until the lock moves on. What the refusal says
 /// then: which workspace, and where to approve it.
-function refused(inner: Inner, ws: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }): CoreError | null {
+function refused(inner: Inner, ws: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown; out?: unknown }): CoreError | null {
   if (inner.provider.kind !== "stillfail") return null;
   const p = part(inner, ws);
   heardRefused(inner, ws, told?.person);
   heardTail(inner, ws, told?.entries);
+  heardOut(inner, ws, told?.out);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
   const f = stateOf(inner, ws, h?.entries ?? []);
@@ -1141,6 +1142,35 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   p.refused.set(station, h?.head?.hash ?? null);
   touch(inner, ws);
   return unconfirmed(inner, ws);
+}
+
+/// What took this device out of a moved workspace, as a station's refusal tells it (station/src/mesh/serve.ts
+/// `toldOut`): the logs and the bodies kept as any given are (`keepLogs`, then `keepBodies`: each body only against an
+/// entry kept that commits to it), so the state made here says it as the stations do (`outOf`).
+function heardOut(inner: Inner, ws: string, raw: unknown): void {
+  if (!isObject(raw) || !movedHere(inner, ws)) return;
+  const logs = keepLogs(inner, ws, arr(raw.logs));
+  const bodies = keepBodies(inner, ws, arr(raw.bodies));
+  if (logs || bodies) touch(inner, ws);
+}
+
+/// Who took this device's person out of moved workspace `ws`, and when (unix seconds), by what is kept here: of the
+/// removals of them (`member.remove {sub}`) whose entry is on a log kept, the latest, its signer the person whose log
+/// it is. Null where none is kept, or the list in force names them.
+export function outOf(inner: Inner, ws: string): { by: string; at: number } | null {
+  const sub = inner.workspaces.owner(ws);
+  if (sub === null || !movedHere(inner, ws) || stateOf(inner, ws).members.has(sub)) return null;
+  const removals = new Map<string, unknown>();
+  for (const b of bodiesHeld(inner, ws)) if (get(b, "kind") === "member.remove" && get(b, "sub") === sub) removals.set(bodyHash(b) ?? "", b);
+  let out: { by: string; at: number } | null = null;
+  for (const [, entries] of logsOf(inner, ws, false)) {
+    const by = str(get(entries[0]?.body, "sub"));
+    for (const e of entries) {
+      if (by === null || e.kind !== "ws" || !removals.has(String(get(e.body, "h")))) continue;
+      if (out === null || e.at > out.at) out = { by, at: e.at };
+    }
+  }
+  return out;
 }
 
 /// Why a station is not asked now: it refused this device and the lock has not moved on since.
