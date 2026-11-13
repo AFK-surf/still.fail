@@ -70,6 +70,10 @@ type Opts = {
   view?: { sub: string; email: string; role: string }[];
   /// Members whose log no station keeps (their app device never brought it).
   unbrought?: ("r2" | "r3")[];
+  /// So many more members (m0, m1, …), each with an app device and a log of their own bound and brought.
+  crowd?: number;
+  /// A third station of the workspace, C.
+  third?: boolean;
 };
 
 async function setUp(o: Opts = {}) {
@@ -80,7 +84,9 @@ async function setUp(o: Opts = {}) {
   const myLog = [simSigned({ v: 1, ws: "person:s1", seq: 0, prev: null, at: 1000, kind: "genesis", body: { sub: "s1", device: { key: k.id, id: base.hex, label: "s1's app" } } } as Omit<StationEntry, "sig">, k)];
   const gMe = stationHash(myLog[0]!);
   const bob = new Log("r2"), xena = new Log("r3"), r4 = new Log("r4"), s0 = dev(), first = new Log("s0");
-  const A = ed().hex, B = ed().hex, D = ed().hex, WEB = ed(), WEB5 = ed();
+  const A = ed().hex, B = ed().hex, C = ed().hex, D = ed().hex, WEB = ed(), WEB5 = ed();
+  const ours = o.third ? [A, B, C] : [A, B];
+  const crowd = Array.from({ length: o.crowd ?? 0 }, (_, i) => new Log(`m${i}`));
   let mine: Signer | null = null;
   let now = 0;
   const other = ed();
@@ -94,7 +100,8 @@ async function setUp(o: Opts = {}) {
     if (o.more?.includes("notReady")) members.push({ sub: "r4", email: "d@x.com", role: "member" }), devices.push(appOf("r4", r4.app));
     if (o.more?.includes("web")) members.push({ sub: "r5", email: "e@x.com", role: "admin" });
     if (o.more?.includes("none")) members.push({ sub: "r6", email: "f@x.com", role: "member" });
-    const e = next("ws", null, o.genesisAt ?? 1000, "genesis", { owner: members[0]!.sub, ...SETTINGS(g.keys), members, devices, passkeys: [], stations: [{ key: A, name: "a" }, { key: B, name: "b" }], gateways: [] });
+    for (const l of crowd) members.push({ sub: l.sub, email: `${l.sub}@x.com`, role: "member" }), devices.push(appOf(l.sub, l.app));
+    const e = next("ws", null, o.genesisAt ?? 1000, "genesis", { owner: members[0]!.sub, ...SETTINGS(g.keys), members, devices, passkeys: [], stations: ours.map((k, i) => ({ key: k, name: "abc"[i]! })), gateways: [] });
     const by = o.mine === "admin" ? s0.signer : o.mine === "second" ? first.app.signer : o.mine === "otherKey" ? other : null;
     return { ws: by === null ? signer.sign(e) : (signed(e as Omit<StationEntry, "sig">, by) as unknown as Entry) };
   }, (host) => {
@@ -105,7 +112,7 @@ async function setUp(o: Opts = {}) {
     host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(myLog)));
     host.storage.set("personal-signer-id", utf8(k.id));
     host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
-  }, [A, B], [A, B], undefined, [D], o.view === undefined ? {} : { members: o.view });
+  }, ours, ours, undefined, [D], o.view === undefined ? {} : { members: o.view });
   clock = () => r.host.nowMs();
   const inner = r.core.inner;
   inner.mesh = () => withoutMesh(base.hex);
@@ -123,6 +130,7 @@ async function setUp(o: Opts = {}) {
   after(bob.app.signer, "person", { sub: "r2", person: bob.genesis });
   after(xena.app.signer, "person", { sub: "r3", person: xena.genesis });
   if (o.mine === "second") after(first.app.signer, "person", { sub: "s0", person: first.genesis });
+  for (const l of crowd) after(l.app.signer, "person", { sub: l.sub, person: l.genesis });
   if (o.firstLowered) after(signer, "member", { sub: "s0", email: "o@x.com", role: "admin" });
   if (o.myWeb) after(signer, "device", { id: WEB.hex, sub: "s1", kind: "web", label: "s1's browser", exp: now + 10 * 86400 });
   if (o.more?.includes("web")) after(o.mine === "admin" ? s0.signer : signer, "device", { id: WEB5.hex, sub: "r5", kind: "web", label: "r5's browser", exp: now + 10 * 86400 });
@@ -130,14 +138,15 @@ async function setUp(o: Opts = {}) {
   // Stations A and B, the station's own code, the chain pinned and the members' logs heard
   const station = (id: string): Cloud => {
     const data = mkdtempSync(join(tmpdir(), "lock-handover-"));
-    writeState(data, { origin: "https://stillfail.test", station: id, workspace: "ws", workspace_name: "W", name: id.slice(0, 4), relay_url: "", relay_urls: [], grant_keys: g.keys, peers: [A, B].map((p, i) => ({ id: p, name: `s${i}` })), revocations: [] } as never);
+    writeState(data, { origin: "https://stillfail.test", station: id, workspace: "ws", workspace_name: "W", name: id.slice(0, 4), relay_url: "", relay_urls: [], grant_keys: g.keys, peers: ours.map((p, i) => ({ id: p, name: `s${i}` })), revocations: [] } as never);
     const c = new Cloud(data, false);
     c.takeLock(chain as unknown as StationEntry[]);
     // (each member's log as their app device brought it to the station, POST /lock/person)
-    for (const l of [bob, xena, ...(o.mine === "second" ? [first] : [])]) if (!o.unbrought?.includes(l.sub as "r2" | "r3")) bring(c, l, false, "ws");
+    for (const l of [bob, xena, ...(o.mine === "second" ? [first] : []), ...crowd]) if (!o.unbrought?.includes(l.sub as "r2" | "r3")) bring(c, l, false, "ws");
     return c;
   };
-  const stations = { A: station(A), B: station(B) };
+  const stations: { A: Cloud; B: Cloud; C?: Cloud } = { A: station(A), B: station(B), ...(o.third ? { C: station(C) } : {}) };
+  const nameOf = (id: string) => (id === A ? "A" : id === B ? "B" : id === C ? "C" : id === D ? "D" : null);
   const st = { silent: false, down: new Set<string>(), asked: [] as Asked[], hook: null as null | (() => void), early: [] as string[] };
   const viewer = viewerOf("s1", { base }, "owner", "ws");
   const route = (c: Cloud, method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
@@ -147,7 +156,7 @@ async function setUp(o: Opts = {}) {
     if (method === "POST" && path === "/lock" && ((body as { entries?: Entry[] })?.entries ?? []).some((e) => e.kind === "moved")) {
       const commits = inner.adb.personal().entries("s1").filter((e) => e.kind === "ws").map((e) => (e.body as { h: string }).h);
       const kept = c.bodies(null).all();
-      if (commits.length === 0 || commits.some((h) => !kept.has(h))) st.early.push(`${c === stations.A ? "A" : "B"}: a moved with ${commits.filter((h) => kept.has(h)).length} of ${commits.length} bodies`);
+      if (commits.length === 0 || commits.some((h) => !kept.has(h))) st.early.push(`${Object.entries(stations).find(([, x]) => x === c)?.[0]}: a moved with ${commits.filter((h) => kept.has(h)).length} of ${commits.length} bodies`);
     }
     const [p, q] = path.split("?") as [string, string | undefined];
     const buf = Buffer.from(body === null || body === undefined ? "" : JSON.stringify(body));
@@ -163,12 +172,13 @@ async function setUp(o: Opts = {}) {
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
-    if (path.startsWith("/lock") && (id === A || id === B || id === D)) {
-      const at = `${ws}/${id === A ? "A" : id === B ? "B" : "D"}`;
+    const n = id === undefined ? null : nameOf(id);
+    if (path.startsWith("/lock") && n !== null && (n === "D" || (stations as Record<string, Cloud | undefined>)[n] !== undefined)) {
+      const at = `${ws}/${n}`;
       st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
       if (id === D || ws !== "ws") return method === "POST" ? Effect.succeed({}) : Effect.fail(httpError(404, { error: "no route" }));
       if (st.down.has(at.slice(-1))) return Effect.fail(httpError(503, { error: "not reached" }));
-      return route(id === A ? stations.A : stations.B, method, path, body);
+      return route((stations as Record<string, Cloud | undefined>)[n]!, method, path, body);
     }
     return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
   }) as typeof inner.stations.requests.call;
@@ -188,7 +198,7 @@ async function setUp(o: Opts = {}) {
   const said = () => inner.adb.personal().entries("s1").slice(myLog.length).filter((e) => e.kind === "ws").map((e) => {
     const h = (e.body as { h: string }).h;
     const b = ((inner.data.record("lockBodies", "ws") as { bodies?: Record<string, unknown>[] } | null)?.bodies ?? []).find((x) => bodyHash(x) === h);
-    return b === undefined ? { what: "ws (no body)", prev: null, h } : { what: `${b.kind} ${b.sub ?? (b.key === A ? "A" : b.key === B ? "B" : "")}${b.role ? ` ${b.role}` : ""}`.trim(), prev: b.prev as string | null, h };
+    return b === undefined ? { what: "ws (no body)", prev: null, h } : { what: `${b.kind} ${b.sub ?? (nameOf(String(b.key)) ?? "")}${b.role ? ` ${b.role}` : ""}`.trim(), prev: b.prev as string | null, h };
   });
   const hand = () => run(handOver(inner, "s1", "ws"));
   /// The chain's list as the model's D4 has it, by the station's own fold, rooted in s1's log.
@@ -208,7 +218,7 @@ async function setUp(o: Opts = {}) {
   };
   /// An ask of the person's own lock's key for something else: grants signed (none: the ask alone).
   const askGrant = () => run(inner.adb.personal().signGrants("s1", [], "a grant"));
-  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, base, WEB, WEB5, A, B, viewer, firstApp, g, askGrant, now: () => now };
+  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, crowd, base, WEB, WEB5, A, B, C, viewer, firstApp, g, askGrant, now: () => now };
 }
 
 /// A second app device of `log`'s person (`d`) as the product puts it on their own log: a device entry signed by the
@@ -704,4 +714,25 @@ test("stations all down at the ask: said and pending, nothing moved; one back, m
   assert.deepEqual(movedAt(w), [w.gMe, w.gMe]);
   assert.equal(w.asked(), 1);
   assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS, "nothing said twice");
+});
+
+// A handover of any size is taken (2026-11-14): what one ask says of a workspace of 100 members and 3 stations is
+// brought in one POST /lock/person a station, the chain and every body, within what the station takes of one
+// (station/src/mesh/serve.ts `BODIES_MOST`, person-chains.ts `CHAIN_MOST`; `BROUGHT_MOST` bounds only what a hello's
+// first line brings, which never carries bodies).
+test("a workspace of 100 members and 3 stations handed over by itself in one ask: every body taken at each station, the chain's list in force", async () => {
+  const w = await setUp({ auto: true, crowd: 100, third: true });
+  const before = w.d4Chain(w.chain);
+  assert.equal((await w.askGrant()).error, undefined);
+  const says = w.said();
+  assert.equal(says.length, 1 + 102 + 3, "open, 102 members, 3 stations");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe, w.gMe], "moved at A, B and C");
+  for (const [n, c] of Object.entries(w.stations)) {
+    assert.equal(c.bodies(null).all().size, says.length, `${n} keeps every body`);
+    assert.deepEqual(d4Diff(before, d4Station(c, w.gMe, Math.floor(w.r.host.nowMs() / 1000))), [], `${n}'s state is the chain's list before`);
+  }
+  assert.deepEqual(d4Diff(before, d4Core(w.inner)), [], "the state in force here is the chain's list before");
+  assert.equal(w.asked(), 1, "one ask in all");
+  assert.deepEqual(w.st.early, [], "no moved before a station held every body");
 });
