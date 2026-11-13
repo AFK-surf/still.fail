@@ -549,7 +549,13 @@ export function install(inner: Inner): void {
   hooks.added = added;
   hooks.pendingDrop = (inner, ws, id) => {
     const items = pendingHeld(inner, ws);
-    if (items.some((x) => x.id === id)) putPending(inner, ws, items.filter((x) => x.id !== id));
+    if (items.some((x) => x.id === id)) return putPending(inner, ws, items.filter((x) => x.id !== id));
+    // (a moved workspace's: statements in the person's own log, their bodies kept here let go of too)
+    const sub = inner.workspaces.owner(ws);
+    const gone = new Set(sub === null ? [] : (inner.adb.personal().dropStated(sub, id) ?? []));
+    if (gone.size === 0) return;
+    inner.data.put("lockBodies", ws, { bodies: bodiesHeld(inner, ws).filter((b) => !gone.has(bodyHash(b) ?? "")) });
+    touch(inner, ws);
   };
   hooks.lockRefused = refused;
   hooks.lockWaiting = waiting;

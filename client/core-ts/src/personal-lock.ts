@@ -244,6 +244,8 @@ export class PersonalLock {
   readonly #shown = new Map<string, { act: Act | null; name: string; role?: string }>();
   /// The rows of statements that lost their place, not signed again yet, the person read (`dismissPending`).
   readonly #dismissed = new Set<string>();
+  /// Of an act's statements left pending (`say`), by the id of the one the person meant: all it signed, by hash.
+  readonly #acts = new Map<string, string[]>();
   /// What this device signed that no station took yet, each person's (`pendingAs`): never on the chain pinned.
   readonly #pending = new Map<string, Pending[]>();
   /// Whether what is pending is being brought to the stations now (`#deliver`), and asked again meanwhile.
@@ -1286,6 +1288,7 @@ export class PersonalLock {
         const p = this.#pend(sub, e, 0, null, true, made.shown[i] ?? { act: null, name: "" });
         if (p.act !== null) meant = p;
       });
+      if (meant !== null) this.#acts.set((meant as Pending).id, entries.map(hashOf));
       if (typeof taken === "object" && taken !== null) {
         this.#env.runner.fork(Effect.ignore(Effect.flatMap(taken.later, (n) => (n !== null && n > 0 ? this.#turn(sub).withPermits(1)(this.#tookAll(sub, chain)) : Effect.void))));
       }
@@ -1347,6 +1350,21 @@ export class PersonalLock {
   approvers(sub: string): Device[] {
     const entries = this.#seen.get(sub) ?? this.#pinned.get(sub) ?? [];
     return [...(checkChain(entries, sub)?.devices.values() ?? [])].filter((d) => d.key !== this.#myKey);
+  }
+
+  /// An act's statements left pending (`say`'s `{pending}`, its `id`) whose part past the lock then failed (the cloud's
+  /// write of the same change: core/execute.ts `pendingDrop`): dropped as a pending chain entry is there, never brought,
+  /// so the change is not made at all, as the call's failure says. The commitments (`h`) of their bodies, which the
+  /// caller lets go of. Null where it is pending no more (taken: it stays, as a taken chain entry does).
+  dropStated(sub: string, id: string): string[] | null {
+    const hs = this.#acts.get(id);
+    const items = this.#pending.get(sub) ?? [];
+    if (hs === undefined || !items.some((x) => x.id === id && x.state === "waiting")) return null;
+    this.#acts.delete(id);
+    const of = new Set(hs);
+    const gone = items.filter((x) => of.has(hashOf(x.entry)));
+    this.#putPending(sub, items.filter((x) => !of.has(hashOf(x.entry))));
+    return gone.flatMap((x) => (typeof (x.entry.body as J)?.h === "string" ? [(x.entry.body as J).h as string] : []));
   }
 
   /// This device's key's id on the lock, read without asking anyone; none made yet.

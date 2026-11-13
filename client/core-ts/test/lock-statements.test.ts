@@ -19,8 +19,10 @@ import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, entryHash, next } from "../src/lock.ts";
 import { bodyHash, wsTag } from "../src/lock-moved.ts";
 import { held, inForceOf, read, roster } from "../src/views/lock.ts";
+import { jsonResponse } from "../src/testing.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { ME, genesis, grant, rig } from "./lock-rig.ts";
+import { stationLater } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
 const C = "cc".repeat(32);
@@ -379,3 +381,35 @@ for (const where of ["ws", "w2"] as const) {
     assert.ok(sent.length > 0 && sent.every((e) => Object.keys(e.body as object).sort().join() === "h,t"), `the cloud sent the entries alone: ${JSON.stringify(sent.map((e) => e.body))}`);
   });
 }
+
+/// The cloud refusing the write of bob's removal (the call's part past the lock).
+function cloudRefuses(w: Awaited<ReturnType<typeof setUp>>) {
+  stationLater(w.r.host, (req) => (req.method === "DELETE" && new URL(req.url).pathname === "/v1/workspaces/ws/members/r2" ? Promise.resolve(jsonResponse(500, { error: { code: "internal", message: "the cloud failed" } })) : undefined));
+}
+const keptKinds = (w: Awaited<ReturnType<typeof setUp>>) => (((w.inner.data.record("lockBodies", "ws") as { bodies?: { kind: string }[] } | null)?.bodies ?? []).map((b) => b.kind)).sort().join(", ");
+
+test("bob taken out, its statements pending, the cloud's write then failing: dropped as a chain entry is, its bodies let go of here, never brought once A is back", async () => {
+  const w = await setUp();
+  cloudRefuses(w);
+  const before = keptKinds(w);
+  w.st.silent = true;
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("workspace.removeMember", { account: "s1", workspace: "ws", member: "r2" }), catch: (e) => e as CoreError }));
+  assert.ok(out.error !== undefined, "the call fails, as the cloud's write did");
+  assert.deepEqual(w.inner.adb.personal().pending("s1"), [], "nothing pending");
+  assert.equal(keptKinds(w), before, "the bodies said let go of here");
+  w.st.silent = false;
+  await w.run(w.inner.adb.personal().refresh("s1"));
+  await w.r.host.time.pass(5000);
+  assert.deepEqual(w.said(), [], "never brought");
+  assert.deepEqual(w.st.brought.filter((b) => b.bodies !== null), [], "no body brought");
+  assert.equal(w.members(), "r2 admin, r3 member, s1 owner");
+});
+
+test("bob taken out, its statements taken by A, the cloud's write then failing: they stay, as a chain entry taken does", async () => {
+  const w = await setUp();
+  cloudRefuses(w);
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("workspace.removeMember", { account: "s1", workspace: "ws", member: "r2" }), catch: (e) => e as CoreError }));
+  assert.ok(out.error !== undefined, "the call fails, as the cloud's write did");
+  assert.deepEqual(w.said(), ["member r3 member", "member.remove r2"], `the call: ${out.error?.code} ${out.error?.message}`);
+  assert.equal(w.members(), "r3 member, s1 owner");
+});
