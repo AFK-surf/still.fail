@@ -615,8 +615,25 @@ fn image_ends(n : @view.View, vw : Viewer, src : Source) -> Unit {
       }
     },
     fn(waiting) {
-      if waiting is Some(_) && vw.leaving_grab {
+      if waiting is Some(_) && vw.leaving_grab && vw.leaving_pic == "" {
         vw.left_with_frame(src, n.cause_at(), n.window())
+      }
+    },
+  )
+  // (that frame's picture decoded, or failed, at that moment, once: its player hidden as its flight is drawn, setting
+  // out then (Viewer::left_with_picture); never before, however late)
+  n.reacts(
+    fn() {
+      vw.grab_told.get() |> ignore
+      if vw.leaving_pic != "" {
+        @ui.image_state(vw.leaving_pic)
+      } else {
+        0
+      }
+    },
+    fn(state) {
+      if state != 0 && vw.leaving_pic != "" {
+        vw.left_with_picture(src, state > 0, n.cause_at(), n.window())
       }
     },
   )
@@ -1838,12 +1855,15 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
 ///|
 /// A film's flight as node `node` draws it at `t` (from the thumbnail where the chat lays it out, Viewer::flight_from, to
 /// where its player draws its picture, or back from where it was: Viewer::fly_to) and how far it has come: None where
-/// it flies not (or waits for the frame it shows to be grabbed as it closes: its player's picture where it was).
+/// it flies not (or waits for the frame it shows to be grabbed as it closes: its player's picture where it was). That
+/// frame grabbed and its picture not decoded yet (leaving_pic), it stands where the player draws its picture, under the
+/// player, its picture asked for there, setting out once it can be drawn (image_ends).
 fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Double) -> (FlightBox, Double)? {
   let vw = self
   vw.fly.said()
   vw.grab_told.get() |> ignore
-  if !vw.flies || (vw.closing && vw.leaving_grab) {
+  let stands = vw.closing && vw.leaving_pic != ""
+  if !stands && (!vw.flies || (vw.closing && vw.leaving_grab)) {
     return None
   }
   let (w, h) = node.window()
@@ -1854,8 +1874,8 @@ fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Dou
   }
   match (vw.flight_from(@ui.current()), to) {
     (Some(from), Some(to)) => {
-      let p = vw.flying_at(t)
-      flight_box(from, vw.lifted_at(t), to, p, width, h).map(fn(f) { (f, p) })
+      let (lifted, p) = if stands { (1.0, 1.0) } else { (vw.lifted_at(t), vw.flying_at(t)) }
+      flight_box(from, lifted, to, p, width, h).map(fn(f) { (f, p) })
     }
     _ => None
   }

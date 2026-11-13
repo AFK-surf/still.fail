@@ -270,7 +270,10 @@ pub(all) struct Viewer {
   /// it was then
   mut leaving_grab : Bool
   mut left_at : Double
-  /// told as leaving_grab changes (Viewer::grab_set): what is done at its going's end follows it
+  /// that frame, grabbed, while its picture is not decoded ("" none waited for): its player shown, paused, where it
+  /// is till the picture can be drawn in its place (Viewer::left_with_picture)
+  mut leaving_pic : String
+  /// told as leaving_grab or leaving_pic changes (Viewer::grab_set): what is done at its going's end follows it
   grab_told : @signals.Signal[Int]
   /// a desktop's song: played in the player a drive's is, not the phone's strip
   mut media : @kit.Media?
@@ -1023,6 +1026,7 @@ pub fn new_viewer(
       _ => -1.0
     },
     leaving_grab: false,
+    leaving_pic: "",
     left_at: 0.0,
     grab_told: @signals.signal(0),
     media: None,
@@ -1923,8 +1927,10 @@ fn Viewer::fly_home_from(
 }
 
 ///|
-/// A video closing into its thumbnail, its frame grabbed: once here, kept for the thumbnail (with where it was) and
-/// gone back with; none to be had, back with its still: from the moment `at` (the answer's), in a window `window` (w, h).
+/// A video closing into its thumbnail, its frame grabbed: once here, its picture waited for (leaving_pic: its player
+/// shown, paused, where it is meanwhile, its flight standing under it to have that picture decoded,
+/// Viewer::left_with_picture); none to be had, back with its still: from the moment `at` (the answer's), in a window
+/// `window` (w, h).
 pub fn Viewer::left_with_frame(self : Viewer, src : Source, at : Double, window : (Double, Double)) -> Unit {
   let n = match self.view() {
     Some(n) => n
@@ -1935,20 +1941,46 @@ pub fn Viewer::left_with_frame(self : Viewer, src : Source, at : Double, window 
     }
   }
   match n.grabbed() {
-    Some(jpeg) => {
-      self.grab_set(false)
+    Some(jpeg) =>
       if jpeg.length() > 0 {
         pv_frames_n.val += 1
         let key = "mem:pv-frame/\{pv_frames_n.val}/\{self.name}"
         @ui.add_image(key, jpeg)
-        pv_frames[self.id()] = (key, self.left_at)
-        pv_frame_tell(self.id())
-        self.fly_home(key, at, window)
+        self.fly_pic = key
+        self.leaving_pic = key
+        self.fly_back = true
+        if self.player_place() is Some(r) {
+          self.fly_to = Some(r)
+        }
+        self.grab_told.set(self.grab_told.untracked() + 1)
       } else {
+        self.grab_set(false)
         self.fly_home(self.still(src), at, window)
       }
-    }
     None => ()
+  }
+}
+
+///|
+/// A video closing into its thumbnail, the picture of the frame it showed (leaving_pic) `decoded` or failed: kept
+/// for the thumbnail (with where it was) and gone back with; failed, back with its still: its player hidden as its
+/// flight is drawn, setting out from the moment `at` (the decode's), in a window `window` (w, h).
+pub fn Viewer::left_with_picture(
+  self : Viewer,
+  src : Source,
+  decoded : Bool,
+  at : Double,
+  window : (Double, Double),
+) -> Unit {
+  let key = self.leaving_pic
+  self.leaving_pic = ""
+  self.grab_set(false)
+  if decoded {
+    pv_frames[self.id()] = (key, self.left_at)
+    pv_frame_tell(self.id())
+    self.fly_home(key, at, window)
+  } else {
+    self.fly_home(self.still(src), at, window)
   }
 }
 
