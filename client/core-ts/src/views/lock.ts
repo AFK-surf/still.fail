@@ -45,9 +45,10 @@ import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
-import { type Device as PersonDevice, type PersonalEnv, personOf, personRules } from "../personal-lock.ts";
+import { type Device as PersonDevice, type PersonalEnv, type Stated, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot } from "../lock-moved.ts";
-import { type Act, CLOUD_WRITE_MS, PENDING_MOST, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
+import { type Said, bodiesOf, byHash, plan } from "../lock-statements.ts";
+import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -1824,6 +1825,61 @@ function personStations(inner: Inner, sub: string): StationAddr[] {
   return [...out.values()];
 }
 
+/// The stations of `ws` a statement's body goes to (the root AGENTS.md, The cloud is the account system: a body is only
+/// its workspace's): those the list in force here names, and one a `station` body among `bodies` takes in, each one the
+/// workspace's view lists (what reaches it). Never one the view alone names: the cloud saying a station is the
+/// workspace's gives it no statement.
+function bodyStations(inner: Inner, ws: string, bodies: readonly unknown[]): string[] {
+  const named = new Set(stateOf(inner, ws).stations.keys());
+  for (const b of bodies) if (get(b, "kind") === "station" && typeof get(b, "key") === "string") named.add(get(b, "key") as string);
+  return arr(get(view(inner, ws), "stations")).flatMap((s) => (typeof s?.id === "string" && named.has(s.id) ? [s.id as string] : []));
+}
+
+/// The bodies of statements this device signed in `ws`, kept beside its lock as they are signed (`lockBodies`): it
+/// keeps what it said, so the state made here counts each as soon as its entry is on the chain pinned.
+function keepMine(inner: Inner, ws: string, bodies: readonly unknown[]): void {
+  const kept = bodiesHeld(inner, ws);
+  const have = new Set(kept.map((b) => bodyHash(b)));
+  const taken = bodies.filter((b) => {
+    const h = bodyHash(b);
+    if (h === null || have.has(h)) return false;
+    have.add(h);
+    return true;
+  });
+  if (taken.length > 0) inner.data.put("lockBodies", ws, { bodies: [...kept, ...taken] });
+}
+
+/// A person's own lock with statements of `ws` on it brought (personal-lock.ts `say`, `#deliver`): the chain and their
+/// bodies to the stations of `ws` (`bodyStations`), each asked on that workspace's address, as only a connection of the
+/// workspace is given or takes its bodies; the chain alone to their other stations, not waited on. How many of the
+/// workspace's stations took the chain and every body (a body refused there, or a station of another workspace taking
+/// the chain, is no taking: pending); 0 where none could be asked, never the cloud's.
+function bringStated(inner: Inner, sub: string, chain: Entry[], within: Asked | undefined, stated: Stated): Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError> {
+  const ids = bodyStations(inner, stated.ws, stated.bodies);
+  const at = ids.map((id) => new StationAddr(stated.ws, id));
+  const mine = new Set(ids);
+  for (const other of personStations(inner, sub)) {
+    if (other.workspace === stated.ws && mine.has(other.station)) continue;
+    inner.runner.fork(Effect.ignore(inner.stations.requests.call(other, "POST", "/lock/person", { chain }, { quiet: true }), { log: "Unhandled", message: "personal lock brought to a station of another workspace" }));
+  }
+  const hashes = new Set(stated.bodies.map((b) => bodyHash(b)));
+  const answering = answersOf(inner, at.map((a) => inner.stations.requests.call(a, "POST", "/lock/person", { chain, bodies: stated.bodies }, { quiet: true })), tookOrRefused, at.map(String));
+  const decide = (answers: Result.Result<unknown, CoreError>[]): Effect.Effect<number | null, CoreError> => {
+    const took = answers.filter((r) => r._tag === "Success" && !arr(get(r.success, "refused")).some((x) => hashes.has(get(x, "hash") as string))).length;
+    if (took > 0) {
+      const shown = personShownOf(inner).shown.get(sub) ?? new Set<string>();
+      personShownOf(inner).shown.set(sub, shown);
+      for (const e of chain) shown.add(hashOf(e));
+      return Effect.succeed(took);
+    }
+    const refused = answers.find((r) => r._tag === "Failure" && r.failure.status === 409);
+    return refused !== undefined && refused._tag === "Failure" ? Effect.fail(new CoreError("lock_refused", refused.failure.message, 409)) : Effect.succeed(0);
+  };
+  if (within === undefined) return Effect.flatMap(answering, decide);
+  return Effect.flatMap(within.first(answering), (r): Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError> =>
+    "now" in r ? decide(r.now) : Effect.succeed({ later: Effect.flatMap(r.later, decide) }));
+}
+
 /// The stations that answered a read of each person's own lock this run (`personalStations`), by id, per core.
 const answeredOf = new WeakMap<Inner, Map<string, Set<string>>>();
 /// Of each person's own lock, per core (`personalStations` `carry`): what each station showed at its last read (by its
@@ -1907,7 +1963,8 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
       });
     },
     answered,
-    bring: (sub, chain, within) => {
+    bring: (sub, chain, within, stated) => {
+      if (stated !== undefined) return bringStated(inner, sub, chain, within, stated);
       const asked = personStations(inner, sub);
       // (done once one took it: the others are brought it all the same, and keep each other level)
       const answering = answersOf(inner, asked.map((at) => inner.stations.requests.call(at, "POST", "/lock/person", { chain }, { quiet: true })), tookOrRefused, asked.map(String));
@@ -1929,6 +1986,21 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
       // asked meanwhile (personal-lock.ts `#append`, see ASKED_MS).
       return Effect.flatMap(within.first(answering), (r): Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError> =>
         "now" in r ? decide(r.now) : Effect.succeed({ later: Effect.flatMap(r.later, decide) }));
+    },
+    kept: (ws, bodies) => keepMine(inner, ws, bodies),
+    bodyOf: (e) => {
+      const h = get(e.body, "h");
+      const sub = e.ws.startsWith("person:") ? e.ws.slice(7) : null;
+      for (const [ws, owner] of inner.workspaces.owned()) {
+        if (owner !== sub) continue;
+        const b = bodiesHeld(inner, ws).find((x) => bodyHash(x) === h);
+        if (b !== undefined) return { ws, body: b };
+      }
+      return null;
+    },
+    wsNames: (ws) => {
+      const names = arr(get(view(inner, ws), "stations"));
+      return bodyStations(inner, ws, []).map((id) => str(names.find((s) => s?.id === id)?.name) || id.slice(0, 8));
     },
     // The chain pinned, as far as each entry of it a station showed or took this run (never one only this device signed
     // and no station took), brought with `keep` to each station of theirs read last that lacks some of it and keeps what
@@ -2393,7 +2465,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         return null;
       }
       case "open":
-        result = yield* lock.open();
+        result = movedHere(inner, c.workspace) ? yield* onOffMoved(inner, sub, c.workspace, true) : yield* lock.open();
         break;
       // Approved face to face (views/pair.ts): asked, the code typed, given up.
       case "pair":
@@ -2412,7 +2484,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         result = yield* lock.addStation(param("station"), param("code"));
         break;
       case "joinStation":
-        result = yield* lock.joinStation(param("station"));
+        result = movedHere(inner, c.workspace) ? yield* stationMoved(inner, sub, c.workspace, param("station")) : yield* lock.joinStation(param("station"));
         break;
       case "renew":
         result = yield* lock.renew(param("device"));
@@ -2436,8 +2508,11 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         break;
       }
       case "disable": {
-        // (where the chain moved nothing is signed on it: the person not asked for what would not be done)
-        if (movedHere(inner, c.workspace)) return yield* Effect.fail(lockMoved());
+        // (where the chain moved: an `off` in the root's own log, by its person alone)
+        if (movedHere(inner, c.workspace)) {
+          result = yield* onOffMoved(inner, sub, c.workspace, false);
+          break;
+        }
         // The person's own secrets opened while the lock still says whose they are ( 一个库): once it is
         // off they go into the plain library, as the dialog said. Turned down there, nothing is turned off.
         // (the person asked once, for this: the box key's prompt says it, the vaults' keys unsealed with it; asked by
@@ -2579,7 +2654,7 @@ function managed(inner: Inner, sub: string, ws: string, within: Asked): Effect.E
 /// cloud asked too past it (see `ASKED_MS`).
 export function roster(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
-    if (movedHere(inner, ws)) return yield* Effect.fail(lockMoved());
+    if (movedHere(inner, ws)) return yield* rosterMoved(inner, sub, ws, what);
     const within = asked(inner);
     const m = yield* managed(inner, sub, ws, within);
     if (m === null) return null;
@@ -2600,6 +2675,119 @@ export function roster(inner: Inner, sub: string, ws: string, what: Roster): Eff
     const email = member?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email"));
     if (email === null) return null;
     return yield* lock.append("member", { sub: what.member, email, role: what.role });
+  });
+}
+
+/// A change of a moved workspace's list that needs nothing of another device (`roster`'s, `disable`, `open`, a station
+/// taken in): said as statements in this person's own log (src/lock-statements.ts, personal-lock.ts `say`), the person
+/// asked once. What is to be signed is worked out first, nobody asked yet: `meant`, with those it would take out besides
+/// said again first (`plan`, the model's `adopt`); one that would not do what it means, or would take out someone it
+/// cannot say again, is refused in the words of a change not allowed, nothing asked or signed. Taken, the state made
+/// here is to show what was meant; where it does not (someone decided otherwise meanwhile), it is told as a change that
+/// did not take effect (`notInEffect`). `{pending}` its row where no station of the workspace took it.
+function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: { act: Act | null; name: string; role?: string }, reason: string): Effect.Effect<unknown, CoreError> {
+  return Effect.gen(function* () {
+    const personal = inner.adb.personal();
+    const own = personal.root(sub), key = personal.keyId();
+    const root = inForceOf(inner, ws).root;
+    const notAllowed = () => new CoreError("forbidden", t("core-misc.lock.notAllowed"));
+    if (own === null || key === null || root === null || personal.standing(sub) !== "member") return yield* Effect.fail(lockMoved());
+    // (on and off are said in the root's log alone: the rules count them nowhere else)
+    if (meant.some((m) => m.kind === "open" || m.kind === "off") && own !== root) return yield* Effect.fail(new CoreError("lock_root_only", "only the person who turned safe mode on turns it off or on again"));
+    const worked = (after: readonly Entry[]) => {
+      const chains = new Map(logsOf(inner, ws, false));
+      chains.set(own, after);
+      return plan(ws, root, chains, bodiesHeld(inner, ws), { genesis: own, sub, key }, meant, now(inner));
+    };
+    const first = worked(personal.entries(sub));
+    if ("why" in first) return yield* Effect.fail(notAllowed());
+    const salt = () => {
+      const b = new Uint8Array(16);
+      inner.host.randomBytes(b);
+      return hex(b);
+    };
+    const r = yield* personal.say(sub, ws, (after) => {
+      const p = worked(after);
+      if ("why" in p) return notAllowed();
+      const bodies = bodiesOf(ws, p.says, after, byHash(bodiesHeld(inner, ws)), salt);
+      return { bodies, shown: p.says.map((_, i) => (i === p.says.length - 1 ? shown : { act: null, name: shown.name })) };
+    }, reason);
+    touch(inner, ws);
+    if (r !== null) return r;
+    // (taken: what is in force here now is what it is made of, this device's bodies and log among it)
+    const f = stateOf(inner, ws);
+    const last = meant[meant.length - 1]!;
+    const done = last.kind === "member" ? f.members.get(last.sub)?.role === last.role
+      : last.kind === "member.remove" ? !f.members.has(last.sub)
+      : last.kind === "station" ? f.stations.has(last.key)
+      : last.kind === "station.remove" ? !f.stations.has(last.key)
+      : last.kind === "off" ? inForceOf(inner, ws).said === "off"
+      : inForceOf(inner, ws).said === "on";
+    const e = personal.entries(sub).at(-1);
+    if (!done && e !== undefined && shown.act !== null) personal.notInEffect(sub, e, { ...shown, act: shown.act });
+    return null;
+  });
+}
+
+/// Whether this device can say a statement of a moved workspace: on its person's own lock, pinned here. Else nothing
+/// is signed there, as before statements (`lockMoved`), whatever the change.
+function saysHere(inner: Inner, sub: string): boolean {
+  const personal = inner.adb.personal();
+  return personal.root(sub) !== null && personal.keyId() !== null && personal.standing(sub) === "member";
+}
+
+/// `roster`'s change where the chain moved: a member out (`member.remove`), a member's role (`member.remove`, then
+/// `member` with the log that binds them now: the highest admit in force binds, so a lower role given later changes
+/// nothing without the removal; raising too), a station out (`station.remove`). Someone the list has not heard of is
+/// added only with their device (the next step): `lock_moved` still.
+function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
+  return Effect.suspend(() => {
+    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    const f = stateOf(inner, ws);
+    const name = (e: Entry) => whatOf(inner, ws, e);
+    const as = (kind: string, body: unknown) => name({ v: 1, ws, seq: 0, prev: null, at: 0, kind, body, sig: { key: "", alg: "Ed25519", sig: "" } });
+    if ("station" in what) {
+      if (!f.stations.has(what.station)) return Effect.succeed(null);
+      const n = as("station", { key: what.station });
+      return sayMoved(inner, sub, ws, [{ kind: "station.remove", key: what.station }], { act: "removeStation", name: n }, actText({ act: "removeStation", name: n }));
+    }
+    const m = f.members.get(what.member);
+    const lock = f.persons.get(what.member);
+    const n = as("member", { sub: what.member });
+    if ("gone" in what) return m === undefined ? Effect.succeed(null) : sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n }));
+    if (m?.role === what.role) return Effect.succeed(null);
+    if (m === undefined || lock === undefined) return Effect.fail(lockMoved());
+    const shown = { act: "setRole" as const, name: n, role: roleText(what.role) };
+    return sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }, { kind: "member", sub: what.member, email: m.email, lock, role: what.role }], shown, actText(shown));
+  });
+}
+
+/// A moved workspace turned off (`off`) or on again (`open`, with the settings in force and the root's person's email),
+/// by the root's person alone.
+function onOffMoved(inner: Inner, sub: string, ws: string, on: boolean): Effect.Effect<unknown, CoreError> {
+  return Effect.suspend(() => {
+    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    const force = inForceOf(inner, ws);
+    const name = nameOf(inner, ws);
+    if (!on) return sayMoved(inner, sub, ws, [{ kind: "off" }], { act: "disable", name }, t("core-misc.lock.reason.disable"));
+    const st = force.settings;
+    const email = force.f.members.get(sub)?.email;
+    if (st === undefined || email === undefined) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
+    // (no words of its own yet for turning it on again, nor a pending row's: the core's, and none shown)
+    return sayMoved(inner, sub, ws, [{ kind: "open", origins: st.origins, rp_id: st.rp_id, cloud_keys: st.cloud_keys, email }], { act: null, name }, "Turn security mode on again");
+  });
+}
+
+/// A station of the workspace taken in where the chain moved (`station {key}`): one the workspace's view lists and the
+/// list in force does not.
+function stationMoved(inner: Inner, sub: string, ws: string, station: string): Effect.Effect<unknown, CoreError> {
+  return Effect.suspend(() => {
+    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    if (stateOf(inner, ws).stations.has(station)) return Effect.succeed(null);
+    const s = arr(get(view(inner, ws), "stations")).find((x) => x?.id === station);
+    if (!s) return Effect.fail(CoreError.invalid("not a station of this workspace"));
+    const name = str(s.name) || station.slice(0, 8);
+    return sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name }));
   });
 }
 

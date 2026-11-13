@@ -161,10 +161,21 @@ another; the accounts' list's merge across stations and its refills.
   what is in the lock reads `src/views/lock.ts` `stateOf`, what reads the chain itself (its own `disable`, its stations
   keeping it, `chosen`, `carry`) reads `fold`. Without the root's log or its `open` it waits (nobody listed, nothing
   asked of the device). It is made once and kept in memory while what it is made of stands (`inForceOf`). Nothing is
-  signed on a moved chain: `Lock.append` and the calls that sign answer `lock_moved` before anyone is asked, the
-  background writers do nothing, and what was pending as the chain moved is told as not taken effect, until the next
-  step makes each a statement. `test/lock-moved-state.test.ts` holds
-  it to the model.
+  signed on a moved chain itself: `Lock.append` answers `lock_moved`, the background writers do nothing, and what was
+  pending as the chain moved is told as not taken effect. `test/lock-moved-state.test.ts` holds it to the model.
+- A change of a moved workspace's list is a statement in the person's own log (`src/lock-statements.ts`, views/lock.ts
+  `sayMoved`, personal-lock.ts `say`): an entry `ws {t, h}` signed by the device's key on that log, which asks the
+  person each time (the owner, 2026-11-13: a phone taken while unlocked, its screen lock not known, then changes no
+  list, approves no web page and cannot undo its own removal), its body made as the model's `make` makes one and kept
+  here at once. Before the person is asked the rules work out what it would do: whoever it would take out besides is
+  said again first (the model's `adopt`: removing someone takes nobody else out, the root AGENTS.md), and one that
+  would not do what it means is refused. The body goes only to the stations of its workspace that its list names,
+  asked on that workspace's address, never to the cloud nor a station of another workspace (which get the chain);
+  taken once one of those took entry and body, else pending, waiting for those. Said so now: a role, a member out, a
+  station in (`joinStation`) or out, off and on again (the root's person alone, `lock_root_only`). Adding a member,
+  approving a device or a web page, renewing one, `addStation` and `admit` need another device's part and still answer
+  `lock_moved`; a statement that lost its place is not signed again yet (the model's `resign`, the next step), but let
+  be. `test/lock-statements-made.test.ts` holds the bodies and the take-over to the model.
 - The cloud's taking an entry never counts (2026-11-12): what no station took nor refused by the call's wait
   (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
   held and never on it, shown on the lock's topic as not in effect, and brought to the stations as one is next read

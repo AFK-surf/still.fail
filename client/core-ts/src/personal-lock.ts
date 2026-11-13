@@ -19,7 +19,7 @@ import type { Runner } from "./runtime.ts";
 import { fromUtf8, hex, parseJson, sha256, utf8 } from "./util.ts";
 import { ed25519Ok } from "./vault/verified.ts";
 import type { Asked } from "./views/lock.ts";
-import { CLOUD_WRITE_MS, PENDING_MOST, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "./lock-pending.ts";
+import { type Act, CLOUD_WRITE_MS, PENDING_MOST, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "./lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -171,9 +171,17 @@ export type PersonalEnv = {
   /// which, the stations not having answered for it, the way to hear them still (`later`), the cloud asked meanwhile.
   /// `carry`: after a read, the chain pinned (`chain`) brought to each station just read that lacks some of it and keeps
   /// what a device brings as another keeper's (views/lock.ts `personalStations`), forked.
+  /// `bring`'s `bodies`: the bodies of the statements of workspace `ws` on the chain (src/lock-statements.ts), given only
+  /// to stations of that workspace, the chain alone to the others: how many of its stations took both (none: 0, never
+  /// the cloud's). `kept`: the bodies of statements signed here, kept beside that workspace's lock at once (this
+  /// device keeps what it said); `bodyOf`, the body of a statement kept here, and its workspace; `wsNames`, the names of
+  /// a workspace's stations, what a statement pending waits for.
   stations?: {
     read: (sub: string, at?: string) => Effect.Effect<Entry[][] | null>;
-    bring: (sub: string, chain: Entry[], within?: Asked) => Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError>;
+    bring: (sub: string, chain: Entry[], within?: Asked, bodies?: Stated) => Effect.Effect<number | null | { later: Effect.Effect<number | null, CoreError> }, CoreError>;
+    kept?: (ws: string, bodies: readonly unknown[]) => void;
+    bodyOf?: (e: Entry) => { ws: string; body: unknown } | null;
+    wsNames?: (ws: string) => string[];
     answered?: (sub: string) => boolean;
     carry?: (sub: string, chain: Entry[]) => void;
     /// The names of the person's stations, as their workspaces' views name them: what a pending entry waits for.
@@ -183,6 +191,13 @@ export type PersonalEnv = {
   /// stations and the cloud take.
   asked?: () => Asked;
 };
+
+/// The bodies of a workspace's statements brought with the chain that commits to them.
+export type Stated = { ws: string; bodies: readonly unknown[] };
+/// What statements of a workspace a person's act signs (`say`), made in the turn of the chain they are signed after
+/// (`after`, the chain pinned and what is pending after it): their bodies in order, each with what it does as the
+/// person knows it (`act` null: one the act says too, not shown by itself); a CoreError where it is not to be signed.
+export type Statements = (after: readonly Entry[]) => { bodies: unknown[]; shown: { act: Act | null; name: string; role?: string }[] } | CoreError;
 
 /// What a read made within a call's wait brings past it (`refresh`): nothing yet.
 const LATE = Symbol("late");
@@ -649,7 +664,15 @@ export class PersonalLock {
   /// `ownPendingRows`), one done in both once.
   pendingShown(sub: string): { item: Pending; row: PendingRow }[] {
     const names = this.#env.stations?.names?.(sub) ?? [];
-    return (this.#pending.get(sub) ?? []).filter((x) => x.act !== null).map((item) => ({ item, row: pendingRow(item, names) }));
+    return (this.#pending.get(sub) ?? []).filter((x) => x.act !== null).map((item) => ({ item, row: pendingRow(item, this.#namesFor(item.entry) ?? names) }));
+  }
+
+  /// The stations a statement waits for (its workspace's), by name; null for an entry of another kind (all the
+  /// person's).
+  #namesFor(e: Entry): string[] | null {
+    if (e.kind !== "ws") return null;
+    const of = this.#env.stations?.bodyOf?.(e);
+    return of === null || of === undefined ? [] : (this.#env.stations?.wsNames?.(of.ws) ?? []);
   }
 
   /// The stations of `sub`'s workspaces changed (one taken out, as the workspace's view read again says): what is
@@ -665,15 +688,15 @@ export class PersonalLock {
   }
 
   /// In the turn: `e` kept pending, or, signed again (`of`, the id of the one first signed), in that one's place.
-  #pend(sub: string, e: Entry, tries: number, of: string | null, shown: boolean): Pending {
+  #pend(sub: string, e: Entry, tries: number, of: string | null, shown: boolean, as?: { act: Act | null; name: string; role?: string }): Pending {
     const items = this.#pending.get(sub) ?? [];
     const id = of ?? entryHash(e);
     const had = items.find((x) => x.id === id);
     const key = (e.body as J)?.key;
     const label = [...this.#lastSaid(sub).values()].find((d) => d.device.key === key)?.device.label ?? (e.body as J)?.label;
     const name = typeof label === "string" && label !== "" ? label : t("web-pages.security.appDevice");
-    const act = !shown || key === this.#myKey ? null : e.kind === "device.remove" ? "removeDevice" : e.kind === "device" ? "approve" : null;
-    const made: Pending = had !== undefined ? { ...had, entry: e, state: "waiting", ...(tries > 0 ? { tries } : {}) } : { id, entry: e, act, name, at: this.#env.host.nowMs(), state: "waiting", ...(tries > 0 ? { tries } : {}) };
+    const act = as !== undefined ? (shown ? as.act : null) : !shown || key === this.#myKey ? null : e.kind === "device.remove" ? "removeDevice" : e.kind === "device" ? "approve" : null;
+    const made: Pending = had !== undefined ? { ...had, entry: e, state: "waiting", ...(tries > 0 ? { tries } : {}) } : { id, entry: e, act, name: as?.name ?? name, ...(as?.role !== undefined ? { role: as.role } : {}), at: this.#env.host.nowMs(), state: "waiting", ...(tries > 0 ? { tries } : {}) };
     this.#putPending(sub, had !== undefined ? items.map((x) => (x.id === id ? made : x)) : [...items, made]);
     return made;
   }
@@ -730,7 +753,9 @@ export class PersonalLock {
           continue;
         }
         const chain = [...pinned, e];
-        const r = yield* Effect.result(stations.bring(sub, chain));
+        // (a statement with its body, to its workspace's stations alone)
+        const stated = e.kind === "ws" ? stations.bodyOf?.(e) : null;
+        const r = yield* Effect.result(stations.bring(sub, chain, undefined, stated ? { ws: stated.ws, bodies: [stated.body] } : undefined));
         if (r._tag === "Success" && typeof r.success === "number" && r.success > 0) {
           yield* this.#tookLate(sub, e, chain);
           continue;
@@ -882,7 +907,9 @@ export class PersonalLock {
   /// of its own.
   #signAgain(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      const lost = [...(this.#aside.get(sub) ?? [])].sort((a, b) => a.seq - b.seq).filter((e) => e.seq > 0 && e.sig?.key === this.#myKey && !this.#handled.has(hashOf(e)));
+      // (a statement of a workspace is not signed again here: its body names the one before it, which a place after the
+      // head may not have; until that is decided by the model's `resign`, one that lost its place is let be)
+      const lost = [...(this.#aside.get(sub) ?? [])].sort((a, b) => a.seq - b.seq).filter((e) => e.seq > 0 && e.kind !== "ws" && e.sig?.key === this.#myKey && !this.#handled.has(hashOf(e)));
       for (let i = 0; i < lost.length; i++) {
         const e = lost[i]!;
         this.#handled.add(hashOf(e));
@@ -914,7 +941,7 @@ export class PersonalLock {
           const how = againOf(pinned, this.#aside.get(sub) ?? [], e, subjectOf);
           const drop = (how: Partial<Pending> | null) => Effect.sync(() => this.#putPending(sub, (this.#pending.get(sub) ?? []).flatMap((x) => (x.id !== item.id ? [x] : how === null ? [] : [{ ...x, ...how }]))));
           if (how === "done") return Effect.as(drop(null), Effect.succeed(null));
-          if (how !== "sign" || (now.tries ?? 0) >= AGAIN_MOST) return Effect.as(drop({ state: "failed", what: now.name }), Effect.succeed(null));
+          if (how !== "sign" || e.kind === "ws" || (now.tries ?? 0) >= AGAIN_MOST) return Effect.as(drop({ state: "failed", what: now.name }), Effect.succeed(null));
           return Effect.catch(this.#signHere(sub, seed, e.kind, e.body, false, within, (now.tries ?? 0) + 1, item.id, hashOf(e)), (err) => Effect.as(drop({ state: "failed", what: now.name, ...(err.code === "lock_refused" ? {} : { why: err.message }) }), Effect.succeed(null)));
         });
         yield* Effect.ignore(Effect.flatMap(this.#turn(sub).withPermits(1)(inTurn), (rest) => rest), { log: "Unhandled", message: "personal lock: a pending entry signed again" });
@@ -1105,6 +1132,92 @@ export class PersonalLock {
     });
   }
 
+  /// Statements of workspace `ws` said on the person's own lock (src/lock-statements.ts), the person asked once as
+  /// taking a device off asks them (`removeDevice`, whose way it goes: what lost its place signed again first, its own
+  /// device said again, the devices approved elsewhere put on after): each an entry `ws {t, h}` signed by this device's
+  /// key, all in one turn of the lock, after the chain pinned and what is pending; their bodies kept here at once and
+  /// brought with the chain to the workspace's stations alone (`stations.bring`'s `bodies`), never to the cloud. Taken
+  /// once a station of the workspace took entries and bodies; none did by the call's wait: pending, `{pending}` the row
+  /// of the one the person meant. A refusal is the call's. Null: taken.
+  say(sub: string, ws: string, make: Statements, reason: string): Effect.Effect<{ pending: PendingRow } | null, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const seed = yield* this.#unseal(reason);
+      const within = this.asked();
+      yield* this.#signAgain(sub, seed, within);
+      yield* this.#restate(sub, seed, within);
+      const ahead = Effect.suspend((): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> => {
+        const waiting = (this.#pending.get(sub) ?? []).filter((x) => x.state === "waiting");
+        if (waiting.length >= PENDING_MOST) return Effect.fail(new CoreError("lock_pending_full", pastBound(this.#env.stations?.wsNames?.(ws) ?? [])));
+        return this.#state(sub, seed, ws, make, within);
+      });
+      const pending = yield* Effect.flatMap(this.#turn(sub).withPermits(1)(ahead), (rest) => rest);
+      if (pending === null) yield* this.#addApproved(sub, seed, within);
+      return pending === null ? null : { pending: pendingRow(pending, this.#env.stations?.wsNames?.(ws) ?? []) };
+    });
+  }
+
+  /// In the turn: `make`'s statements signed one after another after the chain pinned and what is pending, kept, brought
+  /// together; what is left of it once the turn is given up (taken by a station past the wait: pinned then).
+  #state(sub: string, seed: Uint8Array, ws: string, make: Statements, within: Asked | undefined): Effect.Effect<Effect.Effect<Pending | null, CoreError>, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const pinned = this.#pinned.get(sub) ?? [];
+      if (pinned.length === 0) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const after = [...pinned, ...this.#pendingTail(sub)];
+      const made = make(after);
+      if (made instanceof CoreError) return yield* Effect.fail(made);
+      const root = entryHash(pinned[0]!);
+      let chain = after;
+      const entries: Entry[] = [];
+      for (const b of made.bodies) {
+        // (its commitment: the workspace's tag in this log, the body's hash, rules/src/lock/body.mbt)
+        const h: string = rules.body_hash_js(b, crypto);
+        if (h.startsWith("!")) return yield* Effect.fail(new CoreError("lock_invalid", h.slice(1)));
+        const e = this.#entry(sub, seed, this.#myKey!, "ws", { t: rules.ws_tag_js(ws, root, crypto) as string, h }, chain);
+        entries.push(e);
+        chain = [...chain, e];
+      }
+      if (entries.length === 0) return Effect.succeed(null);
+      if (checkChain(chain, sub) === null) return yield* Effect.fail(new CoreError("lock_invalid", t("core-misc.lock.chainInvalid")));
+      this.#env.stations?.kept?.(ws, made.bodies);
+      const brought = this.#env.stations === undefined ? null : yield* Effect.result(this.#env.stations.bring(sub, chain, within, { ws, bodies: made.bodies }));
+      if (brought !== null && brought._tag === "Failure") return yield* Effect.fail(brought.failure);
+      const taken = brought === null ? 0 : brought.success;
+      if (typeof taken === "number" && taken > 0) {
+        // (the entries alone, for the devices from before that read the lock there: a body never goes to the cloud)
+        this.#env.runner.fork(Effect.ignore(this.#env.cloud(sub, "POST", PATH, { entries })));
+        yield* this.#tookAll(sub, chain);
+        return Effect.succeed(null);
+      }
+      // Pending: no station of the workspace took them by the call's wait. Each kept as an entry of this device's is;
+      // the one the person meant (the last shown) is the call's answer.
+      let meant: Pending | null = null;
+      entries.forEach((e, i) => {
+        const p = this.#pend(sub, e, 0, null, true, made.shown[i] ?? { act: null, name: "" });
+        if (p.act !== null) meant = p;
+      });
+      if (typeof taken === "object" && taken !== null) {
+        this.#env.runner.fork(Effect.ignore(Effect.flatMap(taken.later, (n) => (n !== null && n > 0 ? this.#turn(sub).withPermits(1)(this.#tookAll(sub, chain)) : Effect.void))));
+      }
+      return Effect.succeed(meant);
+    });
+  }
+
+  /// In a turn: `chain` (the chain pinned and what this device signed after it) taken by a station: pinned where it goes
+  /// on from the chain pinned now, else kept with it, the rules choosing (`#chosen`); what is pending of it so no more.
+  #tookAll(sub: string, chain: Entry[]): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const now = this.#pinned.get(sub) ?? [];
+      if (now.length <= chain.length && now.every((e, i) => entryHash(e) === entryHash(chain[i]!))) yield* this.#pin(sub, chain);
+      else {
+        const t = this.#chosen(sub, chain);
+        if (t !== null && t.changed) yield* this.#pin(sub, t.kept.entries, t.kept.aside);
+      }
+      this.#seen.delete(sub);
+      this.#env.changed();
+    });
+  }
+
   /// The lock a device that let this one in brought (the connection proved by the code shown there): pinned.
   joined(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
@@ -1144,6 +1257,20 @@ export class PersonalLock {
   approvers(sub: string): Device[] {
     const entries = this.#seen.get(sub) ?? this.#pinned.get(sub) ?? [];
     return [...(checkChain(entries, sub)?.devices.values() ?? [])].filter((d) => d.key !== this.#myKey);
+  }
+
+  /// This device's key's id on the lock, read without asking anyone; none made yet.
+  keyId(): string | null {
+    return this.#myKey;
+  }
+
+  /// A statement taken that did not do what the person meant (someone decided otherwise meanwhile): told as a pending
+  /// one that failed is, in the words of one let be (`#letBe`'s), by what it was about.
+  notInEffect(sub: string, e: Entry, as: { act: Act; name: string; role?: string }): void {
+    const id = hashOf(e);
+    const row: Pending = { id, entry: e, act: as.act, name: as.name, ...(as.role !== undefined ? { role: as.role } : {}), at: e.at * 1000, state: "failed", what: as.name };
+    const items = (this.#pending.get(sub) ?? []).filter((x) => x.id !== id);
+    this.#putPending(sub, [...items, row]);
   }
 
   /// The chain pinned here, and the hash its lock goes by (what a `person` entry names): none without one.

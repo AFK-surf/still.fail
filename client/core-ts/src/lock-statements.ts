@@ -68,11 +68,25 @@ export function cancelsOf(ws: string, said: { kind: "member.remove"; sub: string
 
 /// The body of `said` in `ws`, signed after `log` by this device, of what it keeps (`kept`, its own bodies among them),
 /// salted with `salt` (16 random bytes, hex).
-export function bodyOf(ws: string, said: Said, log: readonly Entry[], kept: ReadonlyMap<string, J>, salt: string): Body {
+export function bodyOf(ws: string, said: Said, log: readonly Entry[], kept: ReadonlyMap<string, J>, salt: string | (() => string)): Body {
   const prev = prevOf(ws, log, kept);
   const more: Record<string, unknown> = { ...said };
   if (said.kind === "member.remove" || said.kind === "station.remove") more.cancels = cancelsOf(ws, said, kept);
-  return { ...more, ws, kind: said.kind, prev, salt } as Body;
+  return { ...more, ws, kind: said.kind, prev, salt: typeof salt === "string" ? salt : salt() } as Body;
+}
+
+/// The bodies of `says`, signed one after another after `log` (each next one's `prev` the one before it, whose chain is
+/// whole here as the first's is), each salted by `salt()`.
+export function bodiesOf(ws: string, says: readonly Said[], log: readonly Entry[], kept: ReadonlyMap<string, J>, salt: () => string): Body[] {
+  const have = new Map(kept);
+  const out: Body[] = [];
+  for (const s of says) {
+    const b = bodyOf(ws, s, log, have, salt);
+    if (out.length > 0) b.prev = bodyHash(out[out.length - 1])!;
+    have.set(bodyHash(b)!, b);
+    out.push(b);
+  }
+  return out;
 }
 
 /// The commitment of `body` in `sub`'s log of genesis `genesis`: the entry's body.
