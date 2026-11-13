@@ -230,7 +230,9 @@ another; the accounts' list's merge across stations and its refills.
   device approved on the chain (by the key that signed it), not run out, off neither the chain nor their log; and,
   as `web` may not be written yet (rules/AGENTS.md), only on a host that offers the handover or once a chain of theirs
   moved. One not said by the move is out till then, told so and whom to ask (`left`), and in at its next hello once
-  said: a page refused is not tried again while it only waits, so it comes back as it is opened again. A member bound
+  said: a page refused is not tried again while it only waits (no timer), so it comes back as it is opened again, or as
+  the person presses to ask there: its stations are tried again first, and where one lets it in nothing is asked
+  (views/pair.ts `begin`). A member bound
   to a log whose app device signs on the chain and is not on that log, or whose log no station gave, waits it too
   (`lock_not_ready`): the state names a member's devices by their log alone, and nobody would approve that one again
   by itself. So `handOver` reads the logs the chain binds of its stations
