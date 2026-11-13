@@ -1049,13 +1049,26 @@ test("a device whose signer its person's log said again since a workspace of the
   const e = { v: 1 as const, ws: "person:s1", seq: pinned.length, prev: entryHash(last), at: last.at + 1, kind: "ws", body: { t: wsTag("ws", root), h: bodyHash(open)! } };
   kept.entries = [...pinned, { ...e, sig: { key: personal.keyId()!, alg: "Ed25519" as const, sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } }];
   await run(personal.refresh("s1"));
-  inner.data.put("lockBodies", "ws", { bodies: [open] });
   const chain = m.cloud.chains.get("ws")!;
   const tail = chain.at(-1)!;
   m.cloud.chains.set("ws", [...chain, me!.sign(next("ws", { seq: tail.seq, hash: entryHash(tail), genesis: entryHash(chain[0]!) }, tail.at + 1, "moved", { root }))]);
+  // (the workspace's station `st` keeps the chain moved and the `open`'s body, which its entry on s1's log commits to,
+  // and gives them to this device as a station does; the device takes them by its read)
+  stationReplies(m.host, (req) => {
+    const path = new URL(req.url).pathname.replace("/admin/api", "");
+    if (req.url.includes("/v1/")) return m.cloud.reply(req);
+    if (path === "/lock" && req.method === "GET") return { head: m.cloud.head("ws"), entries: m.cloud.chains.get("ws"), takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
+    if (path === "/lock/bodies" && req.method === "GET") return { bodies: [open], lacking: [] };
+    if (path === "/lock/logs" && req.method === "GET") return { chains: [] };
+    if (path === "/lock/devices" && req.method === "GET") return { devices: [] };
+    if (path === "/lock/person" && req.method === "GET") return { chains: [] };
+    return m.cloud.reply(req);
+  });
   await run(read(inner, "ws"));
   const force = inForceOf(inner, "ws");
   assert.deepEqual([force.said, force.f.persons.has("s1"), force.f.devices.get(LAPTOP)?.sign_key, laptopIn("ws")?.sign_key], ["on", true, NOW, OLD], "moved: the state names the signer now, the chain the one before");
+  // (w2's station, reached at the same address here, keeps no lock of ws)
+  stationReplies(m.host, m.cloud.reply);
   await run(read(inner, "w2"));
   await run(personal.signGrant("s1", { station: "w2/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
   await run(read(inner, "w2"));
