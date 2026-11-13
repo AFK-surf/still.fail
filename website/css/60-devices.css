@@ -51,7 +51,7 @@
 
 /* Below: dots that follow the swipe (a pill slides between them as the cards move), the count, and, for a mouse, arrows. */
 .dv-nav { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
-.dv-dots { position: relative; display: flex; margin-left: -10px; }
+.dv-dots { position: relative; display: flex; margin-left: -4px; } /* the pill, 4 px into its button, on the gutter */
 .dv-dots button { all: unset; box-sizing: border-box; position: relative; width: 26px; height: 44px; cursor: pointer;
   -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
 .dv-dots button::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 3px; background: rgba(28,27,26,.2);

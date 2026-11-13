@@ -21,8 +21,9 @@
 }
 /* The dashed rule under the bar, across the page. */
 .nav::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; pointer-events: none; background: var(--dash-x); }
-/* The page's guides, on the container's edges. */
-.nav .w::before { content: ""; position: absolute; top: 0; bottom: 0; left: var(--gl); right: var(--gr); pointer-events: none;
+/* The page's guides, on the container's edges: over the bar's material, under its brand and buttons (which sit on
+   them, at the container's edges). */
+.nav .w::before { content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: var(--gl); right: var(--gr); pointer-events: none;
   background: var(--dash-y), var(--dash-y); background-position: left top, right top; }
 .nav .w { position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
 .brand {

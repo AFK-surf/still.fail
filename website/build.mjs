@@ -13,7 +13,8 @@
 // an attribute data-t-<name>="key" (data-t-aria for aria-label). Keys are "<section>.<first words>.<hash>", the hash
 // taken from the English, so editing the English makes the key stale and its translations drop out until the English
 // is translated again (see README.md, "Languages"). The folder itself also works unbuilt on any static host, in English.
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
@@ -295,6 +296,54 @@ export function render(tpl, cfg, loc, dict) {
   return { html, missing: [...missing] };
 }
 
+// ---------- The latest release ----------
+
+/** The newest stable release's notes (docs/releases/0.1.<n>.md, scripts/changelog.ts): its version, its date, its lines
+ *  by kind. A release's notes are merged into main after the commit it is built from (.github/stable-plan.py), so the
+ *  stable run's checkout lacks its own: origin/main's are read too, those of releases up to the checkout's own count
+ *  (a release is the commits up to it), so a site built for an older release never names a newer one. */
+export function latestRelease(root = here("..")) {
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  const notes = new Map();
+  const dir = resolve(root, "docs/releases");
+  if (existsSync(dir)) for (const f of readdirSync(dir)) notes.set(f, () => readFileSync(resolve(dir, f), "utf8"));
+  let upTo = Infinity;
+  try {
+    if (git("rev-parse", "--is-shallow-repository").trim() !== "true") upTo = Number(git("rev-list", "--count", "HEAD")); // a shallow count is no version
+    for (const f of git("ls-tree", "--name-only", "origin/main", "docs/releases/").split("\n")) {
+      const name = f.slice("docs/releases/".length);
+      if (name && !notes.has(name)) notes.set(name, () => git("show", `origin/main:${f}`));
+    }
+  } catch { /* no git, or no origin/main: the checkout's own notes */ }
+  const versions = [...notes.keys()].map((f) => [/^0\.1\.(\d+)\.md$/.exec(f)?.[1], f]).filter(([n]) => n && +n <= upTo).sort((a, b) => b[0] - a[0]);
+  if (!versions.length) return null;
+  const text = notes.get(versions[0][1])();
+  const front = (key) => new RegExp(`^${key}:\\s*(\\S+)`, "m").exec(text.split("\n---", 1)[0])?.[1];
+  const lines = { new: [], improved: [], fixed: [] };
+  for (const m of text.matchAll(/^- (新增|改进|修复)：(.+)$/gm)) lines[{ 新增: "new", 改进: "improved", 修复: "fixed" }[m[1]]].push(m[2].trim());
+  return { version: Number(front("version")), date: front("date"), lines };
+}
+
+/** A locale's page with the release in its changelog: the version on the cover, the date in the locale's own words, how
+ *  many of each kind (the bars and the headline's numbers), and, in Chinese, which the notes are written in, the first
+ *  three new things, each up to its first "；" (another language has no words for them: the list is left out). */
+export function withRelease(html, loc, release) {
+  if (!release) return html;
+  const count = (kind) => release.lines[kind].length;
+  const [y, m, d] = release.date.split("-").map(Number);
+  const date = new Intl.DateTimeFormat(loc.htmlLang, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(Date.UTC(y, m - 1, d));
+  const shown = [...release.lines.new, ...release.lines.improved].slice(0, 3).map((l) => esc(l.split("；")[0]));
+  return html
+    .replace(/(<text data-release="version"[^>]*>)[^<]*/, `$1${"0.1." + release.version}`)
+    .replace(/(data-release="date">)[^<]*/, `$1${date}`)
+    .replace(/(<span data-n="(\w+)">)\d+/g, (_, open, kind) => open + count(kind))
+    .replace(/(style="--n:)\d+([^"]*" data-n="(\w+)")/g, (_, a, b, kind) => a + count(kind) + b)
+    .replace(/(<span class="val" data-n="(\w+)">)\d+/g, (_, open, kind) => open + count(kind))
+    .replace(/(<ul class="changes" data-release="lines">)[\s\S]*?(<\/ul>)/, (_, open, close) => loc.code === "zh-CN"
+      ? open + shown.map((l) => `<li><svg class="ico"><use href="#i-plus"/></svg><span>${l}</span></li>`).join("") + close
+      : "");
+}
+
 // ---------- Build ----------
 
 function sheetAndScript() {
@@ -447,8 +496,10 @@ function main(argv) {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   const kb = (n) => (n / 1024).toFixed(1) + " KB", bytes = (s) => Buffer.byteLength(s);
+  const release = latestRelease();
+  console.log(release ? `release 0.1.${release.version} (${release.date}) in the changelog` : "! no release notes: the changelog as the template has it");
   for (const loc of cfg.locales) {
-    const { html, missing } = render(tpl, cfg, loc, loadDict(loc.code));
+    const rendered = render(tpl, cfg, loc, loadDict(loc.code)), html = withRelease(rendered.html, loc, release), { missing } = rendered;
     if (missing.length) {
       const msg = `${loc.code}: ${missing.length} key(s) not translated, shown in English: ${missing.slice(0, 4).join(", ")}${missing.length > 4 ? " … (--check lists them all)" : ""}`;
       if (has("--strict")) throw new Error(msg);

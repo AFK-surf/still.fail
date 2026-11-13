@@ -40,3 +40,10 @@ Add it to `i18n/locales.json`, add `i18n/<code>.json` (start from `{}`; the page
 and `--strict` fails instead), give it a font stack in `css/00-base.css` if its script needs one, and fill it from
 `--extract`. `--check <code>` reports missing and extra keys, markup that differs from the English, and characters
 outside Suisse Intl's `unicode-range` that are not CJK, kana, Hangul or full-width (which the system's fonts draw).
+
+## The changelog
+
+The Changelog section names the newest stable release: the build puts its version, date and counts (and, on the
+Chinese page, its first three lines) from `docs/releases/0.1.<n>.md` over the template's (`latestRelease`,
+`withRelease` in build.mjs), reading origin/main's notes too, since a release's notes land on main after its commit.
+Only a stable release deploys monoid.build, so it changes with each one.
