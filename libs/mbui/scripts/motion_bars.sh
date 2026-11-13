@@ -63,7 +63,7 @@ sort -u "$f" | awk -v title="${2:-bars}" -v strict="${MOTION_BARS_FAIL:-}" '
       print "- `leaves motion_counted <file>`: take `\"<file>\"` out of the `motion_counted([…])` of its package"
       print "  (`motion_counted_*test.mbt`): its faults fail its tests from now on."
       print ""
-      print "(mbui AGENTS.md, Time in a test is declared; mbui's scripts/motion_bars.sh.)"
+      print "(mbui AGENTS.md, Time in a test is declared; libs/mbui/scripts/motion_bars.sh.)"
     }
     if (strict == "1" && off > 0) exit 1
   }'
