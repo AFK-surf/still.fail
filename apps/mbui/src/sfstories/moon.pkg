@@ -1,0 +1,23 @@
+import {
+  "mbui/host",
+  "mbui/hostapi",
+  "mbui/ui",
+  "mbui/view",
+  "mbui/signals",
+  "moonbitlang/core/encoding/utf8",
+  "stillfail/sf",
+  "stillfail/sfbase",
+  "stillfail/sfkept",
+}
+
+options(
+  "is-main": true,
+  // (the sources the page shows: beside its script in a browser, none elsewhere)
+  targets: { "sources_js.mbt": [ "js" ], "sources_native.mbt": [ "native", "wasm", "wasm-gc" ] },
+  link: {
+    "js": { "format": "iife" },
+    "native": {
+      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
+    },
+  },
+)

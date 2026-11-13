@@ -66,6 +66,11 @@ decide() {
   # change to what they are made of.
   windows_natives=false
   if has '^(client/shell/|client/Cargo\.(toml|lock)$|vendor/|apps/mbui/engine/|scripts/native\.ts$)'; then windows_natives=true; fi
+  # The component library's page (apps/mbui/scripts/kit-web.sh, monoid's alone: cloud/wrangler.kit.jsonc), built by
+  # mbui-web and deployed by monoid-kit, for a change to what it is made of (the app's code and mbui's, mbui's web host)
+  # or to how it is built and served.
+  kit=false
+  if has '^(apps/mbui/(src|assets)/|apps/mbui/mbui/(src|web)/|apps/mbui/(mbui/)?moon\.(mod|work)$|apps/mbui/scripts/(kit-web\.sh|kit\.html|web\.sh|env\.sh|assets)$|apps/mbui/mbui/scripts/(web|env)\.sh$|apps/mbui/tools/assets/|cloud/(deploy\.py|wrangler\.kit\.jsonc)$)'; then kit=true; fi
   # The mbui app's own tests (check-mbui, mbui-check.yml; main's run there on their own): for a change to it, or
   # to mbui (apps/mbui/mbui).
   mbui=false
@@ -100,6 +105,7 @@ print() {
     echo "mac_beta=$mac_beta"
     echo "win_beta=$win_beta"
     echo "windows_natives=$windows_natives"
+    echo "kit=$kit"
     echo "mbui=$mbui"
     echo "station_tests=$station_tests"
     echo "core_tests=$core_tests"
