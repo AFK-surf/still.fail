@@ -442,7 +442,7 @@ test "allowance layout is chosen per provider: a four-window vendor does not shr
   assert_true(row_in_line("claude1@example.com", "claude2@example.com", ["5H", "W", "Fable"]))
   assert_true(row_in_line("claude3@example.com", "claude4@example.com", ["W", "Fable"]))
   assert_true(row_in_line("ChatGPT 团队", "agy@example.com", ["5H", "W"]))
-  assert_false(row_in_line("agy@example.com", "备用 key", ["Gemini 5H", "Gemini W", "Claude / GPT 5H", "Claude / GPT W"]))
+  assert_false(row_in_line("agy@example.com", "备用 key", ["Gemini", "Claude / GPT"]))
   assert_eq(t.squeeze_faults(), [])
   // At the narrowest sidebar width, Claude's three-window rows switch all Claude rows (including two-window claude3)
   // to two lines of standard capsules, while ChatGPT's two-window row still keeps its marks beside its figures on one line.

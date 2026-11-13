@@ -61,7 +61,12 @@ pub fn quota_lines_node(
       r.drops(Is(-1)) |> ignore
       let parts = fn() { quota_parts(windows()) }
       for i in [0, 1] {
-        let part = fn() { parts().get(i).unwrap_or([]) }
+        let part = fn() {
+          match parts().get(i) {
+            Some((_, p)) => p
+            None => []
+          }
+        }
         r.show(fn() { part().length() > 0 }, fn(p) {
           style_node(p, fn() { quota_chips_part.then(@ui.style(gap=room(gap))) })
           p.wraps(Is(Some(quota_chips_part_lines))) |> ignore
