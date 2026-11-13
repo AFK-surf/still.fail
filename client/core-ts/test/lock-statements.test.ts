@@ -33,25 +33,31 @@ const seedOf = (n: number) => {
   return s;
 };
 
-type Log = { sub: string; k: ReturnType<typeof key>; chain: StationEntry[]; said: string | null; n: number };
+type Log = { sub: string; k: ReturnType<typeof key>; chain: StationEntry[]; said: string | null; said2?: string | null; n: number };
 function person(sub: string, n: number, id: string): Log {
   const k = key(n);
   const g = signed({ v: 1, ws: `person:${sub}`, seq: 0, prev: null, at: T, kind: "genesis", body: { sub, device: { key: k.id, id, label: `${sub}'s app` } } } as Omit<StationEntry, "sig">, k);
   return { sub, k, chain: [g], said: null, n: 0 };
 }
 const gOf = (l: Log) => stationHash(l.chain[0]!);
-function say(l: Log, kind: string, more: Record<string, unknown>): Record<string, unknown> {
-  const b = { ws: "ws", kind, ...more, prev: l.said, salt: (++l.n + 0x5a00 * l.chain.length).toString(16).padStart(32, "0") };
+function say(l: Log, kind: string, more: Record<string, unknown>, ws: "ws" | "w2" = "ws"): Record<string, unknown> {
+  const b = { ws, kind, ...more, prev: ws === "ws" ? l.said : (l.said2 ?? null), salt: (++l.n + 0x5a00 * l.chain.length).toString(16).padStart(32, "0") };
   const h = bodyHash(b)!;
   const last = l.chain[l.chain.length - 1]!;
-  l.chain.push(signed({ v: 1, ws: `person:${l.sub}`, seq: l.chain.length, prev: stationHash(last), at: T, kind: "ws", body: { t: wsTag("ws", gOf(l)), h } } as Omit<StationEntry, "sig">, l.k));
-  l.said = h;
+  l.chain.push(signed({ v: 1, ws: `person:${l.sub}`, seq: l.chain.length, prev: stationHash(last), at: T, kind: "ws", body: { t: wsTag(ws, gOf(l)), h } } as Omit<StationEntry, "sig">, l.k));
+  if (ws === "ws") l.said = h;
+  else l.said2 = h;
   return b;
 }
 const SETTINGS = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: { keys: [] } };
 
 /// What a station was brought of a person's lock: by whom it was asked (its address), the chain's length, the bodies.
 type Brought = { at: string; length: number; bodies: unknown[] | null };
+/// Every request a station of the rig got: by whom it was asked (its address), how, and what it carried, as JSON.
+type Asked = { at: string; method: string; path: string; body: string };
+/// The stations of w2 (`two`): B in its list, D listed by its view alone.
+const B = "bb".repeat(32);
+const D = "dd".repeat(32);
 
 /// s1's other devices (`devices`): D2 and D3, put on s1's own log by this device before anything is said.
 const D2 = key(7002);
@@ -62,7 +68,7 @@ function onOwn(chain: StationEntry[], by: ReturnType<typeof key>, kind: string, 
   return signed({ v: 1, ws: last.ws, seq: chain.length, prev: stationHash(last), at: last.at, kind, body } as Omit<StationEntry, "sig">, by);
 }
 
-async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devices?: boolean } = {}) {
+async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devices?: boolean; two?: boolean } = {}) {
   const me = person("s1", MINE, ME);
   if (o.devices) for (const [k, n] of [[D2, "d2"], [D3, "d3"]] as const) me.chain.push(onOwn(me.chain, me.k, "device", { key: k.id, id: n.repeat(32), label: `s1's ${n}` }));
   const bob = person("r2", 6002, key(6102).hex);
@@ -75,43 +81,51 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
   bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
+  // (w2, where `two`: rooted in s1's log too, B its station)
+  const bodies2: unknown[] = [];
+  if (o.two) bodies2.push(say(me, "open", { ...SETTINGS, email: "a@x.com" }, "w2"), say(me, "station", { key: B }, "w2"));
   const g = grant();
   let mine: Signer | null = null;
-  const r = await rig((signer) => ((mine = signer), { ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME) }), (host) => {
+  const r = await rig((signer) => ((mine = signer), { ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME), ...(o.two ? { w2: genesis("w2", signer, true, [{ key: B, name: "b" }], g.keys, ME) } : {}) }), (host) => {
     // (s1's own lock as this device pinned it before: its chain kept, its key's seed sealed, its id known)
     host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(me.chain)));
     host.storage.set("personal-signer-id", utf8(me.k.id));
     host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
-  }, [A, C], [A, C]);
+  }, [A, C], [A, C], undefined, o.two ? [B, D] : []);
   const inner = r.core.inner;
   const signer = mine! as Signer;
   const g0 = r.cloud.chains.get("ws")![0]!;
   const headOf = (c: Entry[]): Head => ({ seq: c.length - 1, hash: entryHash(c[c.length - 1]!), genesis: entryHash(c[0]!) });
   const moved = signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(root) }));
-  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob, xena].filter((l) => l !== root || o.root === "alice"), bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[] };
-  const answer = (at: string, method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
+  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob, xena].filter((l) => l !== root || o.root === "alice"), bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[] };
+  const g2 = o.two ? r.cloud.chains.get("w2")![0]! : null;
+  const st2 = { chain: g2 === null ? [] : [g2, signer.sign(next("w2", headOf([g2]), 1001, "moved", { root: gOf(me) }))] as Entry[], logs: [] as Log[], bodies: bodies2, brought: [] as Brought[], silent: false };
+  // (each workspace's stations its own chain, logs and bodies; s1's own log the same at all of them)
+  const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked"> = st): Effect.Effect<unknown, CoreError> => {
+    st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
-    if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) return Effect.succeed({ head: headOf(st.chain), entries: st.chain, ...serves });
-    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: st.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) });
-    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: st.bodies, lacking: [] });
+    if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) return Effect.succeed({ head: headOf(x.chain), entries: x.chain, ...serves });
+    if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: x.logs.map((l) => ({ genesis: gOf(l), entries: l.chain })) });
+    if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: x.bodies, lacking: [] });
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
     if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [{ genesis: entryHash(st.own[0]!), entries: st.own }] });
-    if (st.silent && method === "POST") return Effect.never;
+    if (x.silent && method === "POST") return Effect.never;
     if (method === "POST" && path === "/lock/person") {
       const b = body as { chain?: Entry[]; bodies?: unknown[] };
       const chain = b.chain ?? [];
-      st.brought.push({ at, length: chain.length, bodies: b.bodies ?? null });
+      x.brought.push({ at, length: chain.length, bodies: b.bodies ?? null });
       if (chain.length > st.own.length) st.own = chain;
-      for (const x of b.bodies ?? []) if (!st.bodies.some((y) => bodyHash(y) === bodyHash(x))) st.bodies.push(x);
+      for (const n of b.bodies ?? []) if (!x.bodies.some((y) => bodyHash(y) === bodyHash(n))) x.bodies.push(n);
       return Effect.succeed({ genesis: entryHash(chain[0]!), length: chain.length });
     }
-    if (method === "POST") return Effect.succeed({ taken: 1, head: headOf(st.chain) });
+    if (method === "POST") return Effect.succeed({ taken: 1, head: headOf(x.chain) });
     return Effect.fail(new CoreError("http_404", "no route", 404));
   };
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
     if ((id === A || id === C) && path.startsWith("/lock")) return answer(`${ws}/${id === A ? "A" : "C"}`, method, path, body);
+    if ((id === B || id === D) && path.startsWith("/lock")) return answer(`${ws}/${id === B ? "B" : "D"}`, method, path, body, st2);
     return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
   }) as typeof inner.stations.requests.call;
   const run = async <X>(e: Effect.Effect<X, any>): Promise<{ ok?: X; error?: CoreError }> => {
@@ -125,6 +139,10 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   await run(inner.adb.personal().refresh("s1"));
   await run(read(inner, "ws"));
   assert.equal(held(inner, "ws")?.entries.at(-1)?.kind, "moved", "the chain held moved");
+  if (o.two) {
+    await run(read(inner, "w2"));
+    assert.equal(held(inner, "w2")?.entries.at(-1)?.kind, "moved", "w2's chain held moved");
+  }
   assert.equal(inner.adb.personal().standing("s1"), "member", "this device on its own lock");
   // What this device's own log says now, past what it said before: each statement's kind and whom, by its body.
   // (this device said again on it with the key it signs workspaces' locks with, as any act with the seed in hand does
@@ -138,7 +156,7 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const asked = () => r.host.secureAsked.length;
   /// Every request the cloud was sent since the start that carries a body's salt: none may.
   const cloudBodies = () => r.host.requests.filter((q) => q.body !== null && q.body !== undefined && /"salt"/.test(typeof q.body === "string" ? q.body : new TextDecoder().decode(q.body as Uint8Array)));
-  return { r, inner, st, run, said, members, asked, cloudBodies, me, bob, xena, lostOff: (more?: (lost: Record<string, unknown>[]) => Record<string, unknown>[]) => lostOff({ inner, st, run, me, r }, more) };
+  return { r, inner, st, st2, run, said, members, asked, cloudBodies, me, bob, xena, lostOff: (more?: (lost: Record<string, unknown>[]) => Record<string, unknown>[]) => lostOff({ inner, st, run, me, r }, more) };
 }
 
 /// This device's statements past what s1's log said before, then a read that moves s1's own log off them with no seed
@@ -330,3 +348,34 @@ test("lost, then D2 says the same since: nothing signed again, nothing told", as
   assert.equal(w.members(), "r3 member, s1 owner");
   assert.deepEqual(w.inner.adb.personal().pending("s1"), []);
 });
+
+/// What a request carried, as text.
+const textOf = (b: unknown) => (b === null || b === undefined ? "" : typeof b === "string" ? b : new TextDecoder().decode(b as Uint8Array));
+
+for (const where of ["ws", "w2"] as const) {
+  test(`a person in two moved workspaces, an act in ${where}: its bodies at its stations the list names alone; the other's stations the chain alone; the cloud only the entries, a tag and a hash each`, async () => {
+    const w = await setUp({ two: true });
+    const other = where === "ws" ? "w2" : "ws";
+    const kept = (ws: string) => ((w.inner.data.record("lockBodies", ws) as { bodies?: { salt?: string }[] } | null)?.bodies ?? []);
+    const had = new Set(kept(where).map((b) => b.salt));
+    const fromAsked = w.st.asked.length, fromCloud = w.r.host.requests.length;
+    // (in ws bob taken out; in w2 D taken in, which its view lists and its list does not)
+    const out = where === "ws" ? await w.run(roster(w.inner, "s1", "ws", { member: "r2", gone: true })) : await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.joinStation", { workspace: "w2", station: D }), catch: (e) => e as CoreError }));
+    assert.equal(out.error, undefined, out.error?.message);
+    await w.r.host.time.pass(2000);
+    const salts = kept(where).map((b) => b.salt!).filter((x) => !had.has(x));
+    assert.ok(salts.length > 0, "statements made");
+    const asked = w.st.asked.slice(fromAsked);
+    const named = where === "ws" ? ["ws/A"] : ["w2/B", "w2/D"];
+    const carries = (q: Asked) => /"bodies"/.test(q.body) || (q.method === "POST" && q.path === "/lock/bodies") || salts.some((x) => q.body.includes(x));
+    assert.deepEqual([...new Set(asked.filter(carries).map((q) => q.at))].sort(), named, "the bodies at the stations of the workspace the list names alone");
+    const there = asked.filter((q) => q.at.startsWith(`${other}/`));
+    assert.ok(there.some((q) => q.method === "POST" && q.path === "/lock/person" && /"chain"/.test(q.body)), `${other}'s stations brought the chain: ${JSON.stringify(there.map((q) => `${q.method} ${q.path}`))}`);
+    assert.deepEqual(there.filter(carries).map((q) => `${q.at} ${q.method} ${q.path}`), [], `nothing of a body at ${other}'s stations`);
+    // The cloud: the entries of s1's log alone (POST /v1/me/personal-lock), each statement's `ws {t, h}`.
+    const cloud = w.r.host.requests.slice(fromCloud);
+    assert.deepEqual(cloud.filter((q) => salts.some((x) => textOf(q.body).includes(x)) || /"bodies"/.test(textOf(q.body))).map((q) => q.url), [], "no body at the cloud");
+    const sent = cloud.filter((q) => q.url.endsWith("/v1/me/personal-lock")).flatMap((q) => (JSON.parse(textOf(q.body)) as { entries?: Entry[] }).entries ?? []).filter((e) => e.kind === "ws");
+    assert.ok(sent.length > 0 && sent.every((e) => Object.keys(e.body as object).sort().join() === "h,t"), `the cloud sent the entries alone: ${JSON.stringify(sent.map((e) => e.body))}`);
+  });
+}
