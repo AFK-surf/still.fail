@@ -1196,3 +1196,79 @@ test "a chat's page made with its inside nodes, a page pushed over it on 小屏:
   assert_eq(@sfpages.find_chat(), "", msg="back in the chat")
   assert_eq(calls.filter(fn(c) { c.0 == "chat.find" }).length(), 0)
 }
+
+///|
+/// 引用's pill where it is drawn now (a screen reader's button), if it is.
+fn quote_nodes_pill(t : @ui.Tester) -> (Double, Double, Double, Double)? {
+  t.query(Button, label="引用").map(fn(s) { s.rect })
+}
+
+///|
+/// Words `s` of a message in a chat's page made with its inside nodes on 大屏, its list wheeled up till they are drawn
+/// well within the window (pick_pill_kept_wbtest's way): where they are drawn.
+fn quote_nodes_words(t : @ui.Tester, s : String) -> (Double, Double, Double, Double) raise {
+  for _ in 0..<12 {
+    match t.run_rects(s) {
+      [(_, y, _, _), ..] if y > 100.0 && y < 500.0 => break
+      _ => {
+        t.wheel(900.0, 400.0, -200.0)
+        t.run_for(@ui.move_most_ms)
+      }
+    }
+  }
+  match t.run_rects(s) {
+    [r, ..] => r
+    _ => fail("「\{s}」 not drawn")
+  }
+}
+
+///|
+test "大屏, a chat's page made with its inside nodes: words of an agent's message dragged over with the mouse and let go have 引用 over where it let go; pressed, quoted into the chat's draft as that message's, what is picked let go and the pill gone" {
+  let calls : Array[(String, Json)] = []
+  let (w, h) = (1280.0, 800.0)
+  let t = find_nodes_open(calls, w, h, 0)
+  let (px, py, pw, ph) = quote_nodes_words(t, "高度先按 90 估")
+  t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
+  t.frame()
+  assert_eq(@ui.picked_now().map(fn(p) { p.text }), Some("高度先按 90 估"))
+  // the pill over the end the pointer let go: above that line, its end under the pill, all of it in the window
+  guard quote_nodes_pill(t) is Some((qx, qy, qw, qh)) else { fail("no 引用 over what is picked") }
+  assert_true(
+    qy + qh <= py && qy >= 0.0 && qx >= 0.0 && qx + qw <= w && qx <= px + pw && px + pw <= qx + qw,
+    msg="引用 at \{Repr((qx, qy, qw, qh))}, the words picked at \{Repr((px, py, pw, ph))}",
+  )
+  t.run_for(@ui.move_most_ms)
+  assert_true(quote_nodes_pill(t) is Some(_), msg="引用 gone once at rest")
+  // pressed (a click of its own, not a second of the drag's): the quote in the chat's draft (composer.quote), whose
+  // words, which message and as what; nothing picked, the pill gone
+  t.run_for(@ui.double_click_ms)
+  guard quote_nodes_pill(t) is Some((qx, qy, qw, qh)) else { fail("no 引用 to press") }
+  t.tap(qx + qw / 2.0, qy + qh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  let quoted = calls.filter(fn(c) { c.0 == "composer.quote" })
+  assert_eq(quoted.length(), 1, msg="\{Repr(calls.map(fn(c) { c.0 }))}")
+  assert_eq(text(Some(quoted[0].1), "key"), "ws1/st1:s-c1")
+  let q = field(Some(quoted[0].1), "quote")
+  assert_eq(
+    (text(q, "text"), text(q, "ts"), text(q, "author"), text(q, "role")),
+    ("高度先按 90 估", "ts8", "Claude", "agent"),
+  )
+  assert_eq(@ui.picked_now(), None)
+  assert_eq(t.ctx().selected_text(), "")
+  assert_true(quote_nodes_pill(t) is None, msg="引用 still there after it was pressed")
+}
+
+///|
+test "大屏, a chat's page made with its inside nodes: words dragged over with the mouse from one message into the next have no 引用" {
+  let calls : Array[(String, Json)] = []
+  let t = find_nodes_open(calls, 1280.0, 800.0, 0)
+  let (ax, ay, _, ah) = quote_nodes_words(t, "推送截图前要先登录")
+  guard t.run_rects("做完了：列表") is [(bx, by, bw, bh), ..] else { fail("the last message not drawn") }
+  t.drag(ax + 1.0, ay + ah / 2.0, bx + bw - 1.0, by + bh / 2.0)
+  t.frame()
+  guard @ui.picked_now() is Some(p) else { fail("nothing picked") }
+  assert_true(p.of.length() > 1, msg="picked of \{@ui.list_text(p.of)}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(quote_nodes_pill(t) is None, msg="引用 over a pick across messages")
+  assert_eq(calls.filter(fn(c) { c.0 == "composer.quote" }).length(), 0)
+}
