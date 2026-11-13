@@ -228,6 +228,11 @@ export class PersonalLock {
     this.#env = env;
   }
 
+  /// The chain pinned here as read so far, its entries from the genesis (read only).
+  pinnedOf(sub: string): readonly Entry[] {
+    return this.#pinned.get(sub) ?? [];
+  }
+
   /// The chain pinned here as read so far, what it says.
   chain(sub: string): Chain | null {
     return checkChain(this.#pinned.get(sub) ?? [], sub);
