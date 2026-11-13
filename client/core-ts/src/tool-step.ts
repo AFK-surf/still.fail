@@ -71,9 +71,9 @@ export function cleanPath(p: string): string {
   return m && m[1] ? m[1] : p;
 }
 
-/** A command stripped of a leading `cd <workspace> &&` prefix when present. */
+/** A command stripped of a leading `cd /absolute/workspace &&` prefix when present. */
 export function cleanCommand(cmd: string): string {
-  const m = /^cd\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*([\s\S]+)$/.exec(cmd);
+  const m = /^cd\s+(?:"[~/][^"]*"|'[~/][^']*'|[~/][^\s;&|]*)\s*(?:&&|;)\s*([\s\S]+)$/.exec(cmd);
   return m && m[1] ? m[1] : cmd;
 }
 
