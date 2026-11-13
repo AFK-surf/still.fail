@@ -10,6 +10,7 @@
 .foot-grid > :nth-child(5) { grid-column: 20 / span 3; }
 .foot-grid > :not(.foot-id) { padding-right: 12px; }
 .foot-id .brand { align-self: flex-start; margin-block: -9px; color: var(--fg); } /* its 44 px hit area, without moving the drawing */
+.foot-id .brand img { margin-left: calc((var(--nav) - 26px) / 2); } /* the mark off the guide, under the bar's (10-nav.css); the words stay on it */
 .foot-id .brand img { box-shadow: 0 0 0 1px rgba(255,255,255,.18); } /* the dark mark's square, on the dark band */
 .foot-tag { color: var(--mut); font-size: var(--t-small); line-height: 1.55; letter-spacing: var(--tr-small); max-width: 22em; text-wrap: pretty; }
 .foot-grid .fh { font-family: var(--mono); font-size: 11px; line-height: 18px; font-weight: 400; letter-spacing: .06em; text-transform: uppercase; color: var(--mut); margin: 4px 0 14px; }
@@ -30,7 +31,9 @@
 /* Language: a pill (globe, the language, a chevron) opening a menu of the pages in other languages, above it (below
    when there is no room), drawn from the trigger's corner. Positioned by CSS anchor positioning; where that is missing,
    main.js places it (data-placed). */
-.footer-prefs { display: flex; align-items: center; }
+/* As far from the guide beside it as from the rule over the row (padding-top: 20): a control on a dashed line reads as
+   cut by it. On a phone it wraps under the copyright, against the other guide. */
+.footer-prefs { display: flex; align-items: center; margin-inline: 20px; }
 .language-trigger {
   position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 7px 0 9px; border: 1px solid var(--hair); border-radius: 6px;
   background: transparent; color: var(--fg); cursor: pointer;

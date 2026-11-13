@@ -25,9 +25,14 @@
    them, at the container's edges). */
 .nav .w::before { content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: var(--gl); right: var(--gr); pointer-events: none;
   background: var(--dash-y), var(--dash-y); background-position: left top, right top; }
-/* Its brand and buttons stand off the guides (--n-in inside them): a mark or a filled button on a dashed line reads as cut. */
-.nav .w { --n-in: 12px; position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav);
-  padding-left: calc(var(--gl) + var(--n-in)); padding-right: calc(var(--gr) + var(--n-in)); }
+/* The controls at its ends stand as far from the guide beside them as from the rule under the bar (a mark or a filled
+   button on a dashed line reads as cut by it): each one's drawing centred in the bar, so that is half of what the bar's
+   height leaves of it. The mark is 26 high, the call to action 36; the menu's three bars draw 11.2 × 16.7 in its box
+   (centred: (box − 16.7) / 2 of it beside them, 9.7 in either box, its touch box's −4 margin counted). */
+.nav .w { position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
+.nav .brand { margin-left: calc((var(--nav) - 26px) / 2); }
+.nav .nav-tools { margin-right: calc((var(--nav) - 36px) / 2); }
+@media (max-width: 980px) { .nav .nav-tools { margin-right: calc((var(--nav) - 11.2px) / 2 - 9.7px); } }
 .brand {
   display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; color: var(--ink); flex: none;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
