@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ea62d0c05](https://github.com/AFK-surf/monoid/commit/ea62d0c05a38c28e9fce8c16eb9cc279bd87bf04) perf(mbui): enable Metal framebufferOnly, opaque l | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.7 | 95.86 | 107.28 |
 | [6f3ad0d55](https://github.com/AFK-surf/monoid/commit/6f3ad0d554e20c2cbb76d39e88c8a94424dbaa85) mbui app: bring notified pages into view on tape s | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.7 | 95.41 | 109.01 |
 | [def675d85](https://github.com/AFK-surf/monoid/commit/def675d852b1184ebd1872f9ab858203dd0b1bb7) feat(history): refine group summaries, coalesce ed | 1.97 | 2.64 | 11.38 | 30.95 | 40.87 | 27.58 | 52.7 | 95.59 | 109.52 |
 | [85e118c8d](https://github.com/AFK-surf/monoid/commit/85e118c8df152588655f5e1ebb29b27b30d73c56) mbui app: no flight on a chat's page made as nodes | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 95.57 | 108.35 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0451c1a9a](https://github.com/AFK-surf/monoid/commit/0451c1a9ab3968a3863af0bebfdaa3a911601136) mbui: what a Tester reads of a list and of words d | 1.95 | 2.61 | 11.22 | 30.67 | 40.28 | 27.29 | 52.22 | 94 | 98.44 |
 | [4f0c9acae](https://github.com/AFK-surf/monoid/commit/4f0c9acaefb0122fe4b96380980cc4d495b155e7) mbui app: adaptive two-row chat top bar title with | 1.94 | 2.61 | 11.21 | 30.64 | 40.26 | 27.29 | 52.22 | 94 | 171.4 |
 | [0b5cc31fb](https://github.com/AFK-surf/monoid/commit/0b5cc31fb1051a500d5d41b135e46a2bcbca9560) app tests: at the default rate the fourth group re | 1.94 | 2.61 | 11.21 | 30.62 | 40.21 | 27.29 | 52.18 | 93.39 | 179.53 |
-| [99ac449c3](https://github.com/AFK-surf/monoid/commit/99ac449c389f50bda908954c9846720ca2e0e7df) mbui: a chat's page made as nodes opens an agent's | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.39 | 149.92 |
