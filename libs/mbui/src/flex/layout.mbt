@@ -1696,7 +1696,17 @@ fn layout_flex(
       // (and without them, for resolve_flexible)
       let mut items_hyp = 0.0
       for k in ln.start..<ln.end {
-        let hyp = f.unsafe_get(k * ITEM + HYP)
+        // (a page's list's rows on a host's pixels: each as tall as whole pixels before what is left is worked out, as it
+        // is laid (below), so a row that grows is given what is left of whole-pixel rows, not of rows a fraction short
+        // that are then put up a pixel over it (a key on its way pushing all over it down by one; a short list's rows past
+        // its foot at rest). Two or more that grow each put up as theirs is: one pixel each at most; no list has two)
+        let hyp = if rows_g > 0.0 {
+          let h = (f.unsafe_get(k * ITEM + HYP) * rows_g - 0.000001).ceil() / rows_g
+          f.unsafe_set(k * ITEM + HYP, h)
+          h
+        } else {
+          f.unsafe_get(k * ITEM + HYP)
+        }
         let margin = f.unsafe_get(k * ITEM + MARGIN_MAIN)
         sum_hyp = sum_hyp + hyp + margin
         items_hyp = items_hyp + hyp + margin
