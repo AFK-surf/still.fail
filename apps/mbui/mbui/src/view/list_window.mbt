@@ -557,6 +557,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let laid_stretch = Ref(0.0)
   let floor_arm : Ref[(K, Double) -> Unit] = Ref(fn(_, _) {  })
   let floor_end : Ref[() -> Unit] = Ref(fn() {  })
+  // (a key come at its end as one move (list_send_one_move_test): in the change by which a key comes at the end (by
+  // data), it sets out from as tall as all that change gives back under the top of the last key that stays (L): the
+  // floor's stretch, as the last fill before the change left it, less L as it is laid out in that change (what of it a
+  // row closes at once there, `show(at_once=true)`, is given back so) and the foot as it shows; never taller than
+  // itself, and only ever raised from where it set out (the room alone, take_room's), so where nothing is given back it
+  // is as ever. Not where a key the page lets go is gone at or under L (that change is as ever). Two or more come
+  // there in one change take what it gives back in their order, each up to its own height, and stay the one way they
+  // were said in. `one_move_key`: L, the keys come after it, the change's moment, till the fill that measures them;
+  // `came_row`: their rows, noted only while they are named)
+  let one_move_key : Ref[(K, Array[K], Double)?] = Ref(None)
+  let came_row : Map[K, View] = Map([])
   let floor_raise = fn() {
     if floor.val is Some((k, e)) {
       floor.val = Some((k, dmax(e, laid_stretch.val)))
@@ -777,6 +788,27 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // (one come at its foot by this change, seen, at its foot: the stretch from the last key there before that stays held
       // as long as it was; not where a key its page lets go, not said to leave its room, is gone at or under that one,
       // which ends one armed)
+      // (one come at its end by this change: noted for the fill that measures it)
+      came_row.clear()
+      one_move_key.val = None
+      if ks.length() > 0 && came_by_data.val.contains(ks[ks.length() - 1]) {
+        let mut j = was.length() - 1
+        let mut let_go = false
+        while j >= 0 && !laid_at.contains(was[j]) {
+          if !@signals.untracked(fn() { leaves_room(was[j]) }) {
+            let_go = true
+          }
+          j = j - 1
+        }
+        if !let_go && j >= 0 {
+          // (the keys come after L, in their order: the run of those come by data at the end)
+          let mut c = ks.length()
+          while c > 0 && came_by_data.val.contains(ks[c - 1]) {
+            c = c - 1
+          }
+          one_move_key.val = Some((was[j], ks[c:].to_owned(), self.tree.cause_now()))
+        }
+      }
       if @signals.untracked(fn() { s.at_foot() }) {
         let mut j = was.length() - 1
         let mut let_go = false
@@ -2231,6 +2263,95 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         self.tree.sight_owe(self.tree.logic_said())
       _ => ()
     }
+    // (keys come at its end, in the fill that has them measured (noted till then, room or none): from as tall as all
+    // that change gave back under L's top, taken in their order, each never taller than itself, only ever raised)
+    match one_move_key.val {
+      Some((lk, kks, cause)) => {
+        let rows = kks.map(fn(k) { (came_row.get(k), heights.get(k)) })
+        if rows.iter().any(fn(r) { r.0 is Some(row) && row.alive() && r.1 is None }) {
+          // (a row made, not measured yet: noted for the fill that measures it)
+          ()
+        } else {
+          one_move_key.val = None
+          came_row.clear()
+          let all = places(laid.untracked())
+          match (floor.val, laid_at.get(lk)) {
+            (Some((fk, e0)), Some(i)) if fk == lk && i < all.length() => {
+              let mut given = e0 - all.h(i) - room_under() - s.tuck_room.untracked()
+              let tree = self.tree
+              let groups : Array[@flex.ComeGroup] = []
+              for r in rows {
+                guard r is (Some(row), Some(h)) &&
+                  row.live() is Some(m) &&
+                  m.coming &&
+                  m.flex.style.come_at == cause else {
+                  continue
+                }
+                let st = m.flex.style
+                let from = dmax(dmin(h, given), 0.0)
+                given = given - from
+                guard from > st.come_from + 0.001 else { continue }
+                st.come_from = from
+                st.come_v = 0.0
+                st.come_goal = h * st.come_to
+                st.come_plan = st.come_goal
+                match st.come_group {
+                  // (in the one way it was said in, set already: that way's plan made again from there, below)
+                  Some(g) if g.set && g.members.length() > 1 =>
+                    if !groups.iter().any(fn(o) { physical_equal(o, g) }) {
+                      groups.push(g)
+                    }
+                  // (in one not set yet: it is set from there)
+                  Some(g) if !g.set => ()
+                  // (alone: its own way from there)
+                  _ => {
+                    (m.come_off)()
+                    st.come_group = None
+                    st.come_ends = cause + @flex.come_way_ms(from, 0.0, h)
+                    if st.come_ends <= cause + 0.001 {
+                      come_done(tree, row, m)
+                    } else {
+                      m.come_off = row.at_moment(st.come_ends, fn() { come_done(tree, row, m) })
+                      tree.hand_at_end(st.come_ends)
+                    }
+                  }
+                }
+                tree.layout_marked_at(row.at)
+              }
+              // (a way made again from where its keys now set out: each in it to rest at its new end, as
+              // Tree::come_group_settle puts them)
+              if groups.length() > 0 {
+                let ways = tree.list_inner_at(held_node.val, cause)
+                for k in tree.column_items(held_node.val) {
+                  ways.push(tree.handle(k))
+                }
+                for g in groups {
+                  @flex.come_group_set(g)
+                  for w in ways {
+                    guard w.live() is Some(m) &&
+                      m.flex.style.come_group is Some(o) &&
+                      physical_equal(o, g) else {
+                      continue
+                    }
+                    let st = m.flex.style
+                    if st.come_to >= 1.0 {
+                      (m.come_off)()
+                      m.come_off = w.at_moment(st.come_ends, fn() { come_done(tree, w, m) })
+                      tree.hand_at_end(st.come_ends)
+                    } else if m.left_at >= 0.0 {
+                      m.span = dmax(st.come_ends - m.left_at, 0.0)
+                    }
+                    tree.layout_marked_at(w.at)
+                  }
+                }
+              }
+            }
+            _ => ()
+          }
+        }
+      }
+      None => ()
+    }
     // (a block come at its foot that took the room, measured now: shorter than the room it set out from, from as tall
     // as it is (the rest of the room the floor's, so nothing over it comes down))
     if took_room.length() > 0 {
@@ -2261,9 +2382,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     laid_whole.val = blocks_foot(all) + foot_room.untracked()
     laid_last.val = Some(all)
     match floor.val {
-      Some((lk, _)) =>
+      Some((lk, e0)) =>
         match laid_at.get(lk) {
-          Some(i) if i < all.length() => laid_stretch.val = laid_whole.val - all.top(i)
+          Some(i) if i < all.length() => {
+            laid_stretch.val = laid_whole.val - all.top(i)
+            // (on the host's grid the stretch comes to as its blocks' heights are put on its pixels each frame, the
+            // part closing and the key opening each rounded: never let back from as long as it came to while held, so
+            // what is over goes up only, never a device pixel down and back)
+            let bare = laid_stretch.val - foot_room.untracked()
+            if bare > e0 {
+              floor.val = Some((lk, bare))
+            }
+          }
           _ => ()
         }
       None => ()
@@ -2380,6 +2510,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       gone_quiet[g] = true
       floor_raise()
       foot_room.set(foot_room.untracked() + slot_tall(g))
+    }
+    if one_move_key.val is Some((_, kks, _)) && kks.contains(k) {
+      came_row[k] = row
     }
     let r = foot_room.untracked()
     guard r > 0.0 && came_by_data.val.contains(k) else { return 0.0 }

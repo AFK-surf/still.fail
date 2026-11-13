@@ -36,7 +36,11 @@ yet and you can add one, add it.
   keeps what it showed over its place, fading out that long, and shows what it shows now once that is gone and its
   place holds it whole, its place's way to a smaller one waiting for it: never both seen, no words cut by the way
   (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11). Say `at_once=true`
-  only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another);
+  only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another),
+  and on what a row of a page's list shows only while it is the last of its run (its time line under it): gone in the
+  change by which a key comes after it, as the old page built the row again without it, the key setting out from what
+  that gives back (the coordinator of the migration, 2026-11-13; the list cannot tell a part's cause, and a fold stays
+  a fold);
   `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls;
   those its keys bring or take by data make their way as an each's rows do, one way with all else in its column then,
   where they are seen (at its foot what is above going up with them; scrolled up, what is read staying), each key its
@@ -49,8 +53,11 @@ yet and you can add one, add it.
   its foot, the stretch from the top of the last key that stays to the column's end is never shorter than it was then
   while that change's ways go and rests as long as it came to, so what is over the key goes up only by what it needs
   past all that change gives back under that key's top (the room there, the pinned foot's shrink, a part closing in
-  it, a marked key), never down; a key the page lets go, not marked, gone at or under that key (by its way or at once)
-  is no such giving back, and that change is as ever (the coordinator of the migration, 2026-11-13;
+  it, a marked key), never down; and the key coming there sets out from as tall as all that gives back, never taller
+  than itself, two or more in their order each up to its own height, in the one way they were said in, so what it
+  holds is at its resting place against that key from the first frame (`src/view/list_send_one_move_test.mbt`); a key
+  the page lets go, not marked, gone at or under that key (by its way or at once) is no such giving back, and that
+  change is as ever (the coordinator of the migration, 2026-11-13;
   `src/view/list_sent_up_test.mbt`); what a block holds makes its way in the list's one way, its held column's
   group, with what comes or goes down the list then (Tree::come_group_join); every list said `at_once` (keys there and
   gone at once, its blocks' insides each their own way) is a debt of 方案 A, counted (detlint's `list-comes-off`) and
