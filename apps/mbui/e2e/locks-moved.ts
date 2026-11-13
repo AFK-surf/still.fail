@@ -11,7 +11,7 @@
 //   20 the acts of the moved workspace, each a statement in its actor's own log: frank made an owner by A; hank's
 //     first app (S) approved by frank's Q with the role frank gave; frank's web page (Y) approved by his own app,
 //     renewed, taken off; a station added by frank by its code and taken out; P off alice's own lock, her vault
-//     waiting then keyed anew; gina taken out by frank; frank answered `lock_root_only`; off and on again by A. X is
+//     waiting then keyed anew; gina taken out by frank (her app loses the workspace); frank answered `lock_root_only`; off and on again by A. X is
 //     closed meanwhile (one account's requests a minute, the cloud's 120).
 //   21 the cloud frozen and the stations apart: X off at the first, one state at both once the second is back; S
 //     started anew let in by both.
@@ -283,16 +283,16 @@ try {
     log(`  A used its vault, asked: ${asked.join("; ") || "nothing"}`);
     await vDev.until({ topic: "vaults", workspace: three }, (v) => (v?.vaults ?? []).find((x: J) => x.id === threeVaults.get(vDev)!.vault && x.keyed && x.devices < held), 60_000);
   });
-  await check("gina taken out by frank: out of the list at both, R refused by both; what R's lock topic says", async () => {
+  await check("gina taken out by frank: out of the list at both stations; her app loses the workspace, nothing asked on it", async () => {
+    const before = rDev.asked();
     const asked = await asksOf(qDev, () => qDev.call("workspace.removeMember", { account: qDev.sub, workspace: three, member: rDev.sub }));
     log(`  Q asked: ${asked.join("; ") || "nothing"}`);
     await atBoth("gina out", (s) => memberAt(s, rDev.sub) === null);
-    // (gina is no member of the workspace at the cloud either now: her app's view of it is gone, `workspace_not_found`,
-    // and it reaches neither station)
-    const gone = await rDev.until({ topic: "stations", scope: three }, (v) => (v?.code === "workspace_not_found" ? v : undefined), 60_000);
-    log(`  R's stations: ${gone.code}`);
-    const l = await rDev.until({ topic: "lock", workspace: three }, (v) => v, 30_000).catch((x: Error) => ({ error: x.message.slice(0, 200) }));
-    log(`  R's lock topic: ${JSON.stringify({ locked: l?.locked, me: l?.me, error: l?.error })?.slice(0, 500)}`);
+    // (taking a member out is the account's removal too, so her app loses the workspace as it does before a move: the
+    // cloud says she is not in it. Who took a device out and when is told to one whose person is a member still by
+    // the account: station/test/lock-told-out.test.ts, client/core-ts/test/lock-admits.test.ts)
+    await rDev.until({ topic: "workspaces" }, (v) => ((v ?? []).every((a: J) => !(a.workspaces ?? []).some((w: J) => w.id === three)) ? true : undefined), 60_000);
+    if (rDev.asked() !== before) throw new Error(`R asked the person: ${rDev.askedWhat(before).join("; ")}`);
   });
   await check("frank, an owner, turns safe mode off: answered lock_root_only", async () => {
     const r = await qDev.call("lock.disable", { workspace: three }).then(() => null, (x: Error) => x);
