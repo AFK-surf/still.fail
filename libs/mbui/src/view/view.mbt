@@ -1216,6 +1216,11 @@ pub struct Tree {
   /// the ways set out as the tree is told (View::comes, a fade a structure's leaving gives), each where what goes was made: kept only where the tree keeps sources (a Tester's), for what it
   /// reads of them (Tree::ways_set_out)
   priv ways_set : Array[WaySet]
+  /// what an answer changed at once (answer_marked.mbt), each node and when: the frame that shows it reads them
+  /// (Tree::answered_between)
+  priv answer_marks : Array[(Int, Double)]
+  /// whether the binding running now was marked by what an answer wrote (Bound's `answered`)
+  priv mut binding_answered : Bool
   priv mut lifting : Bool
   /// how many times its nodes' flex places were worked out (a layout of all of it, one laid out to be read, one laid
   /// out alone, one beside another): what Tree::laid_origin sums changes only with one of them
@@ -1241,6 +1246,9 @@ struct Bound {
   /// whether the clock told it (a way followed as it goes), a frame's laying out or the hand worked out anew (what the
   /// pointer is over lights), not a change: what it does is no cause of the hand's (Tree::hits_bump)
   mut by_clock : Bool
+  /// whether what it read was written as an answer was told (answering.mbt): what it sets then is the answer's, done at
+  /// once (answer_marked.mbt)
+  mut answered : Bool
   /// what follows what it read (none once let go)
   mut watch : @signals.Watch?
   mut run : () -> Unit
@@ -1498,6 +1506,8 @@ pub fn Tree::new(
     images_wanted: [],
     flights: [],
     ways_set: [],
+    answer_marks: [],
+    binding_answered: false,
     lifting: false,
     laids: 0,
     held_kept: [],
@@ -3038,7 +3048,17 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them. One object with its watch: a node's bindings are made and let go with it, each object more
   // an allocation and a free of every node)
-  let b : Bound = { at, queued: false, marked: false, live: true, told_at: -1.0, by_clock: false, watch: None, run: bound_runs_not }
+  let b : Bound = {
+    at,
+    queued: false,
+    marked: false,
+    live: true,
+    told_at: -1.0,
+    by_clock: false,
+    answered: false,
+    watch: None,
+    run: bound_runs_not,
+  }
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
@@ -3061,6 +3081,10 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
     }
   })
   w.on_marked(fn() {
+    // (marked as an answer writes what it read: what it sets as it runs is the answer's)
+    if b.live && answering_now() {
+      b.answered = true
+    }
     if b.live && !b.marked {
       if !b.queued {
         b.by_clock = self.ticking || self.laying || self.handing
@@ -3086,12 +3110,16 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
     b.told_at = -1.0
     let by_clock_was = self.bound_by_clock
     self.bound_by_clock = b.by_clock
+    let answered_was = self.binding_answered
+    self.binding_answered = b.answered
+    b.answered = false
     self.binding_running = self.binding_running + 1
     // (untracked: what it sets read by nothing that reads now)
     let was_sub = @signals.set_active_sub(None)
     then(v)
     @signals.set_active_sub(was_sub) |> ignore
     self.bound_by_clock = by_clock_was
+    self.binding_answered = answered_was
     self.binding_running = self.binding_running - 1
     self.cause_at = was
     self.change_ended()
@@ -3834,6 +3862,9 @@ fn[T : Eq] View::bind(
         last.val = Some(v)
         apply(v)
         tree.bound_marked(at, phase)
+        if tree.binding_answered && !(phase is Said) {
+          tree.answer_mark(at)
+        }
       })
       n.props[prop.ord()] = stop
     }
@@ -8660,6 +8691,10 @@ fn View::comes(
     // (made or let go as an answer told it, a block given another key or woken: at once, answering.mbt)
     !answered.val &&
     !tree.answer_holds(v.at) else {
+    // (made or let go at once as an answer told it: marked so, for what judges how what moves goes)
+    if answered.val || tree.answer_holds(v.at) {
+      tree.answer_mark(v.at)
+    }
     return false
   }
   let st = n.flex.style

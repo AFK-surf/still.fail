@@ -15,9 +15,6 @@ fn init {
     ("src/sfreplay/flows/settings_vault_item_test.mbt", 1),
     ("src/sfreplay/flows/share_new_chat_test.mbt", 1),
     ("src/sfreplay/flows/sheet_drag_test.mbt", 1),
-    // (a station renamed: its usage's 75% line comes 52 in a frame as its answer comes, since the framework's change
-    // for answers at once where it made its way in before; the steadiness exemption's change, then the page's)
-    ("src/sfreplay/flows/station_rename_test.mbt", 1),
     ("src/sfreplay/flows/viewer_test.mbt", 2),
     // (shown as the replay gives each message at its own moment, a device's timing: the answer's words in the old
     // chat page's state row (made at mbui/src/ui/nav_view.mbt:258, the old view's) step 4.03 in the frame at 1383.3
