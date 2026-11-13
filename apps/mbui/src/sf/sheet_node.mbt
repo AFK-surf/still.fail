@@ -852,21 +852,12 @@ fn sheet_node(
           // (what it holds, as tall as the sheet less its foot's room past the window: what is read out as the sheet, a
           // dialog by its title, where it is seen)
           cut.box(fn(col) {
+            style_node(col, fn() { sheet_content_top })
             col
             .grow(Is(1.0))
             .shrink(Is(1.0))
             .min_height(Is(Some(0.0)))
             .says(By(fn() { Some(@view.said(Dialog, label=now_of(top().x).0)) }))
-            |> ignore
-            // (the grabber: 38 × 5 in the line's colour, 12 over it and 8 under)
-            col.box(fn(g) {
-              style_node(g, fn() { sheet_grab_outer })
-              g.box(fn(i) {
-                style_node(i, fn() { sheet_grab_inner })
-                i.box(fn(b) { style_node(b, fn() { sheet_grabber.then(@ui.style(bg=Data(theme().p.line))) }) }) |> ignore
-              })
-              |> ignore
-            })
             |> ignore
             // (its pages: the one that shows in the sheet's column, as tall as it makes the sheet; the rest over it, off to
             // its sides (cut off by the sheet), kept as they were left)
@@ -1171,6 +1162,17 @@ fn sheet_node(
             |> ignore
             // (under it, the navigation bar's room: sheet_foot)
             col.box(fn(nav) { nav.height(By(fn() { Some(@ui.system_bars().bottom) })) |> ignore }) |> ignore
+          })
+          |> ignore
+          // (the grabber: 38 × 5 in the line's colour, overlaid centred over the sheet's top band, out of the column's flow)
+          cut.box(fn(g) {
+            g.over(Is(true)).presses(Is(false)) |> ignore
+            style_node(g, fn() { sheet_grab_outer })
+            g.box(fn(i) {
+              style_node(i, fn() { sheet_grab_inner })
+              i.box(fn(b) { style_node(b, fn() { sheet_grabber.then(@ui.style(bg=Data(theme().p.line))) }) }) |> ignore
+            })
+            |> ignore
           })
           |> ignore
         })

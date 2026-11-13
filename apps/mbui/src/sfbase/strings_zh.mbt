@@ -735,6 +735,8 @@ let zh : Map[String, String] = {
   "core-logic.accounts.login.failed": "登录失败",
   "core-logic.decisions.replied": "{name} 回复了",
   "core-logic.decisions.you": "你",
+  "core-logic.history.usage.cost.unpriced": "该模型无价目",
+  "core-views.usage.unpriced": "未计价",
   "desktop.contextMenu.copy": "复制",
   "desktop.contextMenu.copyImage": "复制图片",
   "desktop.contextMenu.copyLink": "复制链接",
