@@ -2060,8 +2060,8 @@ test("turning the lock off: the person's own secrets opened first (asked once), 
 /// still the fake's: the chain held pinned there. What it gives and takes of logs and bodies is what a station gives and
 /// takes (a body only against an entry kept that commits to it, the logs the state is made of), so the device takes them
 /// by its own read (views/lock.ts `readLockOnce`), as it would of a station. `take` keeps entries of the chain; `keepLog`
-/// a person's log as heard in the workspace (brought by their device, or by another station); `takeBodies` statements'
-/// bodies brought it.
+/// a person's log as their device brings it (POST /lock/person); `takeBodies` s1's statements' bodies brought with s1's
+/// log as kept there.
 let clock = () => 0;
 mock.method(wall, "now", () => clock());
 function lockStation(r: Awaited<ReturnType<typeof rig>>) {
@@ -2082,8 +2082,16 @@ function lockStation(r: Awaited<ReturnType<typeof rig>>) {
   return {
     c, routed,
     take: () => void c.takeLock(r.lock.entries as unknown as StationEntry[]),
-    keepLog: (entries: readonly Entry[]) => personChainsOf(c).keep(entryHash(entries[0]!), entries as unknown[], "ws"),
-    takeBodies: (bodies: unknown[]) => c.takeBodies(null, bodies),
+    keepLog: (entries: readonly Entry[]) => {
+      const sub = String((entries[0]!.body as { sub?: unknown }).sub);
+      const [code, out] = lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify({ chain: entries })), { ...viewer, sub } as never);
+      assert.equal(code, 200, `the station took ${sub}'s log: ${JSON.stringify(out)}`);
+    },
+    takeBodies: (bodies: unknown[]) => {
+      const [code, out] = lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify({ chain: personChainsOf(c).of("s1")[0]?.[1] ?? [], bodies })), viewer as never);
+      assert.equal(code, 200, JSON.stringify(out));
+      return out as { taken: number; refused?: unknown[] };
+    },
   };
 }
 
