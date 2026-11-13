@@ -63,4 +63,21 @@ test("a failed automatic update gets one delayed retry, still waiting for vault 
   nextHold();
   await settle();
   assert.deepEqual(attempts, ["0.1.1310", "0.1.1320"]);
+
+  // Another failure's retry becomes due while vault work holds it. A manual attempt then times out without an exit
+  // report: even that already-due retry must not start while the installer may still be running.
+  const heldDuringTimeout = hold();
+  t.after(heldDuringTimeout);
+  updates.follow({ at: time.clock.currentTimeMillisUnsafe(), from: "0.1.1300" });
+  await settle();
+  await time.adjust(60_000);
+  await settle();
+  rmSync(join(run, "update.exit"));
+  updates.follow({ at: time.clock.currentTimeMillisUnsafe() - 20 * 60_000 - 1, from: "0.1.1300" });
+  await settle();
+  assert.equal(updates.get()[0]!.state, "failed");
+  heldDuringTimeout();
+  await time.adjust(60_000);
+  await settle();
+  assert.deepEqual(attempts, ["0.1.1310", "0.1.1320"], "an unconfirmed installer exit is never retried");
 });

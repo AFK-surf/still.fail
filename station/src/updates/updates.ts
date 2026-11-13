@@ -7,8 +7,8 @@
 //   release is offered as going back (`downgrade`), only then. It is updated as `stillfail update` does (release.ts):
 //   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
 //   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the
-//   clone). With `autoUpdate: true` it does so by itself (never back from the beta). A failed attempt gets one delayed
-//   retry, then waits for a newer release; vault work still holds both attempts back.
+//   clone). With `autoUpdate: true` it does so by itself (never back from the beta). A reported installer failure gets
+//   one delayed retry, then waits for a newer release; vault work still holds both attempts back.
 //   With a delta from the build it runs (release.ts takeDelta), the station downloads it and applies it first (the
 //   applying in a process apart, release.ts applyApart), shown as the installer's download step is, and hands the
 //   installer what it made (STILLFAIL_ARCHIVE in a temporary stillfail-handed directory); the update is answered as
@@ -1271,7 +1271,11 @@ export class Updates {
         i.failed = failed;
         i.done = done;
       });
-      if (failed !== null && this.tried !== null && this.retried !== this.tried) {
+      // A timeout alone does not mean the installer exited. It and success also cancel an earlier pending retry.
+      if (code === null || failed === null) {
+        this.retryDue = null;
+        this.retried = this.tried;
+      } else if (this.tried !== null && this.retried !== this.tried) {
         const version = this.tried;
         this.later(STATION_RETRY_MS, () => { // timer: one retry after a failed update
           if (this.tried !== version || this.retried === version) return;
