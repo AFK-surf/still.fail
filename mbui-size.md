@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7b3ed8a90](https://github.com/AFK-surf/monoid/commit/7b3ed8a905df5a97bc7e3a7a073bd35d578d72a1) core: a member's web page a chain names is said on | 1.98 | 2.7 | 11.5 | 31.1 | 41.37 | 27.72 | 53.13 | 95.98 | 106.97 |
 | [48279ee2b](https://github.com/AFK-surf/monoid/commit/48279ee2b1e475c0296ac16a494ba6e71ebb2eb0) mbui on its own: libs/mbui, knowing no app; still. | 1.98 | 2.7 | 11.5 | 31.09 | 41.37 | 27.71 | 53.13 | 95.7 | 108.32 |
 | [60c0f75f7](https://github.com/AFK-surf/monoid/commit/60c0f75f746c2888f76df292f7791d3ab7f7d87f) Browser and remote screens as a browser: tabs, an  | 1.98 | 2.7 | 11.49 | 31.09 | 41.37 | 27.71 | 53.13 | 95.9 | 112.49 |
 | [af1435b8b](https://github.com/AFK-surf/monoid/commit/af1435b8b340455e766882dadb33639772390ef2) app tests: answers_still in three runs; app 4/4 at | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.7 | 53.08 | 95.65 | 108.08 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6a279f62a](https://github.com/AFK-surf/monoid/commit/6a279f62ab2d8f457de9de08491dce356b7af0a2) station: count what processes use on Linux, from / | 1.96 | 2.63 | 11.35 | 30.88 | 40.76 | 27.51 | 52.6 | 94.18 | 102.84 |
 | [2ae5c3d8b](https://github.com/AFK-surf/monoid/commit/2ae5c3d8b5adee4697800e28db127d3d8bd65bdb) mbui app: an Android device's video in a screen's  | 1.96 | 2.63 | 11.35 | 30.88 | 40.76 | 27.51 | 52.6 | 94.44 | 98.23 |
 | [d1b4d8c47](https://github.com/AFK-surf/monoid/commit/d1b4d8c47e09e42772987ada8c70b5704ef3cd06) mbui iOS: a chat's "…" folded into the system's "… | 1.96 | 2.63 | 11.35 | 30.88 | 40.75 | 27.51 | 52.6 | 94.42 | 109 |
-| [e5343f3ef](https://github.com/AFK-surf/monoid/commit/e5343f3efdb3bbb3d67ae91c7481ed5ec74738c2) app tests: page-seconds.txt written again from mai | 1.96 | 2.63 | 11.35 | 30.88 | 40.75 | 27.51 | 52.6 | 94.55 | 105.86 |
