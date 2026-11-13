@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [41b38a6ec](https://github.com/AFK-surf/monoid/commit/41b38a6ecdc8183b81d040100fb94b96cef1755c) core: a workspace's chain handed over by itself, b | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.21 | 96.58 | 113.48 |
 | [d32206ba1](https://github.com/AFK-surf/monoid/commit/d32206ba19b7943c81adb9d5a561918ae1d668eb) mbui app: a chat's page made as nodes, its compose | 1.98 | 2.71 | 11.53 | 31.13 | 41.48 | 27.75 | 53.21 | 96.75 | 104.52 |
 | [3c1dde380](https://github.com/AFK-surf/monoid/commit/3c1dde38007643b1ddd306a846b566392dd70bd2) fix(mbui): an agent's history's 详情 unfolds whole,  | 1.98 | 2.7 | 11.52 | 31.12 | 41.46 | 27.74 | 53.19 | 96.91 | 107.21 |
 | [49a1b3e8a](https://github.com/AFK-surf/monoid/commit/49a1b3e8a66ca5ad2e529586dc666f8cb43f4884) app tests: the third's other runs at 60 reckoned a | 1.98 | 2.7 | 11.52 | 31.12 | 41.45 | 27.74 | 53.19 | 97.44 | 112.7 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [4f7321711](https://github.com/AFK-surf/monoid/commit/4f732171142ecbd00650e2944a8322db69c55d8c) Fix LAN direct RTT inflation and front replacement | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 112.88 |
 | [ea62d0c05](https://github.com/AFK-surf/monoid/commit/ea62d0c05a38c28e9fce8c16eb9cc279bd87bf04) perf(mbui): enable Metal framebufferOnly, opaque l | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.7 | 95.86 | 107.28 |
 | [6f3ad0d55](https://github.com/AFK-surf/monoid/commit/6f3ad0d554e20c2cbb76d39e88c8a94424dbaa85) mbui app: bring notified pages into view on tape s | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.7 | 95.41 | 109.01 |
-| [def675d85](https://github.com/AFK-surf/monoid/commit/def675d852b1184ebd1872f9ab858203dd0b1bb7) feat(history): refine group summaries, coalesce ed | 1.97 | 2.64 | 11.38 | 30.95 | 40.87 | 27.58 | 52.7 | 95.59 | 109.52 |
