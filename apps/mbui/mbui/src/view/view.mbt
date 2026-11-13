@@ -1086,6 +1086,9 @@ pub struct Tree {
   /// the width each node that says it lays what it holds out at (View::lays_anew), by node: what a Tester's steadiness
   /// judges take a step of as that node's own, in the frame it steps
   laid_said : Map[Int, Double]
+  /// what each structure said `at_once` last made or let go by a change, by its slot (at_once_said.mbt)
+  at_once_said : Map[Int, AtOnceSaid]
+  mut at_once_count : Int
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -1448,6 +1451,8 @@ pub fn Tree::new(
     bones_set: 0,
     behind_set: 0,
     laid_said: Map([]),
+    at_once_said: Map([]),
+    at_once_count: 0,
     downs: [],
     changed: [],
     composed: [],
@@ -8036,6 +8041,9 @@ pub fn View::show(
             if !first.val && !at_once && leave <= 0.0 && !none {
               slot.arrives(v)
             }
+            if !first.val && at_once && leave <= 0.0 {
+              slot.at_once_said(0.0, v)
+            }
             had.val = Some(v)
           }
         }
@@ -8044,6 +8052,9 @@ pub fn View::show(
       (false, Some(v)) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
         had.val = None
+        if at_once && leave <= 0.0 && v.live() is Some(_) && slot.tree.makes_way(v.at) {
+          slot.at_once_said(slot.tree.along_now(v.at, slot.tree.cause_now()), slot)
+        }
         gone.val = if slot.goes(v, leave, at_once || leave > 0.0, swaps=true) { Some(v) } else { None }
       }
       _ => ()
@@ -8104,6 +8115,9 @@ pub fn[K : Eq] View::pick(
         let said = slot.tree.said_count
         let v = slot.box(fn(v) { make(v, k) }, loc~)
         let none = slot.tree.structural(v, said)
+        if tall == tall && at_once {
+          slot.at_once_said(tall, v)
+        }
         if tall == tall && !at_once {
           if none && tall >= 0.5 {
             // (one that made nothing: its way closes from as tall as the one before was to nothing, and stays there, a
