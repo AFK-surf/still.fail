@@ -134,6 +134,10 @@ pub fn fixture_page(String) -> String
 
 pub fn fixture_pair_ended() -> String
 
+pub fn fixture_retire_preview() -> @json.Json
+
+pub let fixture_retire_asked : Array[(String, @json.Json)]
+
 pub fn fixture_profiles() -> Array[@json.Json]
 
 pub fn fixture_prompts_now(pairing~ : Bool, more? : Bool, key_ask~ : Bool, giving? : Bool) -> Unit

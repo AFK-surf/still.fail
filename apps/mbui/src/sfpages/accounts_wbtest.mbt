@@ -93,20 +93,20 @@ test "a shared subscription's main switch and its station details remain usable 
     let at = "\{w} platform \{platform}"
     scrolled_to(t, w, "分享给其他 station")
     assert_eq(t.get(Switch, label="分享给其他 station").check, Some(On), msg=at)
-    assert_true(t.find("登录在") is Some(_) && t.find("可用的 station") is Some(_), msg=at)
+    assert_true(t.find("所在 station") is Some(_) && t.find("可用的 station") is Some(_), msg=at)
     assert_true(t.find("使用中：Maple") is Some(_), msg=at)
     let boxes = t.boxes_held()
     let switch_title = boxes.filter(fn(b) { b.text == "分享给其他 station" })
     assert_eq(switch_title.length(), 1, msg=at)
-    for title in ["登录在", "可用的 station"] {
+    for title in ["所在 station", "可用的 station"] {
       let found = boxes.filter(fn(b) { b.text == title })
       assert_eq(found.length(), 1, msg="\{at}: \{title}")
       assert_eq(found[0].weight, 500, msg="\{at}: \{title}")
       assert_eq(found[0].color, switch_title[0].color, msg="\{at}: \{title} ink")
     }
-    t.tap_text("登录在")
+    t.tap_text("所在 station")
     t.run_for(@kit.presence_in_ms)
-    assert_true(t.find("选择登录的 station") is Some(_), msg=at)
+    assert_true(t.find("移到哪台 station？") is Some(_), msg=at)
     @sf.presenters_reset()
     // (what was presented let go at once by hand, the test's way to close it: no signal of it, said)
     t.stepped()

@@ -150,8 +150,10 @@ const EMPTY: Record<string, Record<string, string>> = {
     problems: WELL, profileStates: WELL, "overview.profiles[].modelsSaving": SAVING,
     // (a decision-only provider's, Jev's; the workspaces the station joined, it joined none)
     "overview.profiles[].decisionModels": NONE, "overview.profiles[].workspaces": NONE,
-    // (offers: a station with no chats of its own; formerly: the stations it took the place of, none lost)
-    "overview.copies.offers": STATE, "overview.copies.formerly": NONE,
+    // (offers: a station with no chats of its own; formerly: the stations it took the place of, none lost; taking: a
+    // retired station's chats being taken here, none retired; retire.steps: the station being retired, it is not)
+    "overview.copies.offers": STATE, "overview.copies.formerly": NONE, "overview.copies.taking": STATE,
+    "overview.copies.retire.steps": STATE,
   },
   "stationPart profiles": { "[].modelsSaving": SAVING, "[].quota.windows[].time": NEVER, "[].decisionModels": NONE, "[].workspaces": NONE },
   // (a sign-in under way: Willow's)

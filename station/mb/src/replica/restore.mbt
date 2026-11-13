@@ -111,7 +111,9 @@ fn read_json(files : Files, path : String) -> JValue raise {
 
 ///|
 /// What the generation in `dir` says put into the database at `db` (`build`): (rows by table, files placed, missing).
-fn build(host : @host.Host, files : Files, db_path : String, dir : String, from_files : String, data_dir : String, now : Double) -> (JValue, Int, Int) raise {
+/// `merge`: beside this station's own chats (a station retired into it).
+/// `connects`: how the ids of that station's connects go here; `ws`: what its sessions' `ws` is here, where said.
+fn build(host : @host.Host, files : Files, db_path : String, dir : String, from_files : String, data_dir : String, now : Double, merge : Bool, connects : JValue, ws : JValue?) -> (JValue, Int, Int) raise {
   guard as_head(read_json(files, files.join([dir, "head.json"]))) is Some(head) else {
     fail("no copy here, or one of a newer station's")
   }
@@ -131,9 +133,14 @@ fn build(host : @host.Host, files : Files, db_path : String, dir : String, from_
           if !has("threads") || !has("sessions") {
             fail("this station's database is not made yet")
           }
-          if d.all("SELECT 1 FROM threads LIMIT 1", []).length() > 0 || d.all("SELECT 1 FROM sessions LIMIT 1", []).length() > 0 {
+          let empty = d.all("SELECT 1 FROM threads LIMIT 1", []).length() == 0 && d.all("SELECT 1 FROM sessions LIMIT 1", []).length() == 0
+          if !empty && !merge {
             raise NotEmpty
           }
+          let merging = !empty
+          let ids : Map[Double, Double] = Map([])
+          let followed : Map[Double, Bool] = Map([])
+          let put_rows : Map[String, Double] = Map([])
           let columns : Map[String, Array[String]] = Map([])
           let columns_of = (table : String) => match columns.get(table) {
             Some(c) => c
@@ -160,12 +167,71 @@ fn build(host : @host.Host, files : Files, db_path : String, dir : String, from_
                 if !has(table) {
                   return
                 }
-                let row = shaped(files, table, get(rec, "row").unwrap_or(Obj([])), head_dir, data_dir)
+                let mut row = shaped(files, table, get(rec, "row").unwrap_or(Obj([])), head_dir, data_dir)
+                if (table == "sessions" || table == "thread_sessions") && text_of(get(row, "connect")) is Some(c) && get(connects, c) is Some(Str(there)) {
+                  row = set(row, "connect", Str(there))
+                }
+                if table == "sessions" && merge {
+                  match ws {
+                    Some(w) => row = set(row, "ws", w)
+                    None => ()
+                  }
+                }
+                if merging {
+                  if table == "threads" {
+                    let was = num(get(row, "id"))
+                    match d.all("SELECT id FROM threads WHERE surface = ? AND channel = ? AND thread_ts = ?", [param(get(row, "surface")), param(get(row, "channel")), param(get(row, "thread_ts"))]) {
+                      [here, ..] =>
+                        if text_of(get(row, "surface")) != Some(stillfail_surface) {
+                          ids[was] = field_num(here, "id")
+                          followed[was] = true
+                          return
+                        } else {
+                          let mut ts = bumped_ts(text_of(get(row, "thread_ts")).unwrap_or(""))
+                          while d.all("SELECT 1 FROM threads WHERE surface = ? AND channel = ? AND thread_ts = ?", [param(get(row, "surface")), param(get(row, "channel")), s(ts)]).length() > 0 {
+                            ts = bumped_ts(ts)
+                          }
+                          row = set(row, "thread_ts", str(ts))
+                        }
+                      _ => ()
+                    }
+                    row = without(row, "id")
+                  }
+                  match lookup(thread_columns, table) {
+                    Some(column) =>
+                      if get(row, column) is Some(Num(was)) {
+                        let id = ids.get(was)
+                        let shared = followed.contains(was)
+                        if table == "turns" {
+                          match id {
+                            Some(i) if !shared => row = set(row, "about_thread", Num(i))
+                            _ => {
+                              row = set(row, "about_thread", Null)
+                              row = set(row, "about_n", Null)
+                            }
+                          }
+                        } else {
+                          match id {
+                            Some(i) if !(own_log.contains(table) && shared) => row = set(row, column, Num(i))
+                            _ => return
+                          }
+                        }
+                      }
+                    None => ()
+                  }
+                }
                 let have = columns_of(table)
                 let cols = keys_of(row).filter(c => have.contains(c))
-                ignore(
-                  d.run("INSERT INTO \{table} (\{cols.join(", ")}) VALUES (\{cols.map(_ => "?").join(", ")})", cols.map(c => param(get(row, c)))),
-                )
+                let changed = d.run("INSERT\{if merging { " OR IGNORE" } else { "" }} INTO \{table} (\{cols.join(", ")}) VALUES (\{cols.map(_ => "?").join(", ")})", cols.map(c => param(get(row, c))))
+                if merging {
+                  put_rows[table] = put_rows.get(table).unwrap_or(0.0) + changed.to_double()
+                  if table == "threads" {
+                    match d.all("SELECT last_insert_rowid() AS id", []) {
+                      [r, ..] => ids[num(get(get(rec, "row").unwrap_or(Obj([])), "id"))] = field_num(r, "id")
+                      _ => ()
+                    }
+                  }
+                }
               } else if get(rec, "file") is Some(f) {
                 let path = text_of(get(rec, "path")).unwrap_or("")
                 ignore(d.run("INSERT OR REPLACE INTO restore_files (path, hash) VALUES (?, ?)", [s(moved(files, path, head_dir, data_dir)), param(Some(f))]))
@@ -186,9 +252,13 @@ fn build(host : @host.Host, files : Files, db_path : String, dir : String, from_
           let counted : Array[(Array[Int], JValue)] = []
           for table in restore_order {
             if has(table) {
-              let n = match d.all("SELECT COUNT(*) AS n FROM \{table}", []) {
-                [r, ..] => field_num(r, "n")
-                _ => 0.0
+              let n = if merging {
+                put_rows.get(table).unwrap_or(0.0)
+              } else {
+                match d.all("SELECT COUNT(*) AS n FROM \{table}", []) {
+                  [r, ..] => field_num(r, "n")
+                  _ => 0.0
+                }
               }
               counted.push((@jsjson.units(table), Num(n)))
             }
@@ -318,7 +388,9 @@ pub fn take_back(host : @host.Host, sep : String, data : String, db : String, no
   ])
   let gen = text_of(get(ready, "gen")).unwrap_or("")
   let attempt = () => {
-    let (rows, placed, missing) = build(host, files, db, files.join([dir, gen]), files.join([dir, "files"]), data, now)
+    let merge = get(ready, "merge") is Some(Bool(true))
+    let connects = get(ready, "connects").unwrap_or(Obj([]))
+    let (rows, placed, missing) = build(host, files, db, files.join([dir, gen]), files.join([dir, "files"]), data, now, merge, connects, get(ready, "ws"))
     add_formerly(files, data, origin)
     outcome = set(outcome, "rows", rows)
     outcome = set(outcome, "files", Num(placed.to_double()))

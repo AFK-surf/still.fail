@@ -256,6 +256,12 @@ export const routes = (tools: Tools): Route[] => {
       return error(500, (e as Error).message);
     }
   };
+  /// Refused while this station hands the asker's workspace's chats to another (replica/retire.ts): the device keeps
+  /// the message as one not sent (the core's outbox sends again by itself only what found no station), and its words
+  /// say to send it again in the chat on the station they go to.
+  const retiring = (r: Request, a: AgentsParts) => {
+    if (r.viewer.workspace !== null && a.hub.quietIn(r.viewer.workspace)) throw new Refused(503, tr(r.lang, "station.retire.moving"));
+  };
   /// A session there, and in the asker's workspace (one of another is none for them: api/seen.ts).
   const session = (s: Store, key: string, r: Request) => {
     if (s.getSession(key) === null || !sessionSeen(s, r.viewer, key)) throw new Refused(404, `unknown session ${key}`);
@@ -392,6 +398,7 @@ export const routes = (tools: Tools): Route[] => {
       pattern: /^\/sessions$/,
       handle: (r) =>
         write(async (_s, a) => {
+          retiring(r, a);
           const i = input(r);
           const given = (k: string) => (typeof i[k] === "string" && i[k] !== "" ? (i[k] as string) : null);
           const profiles = i.profiles === undefined
@@ -624,6 +631,7 @@ export const routes = (tools: Tools): Route[] => {
         write(async (s, a) => {
           const t = thread(s, segment(rawId!));
           if (t.surface !== STILLFAIL_SURFACE) throw new Refused(400, tr(r.lang, "station.admin.postOnlyStillfail"));
+          retiring(r, a);
           const i = input(r);
           const said = text(i.text).trim();
           const files = await attachments(r, s, a, t.id, i.attachments);

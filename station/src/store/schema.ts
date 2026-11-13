@@ -317,6 +317,13 @@ CREATE TABLE IF NOT EXISTS card_choices (
   PRIMARY KEY (thread, n)
 );
 CREATE INDEX IF NOT EXISTS card_choices_untold ON card_choices (session, at) WHERE told_at IS NULL;
+-- A chat moved here from a station retired (replica/retire.ts): what its agent is told of it, once, with what it is
+-- next handed (told_at), never woken for it.
+CREATE TABLE IF NOT EXISTS moved_notes (
+  session TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  told_at INTEGER
+);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same. The one record
 -- of it: a chat's usage and the usage page are both added up from here (usage/module.ts, read/usage.ts). calls: how

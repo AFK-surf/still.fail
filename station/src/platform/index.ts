@@ -57,6 +57,8 @@ export type Platform = {
   os: string;
   /// How the runtimes name a build's OS (darwin, linux, win32); none for another.
   buildOs: string | null;
+  /// Whether a file copied on a disk of this machine can be a clone of it, taking no room of its own (APFS: macOS).
+  clonesFiles: boolean;
 
   // Commands and their environment.
   /// An executable's file name (`stillfail-runner` → `stillfail-runner.exe` on Windows).

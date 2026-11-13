@@ -2,7 +2,8 @@
 // 2026-11-10: 「按最简单的交互方式做」). Backups are automatic, to two other stations of the workspace: the row says
 // which are up to date and since when, one not reached or behind briefly, or that it is the only station. On a station
 // with no chat of its own, a backup of each station no longer there takes the row's place, to be restored. A station
-// from before says none: the page shows nothing.
+// from before says none: the page shows nothing. A station being retired from a workspace (its chats moved to another
+// station of it), and a retired one's chats taken in here, are said here too, a line each, for its page's 迁移.
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import type { Clock } from "./present.ts";
@@ -84,13 +85,96 @@ export function copiesShown(v: unknown, c: Clock): J | undefined {
   const manage = v.manage === true;
   const offers = v.empty === true ? offersOf(v) : [];
   const busy = offers.some((o) => o.busy);
+  const retire = retireOf(v.retiring, manage);
   return {
     line,
     level,
     offers,
     canRestore: manage && !busy,
     formerly: arr(v.formerly).filter((f) => typeof f === "string"),
+    // (retiring this station from the workspace: one who manages it, while it has chats of its own and none is recorded)
+    canRetire: manage && v.empty !== true && num(v.chats) > 0 && retire === null,
+    retire,
+    taking: arr(v.taking).map((x) => takingOf(x)),
   };
+}
+
+/// Bytes in a few characters (1.2 GB).
+function size(n: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let x = n;
+  while (x >= 1000 && i < units.length - 1) (x /= 1000, i++);
+  return `${i === 0 ? x : x.toFixed(x < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+/// Why moving the chats to `name` did not go, in words (what the station said exactly is in its log).
+function retireWhy(reason: unknown, name: string): string {
+  switch (reason) {
+    case "offline": return t("core-views.copies.retire.why.offline", { name });
+    case "full": return t("core-views.copies.retire.why.full", { name });
+    case "old": return t("core-views.copies.retire.why.old", { name });
+    case "failed": return t("core-views.copies.retire.why.failed", { name });
+    default: return t("core-views.copies.why.error");
+  }
+}
+
+/// The steps a station's retirement goes through, in their order (the station's replica/retire.ts `Step`), a row each;
+/// `accounts` only where its accounts move with it (its home workspace). Its last, `done`, has no row: once there every
+/// row is done and the page offers taking the station out of the workspace.
+const RETIRE_STEPS = ["sending", "quiet", "handing", "accounts", "connects"] as const;
+
+/// This station being retired from the workspace (the station's replica/retire.ts): its steps, a row each, done, under
+/// way (with how far it is, where it says), failed (why, in words) or not yet; the accounts that could not go with it;
+/// and what the viewer may do of it now: let it go (`cancellable`, the station's word), try a failed one again
+/// (`retriable`); once `done` (every row done), take the station out of the workspace.
+function retireOf(r: J, manage: boolean): J | null {
+  if (!isObject(r)) return null;
+  const to = str(r.toName) || short(str(r.to));
+  const step = str(r.step);
+  const failed = typeof r.error === "string" && r.error !== "";
+  const left = arr(r.accountsLeft).map((a) => str(a?.name) || short(str(a?.id))).filter((n) => n !== "");
+  // (its accounts' step where they move: its home workspace, or once the station is at it or past it with some left)
+  const accounts = r.home === true || step === "accounts" || left.length > 0;
+  const keys = RETIRE_STEPS.filter((k) => k !== "accounts" || accounts);
+  const at = keys.indexOf(step as (typeof RETIRE_STEPS)[number]);
+  const steps = keys.map((key, i) => {
+    const state = step === "done" || (at >= 0 && i < at) ? "done" : i === at ? (failed ? "failed" : "now") : "todo";
+    const note = state === "failed"
+      ? retireWhy(r.reason, to)
+      : state === "now" && key === "sending" && num(r.total) > 0
+        ? t("core-views.copies.retire.sent", { done: size(num(r.done)), total: size(num(r.total)) })
+        : "";
+    return { key, label: t(`core-views.copies.retire.step.${key}`, { name: to }), state, note };
+  });
+  return {
+    steps,
+    left: left.length === 0 ? null : {
+      label: t("core-views.copies.retire.left", { n: left.length }),
+      note: t("core-views.copies.retire.leftNote", { names: listed(left), name: to }),
+    },
+    done: step === "done" && !failed,
+    // (its chats stopped: from here it goes on until they are there)
+    stopped: step !== "sending" && step !== "done",
+    to: str(r.to),
+    toName: to,
+    cancellable: manage && r.cancellable === true,
+    retriable: manage && r.retriable === true,
+  };
+}
+
+/// Another station's chats being taken in here as it is retired: whose, and where it stands, in words.
+function takingOf(x: J): J {
+  const origin = str(x?.origin);
+  const name = str(x?.name) || short(origin);
+  const step = str(x?.step);
+  const failed = step === "failed" || (typeof x?.error === "string" && x.error !== "");
+  const line = failed
+    ? t("core-views.copies.taking.failed", { why: t("core-views.copies.why.error") })
+    : step === "placing" || step === "gits" || step === "copy" || step === "restart"
+      ? t(`core-views.copies.taking.${step}`)
+      : t("core-views.copies.taking.coming");
+  return { origin, name, line, level: failed ? "amber" : "ok" };
 }
 
 /// On a station with no chat of its own: a backup of each station no longer there it could restore, and how the one

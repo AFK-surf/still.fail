@@ -9,6 +9,10 @@ export interface OperationParams {
   "search.setPersonal": { personal: boolean };
   "network.setCongestion": { congestion: string };
   "copies.restore": { origin: string; gen: string; fromStation: string };
+  "copies.retire": { to: string };
+  "copies.retireCancel": {  };
+  "copies.retireAgain": {  };
+  "copies.retirePreview": {  };
   "station.restart": {  };
   "context.setAfresh": { afreshWhenCold?: boolean | null | undefined; afreshAbove?: number | null | undefined };
   "diagnostics.setLogs": { logs: boolean };
@@ -180,7 +184,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "profile.fusion", "screen.apps", "screen.chrome", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "copies.retirePreview", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "profile.fusion", "screen.apps", "screen.chrome", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -195,6 +199,10 @@ export function bindStationOperations(call: Call) {
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     networkSetCongestion: <T = unknown>(params: OperationParams["network.setCongestion"]) => call("network.setCongestion", params) as Promise<T>,
     copiesRestore: <T = unknown>(params: OperationParams["copies.restore"]) => call("copies.restore", params) as Promise<T>,
+    copiesRetire: <T = unknown>(params: OperationParams["copies.retire"]) => call("copies.retire", params) as Promise<T>,
+    copiesRetireCancel: <T = unknown>(params: OperationParams["copies.retireCancel"] = {}) => call("copies.retireCancel", params) as Promise<T>,
+    copiesRetireAgain: <T = unknown>(params: OperationParams["copies.retireAgain"] = {}) => call("copies.retireAgain", params) as Promise<T>,
+    copiesRetirePreview: <T = unknown>(params: OperationParams["copies.retirePreview"] = {}) => call("copies.retirePreview", params) as Promise<T>,
     stationRestart: <T = unknown>(params: OperationParams["station.restart"] = {}) => call("station.restart", params) as Promise<T>,
     contextSetAfresh: <T = unknown>(params: OperationParams["context.setAfresh"] = {}) => call("context.setAfresh", params) as Promise<T>,
     diagnosticsSetLogs: <T = unknown>(params: OperationParams["diagnostics.setLogs"]) => call("diagnostics.setLogs", params) as Promise<T>,

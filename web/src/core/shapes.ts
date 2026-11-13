@@ -1292,7 +1292,56 @@ export interface CopyOffer {
 	busy: boolean;
 }
 
-/** A station's backups, as its 设置 shows them: one row. */
+/** A step of a station's retirement, as its page's 迁移 shows it. */
+export interface CopyStep {
+	/** sending | quiet | handing | accounts | connects | done */
+	key: string;
+	label: string;
+	/** done | now | failed | todo */
+	state: string;
+	/** How far it is (1.5 GB / 3.2 GB) while under way, where it says; why it failed; else empty. */
+	note: string;
+}
+
+/** The accounts a retirement could not move. */
+export interface CopyLeft {
+	/** How many accounts could not be moved: 2 个账号没移过去. */
+	label: string;
+	/** Which, and what to do: their names, added again on the station the chats went to. */
+	note: string;
+}
+
+/** A station being retired from a workspace (its replica/retire.ts). */
+export interface CopyRetire {
+	/** Its steps in their order, a row each: 传文件, 暂停聊天，补传改动, {to} 接收聊天, 移账号 (where its accounts move), 移连接, 完成. */
+	steps: CopyStep[];
+	/** The accounts that could not be moved with it, a row under the steps; none where all went. */
+	left?: CopyLeft;
+	/** All of it is on the other station: the station is taken out of the workspace next (`workspace.removeStation`). */
+	done: boolean;
+	/** Its chats paused: from here it goes on until they are on the other station. */
+	stopped: boolean;
+	/** The station the chats go to (its id). */
+	to: string;
+	toName: string;
+	/** The viewer may let go of it now (`copies.retireCancel`), as its station says. */
+	cancellable: boolean;
+	/** The viewer may try it again now (`copies.retireAgain`): it did not go, as its station says. */
+	retriable: boolean;
+}
+
+/** A retired station's chats being taken in by this one (its replica/retire.ts). */
+export interface CopyTaking {
+	/** The retired station's id. */
+	origin: string;
+	name: string;
+	/** Where taking its chats in stands: coming, put in, their working directories made again, their files put in, ready for the restart; or that it did not go. */
+	line: string;
+	/** ok; amber: it did not go. */
+	level: Level;
+}
+
+/** A station's backups, as its 设置 shows them: one row; and its chats moved away as it is retired, or another's taken in. */
 export interface StationCopies {
 	/** Its 备份 row: the stations up to date with it and since when, one not reached or behind said briefly; that it is the only station; that backups stopped and why; or, just after a restore, what came of it. */
 	line: string;
@@ -1304,6 +1353,12 @@ export interface StationCopies {
 	canRestore: boolean;
 	/** The stations it took the place of (their ids): a link that names one is to it. */
 	formerly: string[];
+	/** The viewer may retire this station from the workspace now (`copies.retire`, its ⋯'s 迁走聊天并移出): one of its owners and admins, the station has chats of its own, none recorded. */
+	canRetire?: boolean;
+	/** This station being retired from the workspace, its chats going on on another: its page's 迁移. */
+	retire?: CopyRetire;
+	/** Retired stations' chats being taken in here, a row each: its page's 迁移. */
+	taking?: CopyTaking[];
 }
 
 /**

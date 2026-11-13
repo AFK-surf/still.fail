@@ -74,6 +74,10 @@ export const PARAMS: Record<string, string> = {
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
   "copies.restore": "origin:string gen:string fromStation:string",
+  "copies.retire": "to:string",
+  "copies.retireCancel": "",
+  "copies.retireAgain": "",
+  "copies.retirePreview": "",
   "station.restart": "",
   "context.setAfresh": "afreshWhenCold?:boolean afreshAbove?:number",
   "diagnostics.setLogs": "logs:boolean",
@@ -346,6 +350,18 @@ function stationOp(name: string, params: unknown): Request | null {
     // (its station's replica/copies.ts), by the workspace's owners and admins.
     case "copies.restore":
       return op("POST", () => "/copies/restore", { station: p.str("origin"), gen: p.str("gen"), from: { station: p.str("fromStation") } }, OVERVIEW);
+    // The station retired from the workspace, its chats going on on `to` (another of its stations' id), by the
+    // workspace's owners and admins (its station's replica/retire.ts); let go of while its station says it can be
+    // (`retire.cancellable`: answered 409 in words where it no longer can), a failed one tried again now.
+    case "copies.retire":
+      return op("POST", () => "/retire", { to: p.str("to") }, OVERVIEW);
+    case "copies.retireCancel":
+      return op("DELETE", () => "/retire", null, OVERVIEW);
+    case "copies.retireAgain":
+      return op("POST", () => "/retire/again", null, OVERVIEW);
+    // What retiring it would take along and leave, as its panel shows them (schema.ts RetirePreview), read as it opens.
+    case "copies.retirePreview":
+      return op("GET", () => "/retire/preview", null, NONE);
     // The station started again by its launcher (its routes/network.ts), managers only.
     case "station.restart":
       return op("POST", () => "/station/restart", null, OVERVIEW);

@@ -1334,8 +1334,8 @@ fn profile_run_node(b : @view.View, core : Core, address : String, id : String, 
 
 ///|
 /// Sharing it with the workspace's other stations (ShareSection) in node `b`: a switch (turned on, asked first what the
-/// others do with it); once on, where a subscription is signed in (moved from here to another) and which stations may
-/// use it, a row each. A copy of another station's says whose it is, its page a tap away.
+/// others do with it); the station it is on (moved from here to another, shared or not); once on, which stations may
+/// use it. A copy of another station's says whose it is, its page a tap away.
 fn profile_share_node(
   b : @view.View,
   core : Core,
@@ -1448,13 +1448,18 @@ fn profile_share_node(
           busy=sharing,
         )
       })
-      // where a shared subscription is signed in, moved to another
+      // which station it is on, moved to another: any of the station's own but the machine's login (shared or not, a
+      // subscription or a key). A shared subscription's always says it, as before any could move (the others use it:
+      // where its sign-in is kept is theirs to know); another's only while a station is up to take it
       let targets = fn() { stations().filter(fn(x) { text(Some(x), "id") != sid() }) }
-      g.show(at_once=true, fn() { !user() && shared() && subscription() && !flag(p(), "machine") }, fn(x) {
+      let movable = fn() {
+        !user() && !flag(p(), "machine") && ((shared() && subscription()) || targets().iter().any(fn(x) { flag(Some(x), "online") }))
+      }
+      g.show(at_once=true, movable, fn(x) {
         x.pick(at_once=true, fn() { !moving() && targets().length() > 0 }, fn(r, goes) {
           @sf.link_row_node(
             r,
-            fn() { @sf.t("web-pages.profiles.share.signedIn") },
+            fn() { @sf.t("web-pages.profiles.share.where") },
             fn() { move_dialog(core, @signals.untracked(s), @signals.untracked(p), @signals.untracked(targets)) },
             value=fn() { text(s(), "name") },
             goes~,
@@ -1498,14 +1503,16 @@ fn profile_share_node(
 }
 
 ///|
-/// Where a shared subscription is signed in, moved to another station (`profile.move`): the others, a row each, picked
-/// in a panel (one away, said so and not picked).
+/// The station an account is on, moved to another (`profile.move`): the others, a row each, picked in a panel (one
+/// away, said so and not picked). A shared one leaves this station a borrowed copy; one not shared is on the other
+/// alone after, its page here gone: back to the list at once, as a deleted one's is, its answer said there.
 fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit {
   let address = text(s, "station")
   let id = text(p, "id")
+  let shared = field(p, "share") is Some(Object(_))
   open_dialog(
-    @sf.t("web-pages.profiles.share.moveTitle"),
-    description=@sf.t("web-pages.profiles.share.moveLead", args=[("station", text(s, "name"))]),
+    @sf.t("web-pages.profiles.share.moveTo"),
+    description=@sf.t(if shared { "web-pages.profiles.share.moveShared" } else { "web-pages.profiles.share.moveOwn" }, args=[("station", text(s, "name"))]),
     fn(c, shut) {
       @sf.group(c, fn() {
         for x in targets {
@@ -1521,6 +1528,9 @@ fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit
             lead=fn() { @sf.status_dot(c, if online { "online" } else { "offline" }) },
             on_press=fn() {
               shut()
+              if !shared {
+                (core.pop)()
+              }
               @settings.act(
                 core,
                 @sf.t("web-pages.profiles.share.move"),

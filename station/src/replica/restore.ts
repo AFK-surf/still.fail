@@ -7,8 +7,9 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, 
 import { Worker } from "node:worker_threads";
 import { dirname, join, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { type Head, type Rec, type Row, Folded, RESTORE_ORDER, asHead, attachedPaths, decodeBatch } from "./format.ts";
+import { type Head, type Rec, type Row, Folded, OWN_LOG, RESTORE_ORDER, THREAD_COLUMNS, asHead, attachedPaths, bumpedTs, decodeBatch } from "./format.ts";
 import { headFile } from "./export.ts";
+import { STILLFAIL_SURFACE } from "../store/rows.ts";
 
 /// Where a restore brings a copy before it is put in: `<data>/restore/`, its generation's batches and files as a
 /// place keeps them, and `ready.json` once all of it is there.
@@ -16,7 +17,10 @@ export const restoreDir = (data: string) => join(data, "restore");
 export const readyFile = (data: string) => join(restoreDir(data), "ready.json");
 /// What a restore brought, once all of it is there: whose copy (`origin`, in `workspace`), which generation, and where it
 /// was taken from (said to whoever looks at the station meanwhile).
-export type Ready = { origin: string; workspace: string; gen: string; name: string; from: string };
+/// `merge`: the copy of a station retired into this one (retire.ts), put in beside this station's own chats;
+/// `connects`: how the ids of that station's connects go here (retire.ts `connectsThere`); `ws`: what its sessions'
+/// `ws` is here (null: this station's home workspace), whatever it was there.
+export type Ready = { origin: string; workspace: string; gen: string; name: string; from: string; merge?: boolean; connects?: Record<string, string>; ws?: string | null };
 
 /// The generation brought, as `<restore>/copy/` holds it: `head.json`, `log/`, `files/`.
 export const copyDir = (data: string) => join(restoreDir(data), "copy");
@@ -64,9 +68,13 @@ const RESTORED = "CREATE TABLE IF NOT EXISTS replica_restored (origin TEXT NOT N
 
 /// Puts what the generation in `dir` says into the database at `db` (its schema there already: made by the store as
 /// the station first started): its batches folded on disk, then each row that is left put in once (`Folded`): nothing
-/// of it in memory grows with the copy. Then its files where its rows say, from `files` (`<hash>` each). Refused where the station has chats of its own. `dataDir`:
-/// this station's.
-export function build(db: string, dir: string, files: string, dataDir: string, now = 0): Built {
+/// of it in memory grows with the copy. Then its files where its rows say, from `files` (`<hash>` each). Refused where the station has chats of its own,
+/// unless `merge` (a station retired into this one): then each thread is given an id here (one followed by both, the
+/// same surface, channel and ts of a platform's, is the one here: its log here stays as it is, the other's sessions join
+/// it; still.fail's own chats are each station's, so one whose ts is taken here is given the next free one), what names
+/// a thread names it by that id, and a row of a key here already is left as it is; each session's `ws` is `ws` where it
+/// is said. `dataDir`: this station's.
+export function build(db: string, dir: string, files: string, dataDir: string, now = 0, merge = false, connects: Record<string, string> = {}, ws?: string | null): Built {
   const head = asHead(JSON.parse(readFileSync(headFile(dir), "utf8"))); // sync: in the restore's own thread (restore-worker.ts)
   if (head === null) throw new Error("no copy here, or one of a newer station's");
   const d = new DatabaseSync(db, { timeout: 30_000 });
@@ -79,9 +87,13 @@ export function build(db: string, dir: string, files: string, dataDir: string, n
       try {
         const has = (t: string) => d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t) !== undefined;
         if (!has("threads") || !has("sessions")) throw new Error("this station's database is not made yet");
-        if (d.prepare("SELECT 1 FROM threads LIMIT 1").get() !== undefined || d.prepare("SELECT 1 FROM sessions LIMIT 1").get() !== undefined) {
-          throw new NotEmpty();
-        }
+        const empty = d.prepare("SELECT 1 FROM threads LIMIT 1").get() === undefined && d.prepare("SELECT 1 FROM sessions LIMIT 1").get() === undefined;
+        if (!empty && !merge) throw new NotEmpty();
+        // (merged: the ids the copy's threads have here, those followed here already, the rows put in by table)
+        const merging = !empty;
+        const ids = new Map<number, number>();
+        const followed = new Set<number>();
+        const put: Record<string, number> = {};
         const columns = new Map<string, Set<string>>();
         const columnsOf = (table: string) => {
           let c = columns.get(table);
@@ -108,11 +120,52 @@ export function build(db: string, dir: string, files: string, dataDir: string, n
             if ("r" in rec) {
               if (!has(rec.r)) continue;
               const r = shaped(rec.r, rec.row, head.dataDir, dataDir);
+              // (a connect of the station retired here named as it is here)
+              if ((rec.r === "sessions" || rec.r === "thread_sessions") && typeof r.connect === "string" && connects[r.connect] !== undefined) r.connect = connects[r.connect]!;
+              // (its workspace as it is said here)
+              if (rec.r === "sessions" && merge && ws !== undefined) r.ws = ws;
               // (a column of a newer station's that this one does not have is left out; one this one has and the copy
               // does not say takes its default)
               const have = columnsOf(rec.r);
+              if (merging) {
+                if (rec.r === "threads") {
+                  const was = Number(r.id);
+                  const here = st("SELECT id FROM threads WHERE surface = ? AND channel = ? AND thread_ts = ?").get(r.surface as never, r.channel as never, r.thread_ts as never) as { id: number } | undefined;
+                  if (here !== undefined) {
+                    if (r.surface !== STILLFAIL_SURFACE) {
+                      ids.set(was, here.id);
+                      followed.add(was);
+                      continue;
+                    }
+                    let ts = String(r.thread_ts);
+                    do ts = bumpedTs(ts);
+                    while (st("SELECT 1 FROM threads WHERE surface = ? AND channel = ? AND thread_ts = ?").get(r.surface as never, r.channel as never, ts) !== undefined);
+                    r.thread_ts = ts;
+                  }
+                  delete r.id;
+                }
+                const column = THREAD_COLUMNS[rec.r];
+                if (column !== undefined && typeof r[column] === "number") {
+                  const was = r[column] as number;
+                  const id = ids.get(was);
+                  if (rec.r === "turns") {
+                    // (what a turn was about, by a thread's own log: kept only where that log came with it)
+                    if (id === undefined || followed.has(was)) {
+                      r.about_thread = null;
+                      r.about_n = null;
+                    } else r.about_thread = id;
+                  } else {
+                    if (id === undefined || (OWN_LOG.has(rec.r) && followed.has(was))) continue;
+                    r[column] = id;
+                  }
+                }
+              }
               const cols = Object.keys(r).filter((c) => have.has(c));
-              st(`INSERT INTO ${rec.r} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`).run(...cols.map((c) => r[c] as never));
+              const done = st(`INSERT${merging ? " OR IGNORE" : ""} INTO ${rec.r} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`).run(...cols.map((c) => r[c] as never));
+              if (merging) {
+                put[rec.r] = (put[rec.r] ?? 0) + Number(done.changes);
+                if (rec.r === "threads") ids.set(Number(rec.row.id), Number(done.lastInsertRowid));
+              }
             } else if ("file" in rec) {
               st("INSERT OR REPLACE INTO restore_files (path, hash) VALUES (?, ?)").run(moved(rec.path, head.dataDir, dataDir), rec.file);
             }
@@ -121,7 +174,7 @@ export function build(db: string, dir: string, files: string, dataDir: string, n
           folded.close();
           rmSync(work, { force: true }); // sync: in the restore's own thread (restore-worker.ts)
         }
-        for (const table of RESTORE_ORDER) if (has(table)) rows[table] = (d.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+        for (const table of RESTORE_ORDER) if (has(table)) rows[table] = merging ? (put[table] ?? 0) : (d.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
         d.prepare("INSERT INTO replica_restored (origin, gen, at, rows) VALUES (?, ?, ?, ?)").run(head.origin, head.gen, now, JSON.stringify(rows));
         // (where the files go stays beside the rows until they are placed)
         d.exec("CREATE TABLE IF NOT EXISTS replica_restore_files (path TEXT PRIMARY KEY, hash TEXT NOT NULL) WITHOUT ROWID; INSERT OR REPLACE INTO replica_restore_files SELECT path, hash FROM temp.restore_files;");
@@ -216,7 +269,7 @@ export function takeBack(data: string, db: string, now = 0): Ready | null {
   const dir = copyDir(data);
   const outcome: Outcome = { origin: ready.origin, name: ready.name, from: ready.from, at: now, rows: {}, files: 0, missing: 0, error: null, reason: null, pending: false, left: 0 };
   try {
-    const built = build(db, join(dir, ready.gen), join(dir, "files"), data, now);
+    const built = build(db, join(dir, ready.gen), join(dir, "files"), data, now, ready.merge === true, ready.connects ?? {}, ready.ws);
     addFormerly(data, ready.origin);
     Object.assign(outcome, { rows: built.rows, files: built.files, missing: built.missing });
   } catch (e) {

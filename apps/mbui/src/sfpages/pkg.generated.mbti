@@ -645,6 +645,8 @@ pub fn station_node(@view.View, @settings.Core, () -> @settings.Here, String, on
 
 pub fn station_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 
+pub fn station_retire_panel(@settings.Core, @settings.Here, @json.Json?, @json.Json) -> Unit
+
 pub fn station_state(@ui.Ctx, @json.Json?) -> Unit
 
 pub fn station_waiting(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit

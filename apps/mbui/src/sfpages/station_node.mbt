@@ -161,7 +161,8 @@ fn station_view_node(
     }
   }
   let blocks = fn() {
-    let out = ["parts"]
+    // (being retired, or taking a retired one's chats in: 迁移 first, over its parts, whichever is shown)
+    let out = if station_moving_shown(s()) { ["moving", "parts"] } else { ["parts"] }
     out.append(
       match part() {
         "processes" => ["processes"]
@@ -204,6 +205,7 @@ fn station_view_node(
       "workspaces" => station_workspaces_node(b, core, address)
       "network" => station_network_node(b, core, address, fn() { field(field(s(), "overview"), "network") }, manager)
       "copies" => station_copies_node(b, core, address, fn() { field(field(s(), "overview"), "copies") })
+      "moving" => station_moving_node(b, core, here, s, manager)
       "software" => station_software_node(b, core, s, manager, tips)
       "device" => station_device_node(b, s)
       _ => ()
