@@ -88,10 +88,11 @@ let chat_page_nodes_at_start : Bool = false
 /// a picture flying from its list while under its bar (viewer_flight_slot), and over that what of it is nodes already (`over`: given a node over the island, the chat's source, what the page is now and its
 /// time on top, `stint`; made while `drawn` says its entry is drawn: shown, or kept shown in place while the one on top
 /// waits, as its island is). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
-/// what is beside it reads by it too. With chat_page_nodes on as a chat's page is made: its inside nodes, chat `r`'s
-/// messages made by `body` in a column, given what makes its composer (by `foot`, its old view in a node of its own,
-/// as tall as it is laid out) in the node it is put in, the foot of the messages' list, and whether its entry is
-/// drawn (as `drawn` says).
+/// what is beside it reads by it too. With chat_page_nodes on as the page is made, its inside as what the page is,
+/// one in the other's place at once as it changes: a new chat its old view (what that reads let go as it goes); a chat,
+/// one made so or a new chat become it in place (Nav::become), its inside nodes, chat `r`'s messages made by `body` in
+/// a column, given what makes its composer (by `foot`, its old view in a node of its own, as tall as it is laid out) in
+/// the node it is put in, the foot of the messages' list, and whether its entry is drawn (as `drawn` says).
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -108,38 +109,76 @@ pub fn chat_page_made(
   let page_read = page_chat_reader(retained, v, serial)
   let shown = src.owned_by(v)
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-  // (with chat_page_nodes on, a chat's made as nodes inside: what it is as it is made)
-  let inside = match (body, foot, @signals.untracked(fn() { app.nav.page_of(serial) })) {
-    (Some(b), Some(f), Some((Chat(r), _))) if @signals.untracked(fn() { chat_page_nodes.get() }) => Some((b, f, r))
+  // (with chat_page_nodes on as the page is made, a chat's made as nodes inside, as what the page is: a new chat its old
+  // view, a chat once it has become one in place, Nav::become, its nodes, at once, the one in the other's place)
+  let nodes = match (body, foot) {
+    (Some(b), Some(f)) if @signals.untracked(fn() { chat_page_nodes.get() }) => Some((b, f))
     _ => None
   }
-  match inside {
-    Some((b, f, r)) =>
-      // a column: the chat's messages growing to all of it, the composer in their list's foot at its own height, its
-      // old view in a node of its own as yet (built as the stack's island is, what the page reads read there)
-      v.box(fn(col) {
-        col.grow(Is(1.0)).min_height(Is(Some(0.0))).ground(By(fn() { @sf.theme().p.bg })) |> ignore
-        // (coming to need the viewer while open, felt, as its old view felt it)
-        feel_needed_node(col, retained, r)
-        b(col, retained, r, fn(n) {
-          app.nav.page_island(
-            n,
-            serial,
-            fn(c, page) {
-              page_entry_read(serial, retained, page)
-              page_read(page)
-              f(c, retained, r)
-            },
-            key~,
-            natural=true,
-          )
-          // (in the list's foot, nothing to the hand but what it holds that takes it: the room round the composer's
-          // capsule, over it and the bar's under it, the page's, as a press or what is let go there from outside)
-          |> @ui.old_takes_own
-          |> ignore
-        }, fn() { drawn(serial) })
-      })
-      |> ignore
+  match nodes {
+    Some((b, f)) => {
+      // (which chat the page is, by its station and session, "" while a new chat; as it was once its entry is gone)
+      let was = Ref("")
+      v.pick(
+        fn() {
+          match app.nav.page_of(serial) {
+            Some((Chat(r), _)) => was.val = r.station + "\u{1}" + r.session
+            Some(_) => was.val = ""
+            None => ()
+          }
+          was.val
+        },
+        fn(col, chat) {
+          col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+          let made = if chat == "" { None } else { @signals.untracked(fn() { app.nav.page_of(serial) }) }
+          match made {
+            Some((Chat(r), _)) => {
+              // a column: the chat's messages growing to all of it, the composer in their list's foot at its own
+              // height, its old view in a node of its own as yet (built as the stack's island is, what the page reads
+              // read there)
+              col.ground(By(fn() { @sf.theme().p.bg })) |> ignore
+              // (coming to need the viewer while open, felt, as its old view felt it)
+              feel_needed_node(col, retained, r)
+              b(col, retained, r, fn(n) {
+                app.nav.page_island(
+                  n,
+                  serial,
+                  fn(c, page) {
+                    page_entry_read(serial, retained, page)
+                    page_read(page)
+                    f(c, retained, r)
+                  },
+                  key~,
+                  natural=true,
+                )
+                // (in the list's foot, nothing to the hand but what it holds that takes it: the room round the
+                // composer's capsule, over it and the bar's under it, the page's, as a press or what is let go there
+                // from outside)
+                |> @ui.old_takes_own
+                |> ignore
+              }, fn() { drawn(serial) })
+            }
+            _ => {
+              // (a new chat: its old view, what it reads let go with this node as the page becomes its chat)
+              let here = src.owned_by(col)
+              app.nav.page_island(
+                col,
+                serial,
+                fn(c, page) {
+                  page_entry_read(serial, retained, page)
+                  page_read(page)
+                  build(c, if page is Chat(_) { retained } else { here }, page)
+                },
+                key~,
+              )
+              .grow(Is(1.0))
+              |> ignore
+            }
+          }
+        },
+        at_once=true,
+      )
+    }
     None =>
       app.nav.page_island(
         v,
