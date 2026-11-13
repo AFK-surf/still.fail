@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [45bffd5e1](https://github.com/AFK-surf/monoid/commit/45bffd5e15c69ea83d3e1f8d12ea186d7232f5d6) mbui: a node drawn off exactly where it says so, b | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.44 | 107.22 |
 | [1a2dddace](https://github.com/AFK-surf/monoid/commit/1a2dddace1dba403106e32259cd39b16dd9f71c7) fix(presets): use real triple model picker for pre | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.55 | 52.7 | 94.18 | 104.07 |
 | [26c9014f3](https://github.com/AFK-surf/monoid/commit/26c9014f361e4e65d434bbcc9974c803c2e172d8) fix(mbui, ios): prevent stuck iOS keyboard when IM | 1.97 | 2.64 | 11.37 | 30.92 | 40.86 | 27.55 | 52.68 | 94.39 | 110.13 |
 | [6dddb0cf7](https://github.com/AFK-surf/monoid/commit/6dddb0cf7894cb05eeaae72645f54b624b64e021) core: a workspace's chain handed over to its peopl | 1.97 | 2.64 | 11.37 | 30.92 | 40.86 | 27.55 | 52.68 | 94.24 | 103.71 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f11a356e3](https://github.com/AFK-surf/monoid/commit/f11a356e3a9e0b992f5cf71c780cfc4ad26b9179) app tests: at the default rate each group's other  | 1.94 | 2.61 | 11.2 | 30.62 | 40.18 | 27.28 | 52.15 | 93.31 | 184.88 |
 | [140070ced](https://github.com/AFK-surf/monoid/commit/140070ced117d702099e32ad27d6988b7bfd806f) Keep popovers and dialogs clear of the system's ba | 1.94 | 2.6 | 11.19 | 30.61 | 40.17 | 27.27 | 52.15 | 93.29 | 140.26 |
 | [cde2e1750](https://github.com/AFK-surf/monoid/commit/cde2e175002aa4c42aac7af733bcd4b1036e0feb) mbui app: a passage picked in a message quoted in  | 1.94 | 2.6 | 11.19 | 30.61 | 40.16 | 27.27 | 52.13 | 93.28 | 183.1 |
-| [960fc3979](https://github.com/AFK-surf/monoid/commit/960fc3979c00be98f8a9e56fac7bd31064bdf18c) station, shell: raise RLIMIT_NOFILE and release ha | 1.94 | 2.6 | 11.19 | 30.6 | 40.13 | 27.27 | 52.12 | 93.36 | 134.35 |
