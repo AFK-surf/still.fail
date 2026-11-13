@@ -64,11 +64,14 @@ const keyName = new Map<string, string>([
 export const THEIRS = new Set([...SPECS.filter((s) => s.sub === "mallory").map((s) => s.signer.id), ...ACCOMPLICE.map((a) => a.signer.id)]);
 export const nameOfKey = (k: string) => keyName.get(k) ?? `key ${k.slice(8, 14)}`;
 export const stationName = (hex: unknown) => `s${stationKeys3.findIndex((k) => k.hex === hex)}`;
-export const personDevice = (s: { base: Key; signer: Key; name: string }) => ({ key: s.signer.id, id: s.base.hex, label: s.name });
+/// A device as its person's log says it: its key there, its base key, and the key it signs a workspace's things with
+/// (`sign_key`, rules/src/lock/person.mbt): one key in the model, the product's device having a key of its own on its
+/// log (sealed for its person's presence) beside its signer.
+export const personDevice = (s: { base: Key; signer: Key; name: string }) => ({ key: s.signer.id, id: s.base.hex, label: s.name, sign_key: s.signer.id });
 
 // ── a person log, by the rules ──────────────────────────────────────────────────────────────────────────────────────
 
-export type PDev = { key: string; id: string; label: string };
+export type PDev = { key: string; id: string; label: string; sign_key?: string };
 export type PersonState = { sub: string; seq: number; devices: Map<string, PDev> };
 
 /// Why an entry does not follow a person log's state `ps` (the product's words where person.mbt has them), or null.
@@ -112,8 +115,8 @@ function refusal(ps: PersonState, e: Entry, h: string): string | null {
 }
 
 function after3(ps: PersonState, e: Entry): PersonState {
-  const b = e.body as { key: string; id: string; label: string };
-  if (e.kind === "device") return { sub: ps.sub, seq: e.seq, devices: new Map([...ps.devices, [b.key, { key: b.key, id: b.id, label: b.label }]]) };
+  const b = e.body as { key: string; id: string; label: string; sign_key?: unknown };
+  if (e.kind === "device") return { sub: ps.sub, seq: e.seq, devices: new Map([...ps.devices, [b.key, { key: b.key, id: b.id, label: b.label, ...(typeof b.sign_key === "string" ? { sign_key: b.sign_key } : {}) }]]) };
   if (e.kind === "device.remove") {
     const devices = new Map(ps.devices);
     devices.delete(b.key);

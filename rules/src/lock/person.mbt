@@ -10,6 +10,15 @@ pub(all) struct PersonDevice {
   key : String
   id : String
   label : String
+  /// The key the device signs a workspace's things with, unasked (a vault's versions, items and box certificates; a
+  /// workspace chain's entries): the last its entries on this log said for it, none where that said none or one that
+  /// is no ed25519 key id (never a refusal: a log folds as it did before this was read). Never the log's own `key`,
+  /// which is sealed for its person's presence and signs this log alone (the lead, 2026-11-13).
+  sign_key : String?
+  /// Every `sign_key` its entries said for it while it is on the log, in the order first said: a box certificate an
+  /// earlier one signed still counts where the vault's rules take any it had (vault.mbt `cert_ok`'s `ever`), as a
+  /// workspace chain keeps them (lock.mbt `add`). Begun anew where an entry gives the key another device id.
+  sign_keys : Array[String]
 }
 
 ///|
@@ -46,7 +55,11 @@ fn person_device(v : Json?, c : &Crypto) -> PersonDevice raise LockError {
   guard key.has_prefix("ed25519:") && c.valid_key_id(key) && is_hex32(id) else {
     raise Refused("a person's device signs with an ed25519 key, and goes by its base key")
   }
-  { key, id, label }
+  let sign_key = match text_of(field(v, "sign_key")) {
+    Some(k) if k.has_prefix("ed25519:") && c.valid_key_id(k) => Some(k)
+    _ => None
+  }
+  { key, id, label, sign_key, sign_keys: sign_key.map(fn(k) { [k] }).unwrap_or([]) }
 }
 
 ///|
@@ -104,7 +117,16 @@ fn person_step(was : Person?, e : Json, sub : String, c : &Crypto) -> Person rai
         "device" => {
           guard @role.person_changes(devices.contains(key), false) else { raise Refused("not signed by a device on the lock") }
           let d = person_device(b, c)
-          devices[d.key] = d
+          // (its key on the log already: that device said again, its signer the one said now, those said before kept)
+          let had = match devices.get(d.key) {
+            Some(was) if was.id == d.id => was.sign_keys
+            _ => []
+          }
+          let sign_keys = match d.sign_key {
+            Some(k) if !had.contains(k) => [..had, k]
+            _ => had
+          }
+          devices[d.key] = { ..d, sign_keys }
         }
         "device.remove" => {
           guard text_of(field(b, "key")) is Some(gone) && devices.contains(gone) else { raise Refused("no such device") }

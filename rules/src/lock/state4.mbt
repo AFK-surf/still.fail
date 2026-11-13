@@ -1,7 +1,8 @@
 // One state out of a workspace said in its people's logs (station/test/lock-roster4-model.ts D4 `d4`, 2026-11-13), in
 // the shape of a workspace chain's `LockState`, so that what reads a lock today (admission, `admit`, `admit_person`;
 // the vault; the mesh) reads it unchanged: the list's members and stations, each bound person's app devices from the
-// head of the log that binds them (their keys as `sign_keys`) and their web devices that count by this keeper's clock
+// head of the log that binds them (each by the signing key its entries there said, `sign_key`, and those it said
+// before as `sign_keys`; never the log's own key) and their web devices that count by this keeper's clock
 // (put on no further ahead of it than `web_skew_secs`, not run out by it), the root's newest `open`'s settings, and
 // `disabled` where the root's newest of `open` and `off` in force is `off`. No passkeys and no gateways: nothing says
 // them in a person's log (the lead, 2026-11-13). `genesis`, `head` and `seq` are the root log's: its genesis hash is
@@ -79,11 +80,17 @@ pub fn state4(ws : String, root : String, chains : Array[Array[Json]], bodies : 
     s.members[m.sub] = { sub: m.sub, email: email.unwrap_or(""), role: m.role }
     s.persons[m.sub] = m.lock
     guard logs.get(m.lock) is Some((p, _)) && p.sub == m.sub && p.devices.length() > 0 else { continue }
+    // (named by the key each signs the workspace's things with, as its log says it: one that says none is listed and
+    // signs nothing here, as an app on a chain without a signing key; the log's own key signs that log alone)
     for _, d in p.devices {
-      s.devices[d.id] = { id: d.id, sub: m.sub, kind: "app", label: d.label, sign_key: Some(d.key), endpoints: None, exp: None, by: None, own: true }
-      s.sign_keys[d.id] = [d.key]
+      s.devices[d.id] = { id: d.id, sub: m.sub, kind: "app", label: d.label, sign_key: d.sign_key, endpoints: None, exp: None, by: None, own: true }
+      if d.sign_keys.length() > 0 {
+        s.sign_keys[d.id] = d.sign_keys
+      }
+      if d.sign_key is Some(_) {
+        s.signed[m.sub] = ()
+      }
     }
-    s.signed[m.sub] = ()
     for _, w in p.webs {
       if w.at <= now + web_skew_secs && now < w.exp {
         s.devices[w.id] = { id: w.id, sub: m.sub, kind: "web", label: w.label, sign_key: None, endpoints: None, exp: Some(w.exp), by: None, own: true }

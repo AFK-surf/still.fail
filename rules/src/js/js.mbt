@@ -379,7 +379,16 @@ pub fn fold_held_js(entries : JsValue, now : JsValue, crypto : JsCrypto) -> JsVa
 ///|
 fn person_json(p : @lock.Person) -> Json {
   let device = fn(d : @lock.PersonDevice) -> Json {
-    Json::object(Map([("key", Json::string(d.key)), ("id", Json::string(d.id)), ("label", Json::string(d.label))]))
+    let m : Map[String, Json] = Map([
+      ("key", Json::string(d.key)),
+      ("id", Json::string(d.id)),
+      ("label", Json::string(d.label)),
+      ("sign_keys", Json::array(d.sign_keys.map(Json::string(_)))),
+    ])
+    if d.sign_key is Some(k) {
+      m["sign_key"] = Json::string(k)
+    }
+    Json::object(m)
   }
   Json::object(Map([
     ("sub", Json::string(p.sub)),
@@ -397,8 +406,8 @@ fn person_json(p : @lock.Person) -> Json {
 }
 
 ///|
-/// A person's own lock, its chain checked: `{sub, genesis, head, seq, devices: [{key, id, label}], webs: [{id, label,
-/// at, exp}]}` or `{error}`.
+/// A person's own lock, its chain checked: `{sub, genesis, head, seq, devices: [{key, id, label, sign_key?,
+/// sign_keys}], webs: [{id, label, at, exp}]}` or `{error}`.
 pub fn person_fold_js(entries : JsValue, sub : String, crypto : JsCrypto) -> JsValue {
   let answer = try person_json(@lock.fold_person(entries_of(entries), sub, crypto)) catch {
     @lock.Refused(why) | @lock.Refusal(why) => Json::object(Map([("error", Json::string(why))]))
