@@ -5,7 +5,9 @@
 // words, the message, as what: chat_layers'), let go, and gone. A pick across messages, or in a row that is no message
 // with an id to quote by (what is on its way from here, a notice's line, the list's own rows), gives none. A finger's
 // pick has no pill: the system's text menu over it offers 引用 after its copy and select all (mbui's picked_menu), doing
-// the same.
+// the same, and after it what that message offers of itself where it offers it (message_items' but its words, which
+// the system's copy has: 多选, its turn shared from the chat's picture; 复制链接, its link), as the old finger's bar
+// over a passage held (sfbase's pick_bar) did.
 
 ///|
 /// The message of chat `rows` whose words a mouse's pick lies wholly within, once the pointer let it go: what is
@@ -48,15 +50,32 @@ fn chat_quote_take(src : Source, draft : String, rows : () -> ChatBodyRows) -> U
 /// Over chat `r`'s list in `v` (its rows `rows`, each of whose words are said of its key: chat_body_row's picked_of):
 /// the pill 引用 over a mouse's pick within one message, quoting it into the chat's draft (writing_quote, its text
 /// trimmed, nothing where that is empty), what is picked let go then. One for each pick (its `made`). A finger's pick
-/// in what `v` holds is offered the same in the system's text menu (picked_menu).
-fn chat_quote_node(v : @view.View, src : Source, r : ChatRef, rows : () -> ChatBodyRows) -> Unit {
+/// in what `v` holds is offered the same in the system's text menu (picked_menu), and the message's own items there
+/// (its MessageShare in the chat `here` is: message_share_of).
+fn chat_quote_node(v : @view.View, src : Source, r : ChatRef, here : MessageNodeHere, rows : () -> ChatBodyRows) -> Unit {
   let draft = r.station + ":" + r.session
-  // (a finger's pick: 引用 in the system's text menu over it, for what the list holds, where it lies within one message)
+  // (a finger's pick: 引用 in the system's text menu over it, for what the list holds, where it lies within one message;
+  // then its turn shared and its link copied, where it offers them, what is picked let go as either is chosen)
   @ui.picked_menu(v, fn(_) {
-    match chat_picked_message(rows) {
-      Some(_) => [(@sf.t("web-main.chat.quote"), fn() { chat_quote_take(src, draft, rows) })]
-      None => []
+    guard chat_picked_message(rows) is Some((_, m)) else { return [] }
+    let items = [(@sf.t("web-main.chat.quote"), fn() { chat_quote_take(src, draft, rows) })]
+    match message_share_of(src, here, fn() { m }) {
+      Some(s) => {
+        items.push((@sf.t("web-main.chat.selectMessages"), fn() {
+          @ui.picked_let_go()
+          (s.go)()
+        }))
+        let link = (s.link)()
+        if link != "" {
+          items.push((@sf.t("common.link.copy"), fn() {
+            @sfbase.copy_out(link, said=@sf.t("common.link.copied"))
+            @ui.picked_let_go()
+          }))
+        }
+      }
+      None => ()
     }
+    items
   })
   |> ignore
   v.pick(fn() { chat_quotable(rows).map(fn(q) { q.0.made }) }, fn(holds, made) {

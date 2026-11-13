@@ -6,11 +6,12 @@
 ///|
 /// The fixture `mode` with the core's `downloads` as `list` says (what it brings as `keeping`), its calls kept in
 /// `calls`; `download.take` answered as taken, `download.read` (the saving's) answered with `bytes` (of `type`) a part
-/// at a time, `part` at most.
+/// at a time, `part` at most; `list` changed, the core tells its topic changed by `told` set anew.
 fn downloads_src(
   mode : String,
   list : Array[Json],
   calls : Array[(String, Json)],
+  told? : @signals.Signal[Int] = @signals.signal(0),
   keeping? : Array[Json] = [],
   bytes? : Bytes = b"PK\x03\x04",
   part? : Int = 4 * 1024 * 1024,
@@ -20,6 +21,7 @@ fn downloads_src(
     ..base,
     topic_read: fn(name, params) {
       if name == "downloads" {
+        told.get() |> ignore
         { value: Some({ "downloads": Json::array(list), "keeping": Json::array(keeping) }), error: None, version: 1 }
       } else {
         base.topic(name, params).get().snapshot()
@@ -50,6 +52,14 @@ fn downloads_src(
 }
 
 ///|
+/// The middle of the video `name` of a message (its picture, nothing over it there), as a screen reader has it (播放
+/// …), whichever page draws the chat.
+fn video_middle(t : @ui.Tester, name : String) -> (Double, Double) raise {
+  let (x, y, w, h) = t.get(Button, label=tr("web-main.file.play", args=[("name", name)])).rect
+  (x + w / 2.0, y + h / 2.0)
+}
+
+///|
 /// A download as the core lists it.
 fn listed(name : String, state : String, loaded : Double, size : Double, said : String) -> Json {
   {
@@ -74,12 +84,13 @@ test "downloads: a message's file and video offer 下载 by right click and long
       new_run()
       let calls : Array[(String, Json)] = []
       let list : Array[Json] = []
-      let src = downloads_src("chat-download", list, calls)
+      let told = @signals.signal(0)
+      let src = downloads_src("chat-download", list, calls, told~)
       let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=if platform == 0 { 1280.0 } else { 390.0 }, h=844.0, platform~)
       open_fixture_mode("chat-download")
       t.run_for(@ui.move_most_ms)
       let (x, y) = if name == "演示录屏.mp4" {
-        t.reachable(name)[0]
+        video_middle(t, name)
       } else {
         let words = t.words().filter(fn(w) { w.0 == "发布包" })
         (words[0].1 + 4.0, words[0].2 + 4.0)
@@ -111,6 +122,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
       assert_true(viewer.get() is None)
       if name == "发布包.zip" {
         list.push(listed(name, "going", 22020096.0, 52428800.0, "正在下载 42% · 50 MB"))
+        told.set(told.get() + 1)
         t.draw()
         assert_true(t.find("正在下载 42% · 50 MB") is Some(_))
         t.click(Button, label=tr("web-main.file.cancelDownload"))
@@ -118,6 +130,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
         assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).length(), 1)
       } else {
         list.push(listed(name, "going", 1048576.0, 5242880.0, "正在下载 20% · 5 MB"))
+        told.set(told.get() + 1)
         t.draw()
         t.run_for(@sf.dur_ms)
         assert_true(t.find("20%") is Some(_))
@@ -131,7 +144,8 @@ test "downloads: an image's menu downloads it and its picture shows the download
   new_run()
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
-  let src = downloads_src("chat", list, calls)
+  let told = @signals.signal(0)
+  let src = downloads_src("chat", list, calls, told~)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
   nav_rested(t)
@@ -152,6 +166,7 @@ test "downloads: an image's menu downloads it and its picture shows the download
   assert_eq(text(Some(starts[0].1), "name"), "compare.png")
   assert_true(viewer.get() is None)
   list.push(listed("compare.png", "going", 25.0, 100.0, "正在下载 25% · 100 B"))
+  told.set(told.get() + 1)
   t.draw()
   t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
   assert_true(t.find("25%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
@@ -168,7 +183,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
   // (in its picture's middle: nothing is over it there)
-  let (x, y) = t.reachable("演示录屏.mp4")[0]
+  let (x, y) = video_middle(t, "演示录屏.mp4")
   let video = fn() {
     t.right_click(x, y)
     t.draw()

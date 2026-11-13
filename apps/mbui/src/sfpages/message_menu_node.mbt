@@ -53,3 +53,25 @@ fn message_agent_card_node(
     ),
   )
 }
+
+///|
+/// What a message whose menu is open shows of it (the old list's band for it, chat_list's `msg-menu/`): the pointer's
+/// ground under what `row` holds (its outermost node: across the list), easing in as its menu opens and out as it goes
+/// (nav_fade, from the moment of each), while its right click's menu shows (@sfbase.message_menu_on, by its key `key`)
+/// or its ⋯'s (`more`, the row's own: what it says once the row is made; a menu presented is told to what reads it).
+fn message_menu_band_node(row : @view.View, key : String, more : Ref[() -> Bool]) -> Unit {
+  row.box(fn(b) {
+    let way = @motion.Way::new(0.0)
+    b.over(Is(true)).presses(Is(false)) |> ignore
+    b.reacts(
+      fn() {
+        // (a menu presented or let go tells this again: the row's ⋯ read as it is then)
+        @sf.presenting() |> ignore
+        @sfbase.message_menu_on(key) || (more.val)()
+      },
+      fn(on) { way.go(if on { 1.0 } else { 0.0 }, @sf.nav_fade, at=b.cause_at()) },
+    )
+    b.ground(By(fn() { lit_by(@ui.tree_theme().color(Hover), way.shown_on(b)) })) |> ignore
+  })
+  |> ignore
+}

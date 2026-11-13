@@ -9,6 +9,9 @@ fn init {
     ("src/sfapp/chat_bar_wide_wbtest.mbt", 89156),
     ("src/sfapp/chat_images_told_wbtest.mbt", 57845),
     ("src/sfapp/chat_keys_wbtest.mbt", 127704),
+    // (the chat's page made as nodes hands over the pictures of the rows its list has made round what shows, a screen
+    // over and under it, where the old list handed over those in view: its 小屏 finger's pick held at its end, 2026-11-13)
+    ("src/sfapp/chat_page_nodes_wbtest.mbt", 38548),
     ("src/sfapp/chat_pictures_held_wbtest.mbt", 89156),
     ("src/sfapp/chat_wbtest.mbt", 960538),
     ("src/sfapp/composer_under_sheet_wbtest.mbt", 159102),
