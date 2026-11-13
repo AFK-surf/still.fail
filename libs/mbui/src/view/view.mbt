@@ -4884,7 +4884,8 @@ fn Tree::pivot_of(self : Tree, at : Int, w : Double, h : Double) -> (Double, Dou
 /// middle; 4. else its middle (a line across with a label in its middle; a thing centred by what holds it). 2 and 3 come
 /// as `words` (Tree::drawn_box_of's: 1 its start, 2 its middle, 3 its end, 0 neither); the pivot is always all it
 /// draws' `x0`, `x1` or their middle. A line laid from an edge belongs to that edge (the coordinator of the migration,
-/// 2026-11-14).
+/// 2026-11-14). Known and left (the same, that day): one line of words drawn alone that fills its node within a point,
+/// nothing else drawn with it, shows no laying and gets the middle.
 fn pivot_side(x0 : Double, x1 : Double, w : Double, words : Int) -> Double {
   let (before, after) = (x0, w - x1)
   if before < after - 1.0 {
