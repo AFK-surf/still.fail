@@ -18,7 +18,7 @@ import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, shortCode } from "../src/lock.ts";
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
 import { added, enrolled, held, inForceOf, read } from "../src/views/lock.ts";
-import { serveTrusted, tryOne } from "../src/views/pair.ts";
+import { ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
 import { ME, genesis, grant, pipe, rig } from "./lock-rig.ts";
 
 const A = "aa".repeat(32);
@@ -54,16 +54,21 @@ function say(l: Log, kind: string, more: Record<string, unknown>, ws: "ws" | "w2
 type Brought = { at: string; length: number; bodies: unknown[] | null };
 type Asked = { at: string; method: string; path: string; body: string };
 
-async function setUp(o: { w2?: "moved" | "chain" } = {}) {
+/// `root: "alice"`: alice's log (r1) is the root and says those, and s1 as `mine`. `view`: the workspace's view's members
+/// (the control plane's word of each one's role).
+async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: "owner" | "admin" | "member"; view?: { sub: string; email: string; role: string }[] } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const me = person("s1", MINE, ME);
   const bob = person("r2", 6002, key(6102).hex);
   const xena = person("r3", 6004, key(6104).hex);
+  const alice = person("r1", 6001, key(6101).hex);
+  const root = o.root === "alice" ? alice : me;
   const bodies: unknown[] = [];
-  bodies.push(say(me, "open", { ...settings, email: "a@x.com" }));
-  bodies.push(say(me, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
-  bodies.push(say(me, "station", { key: A }));
+  bodies.push(say(root, "open", { ...settings, email: "a@x.com" }));
+  if (o.root === "alice") bodies.push(say(alice, "member", { sub: "s1", email: "s1@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
+  bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
+  bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
   const bodies2: unknown[] = [];
   if (o.w2 === "moved") bodies2.push(say(me, "open", { ...settings, email: "a@x.com" }, "w2"), say(me, "station", { key: B }, "w2"));
@@ -75,12 +80,12 @@ async function setUp(o: { w2?: "moved" | "chain" } = {}) {
     host.storage.set(`personal-lock-${Buffer.from("s1").toString("hex")}`, new TextEncoder().encode(JSON.stringify(me.chain)));
     host.storage.set("personal-signer-id", new TextEncoder().encode(me.k.id));
     host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
-  }, [A, C], [A, C], undefined, o.w2 === "moved" ? [B, D] : []);
+  }, [A, C], [A, C], undefined, o.w2 === "moved" ? [B, D] : [], o.view === undefined ? {} : { members: o.view });
   const inner = r.core.inner;
   const signer = mine! as Signer;
   const headOf = (c: Entry[]): Head => ({ seq: c.length - 1, hash: entryHash(c[c.length - 1]!), genesis: entryHash(c[0]!) });
   const g0 = r.cloud.chains.get("ws")![0]!;
-  const st = { chain: [g0, signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(me) }))] as Entry[], logs: [bob, xena], bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[] };
+  const st = { chain: [g0, signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(root) }))] as Entry[], logs: o.root === "alice" ? [alice, bob, xena] : [bob, xena], bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[] };
   const g2 = o.w2 === "moved" ? r.cloud.chains.get("w2")![0]! : null;
   const st2 = { chain: g2 === null ? [] : [g2, signer.sign(next("w2", headOf([g2]), 1001, "moved", { root: gOf(me) }))] as Entry[], logs: [] as Log[], bodies: bodies2, brought: [] as Brought[], silent: false };
   const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked"> = st): Effect.Effect<unknown, CoreError> => {
@@ -150,7 +155,25 @@ async function setUp(o: { w2?: "moved" | "chain" } = {}) {
     const f = inForce(ws, held(inner, ws)!.entries, chains, ws === "ws" ? st.bodies : st2.bodies, ms).f;
     return f.devices.get(WEB)?.kind === "web";
   };
-  return { r, inner, st, st2, run, ask, said, own, asked, hello, prove, lets, me, prompts };
+  /// Someone's first device asking (`id` its base key; an app, with `log` the log of its own it brings) as `sub`.
+  const helloApp = async (sub: string, id: string, log: StationEntry[] | null) => {
+    const [trusted, phone] = await pipe();
+    inner.runner.fork(serveTrusted(inner, id, ME, trusted));
+    const first = await run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", id, sub) }], kind: "app", label: "Pixel", sign_key: "ed25519:" + "11".repeat(32), ...(log !== null ? { log } : {}) }), phone.next()));
+    return { phone, answer: first.ok as { t: string; workspaces?: string[]; error?: string } };
+  };
+  const proveApp = async (phone: Awaited<ReturnType<typeof helloApp>>["phone"], id: string) => {
+    const code = ((await prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
+    return run(tryOne(inner, { id: ME, d: phone, workspaces: ["ws"] }, id, code));
+  };
+  /// The bodies of this device's statements past what s1's log said before: kind, whom, role, log.
+  const stated = () => own().filter((e) => e.kind === "ws").map((e) => {
+    const h = (e.body as { h: string }).h;
+    const b = [...st.bodies, ...((inner.data.record("lockBodies", "ws") as { bodies?: unknown[] } | null)?.bodies ?? [])].find((x) => bodyHash(x) === h) as Record<string, unknown> | undefined;
+    return b === undefined ? "(no body)" : [b.kind, b.sub ?? "", b.role ?? "", typeof b.lock === "string" ? b.lock.slice(0, 6) : ""].join(" ").trim();
+  });
+  const members = () => [...inForceOf(inner, "ws").f.members].map(([sub, m]) => `${sub} ${m.role}`).sort().join(", ");
+  return { r, inner, st, st2, run, ask, said, own, asked, hello, prove, lets, me, prompts, helloApp, proveApp, stated, members, xena };
 }
 
 test("a web page approved face to face where the chain moved: a `web` entry of the person's own log, the person asked once, let in until its `exp`", async () => {
@@ -266,4 +289,92 @@ test("a station enrolled and confirmed by its code where the chain moved: its co
   assert.deepEqual([body.kind, body.key], ["station", C]);
   assert.ok(inForceOf(w.inner, "ws").f.stations.has(C), "C in the list");
   assert.equal(w.r.cloud.posted.length, 0, "nothing on the chain");
+});
+
+/// Someone's first device (NEW, its base key) and the log of their own it brings.
+const NEW = key(6109).hex;
+const newcomer = (sub = "r9", n = 6009, device = NEW) => person(sub, n, device);
+const VIEW = [{ sub: "s1", email: "s1@x.com", role: "owner" }, { sub: "r2", email: "b@x.com", role: "admin" }, { sub: "r3", email: "c@x.com", role: "member" }];
+
+test("someone's first device where the chain moved: the code shown by an owner's device, then `member` with the log it brought and the role the view gives, the person asked once", async () => {
+  const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "admin" }] });
+  const log = newcomer();
+  const before = w.asked();
+  const { phone, answer } = await w.helloApp("r9", NEW, log.chain);
+  assert.deepEqual(answer, { t: "code", workspaces: ["ws"] }, "a code shown");
+  assert.equal(w.asked(), before, "nobody asked for showing it");
+  const done = await w.proveApp(phone, NEW);
+  assert.equal(done.error, undefined, done.error?.message);
+  assert.deepEqual((done.ok as { approved: { workspaces: string[] } }).approved.workspaces, ["ws"]);
+  assert.equal(w.asked() - before, 1, "the person asked once");
+  assert.deepEqual(w.stated(), [`member r9 admin ${gOf(log).slice(0, 6)}`], "one statement: r9 with their own log, as the view's admin");
+  assert.equal(w.members(), "r2 admin, r3 member, r9 admin, s1 owner");
+  assert.equal(inForceOf(w.inner, "ws").f.persons.get("r9"), gOf(log), "bound to the log it brought");
+  assert.equal(w.r.cloud.posted.length, 0, "nothing on the chain");
+});
+
+test("someone's first device bringing a log not of the credential's person, or one it is not on, or none: no code, nothing signed, nobody asked", async () => {
+  const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+  const before = w.asked();
+  for (const [why, log] of [["another person's log", newcomer("r8", 6008).chain], ["a log it is not on", newcomer("r9", 6009, key(6110).hex).chain], ["no log", null]] as const) {
+    const { answer } = await w.helloApp("r9", NEW, log);
+    assert.deepEqual(answer, { t: "no", error: "not_here" }, why);
+  }
+  assert.equal(w.asked(), before);
+  assert.deepEqual(w.stated(), []);
+});
+
+test("an admin letting in someone the view calls an owner: no code, refused before the person is asked; a member's device shows none", async () => {
+  const a = await setUp({ root: "alice", mine: "admin", view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "owner" }] });
+  const before = a.asked();
+  assert.deepEqual((await a.helloApp("r9", NEW, newcomer().chain)).answer, { t: "no", error: "not_here" });
+  assert.equal(a.asked(), before, "nobody asked");
+  assert.deepEqual(a.stated(), []);
+  const m = await setUp({ root: "alice", mine: "member", view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+  assert.deepEqual((await m.helloApp("r9", NEW, newcomer().chain)).answer, { t: "no", error: "not_here" });
+  assert.deepEqual(m.stated(), []);
+});
+
+test("a member the list names under another log (their lock begun anew): the old binding taken out, the member said again with the new log", async () => {
+  const w = await setUp({ view: VIEW });
+  const log = newcomer("r3", 6014);
+  const { phone, answer } = await w.helloApp("r3", NEW, log.chain);
+  assert.deepEqual(answer, { t: "code", workspaces: ["ws"] });
+  const done = await w.proveApp(phone, NEW);
+  assert.equal(done.error, undefined, done.error?.message);
+  assert.deepEqual(w.stated(), ["member.remove r3", `member r3 member ${gOf(log).slice(0, 6)}`]);
+  assert.equal(inForceOf(w.inner, "ws").f.persons.get("r3"), gOf(log), "bound to the new log");
+  assert.equal(w.members(), "r2 admin, r3 member, s1 owner");
+});
+
+test("a device on its person's own log brings that log where the chain moved: in its hello to the trusted device, and in its hello to the stations, which take a member's log only so", async () => {
+  const w = await setUp();
+  const log = await w.run(ownLogFor(w.inner, ["ws"]));
+  assert.equal(log.error, undefined, log.error?.message);
+  assert.equal(entryHash((log.ok as Entry[])[0]!), stationHash(w.me.chain[0]!), "the log it is on, named as it is");
+  const carried = w.inner.cloudSync.carryPerson?.("ws") ?? null;
+  assert.ok(carried !== null && entryHash(carried[0]!) === stationHash(w.me.chain[0]!), "carried to the stations");
+  assert.equal((await w.run(ownLogFor(w.inner, []))).ok, null, "none where no workspace it waits in moved");
+});
+
+test("a person's own new app device (the personal exchange) where the chains moved: put on their own log alone, and so let into every moved workspace of theirs, nothing signed on a chain", async () => {
+  const w = await setUp({ w2: "moved" });
+  const k = key(7009);
+  const id = key(7109).hex;
+  const chains = { ws: held(w.inner, "ws")!.entries.length, w2: held(w.inner, "w2")!.entries.length };
+  const before = w.asked();
+  const [trusted, phone] = await pipe();
+  w.inner.runner.fork(serveTrusted(w.inner, id, ME, trusted));
+  const first = await w.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel", sign_key: "ed25519:" + "12".repeat(32), personal: { subs: ["s1"], key: k.id } }), phone.next()));
+  assert.deepEqual(first.ok, { t: "code", workspaces: ["person:s1"] });
+  const code = ((await w.prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
+  const done = await w.run(tryOne(w.inner, { id: ME, d: phone, workspaces: ["person:s1"] }, id, code));
+  assert.equal(done.error, undefined, done.error?.message);
+  assert.equal(w.asked() - before, 1, "the person asked once");
+  assert.ok(w.own().some((e) => e.kind === "device" && (e.body as { id: string }).id === id), "on s1's own log");
+  assert.equal(inForceOf(w.inner, "ws").f.devices.get(id)?.kind, "app", "let into ws");
+  assert.equal(inForceOf(w.inner, "w2").f.devices.get(id)?.kind, "app", "and into w2");
+  assert.equal(held(w.inner, "ws")!.entries.length, chains.ws, "nothing on ws's chain");
+  assert.equal(held(w.inner, "w2")!.entries.length, chains.w2, "nor on w2's");
+  assert.equal(w.r.cloud.posted.filter((p) => p.ws === "ws" || p.ws === "w2").length, 0, "nothing sent to the chains' cloud");
 });

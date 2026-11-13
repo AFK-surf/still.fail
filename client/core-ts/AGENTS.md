@@ -172,11 +172,17 @@ another; the accounts' list's merge across stations and its refills.
   would not do what it means is refused. The body goes only to the stations of its workspace that its list names,
   asked on that workspace's address, never to the cloud nor a station of another workspace (which get the chain);
   taken once one of those took entry and body, else pending, waiting for those. Said so now: a role, a member out, a
-  station in (`joinStation`) or out, off and on again (the root's person alone, `lock_root_only`). Adding a member,
-  approving a device or a web page, renewing one, `addStation` and `admit` need another device's part and still answer
-  `lock_moved`. One that lost its place is signed again as the model's `resign` does (`again=batch`), only with the
-  seed in hand, never asking for it: judged with the others lost with it in the order made by what its body is about
-  (`src/personal-lock.ts` `#how`), the same body where its `prev` still stands before it, else one made anew
+  station in (`joinStation`, `addStation` once its code is confirmed) or out, off and on again (the root's person
+  alone, `lock_root_only`). What lets someone in there (2026-11-13): a web page is `web {id, label, exp}` on its own
+  person's log (personal-lock.ts `web`), approved face to face only by a device of that person's on the log that binds
+  them (views/pair.ts `movedPlace`), one entry and one ask for every moved workspace it asked in, renewed by a later
+  `web`, taken off by `web.remove`; someone's first device is `member {sub, email, lock, role}` said by an owner's or
+  admin's device once the code is proved, `lock` the log of their own its hello brought (checked as the credential's
+  person's, the asking device on it; `admitOf`), the role the workspace's view gives them as the rules let this signer
+  give it, and the removal of an older binding first where their lock was begun anew; a person's own new device goes
+  on their log alone. Adding a member is the cloud's part alone there (`added`: nothing signed). One that lost its
+  place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:
+  judged with the others lost with it in the order made by what its body is about (`src/personal-lock.ts` `#how`), the same body where its `prev` still stands before it, else one made anew
   (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,
   as `lockAsked` is), told as not in effect. One pending whose act's cloud write then fails is dropped and its bodies
   let go of, as a pending chain entry is (`dropStated`); one taken stays. Its row is on its own workspace's lock topic

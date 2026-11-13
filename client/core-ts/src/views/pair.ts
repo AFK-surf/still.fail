@@ -39,10 +39,10 @@ import { hooks } from "../core/execute.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import type { IrohConnection, IrohStream } from "../iroh.ts";
-import { Signer, WEB_DEVICE_SECS } from "../lock.ts";
+import { CARRY_BYTES, Signer, WEB_DEVICE_SECS } from "../lock.ts";
 import { Lines } from "../mesh.ts";
 import { type Entry, entryHash } from "../lock.ts";
-import { isPerson, personOf } from "../personal-lock.ts";
+import { checkChain, isPerson, personOf } from "../personal-lock.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../pair.ts";
 import * as format from "../format.ts";
 import * as prefs from "../prefs.ts";
@@ -50,7 +50,8 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, asked, baseOf, deviceText, held, inForceOf, live, lockSeen, movedHere, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, stateOf, view, withBound } from "./lock.ts";
+import { Lock, asked, baseOf, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, view, withBound } from "./lock.ts";
+import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -119,8 +120,9 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 /// `personal`: it asks into this person's own locks, each account's it can be let into here, not a workspace
 ///; `places` is empty then. `seed`: the key, read as the person was asked before the code showed.
 /// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on); `moved`: its
-/// chain moved to its people's own logs, where a web page is let in by an entry of its person's own log (`movedPlace`).
-type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean; moved?: true }[]; hidden: boolean; away: Deferred.Deferred<void> };
+/// chain moved to its people's own logs, where a web page is let in by an entry of its person's own log (`movedPlace`);
+/// `admit`, there, someone's first device: who is said a member, with the log of their own its hello brought.
+type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean; moved?: true; admit?: Admit }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -179,10 +181,10 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     const h = held(inner, ws);
     if (account === null || !h?.head) continue;
     if (movedHere(inner, ws)) {
-      const c = movedPlace(inner, w, ws, account, hello, peer, me, now);
-      if (c === null || (who !== null && c.sub !== who.sub)) continue;
-      who ??= c;
-      places.push({ ws, sub: c.sub, account, moved: true });
+      const m = movedPlace(inner, w, ws, account, hello, peer, me, now);
+      if (m === null || (who !== null && m.c.sub !== who.sub)) continue;
+      who ??= m.c;
+      places.push({ ws, sub: m.c.sub, account, moved: true, ...(m.admit !== undefined ? { admit: m.admit, joins: true } : {}) });
       continue;
     }
     let lock;
@@ -221,8 +223,7 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
 /// signs: an owner or admin lets nobody else's page in (fewer let in than on a chain, where one of theirs could let a
 /// member's first page in). An app is not let in here: its person's own devices put it on their log (the personal
 /// exchange, `personalAsked`), and every moved workspace of theirs follows that.
-function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, peer: string, me: string, now: number): { sub: string; email: string; name: string } | null {
-  if (get(hello, "kind") !== "web") return null;
+function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, peer: string, me: string, now: number): { c: { sub: string; email: string; name: string }; admit?: Admit } | null {
   const force = inForceOf(inner, ws);
   if (force.said !== "on") return null;
   const personal = inner.adb.personal();
@@ -233,8 +234,50 @@ function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, p
   // (one let in there already, not run out: nothing to sign; renewed on the security page, `Lock.renew`)
   if (live(force.f.devices.get(peer), now) !== undefined) return null;
   const c = credentialOf(str(get(w, "credential")) ?? "", force.settings?.cloud_keys, ws, peer, now);
-  return c === null || c.sub !== account ? null : c;
+  if (c === null || c.sub === "") return null;
+  if (get(hello, "kind") === "web") return c.sub === account ? { c } : null;
+  const admit = admitOf(inner, ws, account, c, hello, peer);
+  return admit === null ? null : { c, admit };
 }
+
+/// Someone's first device where the chain moved (an app): who an owner's or admin's device here says a member, `member
+/// {sub, email, lock, role}`, `lock` the log of their own the hello brought (`log`), checked by the person logs' rules
+/// as the credential's person's (`sub`) with the asking device on it (its base key, the connection's peer). One the list
+/// names already under that log is not asked for here (their own devices put it on their log: the personal exchange);
+/// one it names under another (their lock begun anew) is taken out of what bound them before as it is said again with
+/// this one (`again`). The role is the one the workspace's view gives them (the control plane's word of what they were
+/// invited as); the rules decide whether this device may give it (`plan`, before the person is asked: an admin names no
+/// owner). The credential is the cloud's word that they are a member: it lets nobody in by itself; the code typed face
+/// to face here and this device's signature do. Null: no code shown for it.
+export type Admit = { lock: string; role: string; email: string; again: boolean };
+function admitOf(inner: Inner, ws: string, account: string, c: { sub: string; email: string }, hello: J, peer: string): Admit | null {
+  if (c.sub === account || c.email === "") return null;
+  const f = stateOf(inner, ws);
+  const role = f.members.get(account)?.role;
+  if (role !== "owner" && role !== "admin") return null;
+  const log = arr(get(hello, "log")) as Entry[];
+  if (log.length === 0 || JSON.stringify(log).length > CARRY_BYTES) return null;
+  const chain = checkChain(log, c.sub);
+  if (chain === null || ![...chain.devices.values()].some((d) => d.id === peer)) return null;
+  const lock = entryHash(log[0]!);
+  const bound = f.persons.get(c.sub);
+  if (bound === lock) return null;
+  const said = str(arr(get(view(inner, ws), "members")).find((m) => m?.sub === c.sub)?.role);
+  if (said !== "owner" && said !== "admin" && said !== "member" && said !== "viewer") return null;
+  const a: Admit = { lock, role: said, email: c.email, again: f.members.has(c.sub) };
+  return movedPlan(inner, ws, account, c.sub, a) === null ? null : a;
+}
+
+/// What this device would say for `a` (`plan`'s statements), or null where the rules would not have it do what it
+/// means (a role it may not give, its own standing): worked out with nothing signed and nobody asked.
+function movedPlan(inner: Inner, ws: string, account: string, sub: string, a: Admit): Said[] | null {
+  const meant = admitSaid(sub, a);
+  return movedWorks(inner, ws, account, meant) ? meant : null;
+}
+const admitSaid = (sub: string, a: Admit): Said[] => [
+  ...(a.again ? [{ kind: "member.remove" as const, sub }] : []),
+  { kind: "member", sub, email: a.email, lock: a.lock, role: a.role },
+];
 
 /// The requested workspaces this app knows about whose cloud view names a lock it has not read yet. If its held chain
 /// already contains that head, it is further ahead than the view and does not need to wait for it.
@@ -403,7 +446,16 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
     let pending: unknown = null;
     // Where the chain moved: one `web` entry of the person's own log lets the page into every such workspace of theirs,
     // the person asked once for all of them (not once a workspace); the others' chains as before, in the same approval.
-    const moved = a.places.filter((p) => p.moved === true);
+    // Someone's first device where the chain moved: `member` (after the removal of what bound them before, where it
+    // did) said in this person's own log, the person asked once a workspace; let in by the stations as their state
+    // names it, its hello bringing its log.
+    for (const p of a.places.filter((x) => x.admit !== undefined)) {
+      const said = yield* Effect.result(sayAdmit(inner, p.account, p.ws, admitSaid(p.sub, p.admit!), a.email || a.name));
+      if (said._tag === "Success") done.push(p.ws);
+      else failed.push({ ws: p.ws, error: said.failure.message });
+      if (pending === null && said._tag === "Success" && isObject(said.success) && isObject(said.success.pending)) pending = said.success.pending;
+    }
+    const moved = a.places.filter((p) => p.moved === true && p.admit === undefined);
     if (moved.length > 0) {
       const sub = moved[0]!.sub;
       const exp = Math.floor(inner.host.nowMs() / 1000) + WEB_DEVICE_SECS;
@@ -572,10 +624,23 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
     if (f.disabled || (had !== undefined && !unsigned) || onBoundPerson(inner, ws) || offOwnLock(inner, ws)) continue;
     // (where the chain moved: its state's, of its people's own logs; a web page is let in there by its own person's
     // devices alone, `movedPlace`)
+    // An app there whose person the list does not name with the log this device is on (someone's first device, or
+    // their lock begun anew) is let in by an owner's or admin's device; one whose person has a log it is not on joins
+    // that one first (`run`'s pair). Where the state is not said here (this device not let in, so given no bodies),
+    // those who may let it in are dialled as the chain held before it moved names them, and its person's own devices
+    // this device has heard of: whom it dials lets nobody in (the device dialled checks everything itself).
     if (movedHere(inner, ws)) {
-      if (inForceOf(inner, ws).said !== "on") continue;
+      const force = inForceOf(inner, ws);
+      if (force.said === "off") continue;
+      const personal = inner.adb.personal();
+      if (inner.host.appKeys === true && personal.standing(sub) !== "none" && personal.standing(sub) !== "member") continue;
       workspaces.push(ws);
-      approvers.set(ws, [...f.devices.values()].filter((d) => d.id !== base && d.kind === "app" && d.sub === sub && typeof d.sign_key === "string").map((d) => d.id));
+      const known = force.said === "on" ? f : fold(h.entries);
+      const first = inner.host.appKeys === true && (!known.members.has(sub) || (force.said === "on" && known.persons.get(sub) !== personal.root(sub)));
+      const here = [...known.devices.values()].filter((d) => d.id !== base && d.kind === "app" && typeof d.sign_key === "string" && (d.sub === sub || (first && ["owner", "admin"].includes(known.members.get(d.sub)?.role ?? ""))));
+      const ids = new Set([...here.map((d) => d.id as string), ...(inner.host.appKeys === true ? [] : personal.approvers(sub).map((d) => d.id))]);
+      ids.delete(base);
+      approvers.set(ws, [...ids]);
       continue;
     }
     workspaces.push(ws);
@@ -595,6 +660,28 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
     approvers.set(ws, here);
   }
   return { workspaces, approvers };
+}
+
+/// The log of its person's own an app brings to the moved workspaces it waits in (`admitOf` on the device it meets
+/// names them a member with it): the one this device is on, or, where it heard of none for its person once its
+/// stations were read (not knowing is not none), one begun now, its key made now and so in hand, nobody asked (asked
+/// only where a key of its own was made before). None where no workspace it waits in moved, or the person's account is
+/// not one of this device's.
+export function ownLogFor(inner: Inner, workspaces: readonly string[]): Effect.Effect<Entry[] | null, CoreError> {
+  return Effect.gen(function* () {
+    const moved = workspaces.filter((ws) => movedHere(inner, ws));
+    const sub = moved.length === 0 ? null : inner.workspaces.owner(moved[0]!);
+    if (sub === null) return null;
+    const personal = inner.adb.personal();
+    const read = yield* Effect.result(personal.refresh(sub, undefined, personal.asked()));
+    if (personal.standing(sub) === "none") {
+      if (read._tag === "Failure") return yield* Effect.fail(read.failure);
+      yield* personal.begin(sub, t("core-misc.personal.reason.add"));
+    }
+    if (personal.standing(sub) !== "member") return null;
+    const log = personal.entries(sub);
+    return JSON.stringify(log).length <= CARRY_BYTES ? log : null;
+  });
 }
 
 /// Where the new device reaches a trusted one: its mesh's endpoint, dialling the trusted device's id on PAIR_ALPN
@@ -641,6 +728,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
       }),
     ) : null;
     if (signer) signerKnown(inner, signer.id);
+    const log = inner.host.appKeys ? yield* ownLogFor(inner, workspaces) : null;
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(
       Effect.gen(function* () {
@@ -681,7 +769,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
           return;
         }
         changed(inner, y);
-        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
+        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null, ...(log !== null ? { log } : {}) };
         // A lock can move while credentials or devices are being sought. Follow it for this try, asking newly named
         // approvers too, but never dial one a second time after its seek ended: it may already be showing a code.
         const asked = new Set<string>();

@@ -1240,9 +1240,13 @@ export function offOwnLock(inner: Inner, ws: string): boolean {
 
 /// What a hello brings of the person's own lock: its chain, wherever its member bound it here, this device in the
 /// workspace's lock as well or not: a station that goes by the person's own lock alone for them lets it in on that.
+/// Where the chain moved, the one this device is on whether or not the state said here binds it: a device not let in yet
+/// is given no bodies to read that by, and a station takes the log of a member the list names only as their device's
+/// hello brings it (station/src/mesh/serve.ts `onPersonalLock`: someone's first device, named with it by an owner's).
 function carriedPerson(inner: Inner, ws: string): Entry[] | null {
   const sub = inner.workspaces.owner(ws);
-  if (sub === null || !onBoundPerson(inner, ws)) return null;
+  const moved = sub !== null && movedHere(inner, ws) && inner.host.appKeys === true && inner.adb.personal().standing(sub) === "member";
+  if (sub === null || (!moved && !onBoundPerson(inner, ws))) return null;
   const chain = inner.adb.personal().entries(sub);
   return JSON.stringify(chain).length <= CARRY_BYTES ? chain : null;
 }
@@ -2504,7 +2508,9 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // Its person bound a lock of their own here that this device is not on: approved into this one it would still be
         // refused (the stations let their app devices in on that lock alone), so it asks to join that one instead, the
         // same code shown on a device on it (2026-11-10: a new phone approved here went on being refused, 「已经批过了啊」).
-        if (offOwnLock(inner, c.workspace)) {
+        // (where the chain moved, its person having a log of their own this device is not on: so too, `waitingIn`)
+        const standing = inner.adb.personal().standing(sub);
+        if (offOwnLock(inner, c.workspace) || (movedHere(inner, c.workspace) && inner.host.appKeys === true && standing !== "none" && standing !== "member")) {
           const sub = inner.workspaces.owner(c.workspace);
           if (sub !== null) return yield* inner.adb.run({ kind: "personalJoin", sub });
         }
@@ -2762,6 +2768,25 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     if (!done && e !== undefined && shown.act !== null) personal.notInEffect(sub, e, { ...shown, act: shown.act });
     return null;
   });
+}
+
+/// Whether `meant` said here by `sub`'s device would do what it means in moved workspace `ws` (`plan`, nothing signed,
+/// nobody asked): views/pair.ts asks it before a newcomer's code is shown.
+export function movedWorks(inner: Inner, ws: string, sub: string, meant: Said[]): boolean {
+  const personal = inner.adb.personal();
+  const own = personal.root(sub), key = personal.keyId();
+  const root = inForceOf(inner, ws).root;
+  if (own === null || key === null || root === null || personal.standing(sub) !== "member") return false;
+  const chains = new Map(logsOf(inner, ws, false));
+  chains.set(own, personal.entries(sub));
+  return !("why" in plan(ws, root, chains, bodiesHeld(inner, ws), { genesis: own, sub, key }, meant, now(inner)));
+}
+
+/// Someone's first device let in where the chain moved (views/pair.ts `approve`): `meant` (their `member`, after the
+/// removal of what bound them before) said as any change of the list is (`sayMoved`), shown and asked as adding them.
+export function sayAdmit(inner: Inner, sub: string, ws: string, meant: Said[], name: string): Effect.Effect<unknown, CoreError> {
+  const shown = { act: "addMember" as const, name };
+  return sayMoved(inner, sub, ws, meant, shown, actText(shown));
 }
 
 const rootOnly = () => new CoreError("lock_root_only", "only the person who turned safe mode on turns it off or on again");
