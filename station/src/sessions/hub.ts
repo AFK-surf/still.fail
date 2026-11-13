@@ -44,7 +44,7 @@ import type { CardPage } from "../logins/index.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle, sameModel } from "./config.ts";
-import { candidates as modelsRun } from "./model-choice.ts";
+import { FEW_MOST, USED_WITHIN_MS, candidates as modelsRun, few } from "./model-choice.ts";
 import { CHAT_KEY, INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
@@ -1286,6 +1286,20 @@ export class Hub {
     const profiles = config.profiles.filter((p) => p.enabled !== false && allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
     const same = (c: ModelChoice) => c.runtime === own.runtime && (c.model === null || own.model === null ? c.model === own.model : sameModel(c.model, own.model));
     return [own, ...modelsRun(profiles, null).filter((c) => !same(c))];
+  }
+
+  /// Of those, the few `user` (a person as the connect's platform names them) is offered before they type anything
+  /// (model-choice.ts `few`): what they started chats on lately counts with any connect, as one person talks to
+  /// several bots.
+  modelsFirst(connectId: string, user: string): ModelChoice[] {
+    const all = this.modelsFor(connectId);
+    if (all.length <= FEW_MOST) return all;
+    const config = this.config();
+    const connect = connectOf(config, connectId);
+    const since = this.now() - USED_WITHIN_MS;
+    const used = user === "" ? [] : config.connects.flatMap((c) => this.store.modelsUsedBy(`slack:${c.id}:${user}`, since));
+    const profiles = config.profiles.filter((p) => p.enabled !== false && allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
+    return few(all, used, modelsRun(profiles.map((p) => ({ ...p, models: p.named })), null));
   }
 
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its

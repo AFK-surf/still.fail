@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { hubConfig } from "../src/sessions/config.ts";
-import { askWhich, candidates, choose } from "../src/sessions/model-choice.ts";
+import { FEW_MOST, askWhich, candidates, choose, few } from "../src/sessions/model-choice.ts";
 
 const profiles = (list: object[]) => hubConfig({ profiles: list }, "/nonexistent-model-choice").profiles;
 
@@ -81,4 +81,22 @@ test("none used: a profile's first model, not every model its check found", () =
 test("a chat that ran its runtime's default counts for a profile that names no model", () => {
   const cands = candidates(profiles([{ id: "cc", runtime: "claude", home: "h" }, { id: "cx", runtime: "codex", home: "h2" }]), null);
   assert.deepEqual(choose(cands, [{ runtime: "codex", model: "whatever-it-ran", n: 2 }, { runtime: "claude", model: null, n: 1 }]), { pick: { runtime: "codex", model: null } });
+});
+
+test("the few models offered before anything is typed: the first, the person's most used, those config.json names", () => {
+  const all = [{ runtime: "claude", model: "opus" as string | null }, ...Array.from({ length: 20 }, (_, i) => ({ runtime: "claude", model: `m${i}` as string | null })), { runtime: "codex", model: null }];
+  // As many as one list takes: all of them, as they are.
+  const twelve = all.slice(0, FEW_MOST);
+  assert.equal(few(twelve, [], []), twelve);
+  const used = [
+    { runtime: "claude", model: "m7", n: 2 },
+    { runtime: "codex", model: null, n: 5 },
+    // A model no profile runs any more: not offered.
+    { runtime: "claude", model: "gone", n: 9 },
+  ];
+  const named = [{ runtime: "claude", model: "m3" }, { runtime: "claude", model: "m7" }, { runtime: "claude", model: "not run" }];
+  assert.deepEqual(few(all, used, named).map((m) => m.model), ["opus", null, "m7", "m3"]);
+  // Nobody used any, none named: the first alone, the rest found by typing.
+  assert.deepEqual(few(all, [], []), [all[0]]);
+  assert.equal(few(all, [], all).length, FEW_MOST);
 });

@@ -243,6 +243,8 @@ export type SlackSurfaceOptions = {
   onWorking?: () => boolean | void | Promise<boolean | void>;
   /// The models `/sf` offers, the connect's own first (the hub's `modelsFor`).
   models?: () => ModelChoice[];
+  /// Of those, the few its form lists for `user` before they type anything (the hub's `modelsFirst`): all, when absent.
+  modelsFirst?: (user: string) => ModelChoice[];
 };
 /// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
 /// options are listed with them).
@@ -271,6 +273,7 @@ export class SlackSurface extends ConnectedSurface {
   private standing = new Map<string, Promise<void>>();
   private onWorking: () => boolean | void | Promise<boolean | void>;
   private models: () => ModelChoice[];
+  private modelsFirst: (user: string) => ModelChoice[];
 
   constructor(options: SlackSurfaceOptions) {
     if (!options.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -282,6 +285,7 @@ export class SlackSurface extends ConnectedSurface {
     this.client = options.client ?? new SlackClient();
     this.onWorking = options.onWorking ?? (() => {});
     this.models = options.models ?? (() => []);
+    this.modelsFirst = options.modelsFirst ?? (() => this.models());
   }
 
   protected identify() {
@@ -325,11 +329,12 @@ export class SlackSurface extends ConnectedSurface {
           if (envelope.payload?.command === NEW_CHAT_COMMAND) void this.newChat(envelope.payload).catch((error) => log.error("slack", "failed to open the new chat form", { error: (error as Error).message }));
           return;
         }
-        // The form's model field: the models matching what is typed.
+        // The form's model field: the models matching what is typed; nothing typed, the few the person is offered first.
         if (envelope?.type === "interactive" && envelope.payload?.type === "block_suggestion") {
           let options: Json[] = [];
           try {
-            options = modelOptions(this.models(), text(envelope.payload.value), stationLang());
+            const typed = text(envelope.payload.value);
+            options = modelOptions(typed.trim() === "" ? this.modelsFirst(text(envelope.payload.user?.id)) : this.models(), typed, stationLang());
           } catch (error) {
             log.error("slack", "failed to list the models", { error: (error as Error).message });
           }

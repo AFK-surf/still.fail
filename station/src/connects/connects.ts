@@ -26,6 +26,8 @@ export type ConnectsOptions = {
   receive: (connect: string, event: ChatEvent) => Promise<void>;
   /// The models a person can pick for a new chat with a connect (the hub's `modelsFor`). Absent: none offered.
   models?: (connect: string) => ModelChoice[];
+  /// Of those, the few `user` is offered before they type anything (the hub's `modelsFirst`). Absent: all of them.
+  modelsFirst?: (connect: string, user: string) => ModelChoice[];
   /// Whether the station is in its workspace: only then are connects connected.
   bound: () => boolean;
   /// Whether the station is in a connect's workspace (null: its home one) now: a joined workspace's connects

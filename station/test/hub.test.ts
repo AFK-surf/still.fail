@@ -11,6 +11,7 @@ import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { claudeProject, homesFirst, transcriptPaths } from "../src/read/transcript.ts";
 import { marksDir, stateOf } from "../src/read/transcripts.ts";
+import { hubConfig } from "../src/sessions/config.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { addToThread, autoArchive, archive, archiveBy, archiveChat, bindSingle, configure, deleteSession, newSession, openChat, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { AUTO, MANUAL } from "../src/store/store.ts";
@@ -1098,6 +1099,22 @@ test("a message sent to a model (Slack's /sf) starts a session on that model, on
   await settle();
   assert.equal(r.store.getSession(sessionKey("cl", "C1", n.threadTs)), null);
   assert.match(r.chat.texts().at(-1) ?? "", /sonnet/);
+  await r.close();
+});
+
+test("the few models /sf offers before anything is typed: the connect's own, the person's most used with any connect, those config.json names", async () => {
+  const r = new Rig();
+  // One account that runs the two models config.json names and twenty its check found.
+  r.edit((raw) => (raw.profiles[0] = { ...raw.profiles[0], models: ["opus", "sonnet"] }));
+  r.config = hubConfig(r.raw, r.dir, (id) => (id === "cc" ? Array.from({ length: 20 }, (_, i) => `m${i}`) : null));
+  assert.equal(r.hub.modelsFor("cl").length, 23);
+  const first = (connect: string, user: string) => r.hub.modelsFirst(connect, user).map((m) => `${m.runtime} ${m.model}`);
+  assert.deepEqual(first("cl", "U1"), ["claude opus", "claude sonnet", "codex null"]);
+  await r.accept(say("refactor this", { model: { runtime: "claude", model: "m5" } }));
+  await settle();
+  assert.deepEqual(first("cl", "U1"), ["claude opus", "claude m5", "claude sonnet", "codex null"]);
+  assert.deepEqual(first("gpt", "U1"), ["codex null", "claude m5", "claude opus", "claude sonnet"], "what they ran with another connect counts");
+  assert.deepEqual(first("cl", "U2"), ["claude opus", "claude sonnet", "codex null"], "another person's chats do not");
   await r.close();
 });
 

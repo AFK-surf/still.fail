@@ -630,7 +630,7 @@
   "station.slack.newChatSubmit": "开始",
   "station.slack.newChatCancel": "取消",
   "station.slack.newChatModel": "模型",
-  "station.slack.newChatModelHint": "输入名字搜索",
+  "station.slack.newChatModelHint": "输入名字搜索全部模型",
   "station.slack.newChatDefaultModel": "默认模型",
   "station.slack.newChatWords": "要说的话",
   "station.slack.newChatWordsHint": "会作为新 thread 的第一条消息发到这个频道",

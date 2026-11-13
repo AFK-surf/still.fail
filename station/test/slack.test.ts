@@ -567,7 +567,7 @@ describe("slack", { concurrency: true }, () => {
       { runtime: "claude", model: "claude-sonnet-5-5" },
       { runtime: "codex", model: null },
     ];
-    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5, models: () => models });
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5, models: () => models, modelsFirst: (user) => (user === "U1" ? models.slice(0, 2) : models) });
     const heard: ChatEvent[] = [];
     try {
       await surface.start(async (event) => void heard.push(event));
@@ -583,15 +583,18 @@ describe("slack", { concurrency: true }, () => {
       assert.equal(view.blocks[0].element.type, "external_select");
       assert.equal(view.blocks[0].element.initial_option.text.text, "Claude Code · claude-opus-5-5", "the connect's own model first");
       assert.equal(view.blocks[1].element.initial_value, "fix the build");
-      // Typing in the model field: the matching models, in the acknowledgement.
-      const suggest = (id: string, value: string) => fake.send({ type: "interactive", envelope_id: id, payload: { type: "block_suggestion", action_id: "model", block_id: "model", value, view } });
+      // Typing in the model field: the matching models, in the acknowledgement; nothing typed, the few the person is
+      // offered first, the rest found by typing.
+      const suggest = (id: string, value: string) => fake.send({ type: "interactive", envelope_id: id, payload: { type: "block_suggestion", action_id: "model", block_id: "model", value, user: { id: "U1" }, view } });
       suggest("q1", "sonnet");
       suggest("q2", "");
-      await fake.until("both answered", () => fake.acks.filter((a) => a.envelope_id === "q1" || a.envelope_id === "q2").length === 2);
+      suggest("q3", "codex");
+      await fake.until("all answered", () => fake.acks.filter((a) => ["q1", "q2", "q3"].includes(a.envelope_id)).length === 3);
       const options = (id: string) => fake.acks.find((a) => a.envelope_id === id).payload.options.map((o: any) => o.text.text);
       assert.deepEqual(options("q1"), ["Claude Code · claude-sonnet-5-5"]);
-      assert.equal(options("q2").length, 3);
-      assert.match(options("q2")[2], /默认模型/);
+      assert.deepEqual(options("q2"), ["Claude Code · claude-opus-5-5", "Claude Code · claude-sonnet-5-5"]);
+      assert.equal(options("q3").length, 1);
+      assert.match(options("q3")[0], /默认模型/);
       // Sent with a model no longer offered: said in the form, nothing posted.
       const submit = (id: string, value: string, words: string) =>
         fake.send({

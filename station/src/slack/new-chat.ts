@@ -1,7 +1,8 @@
 // `/sf` (apps.ts NEW_CHAT_COMMAND): a new chat with a model picked. Slack completes nothing typed after a command, so
 // the command opens a form whose model field completes as one types (an external select: Slack asks the station for
-// the options matching what is typed, `block_suggestion`); sent, the bot posts the words in the channel as a new thread
-// and a session on that model takes it (surface.ts `newChat`, `startChat`). All of it over Socket Mode.
+// the options matching what is typed, `block_suggestion`; nothing typed, the few the person is offered first, the
+// hub's `modelsFirst`); sent, the bot posts the words in the channel as a new thread and a session on that model takes
+// it (surface.ts `newChat`, `startChat`). All of it over Socket Mode.
 import { runtimeNamed, runtimeTitle } from "../sessions/config.ts";
 import type { ModelChoice } from "../sessions/chat.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
