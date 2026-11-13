@@ -266,7 +266,7 @@ test "a film zoomed, flung and closed: its flight back sets out where its player
   let last = @sf.player_picture_at(key).unwrap()
   assert_true(last.0 > let_go.0 + 8.0, msg="flung on: \{Repr(let_go)} \{Repr(last)}")
   film_frame_answered(t)
-  assert_true(v.flies && !v.leaving_grab)
+  assert_true(pic_flies(t, v) && !v.leaving_grab)
   let p = zf_pic(t).unwrap()
   assert_true((p.whole.0 - last.0).abs() < 0.5 && (p.whole.2 - last.2).abs() < 0.5, msg="\{Repr(p.whole)} \{Repr(last)}")
 }
@@ -286,7 +286,7 @@ test "a film opened again and closed while it still flies in: back from where th
     t.advance(@ui.frame_period_default)
     t.draw()
   }
-  assert_true(v.flies, msg="still flying in")
+  assert_true(pic_flies(t, v), msg="still flying in")
   let before = zf_pic(t).unwrap()
   t.back()
   assert_true(!v.leaving_grab, msg="no frame waited for")

@@ -235,10 +235,20 @@ pub fn Tree::lift_cut_corners(self : Tree, id : NodeId) -> (Double, Double, Doub
 }
 
 ///|
-/// Whether it is drawn on a flight's way now (View::shared): the new one or the old one's copy.
+/// Whether it is drawn on a flight's way now (View::shared): the new one or the old one's copy. Followed where it is
+/// read tracked (a binding made again as a flight begins or ends: in the change that sets it out, at its end's moment),
+/// so what draws by it (a player hidden while its still flies) goes with the flight, the same whoever reads it first in
+/// a frame; read untracked, as it is then.
 pub fn View::flies(self : View) -> Bool {
+  self.tree.flights_told.get() |> ignore
   guard self.live() is Some(n) else { return false }
   n.lift is Some(_)
+}
+
+///|
+/// A flight began or ended: what follows View::flies told.
+fn Tree::flights_said(self : Tree) -> Unit {
+  self.flights_told.set(self.flights_told.untracked() + 1)
 }
 
 ///|
@@ -862,6 +872,7 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
     stop: fn() {  },
   }
   self.flights.push(f)
+  self.flights_said()
   self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 0.0, from: d.look, stays: None })
   g.lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: d.look, stays: None })
   self.lifted_order()
@@ -947,6 +958,7 @@ fn Tree::fly_stays(
   let top = self.top_node_of(to.at)
   let f : Flying = { node: to, ghost: None, fades: false, start: at, dur: ms, along, top, stop: fn() {  } }
   self.flights.push(f)
+  self.flights_said()
   self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: look, stays: Some(stays) })
   self.lifted_order()
   let stop_way = self.queued(fn() { self.drawn_said() }, fn(t) { self.flight_at(f, t) })
@@ -1019,6 +1031,7 @@ fn Tree::lift_marked(self : Tree, at : Int) -> Unit {
 fn Tree::flight_over(self : Tree, f : Flying) -> Unit {
   guard self.flights.search_by(fn(o) { physical_equal(o, f) }) is Some(i) else { return }
   self.flights.remove(i) |> ignore
+  self.flights_said()
   let stop = f.stop
   f.stop = fn() {  }
   stop()

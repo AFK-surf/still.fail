@@ -287,6 +287,9 @@ pub(all) struct Viewer {
   /// closed back into its thumbnail drawn by the window's tree (Viewer::shut): its picture's node let go of at once,
   /// flown back by the tree (viewer_tree.mbt's image_layer)
   tree_back : @signals.Signal[Bool]
+  /// closing back into a thumbnail a chat's page made as nodes draws, a film: once its frame is grabbed, flown back by
+  /// the window's tree (Viewer::home_with)
+  mut tree_film : Bool
   /// the fingers on its stage by their ids (Drag's `finger`), where each is now; how fast the one moving it goes, by
   /// its events' own moments; what calls off the hold waited for (its picture's menu)
   fingers : Map[Int, (Double, Double)]
@@ -752,6 +755,16 @@ fn tree_thumb_seen(id : String) -> Bool {
 }
 
 ///|
+/// Whether one of id `id` flies now in the window's tree (a picture's or a film's flight from a thumbnail a chat's page
+/// made as nodes draws).
+fn tree_flying(id : String) -> Bool {
+  match @ui.view_tree() {
+    Some(tree) => tree.flight_drawn(id) is Some(_)
+    None => false
+  }
+}
+
+///|
 /// The thumbnail of `id` where it was last laid out, while some of it is on the screen.
 pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
   match (pv_thumbs.get(id), @motion.measured_rect(c, "pv-thumb/" + id)) {
@@ -1035,6 +1048,7 @@ pub fn new_viewer(
     in_tree: false,
     tree_layers: 0,
     tree_back: @signals.signal(false),
+    tree_film: false,
     fingers: Map([]),
     speed: @ui.Velocity::new(),
     hold_off: fn() {  },
@@ -1837,6 +1851,23 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
         self.tree_back.set(true)
         self.fade.go(0.0, @motion.tween(pv_fade_ms, ease=Leave), at=viewer_moment(c))
       }
+      // a video of a chat's page made as nodes, its thumbnail drawn: back into it with the frame it shows, grabbed first
+      // (its player's picture where it is meanwhile), its still where none is to be had; flown back by the window's tree
+      // (viewer_tree.mbt's film_tree_end) as the rest fades
+      (None, Some(KVideo), _) if self.in_tree && self.chat_file() && tree_thumb_seen(self.thumb_id()) => {
+        self.tree_film = true
+        self.fly_to = self.player_place()
+        match self.view() {
+          // (still flying in: back from where that has got to at once, no frame waited for)
+          Some(n) if !tree_flying(self.thumb_id()) && n.here() && n.shown() && !n.grabbing() => {
+            self.grab_set(true)
+            self.left_at = n.position()
+            c.tell("preview-grab", fn() { n.grab_shown(kept_frame_side) })
+          }
+          _ => self.home_with("", viewer_moment(c), (c.width, c.height))
+        }
+        self.fade.go(0.0, @motion.tween(pv_fade_ms, ease=Leave), at=viewer_moment(c))
+      }
       // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
       // ground and the picture stay nearly whole at first, then go
       _ => self.fade.go(0.0, @motion.tween(pv_fade_ms, ease=Leave), at=viewer_moment(c))
@@ -1930,7 +1961,7 @@ pub fn Viewer::left_with_frame(self : Viewer, src : Source, at : Double, window 
     Some(n) => n
     None => {
       self.grab_set(false)
-      self.fly_home(self.still(src), at, window)
+      self.home_with(self.still(src), at, window)
       return
     }
   }
@@ -1943,12 +1974,29 @@ pub fn Viewer::left_with_frame(self : Viewer, src : Source, at : Double, window 
         @ui.add_image(key, jpeg)
         pv_frames[self.id()] = (key, self.left_at)
         pv_frame_tell(self.id())
-        self.fly_home(key, at, window)
+        self.home_with(key, at, window)
       } else {
-        self.fly_home(self.still(src), at, window)
+        self.home_with(self.still(src), at, window)
       }
     }
     None => ()
+  }
+}
+
+///|
+/// Back into its thumbnail with `picture` (a film's frame, else its still): by its own flight (Viewer::fly_home), or
+/// where it closes into a thumbnail a chat's page made as nodes draws (`tree_film`), its still there and let go of, the
+/// window's tree flying it back (viewer_tree.mbt's film_tree_end).
+fn Viewer::home_with(self : Viewer, picture : String, at : Double, window : (Double, Double)) -> Unit {
+  if self.tree_film {
+    self.fly_pic = picture
+    // (from where its player drew its picture last: gone on while its frame was grabbed)
+    if self.player_place() is Some(r) {
+      self.fly_to = Some(r)
+    }
+    self.tree_back.set(true)
+  } else {
+    self.fly_home(picture, at, window)
   }
 }
 

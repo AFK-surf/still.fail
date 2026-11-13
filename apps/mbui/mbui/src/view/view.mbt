@@ -1213,6 +1213,8 @@ pub struct Tree {
   /// what hosts the tree as that ends, where that node still stands (Tree::change_ended, Tree::brought)
   priv images_wanted : Array[(NodeId, String, Double)]
   priv flights : Array[Flying]
+  /// told as a flight begins or ends (View::flies, followed): what draws by whether a node flies made again then
+  priv flights_told : @signals.Signal[Int]
   priv mut lifting : Bool
   /// how many times its nodes' flex places were worked out (a layout of all of it, one laid out to be read, one laid
   /// out alone, one beside another): what Tree::laid_origin sums changes only with one of them
@@ -1494,6 +1496,7 @@ pub fn Tree::new(
     pairs_asked: false,
     images_wanted: [],
     flights: [],
+    flights_told: @signals.signal(0),
     lifting: false,
     laids: 0,
     held_kept: [],
