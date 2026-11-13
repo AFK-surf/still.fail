@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [69f5f47d9](https://github.com/AFK-surf/monoid/commit/69f5f47d96b344772d120abccf93c27f973d028c) mbui app: a chat's page made as nodes colours in ⌘ | 1.95 | 2.62 | 11.3 | 30.79 | 40.57 | 27.44 | 52.45 | 94.21 | 104.9 |
 | [d3881a70c](https://github.com/AFK-surf/monoid/commit/d3881a70c15c55ae0b814fd6e520213d2c43b04f) mbui: a Tester reads the main list of the page in  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 94.03 | 99.98 |
 | [442464dd8](https://github.com/AFK-surf/monoid/commit/442464dd8bc2577494da0d64dd1612692ed7a790) fix(mbui,core-ts): align profile quota layout per  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 93.91 | 98.75 |
 | [b3c2b2bae](https://github.com/AFK-surf/monoid/commit/b3c2b2bae4e12ffd6295fc0904429be99449462c) ci: the station's longest test files one to a slic | 1.95 | 2.62 | 11.29 | 30.78 | 40.53 | 27.42 | 52.42 | 94.13 | 109.53 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0ae3596db](https://github.com/AFK-surf/monoid/commit/0ae3596db79de3bc322c5e2b9ac8b913c8a66ffb) fix(cloud): a deploy takes away MOVING and the for | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.29 | 147.64 |
 | [8ea59093f](https://github.com/AFK-surf/monoid/commit/8ea59093faf39dd54ef0f7ba3dbff07b7ef5f1b7) core: what the views and the store walk for one ch | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.08 | 160.53 |
 | [8a0b79570](https://github.com/AFK-surf/monoid/commit/8a0b795707a9eea9d27486ae0387941c483355e4) app tests: chat_pictures_scrolled_wbtest's bytes b | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 93.14 | 175.17 |
-| [af0bd99e7](https://github.com/AFK-surf/monoid/commit/af0bd99e70a42ce10c951c587e0c467baeef20fd) core tests: the rig tells a change of a station's  | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 94.47 | 186.2 |
