@@ -103,7 +103,14 @@ export function lockChain(entries: Entry[], root: string): Chain {
 /// The lock its entries make, each checked as a station checks it; throws why not. `now` (unix seconds): signing
 /// devices that ran out sign no more.
 export function checkLock(entries: Entry[], now: number): Checked {
-  const out = rules.fold_held_js(entries, now, crypto);
+  return checkedOf(rules.fold_held_js(entries, now, crypto));
+}
+
+/// A lock as the rules give it (`{state, rules}`: a chain folded, `fold_held_js`, or the state a moved workspace's
+/// people's logs make, `state4_js`, src/lock-moved.ts `inForce`, which is in the shape of a folded chain's), the rules'
+/// own object kept for it (`signerIn`), as station/src/cloud/lock.ts `taken` makes a station's of either; throws why
+/// there is none.
+export function checkedOf(out: any): Checked {
   if ("error" in out) return refuse(out.error);
   const t = out.state;
   const s: Checked = {

@@ -57,7 +57,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
-import { OTHERS_MS, answersOf, askPerson, tookOrRefused, deviceText, held as lockHeld, inForceOf, lockSeen, nameOf as workspaceName, signerOf, stateOf } from "./lock.ts";
+import { OTHERS_MS, answersOf, askPerson, tookOrRefused, deviceText, held as lockHeld, inForceOf, lockSeen, movedHere, nameOf as workspaceName, signerOf, stateOf } from "./lock.ts";
 import { workspaceIds } from "./marks.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -164,6 +164,7 @@ function change(inner: Inner, ws: string, f: (h: Held) => void): void {
   const h = structuredClone(held(inner, ws)) as Held;
   f(h);
   inner.data.put("vault", ws, h);
+  keepTook(inner, ws);
   changed(inner, ws);
 }
 
@@ -189,13 +190,18 @@ const view = (inner: Inner, ws: string): J => inner.data.shared({ topic: "worksp
 const stationsOf = (inner: Inner, ws: string): { id: string; name: string }[] => arr(get(view(inner, ws), "stations")).filter((s) => typeof s?.id === "string");
 
 /// The workspace's lock as held here, checked (the same while its head does not move); an error says why it is none.
+/// Where its chain moved, the state in force (views/lock.ts `inForceOf`, the same object while what it is made of
+/// stands), as a station's vaults go by it (station/src/cloud/state.ts `Cloud.locked`): while it waits for the root's
+/// log or its `open`, a state that names nobody (no vault shown, no key given, nobody asked), as a station's then.
 function lockOf(inner: Inner, ws: string): Checked | CoreError {
   const h = inner.data.record("lock", ws);
   const entries = isObject(h) && Array.isArray(h.entries) ? (h.entries as Entry[]) : [];
   const head = isObject(h) ? str(get(h.head, "hash")) : null;
   if (entries.length === 0 || head === null) return new CoreError("vault_needs_lock", t("core-misc.vault.needsLock"));
+  const force = inForceOf(inner, ws);
   // (where the chain moved, off is a statement, not an entry of it: the workspace off, as a chain disabled is)
-  if (inForceOf(inner, ws).said === "off") return new CoreError("vault_needs_lock", t("core-misc.vault.needsLock"));
+  if (force.said === "off") return new CoreError("vault_needs_lock", t("core-misc.vault.needsLock"));
+  if (force.checked !== undefined) return force.checked;
   const m = mem(inner);
   const at = `${head}/${entries.length}`;
   const had = m.checked.get(ws);
@@ -243,6 +249,8 @@ export const waitingChecks = { count: 0 };
 function tookAs(inner: Inner, ws: string, v: Vault): Checked | null {
   const lock = lockOf(inner, ws);
   if (!(lock instanceof CoreError) && trusted(lock, v)) return lock;
+  // (a moved workspace has no line of prefixes: what this device kept of the state that took it)
+  if (movedHere(inner, ws)) return keptFor(inner, ws, v);
   const entries: readonly Entry[] = lockHeld(inner, ws)?.entries ?? [];
   let of = took.get(entries);
   if (!of) took.set(entries, (of = new Map()));
@@ -260,6 +268,80 @@ function tookAs(inner: Inner, ws: string, v: Vault): Checked | null {
   }
   of.set(at, was);
   return was;
+}
+
+/// Where a workspace's chain moved, what of the state in force took each vault's version this device found trusted
+/// (`keepTook`), by vault, then by epoch: the vault's members in that state with their roles, their app devices as it
+/// named them (sign key, own) and the signing keys each had had in it (`signKeys`). That is all `vault_ok_js`,
+/// `cert_ok_js` and `item_ok_js` read of a lock for one vault (rules/src/js/js.mbt `lock_view`: its members, devices
+/// and signKeys; of those, a version's members, its keys' devices, its signer, its owner's, and an item's signer, a
+/// member's device), so the version and its items are taken by it as they were. Kept for the newest version found
+/// trusted of the vault's own epoch, and of an earlier epoch while its last version is kept for items left under it
+/// (`before`): bounded by the vaults held, each by its members and their devices.
+type TookState = { seq: number; sig: string; members: [string, string][]; devices: [string, TookDevice][]; signKeys: [string, string[]][] };
+type TookDevice = { id: string; sub: string; kind: "app"; sign_key?: string; own: boolean };
+type Took = Record<string, Record<string, TookState>>;
+const tookHeld = (inner: Inner, ws: string): Took => {
+  const r = inner.data.record("vaultTook", ws);
+  return isObject(r) && isObject(r.took) ? (r.took as Took) : {};
+};
+
+/// What of `lock` takes vault version `v` (`TookState`).
+function sliceOf(lock: Checked, v: Vault): TookState {
+  const subs = new Set([v.owner, ...v.members].filter((m) => lock.members.has(m)));
+  const devices = [...lock.devices.values()].filter((d) => d.kind === "app" && subs.has(d.sub)).sort((a, b) => (a.id < b.id ? -1 : 1));
+  return {
+    seq: v.seq, sig: v.sig?.sig ?? "",
+    members: [...subs].sort().map((m) => [m, lock.members.get(m)!]),
+    devices: devices.map((d) => [d.id, { id: d.id, sub: d.sub, kind: "app", ...(typeof d.sign_key === "string" ? { sign_key: d.sign_key } : {}), own: d.own }]),
+    signKeys: devices.flatMap((d) => (lock.signKeys.has(d.id) ? [[d.id, [...lock.signKeys.get(d.id)!]] as [string, string[]]] : [])),
+  };
+}
+
+/// The lock a kept state is read as: the same object for the same record (`trusted`'s WeakMap rests on it). It names
+/// no passkey, settings or stations, and the rules' own object is not kept for it (nothing asks who signs by it).
+const keptLocks = new WeakMap<TookState, Checked>();
+function keptLock(ws: string, s: TookState): Checked {
+  let c = keptLocks.get(s);
+  if (c === undefined) {
+    c = { ws, head: "", genesis: "", members: new Map(s.members), devices: new Map(s.devices), passkeys: new Map(), signed: new Set(), signKeys: new Map(s.signKeys), origins: [], rp_id: "", disabled: false, cloudKeys: null };
+    keptLocks.set(s, c);
+  }
+  return c;
+}
+
+/// Where the chain moved, the state that took vault version `v` as this device kept it: only for that very version
+/// (its number and signature), never a later one a station gives, and only where it takes it; else none (a device
+/// begun anew since kept none, and holds no key of it either).
+function keptFor(inner: Inner, ws: string, v: Vault): Checked | null {
+  const s = tookHeld(inner, ws)[v.id]?.[String(v.epoch)];
+  if (s === undefined || s.seq !== v.seq || s.sig !== (v.sig?.sig ?? "")) return null;
+  const c = keptLock(ws, s);
+  return trusted(c, v) ? c : null;
+}
+
+/// What of the state in force took each vault version held, kept (`TookState`) where the chain moved: as a version is
+/// first found trusted (the vaults held changed: `change`) and as the state changes while it still is (`vaultCome`,
+/// which runs as it is made anew, whatever made it so); never as a topic is answered. A version the state takes no
+/// more keeps what was kept of it; a state that waits (naming nobody) or is off changes nothing kept.
+function keepTook(inner: Inner, ws: string): void {
+  if (!movedHere(inner, ws)) return;
+  const lock = lockOf(inner, ws);
+  const h = held(inner, ws);
+  const was = tookHeld(inner, ws);
+  const next: Took = {};
+  for (const v of Object.values(h.vaults)) {
+    if (v.deleted) continue;
+    const keep: Record<string, TookState> = {};
+    for (const [e, s] of Object.entries(was[v.id] ?? {})) if (e === String(v.epoch) || h.before?.[v.id]?.[e] !== undefined) keep[e] = s;
+    if (!(lock instanceof CoreError) && trusted(lock, v)) {
+      const s = sliceOf(lock, v);
+      const had = keep[String(v.epoch)];
+      keep[String(v.epoch)] = had !== undefined && JSON.stringify(had) === JSON.stringify(s) ? had : s;
+    }
+    if (Object.keys(keep).length > 0) next[v.id] = keep;
+  }
+  if (JSON.stringify(next) !== JSON.stringify(was)) inner.data.put("vaultTook", ws, { took: next });
 }
 
 /// A vault waiting to be keyed anew: the lock as it stood when it last took version `v` (`tookAs`), where the lock as
@@ -848,6 +930,8 @@ export function askAnswers(inner: Inner, ws: string, asks: { request: string; sa
 export function vaultCome(inner: Inner, ws: string): void {
   // A version told before the lock that takes it came (this device let in again): held now.
   takeLater(inner, ws);
+  // (where the chain moved: what of the state took each version, as it is now)
+  keepTook(inner, ws);
   timed("vault.come", () => askAnswers(inner, ws, [{ request: "", save: true }]));
   // A device confirmed in the lock whose certificate came first: given the keys unsealed here; the prompts of every
   // workspace follow the lock too.

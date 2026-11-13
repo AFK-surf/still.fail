@@ -11,6 +11,7 @@
 import * as rules from "../../../rules/js/rules.js";
 import { type Entry, canonical } from "./lock.ts";
 import { crypto } from "./personal-lock.ts";
+import { type Checked, checkedOf } from "./vault/lock-check.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -144,7 +145,10 @@ export function lackingOf(ws: string, chains: Iterable<readonly [string, readonl
 /// said here yet (no `open` or `off` in force, the root's log not kept): nobody and nothing. `settings`: the root's
 /// newest `open`'s, where moved and said.
 export type Settings = { origins: string[]; rp_id: string; cloud_keys: unknown };
-export type InForce = { said: "chain" | "on" | "off" | "waiting"; root: string | null; f: Folded; settings?: Settings };
+/// `checked`, where moved: the same state as the rules give it for the vaults (vault/lock-check.ts `checkedOf`), as a
+/// station's vaults go by it (station/src/cloud/state.ts `Cloud.locked`); `waiting`'s names nobody, as a station's
+/// does then.
+export type InForce = { said: "chain" | "on" | "off" | "waiting"; root: string | null; f: Folded; settings?: Settings; checked?: Checked };
 
 /// How far ahead of this device's clock a web device's `at` may be and still count (rules/src/lock/state4.mbt
 /// `web_skew_secs`, station/src/cloud/state.ts WEB_SKEW).
@@ -183,7 +187,7 @@ export function inForce(ws: string, entries: readonly Entry[], chains: ReadonlyM
   const now = Math.floor(nowMs / 1000);
   const out = rules.state4_js(ws, root, [...chains.values()], bodies, now, crypto) as J;
   // (a state the rules cannot make of what is kept is none: nobody is listed)
-  if ("error" in out || (out.on !== "on" && out.on !== "off")) return { said: "waiting", root, f: none() };
+  if ("error" in out || (out.on !== "on" && out.on !== "off")) return { said: "waiting", root, f: none(), checked: checkedOf(rules.state4_js(ws, root, [], [], now, crypto)) };
   const s = out.state as J;
   const f = none();
   f.disabled = out.on === "off";
@@ -217,5 +221,5 @@ export function inForce(ws: string, entries: readonly Entry[], chains: ReadonlyM
     }
     for (const [id, t] of at) if (f.persons.get(f.devices.get(id)?.sub) === g) f.added.set(id, t);
   }
-  return { said: f.disabled ? "off" : "on", root, f, settings: { origins: arr(s.origins).map(String), rp_id: String(s.rp_id ?? ""), cloud_keys: s.cloud_keys ?? null } };
+  return { said: f.disabled ? "off" : "on", root, f, settings: { origins: arr(s.origins).map(String), rp_id: String(s.rp_id ?? ""), cloud_keys: s.cloud_keys ?? null }, checked: checkedOf(out) };
 }
