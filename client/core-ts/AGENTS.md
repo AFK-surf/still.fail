@@ -174,10 +174,16 @@ another; the accounts' list's merge across stations and its refills.
   taken once one of those took entry and body, else pending, waiting for those. Said so now: a role, a member out, a
   station in (`joinStation`) or out, off and on again (the root's person alone, `lock_root_only`). Adding a member,
   approving a device or a web page, renewing one, `addStation` and `admit` need another device's part and still answer
-  `lock_moved`. One that lost its place is signed again as the model's `resign` does (`again=batch`): with the seed in
-  hand, judged with the others lost with it in the order made by what its body is about (personal-lock.ts `#how`), the
-  same body where its `prev` still stands before it, else one made anew (views/lock.ts `restated`); meanwhile told as
-  not in effect. `test/lock-statements-made.test.ts` holds the bodies and the take-over to the model.
+  `lock_moved`. One that lost its place is signed again as the model's `resign` does (`again=batch`), only with the
+  seed in hand, never asking for it: judged with the others lost with it in the order made by what its body is about
+  (`src/personal-lock.ts` `#how`), the same body where its `prev` still stands before it, else one made anew
+  (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,
+  as `lockAsked` is), told as not in effect. One pending whose act's cloud write then fails is dropped and its bodies
+  let go of, as a pending chain entry is (`dropStated`); one taken stays. Its row is on its own workspace's lock topic
+  alone. Turning a moved workspace off asks twice (2026-11-13, the lead's: two asks taken over secrets left sealed
+  under a lock that is off): the person's own secrets opened first (the box key's ask), then `off` signed (their own
+  lock's), the secrets written to the plain library after; one ask for both needs the host to open two sealed values
+  under one prompt, not built. `test/lock-statements-made.test.ts` holds the bodies and the take-over to the model.
 - The cloud's taking an entry never counts (2026-11-12): what no station took nor refused by the call's wait
   (ASKED_MS; a background signer's, TAKEN_MS) is pending (`src/lock-pending.ts`), kept on the device beside the lock
   held and never on it, shown on the lock's topic as not in effect, and brought to the stations as one is next read
