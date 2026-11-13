@@ -223,9 +223,12 @@ for t in $targets; do
     # (kept_rows_kinds' four by count put three of its longest (中屏 read out, both scrolled) in one run, 166-233 s at 120 a
     # second alone, app 3/4 at 120 fps part 2/2 226-247 s of its 5 minutes, main e1c758fc 42939211803, mbui-chooser-node
     # 42940297713, 2026-11-11: those three a run each, @2@3@4@5@8, the last run still 8-11 on the second)
+    # (send_steady's in three, at its tests 1 and 2: it walks its frames itself, 48, 50 and 51 sends at as many paces,
+    # 151-221 s in one process at the default rate, the longest run of app 4/4's 230 s of its 5 minutes, its pages
+    # ended before it, ci/default-rate-others-reckoned 43344761305, 2026-11-13; at a rate it returns at once)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
-      src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2)
+      src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2 src/sfapp/send_steady_wbtest.mbt:@1@2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -352,7 +355,15 @@ for t in $targets; do
           # second is reckoned 150, as at 60 for what runs beside its pages, and the third 500: by the table some 70 s
           # of the second's pages at each rate go to the third's program and the fourth's)
           24 | 7) specs="4,4,300,2 4,4,150,2 1,4,500,2 4,4,120,1" ;;
-          *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
+          # (at the default rate each group's other runs reckoned as they now run, branch pushes of 2026-11-13
+          # (mbui-chat-made-always 43343545286): the first's real_size half 190 s and preview_tree's halves 61 and 97
+          # beside its pages, some 350 s of its cores where they were reckoned 80, its pages 215-229 s, app 1/4 209-242 s
+          # of its 5 minutes; the second's sweeps some 210, the third's kept_rows five some 390, the fourth's
+          # real_size half 42 and send_steady's three (above) some 220. The third's reckoned 500, not its 390: on one
+          # program its pages are its job. By the table the first's pages go from 623 s to 485, the second's from 351
+          # to 417 (on two programs, 117-131 s of 351 before), the third's from 167 to 140, the fourth's from 720 to
+          # 668 beside send_steady's three)
+          *) specs="4,4,350,1 2,4,210,1 1,4,500,1 4,4,150,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
@@ -457,6 +468,8 @@ for t in $targets; do
       # 54-124 s, main 85413543 42736997391, station-conversations-survive 42739107408, 2026-11-10)
       "src/sfapp/preview_tree_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "" | 60) echo 1 ;; *) echo 4 ;; esac ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
+      # (send_steady's three on the fourth, beside its pages on its four cores: the deal reckons them there)
+      "src/sfapp/send_steady_wbtest.mbt "*) echo 4 ;;
       "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
