@@ -120,6 +120,8 @@ function d4Of(c: Cloud): D4 | string {
   return { on: "on", settings: canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys }), members, stations: [...s.stations.keys()].sort() };
 }
 
+const looked = new WeakMap<World4, Map<string, string>>();
+
 /// Every keeper of `w` that goes by a root, compared at `at`: each station, and each device too, stood for by a station
 /// given what it keeps (a device keeps a workspace as a station does: the model's keepers are both); `extra`, bodies
 /// offered there that no keeper keeps (M2's).
@@ -127,6 +129,11 @@ export function stations4(o: Out, w: World4, at: string, r: Rng, extra: Body[] =
   for (const h of w.holders) {
     for (const [ws, root] of w.pinsOf(h)) {
       if (!root) continue;
+      // (a keeper nothing came to since it was last compared, by the same clock: compared already)
+      const was = (looked.get(w) ?? looked.set(w, new Map()).get(w)!);
+      const word = `${h.ver}|${root}|${w.clock(h)}|${w.x.order.length}|${extra.length}|${w.x.old.get(h)?.active.length ?? -1}`;
+      if (was.get(`${h.name}|${ws}`) === word) continue;
+      was.set(`${h.name}|${ws}`, word);
       o.stations++;
       o.moved++;
       const where = `${at}, ${h.name}, ${ws === WS ? "W1" : "W2"}`;
