@@ -6,8 +6,9 @@
 // view's) while it shows, its page showing (page_shows_lent) and the app shown: asked as all three come to hold, stopped
 // as one stops holding or the node is let go (a page's list makes a block only while it shows and lets it go as it
 // leaves: scrolled off, the card goes); nothing worked out frame by frame (the old view's peeks_built, peeks_frame,
-// peeks_settle pass a node's Peek by). Not here yet: an Android device's video (H.264 alone): the window's tree has no
-// node that draws a @ui.Stream, so a card made as nodes asks JPEG alone, and such a device's card shows its mark.
+// peeks_settle pass a node's Peek by). An Android device's (H.264 alone, where the host decodes it) is its Peek's
+// Stream, drawn in the card by a stream node (ui's stream) the Peek closes itself (peek_drop_video: as the card leaves
+// sight, and past video_peeks_most).
 
 ///|
 /// Whether the page what is made in it is on shows (a chat's page made as nodes lends it to its rows:
@@ -212,13 +213,14 @@ fn screen_peek_card_node(
 
 ///|
 /// The screen `screen` of `station` live in its card (screen_peek's) in `v`, its preview the card's own (`key`: its
-/// Peek in `peeks`, held by this node: Peek's `made`): asked (JPEG alone: no node draws a video yet) while the node is,
+/// Peek in `peeks`, held by this node: Peek's `made`): asked (JPEG, and H.264 where the host decodes it) while the node is,
 /// the page it is on shows (page_shows_lent) and the app is shown, stopped as one of them stops holding, and as the node
 /// is let go, its pictures let go with it and its Peek taken out of `peeks`. Each frame that comes acknowledged
 /// peek_ms after the one before (the first at once), at its moment; ended (refused, or no longer previewed) while it is
 /// wanted, asked again peek_again_ms on. Its mark till a picture comes; the newest picture decoded filling it, cropped
-/// from the top, a newer one drawn over it once decoded and the older let go of then. A browser's 16:10; another
-/// screen's as its picture is, its listed size till one is decoded, within peek_ratio_least and peek_ratio_most.
+/// from the top, a newer one drawn over it once decoded and the older let go of then; a video's decoder over them all,
+/// filling it the same way (nothing of it drawn till a frame shows). A browser's 16:10; another screen's as its picture
+/// is (its video's, once one shows), its listed size till one is decoded, within peek_ratio_least and peek_ratio_most.
 fn screen_peek_node(
   v : @view.View,
   src : Source,
@@ -237,7 +239,7 @@ fn screen_peek_node(
   v.reacts(fn() { shows() && @ui.app_visible() }, fn(want) {
     if want {
       if p.run == PeekOff {
-        peek_start(src, p, video=false)
+        peek_start(src, p)
       }
     } else if p.run != PeekOff {
       peek_stop(src, p)
@@ -252,7 +254,7 @@ fn screen_peek_node(
       v.cause_at() + peek_again_ms,
       fn() {
         if p.run == PeekEnded && p.view == view && @signals.untracked(fn() { shows() && @ui.app_visible() }) {
-          peek_start(src, p, video=false)
+          peek_start(src, p)
         }
       },
       later=true,
@@ -325,7 +327,14 @@ fn screen_peek_node(
       By(fn() {
         guard card() is Some(k) else { return peek_ratio }
         let at = newest()
-        let natural = if at >= 0 {
+        // (a video's picture, once one shows, as the old view's: its size what it is told with its frames)
+        let video = match p.stream {
+          Some(st) if st.shown_any() => st.size()
+          _ => None
+        }
+        let natural = if video is Some((w, h)) && h > 0 {
+          w.to_double() / h.to_double()
+        } else if at >= 0 {
           match @ui.image_natural(p.pictures[at]) {
             Some((w, h)) if h > 0.0 => w / h
             _ => 0.0
@@ -364,6 +373,25 @@ fn screen_peek_node(
         .image(By(fn() { Some((k.get(), "", peek_size.to_int())) }))
         .image_covers_at(Is(Some(0.0)))
         |> ignore
+      },
+      at_once=true,
+    )
+    // (its video's decoder, while it has one, over them all: drawn as each frame shows; closed by the Peek itself, as the
+    // card leaves sight or the app's videos are past video_peeks_most, not by the node)
+    f.each(
+      fn() {
+        p.told.get() |> ignore
+        match p.stream {
+          Some(st) => [st.id()]
+          None => []
+        }
+      },
+      fn(id) { id },
+      fn(i, id) {
+        let id = @signals.untracked(fn() { id.get() })
+        guard p.stream is Some(st) && st.id() == id else { return }
+        i.over(Is(true)) |> ignore
+        @ui.stream(i, st, fit=FitCoverAt(0.0), closes=false).over(Is(true)) |> ignore
       },
       at_once=true,
     )

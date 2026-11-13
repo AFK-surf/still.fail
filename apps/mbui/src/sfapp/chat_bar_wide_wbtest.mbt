@@ -629,12 +629,15 @@ test "大屏, 中屏: the bar's popovers keep by their buttons as the window cha
       }
       assert_true(b2.0 != b.0, msg="\{win.0}: \{label} moved: \{Repr(b)} \{Repr(b2)}")
       assert_true(wide_bar_under(d2, b2), msg="\{win.0}: \{label}'s popover by it, wider: \{Repr(d2)} \{Repr(b2)}")
-      // (closed by Escape: the focus back where it was as it opened, as the old view's popover gives it (kit's popover:
-      // what had it; the button only where that had it))
+      // (closed by Escape: where the chat's page is made as nodes its bar's popovers are the library's presenters, which
+      // give the focus back to what opened them, the button (decided: the library's rule); on the old page back where it
+      // was as it opened, as the old view's popover gives it (kit's popover: what had it; the button only where that had
+      // it))
       t.key(@ui.key_escape)
       t.run_for(@ui.move_most_ms)
       assert_true(!opened(), msg="\{win.0}: \{label} closed")
-      assert_eq(focused(), had, msg="\{win.0}: the focus back where it was")
+      let back = if @sfbase.chat_page_nodes.get() { Some(label) } else { had }
+      assert_eq(focused(), back, msg="\{win.0}: the focus back where it was")
       // (opened by a key (a fixture's, the system's bars' item): by the button where it is, the window narrower again)
       if which == "info" {
         @sfdesk.open_info_pop()

@@ -613,9 +613,7 @@ fn peek_took_now(src : Source, p : Peek, view : String, value : Json, bytes : By
 
 ///|
 /// The preview of `p` asked for (`screen.view` with `peek`, small: JPEG, and H.264 where the host decodes it).
-/// `video`: H.264 asked too where the host decodes it (not by a card made as nodes: the window's tree has no node that
-/// draws a Stream yet).
-pub fn peek_start(src : Source, p : Peek, video? : Bool = true) -> Unit {
+pub fn peek_start(src : Source, p : Peek) -> Unit {
   peek_views.val += 1
   let view = "mbui-peek-\{peek_views.val}"
   p.view = view
@@ -625,7 +623,7 @@ pub fn peek_start(src : Source, p : Peek, video? : Bool = true) -> Unit {
   p.again = false
   p.codec = "jpeg"
   p.waiting.clear()
-  let codecs : Array[Json] = if video && @ui.h264_here() { ["jpeg", "h264"] } else { ["jpeg"] }
+  let codecs : Array[Json] = if @ui.h264_here() { ["jpeg", "h264"] } else { ["jpeg"] }
   let params : Map[String, Json] = {
     "station": Json::string(p.station),
     "screen": Json::string(p.screen),
