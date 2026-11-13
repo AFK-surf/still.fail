@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a936f7d2a](https://github.com/AFK-surf/monoid/commit/a936f7d2a383aefa92b9a8ead339a0019283f991) mbui: what a page's list has in sight, where a blo | 1.97 | 2.69 | 11.41 | 31 | 40.95 | 27.63 | 52.78 | 95.59 | 177.86 |
 | [a88607818](https://github.com/AFK-surf/monoid/commit/a88607818d6c8539750e1f9e4e9e58497412093f) Streams: a frame decoded unseen, a decoder emptied | 1.97 | 2.69 | 11.4 | 30.98 | 40.91 | 27.6 | 52.73 | 95.8 | 106.62 |
 | [4b1b9dfe2](https://github.com/AFK-surf/monoid/commit/4b1b9dfe287decf26204dd1c4f5250b96bb31255) presets: what a preset names, its chats run with;  | 1.97 | 2.68 | 11.4 | 30.98 | 40.91 | 27.6 | 52.73 | 95.88 | 109.31 |
 | [7487337a0](https://github.com/AFK-surf/monoid/commit/7487337a007fdd4ab164e5e9e32f67781fbc88a4) test(mbui): what the core's answers set moving, he | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.93 | 112.36 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [2f66e50bd](https://github.com/AFK-surf/monoid/commit/2f66e50bd54fb52dd75ae17d40c2a42a979b6dfc) mbui: a long press a cover hands through lands on  | 1.95 | 2.62 | 11.3 | 30.8 | 40.59 | 27.45 | 52.47 | 94.14 | 98.89 |
 | [0b94120f3](https://github.com/AFK-surf/monoid/commit/0b94120f3daa4a73fd10e73ccbda5c4a9279c295) mbui app: a chat's page made as nodes lays its col | 1.95 | 2.62 | 11.3 | 30.79 | 40.57 | 27.44 | 52.47 | 94.39 | 108.48 |
 | [69f5f47d9](https://github.com/AFK-surf/monoid/commit/69f5f47d96b344772d120abccf93c27f973d028c) mbui app: a chat's page made as nodes colours in ⌘ | 1.95 | 2.62 | 11.3 | 30.79 | 40.57 | 27.44 | 52.45 | 94.21 | 104.9 |
-| [d3881a70c](https://github.com/AFK-surf/monoid/commit/d3881a70c15c55ae0b814fd6e520213d2c43b04f) mbui: a Tester reads the main list of the page in  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 94.03 | 99.98 |
