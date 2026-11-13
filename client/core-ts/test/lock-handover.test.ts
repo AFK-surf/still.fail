@@ -22,7 +22,7 @@ import { type Entry as StationEntry, entryHash as stationHash, fold as stationFo
 import { Cloud, personChainsOf, writeState } from "../../../station/src/cloud/state.ts";
 import { wall } from "../../../station/src/ops/fibers.ts";
 import { inLock, lockPartRoute, lockRoute } from "../../../station/src/mesh/serve.ts";
-import { type Dev, type Key, Log, dev, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
+import { type Dev, type Key, Log, bring, dev, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
 import { d4Diff, d4Old } from "../../../station/test/lock-roster4-model.ts";
 import { key, signed as simSigned } from "../../../station/test/lock-world-sim.ts";
 import type { CoreError } from "../src/error.ts";
@@ -120,7 +120,8 @@ async function setUp(o: Opts = {}) {
     writeState(data, { origin: "https://stillfail.test", station: id, workspace: "ws", workspace_name: "W", name: id.slice(0, 4), relay_url: "", relay_urls: [], grant_keys: g.keys, peers: [A, B].map((p, i) => ({ id: p, name: `s${i}` })), revocations: [] } as never);
     const c = new Cloud(data, false);
     c.takeLock(chain as unknown as StationEntry[]);
-    for (const l of [bob, xena]) personChainsOf(c).keep(l.genesis, l.entries, "ws");
+    // (each member's log as their app device brought it to the station, POST /lock/person)
+    for (const l of [bob, xena]) bring(c, l, false, "ws");
     return c;
   };
   const stations = { A: station(A), B: station(B) };
@@ -253,7 +254,7 @@ test("a member with a device that signs and no log of their own: lock_not_ready,
   const bound = w.after(w.r4.app.signer, "person", { sub: "r4", person: w.r4.genesis });
   for (const c of Object.values(w.stations)) {
     c.takeLock([...w.chain] as unknown as StationEntry[]);
-    personChainsOf(c).keep(w.r4.genesis, w.r4.entries, "ws");
+    bring(c, w.r4, false, "ws");
   }
   assert.ok(bound);
   const done = await w.hand();
@@ -330,7 +331,7 @@ test("the chain changed between the statements and the moved: bob's own new devi
     v.after(r7.app.signer, "person", { sub: "r7", person: r7.genesis });
     for (const c of Object.values(v.stations)) {
       c.takeLock([...v.chain] as unknown as StationEntry[]);
-      personChainsOf(c).keep(r7.genesis, r7.entries, "ws");
+      bring(c, r7, false, "ws");
     }
   };
   const more = await v.hand();
@@ -373,7 +374,7 @@ test("the one with only a web page, not said at the move: their first app device
   assert.equal(notedRole(w.inner, "ws", "s1", "r5", "e@x.com"), "admin", "noted with the chain's role");
   const before = w.asked();
   const r5 = new Log("r5");
-  for (const c of Object.values(w.stations)) personChainsOf(c).keep(r5.genesis, r5.entries, "ws");
+  for (const c of Object.values(w.stations)) bring(c, r5, false, "ws");
   const { answer, done } = await w.firstApp("r5", r5);
   assert.deepEqual(answer, { t: "code", workspaces: ["ws"] }, "a code shown");
   assert.equal(done?.error, undefined, done?.error?.message);
@@ -422,8 +423,9 @@ for (const wins of ["bob", "this device"] as const) {
     w.bob.say("member", { sub: "r3", email: "c@x.com", lock: w.xena.genesis, role: "member" }, "ws");
     w.bob.say("station", { key: w.A }, "ws");
     w.bob.say("station", { key: w.B }, "ws");
-    personChainsOf(b).keep(w.bob.genesis, w.bob.entries, "ws");
-    assert.equal(b.takeBodies(null, [...w.bob.bodies.values()]).taken, 5, "B takes bob's five bodies");
+    const [took, said] = bring(b, w.bob, true, "ws");
+    assert.equal(took, 200, JSON.stringify(said));
+    assert.equal((said as { taken?: number }).taken, 5, "B takes bob's five bodies");
     const bobsAt = wins === "this device" ? on(xenas, w.bob.app.signer, "moved", { root: w.bob.genesis }) : on(head, w.bob.app.signer, "moved", { root: w.bob.genesis });
     b.takeLock([...w.chain, ...(wins === "this device" ? [xenas] : []), bobsAt] as unknown as StationEntry[]);
     assert.equal(b.chain(null)?.state?.moved, w.bob.genesis, "B moved to bob's log");

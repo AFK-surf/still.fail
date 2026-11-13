@@ -7,7 +7,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Entry, bodyHash, endpointBytes, entryHash, signedBytes, wsTag } from "../src/cloud/lock.ts";
-import { Cloud, personChainsOf, writeState } from "../src/cloud/state.ts";
+import { Cloud, writeState } from "../src/cloud/state.ts";
+import { lockPartRoute } from "../src/mesh/serve.ts";
 
 export const WS = "01HMOVEDMOVEDMOVEDMOVEDMOV";
 export const WS2 = "01HOTHEROTHEROTHEROTHEROTH";
@@ -115,10 +116,12 @@ export function station(w: World, i = 0, moved = true): Cloud {
   return c;
 }
 
-/// What a device brings a station: its person's log (as heard in the workspace) and the bodies of its statements.
-export function bring(c: Cloud, log: Log, bodies = true, ws = WS) {
-  personChainsOf(c).keep(log.genesis, log.entries, ws);
-  if (bodies) c.takeBodies(null, [...log.bodies.values()].filter((b) => b.ws === ws));
+/// What a device brings a station: its person's log and the bodies of its statements, as its app device brings them
+/// (POST /lock/person on a connection of that device's in `ws`, mesh/serve.ts `lockPartRoute`: the log taken as its
+/// person's, the bodies as the rules take them). Its answer's status and body.
+export function bring(c: Cloud, log: Log, bodies = true, ws = WS): [number, unknown] {
+  const said = { chain: log.entries, ...(bodies ? { bodies: [...log.bodies.values()].filter((b) => b.ws === ws) } : {}) };
+  return lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify(said)), viewerOf(log.sub, log.app, "member", ws) as never);
 }
 
 /// A member's device as a connection of it shows itself: its credential's viewer, its base key's proof of the endpoint.
