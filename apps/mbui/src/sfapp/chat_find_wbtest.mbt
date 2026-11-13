@@ -505,7 +505,8 @@ test "对话目录: a go-to in the chat far from its end keeps where the reader 
 }
 
 ///|
-/// What the last frame drew of `kind` (rect, glyphs…) as frame_export has it: where (x y w h), its colour, its words.
+/// What the last frame drew of `kind` (rect, glyphs…) as frame_export has it: where (x y w h, as much across as its
+/// clip lets be seen), its colour, its words.
 fn outline_drawn(t : @ui.Tester, kind : String) -> Array[(Double, Double, Double, Double, String, String)] {
   t
   .frame_export()
@@ -523,7 +524,17 @@ fn outline_drawn(t : @ui.Tester, kind : String) -> Array[(Double, Double, Double
       Some(i) => l.exact_view(start=i + 1).to_owned().trim_end(chars="\"").to_owned()
       None => ""
     }
-    Some((n(p[1]), n(p[2]), n(p[3]), n(p[4]), p[5], words))
+    // (across, as much of it as its clip lets be seen: a tick drawn shorter than its box, Ctx::cut_across_by)
+    let (x, w) = match p.iter().find_first(fn(f) { f.has_prefix("clip=") }) {
+      Some(f) => {
+        let c = f.split("=").collect()[1].split(",").map(fn(v) { n(v.to_owned()) }).collect()
+        let x0 = if c[0] > n(p[1]) { c[0] } else { n(p[1]) }
+        let x1 = if c[2] < n(p[1]) + n(p[3]) { c[2] } else { n(p[1]) + n(p[3]) }
+        if c[2] > c[0] { (x0, if x1 > x0 { x1 - x0 } else { 0.0 }) } else { (n(p[1]), n(p[3])) }
+      }
+      None => (n(p[1]), n(p[3]))
+    }
+    Some((x, n(p[2]), w, n(p[4]), p[5], words))
   })
 }
 
@@ -1135,6 +1146,52 @@ test "对话目录: a tick of the rail pointed at says its message's first line 
   t.click(Button, label="对话目录")
   t.run_for(@ui.move_most_ms)
   assert_true(outline_panel(t) is Some(_))
+  assert_eq(outline_faults(t), [])
+}
+
+///|
+test "对话目录: a tick of the rail pointed at grows to 20 in the ink, the two either side of it reaching out less the further they are, over dur_ms; all back once the pointer leaves" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  let rail = outline_buttons(t)[0]
+  let (rx, ry, rw, _) = rail
+  let rest = outline_ticks(t, rail)
+  let ys = outline_drawn(t, "rect").filter(fn(r) {
+    r.0 >= rx && r.0 + r.2 <= rx + rw + 0.5 && r.1 >= ry && r.3 <= 2.5
+  }).map(fn(r) { r.1 })
+  ys.sort()
+  let p = @sf.theme().p
+  // (the 6th: 4 said from the reader's, none of them it)
+  t.move_to(rx + rw / 2.0, ys[5] + 1.0)
+  t.run_for(@sf.dur_ms)
+  let hot = outline_ticks(t, rail)
+  assert_eq(hot.length(), rest.length(), msg="\{Repr(hot)}")
+  assert_eq(hot[5], (20.0, outline_hex(p.text)), msg="\{Repr(hot)}")
+  // (the next ones out longer than they rest, the nearer the longer, and darker; the third out as it rests)
+  for d in [1, 2] {
+    for i in [5 - d, 5 + d] {
+      assert_true(hot[i].0 > rest[i].0 && hot[i].0 < 20.0, msg="\{i}: \{Repr(hot)}")
+      assert_true(hot[i].1 != rest[i].1, msg="\{i}: \{Repr(hot)}")
+    }
+  }
+  assert_true(hot[4].0 - rest[4].0 > hot[3].0 - rest[3].0, msg="\{Repr(hot)}")
+  assert_eq(hot[2], rest[2], msg="\{Repr(hot)}")
+  assert_eq(hot[8], rest[8], msg="\{Repr(hot)}")
+  // (in the gap between two days: the tick over it or under it pointed at, the rail never all at rest on the way)
+  let gap = ys.mapi(fn(i, y) { (i, y) }).iter().find_first(fn(x) { x.0 > 0 && x.1 - ys[x.0 - 1] > 8.0 }).unwrap().0
+  t.move_to(rx + rw / 2.0, (ys[gap - 1] + ys[gap]) / 2.0 + 1.0)
+  t.run_for(@sf.dur_ms)
+  let between = outline_ticks(t, rail)
+  assert_true(between[gap - 1].0 == 20.0 || between[gap].0 == 20.0, msg="\{gap}: \{Repr(between)}")
+  // (half way, part of the way)
+  t.move_to(rx + rw / 2.0, ys[5] + 1.0)
+  t.run_for(@sf.dur_ms)
+  t.move_to(rx - 200.0, ys[5] + 1.0)
+  t.run_for(@sf.dur_ms / 2.0)
+  let half = outline_ticks(t, rail)
+  assert_true(half[5].0 < 20.0 && half[5].0 > rest[5].0, msg="\{Repr(half)}")
+  t.run_for(@sf.dur_ms)
+  assert_eq(outline_ticks(t, rail), rest)
   assert_eq(outline_faults(t), [])
 }
 

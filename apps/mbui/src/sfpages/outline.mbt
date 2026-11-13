@@ -12,7 +12,8 @@
 //
 // What opens it, on the chat's page (chat_list.mbt, the old view's, beside the way to the newest): on a page whose
 // column leaves room at its right (rail_fits), a rail of ticks there, one for each person's message, as long as its
-// turn, the reader's longest and in the ink, a tick pointed at saying its message's first line; on a narrower one a round button over the way to the newest, coming and going with it.
+// turn, the reader's longest and in the ink, a tick pointed at longer still and saying its message's first line, the
+// ticks round it reaching out towards it as a dock's icons do; on a narrower one a round button over the way to the newest, coming and going with it.
 // ⌘G (chat.outline) opens it from either, its field taking the keys; ⌥⇧↑ and ⌥⇧↓ go to the message a person said
 // before and after the reader's.
 
@@ -749,6 +750,25 @@ let tick_most : Double = @ui.Space::px(S3)
 let tick_long : Double = @ui.Space::px(S4)
 
 ///|
+/// How long a tick is at most: the one pointed at, S5 (20); the ones round it reach out towards it, less the further
+/// they are (tick_reach_of), as a dock's icons do round the pointer.
+let tick_reach : Double = @ui.Space::px(S5)
+
+///|
+/// How far the `i`th tick reaches out from its own length to tick_reach while the `hot`th is pointed at (-1: none):
+/// all the way for that one, then 0.55, 0.25 for the next ones on each side, none further.
+fn tick_reach_of(hot : Int, i : Int) -> Double {
+  guard hot >= 0 else { return 0.0 }
+  let d = if i > hot { i - hot } else { hot - i }
+  match d {
+    0 => 1.0
+    1 => 0.55
+    2 => 0.25
+    _ => 0.0
+  }
+}
+
+///|
 /// How many doublings of a turn's messages reach tick_most (32).
 let tick_steps : Int = 5
 
@@ -934,23 +954,62 @@ fn outline_rail(
       let b = c.box(style=rail_press, id~, fn() {
         // (a day's ticks together, the days further apart; the map's, one group; each in a room as tall as it and the
         // gap to the next, the press's width, for the pointer to rest on)
+        // (the tick pointed at, by its place among them all: the ones round it reach out to it)
+        let count = shown.fold(init=0, fn(a, g) { a + g.length() })
+        let mut hot = -1
+        for i in 0..<count {
+          if c.hovered(c.id("chat-outline-tick/" + i.to_string())) {
+            hot = i
+          }
+        }
+        let p = @sf.theme().p
         let n = Ref(0)
-        for ticks in shown {
+        for g, ticks in shown {
           c.box(style=rail_day, fn() {
-            for tick in ticks {
-              let tid = c.id("chat-outline-tick/" + n.val.to_string())
+            for j, tick in ticks {
+              let i = n.val
+              let tid = c.id("chat-outline-tick/" + i.to_string())
               n.val += 1
-              // (only pointed at, for its tip: a press there the rail's)
-              c.box(style=tick_room, id=tid, taps=false, points=true, fn() {
-                let line = if tick.reader {
-                  @ui.style(w=Fixed(tick_long), h=Fixed(tick_thick), bg=Fg)
+              let rest = if tick.reader { tick_long } else { tick_w(tick.turn) }
+              let ink_at = fn(reach : Double) {
+                if tick.reader {
+                  p.text
                 } else {
-                  @ui.style(w=Fixed(tick_w(tick.turn)), h=Fixed(tick_thick), bg=Line)
+                  @sf.mix_seen(p.text, reach, p.line)
                 }
-                c.box(style=line, fn() {  }) |> ignore
+              }
+              // (how far it reaches out to the one pointed at: told as the pointer moves, eased as it is painted)
+              let reach = @motion.told(
+                c,
+                "outline/tick/" + k + "/" + i.to_string(),
+                tick_reach_of(hot, i),
+                spec=@motion.tween(@sf.dur_ms, ease=Out),
+              )
+              // (only pointed at, for its tip: a press there the rail's)
+              // (the gap between two days split between the rooms either side of it, so a pointer going down the rail
+              // is always on a tick)
+              let after = j == ticks.length() - 1 && g < shown.length() - 1
+              let before = j == 0 && g > 0
+              let room = match (before, after) {
+                (true, true) => tick_room_alone
+                (true, false) => tick_room_first
+                (false, true) => tick_room_last
+                (false, false) => tick_room
+              }
+              c.box(style=room, id=tid, taps=false, points=true, fn() {
+                // (as long as it reaches at most, drawn only at its right as long as it is now)
+                let line = c.box(
+                  style=@ui.style(w=Fixed(tick_reach), h=Fixed(tick_thick), bg=Data(ink_at(reach.target()))),
+                  fn() {  },
+                )
+                c.cut_across_by(line, fn() {
+                  let w = rest + (tick_reach - rest) * reach.get(c)
+                  (tick_reach - w, tick_reach)
+                })
+                c.bg_by(line, fn() { ink_at(reach.get(c)) })
               })
               |> ignore
-              if c.hovered(tid) {
+              if i == hot {
                 pointed.val = Some((tid, tick.at))
               }
             }
@@ -998,7 +1057,6 @@ let rail_press : @ui.Style = @ui.style(
   justify=JCenter,
   py=rail_pad,
   pr=rail_pad,
-  gap=tick_day_gap,
 )
 
 ///|
@@ -1010,6 +1068,20 @@ let rail_day : @ui.Style = @ui.css("w=Full align=AEnd")
 /// A tick's room: across the press, half the gap over it and under it (tick_gap), the tick at its right.
 // kept across runs: a value (no field of it changes)
 let tick_room : @ui.Style = @ui.css("w=Full py=S0_5 align=AEnd")
+
+///|
+/// The rooms of a day's first tick, its last and its only one: half of tick_day_gap more over it, under it, or both
+/// (S2 = S0_5 + S3 / 2), the days as far apart as ever, the gap a tick's room for the pointer.
+// kept across runs: a value (no field of it changes)
+let tick_room_first : @ui.Style = @ui.css("w=Full pt=S2 pb=S0_5 align=AEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tick_room_last : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S2 align=AEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tick_room_alone : @ui.Style = @ui.css("w=Full py=S2 align=AEnd")
 
 ///|
 /// The round button to chat `r`'s outline (its thread `thread`), over the way to the newest (`lift` over the foot,
