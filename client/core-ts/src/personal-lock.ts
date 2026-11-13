@@ -604,8 +604,8 @@ export class PersonalLock {
   /// approved on the chain (the key that signed it is one the lock records for a device on it, `signKeys`, as
   /// `#putApproved` matches the device that approved one), never one an owner or admin put in there for them, which the
   /// person's lock would then let in to every moved workspace of theirs. Each with the chain's id, label and `exp`
-  /// (none later, and none past WEB_DEVICE_SECS from now, as the rules bound one), not run out by this device's clock,
-  /// where the lock does not hold it already with an `exp` as late, and not one the lock took off (its last word of the
+  /// (none later, and none past WEB_DEVICE_SECS from now, as the rules bound one; `webs` gives none run out), where
+  /// the lock does not hold it already with an `exp` as late, and not one the lock took off (its last word of the
   /// id a `web.remove`): taken off, it stays off. One entry a page whatever number of chains name it, at most
   /// WEBS_AT_ONCE at a time. Nothing more is asked of the person; a failure only leaves the rest for the next time.
   #addWebs(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
@@ -628,7 +628,7 @@ export class PersonalLock {
         if (n >= WEBS_AT_ONCE) return;
         const exp = Math.min(w.exp, at + WEB_DEVICE_SECS);
         const was = said.get(w.id);
-        if (!signers.has(w.by) || !WEB_ID.test(w.id) || exp <= at || was === "off" || (was !== undefined && was >= exp)) continue;
+        if (!signers.has(w.by) || !WEB_ID.test(w.id) || was === "off" || (was !== undefined && was >= exp)) continue;
         let failed = false;
         const put = this.#append(sub, seed, "web", { id: w.id, label: w.label, exp }, true, within);
         yield* Effect.ignore(Effect.tapError(put, () => Effect.sync(() => void (failed = true))), { log: "Unhandled", message: "personal lock: a web page a workspace's chain names said" });

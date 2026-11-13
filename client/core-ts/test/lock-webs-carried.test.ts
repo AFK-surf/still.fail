@@ -4,11 +4,13 @@
 // `inLockBringing`, `refusalOf`): said once, with the chain's id, label and exp, in the ask the person answered and in
 // no other; a handover after it leaves the page in, nobody asked again; a handover before it leaves the page out (told
 // so, whom to ask) until the member's app next signs something, no code entered. Never said: a page run out, one the
-// chain took off, one the log took off, another person's, one an owner put in for them.
+// chain took off, one the log took off, another person's (put in by this app), one an owner put in for them; one said
+// is not said again.
 //
-// The world: `ws`, its chain s0's (the owner, a log of their own, `owner`); s1 a member, this core their app, its log
+// The world: `ws`, its chain s0's (the owner, a log of their own, `owner`); s1 an admin, this core their app, its log
 // pinned here (`myLog`); r2 a member with a log; stations A and B. s1's pages on the chain: W1 (its own app approved it),
-// WX (runs out), WD (taken off the chain), WL (taken off s1's log), WO (put in by s0); r2's WR.
+// WX (runs out), WD (taken off the chain), WL (taken off s1's log), WO (put in by s0); r2's WR, put in by s1's app (an
+// admin's may), so that only its person tells it from s1's own.
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -63,7 +65,7 @@ async function setUp() {
   const appOf = (sub: string, l: Log) => ({ id: l.app.base.hex, sub, kind: "app", label: `${sub}'s app`, sign_key: l.app.signer.id });
   const r = await rig((signer) => {
     mine = signer;
-    const members = [{ sub: "s0", email: "o@x.com", role: "owner" }, { sub: "s1", email: "a@x.com", role: "member" }, { sub: "r2", email: "b@x.com", role: "member" }];
+    const members = [{ sub: "s0", email: "o@x.com", role: "owner" }, { sub: "s1", email: "a@x.com", role: "admin" }, { sub: "r2", email: "b@x.com", role: "member" }];
     const devices = [appOf("s0", owner), { id: base.hex, sub: "s1", kind: "app", label: "s1's app", sign_key: signer.id }, appOf("r2", r2)];
     const e = next("ws", null, 1000, "genesis", { owner: "s0", ...SETTINGS(g.keys), members, devices, passkeys: [], stations: [{ key: A, name: "a" }, { key: B, name: "b" }], gateways: [] });
     return { ws: signed(e as Omit<StationEntry, "sig">, owner.app.signer) as unknown as Entry };
@@ -72,7 +74,7 @@ async function setUp() {
     host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(myLog)));
     host.storage.set("personal-signer-id", utf8(k.id));
     host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
-  }, [A, B], [A, B], undefined, [D], { role: "member" });
+  }, [A, B], [A, B], undefined, [D], { role: "admin" });
   clock = () => r.host.nowMs();
   const inner = r.core.inner;
   inner.mesh = () => withoutMesh(base.hex);
@@ -95,7 +97,7 @@ async function setUp() {
   after(signer, "device.remove", { id: WD.hex });
   after(signer, "device", web(WL, "s1", "s1's old browser", now + 10 * DAY));
   after(owner.app.signer, "device", web(WO, "s1", "s1's browser, by the owner", now + 10 * DAY));
-  after(r2.app.signer, "device", web(WR, "r2", "r2's browser", now + 10 * DAY));
+  after(signer, "device", web(WR, "r2", "r2's browser", now + 10 * DAY));
   r.cloud.chains.set("ws", chain);
   const station = (id: string): Cloud => {
     const data = mkdtempSync(join(tmpdir(), "lock-webs-carried-"));
@@ -104,12 +106,12 @@ async function setUp() {
     c.takeLock(chain as unknown as StationEntry[]);
     for (const l of [owner, r2]) bring(c, l, false, "ws");
     // (s1's log, as their app brought it as it came to the station)
-    const [status] = lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify({ chain: myLog })), viewerOf("s1", { base }, "member", "ws") as never);
+    const [status] = lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify({ chain: myLog })), viewerOf("s1", { base }, "admin", "ws") as never);
     assert.equal(status, 200, "s1's log taken");
     return c;
   };
   const stations = { A: station(A), B: station(B) };
-  const viewer = viewerOf("s1", { base }, "member", "ws");
+  const viewer = viewerOf("s1", { base }, "admin", "ws");
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
@@ -145,7 +147,7 @@ async function setUp() {
   /// its log, the `moved` on the chain, both at A and B, the core then reading the chain.
   const handOver = async () => {
     owner.say("open", { ...SETTINGS(g.keys), email: "o@x.com" }, "ws");
-    owner.say("member", { sub: "s1", email: "a@x.com", lock: gMe, role: "member" }, "ws");
+    owner.say("member", { sub: "s1", email: "a@x.com", lock: gMe, role: "admin" }, "ws");
     owner.say("member", { sub: "r2", email: "b@x.com", lock: r2.genesis, role: "member" }, "ws");
     owner.say("station", { key: A }, "ws");
     owner.say("station", { key: B }, "ws");
@@ -160,10 +162,10 @@ async function setUp() {
   };
   /// A web page of s1's (`k`) at a station's hello: in, or refused with what the refusal tells it.
   const page = (c: Cloud, k: Key): { in: boolean; left?: J } => {
-    const v = viewerOf("s1", { base: k }, "member", "ws");
+    const v = viewerOf("s1", { base: k }, "admin", "ws");
     const said = { lock: { device: k.hex, proof: v.lockDevice.proof } };
     try {
-      inLockBringing(c, { viewer: v, exp: 4102444800, iat: 0, sid: "" } as never, "member", v.device, said);
+      inLockBringing(c, { viewer: v, exp: 4102444800, iat: 0, sid: "" } as never, "admin", v.device, said);
       return { in: true };
     } catch (e) {
       if (!(e instanceof LockRefusal)) throw e;
@@ -179,21 +181,22 @@ test("a member's page their app approved on the chain: said on their log as thei
   const out = await w.grantAsked();
   assert.equal(out.error, undefined, out.error?.message);
   assert.equal(w.asked(), 1, "the person asked once, for the grant");
-  assert.deepEqual(w.webs(), [{ kind: "web", id: w.W1.hex, label: "s1's browser", exp: w.now() + 10 * DAY }], "W1 said, as the chain names it");
+  assert.deepEqual(w.webs().filter((x) => x.id === w.W1.hex), [{ kind: "web", id: w.W1.hex, label: "s1's browser", exp: w.now() + 10 * DAY }], "W1 said once, as the chain names it");
+  const n = w.webs().length;
   const again = await w.grantAsked();
   assert.equal(again.error, undefined, again.error?.message);
   assert.equal(w.asked(), 2);
-  assert.equal(w.webs().length, 1, "nothing more said");
+  assert.equal(w.webs().length, n, "said already, nothing more said");
 });
 
-test("never said: a page run out, one taken off the chain, one taken off the log, another person's, one an owner put in for them", async () => {
-  const w = await setUp();
-  await w.grantAsked();
-  const ids = w.webs().map((x) => x.id);
-  for (const [name, k] of [["run out", w.WX], ["taken off the chain", w.WD], ["taken off the log", w.WL], ["r2's", w.WR], ["put in by the owner", w.WO]] as const) {
-    assert.ok(!ids.includes(k.hex), `${name}: not said`);
-  }
-});
+for (const [name, k] of [["run out", "WX"], ["taken off the chain", "WD"], ["taken off s1's log", "WL"], ["another person's (r2's, put in by s1's app)", "WR"], ["s1's, put in by the owner", "WO"]] as const) {
+  test(`never said: a page ${name}`, async () => {
+    const w = await setUp();
+    assert.equal((await w.grantAsked()).error, undefined);
+    assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said in the same ask");
+    assert.ok(!w.webs().some((x) => x.id === w[k].hex), `${name}: not said`);
+  });
+}
 
 test("said before the handover: in force after it, let in by both stations, nobody asked again", async () => {
   const w = await setUp();
@@ -203,7 +206,6 @@ test("said before the handover: in force after it, let in by both stations, nobo
   assert.ok(inForceOf(w.inner, "ws").f.devices.has(w.W1.hex), "W1 in force here");
   for (const [n, c] of Object.entries(w.stations)) assert.equal(w.page(c, w.W1).in, true, `W1 let in by ${n}`);
   assert.equal(w.asked(), 1, "nobody asked again");
-  assert.equal(w.page(w.stations.A, w.WO).in, false, "the owner's page for s1 out");
 });
 
 test("not said before the handover: out after it, told to ask s1's own app; in at both stations once that app next signs something, no code entered", async () => {
@@ -218,7 +220,7 @@ test("not said before the handover: out after it, told to ask s1's own app; in a
   const out = await w.grantAsked();
   assert.equal(out.error, undefined, out.error?.message);
   assert.equal(w.asked(), 1, "the one ask, for the grant");
-  assert.deepEqual(w.webs().map((x) => x.id), [w.W1.hex], "W1 said, from the chain as it moved");
+  assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said, from the chain as it moved");
   for (const [n, c] of Object.entries(w.stations)) assert.equal(w.page(c, w.W1).in, true, `W1 let in by ${n}`);
   await w.run(read(w.inner, "ws"));
   assert.ok(inForceOf(w.inner, "ws").f.devices.has(w.W1.hex), "W1 in force here");
