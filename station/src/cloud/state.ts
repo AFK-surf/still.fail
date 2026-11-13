@@ -620,59 +620,76 @@ export class Cloud {
     return this.forceOf(ws, l, root).needs;
   }
 
-  /// Who this station's state of `ws` named until a removal came in force (a station by its key, a device by its id or
-  /// signing key), and the bodies each is given of it: the removal's and those along its `prev` chain, nothing else
-  /// (the model's `admitsBefore`, as this station saw it go: kept while it runs).
-  private toldOuts = new Map<string, Map<string, Set<string>>>();
-
-  /// The bodies of `ws` given to `key`, taken out of its state by a removal: none where it was not.
-  toldOut(ws: string | null, key: string): ReadonlySet<string> {
-    return (this.toldOuts ??= new Map()).get(this.idOf(ws))?.get(key) ?? new Set();
+  /// What `ws`'s list says, on or off, where its chain moved (the state made of the bodies, `waiting` where there is
+  /// none yet), else its chain's: whom its bodies and logs are given to (the model's `admits` goes by the list).
+  list(ws: string | null): { state: LockState | null; waiting?: true } | null {
+    const l = this.chain(ws);
+    const root = l?.state?.moved;
+    if (l === null || root === undefined) return l;
+    return this.forceOf(ws, l as KeptLock, root).out;
   }
 
-  /// Each one `before` named and `after` does not, where a removal of it is in force now: told it, and its `prev` chain.
-  private tellOut(id: string, root: string, before: LockState, after: LockState, chains: Entry[][], bodies: unknown[]) {
-    const keysOf = (st: LockState) => {
-      const out = new Map<string, string | null>();
-      for (const k of st.stations.keys()) out.set(k, null);
-      for (const [x, d] of st.devices) {
-        out.set(x, d.sub);
-        if (d.sign_key !== undefined) out.set(d.sign_key, d.sub);
-      }
-      return out;
-    };
-    const was = keysOf(before), now = keysOf(after);
-    const gone = [...was].filter(([k]) => !now.has(k));
-    if (gone.length === 0) return;
-    let inForce: Set<string>;
+  /// The bodies of `ws` station or device `key` is given (by hash): every one where the list names it (a station of it,
+  /// a member's device), none while it waits; to one it no longer names, each removal in force whose subject's
+  /// removals left out (`roster4`'s `without`) make the list name it again, with that removal's `prev` chain (the
+  /// model's `admitsBefore`); else none. Made when asked, kept while the state's word stands.
+  givenTo(ws: string | null, key: string): ReadonlySet<string> | "all" {
+    const li = this.list(ws);
+    if (li === null || li.state === null || li.waiting === true) return new Set();
+    const st = li.state;
+    if (st.stations.has(key) || st.devices.has(key) || [...st.devices.values()].some((d) => d.sign_key === key)) return "all";
+    const l = this.chain(ws) as KeptLock;
+    const root = l.state?.moved;
+    if (root === undefined) return new Set();
+    return this.outOf(ws, l, root).get(key) ?? new Set();
+  }
+
+  /// Whom each removal in force in `ws` took out (by key), and what each is given: made once a state's word.
+  private outs = new Map<string, { word: string; out: Map<string, Set<string>> }>();
+  private outOf(ws: string | null, l: KeptLock, root: string): Map<string, Set<string>> {
+    const id = this.idOf(ws);
+    const f = this.forceOf(ws, l, root);
+    const outs = (this.outs ??= new Map());
+    const was = outs.get(id);
+    const word = `${f.word}:${this.bodies(ws).version}:${this.personsVer}`;
+    if (was !== undefined && was.word === word) return was.out;
+    const out = new Map<string, Set<string>>();
+    const chains = personChainsOf(this).every().map(([, es]) => es);
+    const kept = this.bodies(ws).all();
+    const bodies = [...kept.values()];
+    const subjectOf = (b: any) => (b?.kind === "member.remove" ? `m|${b.sub}` : b?.kind === "station.remove" ? `s|${b.key}` : null);
     try {
-      inForce = new Set(roster4(id, root, chains, bodies).in_force.map((x) => x.body));
-    } catch {
-      return;
-    }
-    const by = new Map<string, any>();
-    for (const b of bodies) {
-      const h = bodyHash(b);
-      if (h !== null) by.set(h, b);
-    }
-    const outs = (this.toldOuts ??= new Map());
-    const mine = outs.get(id) ?? new Map<string, Set<string>>();
-    for (const [k, sub] of gone) {
+      const inForce = [...new Set(roster4(id, root, chains, bodies).in_force.map((x) => x.body))];
+      const subjects = new Map<string, string[]>();
       for (const h of inForce) {
-        const b = by.get(h);
-        const about = b?.kind === "station.remove" ? b.key === k : b?.kind === "member.remove" ? sub !== null && b.sub === sub : false;
-        if (!about) continue;
-        const given = mine.get(k) ?? new Set<string>();
-        for (let p: string | null = h, n = 0; p !== null && n < 10_000; n++) {
-          const q = by.get(p);
-          if (q === undefined) break;
-          given.add(p);
-          p = typeof q.prev === "string" ? q.prev : null;
-        }
-        mine.set(k, given);
+        const subject = subjectOf(kept.get(h));
+        if (subject !== null) subjects.set(subject, [...(subjects.get(subject) ?? []), h]);
       }
+      for (const [subject, removals] of subjects) {
+        const r = roster4(id, root, chains, bodies, removals);
+        // (each removal of that subject kept, in force or not, as the model's `bodiesFor` gives them)
+        const told = [...kept].filter(([, b]) => subjectOf(b) === subject).map(([h]) => h);
+        const keys = [...r.stations, ...r.members.flatMap((m) => m.keys ?? [])];
+        const named = new Set([...f.out.state.stations.keys(), ...[...f.out.state.devices.values()].flatMap((d) => [d.id, ...(d.sign_key ? [d.sign_key] : [])])]);
+        for (const k of keys) {
+          if (named.has(k)) continue;
+          const given = out.get(k) ?? new Set<string>();
+          for (const h of told) {
+            for (let p: string | null = h, n = 0; p !== null && n < 10_000; n++) {
+              const q = kept.get(p) as { prev?: unknown } | undefined;
+              if (q === undefined) break;
+              given.add(p);
+              p = typeof q.prev === "string" ? q.prev : null;
+            }
+          }
+          out.set(k, given);
+        }
+      }
+    } catch {
+      // (no list of what is kept: nobody told)
     }
-    outs.set(id, mine);
+    outs.set(id, { word, out });
+    return out;
   }
 
   /// The person logs a device of `ws` is given to work out its state itself (GET /lock/logs): those it is made of where
@@ -782,7 +799,6 @@ export class Cloud {
         }
       }
     }
-    if (was !== undefined && was.out.waiting !== true) this.tellOut(id, root, was.out.state, out.state, logs.map(([, es]) => es), kept);
     const f: InForce = { lock: l, ver, from, until, on: s.on, out, needs, word };
     forces.set(id, f);
     return f;

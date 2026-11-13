@@ -200,7 +200,7 @@ test("the devices that came are listed for the workspace's owners and admins, a 
 
 test("a device refused for the lock is told its person's own lock, for a new one to find who may let it in with no cloud", () => {
   const kept = [{ v: 1, ws: "w1", seq: 0, kind: "genesis" }, { v: 1, ws: "w1", seq: 1, kind: "device.remove" }];
-  const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "refusal-person-")), { locked: () => null, home: () => null, lockAfter: () => [...kept] });
+  const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "refusal-person-")), { locked: () => null, chain: () => null, home: () => null, lockAfter: () => [...kept] });
   const carol = personal("carol");
   lockPartRoute(cloud, "person", "POST", body({ chain: carol.chain }), viewer("carol"));
   const said = refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("this device is not on the lock its person bound in this workspace"), undefined, "carol");

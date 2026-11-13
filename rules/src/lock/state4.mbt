@@ -25,7 +25,7 @@ pub(all) struct State4 {
 /// Workspace `ws`'s state, rooted in the person log of genesis hash `root`, from each log's active chain and the bodies
 /// kept (`roster`), at `now` (unix seconds, this keeper's clock).
 pub fn state4(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], now : Double, c : &Crypto) -> State4 {
-  let (r, logs) = roster_of(ws, root, chains, bodies, c)
+  let (r, logs) = roster_of(ws, root, chains, bodies, [], c)
   let s : LockState = {
     ws,
     seq: 0.0,

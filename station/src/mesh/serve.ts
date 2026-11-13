@@ -221,6 +221,29 @@ export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, 
   return { error: (e as Error).message };
 }
 
+/// Whether a device's connection is given `ws`'s bodies and logs: let in by its lock (while on); while its people's
+/// logs say it is off, the connection was let in by the control plane's word alone, so only where the list made of the
+/// bodies names that very device as the lock's admission would (its base key's proof of the endpoint, and an app's
+/// person's log as kept here). A connection that brought no proof (`lock` on its hello) is given none while off.
+function givesDevice(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"]): boolean {
+  if (cloud.locked(ws) !== null) return true;
+  const li = cloud.list(ws);
+  const s = li?.state;
+  if (!s || li!.waiting === true || s.moved !== undefined || cloud.chain(ws)?.state?.moved === undefined) return false;
+  try {
+    const who = { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof };
+    const { device } = admit(s, who, nowSecs());
+    if (device.kind === "app" && s.persons.has(viewer.sub)) {
+      const chain = personChainsOf(cloud).kept(s.persons.get(viewer.sub)!);
+      if (chain === null) return false;
+      admitPerson(s, who, chain);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /// How many bodies one request brings at most.
 const BODIES_MOST = 1024;
 
@@ -402,7 +425,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
   if (part === "bodies") {
     // (to a connection let in in this workspace alone: it is in its state, or, before its chain moved, in its chain)
     if (method === "GET") {
-      if (cloud.locked(ws) === null) return [200, { bodies: [], lacking: [] }];
+      if (!givesDevice(cloud, ws, viewer)) return [200, { bodies: [], lacking: [] }];
       return [200, { bodies: [...cloud.bodies(ws).all().values()], lacking: cloud.lacking(ws) }];
     }
     if (method !== "POST") return [405, { error: "GET or POST" }];
@@ -416,7 +439,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     return [200, bodiesTaken(cloud, viewer, said.bodies)];
   }
   if (part === "logs" && method === "GET") {
-    if (cloud.locked(ws) === null) return [200, { chains: [] }];
+    if (!givesDevice(cloud, ws, viewer)) return [200, { chains: [] }];
     const chains = personChainsOf(cloud);
     return [200, { chains: cloud.logsOf(ws).flatMap((genesis) => {
       const entries = chains.kept(genesis);

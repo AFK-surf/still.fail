@@ -680,10 +680,19 @@ fn chains_of(chains : JsValue) -> Array[Array[Json]] raise @form.Invalid {
 /// chain, genesis first) and `bodies` (the statements' bodies kept): `{rooted, members: [{sub, role, lock, admit,
 /// keys}], stations, pairs: [{sub, lock, role}], undecided: [{sub, lock}], cancelled, statements: [{hash, kind, log, by,
 /// label, why, decided}], labels: [[name, label]], refused: [{genesis, why}], in_force: [{entry, body}], lacking,
-/// newest, settings}`, or `{error}` when the chains are none.
-pub fn roster_js(ws : String, root : String, chains : JsValue, bodies : JsValue, crypto : JsCrypto) -> JsValue {
+/// newest, settings}`, or `{error}` when the chains are none. `without`: bodies' hashes whose statements are left out of
+/// those in force once that is decided (`roster_without`: whom a removal took out); none, the list.
+pub fn roster_js(ws : String, root : String, chains : JsValue, bodies : JsValue, without : JsValue, crypto : JsCrypto) -> JsValue {
   let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
-  let r = @lock.roster(ws, root, cs, bodies_of(bodies), crypto)
+  let left : Array[String] = []
+  if js_kind(without) == 4 {
+    for i in 0..<js_len(without) {
+      if js_kind(js_at(without, i)) == 3 {
+        left.push(js_str(js_at(without, i)))
+      }
+    }
+  }
+  let r = @lock.roster_without(ws, root, cs, bodies_of(bodies), left, crypto)
   let s = Json::string(_)
   to_js(Json::object(Map([
     ("rooted", Json::boolean(r.rooted)),

@@ -77,16 +77,16 @@ export function answerPerson(chains: PersonChains, request: any, ws: string): un
   throw new Error("unknown lock method");
 }
 
-/// What this station gives station `peer` of workspace `ws`'s bodies (by hash): every one, to a station its own state
-/// there names (before the chain moved, its chain's; where it waits for the root, none), whatever the control plane's
-/// roster says; to one a removal took out of it, that removal's and its `prev` chain (Cloud `toldOut`); else none.
+/// What this station gives station `peer` of workspace `ws`'s bodies (by hash): every one, to a station its list there
+/// names, on or off (before the chain moved, its chain's; where it waits for the root, none), whatever the control
+/// plane's roster says; to one a removal took out of it, that removal's and its `prev` chain (Cloud `givenTo`).
 export function bodiesGiven(cloud: Cloud, ws: string, peer: string): Map<string, unknown> {
   const w = ws === cloud.home() ? null : ws;
   const all = cloud.bodies(w).all();
-  const l = cloud.locked(w);
-  if (l?.state && l.waiting !== true && l.state.stations.has(peer)) return all;
+  const given = cloud.givenTo(w, peer);
+  if (given === "all") return all;
   const out = new Map<string, unknown>();
-  for (const h of cloud.toldOut(w, peer)) if (all.has(h)) out.set(h, all.get(h));
+  for (const h of given) if (all.has(h)) out.set(h, all.get(h));
   return out;
 }
 

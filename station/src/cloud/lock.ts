@@ -336,8 +336,10 @@ export function state4(ws: string, root: string, chains: unknown[][], bodies: un
 
 /// Workspace `ws`'s list as the rules work it out of the same (rules/src/lock/roster.mbt): what is in force (`in_force`,
 /// each `{entry, body}` hash), the entries of its tag whose body is not kept (`lacking`), and the rest `roster_js` says.
-export function roster4(ws: string, root: string, chains: unknown[][], bodies: unknown[]): { in_force: { entry: string; body: string }[]; lacking: string[]; members: { sub: string; lock: string }[] } {
-  const out = rules.roster_js(ws, root, chains, bodies, crypto);
+/// `without`: bodies' hashes whose statements are left out of those in force once that is decided (whom a removal took
+/// out: the list as it would be without it).
+export function roster4(ws: string, root: string, chains: unknown[][], bodies: unknown[], without: string[] = []): { rooted: boolean; in_force: { entry: string; body: string }[]; lacking: string[]; members: { sub: string; lock: string; keys: string[] | null }[]; stations: string[] } {
+  const out = rules.roster_js(ws, root, chains, bodies, without, crypto);
   if ("error" in out) throw new Error(out.error);
   return out;
 }
