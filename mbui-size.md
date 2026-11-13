@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [140070ced](https://github.com/AFK-surf/still.fail/commit/140070ced117d702099e32ad27d6988b7bfd806f) Keep popovers and dialogs clear of the system's ba | 1.94 | 2.6 | 11.19 | 30.61 | 40.17 | 27.27 | 52.15 | 93.29 | 140.26 |
 | [cde2e1750](https://github.com/AFK-surf/still.fail/commit/cde2e175002aa4c42aac7af733bcd4b1036e0feb) mbui app: a passage picked in a message quoted in  | 1.94 | 2.6 | 11.19 | 30.61 | 40.16 | 27.27 | 52.13 | 93.28 | 183.1 |
 | [960fc3979](https://github.com/AFK-surf/still.fail/commit/960fc3979c00be98f8a9e56fac7bd31064bdf18c) station, shell: raise RLIMIT_NOFILE and release ha | 1.94 | 2.6 | 11.19 | 30.6 | 40.13 | 27.27 | 52.12 | 93.36 | 134.35 |
 | [575f2825c](https://github.com/AFK-surf/still.fail/commit/575f2825c1ddc0ab53784b3f3aa414415b2f028a) mbui app: ⌘F finds in a chat's page made as nodes  | 1.94 | 2.6 | 11.19 | 30.6 | 40.13 | 27.26 | 52.1 | 93.18 | 191.58 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [980290250](https://github.com/AFK-surf/still.fail/commit/980290250fc2e658987180eb43f6739e76088b04) locks: the cloud's copy of a lock follows the stat | 1.93 | 2.59 | 11.12 | 30.18 | 39.85 | 26.86 | 51.16 | 94.75 | 125.09 |
 | [53796929b](https://github.com/AFK-surf/still.fail/commit/53796929b6e093da58ba270ef70eb80b7764c489) pipeline: the Mac's beta holds back no other part' | 1.93 | 2.59 | 11.12 | 30.18 | 39.85 | 26.86 | 51.16 | 94.85 | 125.09 |
 | [d953c3dd5](https://github.com/AFK-surf/still.fail/commit/d953c3dd5d6de2632c2f630a319733ee559ca218) mbui: what a page's list has in sight, told to han | 1.93 | 2.59 | 11.12 | 30.18 | 39.85 | 26.86 | 51.16 | 95.11 | 162.49 |
-| [6c3e51a27](https://github.com/AFK-surf/still.fail/commit/6c3e51a270589e5f7729072390b5ac758fefe4b5) station: read Antigravity CLI plan usage via agy / | 1.93 | 2.58 | 11.11 | 30.16 | 39.8 | 26.84 | 51.11 | 94.82 | 137.5 |
