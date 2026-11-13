@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d3881a70c](https://github.com/AFK-surf/monoid/commit/d3881a70c15c55ae0b814fd6e520213d2c43b04f) mbui: a Tester reads the main list of the page in  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 94.03 | 99.98 |
 | [442464dd8](https://github.com/AFK-surf/monoid/commit/442464dd8bc2577494da0d64dd1612692ed7a790) fix(mbui,core-ts): align profile quota layout per  | 1.95 | 2.62 | 11.29 | 30.78 | 40.54 | 27.43 | 52.43 | 93.91 | 98.75 |
 | [b3c2b2bae](https://github.com/AFK-surf/monoid/commit/b3c2b2bae4e12ffd6295fc0904429be99449462c) ci: the station's longest test files one to a slic | 1.95 | 2.62 | 11.29 | 30.78 | 40.53 | 27.42 | 52.42 | 94.13 | 109.53 |
 | [bb2b49a24](https://github.com/AFK-surf/monoid/commit/bb2b49a240c764e8bc5fd48e8dac06f1b744ea94) mbui: a key a page's list's page marks goes leavin | 1.95 | 2.62 | 11.29 | 30.77 | 40.51 | 27.42 | 52.42 | 94.09 | 104.7 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [8ea59093f](https://github.com/AFK-surf/monoid/commit/8ea59093faf39dd54ef0f7ba3dbff07b7ef5f1b7) core: what the views and the store walk for one ch | 1.93 | 2.59 | 11.14 | 30.53 | 39.93 | 27.2 | 51.94 | 93.08 | 160.53 |
 | [8a0b79570](https://github.com/AFK-surf/monoid/commit/8a0b795707a9eea9d27486ae0387941c483355e4) app tests: chat_pictures_scrolled_wbtest's bytes b | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 93.14 | 175.17 |
 | [af0bd99e7](https://github.com/AFK-surf/monoid/commit/af0bd99e70a42ce10c951c587e0c467baeef20fd) core tests: the rig tells a change of a station's  | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 94.47 | 186.2 |
-| [4988be2af](https://github.com/AFK-surf/monoid/commit/4988be2af51e93ce98203f122a34f5d290570ee3) core: a change of one row of the list a station ma | 1.93 | 2.59 | 11.13 | 30.52 | 39.9 | 27.19 | 51.92 | 94.6 | 137.26 |
