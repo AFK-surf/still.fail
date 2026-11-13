@@ -168,7 +168,10 @@ start_cloud() {
   rm -f "$RUN/cloud.ready"
   mkfifo "$RUN/cloud.ready"
   exec 9<> "$RUN/cloud.ready"
+  # (its sign-in limit 20 times the product's: every device of a run signs in from 127.0.0.1, nine with the moved
+  # rounds, and runs in a row share the minute and the day; the product's own and the deployed cloud's untouched)
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
+    LOGIN_LIMIT_TIMES=${E2E_LOGIN_LIMIT_TIMES:-20} \
     AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} LOG_REQUESTS=1 detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
     --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts 9>&- & echo $! > $RUN/cloud.pid)
   if ! IFS= read -r -t 120 ready <&9; then
@@ -719,6 +722,8 @@ second_station() {
   local B=$(more_dir $n)
   second_down $n >/dev/null 2>&1
   mkdir -p $B/data $B/home $B/app/node/bin
+  # (its key chosen by the run, where it put one at $RUN/NAME.seed: so where its id sorts among the others' is the run's)
+  [ ! -f $RUN/$n.seed ] || { mkdir -p $B/data/mesh && cp $RUN/$n.seed $B/data/mesh/secret.key && chmod 600 $B/data/mesh/secret.key; }
   ln -s $E/station/dist $B/app/station
   ln -s "$(command -v node)" $B/app/node/bin/node
   echo '{"autoUpdate":false}' > $B/data/config.json

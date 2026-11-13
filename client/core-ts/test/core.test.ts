@@ -260,20 +260,19 @@ test("a_write_answers_once_the_reads_after_it_have_had_their_while_and_they_go_o
   const ui = core.connect();
   await host.settle();
   host.takeEmitted();
-  // The account's `/v1/me` read again after the write does not answer (a link where nothing comes).
-  const release = host.hold("/v1/me");
-  const before = count(host, "/v1/me");
+  // The account's sign-ins read again after the write (no event tells them) do not answer (a link where nothing comes).
+  const release = host.hold("/v1/auth/sessions");
+  const before = count(host, "/v1/auth/sessions");
   call(core, ui, 2, "loginSession.revoke", { account: "s1", id: "d2" });
   await host.settle();
-  assert.equal(count(host, "/v1/me"), before + 1);
+  assert.equal(count(host, "/v1/auth/sessions"), before + 1);
   assert.equal(answers(host.takeEmitted(), 2), undefined);
   await host.time.pass(REREAD_WAIT_MS);
   assert.ok("ok" in (answers(host.takeEmitted(), 2) ?? {}));
-  // The read goes on after the answer: what it brings is read as it comes.
-  const sessions = count(host, "/v1/auth/sessions");
+  // The read goes on after the answer: what it brings is held as it comes.
   release();
   await host.settle();
-  assert.equal(count(host, "/v1/auth/sessions"), sessions + 1);
+  assert.equal(count(host, "/v1/auth/sessions"), before + 1);
   core.close();
 });
 

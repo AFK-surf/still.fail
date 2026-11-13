@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, approvedHere, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -734,7 +734,14 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     const base = mesh.deviceId();
     const before = tryings.get(inner);
     if (before) drop(before);
+    // Left out of a moved workspace (its stations' refusal said so, views/lock.ts `leftIn`): those stations tried again
+    // first, as the person presses to ask, its lock read of them. Nothing tells a refused device that its person's log
+    // said it meanwhile (their app, personal-lock.ts `#addWebs`), and nothing tries it on a timer; where one lets it in
+    // now there is nothing to ask there, and the page, as before meanwhile (not confirmed, able to ask), is in.
+    const left = waitingIn(inner, base).workspaces.filter((ws) => leftIn(inner, ws) !== null);
+    yield* Effect.forEach(left, (ws) => Effect.ignore(Effect.andThen(Effect.sync(() => refusedAgain(inner, ws)), read(inner, ws)), { log: "Unhandled", message: "left out: tried again" }), { concurrency: "unbounded", discard: true });
     const { workspaces, approvers } = waitingIn(inner, base);
+    if (workspaces.length === 0 && left.length > 0) return null;
     if (workspaces.length === 0) return yield* Effect.fail(CoreError.invalid("this device waits in no workspace"));
     const y = trying(inner, workspaces);
     y.approvers = approvers;

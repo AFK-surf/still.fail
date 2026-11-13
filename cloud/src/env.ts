@@ -25,6 +25,10 @@ export interface Env {
   RELEASES_UPSTREAM?: string;
   LOGINS: DurableObjectNamespace<LoginAttempt>;
   LOGIN_LIMITS: DurableObjectNamespace<LoginLimiter>;
+  /** How many times the sign-ins an address may start (login.ts `LoginLimiter`: 10 a minute, 100 a day) the cloud allows:
+   * set only by a local cloud for tests (test/dev.ts `LOGIN_LIMIT_TIMES`, the end to end's devices all signing in from
+   * 127.0.0.1); unset, 1. */
+  LOGIN_LIMIT_TIMES?: string;
   TELEMETRY_LIMITS: DurableObjectNamespace<TelemetryLimiter>;
   /** The web app's and the API's origin; every link the cloud makes is on it. */
   PUBLIC_ORIGIN: string;

@@ -506,11 +506,11 @@ export class Directory extends DurableObject<Env> {
    * A workspace changed: its members (and `also`) are told, with `workspaces`
    * too when what their lists show changed (a name, a role, a count).
    */
-  #changed(workspace: string, list: boolean, also: Iterable<string> = [], lockOnly = false): void {
+  #changed(workspace: string, list: boolean, also: Iterable<string> = [], only: "lock" | "requests" | null = null): void {
     for (const station of this.#stationsIn(workspace)) this.#sendState(station);
     const subs = [...this.#members(workspace), ...also];
-    const lock = lockOnly ? { lock: { head: this.#lockHead(workspace), locked: this.#locked(workspace) } } : {};
-    this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace, ...lock });
+    const said = only === "lock" ? { lock: { head: this.#lockHead(workspace), locked: this.#locked(workspace) } } : only === "requests" ? { requests: true as const } : {};
+    this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace, ...said });
   }
 
   /**
@@ -944,7 +944,7 @@ export class Directory extends DurableObject<Env> {
         for (const e of now.aside) if (!had.has(entryHash(e))) this.#run("INSERT INTO lock_aside (workspace, hash, entry) VALUES (?, ?, ?)", workspace, entryHash(e), JSON.stringify(e));
       });
       // (its lock alone moved on: said in the event, so the members' devices need not ask for the workspace again)
-      if (moved) this.#changed(workspace, false, [], true);
+      if (moved) this.#changed(workspace, false, [], "lock");
     }
     return this.#lockHead(workspace);
   }
@@ -1005,7 +1005,8 @@ export class Directory extends DurableObject<Env> {
       "INSERT INTO lock_requests (workspace, base, sub, request, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace, base) DO UPDATE SET sub = excluded.sub, request = excluded.request, created_at = excluded.created_at",
       workspace, base, sub, JSON.stringify(request), nowSeconds(),
     );
-    this.#changed(workspace, false);
+    // (its requests alone changed: said in the event, so a device of today, which shows none, asks for nothing)
+    this.#changed(workspace, false, [], "requests");
     return { base, sub, email: (this.#one("SELECT email FROM users WHERE sub = ?", sub)?.email as string) ?? "", ...request, code, created_at: nowSeconds() };
   }
 
@@ -1023,7 +1024,8 @@ export class Directory extends DurableObject<Env> {
     if (!row) return;
     if (row.sub !== sub && !MANAGERS.includes(role)) fail(403, "forbidden");
     this.#run("DELETE FROM lock_requests WHERE workspace = ? AND base = ?", workspace, base);
-    this.#changed(workspace, false);
+    // (its requests alone changed: said in the event, so a device of today, which shows none, asks for nothing)
+    this.#changed(workspace, false, [], "requests");
   }
 
   /**

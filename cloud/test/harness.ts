@@ -54,6 +54,8 @@ export async function harness(
     port?: number;
     signingKey?: string;
     noGoogle?: boolean;
+    /** LOGIN_LIMIT_TIMES: the sign-ins an address may start, times this (env.ts). */
+    loginLimitTimes?: number;
     /** REVIEW_ACCOUNTS: who signs in with a password (password.ts). */
     reviewAccounts?: string;
     relayUrl?: string;
@@ -215,6 +217,7 @@ export async function harness(
         ...(options.forwardTo ? { FORWARD_TO: options.forwardTo } : {}),
         ...(options.moving ? { MOVING: "1" } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
+        ...(options.loginLimitTimes ? { LOGIN_LIMIT_TIMES: String(options.loginLimitTimes) } : {}),
         ...(options.mail ? { TEST_MAIL: "1" } : {}),
         ...(telemetryAccount ? { GCP_TELEMETRY: telemetryAccount } : {}),
       },

@@ -185,6 +185,46 @@ export class CloudSync {
     );
   }
 
+  /// What a write of `sub`'s to still.fail cloud changed that no event tells, read again, waited on (core/execute.ts
+  /// answers the call once it is). What it changed in a workspace or in the account's list the cloud tells every device
+  /// of its members, this one too (`workspace`, `workspaces` on `/v1/events`), read as it is told like another device's
+  /// change; so here only: the workspace's view the write answered with, held at once with no request, or, where a
+  /// write in a workspace answered otherwise (people added, a station taken out), that one workspace read again: what
+  /// the core does next goes by it (the people just added are signed into its lock by their subs), and its event
+  /// alone would bring it only as the socket opens again where it is down; the account's
+  /// `/v1/me` where the write changes which workspaces it reaches or the account itself (a workspace made, deleted or
+  /// left, an invitation taken: the page that goes there next reads which account reaches it); its sign-ins and an
+  /// operator's lists, which no event tells. Until 2026-11-15 every account was read whole after every write (`/v1/me`,
+  /// every workspace, the sign-ins), an invitation only looked at too: in the locks' end to end 75 of a run's 443
+  /// requests to the cloud were `/v1/me`, and an owner's own act was turned away by the account's limit.
+  afterWrite(sub: string, method: string, path: string, answer: unknown): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const core = this.#core;
+      const scheduler = core.scheduler;
+      const at = path.split("?")[0]!;
+      const ws = /^\/v1\/workspaces\/([^/]+)(?:\/([^/]+)(?:\/([^/]+))?)?/.exec(at);
+      const id = ws ? decodeURIComponent(ws[1]!) : null;
+      const made = method === "POST" && at === "/v1/workspaces";
+      const joined = at.startsWith("/v1/invitations/") && at.endsWith("/accept");
+      const reaches = made || joined
+        || at === "/v1/me" || at.startsWith("/v1/me/")
+        || (method === "DELETE" && ws !== null && (ws[2] === undefined || (ws[2] === "members" && ws[3] !== undefined && decodeURIComponent(ws[3]) === sub)));
+      // (first: a workspace made, or joined, is the account's once its `/v1/me` lists it, and its view is then held as answered)
+      if (reaches) yield* Effect.ignore(scheduler.ask("cloud", `me/${sub}`, Priority.asked, this.#listed(sub)), { log: "Unhandled", message: "me read" });
+      const view = isObject(answer) && typeof answer.id === "string" && Array.isArray(answer.members) ? answer : null;
+      const viewOf = view === null ? null : made || joined ? (view.id as string) : id;
+      if (viewOf !== null && view!.id === viewOf && core.workspaces.owner(viewOf) === sub) this.#took(viewOf, view);
+      const reads: Effect.Effect<void>[] = [];
+      // (a write inside a workspace still this account's that did not answer with its view; a bug report's answer is
+      // read by its own path, core/execute.ts)
+      const inside = ws !== null && ws[2] !== undefined && ws[2] !== "feedback" && view === null && !reaches && core.workspaces.owner(id!) === sub;
+      if (inside) reads.push(Effect.ignore(scheduler.ask("cloud", `workspace/${id}`, Priority.asked, this.#workspace(id!)), { log: "Unhandled", message: "workspace read" }));
+      if (at.startsWith("/v1/auth/") && core.provider.supports("loginSessions")) reads.push(Effect.ignore(scheduler.ask("cloud", `sessions/${sub}`, Priority.asked, this.#loginSessions(sub)), { log: "Unhandled", message: "login sessions read" }));
+      if (at.startsWith("/v1/admin/") && this.#admins.has(sub)) reads.push(Effect.ignore(scheduler.ask("cloud", `admin/${sub}`, Priority.asked, this.#admin(sub)), { log: "Unhandled", message: "admin read" }));
+      yield* Effect.all(reads, { concurrency: "unbounded", discard: true });
+    });
+  }
+
   /// Everything of an account read again, waited on.
   refreshAccount(sub: string): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
@@ -227,6 +267,24 @@ export class CloudSync {
     });
   }
 
+  /// A workspace's view as the cloud gave it (its read, or a write of this device's answered with it), held.
+  #took(id: string, view: unknown): void {
+    const core = this.#core;
+    const topic: Topic = { topic: "workspace", workspace: id };
+    this.errors.delete(id);
+    this.forgetGoneStations(id, view);
+    // Stations it said were not online and now says are (their `station` event went by while the socket was down):
+    // tried now, as when the event says so.
+    const was = core.data.shared(topic);
+    const offline = new Set((isObject(was) && Array.isArray(was.stations) ? was.stations : []).flatMap((s) => (isObject(s) && typeof s.id === "string" && s.online === false ? [s.id] : [])));
+    // (its stations' names and marks as the stations keep them laid over the cloud's list: station-marks-kept.ts)
+    core.data.set(topic, overlaid(view, keptMarks(core.data, id)));
+    for (const s of isObject(view) && Array.isArray(view.stations) ? view.stations : []) {
+      if (isObject(s) && typeof s.id === "string" && s.online === true && offline.has(s.id)) core.stations?.cameOnline(`${id}/${s.id}`);
+    }
+    this.onReach?.();
+  }
+
   #workspace(id: string): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
@@ -234,21 +292,8 @@ export class CloudSync {
       if (sub === null) return;
       const topic: Topic = { topic: "workspace", workspace: id };
       const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/workspaces/${encode(id)}`, null));
-      if (answer._tag === "Success") {
-        this.errors.delete(id);
-        this.forgetGoneStations(id, answer.success);
-        // Stations it said were not online and now says are (their `station` event went by while the socket was
-        // down): tried now, as when the event says so.
-        const was = core.data.shared(topic);
-        const offline = new Set((isObject(was) && Array.isArray(was.stations) ? was.stations : []).flatMap((s) => (isObject(s) && typeof s.id === "string" && s.online === false ? [s.id] : [])));
-        // (its stations' names and marks as the stations keep them laid over the cloud's list: station-marks-kept.ts)
-        core.data.set(topic, overlaid(answer.success, keptMarks(core.data, id)));
-        const now = answer.success;
-        for (const s of isObject(now) && Array.isArray(now.stations) ? now.stations : []) {
-          if (isObject(s) && typeof s.id === "string" && s.online === true && offline.has(s.id)) core.stations?.cameOnline(`${id}/${s.id}`);
-        }
-        this.onReach?.();
-      } else {
+      if (answer._tag === "Success") this.#took(id, answer.success);
+      else {
         const error = answer.failure;
         // Gone (deleted, or the account left it): what is held of it goes.
         if (error.status === 404 || error.status === 403) {
@@ -664,6 +709,10 @@ export class CloudSync {
           const { locked: _, ...rest } = w;
           return { ...rest, lock: head, ...(lock.locked === true ? { locked: true } : {}) };
         });
+      } else if (event.requests === true) {
+        // Only its requests to be let in moved (the cloud's, which apps from before ask and drop): nothing this core
+        // shows of the workspace says them (its view's `lock_requests` is held as the cloud last gave it, read by none),
+        // so nothing is asked; every device of every member read the whole workspace for each.
       } else core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
     } else if (event.type === "station" && typeof event.workspace === "string" && typeof event.id === "string" && typeof event.online === "boolean") {
       // A station came online or went: in place, no request.

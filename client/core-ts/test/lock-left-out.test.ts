@@ -234,7 +234,7 @@ test("a member's new web page: it asks that member's own app, `web` said, in", a
   assert.equal(subs(after), "r1,r2,s1");
 });
 
-test("a member's web page left out, said on their log meanwhile by their app (carried from the chain, personal-lock.ts `#addWebs`), nothing asked on the page: as it is, not tried again while it only waits (ten minutes), let in at its next hello", async () => {
+test("a member's web page left out, said on their log meanwhile by their app (carried from the chain, personal-lock.ts `#addWebs`): as it is while it only waits (ten minutes), nothing tells it; as the person presses to ask, its station is tried again first and lets it in, nothing dialled", async () => {
   const w = await setUp({ named: true, web: true });
   const before = await w.page();
   assert.deepEqual([before.me.confirmed, before.me.waiting], [false, true], "out, able to ask");
@@ -242,9 +242,17 @@ test("a member's web page left out, said on their log meanwhile by their app (ca
   w.x.add("web", { id: w.base.hex, label: "Chrome", exp: w.now() + 20 * 86400 }, w.x.app.key, w.now());
   w.bring(w.x);
   await w.r.host.time.pass(600_000);
+  const waited = await w.page();
+  assert.deepEqual([waited.me.confirmed, waited.me.waiting, w.st.refusals.length - refused, w.st.admitted], [false, true, 0, 0], "not tried while it only waits: nothing tells a page refused that its person's log changed (no timer, no polling)");
+  // X's app is there to be dialled, and would approve: the ask is not made all the same.
+  w.approvers.set(w.x.app.base.hex, { where: () => ["ws"], approve: () => ({ t: "approved", workspaces: ["ws"], failed: [] }) });
+  const asked = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(asked.error, undefined, asked.error?.message);
+  assert.ok(w.st.admitted > 0, `its station tried again and let it in (${w.why()})`);
+  assert.deepEqual(w.dialled, [], "no app dialled: nothing asked of the person's own");
   const after = await w.page();
-  assert.deepEqual([after.me.confirmed, w.st.refusals.length - refused, w.st.admitted], [false, 0, 0], "not tried again: nothing tells a page refused that its person's log changed");
-  assert.equal(w.hello(), null, "its next hello (the page opened again) let in");
+  assert.deepEqual([after.me.confirmed, after.me.pair ?? null], [true, null], `in, no try on the page (${w.why()})`);
+  assert.equal(subs(after), "r1,r2,s1", "it reads the list");
 });
 
 test("a member's own second app: the personal exchange with their app on the log, then in", async () => {
