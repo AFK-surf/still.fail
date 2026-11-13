@@ -894,7 +894,7 @@ fn size_uncached(
 /// item side by side in its pool's `f` (item k's at k * ITEM): read pass
 /// after pass over the items, they are kept together, not as an object
 /// each, which its node and box would also be reached through.
-const ITEM : Int = 26
+const ITEM : Int = 27
 
 ///|
 const BASIS : Int = 0
@@ -924,6 +924,11 @@ const MIN_MAIN : Int = 7
 ///|
 /// the least it comes to as a last resort along a row (Style's soft_min; NaN: none)
 const SOFT_MIN : Int = 25
+
+///|
+/// the flex basis it has of its own where it is counted at what it holds instead, growing in a container sized by what
+/// it holds (layout_flex's `grows_in_unknown`), as the line's main size known goes back to (NaN: none)
+const DECLARED : Int = 26
 
 ///|
 const MAX_MAIN : Int = 8
@@ -1494,6 +1499,7 @@ fn layout_flex(
       f.unsafe_set(i + CROSS_STYLE, cross_style)
       f.unsafe_set(i + ASCENT, 0.0)
       f.unsafe_set(i + GROW, cs.grow)
+      f.unsafe_set(i + DECLARED, undef)
       // (what a row may leave out is kept whole while it is there)
       f.unsafe_set(i + SHRINK, if s.fits && cs.drop != 0 { 0.0 } else { cs.shrink })
       // flex base size
@@ -1592,6 +1598,9 @@ fn layout_flex(
       }
       f.unsafe_set(i + BASIS, basis)
       f.unsafe_set(i + HYP, clamp_size(basis, f.unsafe_get(i + MIN_MAIN), max_main))
+      // (counted at what it holds only to find how long its container comes to: its own flex basis kept for the line's
+      // main size known, as it is laid out given that size)
+      f.unsafe_set(i + DECLARED, if known(declared) && !known(cs.come_now) { fmax(declared, pb_main) } else { undef })
     }
     // (no more items: their numbers stay where they are)
     let f = pool.f
@@ -1704,6 +1713,28 @@ fn layout_flex(
           space = hi
         } else if known(lo) && sum_hyp < lo {
           space = lo
+        }
+      }
+      // (along a row, the line's main size known now in a container sized by what it holds, by whatever made it known
+      // (the room it has, its max, its min): what grows counted at what it holds to find that size goes back to its own
+      // flex basis, so the line flexes from the bases its layout given that size flexes from, and what it holds is measured
+      // at the widths that layout gives it, not at what it holds on one line: how tall its words come to rides on the width
+      // they are given. Not down a column: there the main size is the height itself, nothing of the width riding on it,
+      // and what grows counted at what it holds is what its measure and its layout both have it at; gone back to nothing
+      // where what the column holds is taller than its room, it would be squeezed to nothing (日志's choice of App, 设备
+      // and 日志 on 小屏, under the sheet's room))
+      if row && !known(inner_main) && known(space) {
+        for k in ln.start..<ln.end {
+          let i = k * ITEM
+          let d = f.unsafe_get(i + DECLARED)
+          if known(d) {
+            let back = clamp_size(d, f.unsafe_get(i + MIN_MAIN), f.unsafe_get(i + MAX_MAIN))
+            let hyp = f.unsafe_get(i + HYP)
+            sum_hyp = sum_hyp - hyp + back
+            items_hyp = items_hyp - hyp + back
+            f.unsafe_set(i + BASIS, d)
+            f.unsafe_set(i + HYP, back)
+          }
         }
       }
       // rows in it that leave out what they have not the room for, each as wide as what it keeps, where the line has
