@@ -334,6 +334,7 @@ pub fn model_triple(
   small? : Bool = false,
   floating? : Bool = false,
   saved? : String = "",
+  bound? : Bool = false,
 ) -> Unit {
   let t = @sf.theme()
   let v = match face {
@@ -350,7 +351,8 @@ pub fn model_triple(
   let dkey = "pick.save/" + station + "/" + of
   let saving = doing(dkey)
   let id = c.id("triple/" + me)
-  let can = offers && !saving
+  // (`bound`: what it runs is another's to say, a preset's: shown, not opened, no chevron)
+  let can = offers && !saving && !bound
   let open = triple.open == me
   let go = fn() {
     triple.asked = ""
@@ -489,7 +491,7 @@ pub fn model_triple(
     // what was picked on its way: a ring in place of the chevron
     if saving {
       @sf.spinner(c, size=12.0) |> ignore
-    } else {
+    } else if !bound {
       @sf.icon(c, "chevron-down", size=12.0, color=t.p.muted) |> ignore
     }
     },

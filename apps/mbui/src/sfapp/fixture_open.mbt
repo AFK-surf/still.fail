@@ -607,6 +607,10 @@ pub fn open_mode(mode : String) -> Unit {
         @sfpages.new_chat_ask("preset-new-clones")
       }
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
+      "newchat-preset-bound" => {
+        @sffixture.new_fix.preset = "p-sf"
+        @sffixture.new_fix.bound = true
+      }
       "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" | "newchat-providers-model-far" =>
         @sfpages.new_chat_ask("model")
       _ => ()

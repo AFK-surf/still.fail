@@ -69,6 +69,32 @@ const stationId = (address: string) => address.slice(address.lastIndexOf("/") + 
 const address = (scope: string, id: string) => `${scope}/${id}`;
 const text = (v: J): string | null => (typeof v === "string" && v !== "" ? v : null);
 
+/// What preset `p` binds a new chat to (the user, 2026-11-13: what a preset names, its chats run with, and the page does
+/// not change it; to run otherwise is to edit the preset or open the chat with none): the model's configuration it
+/// names (null: any), and the ids of the stations its chats may start on (null: any up, `autoStation` too).
+function presetBinds(p: J): { model: J | null; stations: string[] | null } {
+  const pm = get(p, "model");
+  const model = isObject(pm) && text(get(pm, "model")) !== null ? pm : null;
+  const one = text(get(p, "station"));
+  const some = arr(get(p, "stations")).filter((x): x is string => typeof x === "string" && x !== "").map(stationId);
+  return { model, stations: one !== null ? [stationId(one)] : some.length > 0 ? some : null };
+}
+
+/// A station's choice `base` as a preset's model configuration `pm` makes it: all of it the preset's, what the
+/// preset leaves out the model's own (its first runtime where the one kept does not run it, its default effort).
+function boundChoice(pm: J, base: J): J {
+  return {
+    ...base,
+    model: pm.model,
+    runtime: text(get(pm, "runtime")) ?? (get(base, "model") === pm.model ? get(base, "runtime") : ""),
+    effort: text(get(pm, "effort")) ?? "",
+    fast: typeof get(pm, "fast") === "boolean" ? pm.fast : null,
+    context: get(pm, "context") ?? null,
+    profile: text(get(pm, "profile")) ?? "",
+    profiles: get(pm, "profiles") ?? null,
+  };
+}
+
 /// A model's whole window as a model control offers it: 完整 · 1M (just 完整 where its window is not known).
 const wholeWindow = (option: J): string =>
   typeof get(option, "contextWindow") === "number" ? t("core-logic.choose.context.whole_of", { window: format.compactNumber(option.contextWindow) }) : t("core-logic.choose.context.whole");
@@ -353,7 +379,25 @@ export class Choose implements Owner {
   }
 
   #choice(scope: string, id: string): J {
-    return this.#record(`ws:${scope}:station:${id}`) ?? this.#record(`station:${id}`) ?? {};
+    const kept = this.#record(`ws:${scope}:station:${id}`) ?? this.#record(`station:${id}`) ?? {};
+    const pm = this.#bound(scope)?.model;
+    return pm !== null && pm !== undefined ? boundChoice(pm, kept) : kept;
+  }
+
+  /// What the preset picked for the scope's new chats binds them to (`presetBinds`), with its name; none for none. Every
+  /// choice made reads this, so it reads the picked one's station's presets alone, as that station said them last (not
+  /// the scope's stations: `topic-work`'s pick, with three times the stations).
+  #bound(scope: string): { name: string; model: J | null; stations: string[] | null } | undefined {
+    const kept = this.#record(`ws:${scope}:preset`);
+    if (!isObject(kept) || typeof kept.id !== "string" || kept.id === "" || typeof kept.station !== "string") return undefined;
+    const p = arr(get(this.#env.store.get({ topic: "presets", station: kept.station }), "presets")).find((x) => get(x, "id") === kept.id);
+    return p === undefined ? undefined : { name: text(get(p, "name")) ?? "", ...presetBinds(p) };
+  }
+
+  /// Whether a new chat of `scope` may start on station `id` as the preset picked binds it.
+  allows(scope: string, id: string): boolean {
+    const stations = this.#bound(scope)?.stations;
+    return stations === null || stations === undefined || stations.includes(id);
   }
 
   #keepChoice(scope: string, id: string, choice: J, key = `ws:${scope}:station:${id}`): void {
@@ -489,6 +533,14 @@ export class Choose implements Owner {
     view.presetStation = picked?.station ?? "";
     view.presetName = picked === undefined ? "" : (text(get(picked.p, "name")) ?? "");
     view.presetMarks = picked === undefined ? [] : this.#marks(picked.p, picked.station);
+    // What it binds the page to: its model control shows the preset's and does not open; its stations are those it names.
+    const binds = picked === undefined ? null : presetBinds(picked.p);
+    view.presetModel = binds !== null && binds.model !== null;
+    view.presetStations = binds !== null && binds.stations !== null;
+    if (binds !== null && binds.stations !== null) {
+      const named = binds.stations;
+      view.stations = arr(view.stations).filter((s) => s === station || named.includes(typeof s.id === "string" ? s.id : ""));
+    }
     view.station = station;
     return view;
   }
@@ -578,6 +630,15 @@ export class Choose implements Owner {
   /// `newChat.pick`: the station a scope's new chat starts on, and what it runs there.
   pickNew(scope: string, params: J): void {
     const station = text(get(params, "station"));
+    // (what the preset picked binds is not changed here: the page offers no other, and one asked for is refused saying
+    // how to have it)
+    const bound = typeof get(params, "preset") === "string" ? undefined : this.#bound(scope);
+    if (bound !== undefined && bound.model !== null && FIELDS.some((f) => get(params, f) !== undefined)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model", { name: bound.name }));
+    }
+    if (bound !== undefined && bound.stations !== null && station !== null && !bound.stations.includes(station)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
+    }
     if (station !== null) this.#keepStation(scope, station);
     // the preset, whichever station it is of (`presetStation`, its address; "" for none)
     const preset = get(params, "preset");
@@ -623,34 +684,6 @@ export class Choose implements Owner {
           }
           if (targetStationId !== null && targetStationId !== "") {
             this.#keepStation(scope, targetStationId);
-          }
-          if (isObject(pm) && wantModel !== null) {
-            const id = targetStationId ?? this.#shown(scope);
-            const addr = address(scope, id);
-            const [options, now] = this.#onStation(addr);
-            const next: J = {
-              runtime: now.runtime,
-              model: now.entry !== null ? now.entry.model : null,
-              effort: now.effort,
-              fast: now.fast,
-              context: now.context,
-              profile: now.profile,
-              profiles: now.profiles,
-            };
-            const runs = arr(get(optionOf(options, wantModel), "runtimes"));
-            const rt = text(get(pm, "runtime"));
-            if (rt !== null) {
-              next.runtime = rt;
-            } else if (!runs.some((r) => equal(r, next.runtime))) {
-              next.runtime = runs[0] ?? next.runtime;
-            }
-            next.model = wantModel;
-            next.effort = text(get(pm, "effort"));
-            if (typeof get(pm, "fast") === "boolean") next.fast = pm.fast;
-            if (get(pm, "context") !== undefined) next.context = contextOf(pm.context);
-            if (get(pm, "profile") !== undefined) next.profile = text(pm.profile) ?? "";
-            if (get(pm, "profiles") !== undefined) next.profiles = normProfiles(pm.profiles);
-            this.#keepChoice(scope, id, next);
           }
         }
       }
@@ -698,8 +731,12 @@ export class Choose implements Owner {
     if (r.fast !== null) ask.fast = r.fast;
     if (r.context !== null) ask.context = r.context;
     // The preset picked: by its id where it is this station's, else all of it as its station said it (its folders
-    // that station's).
+    // that station's), with what it binds for the station to hold the chat to.
     const scope = ofAddress(station);
+    const bound = this.#bound(scope);
+    if (bound !== undefined && bound.stations !== null && !bound.stations.includes(stationId(station))) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
+    }
     const online = (() => {
       const v = this.#env.store.value({ topic: "stations", scope });
       return v !== undefined && "ok" in v ? arr(v.ok) : [];
@@ -716,7 +753,14 @@ export class Choose implements Owner {
           if (at !== station) dir.elsewhere = text(get(d, "stationName")) ?? names.get(at) ?? at;
           return dir;
         });
-        ask.presetCopy = { id: get(picked.p, "id"), name: get(picked.p, "name"), dirs, instructions: get(picked.p, "instructions") ?? "" };
+        ask.presetCopy = {
+          id: get(picked.p, "id"),
+          name: get(picked.p, "name"),
+          dirs,
+          instructions: get(picked.p, "instructions") ?? "",
+          ...(bound?.model ? { model: bound.model } : {}),
+          ...(bound?.stations ? { stations: bound.stations } : {}),
+        };
       }
     }
     this.#keepStation(ofAddress(station), stationId(station));

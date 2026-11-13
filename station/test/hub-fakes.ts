@@ -380,6 +380,7 @@ export class Rig {
       internal: o.internal === false ? null : new InternalChat(),
       link: o.link ? (key) => `https://ember.test/o/${this.hub?.wsOf(key) ?? this.place.workspace}/${this.place.station}/${key.replaceAll(":", "%3A")}` : undefined,
       workspaces: this.workspaces ? () => this.workspaces! : undefined,
+      station: () => this.place.station,
       runners: () => o.runners ?? [],
       cold: o.cold,
       clock: this.clock,

@@ -134,6 +134,21 @@ test "a phone's new chat shows its preset's control, the composer a capsule as t
 }
 
 ///|
+test "a preset that names its model and its station shows them as its own, a press opening neither" {
+  // (the same page with a preset that names neither: each opens)
+  for bound in [false, true] {
+    for words in ["Opus 5.5", "Willow"] {
+      new_run()
+      let t = preset_mode(if bound { "newchat-preset-bound" } else { "newchat-preset-picked" })
+      guard t.find(words) is Some((x, y)) else { fail("no \{words}: \{runs(t)}") }
+      t.tap(x, y)
+      t.run_for(@ui.move_most_ms)
+      assert_eq(t.query(@ui.Role::Dialog) is Some(_), !bound, msg="\{words}, bound \{bound}: \{runs(t)}")
+    }
+  }
+}
+
+///|
 test "with no presets at all, the capsule opens a new one's dialog, not a menu of 不用预设 alone" {
   new_run()
   @sffixture.new_fix.presets.clear()

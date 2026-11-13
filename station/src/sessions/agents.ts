@@ -293,6 +293,7 @@ export const AgentsLive = (control: Control) =>
         internal: new InternalChat(),
         link: pageOf,
         workspaces: () => cloud.memberships().map((m) => m.workspace),
+        station: () => cloud.state?.station ?? null,
         cold,
         places,
       });

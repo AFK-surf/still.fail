@@ -221,13 +221,14 @@ test("a_preset_applies_its_optional_station_and_model_when_picked_or_leaves_them
   assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
   assert.equal(v(values, 2).pick.value.effort, "high");
 
-  // Picking an unrestricted preset keeps the current station and model untouched.
+  // Picking an unrestricted preset leaves the station and the model as they were picked before it: the bound one was
+  // the preset's, never written over the person's own.
   call(core, ui, 4, "newChat.pick", { scope: "ws", preset: "free", presetStation: S });
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 2).preset, "free");
-  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
-  assert.equal(v(values, 2).pick.value.effort, "high");
+  assert.equal(v(values, 2).presetModel, false);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
 
   // `connect-new:preset` starts unrestricted (`value.model === null`) while still populating panel options/efforts,
   // saves via `pick.save`, and resets to unrestricted via `pick.set({ clear: true })`.
@@ -235,7 +236,7 @@ test("a_preset_applies_its_optional_station_and_model_when_picked_or_leaves_them
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 5).value.model, undefined);
-  assert.equal(v(values, 5).option, "claude-sonnet-5-5");
+  assert.equal(v(values, 5).option, "claude-opus-5-5");
   assert.equal(v(values, 5).changed, true);
 
   call(core, ui, 6, "pick.save", { station: S, of: "connect-new:preset", model: "claude-opus-5-5", effort: "medium" });
@@ -248,5 +249,83 @@ test("a_preset_applies_its_optional_station_and_model_when_picked_or_leaves_them
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 5).value.model, undefined);
+  core.close();
+});
+
+test("what_a_preset_binds_is_not_changed_on_the_page_nor_sent_otherwise", async () => {
+  const p2 = { ...profile, id: "p2", name: "p2@x.com", models: ["claude-opus-5-5", "claude-sonnet-5-5"] };
+  const bound = {
+    id: "review", name: "Code Review", dirs: [], instructions: "", model: { model: "claude-sonnet-5-5", runtime: "claude", effort: "high" },
+    createdBy: "a@x.com", createdAt: 1, updatedAt: 1,
+  };
+  const elsewhere = { id: "far", name: "Far", dirs: [], instructions: "", station: "ws/other", createdBy: "a@x.com", createdAt: 1, updatedAt: 1 };
+  const said: Record<string, unknown> = {
+    ...base(),
+    "GET /overview": { ...overview, profiles: [p2] },
+    "GET /presets": { presets: [bound, elsewhere], candidates: [candidate] },
+    "POST /sessions": { key: "chat:c-new", thread: { id: 9, threadTs: "9.0" } },
+  };
+  const { host, core } = await started(said as never);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  // (what a call answered, the values it changed taken as `apply` takes them)
+  const answered = (id: number): Record<string, unknown> | undefined => {
+    const out = host.takeEmitted();
+    for (const [, m] of out) {
+      const x = m as Record<string, unknown>;
+      if ("value" in x) values.set(x.id as number, x.value);
+      else if ("delta" in x) values.set(x.id as number, applyOps(values.get(x.id as number), x.delta as never));
+    }
+    return answers(out, id);
+  };
+  subscribe(core, ui, 1, { topic: "presets", station: S });
+  subscribe(core, ui, 2, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
+  assert.equal(v(values, 2).presetModel, false);
+
+  // Its model: shown as the preset's, the control not to open, a pick of another refused saying how to have it.
+  call(core, ui, 3, "newChat.pick", { scope: "ws", preset: "review", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).presetModel, true);
+  assert.equal(v(values, 2).presetStations, false);
+  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
+  assert.equal(v(values, 2).pick.value.effort, "high");
+  call(core, ui, 4, "newChat.pick", { scope: "ws", station: "st", model: "claude-opus-5-5" });
+  await host.settle();
+  const refused = answered(4) as { error?: { message: string } };
+  assert.match(refused.error?.message ?? "", /Code Review/);
+  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5", "nothing changed");
+  call(core, ui, 5, "newChat.create", { station: S, key: v(values, 2).next });
+  await host.settle();
+  const made = host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions"));
+  const body = JSON.parse(new TextDecoder().decode(made!.body!));
+  assert.equal(body.model, "claude-sonnet-5-5");
+  assert.equal(body.effort, "high");
+  assert.equal(body.preset, "review");
+
+  // None picked: the person's own choice again, never written over by the preset's.
+  call(core, ui, 6, "newChat.pick", { scope: "ws", preset: "", presetStation: "" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).presetModel, false);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
+
+  // Its stations: only those it names offered; none of them here, so no chat is made on this one, and it says how.
+  call(core, ui, 7, "newChat.pick", { scope: "ws", preset: "far", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).presetStations, true);
+  assert.deepEqual(v(values, 2).stations.map((s: { id: string }) => s.id), ["st"], "the one it is on, held while no other is up");
+  call(core, ui, 8, "newChat.pick", { scope: "ws", station: "st" });
+  await host.settle();
+  assert.match(((answered(8) as { error?: { message: string } }).error?.message) ?? "", /Far/);
+  const before = host.requests.length;
+  call(core, ui, 9, "newChat.create", { station: S, key: v(values, 2).next });
+  await host.settle();
+  assert.ok("error" in (answered(9) ?? {}), "refused before anything is asked of the station");
+  assert.equal(host.requests.slice(before).filter((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions")).length, 0);
   core.close();
 });

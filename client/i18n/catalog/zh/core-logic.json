@@ -58,6 +58,8 @@
   "core-logic.choose.error.no_stations_yet": "station 列表尚未加载",
   "core-logic.choose.error.no_such": "无效的选项：{of}",
   "core-logic.choose.error.none_online": "没有在线的 station",
+  "core-logic.choose.error.preset_model": "模型由预设「{name}」决定；要换模型，请编辑这个预设，或选「不用预设」",
+  "core-logic.choose.error.preset_station": "预设「{name}」只在它指定的 station 上开对话；请换到其中一台（不在线就等它上线），或编辑预设、选「不用预设」",
   "core-logic.choose.error.station_account_subsets": "该机器的 Station 版本较旧，请先更新后再多选账号",
   "core-logic.choose.force.dropped": "所选账号「{account}」无法运行 {model}，已改为自动分配",
   "core-logic.choose.force.moves_off": "当前账号「{account}」无法运行 {model}，将自动切换到能运行它的账号",
