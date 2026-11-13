@@ -11,6 +11,7 @@ fn image_in_chat(name : String, platform? : Int = 2, w? : Double = 390.0) -> (@u
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
   nav_rested(t)
+  files_page_over(t, w, 844.0)
   walk_to_image(t, name)
   let at = t.locate("img:" + name)
   assert_true(at.length() > 0) catch { _ => () }
