@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2deb3715e](https://github.com/AFK-surf/still.fail/commit/2deb3715e3a9317abd6496747106ecc33713833f) station, mbui: centralize local Claude subscriptio | 1.94 | 2.6 | 11.17 | 30.58 | 40.07 | 27.24 | 52.05 | 93.29 | 131.22 |
 | [a424a7f9a](https://github.com/AFK-surf/still.fail/commit/a424a7f9a691f42d94d7afdfd1f4c6ad8ce1c0cf) station: support agy mid-turn steer and sandbox co | 1.94 | 2.6 | 11.16 | 30.57 | 40.03 | 27.23 | 52.03 | 93.44 | 116.81 |
 | [89ca87552](https://github.com/AFK-surf/still.fail/commit/89ca87552673e44bc44a0d13fa4ef991320d3fd4) rules: a person's log takes web devices and a work | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.52 | 181.81 |
 | [de090a12f](https://github.com/AFK-surf/still.fail/commit/de090a12f616c06e10a31e0e4e0435a3345f1433) mbui, app: open and sink touch sheets at the scree | 1.93 | 2.6 | 11.16 | 30.55 | 40 | 27.22 | 52 | 93.65 | 149.69 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [fe6d90f2b](https://github.com/AFK-surf/still.fail/commit/fe6d90f2b3cc730886b022bcd142baf4f17ee3dd) mbui-ci: the macos job takes the C units main's la | 1.93 | 2.58 | 11.1 | 30.16 | 39.8 | 26.83 | 51.11 | 94.34 | 157.09 |
 | [75a11c513](https://github.com/AFK-surf/still.fail/commit/75a11c51362f975e75e0ac7ae2d4cf523b26dbae) app: a chat's rows ease from where a way lets go o | 1.93 | 2.58 | 11.1 | 30.16 | 39.79 | 26.83 | 51.11 | 94.75 | 184.76 |
 | [c447d3c8f](https://github.com/AFK-surf/still.fail/commit/c447d3c8f9f76ca9027e30d8acb148cc80a177ea) mbui: what comes down a column in a group set off  | 1.92 | 2.58 | 11.09 | 30.15 | 39.77 | 26.83 | 51.09 | 94.88 | 158.25 |
-| [d1960a64d](https://github.com/AFK-surf/still.fail/commit/d1960a64d14e7f3350aeaaa7989a5c40653b162a) station: a local status socket, what its agents do | 1.93 | 2.58 | 11.09 | 30.15 | 39.77 | 26.82 | 51.09 | 94.54 | 147.47 |
