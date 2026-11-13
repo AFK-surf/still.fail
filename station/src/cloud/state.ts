@@ -693,14 +693,19 @@ export class Cloud {
   }
 
   /// The person logs a device of `ws` is given to work out its state itself (GET /lock/logs): those it is made of where
-  /// its chain moved (`needs`), else each holding a statement of the workspace; none without a lock pinned there.
+  /// its chain moved (`needs`), else each holding a statement of the workspace and each the chain binds a member by
+  /// (its `persons`: what an owner's device handing it over reads first, so that a member's app device on the chain and
+  /// not on their log is waited for, not dropped; no more than the state is made of once it moved); none without a
+  /// lock pinned there. Only those kept here: a bound log this station keeps none of is not given.
   logsOf(ws: string | null): string[] {
     const l = this.lockOf(ws);
     if (l === null || l.state === null) return [];
     const needed = this.needs(ws);
     if (needed.size > 0) return [...needed];
     const id = this.idOf(ws);
+    const bound = new Set(l.state.persons.values());
     return personChainsOf(this).every().filter(([g, es]) => {
+      if (bound.has(g)) return true;
       const t = wsTag(id, g);
       return es.some((e) => e.kind === "ws" && (e.body as { t?: unknown } | null)?.t === t);
     }).map(([g]) => g);

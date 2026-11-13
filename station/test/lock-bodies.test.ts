@@ -8,12 +8,12 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { Cloud, personChainsOf } from "../src/cloud/state.ts";
 import { BODY_MOST } from "../src/cloud/lock-bodies.ts";
-import { bodyHash, wsTag } from "../src/cloud/lock.ts";
+import { type Entry as StationEntry, bodyHash, entryHash, wsTag } from "../src/cloud/lock.ts";
 import { wall } from "../src/ops/fibers.ts";
 import { answerLock } from "../src/mesh/lock-sync.ts";
 import { bodiesSyncWith } from "../src/mesh/person-sync.ts";
 import { lockPartRoute } from "../src/mesh/serve.ts";
-import { WS, WS2, bring, ed, handover, station, viewerOf, world } from "./lock-moved-world.ts";
+import { Log, WS, WS2, bring, ed, handover, signed, station, viewerOf, world } from "./lock-moved-world.ts";
 
 const NOW = 2_000_000;
 mock.method(wall, "now", () => NOW * 1000);
@@ -175,4 +175,29 @@ test("before the chain moved, a station takes the statements' bodies of a handov
   for (const l of [w.bob, w.carol]) bring(c, l);
   c.takeLock([w.first, w.moved], null, true);
   assert.deepEqual(roles(c), ["alice owner", "bob admin", "carol member"]);
+});
+
+test("of a chain not moved, /lock/logs gives the logs its `person` entries bind, kept here, to a device the chain names: none to one it does not, none bound in another workspace", () => {
+  const w = world();
+  // bob and carol bind their logs on the chain (alice binds none); dan's log, of another workspace, kept here too
+  const bind = (prev: StationEntry, l: Log): StationEntry => signed({ v: 1, ws: WS, seq: prev.seq + 1, prev: entryHash(prev), at: 1000, kind: "person", body: { sub: l.sub, person: l.genesis } }, l.app.signer);
+  const p1 = bind(w.first, w.bob), p2 = bind(p1, w.carol);
+  const c = station(w, 0, false);
+  c.takeLock([w.first, p1, p2]);
+  assert.equal(c.chain(null)?.state?.persons.size, 2, "two bound");
+  for (const l of [w.bob, w.carol]) bring(c, l, false);
+  const dan = new Log("dan");
+  personChainsOf(c).keep(dan.genesis, dan.entries, WS2);
+  const logs = (v: unknown) => ((lockPartRoute(c, "logs", "GET", Buffer.alloc(0), v as never) as any)[1].chains as { genesis: string }[]).map((x) => x.genesis).sort();
+  assert.deepEqual(logs(viewerOf("alice", w.alice.app, "owner")), [w.bob.genesis, w.carol.genesis].sort(), "alice's app, named by the chain: the two bound logs");
+  assert.deepEqual(logs(viewerOf("bob", w.bob.app, "admin")), [w.bob.genesis, w.carol.genesis].sort(), "bob's app, on his own log");
+  assert.deepEqual(logs(viewerOf("alice", { base: ed() }, "owner")), [], "a device the chain does not name");
+  const { lockDevice: _, ...noProof } = viewerOf("alice", w.alice.app, "owner");
+  assert.deepEqual(logs(noProof), [], "a connection that brought no proof of its base key");
+  assert.deepEqual(logs(viewerOf("dan", dan.app, "member", WS2)), [], "a device of another workspace");
+  // a bound log this station keeps none of is not given
+  const c2 = station(w, 1, false);
+  c2.takeLock([w.first, p1, p2]);
+  bring(c2, w.bob, false);
+  assert.deepEqual(((lockPartRoute(c2, "logs", "GET", Buffer.alloc(0), viewerOf("alice", w.alice.app, "owner") as never) as any)[1].chains as { genesis: string }[]).map((x) => x.genesis), [w.bob.genesis], "carol's log, not kept at s1: none");
 });
