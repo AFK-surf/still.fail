@@ -229,10 +229,14 @@ for t in $targets; do
     # (send_steady's in three, at its tests 1 and 2: it walks its frames itself, 48, 50 and 51 sends at as many paces,
     # 151-221 s in one process at the default rate, the longest run of app 4/4's 230 s of its 5 minutes, its pages
     # ended before it, ci/default-rate-others-reckoned 43344761305, 2026-11-13; at a rate it returns at once)
+    # (answers_still's in three, a Home and a chat each: every screen walked at six paces of the core's answers, new in
+    # #5996 and not in page-seconds.txt, so dealt as one page of the column's ninetieth percentile; one process of it was
+    # 256 s of app 4/4 at 120 fps part 2/3 and 117 s of app 1/4 at 24 7 fps, which its 7 then cut at its 5 minutes,
+    # main 0d56014c 43468965521, 2026-11-13)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2 src/sfapp/send_steady_wbtest.mbt:@1@2
-      src/sfapp/chat_page_nodes_wbtest.mbt:2)
+      src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:3)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -345,12 +349,12 @@ for t in $targets; do
           # fourth's eight programs, the third's to them too)
           # (the fourth's 100, 120, 50 and 120 more at 60, 120, 24 and 7 and the default rate: chat_page_nodes' two,
           # above, as main's runs of 2026-11-13 measured the file)
-          60) specs="4,4,700,1 4,4,120,1 1,4,600,1 8,8,100,1" ;;
+          60) specs="4,4,700,1 4,4,120,1 1,4,690,1 8,8,100,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
           # says why): by the table every runner's pages 180 s a program where they were 246)
-          120) specs="4,4,500,1 12,12,26,1 2,8,370,1 12,12,400,1" ;;
+          120) specs="4,4,760,1 12,12,26,1 2,8,370,1 12,12,400,1" ;;
           # (the first's other runs at 24 and 7, the packages' programs, 105-133 s and 85-106 beside its pages, not the
           # 46 and 43 they were reckoned at: its job 235-266 s of its 5 minutes on main's runs of 2026-11-12, a3e59ea9
           # 43157398527, 36b56f21 43159426488, c9f8f144 43159891701; reckoned 300 of its cores, the third's 900 so that
@@ -364,7 +368,7 @@ for t in $targets; do
           # each over four programs, the packages' 91 and 80, app 1/4 at 24 7 fps 250-267 s of its 5 minutes on main
           # 559256a0, ecd82606, 2026-11-13, the second's 147: the first reckoned 450, the second 100. By the table
           # the first's pages go from 338 s to 262 at each rate, the second's from 387 to 450)
-          24 | 7) specs="4,4,450,2 4,4,100,2 1,4,500,2 4,4,170,1" ;;
+          24 | 7) specs="4,4,450,2 4,4,100,2 1,4,500,2 4,4,290,1" ;;
           # (at the default rate each group's other runs reckoned as they now run, branch pushes of 2026-11-13
           # (mbui-chat-made-always 43343545286): the first's real_size half 190 s and preview_tree's halves 61 and 97
           # beside its pages, some 350 s of its cores where they were reckoned 80, its pages 215-229 s, app 1/4 209-242 s
@@ -376,7 +380,7 @@ for t in $targets; do
           # (send_steady's three beside the fourth's pages were 114, 137 and 149 s, with real_size's half 78 and its
           # pages 211, app 4/4 222-237 s of its 5 minutes on main c54dc28b 43348134004 and branches after: reckoned 300,
           # by the table some 95 s of its pages go to the other three)
-          *) specs="4,4,350,1 2,4,430,1 1,4,500,1 4,4,420,1" ;;
+          *) specs="4,4,380,1 2,4,430,1 1,4,500,1 4,4,420,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
@@ -488,6 +492,10 @@ for t in $targets; do
       # send_steady's three, real_size's half and its pages, ten processes on its four cores, app 4/4 was 238-249 s
       # of its 5 minutes on 2026-11-13's pushes after #5906, the second's 158)
       "src/sfapp/chat_page_nodes_wbtest.mbt "*) [ -z "${MBUI_TEST_FPS:-}" ] && echo 2 || echo 4 ;;
+      # (answers_still's three where each rate's jobs had the most room on main 0d56014c 43468965521 without it: the
+      # first at the default rate (162 s) and at 120 (122 s), the third at 60 (150 s), the fourth at 24 and at 7, a
+      # runner each; reckoned in specs below: 31, 256, 91 and some 120 s of its cores)
+      "src/sfapp/answers_still_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "") echo 1 ;; 60) echo 3 ;; 120) echo 1 ;; *) echo 4 ;; esac ;;
       "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
