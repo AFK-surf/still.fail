@@ -629,26 +629,31 @@ function admission(m: Members, device: string): Admit {
     const state = () => m.cloud.state!;
     // Which device this is in the workspace's lock: its base key's proof for this endpoint, said once (cloud/lock.ts).
     const proof = lockProof(hello?.lock);
-    // The role the credential names: the control plane's word, which the lock may lower but not raise.
-    let named = "";
-    // Whose credential checked out (refused then for the lock alone).
-    let whose: string | null = null;
-    const check = (line: any) => {
+    // A credential line checked: the member as the lock lets them in, and the role the credential names (the control
+    // plane's word, which the lock may lower but not raise). Nothing of the connection is set here: the two are taken
+    // together, once the lock let the member in, so a renewal refused leaves the connection as it was (2026-11-14: the
+    // role one named stayed, and a member of a workspace with no lock was its owner by a credential of another
+    // workspace of this station whose lock refused the device). `verified`: told whose credential checked out, before
+    // the lock is asked.
+    const check = (line: any, verified?: (sub: string) => void): { admitted: Admitted; named: string } => {
       // Of any workspace the station is in: the viewer's is the one its requests are answered for.
       const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
-      named = admitted.viewer.role;
-      whose = admitted.viewer.sub;
+      const named = admitted.viewer.role;
+      verified?.(admitted.viewer.sub);
       if (proof) admitted.viewer.lockDevice = proof;
       // Which devices came, for a lock's owner to name (seen-devices.ts): what it says of itself with its lock proof
       // (`lock.kind`, `lock.label`), its base key.
       // Its base key only as its proof for this endpoint holds (as the cloud checked it).
       const base = proof && endpointProof(admitted.viewer.workspace, proof.base, device, proof.proof) ? proof.base : null;
       seenDevicesOf(m.cloud).saw(nowSecs(), admitted.viewer, device, base, line?.lock ?? null);
-      return inLockBringing(m.cloud, admitted, named, device, line);
+      return { admitted: inLockBringing(m.cloud, admitted, named, device, line), named };
     };
     let current: Admitted;
+    let named: string;
+    // Whose credential checked out (refused then for the lock alone).
+    let whose: string | null = null;
     try {
-      current = check(hello);
+      ({ admitted: current, named } = check(hello, (sub) => (whose = sub)));
     } catch (e) {
       return { refused: { line: refusalOf(m.cloud, hello, device, e, m.accepted?.(), whose), code: 1, reason: e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused", error: e } };
     }
@@ -718,7 +723,7 @@ function admission(m: Members, device: string): Admit {
       },
       // Renewals on the credential stream (one that fails is answered why, by the door, and ends nothing).
       renew: (line) => {
-        current = check(line);
+        ({ admitted: current, named } = check(line));
         watchExpiry();
         return { ok: true, expires_at: current.exp };
       },
