@@ -59,6 +59,40 @@ export type HandOverPlan =
   /// no device that signs: `unsaid`, with the chain's role), the target, and the state as if moved once it is said.
   | { says: Said[]; webs: Web[]; unsaid: { sub: string; role: string; email: string }[]; target: Target; asIf: AsIf };
 
+/// From when (unix seconds, by this device's clock) a workspace's chain is handed over by itself (views/lock.ts
+/// `handsOver`): null, never yet. A station or app from before `moved`, `ws` and `web` refuses a chain or log holding
+/// one, so this is set only once the builds that read them have been out seven days, with the floors raised
+/// (rules/AGENTS.md; the root AGENTS.md, Changes, checks and CI).
+export const HAND_OVER_FROM: number | null = null;
+/// How long the person who turned safe mode on has to hand the chain over before another owner's device does (the
+/// owner, 2026-11-14): from `HAND_OVER_FROM` or the genesis, whichever is later.
+export const HAND_OVER_FIRST_SECS = 14 * 86400;
+
+/// Who turned safe mode on: the person of the device the genesis names with the key that signed it (its body's
+/// `owner` where it names none so).
+export function genesisPerson(entries: readonly Entry[]): string | null {
+  const g = entries[0];
+  if (g === undefined || g.kind !== "genesis") return null;
+  const b = g.body as J;
+  const d = arr(b?.devices).find((x) => typeof x?.sign_key === "string" && x.sign_key === g.sig?.key);
+  return typeof d?.sub === "string" ? d.sub : typeof b?.owner === "string" ? b.owner : null;
+}
+
+/// Whether `sub`'s device is the one to hand the chain `entries` over by itself (the owner, 2026-11-14): an owner
+/// on it, and the person who turned safe mode on (`genesisPerson`) while still an owner there; another owner only
+/// once `now` is HAND_OVER_FIRST_SECS past `from` (HAND_OVER_FROM) and the genesis, or at once where that person is no
+/// owner on it any more (taken out, or a role below). By the chain as held and this device's clock (unix seconds).
+/// Whether this device may (its person's own app device, by the chain's signer, its log pinned) is the plan's.
+export function mayHandOver(entries: readonly Entry[], sub: string, from: number, now: number): boolean {
+  if (entries.length === 0 || movedRoot(entries) !== null) return false;
+  const f = fold(entries);
+  if (f.members.get(sub)?.role !== "owner") return false;
+  const first = genesisPerson(entries);
+  if (first === sub) return true;
+  if (first === null || f.members.get(first)?.role !== "owner") return true;
+  return now >= Math.max(from, entries[0]!.at) + HAND_OVER_FIRST_SECS;
+}
+
 /// The handover's plan for workspace `ws` by `who`, of the chain held (`entries`, its active chain), the person logs
 /// held (`chains`, by genesis; this person's own as it stands with what is pending after it), the bodies kept and this
 /// device's clock (unix seconds).

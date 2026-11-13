@@ -205,6 +205,9 @@ export interface HostOf<Message> extends BaseHost {
   /// Whether the core offers `lock.handOver` (views/lock.ts `handOver`): a host made for tests says so (testing.ts, the
   /// e2e device's, apps/mbui/e2e/device.ts), no other; nothing a person sets and nothing read of the environment.
   handOverByTests?: boolean;
+  /// Whether a workspace's chain is handed over by itself (views/lock.ts `handsOver`) though `HAND_OVER_FROM` is not
+  /// reached: a host made for tests says so where a test asks for it (testing.ts, the e2e device's), no other.
+  handOverAuto?: boolean;
 
   /// Delivers a message to one connected UI. A property, not a method: a method's parameter is compared both ways, and
   /// a host of UIs sent something else (or nothing: `HostOf<never>`) would pass for this one.

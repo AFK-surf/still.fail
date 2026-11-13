@@ -43,7 +43,8 @@ const seedOf = (n: number) => {
 const SETTINGS = (keys: unknown) => ({ origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: keys });
 const DAY = 86400;
 
-/// `flag`: the host offers the handover (by default), which alone lets a page be said before any chain moved.
+/// `flag`: the host offers the handover and hands chains over by itself (by default), which alone lets a page be said
+/// before any chain moved.
 async function setUp(o: { flag?: boolean } = {}) {
   const g = grant();
   const base = ed();
@@ -72,6 +73,8 @@ async function setUp(o: { flag?: boolean } = {}) {
     return { ws: signed(e as Omit<StationEntry, "sig">, owner.app.signer) as unknown as Entry };
   }, (host) => {
     host.handOverByTests = o.flag !== false;
+    // (pages said before any chain moved only where chains are handed over by themselves: views/lock.ts `handsOver`)
+    host.handOverAuto = o.flag !== false;
     now = Math.floor(host.nowMs() / 1000);
     host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(myLog)));
     host.storage.set("personal-signer-id", utf8(k.id));

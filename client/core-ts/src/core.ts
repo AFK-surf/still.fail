@@ -67,7 +67,7 @@ import { Rigs } from "./rigs.ts";
 import { Devices } from "./devices.ts";
 import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { answersOf, asked, bindPerson, enrolled, inForceOf, keepToPerson, lockSeen, movedHere, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, takeOffBound, tellStations, tookOrRefused, withBound } from "./views/lock.ts";
+import { answersOf, asked, bindPerson, enrolled, inForceOf, keepToPerson, lockSeen, movedBySelf, movedHere, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, takeOffBound, tellStations, tookOrRefused, withBound } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -323,6 +323,8 @@ export class Core {
               inner.runner.fork(keepToPerson(inner, ws));
               inner.runner.fork(ownLockFor(inner, ws));
               refusedAgain(inner, ws);
+              // (handed over by itself once a station took all it said: views/lock.ts `movedBySelf`)
+              inner.runner.fork(movedBySelf(inner, ws));
               // (where its chain moved, the state in force made anew of the person's log now, the vaults following it:
               // views/lock.ts `inForceOf`, whether or not anything shown reads it)
               if (movedHere(inner, ws)) inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => void inForceOf(inner, ws)))));
