@@ -680,9 +680,9 @@ export class PersonalLock {
   }
 
   /// This device's statements the chain pinned left (kept aside) that are still to be signed again, the seed not in
-  /// hand since (`#signAgain` signs them with the next act that has it): told as not in effect meanwhile, in the words
-  /// of a pending one whose lock changed after it (`failedTrusted`), each by what the person did (`#shown`). One whose
-  /// subject was decided since, or said already, is not.
+  /// hand since (`#signAgain` signs them with the next act that has it, or lets them be): told as not in effect
+  /// meanwhile, in the words of a pending one whose lock changed after it (`failedTrusted`), each by what the person did
+  /// (`#shown`). One said already since, or decided since by this device's own later act, is not.
   #lostStated(sub: string): Pending[] {
     const pinned = this.#pinned.get(sub) ?? [];
     const aside = this.#aside.get(sub) ?? [];
@@ -690,7 +690,10 @@ export class PersonalLock {
       if (e.kind !== "ws" || e.sig?.key !== this.#myKey || this.#handled.has(hashOf(e))) return [];
       const as = this.#shownOf(e);
       const id = this.#actsOf(e).at(-1)!;
-      if (as === null || as.act === null || this.#dismissed.has(id) || this.#how(pinned, aside, e) !== "sign") return [];
+      if (as === null || as.act === null || this.#dismissed.has(id)) return [];
+      // (to be signed again, or let be for what someone else said since; not what this device's own later act decided)
+      const how = this.#how(pinned, aside, e, undefined, (x) => (x !== e && x.sig?.key === this.#myKey ? null : this.#subject(x)));
+      if (how !== "sign" && how !== "otherwise") return [];
       return [{ id, entry: e, act: as.act, name: as.name, ...(as.role !== undefined ? { role: as.role } : {}), at: e.at * 1000, state: "failed", as: "trusted" }];
     });
   }

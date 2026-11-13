@@ -2329,6 +2329,8 @@ function ownPendingRows(inner: Inner, ws: string, mine: readonly Pending[]): Pen
   const idOf = (e: Entry) => str(get(e.body, "id")) ?? ids.get(str(get(e.body, "key")) ?? "") ?? null;
   return shown
     .filter(({ item }) => {
+      // (a statement on its own workspace's topic alone, as a chain entry is; one whose body is not kept here on none)
+      if (item.entry.kind === "ws") return bodyOfEntry(inner, item.entry)?.ws === ws;
       const id = idOf(item.entry);
       return id === null || !mine.some((w) => w.entry.kind === item.entry.kind && get(w.entry.body, "id") === id);
     })

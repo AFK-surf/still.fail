@@ -413,3 +413,42 @@ test("bob taken out, its statements taken by A, the cloud's write then failing: 
   assert.deepEqual(w.said(), ["member r3 member", "member.remove r2"], `the call: ${out.error?.code} ${out.error?.message}`);
   assert.equal(w.members(), "r3 member, s1 owner");
 });
+
+type Row = { id: string; state: string; text: string; stations: string[] };
+const rowsOf = (v: { pending?: Row[] } | undefined) => (v?.pending ?? []).map((x) => [x.state, x.text, x.stations]);
+
+test("the lock's topic: a statement pending shows as a chain entry's, its workspace's stations named, on its workspace's topic alone; gone once taken", async () => {
+  const w = await setUp({ two: true });
+  const lock = await w.r.watch({ topic: "lock", workspace: "ws" });
+  const other = await w.r.watch({ topic: "lock", workspace: "w2" });
+  w.st.silent = true;
+  const out = await w.run(roster(w.inner, "s1", "ws", { member: "r2", gone: true }));
+  const row = (out.ok as { pending: Row }).pending;
+  assert.match(row.text, /^移除成员 .+：已记下，等 studio 上线后生效$/);
+  assert.deepEqual(rowsOf(await lock()), [["waiting", row.text, ["studio"]]], "the call's row, as a chain entry's");
+  assert.deepEqual(rowsOf(await other()), [], "not on w2's topic");
+  w.st.silent = false;
+  await w.run(w.inner.adb.personal().refresh("s1"));
+  await w.r.host.time.pass(5000);
+  assert.equal(w.members(), "r3 member, s1 owner");
+  assert.deepEqual(rowsOf(await lock()), [], "gone once taken");
+});
+
+test("the lock's topic: a statement lost with no seed in hand a failed row; let be once the seed is in hand, a failed row saying what changed; each dismissed by its call", async () => {
+  const w = await setUp({ devices: true });
+  const lock = await w.r.watch({ topic: "lock", workspace: "ws" });
+  await w.run(roster(w.inner, "s1", "ws", { member: "r2", role: "member" }));
+  await w.lostOff((lost) => [{ ...meaning(lost[2]!), role: "admin" }]);
+  const lost = (await lock()).pending as Row[];
+  assert.deepEqual(lost.map((x) => x.state), ["failed"], `lost: ${JSON.stringify(lost)} ${JSON.stringify(w.inner.adb.personal().pending("s1"))}`);
+  assert.match(lost[0]!.text, /^把 .+ 改为.+：没有生效/);
+  await w.r.ask("lock.pendingDismiss", { workspace: "ws", id: lost[0]!.id });
+  assert.deepEqual(rowsOf(await lock()), [], "dismissed");
+  const inC = await takeC(w);
+  assert.equal(inC.error, undefined, inC.error?.message);
+  const let_ = (await lock()).pending as Row[];
+  assert.deepEqual(let_.map((x) => x.state), ["failed"], `let be: ${JSON.stringify(let_)} ${JSON.stringify(w.inner.adb.personal().pending("s1"))}`);
+  assert.notEqual(let_[0]!.text, lost[0]!.text, "the words of one changed after it");
+  await w.r.ask("lock.pendingDismiss", { workspace: "ws", id: let_[0]!.id });
+  assert.deepEqual(rowsOf(await lock()), [], "dismissed");
+});
