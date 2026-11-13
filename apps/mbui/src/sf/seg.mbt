@@ -454,7 +454,7 @@ fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400) -
 ///|
 /// The same of a node's words: in the theme the window's tree's words are drawn in (@ui.tree_theme, view_host's
 /// words_style), whatever theme an old view was left in.
-fn node_words_w(s : String, size : Double, weight? : Int = 400) -> Double {
+pub fn node_words_w(s : String, size : Double, weight? : Int = 400) -> Double {
   words_w(@ui.tree_theme().tabular, s, size, weight~)
 }
 

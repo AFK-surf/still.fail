@@ -29,8 +29,23 @@ fn bar_foot() -> Double {
 }
 
 ///|
+fn bar_foot_of(r : ChatRef) -> Double {
+  bar_foot() + bar_extra_target(r)
+}
+
+///|
 fn list_top() -> Double {
   status_top() + chat_bar_h + 14.0
+}
+
+///|
+fn list_top_of(r : ChatRef) -> Double {
+  list_top() + bar_extra_target(r)
+}
+
+///|
+fn list_top_live(v : @view.View, r : ChatRef) -> Double {
+  list_top() + bar_extra_shown(v, r)
 }
 
 ///|
@@ -109,9 +124,9 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, barred? : Bo
           list,
           chat_foot_room(c, r, Some(v)),
           settings_core(src, w),
-          top=list_top(),
+          top=list_top_of(r),
           lead=unread_lead(),
-          bar=bar_foot(),
+          bar=bar_foot_of(r),
           foot=list_foot(),
           // (its bar the page's node's: a picture flying from it drawn under that bar in the page's slot)
           slotted=barred,
@@ -133,7 +148,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, barred? : Bo
           // as of chat_bar's; the page's Bar all the same, so that what flies in it lands under it, in the page and
           // cut to it, not at the frame's end over whatever is beside the page as it goes)
           let room = c.layer(fn() {
-            let room = c.box(style=@ui.style(w=Full, h=Fixed(top_bar_h())), fn() {  })
+            let room = c.box(style=@ui.style(w=Full, h=Fixed(top_bar_h() + bar_extra_target(r))), fn() {  })
             c.floats_over(room)
           })
           c.stratum(room, Bar)
@@ -183,6 +198,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   }
   pick_clear()
   readings.remove(k)
+  chat_bar_states.remove(k)
   // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
   // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again
   // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
@@ -659,8 +675,8 @@ fn avatar(
 ///|
 /// The chat read the first time (the library's Waiting): its messages to come in their bones, as its list draws them,
 /// the first as far under the bar as the list's first row; what could not be read over them in red (the bones still).
-fn waiting_messages(c : @ui.Ctx, failed : String?) -> Unit {
-  @sf.waiting(c, fn() { @sfpages.chat_messages_sample(c, list_top() - top_bar_h()) }, error=failed.unwrap_or(""))
+fn waiting_messages(c : @ui.Ctx, failed : String?, extra? : Double = 0.0) -> Unit {
+  @sf.waiting(c, fn() { @sfpages.chat_messages_sample(c, list_top() + extra - top_bar_h()) }, error=failed.unwrap_or(""))
 }
 
 ///|

@@ -557,7 +557,7 @@ fn narrow_made_as(
                   tips=@sf.TipLayer::new(fn() { None }),
                   stint~,
                   shows~,
-                  top=list_top,
+                  top=fn() { list_top_live(col, r) },
                   foot=list_foot,
                   composer~,
                   lead=unread_lead(),
