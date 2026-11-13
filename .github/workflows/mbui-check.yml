@@ -569,8 +569,12 @@ jobs:
           - { group: 4/4, fps: "60", part: 1/3 }
           - { group: 4/4, fps: "60", part: 2/3 }
           - { group: 4/4, fps: "60", part: 3/3 }
-          - { group: 1/4, fps: "24 7" }
-          - { group: 2/4, fps: "24 7" }
+          # (the first's and the second's a runner a rate too since: both in turn 4.2 and 4.7 min of their five minutes on
+          # main af1435b8 43476543010, 2026-11-13, their time many files' frames)
+          - { group: 1/4, fps: "24" }
+          - { group: 1/4, fps: "7" }
+          - { group: 2/4, fps: "24" }
+          - { group: 2/4, fps: "7" }
           - { group: 3/4, fps: "24 7" }
           # (the fourth's at 24 and at 7 a runner each: one after the other 275 s of its runs, 289 s of its five minutes on
           # a branch, 42649543160, 2026-11-10; its time many files' frames, no one test's)
