@@ -7,7 +7,7 @@
 import { Effect } from "effect";
 import type { Inner } from "../core.ts";
 import type { Call } from "../core/calls.ts";
-import { type Handler, handlers } from "../core/execute.ts";
+import { type Handler, execute, handlers } from "../core/execute.ts";
 import { CoreError } from "../error.ts";
 import * as ops from "../ops.ts";
 import { Priority } from "../sync/scheduler.ts";
@@ -22,6 +22,11 @@ export type OwnRelay = { url: string; by?: string };
 export type KeptWays = { relays: OwnRelay[]; off: string[]; at: number; station: string };
 
 type Of = Extract<Call, { kind: "ways" }>;
+
+/// How the cloud is written where no station keeps the ways: as the app's own call went before, execute's cloud op
+/// (`handlers.op` is a station's, which took the cloud's path for a station's address and threw; a test puts its own
+/// here).
+export const cloudOp: { run: Handler } = { run: (inner, call, progress, at, ctx) => execute(inner, call, progress, at, ctx) };
 
 /// What a station answered as kept ways; null when it is none.
 export function keptOf(raw: unknown): KeptWays | null {
@@ -92,8 +97,8 @@ function run(inner: Inner, c: Of, progress: Parameters<Handler>[2], at: Paramete
     }
     if (lost !== null) return yield* Effect.fail(lost);
     const op = ops.request(`workspace.${c.name}`, c.params);
-    if (op === null || handlers.op === undefined) return yield* Effect.fail(CoreError.invalid("no way to change the workspace's ways"));
-    return yield* handlers.op(inner, { kind: "op", op }, progress, at, ctx);
+    if (op === null) return yield* Effect.fail(CoreError.invalid("no way to change the workspace's ways"));
+    return yield* cloudOp.run(inner, { kind: "op", op }, progress, at, ctx);
   });
 }
 
