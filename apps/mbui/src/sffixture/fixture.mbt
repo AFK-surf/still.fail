@@ -2009,13 +2009,10 @@ pub fn fixture(mode : String) -> Source {
     topic_lease_own: None,
     call: fn(name, params, done) {
       // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so; but one
-      // whose answer changes only signals, as the core's is taken as it comes, sfbase's calls_said)
-      let done = fn(r) {
-        if !@sfbase.call_said(name) {
-          @ui.came_from_outside()
-        }
-        done(r)
-      }
+      // whose answer changes only signals, as the core's is taken as it comes, sfbase's calls_said. One asked as a read
+      // works its value out (the client's chats.window before a chat's topic) once that read is over, as a core's
+      // message is heard between what the app runs: @ui.answered_from_outside)
+      let done = fn(r) { @ui.answered_from_outside(fn() { done(r) }, told=!@sfbase.call_said(name)) }
       // a chats' list's window: kept as the core keeps it, growing only, the list given by it as the core's comes, from
       // outside, not in the middle of what asked it (fix_later)
       if name == "chats.window" {

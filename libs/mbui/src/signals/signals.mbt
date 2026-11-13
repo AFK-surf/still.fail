@@ -53,6 +53,10 @@ priv struct Run {
   afters : Array[(() -> Unit)?]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
+  /// how deep in computeds' getters, and what is to be done once the outermost is over (after_computing): not this
+  /// library's either
+  mut computing : Int
+  computed_afters : Array[() -> Unit]
 }
 
 ///|
@@ -68,6 +72,8 @@ let run : Run = {
   flushing: 0,
   afters: [],
   draining: false,
+  computing: 0,
+  computed_afters: [],
 }
 
 ///|
@@ -98,6 +104,8 @@ priv struct ComputedState[T] {
   mut read_dependency : Computed[Unit]?
   /// An optional direct answer for an untracked read, without installing graph dependencies.
   mut untracked_read : (() -> T?)?
+  /// where it was made (computed's caller): said where it is read as its first value is worked out (Computed::get)
+  made_at : SourceLoc
 }
 
 ///|
@@ -299,9 +307,19 @@ pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
 }
 
 ///|
-/// A computed: `getter` worked out (given what it made last) as it is read after what it read changed.
-pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
-  let state : ComputedState[T] = { value: None, getter, same, untracked_dispose: false, read_dependency: None, untracked_read: None }
+/// A computed: `getter` worked out (given what it made last) as it is read after what it read changed. `loc`: where it
+/// was made, said should it be read as its first value is worked out (Computed::get).
+#callsite(autofill(loc))
+pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool, loc~ : SourceLoc) -> Computed[T] {
+  let state : ComputedState[T] = {
+    value: None,
+    getter,
+    same,
+    untracked_dispose: false,
+    read_dependency: None,
+    untracked_read: None,
+    made_at: loc,
+  }
   Computed(
     ReactiveNode::new(
       NONE,
@@ -315,8 +333,14 @@ pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
 ///|
 /// A computed which releases its dependencies after a one-off read outside the graph. When read by another signal,
 /// its dependencies stay until the last reader leaves, just as for any computed.
-pub fn[T] computed_scoped(getter : (T?) -> T, same? : (T, T) -> Bool, untracked_read? : (() -> T?)? = None) -> Computed[T] {
-  let c = computed(getter, same?)
+#callsite(autofill(loc))
+pub fn[T] computed_scoped(
+  getter : (T?) -> T,
+  same? : (T, T) -> Bool,
+  untracked_read? : (() -> T?)? = None,
+  loc~ : SourceLoc,
+) -> Computed[T] {
+  let c = computed(getter, same?, loc~)
   holds_up(c.0)
   c.1.untracked_dispose = true
   c.1.untracked_read = untracked_read
@@ -325,8 +349,14 @@ pub fn[T] computed_scoped(getter : (T?) -> T, same? : (T, T) -> Bool, untracked_
 
 ///|
 /// A value whose graph readers also follow a shared resource. A one-off read acquires no resource and leaves no links.
-pub fn[T] computed_following(getter : (T?) -> T, dependency : Computed[Unit], same? : (T, T) -> Bool) -> Computed[T] {
-  let c = computed_scoped(getter, same?)
+#callsite(autofill(loc))
+pub fn[T] computed_following(
+  getter : (T?) -> T,
+  dependency : Computed[Unit],
+  same? : (T, T) -> Bool,
+  loc~ : SourceLoc,
+) -> Computed[T] {
+  let c = computed_scoped(getter, same?, loc~)
   c.1.read_dependency = Some(dependency)
   c
 }
@@ -464,12 +494,15 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   let prev_sub = set_active_sub(Some(c))
   run.cycle += 1
   let old_value = state.value
+  run.computing += 1
   let value = (state.getter)(old_value)
+  run.computing -= 1
   state.value = Some(value)
   run.active_sub = prev_sub
   c.flags = c.flags & RECURSED_CHECK.lnot()
   purge_deps(c)
   finish_computed_read(c)
+  computed_afters_due()
   match old_value {
     Some(old) => !same_as(state.same, old, value)
     None => true
@@ -607,6 +640,35 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 }
 
 ///|
+/// `f` done once no computed's getter runs (the outermost one over, its value kept); none running, now. Not
+/// alien-signals': a hook beside it, for what comes from outside the graph as a getter runs (a made-up core answering
+/// at once what a read asked it) and must be heard as a device's is, between what the app runs: told in the getter, it
+/// runs what reads that computed, which reads it again half made. What it sets waits as ever for a change under way
+/// (after_flush's).
+pub fn after_computing(f : () -> Unit) -> Unit {
+  if run.computing > 0 {
+    run.computed_afters.push(f)
+  } else {
+    f()
+  }
+}
+
+///|
+/// The outermost getter over: what waited for it (after_computing) done, in order, read by nothing that reads now.
+fn computed_afters_due() -> Unit {
+  if run.computing > 0 || run.computed_afters.is_empty() {
+    return
+  }
+  let due = run.computed_afters.copy()
+  run.computed_afters.clear()
+  let was = set_active_sub(None)
+  for f in due {
+    f()
+  }
+  run.active_sub = was
+}
+
+///|
 /// The computed's value, worked out again first if what it read changed since (computedOper).
 pub fn[T] Computed::get(self : Computed[T]) -> T {
   let node = self.0
@@ -650,13 +712,22 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
   } else if flags == 0 {
     node.flags = MUTABLE | RECURSED_CHECK
     let prev_sub = set_active_sub(Some(node))
+    run.computing += 1
     state.value = Some((state.getter)(None))
+    run.computing -= 1
     run.active_sub = prev_sub
     node.flags = node.flags & RECURSED_CHECK.lnot()
     finish_computed_read(node)
+    computed_afters_due()
   }
   track(node)
-  let value = state.value.unwrap()
+  // (read again from inside its own first working out: something its getter did ran what reads it, which read it back
+  // half made; alien-signals' unwrap, silent on wasm-gc and leaving the graph mid-change)
+  guard state.value is Some(value) else {
+    @halt.saying(
+      "a computed read as its first value is worked out (made at \{state.made_at}): what its getter did ran what reads it",
+    )
+  }
   if untracked && node.subs is None {
     unwatched(node)
   }

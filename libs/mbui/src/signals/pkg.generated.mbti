@@ -18,15 +18,17 @@ pub const WATCHING : Int32 = 2
 
 pub fn active_sub() -> ReactiveNode?
 
+pub fn after_computing(() -> Unit) -> Unit
+
 pub fn after_flush(() -> Unit) -> Unit
 
 pub fn batch_depth() -> Int32
 
-pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
+pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool, loc~ : SourceLoc) -> Computed[T]
 
-pub fn[T] computed_following((T?) -> T, Computed[Unit], same? : (T, T) -> Bool) -> Computed[T]
+pub fn[T] computed_following((T?) -> T, Computed[Unit], same? : (T, T) -> Bool, loc~ : SourceLoc) -> Computed[T]
 
-pub fn[T] computed_scoped((T?) -> T, same? : (T, T) -> Bool, untracked_read? : (() -> T?)?) -> Computed[T]
+pub fn[T] computed_scoped((T?) -> T, same? : (T, T) -> Bool, untracked_read? : (() -> T?)?, loc~ : SourceLoc) -> Computed[T]
 
 pub fn effect(() -> Unit, loc~ : SourceLoc) -> () -> Unit
 

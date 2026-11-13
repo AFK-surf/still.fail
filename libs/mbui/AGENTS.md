@@ -288,7 +288,10 @@ yet and you can add one, add it.
   picker gave (`MB_OUTSIDE_PICK`, taken then into what reads it: hostcall.mbt's `outside_take`; Windows' and Linux's
   told it as a frame began till 2026-11-11): Linux's `host_contract.sh linux picked`. What the window's tree
   was told in a frame is drawn by that frame whenever in it it was told (ui's `view_owes`: its changes waiting count,
-  not only whether it is due).
+  not only whether it is due). A made-up core that answers at once (an app's fixture, a replay's kept answers)
+  answers through ui's `answered_from_outside`: what a computed's getter asked it is given once that getter is over
+  (`@signals.after_computing`), never in it, where what it told ran what reads that computed and read it again half
+  made (`src/ui/answered_in_read_wbtest.mbt`; the coordinator of the migration, 2026-11-14).
 - What runs in the app never asks whether a Tester runs it: no `fake.val`, no switch only a Tester sets. What differs
   under a Tester is its fake host's answer (`impl Host for FakeHost`, a capability such as `rows_on_pixels`,
   `answers_by_frame`, answered as a device would unless the test says otherwise) or what the Tester does itself after a
