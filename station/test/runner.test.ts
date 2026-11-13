@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { findRunner } from "../src/agents/process.ts";
+import { ackedOffset, findRunner, outFile } from "../src/agents/process.ts";
 import { RunnerConnection, existingRunners, liveRunners, startRunner } from "../src/agents/runner.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -53,4 +53,61 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   // Done: the runner is gone.
   await until(() => existingRunners(data).length === 0);
   assert.deepEqual(await liveRunners(data), []);
+});
+
+test("a line of many of the runner's pieces comes whole, where it is, and is acknowledged", { skip: process.platform === "win32" && "runner-windows.test.ts" }, async () => {
+  const data = mkdtempSync(join(tmpdir(), "runner-test-"));
+  // A line of 1 MB (sixteen of the runner's 64 KB pieces), one after it, then it waits on its stdin.
+  const long = 1 << 20;
+  const script = `head -c ${long} /dev/zero | tr '\\0' x; echo; echo after; read x; exit 0`;
+  const info = await startRunner(data, "t3", "/bin/sh", ["-c", script], process.env, data);
+  const got: [string, number, number][] = [];
+  const a = new RunnerConnection(info, (stream, text, from, to) => void (stream === "out" && got.push([text, from, to])));
+  await until(() => got.length === 2);
+  await a.detach();
+  assert.deepEqual(got, [["x".repeat(long), 0, long + 1], ["after", long + 1, long + 7]]);
+  // Both acknowledged: the runner sends a next station nothing of them.
+  assert.equal((await ackedOffset(info, outFile(data, "t3"))).at, long + 7);
+  const again: string[] = [];
+  const b = new RunnerConnection(info, (stream, text) => void again.push(`${stream}:${text}`));
+  // Once attached (the attach is sent as it connects), its stdin closed: it exits.
+  await new Promise((resolve) => (b as unknown as { socket: import("node:net").Socket }).socket.once("connect", resolve));
+  b.closeStdin();
+  assert.deepEqual(await b.exited, { code: 0, signal: null });
+  assert.deepEqual(again, []);
+  b.done();
+  await until(() => existingRunners(data).length === 0);
+});
+
+test("a long line given a piece at a time is joined once: what it copies is its own size, not its square", async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "runner-test-"));
+  const got: [number, number, number][] = [];
+  const line = (_: "out" | "err", text: string, from: number, to: number) => void got.push([text.length, from, to]);
+  // No runner behind it: the pieces are given as a runner's messages would give them.
+  const conn = new RunnerConnection({ id: "none", runner: 0, pid: 0, pgid: 0, startedAt: 0, program: "", args: [], socket: join(data, "no-such.sock") }, line);
+  (conn as unknown as { socket: import("node:net").Socket }).socket.on("error", () => {});
+  const give = (at: number, bytes: Buffer) => (conn as unknown as { data(s: "out", at: number, b: Buffer, l: typeof line): void }).data("out", at, bytes, line);
+  const real = Buffer.concat;
+  let copied = 0;
+  Buffer.concat = ((list: readonly Uint8Array[], length?: number) => {
+    const joined = real(list, length);
+    copied += joined.length;
+    return joined;
+  }) as typeof Buffer.concat;
+  try {
+    const long = 8 << 20;
+    const bytes = Buffer.alloc(long + 4, "x".charCodeAt(0));
+    bytes[long] = 10;
+    bytes[long + 3] = 10;
+    const piece = 64 * 1024;
+    for (let i = 0; i < bytes.length; i += piece) give(100 + i, bytes.subarray(i, i + piece));
+    await (conn as unknown as { queue: Promise<void> }).queue;
+    Buffer.concat = real;
+    assert.deepEqual(got, [[long, 100, 100 + long + 1], [2, 100 + long + 1, 100 + long + 4]]);
+    t.diagnostic(`copied ${copied} bytes for a line of ${long}`);
+    assert.ok(copied <= 2 * long, `copied ${copied} bytes for a line of ${long}`);
+  } finally {
+    Buffer.concat = real;
+    conn.detach();
+  }
 });

@@ -146,12 +146,49 @@ export async function allLeft() {
   while (leaving.size > 0) await Promise.all(leaving);
 }
 
+/// Whole lines of bytes that come a piece at a time: a runner's messages of 64 KB (`RunnerConnection`), an output read
+/// again a part at a time (process.ts `linesWithin`). A line's pieces are kept as they came and joined once at its end,
+/// and a newline is looked for only in the piece that came. Joined again with each piece and searched from its start, a
+/// line of L bytes copied and scanned L²/(2·64 KB) bytes on the main thread: a `thread/resume` reply of 160 MB on one
+/// line, some 200 GB, and stations killed by the launcher one after another as they took it up (2026-11-13).
+export class Lines {
+  private parts: Buffer[] = [];
+  private size = 0;
+
+  /// The lines `bytes` ends, in order, without their newline; what it leaves of one is held for the next piece.
+  take(bytes: Buffer): Buffer[] {
+    const lines: Buffer[] = [];
+    let from = 0;
+    for (let i = bytes.indexOf(10); i >= 0; i = bytes.indexOf(10, from)) {
+      const last = bytes.subarray(from, i);
+      if (this.parts.length === 0) lines.push(last);
+      else {
+        this.parts.push(last);
+        lines.push(Buffer.concat(this.parts, this.size + last.length));
+        this.drop();
+      }
+      from = i + 1;
+    }
+    if (from < bytes.length) {
+      this.parts.push(bytes.subarray(from));
+      this.size += bytes.length - from;
+    }
+    return lines;
+  }
+
+  /// Lets go of what is held of a line: the next piece begins one.
+  drop() {
+    this.parts = [];
+    this.size = 0;
+  }
+}
+
 /// A connection to one runner: what the agent says, line by line, from where this station last acknowledged.
 export class RunnerConnection {
   readonly info: RunnerInfo;
   private socket: Socket;
   private carry = "";
-  private partial: Record<"out" | "err", Buffer> = { out: Buffer.alloc(0), err: Buffer.alloc(0) };
+  private lines: Record<"out" | "err", Lines> = { out: new Lines(), err: new Lines() };
   /// Where each stream's next line starts, as the runner counts bytes.
   private at: Record<"out" | "err", number> = { out: -1, err: -1 };
   private acked: Record<"out" | "err", number> = { out: 0, err: 0 };
@@ -184,12 +221,10 @@ export class RunnerConnection {
 
   private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string, from: number, to: number) => void | Promise<void>) {
     if (this.at[stream] < 0) this.at[stream] = at;
-    let buf = Buffer.concat([this.partial[stream], bytes]);
-    for (let i = buf.indexOf(10); i >= 0; i = buf.indexOf(10)) {
-      const text = buf.subarray(0, i).toString("utf8");
-      buf = buf.subarray(i + 1);
+    for (const whole of this.lines[stream].take(bytes)) {
+      const text = whole.toString("utf8");
       const start = this.at[stream];
-      this.at[stream] += i + 1;
+      this.at[stream] += whole.length + 1;
       const end = this.at[stream];
       this.queue = this.queue.then(async () => {
         await line(stream, text, start, end);
@@ -197,7 +232,6 @@ export class RunnerConnection {
         this.send({ op: "ack", out: this.acked.out, err: this.acked.err, ...(this.keep !== null ? { keep: this.keep } : {}) });
       });
     }
-    this.partial[stream] = buf;
   }
 
   private send(message: unknown) {
