@@ -213,7 +213,16 @@ pub fn Tree::lift_cut(self : Tree, id : NodeId) -> (Double, Double, Double, Doub
   // (how far it is from that end: 0 there, 1 at the other)
   let p = 1.0 - l.k
   let t = if e.at_start { p } else { 1.0 - p }
-  Some((c0 + (x0 - c0) * t, c1 + (y0 - c1) * t, c2 + (x1 - c2) * t, c3 + (y1 - c3) * t))
+  // (and within where it is drawn on its way: what is seen of it, the box its corners round, Tree::lift_cut_corners)
+  let (lx, ly, lw, lh) = self.lift_rect(l)
+  Some(
+    (
+      dmax(c0 + (x0 - c0) * t, lx),
+      dmax(c1 + (y0 - c1) * t, ly),
+      dmin(c2 + (x1 - c2) * t, lx + lw),
+      dmin(c3 + (y1 - c3) * t, ly + lh),
+    ),
+  )
 }
 
 ///|
