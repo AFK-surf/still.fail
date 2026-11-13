@@ -1,6 +1,6 @@
 // The station held to the fourth round's model (lock-roster4-model.ts, its defaults), as rules-fork-check.ts holds the
 // rules to it: at each quarter of a drawn world and at its end, and at each look of the scripted ones (`look4.at`), every
-// station of the model's world is stood for by a real station (`Cloud` with its `PersonChains` and `LockBodies`) given
+// keeper of the model's world (each station, and each device, which keeps a workspace as a station does) is stood for by a real station (`Cloud` with its `PersonChains` and `LockBodies`) given
 // what the model's keeper stores then: every entry of every log it stores, as another keeper's; the workspace chain
 // with its `moved` (the model's old chain where the world has one, M7; else a genesis and a `moved {root}` by the root's
 // own app); and the bodies the world offered it, in the order made and again in a drawn other order. Its clock is the
@@ -120,9 +120,11 @@ function d4Of(c: Cloud): D4 | string {
   return { on: "on", settings: canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys }), members, stations: [...s.stations.keys()].sort() };
 }
 
-/// Every station of `w`, compared at `at`.
-export function stations4(o: Out, w: World4, at: string, r: Rng) {
-  for (const h of w.stations) {
+/// Every keeper of `w` that goes by a root, compared at `at`: each station, and each device too, stood for by a station
+/// given what it keeps (a device keeps a workspace as a station does: the model's keepers are both); `extra`, bodies
+/// offered there that no keeper keeps (M2's).
+export function stations4(o: Out, w: World4, at: string, r: Rng, extra: Body[] = []) {
+  for (const h of w.holders) {
     for (const [ws, root] of w.pinsOf(h)) {
       if (!root) continue;
       o.stations++;
@@ -132,8 +134,8 @@ export function stations4(o: Out, w: World4, at: string, r: Rng) {
       const kept = w.keptOf(h);
       const refusedBy = new Map<string, string>();
       const offered: Body[] = [];
-      for (const hb of w.x.order) {
-        const b = w.x.bodies.get(hb)!;
+      for (const b of [...w.x.order.map((hb) => w.x.bodies.get(hb)!), ...extra]) {
+        const hb = bodyHash(b);
         if (kept.has(hb)) offered.push(b);
         else {
           const why = w.bodyRefusal(h, b);
@@ -238,7 +240,7 @@ export function drawnWorlds(v: V3v, family: Family, from: number, to: number, st
 export function scriptedWorlds(from: number, to: number): Out {
   const o = fresh();
   const r = new Rng(from ^ 0x5a7f);
-  look4.at = (w, where) => stations4(o, w, where, r);
+  look4.at = (w, where, offered) => stations4(o, w, where, r, offered ?? []);
   try {
     for (let seed = from; seed <= to; seed++) {
       m2(seed);

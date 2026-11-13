@@ -38,12 +38,12 @@ test("on the model's drawn worlds every station has the model keeper's logs, bod
   const o = sum(await drawn);
   told("drawn", o);
   assert.equal(o.differ.length, 0, "the station and the model differ (the first are printed above)");
-  assert.ok(Object.keys(o.refused).length > 0 && o.lacking > 0 && o.on > 0 && o.waiting > 0 && o.given > 0, "not trivial worlds");
+  assert.ok(Object.keys(o.refused).length > 0 && o.lacking > 0 && o.on > 0 && o.waiting > 0 && o.given > 0 && o.toldOut > 0, "not trivial worlds");
 });
 
 test("on the model's scripted worlds too: bodies no one's, web devices by a keeper's clock, a revoked key, off and on again, the handover", async () => {
   const o = sum(await scripted);
   told("scripted", o);
   assert.equal(o.differ.length, 0, "the station and the model differ (the first are printed above)");
-  assert.ok(o.off > 0 && o.webs > 0 && o.toldOut > 0 && o.moved > 0, "not trivial worlds");
+  assert.ok(o.off > 0 && o.webs > 0 && o.moved > 0 && Object.keys(o.refused).length >= 3, "not trivial worlds");
 });

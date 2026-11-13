@@ -72,7 +72,7 @@ export class Log {
 }
 
 /// The world: the old chain's people and stations, their logs, and the old chain up to its `moved` (not yet given).
-export function world() {
+export function world(ws = WS) {
   const alice = new Log("alice"), bob = new Log("bob"), carol = new Log("carol");
   const stations = [ed(), ed(), ed()];
   const body = {
@@ -81,21 +81,21 @@ export function world() {
     devices: [alice, bob, carol].map((l) => ({ id: l.app.base.hex, sub: l.sub, kind: "app", label: l.sub, sign_key: l.app.signer.id })),
     passkeys: [], stations: stations.slice(0, 2).map((s, i) => ({ key: s.hex, name: `s${i}` })), gateways: [],
   };
-  const first = signed({ v: 1, ws: WS, seq: 0, prev: null, at: 1000, kind: "genesis", body }, alice.app.signer);
-  const moved = signed({ v: 1, ws: WS, seq: 1, prev: entryHash(first), at: 1000, kind: "moved", body: { root: alice.genesis } }, alice.app.signer);
+  const first = signed({ v: 1, ws, seq: 0, prev: null, at: 1000, kind: "genesis", body }, alice.app.signer);
+  const moved = signed({ v: 1, ws, seq: 1, prev: entryHash(first), at: 1000, kind: "moved", body: { root: alice.genesis } }, alice.app.signer);
   const settings = { origins: ["https://app.still.fail"], rp_id: "app.still.fail", cloud_keys: { keys: [] } };
-  return { alice, bob, carol, stations, first, moved, settings };
+  return { ws, alice, bob, carol, stations, first, moved, settings };
 }
 export type World = ReturnType<typeof world>;
 
 /// The statements of a handover: alice opens the workspace (D3), lets bob in as an admin and carol as a member by
 /// their logs, and names stations s0 and s1; bob names no one yet.
 export function handover(w: World) {
-  const open = w.alice.say("open", { ...w.settings, email: "alice@x" });
-  const bob = w.alice.say("member", { sub: "bob", email: "bob@x", lock: w.bob.genesis, role: "admin" });
-  const carol = w.alice.say("member", { sub: "carol", email: "carol@x", lock: w.carol.genesis, role: "member" });
-  const s0 = w.alice.say("station", { key: w.stations[0]!.hex });
-  const s1 = w.alice.say("station", { key: w.stations[1]!.hex });
+  const open = w.alice.say("open", { ...w.settings, email: "alice@x" }, w.ws);
+  const bob = w.alice.say("member", { sub: "bob", email: "bob@x", lock: w.bob.genesis, role: "admin" }, w.ws);
+  const carol = w.alice.say("member", { sub: "carol", email: "carol@x", lock: w.carol.genesis, role: "member" }, w.ws);
+  const s0 = w.alice.say("station", { key: w.stations[0]!.hex }, w.ws);
+  const s1 = w.alice.say("station", { key: w.stations[1]!.hex }, w.ws);
   return { open, bob, carol, s0, s1 };
 }
 
@@ -103,7 +103,7 @@ export function handover(w: World) {
 export function station(w: World, i = 0, moved = true): Cloud {
   const data = mkdtempSync(join(tmpdir(), "lock-moved-"));
   writeState(data, {
-    origin: "https://app.still.fail", station: w.stations[i]!.hex, workspace: WS, workspace_name: "Team", name: `s${i}`, relay_url: "", relay_urls: [],
+    origin: "https://app.still.fail", station: w.stations[i]!.hex, workspace: w.ws, workspace_name: "Team", name: `s${i}`, relay_url: "", relay_urls: [],
     grant_keys: { keys: [] }, peers: w.stations.map((s, j) => ({ id: s.hex, name: `s${j}` })), revocations: [],
   });
   const c = new Cloud(data, false);
@@ -113,9 +113,9 @@ export function station(w: World, i = 0, moved = true): Cloud {
 }
 
 /// What a device brings a station: its person's log (as heard in the workspace) and the bodies of its statements.
-export function bring(c: Cloud, log: Log, bodies = true) {
-  personChainsOf(c).keep(log.genesis, log.entries, WS);
-  if (bodies) c.takeBodies(null, [...log.bodies.values()].filter((b) => b.ws === WS));
+export function bring(c: Cloud, log: Log, bodies = true, ws = WS) {
+  personChainsOf(c).keep(log.genesis, log.entries, ws);
+  if (bodies) c.takeBodies(null, [...log.bodies.values()].filter((b) => b.ws === ws));
 }
 
 /// A member's device as a connection of it shows itself: its credential's viewer, its base key's proof of the endpoint.
