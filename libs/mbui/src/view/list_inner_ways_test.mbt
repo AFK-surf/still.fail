@@ -331,10 +331,14 @@ test "a page's list said from_end holding nothing, its first key come, its block
   let by_rate = rc_rates.map(fn(rate) {
     let gap = @signals.signal(true)
     let c = iw_list([], fn(_) { Gap(gap) }, from_end=true)
-    // (how tall its block is, read off its words' top at the foot of 200: the gap over them)
+    // (how tall its block shows, its row as the list lays it out: not read off its words, which on its way are drawn
+    // as big as it shows, View::scrolls_window)
     let list = rc_walk(c.tree, [(rc_at, fn() { c.keys.set([0]) })], looks, rate, fn() {
-      let y = rc_y(c.tree, "行0")
-      (if y == rc_none { 0.0 } else { 200.0 - (y - iw_gap) }, c.off_foot())
+      let h = match c.tree.lists_seen() {
+        [.., l] if l.rows.length() > 0 => (l.rows[0].2).3
+        _ => 0.0
+      }
+      (h, c.off_foot())
     })
     let gap2 = @signals.signal(true)
     let (t, ks) = iw_column([], fn(_) { Gap(gap2) })

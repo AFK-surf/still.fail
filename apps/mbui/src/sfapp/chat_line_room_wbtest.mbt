@@ -28,8 +28,13 @@ let cr_screens : Array[(String, Double, Double, Int)] = [("小屏", 390.0, 844.0
 
 ///|
 /// The fixture's chat with its page's inside nodes on `screen`, its station's pace `pace` (fix_pace's: delivery, the
-/// answer after it, the turn's end after that or, less than 0, that long before the answer), at rest.
-fn cr_open(screen : (String, Double, Double, Int), pace : (Double, Double, Double)) -> @ui.Tester {
+/// answer after it, the turn's end after that or, less than 0, that long before the answer), at rest. `on_pixels`: its
+/// list's rows set on the host's pixels, as every device's host sets them (Tester::set_rows_on_pixels).
+fn cr_open(
+  screen : (String, Double, Double, Int),
+  pace : (Double, Double, Double),
+  on_pixels? : Bool = false,
+) -> @ui.Tester {
   let (_, w, h, platform) = screen
   new_run()
   @sfbase.chat_page_nodes.set(true)
@@ -37,6 +42,9 @@ fn cr_open(screen : (String, Double, Double, Int), pace : (Double, Double, Doubl
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  if on_pixels {
+    t.set_rows_on_pixels(true)
+  }
   t.run_for(@ui.move_most_ms)
   t
 }

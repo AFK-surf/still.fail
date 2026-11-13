@@ -2468,10 +2468,92 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       st.come_at + @flex.move_most_ms
     }
   }
+  // (a key coming or going by data on its way drawn by how much of its block shows, as an old list's row coming or
+  // going where it is (ui's row_held_look, by view's row_held_at): what its block holds as big as that, about the middle
+  // of what it draws across and its top down (Pivot's DrawnAcross: what shows of a block on its way is its top, so drawn
+  // there it is all within what shows, nothing of it cut; a bubble to its side grown about its own middle, not the
+  // page's, the user, 2026-10-31: 「有些东西就应该偏心缩放」), and as opaque, none at half its size or less, whole at its
+  // size; one set out from all its height whole at once, from part of it at that part from the first frame. Its block's
+  // own, while it is on its way alone: as it ends, whole and at its size again, nothing of it kept at rest (the user,
+  // 2026-10-31 and 2026-11-08: 缩到 50% 左右的时候就变成完全看不见了). Its way read where it is drawn
+  // (View::drawn_while), how far it goes as its column's layout said it (`laid`, read so that it is worked out again once
+  // the change's layout has measured it))
+  let seen_on_way : Map[Int, (View, Array[View])] = Map([])
+  // (how much of the block of row `v` on its way shows, 0 to 1, where it is drawn: one number, as the layout puts it,
+  // its height then over its height at rest, each as its column lays it out (on the host's pixels where it sets a page's
+  // list's rows on them: rows_slot_on, as flex rounds a row's height), so that what it holds drawn at it fills what shows
+  // and its foot steps with the slot's, never between; as far as it set out from, where its way is not measured yet; 1
+  // off its way. Read by the clock where it is drawn (View::drawn_while): `laid` is told what is measured, not each
+  // layout of the way)
+  let shown_share = fn(v : View) -> Double {
+    laid.get() |> ignore
+    guard v.live() is Some(m) && m.coming else { return 1.0 }
+    let st = m.flex.style
+    let ends = st.come_ends
+    let g = self.tree.rows_grid_now()
+    let whole = rows_slot_on(dmax(st.come_from, if st.come_goal == st.come_goal { st.come_goal } else { 0.0 }), g)
+    guard ends == ends && whole > 0.0 else { return if st.come_from > 0.0 { 1.0 } else { 0.0 } }
+    let t = v.drawn_while(fn(now) { now < ends })
+    let shown = match @flex.come_state(st, if t == @double.infinity { ends } else { t }) {
+      Some((h, _)) => h
+      None => whole
+    }
+    dmin(rows_slot_on(shown, g) / whole, 1.0)
+  }
+  let seen_from = fn(v : View) {
+    // (the same view already seen so: nothing to do; another made at its index since, or one let go, replaced)
+    match seen_on_way.get(v.at) {
+      Some((o, _)) if o.alive() && o.id() == v.id() => return
+      _ => ()
+    }
+    // (the blocks it holds: what is drawn as big as it shows)
+    let held = blocks.filter(fn(b) {
+      guard b.0.alive() else { return false }
+      let mut i = self.tree.nodes[b.0.at].parent
+      while i >= 0 && i != v.at {
+        i = self.tree.nodes[i].parent
+      }
+      i == v.at
+    }).map(fn(b) { b.0 })
+    seen_on_way[v.at] = (v, held)
+    v.alpha(By(fn() { row_held_at(shown_share(v)).0 })) |> ignore
+    for b in held {
+      b.scale(By(fn() { row_held_at(shown_share(v)).1 }), about=DrawnAcross(0.0)) |> ignore
+    }
+  }
+  let seen_whole = fn(at : Int) {
+    match seen_on_way.get(at) {
+      Some((v, held)) => {
+        seen_on_way.remove(at)
+        if v.alive() {
+          v.alpha(Is(1.0)) |> ignore
+        }
+        for b in held {
+          if b.alive() {
+            b.scale(Is(1.0)) |> ignore
+          }
+        }
+      }
+      None => ()
+    }
+  }
   let ways_due : Ref[() -> Unit] = Ref(fn() {  })
   ways_due.val = fn() {
     let t = self.tree.logic_said()
     let left = ways.filter(fn(w) { w.0.live() is Some(n) && way_ends(n) > t })
+    for w in ways {
+      if !left.iter().any(fn(l) { l.0.at == w.0.at }) {
+        seen_whole(w.0.at)
+      }
+    }
+    // (one let go on its way: its entry with it)
+    let gone = seen_on_way.keys().filter(fn(at) { !(seen_on_way.get(at) is Some((o, _)) && o.alive()) }).collect()
+    for at in gone {
+      seen_on_way.remove(at)
+    }
+    for w in left {
+      seen_from(w.0)
+    }
     if left.length() != ways.length() {
       ways.clear()
       ways.append(left)
