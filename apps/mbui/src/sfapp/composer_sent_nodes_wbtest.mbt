@@ -213,3 +213,117 @@ test "a new chat on a page made as nodes, 小屏, a finger's: its first three li
     assert_true((room - room_one).abs() < 0.01, msg="\{at}: its room \{room} by move_most_ms, \{room_one} with one line")
   }
 }
+
+// Back at its one line, the composer is cut to itself all the way, its ground its shape: from the press of send till
+// it rests, the ground it draws (its glass) is drawn whole, its top's corners round as at rest at every height on the
+// way, never a taller ground cut flat by the line its node is laid to (sent with no flight, the composer is laid at its
+// one line at once and its ground goes down on its own way: #5977); its caret drawn only where that ground is. Three
+// lines and five, 小屏 with a finger and 大屏 with a keyboard, its list's rows on the host's pixels. On main, for about
+// the first 90 ms of a three-line send, the ground was a box cut square at the top, the caret drawn through its edge.
+
+///|
+/// The fixture's chat s-c1 on a page made as nodes, `w` by `h` on `platform` (2: 小屏 with a finger; 0: 大屏 with a
+/// keyboard), its rows on the host's pixels, its composer pressed and `lines` lines typed in it, at rest.
+fn back_round_chat(w : Double, h : Double, platform : Int, lines : Int) -> @ui.Tester {
+  new_run()
+  @sfbase.chat_page_nodes.set(true)
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  t.set_rows_on_pixels(true)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("第一行")
+  for i in 2..=lines {
+    // (a new line: Enter with a finger, Shift+Enter on a keyboard, where Enter sends)
+    if platform == 2 {
+      t.type_text("\n")
+    } else {
+      t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+    }
+    t.type_text("第\{i}行")
+  }
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// The composer's ground as drawn now: the glass whose foot is its box's (composer/content) and as wide as most of it,
+/// (x, y, w, h, its corner, the top of what cuts it); none where none is drawn.
+fn back_round_ground(t : @ui.Tester) -> (Double, Double, Double, Double, Double, Double)? {
+  let (by, bh) = sent_nodes_box(t)
+  let cuts = t.drawn_cut().filter(fn(e) { e.0 == 5 || e.0 == 6 })
+  for i, g in t.drawn_glass_corners() {
+    let (x, y, w, h, k) = g
+    if (y + h - (by + bh)).abs() < 1.0 && w > 100.0 && i < cuts.length() {
+      return Some((x, y, w, h, k, cuts[i].5.1))
+    }
+  }
+  None
+}
+
+///|
+/// Whether point (`px`, `py`) lies in the box at `x`, `y`, `w` by `h` with corners of `r` (a hair over its edge in).
+fn back_round_in(px : Double, py : Double, x : Double, y : Double, w : Double, h : Double, r : Double) -> Bool {
+  let e = 0.01
+  guard px >= x - e && px <= x + w + e && py >= y - e && py <= y + h + e else { return false }
+  let cx = if px < x + r { x + r } else if px > x + w - r { x + w - r } else { px }
+  let cy = if py < y + r { y + r } else if py > y + h - r { y + h - r } else { py }
+  let (dx, dy) = (px - cx, py - cy)
+  dx * dx + dy * dy <= (r + e) * (r + e)
+}
+
+///|
+/// What is wrong with the composer's ground and caret now (see above), its ground's corner at rest `corner`: none, or
+/// what.
+fn back_round_fault(t : @ui.Tester, corner : Double) -> String? {
+  guard back_round_ground(t) is Some((x, y, w, h, k, cut_top)) else { return Some("its ground not drawn") }
+  if y < cut_top - 0.01 {
+    return Some("its ground \{y}..\{y + h} cut flat at \{cut_top}")
+  }
+  if (k - corner).abs() > 0.01 {
+    return Some("its ground's corner \{k}, \{corner} at rest")
+  }
+  let cuts = t.drawn_cut().filter(fn(e) { e.0 == 0 })
+  for i, r in t.drawn_rects() {
+    let (rx, ry, rw, rh, _) = r
+    // (its caret: a bar as tall as a line, a point or two wide, within its width)
+    guard rw <= 3.0 && rh >= 10.0 && rh <= 40.0 && rx >= x && rx + rw <= x + w && i < cuts.length() else {
+      continue
+    }
+    let (cx0, cy0, cx1, cy1) = cuts[i].5
+    let (sx0, sy0) = (if rx > cx0 { rx } else { cx0 }, if ry > cy0 { ry } else { cy0 })
+    let (sx1, sy1) = (if rx + rw < cx1 { rx + rw } else { cx1 }, if ry + rh < cy1 { ry + rh } else { cy1 })
+    guard sx1 > sx0 && sy1 > sy0 else { continue }
+    for p in [(sx0, sy0), (sx1, sy0), (sx0, sy1), (sx1, sy1)] {
+      if !back_round_in(p.0, p.1, x, y, w, h, k) {
+        return Some("its caret drawn \{sx0}..\{sx1} x \{sy0}..\{sy1}, out of its ground \{x}, \{y}, \{w} x \{h}, corner \{k}")
+      }
+    }
+  }
+  None
+}
+
+///|
+test "a chat's page made as nodes, 小屏 and 大屏, three lines and five sent: from the press till the composer rests, its ground drawn whole, its top's corners round as at rest, its caret only where its ground is" {
+  for screen in [("小屏", 390.0, 844.0, 2), ("大屏", 1280.0, 800.0, 0)] {
+    for lines in [3, 5] {
+      let at = "\{screen.0}, \{lines} lines"
+      let t = back_round_chat(screen.1, screen.2, screen.3, lines)
+      let corner = match back_round_ground(t) {
+        Some((_, _, _, _, k, _)) => k
+        None => @halt.saying("\{at}: the composer's ground not drawn at rest")
+      }
+      tap_send(t)
+      let press = t.time()
+      while t.time() - press <= @ui.move_most_ms {
+        match back_round_fault(t, corner) {
+          Some(f) => fail("\{at}, \{t.time() - press} ms after the press: \{f}")
+          None => ()
+        }
+        t.run_for(sent_nodes_look_ms)
+      }
+    }
+  }
+}

@@ -58,6 +58,8 @@ priv struct OldIsland {
   /// told, a `natural` one's, as what it holds comes to another height after it was first laid out, as tall as it was
   /// before (old's `reshaped`)
   reshaped : ((Double) -> Unit)?
+  /// what it holds drawn past it, not cut to it (old's `over`)
+  over : Bool
 }
 
 ///|
@@ -1134,7 +1136,7 @@ fn old_frame(c : Ctx) -> Unit {
           // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
           // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
           style=if o.natural is Some(_) && !o.gives {
-            style(w=Fixed(w), clip=true)
+            style(w=Fixed(w), clip=!o.over)
           } else {
             style(w=Fixed(w), h=Fixed(h), clip=true)
           },
@@ -3374,6 +3376,8 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// it to go from that height to the new one as it holds no motion of its own (a sheet's height).
 /// `unlaid`, a `natural` one's: how tall it is taken to be till first laid out (in a list: as tall as a screen, the rows
 /// after it made only as it is known to leave room for them).
+/// `over`, a `natural` one's: what it holds drawn past it, not cut to it (a composer at a list's foot, laid out at its
+/// one line at once, its ground going down to it on its own way: whole, its corners round, not cut flat at its top).
 #callsite(autofill(loc))
 pub fn old(
   v : @view.View,
@@ -3384,6 +3388,7 @@ pub fn old(
   fits? : (Double, @signals.Signal[Double?]),
   unlaid? : () -> Double,
   reshaped? : (Double) -> Unit,
+  over? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
   v.hosted(make=fn(n) {
@@ -3473,6 +3478,7 @@ pub fn old(
       fits: if natural { fits } else { None },
       held_box: -1,
       reshaped: if natural { reshaped } else { None },
+      over: natural && over,
     })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
