@@ -17,7 +17,8 @@ import { key, signed } from "../../../station/test/lock-world-sim.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, shortCode } from "../src/lock.ts";
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
-import { added, enrolled, held, inForceOf, outOf, read, roster } from "../src/views/lock.ts";
+import { added, enrolled, held, inForceOf, lockView, outOf, read, roster } from "../src/views/lock.ts";
+import * as format from "../src/format.ts";
 import { hooks } from "../src/core/execute.ts";
 import { dialer, ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
 import { ME, committed, genesis, grant, pipe, rig } from "./lock-rig.ts";
@@ -326,6 +327,9 @@ test("someone's first device where the chain moved: the code shown by an owner's
   const { phone, answer } = await w.helloApp("r9", NEW, log.chain);
   assert.deepEqual(answer, { t: "code", workspaces: ["ws"] }, "a code shown");
   assert.equal(w.asked(), before, "nobody asked for showing it");
+  const prompt = ((await w.prompts()).pairing as { device: string; roleText?: string; deviceText: string }[]).find((p) => p.device === NEW)!;
+  assert.equal(prompt.roleText, "批准后以管理员身份加入", "the prompt says the role approving lets them in as");
+  assert.doesNotMatch(prompt.deviceText, /身份加入/, "not said as a member besides");
   const done = await w.proveApp(phone, NEW);
   assert.equal(done.error, undefined, done.error?.message);
   assert.deepEqual((done.ok as { approved: { workspaces: string[] } }).approved.workspaces, ["ws"]);
@@ -506,10 +510,14 @@ test("a device whose person was taken out where the chain moved: the refusal's r
   await w.r.host.time.pass(100);
   assert.equal(inForceOf(w.inner, "ws").f.members.has("s1"), false, "the list made here no longer names it");
   assert.deepEqual(outOf(w.inner, "ws"), { by: "r1", at: w.alice.chain.at(-1)!.at }, "taken out by alice, at her entry's time");
+  const ms = w.alice.chain.at(-1)!.at * 1000;
+  const alice = inForceOf(w.inner, "ws").f.members.get("r1")?.email;
+  assert.equal(lockView(w.inner, "ws").me.outText, `${alice} 于 ${format.dateClock(ms, w.r.host.utcOffsetMin(ms))} 将你移出了此 workspace 的安全模式。需要继续使用的话，请联系 ${alice} 或其他管理员重新添加`, "the page says who, when, and whom to ask");
   const other = await setUp({ root: "alice", mine: "member" });
   hooks.lockRefused?.(other.inner, "ws", A, null, { out: { bodies: [removal], logs: [] } });
   assert.equal(inForceOf(other.inner, "ws").f.members.has("s1"), true, "a body no log kept commits to is not taken");
   assert.equal(outOf(other.inner, "ws"), null);
+  assert.equal(lockView(other.inner, "ws").me.outText, undefined);
 });
 
 /// The new device's side: s1's device (ME) waiting in `ws`, whose list (alice's log the root) does not name s1: given

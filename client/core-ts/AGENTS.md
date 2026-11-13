@@ -189,7 +189,7 @@ another; the accounts' list's merge across stations and its refills.
   2026-11-13: a cloud calling a newcomer an owner would have an owner's device sign them in as one, the ask not showing
   the role): what the person chose as they added them on this same device (views/lock.ts `notedRole`, kept here alone,
   used once, else a member), lowered to the view's where that is lower; one this signer may not give, the note's or the
-  view's, shows no code. So someone added as an admin on one device and approved from another comes in a member, and an
+  view's, shows no code; its prompt says the role approving gives (`roleText`). So someone added as an admin on one device and approved from another comes in a member, and an
   owner makes them an admin by changing their role. Adding a member is the cloud's part alone there (`added`: nothing
   signed, the role noted), and so is changing the role of one not let in yet (`rosterMoved`: the note the new role, an
   owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`). The vaults
@@ -200,7 +200,7 @@ another; the accounts' list's merge across stations and its refills.
   is next unsealed for something the person does; an item that device writes meanwhile, the key in hand, waits for
   that first (vault.ts `#writable`, 2026-11-14), never refused for its own device's keying. A device taken out
   takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
-  `outOf` says who took it out and when (no words for the page yet). A device the stations' state does not name
+  `outOf` says who took it out and when (the `lock` topic's `me.outText`, with whom to ask to be added again). A device the stations' state does not name
   is given no log nor body, and told by their refusal that it is left out and whom to ask (views/lock.ts
   `heardLeft`, `leftIn`; station/src/mesh/serve.ts `leftOf`; 2026-11-14): its page is as before a move, not
   confirmed and able to ask, its try dialling those (views/pair.ts `waitingIn`), a hint that lets nobody in; once let

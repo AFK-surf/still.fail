@@ -1969,6 +1969,7 @@ export const SHAPES: Record<string, Shape> = {
     ["unsigned", opt("bool"), { doc: "In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since\nlost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`)." }],
     ["ownLock", opt("bool"), { doc: "Its person bound a lock of their own here that this app is not on: the stations let it in on that lock\nalone, so it waits however the workspace's names it, and `lock.pair` asks to join that one (`pair` its try)." }],
     ["pair", opt("LockPair"), { doc: "Its try to be approved face to face (or made one that signs), once it began (`lock.pair`)." }],
+    ["outText", opt("String"), { said: true, doc: "Its person taken out of an upgraded workspace: by whom and when, and whom to ask to be added again\n(views/lock.ts `outOf`)." }],
   ], { doc: "This device in the workspace's lock." }),
   LockPending: struct([
     ["id", "String", { doc: "Which one (`lock.pendingDismiss`, `adb.personalPendingDismiss`); in a workspace's `lock`, one of the person's own lock begins `own:`." }],
@@ -2019,6 +2020,7 @@ export const SHAPES: Record<string, Shape> = {
     ["label", "String", { said: true }],
     ["code", "String", { doc: "The code to type on the new device: shown here only, never sent." }],
     ["deviceText", "String", { said: true, doc: "Its name as people know it (LockDevice `fullText`)." }],
+    ["roleText", opt("String"), { doc: "Someone's first device in an upgraded workspace: the role approving lets them in as (批准后以管理员身份加入;\nviews/pair.ts `admitOf`), each workspace's by its name where it asks in several." }],
     ["workspaces", vec("LockPromptWorkspace"), { doc: "Where it asks to be let in and this device approves it." }],
     ["created_at", "i64", { client: "I54", doc: "When it asked." }],
     ["time", opt(map("Stamp")), { doc: "Its times in words (`created_at`)." }],

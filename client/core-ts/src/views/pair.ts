@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, approvedHere, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -511,11 +511,16 @@ function shown(inner: Inner): J[] {
     .filter((a) => !a.hidden)
     .sort((a, b) => a.at - b.at)
     .map((a) => {
-      // Who reads the code out decides this: that it also lets someone new into the lock is said as they do.
-      const joins = a.places.filter((p) => p.joins === true).map((p) => nameOf(inner, p.ws));
+      // Who reads the code out decides this: that it also lets someone new into the lock is said as they do. Where the
+      // chain moved, with the role approving says (`admitOf`'s, the note lowered to the view's): 批准后以管理员身份加入,
+      // one workspace's, or each by its name.
+      const joins = a.places.filter((p) => p.joins === true && p.admit === undefined).map((p) => nameOf(inner, p.ws));
+      const admits = a.places.flatMap((p) => (p.admit !== undefined ? [{ ws: p.ws, text: t("core-misc.lock.pairRole", { role: roleText(p.admit.role) }) }] : []));
+      const role = admits.length === 0 ? null : admits.length === 1 ? admits[0]!.text : admits.map((x) => t("core-misc.lock.inWorkspace", { name: nameOf(inner, x.ws), error: x.text })).join(t("core-misc.lock.listSep"));
       return {
         device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
         deviceText: deviceText(a) + (joins.length > 0 ? t("core-misc.lock.pairJoins", { names: joins.join(t("core-misc.lock.listSep")) }) : ""),
+        ...(role !== null ? { roleText: role } : {}),
         until: a.until, untilText: untilText(inner, a.until),
         // (asked into the person's own lock: the workspaces that lock lets it in to, as one approved into theirs is
         // shown: people are not asked to tell the two apart, the user, 2026-11-10)

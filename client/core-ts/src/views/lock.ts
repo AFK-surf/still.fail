@@ -33,6 +33,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { CARRY_BYTES, type Entry, type Head, Signer, WEB_DEVICE_SECS, entryHash, next, readHead, shortCode } from "../lock.ts";
+import * as format from "../format.ts";
 import * as prefs from "../prefs.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -1278,6 +1279,17 @@ export function outOf(inner: Inner, ws: string): { by: string; at: number } | nu
   return out;
 }
 
+/// `outOf` in words, for this device's page (the `lock` topic's `me.outText`): who took its person out and when, by that
+/// person's name as the workspace's view gives it (else their email in the list in force), the day and time by this
+/// device's clock; and whom to ask to be added again.
+function outText(inner: Inner, ws: string): string | null {
+  const o = outOf(inner, ws);
+  if (o === null) return null;
+  const name = str(get(arr(get(view(inner, ws), "members")).find((m) => m?.sub === o.by), "name")) || stateOf(inner, ws).members.get(o.by)?.email || o.by;
+  const ms = o.at * 1000;
+  return t("core-misc.lock.out", { name, time: format.dateClock(ms, inner.host.utcOffsetMin(ms)) });
+}
+
 /// Why a station is not asked now: it refused this device and the lock has not moved on since.
 function waiting(inner: Inner, ws: string, station: string): CoreError | null {
   const p = inner.workspaces.get(ws)?.own.get("lock") as Part | undefined;
@@ -2447,6 +2459,7 @@ export function lockView(inner: Inner, ws: string): J {
       .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
   }
   const upgrade = upgradeOf(inner, ws);
+  const out = outText(inner, ws);
   const root = movedHere(inner, ws) && role === "owner" && force.said !== "waiting" ? rootOf(inner, ws) : null;
   const rootText = root !== null && root.sub !== sub ? t("core-misc.lock.rootOnlyPage", { name: root.name }) : null;
   const onAgain = root !== null && root.sub === sub && force.said === "off";
@@ -2471,6 +2484,8 @@ export function lockView(inner: Inner, ws: string): J {
       ...(own && (mine === undefined || unsigned) ? { ownLock: true } : {}),
       // Its try to be approved face to face (views/pair.ts), once it began.
       pair,
+      // Its person taken out of a moved workspace: by whom and when, and whom to ask (`outText`).
+      ...(out !== null ? { outText: out } : {}),
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,
