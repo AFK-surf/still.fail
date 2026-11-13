@@ -12,7 +12,7 @@ import { cloudError, readCredential, type Credential } from "./cloud.ts";
 import { CoreError, HostError, asCoreError } from "./error.ts";
 import type { Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
 import { t } from "./i18n.ts";
-import { SseParser } from "./station/sse.ts";
+import { SseParser } from "./sse.ts";
 import { CLOUD, cloudWhat, type Status } from "./status.ts";
 import { isObject, parseJson, toJsonBytes } from "./util.ts";
 import { laterSleep } from "./runtime.ts";
