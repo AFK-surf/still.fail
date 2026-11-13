@@ -417,7 +417,7 @@ if part ts; then
   # Nothing that answers the app reads a station's chats whole: the chat table is read by what a view shows.
   if touches '^client/core-ts/(src|scripts)/'; then step "core reads no chat list whole" after core node client/core-ts/scripts/whole-lists.ts --check; fi
   # The core's base (the device's mesh, what runs a client) imports nothing of what still.fail does with it.
-  if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core base stands apart" after core node client/core-ts/scripts/base.ts --check; fi
+  if touches '^client/core-ts/(src|scripts)/|^client/i18n/'; then prep core deps client/core-ts; step "core base stands apart" after core node client/core-ts/scripts/base.ts --check; fi
 
 fi
 

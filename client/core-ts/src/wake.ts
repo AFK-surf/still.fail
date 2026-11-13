@@ -9,8 +9,7 @@
 import * as clock from "./clock.ts";
 import { Deferred, Effect, Scope } from "effect";
 import { HostError } from "./error.ts";
-import type { Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
-import type { ClientId, CoreMessage } from "./protocol.ts";
+import type { AnyHost, ClientId, HostOf, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host-of.ts";
 import { DROPPED, GONE, NETWORK } from "./wake-words.ts";
 
 export { DROPPED, GONE, NETWORK };
@@ -119,7 +118,7 @@ export function unlessDropped<A, R>(wakes: Wakes, sent: number, pending: Effect.
 
 /// A request that may be asked twice: asked again at each wake that suspects what it went on (up to HEDGES at once),
 /// the first answer its answer; one that fails leaves it to the others.
-export function hedged<A>(wakes: Wakes, host: Host, ask: Effect.Effect<A, HostError>): Effect.Effect<A, HostError> {
+export function hedged<A>(wakes: Wakes, host: AnyHost, ask: Effect.Effect<A, HostError>): Effect.Effect<A, HostError> {
   return Effect.scoped(
     Effect.gen(function* () {
       const done = yield* Deferred.make<A, HostError>();
@@ -148,7 +147,7 @@ export function hedged<A>(wakes: Wakes, host: Host, ask: Effect.Effect<A, HostEr
 }
 
 /// A pull that ends with an error at a wake when it heard nothing while the UI was away.
-export function quietEnds<A>(host: Host, wakes: Wakes, pull: Pull<A>): Pull<A> {
+export function quietEnds<A>(host: AnyHost, wakes: Wakes, pull: Pull<A>): Pull<A> {
   let heard = host.nowMs();
   const gone = Effect.suspend(() => wakes.until((w) => w.dropsStream(heard))).pipe(Effect.flatMap((w) => Effect.fail(new HostError(w.reason()))));
   return {
@@ -165,39 +164,40 @@ export function quietEnds<A>(host: Host, wakes: Wakes, pull: Pull<A>): Pull<A> {
   };
 }
 
-/// The host the core runs on, with the rules above for its requests and streams.
-export class WakingHost implements Host {
-  readonly inner: Host;
+/// The host the core runs on, with the rules above for its requests and streams; its UIs sent what the inner one's
+/// are (`Message`).
+export class WakingHost<Message = never> implements HostOf<Message> {
+  readonly inner: HostOf<Message>;
   readonly wakes: Wakes;
 
   /// The inner host's record, as it is now (a test sets its own after the core starts).
-  get recorder(): Host["recorder"] {
+  get recorder(): HostOf<Message>["recorder"] {
     return this.inner.recorder;
   }
   /// This device's own adb session is held independently of any station or UI wake.
-  get adb(): Host["adb"] {
+  get adb(): HostOf<Message>["adb"] {
     return this.inner.adb;
   }
-  readonly tcp?: Host["tcp"];
+  readonly tcp?: HostOf<Message>["tcp"];
   readonly appKeys?: boolean;
   readonly handOverByTests?: boolean;
-  readonly openDb?: Host["openDb"];
-  readonly memoryDb?: Host["memoryDb"];
-  readonly deleteDb?: Host["deleteDb"];
-  readonly report?: Host["report"];
-  readonly legacyRead?: Host["legacyRead"];
-  readonly secureGet?: Host["secureGet"];
-  readonly secureSet?: Host["secureSet"];
-  readonly secureDelete?: Host["secureDelete"];
-  readonly securePast?: Host["securePast"];
-  readonly secureAsk?: Host["secureAsk"];
-  readonly savedRead?: Host["savedRead"];
-  readonly stage?: Host["stage"];
-  readonly unzstd?: Host["unzstd"];
-  readonly ed25519Sign?: Host["ed25519Sign"];
-  readonly verify?: Host["verify"];
+  readonly openDb?: HostOf<Message>["openDb"];
+  readonly memoryDb?: HostOf<Message>["memoryDb"];
+  readonly deleteDb?: HostOf<Message>["deleteDb"];
+  readonly report?: HostOf<Message>["report"];
+  readonly legacyRead?: HostOf<Message>["legacyRead"];
+  readonly secureGet?: HostOf<Message>["secureGet"];
+  readonly secureSet?: HostOf<Message>["secureSet"];
+  readonly secureDelete?: HostOf<Message>["secureDelete"];
+  readonly securePast?: HostOf<Message>["securePast"];
+  readonly secureAsk?: HostOf<Message>["secureAsk"];
+  readonly savedRead?: HostOf<Message>["savedRead"];
+  readonly stage?: HostOf<Message>["stage"];
+  readonly unzstd?: HostOf<Message>["unzstd"];
+  readonly ed25519Sign?: HostOf<Message>["ed25519Sign"];
+  readonly verify?: HostOf<Message>["verify"];
 
-  constructor(inner: Host, wakes: Wakes) {
+  constructor(inner: HostOf<Message>, wakes: Wakes) {
     this.inner = inner;
     this.wakes = wakes;
     if (inner.tcp) this.tcp = (port) => inner.tcp!(port);
@@ -241,7 +241,7 @@ export class WakingHost implements Host {
   }
 
   /// A loopback listener (a login's callback): the device's, nothing of a UI's to wait on.
-  get listen(): Host["listen"] {
+  get listen(): HostOf<Message>["listen"] {
     const inner = this.inner;
     return inner.listen ? (port, host) => inner.listen!(port, host) : undefined;
   }
@@ -302,7 +302,7 @@ export class WakingHost implements Host {
   randomBytes(buf: Uint8Array): void {
     this.inner.randomBytes(buf);
   }
-  emit(client: ClientId, message: CoreMessage): void {
+  emit(client: ClientId, message: Message): void {
     this.inner.emit(client, message);
   }
 }

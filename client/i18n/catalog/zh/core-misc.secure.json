@@ -1,0 +1,5 @@
+{
+  "core-misc.secure.noDeviceLock": "请先为此设备设置锁屏密码",
+  "core-misc.secure.notInFront": "still.fail 在后台时无法验证身份：请切回后重试",
+  "core-misc.secure.keyInvalidated": "此设备的锁屏密码关闭过，原有密钥已失效：请使用恢复码"
+}

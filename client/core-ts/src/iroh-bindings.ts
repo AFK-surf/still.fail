@@ -1,5 +1,5 @@
 // The iroh a host binds (iroh.ts) from a binding's promises: station/native/mesh's napi addon on Node
-// (hosts/node-iroh.ts), client/iroh-wasm in a browser (hosts/web.ts). Both have the same calls; this makes them the
+// (hosts/node-addon.ts), client/iroh-wasm in a browser (hosts/web.ts). Both have the same calls; this makes them the
 // core's Effects.
 import { Effect, Fiber } from "effect";
 import { HostError } from "./error.ts";

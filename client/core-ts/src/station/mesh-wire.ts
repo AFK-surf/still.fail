@@ -15,7 +15,7 @@ import { claimBy } from "../lock.ts";
 import { type CredentialSource, type Link, Mesh, type MeshEnv, type Presented, type Reply, relayHost } from "../mesh.ts";
 import { PAIR_ALPN } from "../pair.ts";
 import { RELAY, type Place, type Status } from "../status.ts";
-import { route } from "../trace.ts";
+import { route } from "../route.ts";
 import type { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./requests.ts";
 import type { LinkNet, RequestHead, ScreenAsk, StationWire, WireReply, WireSocket } from "./wire.ts";

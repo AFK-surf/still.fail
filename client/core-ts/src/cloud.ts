@@ -7,7 +7,8 @@ import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { CLOUD, cloudWhat, type Status } from "./status.ts";
-import { Kind, route, type SpanContext, type Tracer } from "./trace.ts";
+import { route } from "./route.ts";
+import { Kind, type SpanContext, type Tracer } from "./trace.ts";
 import { isObject, parseJson, toJsonBytes } from "./util.ts";
 
 /// A member credential for this device (POST /v1/workspaces/:ws/credential {device}): valid until `expires_at` (s).

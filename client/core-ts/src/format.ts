@@ -5,9 +5,10 @@ import { current, tr, type Lang } from "./i18n.ts";
 import * as model from "./shapes/model.ts";
 import * as reasoning from "./shapes/reasoning.ts";
 import * as titles from "./titles.ts";
-import { get, localDay, str } from "./util.ts";
+import { get, local, localDay, remEuclid, str } from "./util.ts";
 
-export { localDay };
+export { local, localDay };
+export { dateClockSeconds } from "./error.ts";
 
 const MINUTE = 60_000;
 const DAY = 86_400_000;
@@ -73,42 +74,12 @@ export function durationIn(lang: Lang, ms: number): string {
   return tr(lang, "core-logic.format.duration.hm", { h: Math.trunc(m / 60), m: m % 60 });
 }
 
-function remEuclid(a: number, b: number): number {
-  return ((a % b) + b) % b;
-}
-
-/// A local time's parts: [year, month 1–12, day, weekday 0 = Sunday, hour, minute].
-export function local(ms: number, offsetMin: number): [number, number, number, number, number, number] {
-  const at = ms + offsetMin * MINUTE;
-  const days = Math.floor(at / DAY);
-  const inDay = Math.trunc(Math.trunc(at - days * DAY) / 60_000);
-  const z = days + 719_468;
-  const era = Math.floor(z / 146_097);
-  const doe = z - era * 146_097;
-  const yoe = Math.trunc((doe - Math.trunc(doe / 1460) + Math.trunc(doe / 36_524) - Math.trunc(doe / 146_096)) / 365);
-  const doy = doe - (365 * yoe + Math.trunc(yoe / 4) - Math.trunc(yoe / 100));
-  const mp = Math.trunc((5 * doy + 2) / 153);
-  const d = doy - Math.trunc((153 * mp + 2) / 5) + 1;
-  const m = mp < 10 ? mp + 3 : mp - 9;
-  const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
-  const weekday = remEuclid(days + 4, 7);
-  return [y, m, d, weekday, Math.trunc(inDay / 60), inDay % 60];
-}
-
 const two = (n: number) => String(n).padStart(2, "0");
 
 /// 14:05, local.
 export function clock(ms: number, offsetMin: number): string {
   const [, , , , h, m] = local(ms, offsetMin);
   return `${two(h)}:${two(m)}`;
-}
-
-/// 10月28日 00:40:14, local: a moment said to the second, for an error people may report days later.
-export function dateClockSeconds(ms: number, offsetMin: number): string {
-  const [, month, day, , h, m] = local(ms, offsetMin);
-  // Offsets are whole minutes: the second is the same everywhere.
-  const s = Math.floor(remEuclid(Math.floor(ms), 60_000) / 1000);
-  return tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: `${two(h)}:${two(m)}:${two(s)}` });
 }
 
 /// 10月26日 04:12, local: a moment said whole, for what is shared of it.
