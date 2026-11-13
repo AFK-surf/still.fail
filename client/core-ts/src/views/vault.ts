@@ -377,7 +377,7 @@ function readAs(inner: Inner, ws: string, lock: Checked, v: Vault, self: { devic
 /// The name of the station vault `v` waits on to be keyed anew (`waitingAs`), the one it lives on: its id's first
 /// characters where the workspace names none.
 function waitsOn(inner: Inner, ws: string, v: Vault): string {
-  const at = held(inner, ws).at[v.id] ?? "";
+  const at = hostOf(inner, ws, v.id);
   return str(stationsOf(inner, ws).find((s) => s.id === at)?.name) || at.slice(0, 8);
 }
 
@@ -585,6 +585,20 @@ function holds(h: Held, v: Vault, station: string, items: Item[] | null, fit: Fi
   // from the same version (one written to another meanwhile is refused, not a second of its seq).
   h.at[v.id] = Object.keys(on).sort()[0]!;
   take(h, v, fit);
+}
+
+/// Where vault `id` is written from this device (`at` as it is written to, `hostOf`): the first by id of the stations
+/// holding it that the workspace has now (its list, and the lock's stations where the lock names any), the same on
+/// every device that holds the same; `at` where none of them holds it. A station taken out of the workspace stays in
+/// `on` (nothing reads it again to say it holds none), and where its id was the first, every write and keying anew of
+/// the vault went to it, a station no longer there: the locks' end to end, 2026-11-15, a station enrolled, given the
+/// vault's copy, taken out and stopped, then the owner's write refused `vault_waiting` naming it.
+function hostOf(inner: Inner, ws: string, id: string): string {
+  const h = held(inner, ws);
+  const listed = new Set(stationsOf(inner, ws).map((s) => s.id));
+  const named = stateOf(inner, ws).stations;
+  const there = Object.keys(h.on[id] ?? {}).filter((s) => listed.has(s) && (named.size === 0 || named.has(s))).sort();
+  return there[0] ?? h.at[id] ?? "";
 }
 
 /// Vault `v` held over the version held where the rules say so (of one seq, written on two stations at once: the one
@@ -1063,7 +1077,7 @@ export function vaultsView(inner: Inner, ws: string): J {
       return {
         id: v.id, name: v.name, owner: v.owner, ownerName: nameOf(v.owner), mine: v.owner === sub,
         members: v.members.map((s) => ({ sub: s, name: nameOf(s) })),
-        station: h.at[v.id] ?? "", stationName: stationName.get(h.at[v.id] ?? "") ?? "",
+        station: hostOf(inner, ws, v.id), stationName: stationName.get(hostOf(inner, ws, v.id)) ?? "",
         items: all.length, devices: v.keys.length, open: unlocked(inner, v),
         // Whether this device has a key to it; members' devices set up since that have none yet (its owner's device gives
         // them the key as it next has it in hand, or as asked: addDevice).
@@ -1448,7 +1462,7 @@ class Vaults {
         const { sig: _, ...rest } = v;
         // (refused as not a vault, by a station from before this device's checks: not tried again for this version,
         // as the next certificate or read comes, but as the vault moves on)
-        yield* Effect.tapError(self.#putVault(sign({ ...rest, seq: v.seq + 1, keys, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? ""), (e) =>
+        yield* Effect.tapError(self.#putVault(sign({ ...rest, seq: v.seq + 1, keys, at: nowS(inner) }, TAG.vault, signer), hostOf(inner, self.ws, v.id)), (e) =>
           Effect.sync(() => void (e.code === "vault_invalid" && mem(inner).refused.set(v.id, v.seq))));
         return add.length;
       }),
@@ -1562,7 +1576,7 @@ class Vaults {
         const recovery = to.find((c) => c.sub === v.owner && c.recovery)?.recovery;
         const { sig: _, recovery: _r, ...rest } = v;
         const next = sign({ ...rest, seq: v.seq + 1, members, epoch, keys: to.map((c) => ({ cert: bare(c), wrapped: seal(c.box) })), ...(recovery ? { recovery: seal(recovery) } : {}), at: nowS(inner) }, TAG.vault, signer);
-        const nv = yield* self.#putVault(next, held(inner, self.ws).at[v.id] ?? "");
+        const nv = yield* self.#putVault(next, hostOf(inner, self.ws, v.id));
         // The key before kept a while too, not forgotten: an item not written again yet (this device stopped, a write
         // that failed) is carried on with it, nobody asked. The device taken out holds that key anyway: keeping it
         // here a while gives nothing away. (The version it was sealed in is kept as the last of its epoch, `before`.)
@@ -1833,7 +1847,7 @@ class Vaults {
       const n = Object.values(items(inner, self.ws, v.id)).filter((i) => !i.deleted).length;
       if (n > 0) yield* askPerson(inner, t("core-misc.vault.reason.delete", { name: v.name }), "vault_refused");
       const { sig: _, recovery: _r, ...rest } = v;
-      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, epoch: v.epoch + 1, keys: [], deleted: true as const, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
+      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, epoch: v.epoch + 1, keys: [], deleted: true as const, at: nowS(inner) }, TAG.vault, signer), hostOf(inner, self.ws, v.id));
       mem(inner).keys.delete(keyOf(v));
       inner.data.forgetRecord("vaultItems", `${self.ws}/${v.id}`);
       changed(inner, self.ws);
@@ -1860,7 +1874,7 @@ class Vaults {
       const v = yield* self.#vault(lock, id);
       if (v.owner !== who.sub) return yield* fail("vault_not_owner", t("core-misc.vault.notOwnerLasts"));
       const { sig: _, ...rest } = v;
-      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, lasts: scope, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
+      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, lasts: scope, at: nowS(inner) }, TAG.vault, signer), hostOf(inner, self.ws, v.id));
       return { lasts: scope };
     });
   }
@@ -1916,7 +1930,7 @@ class Vaults {
   /// items read again before it fails.
   #putItem(next: Item, v: Vault): Effect.Effect<unknown, CoreError> {
     const self = this;
-    const station = held(this.#inner, this.ws).at[v.id] ?? "";
+    const station = hostOf(this.#inner, this.ws, v.id);
     return Effect.gen(function* () {
       const said = yield* Effect.tapError(self.#station(station, "PUT", "/vault/items", next), (e) =>
         e.code === "vault_conflict" ? Effect.ignore(readItems(self.#inner, `${self.ws}/${station}`, v.id), { log: "Unhandled", message: "vault items read" }) : Effect.void,
@@ -1961,7 +1975,7 @@ class Vaults {
       // Written before its vault was keyed anew (`rekeyGone`), as held here: its station read again for the one
       // written since under the new key.
       if (item.epoch < v.epoch) {
-        yield* Effect.ignore(readItems(self.#inner, `${self.ws}/${held(self.#inner, self.ws).at[v.id] ?? ""}`, v.id), { log: "Unhandled", message: "vault items read" });
+        yield* Effect.ignore(readItems(self.#inner, `${self.ws}/${hostOf(self.#inner, self.ws, v.id)}`, v.id), { log: "Unhandled", message: "vault items read" });
         ({ v, item, as } = yield* self.#find(lock, who, id));
       }
       const name = item.listing?.name ?? v.name;
@@ -2024,7 +2038,7 @@ class Vaults {
         const cert = bare(here);
         const keys = [...v.keys.filter((k) => k.cert.device !== who.device), { cert, wrapped: sealWith(cert.box, key, keyContext(self.ws, v.id, v.epoch), eph) }];
         const { sig: _s, ...rest } = v;
-        yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, keys, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
+        yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, keys, at: nowS(inner) }, TAG.vault, signer), hostOf(inner, self.ws, v.id));
         recovered++;
       }
       if (waited !== null) return yield* Effect.fail(waitingError(inner, self.ws, waited));
