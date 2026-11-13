@@ -128,6 +128,7 @@ test("a chain kept grows: the other stations are brought level, one that could n
     peersCurrent: true,
     memberships: () => [{ workspace: "w1", home: true, peers: [{ id: "a" }, { id: "b" }] }],
     listen: (f: () => void) => (listeners.add(f), () => listeners.delete(f)),
+    home: () => "w1", chain: () => null,
   } as unknown as Cloud;
   const a = new PersonChains(null), b = new PersonChains(null);
   let down = true;
@@ -155,6 +156,8 @@ test("a lock's change is told on the event stream: the workspace's to its member
   const cloud = {
     memberships: () => [{ workspace: "w1", home: true, peers: [] }],
     locked: () => ({ state: head }),
+    chain: () => ({ state: head }),
+    forceWord: () => "",
     listen: (f: () => void) => (listeners.add(f), () => listeners.delete(f)),
   } as unknown as Cloud;
   const chains = new PersonChains(null);
@@ -197,7 +200,7 @@ test("the devices that came are listed for the workspace's owners and admins, a 
 
 test("a device refused for the lock is told its person's own lock, for a new one to find who may let it in with no cloud", () => {
   const kept = [{ v: 1, ws: "w1", seq: 0, kind: "genesis" }, { v: 1, ws: "w1", seq: 1, kind: "device.remove" }];
-  const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "refusal-person-")), { locked: () => null, home: () => null, lockAfter: () => [...kept] });
+  const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "refusal-person-")), { locked: () => null, chain: () => null, home: () => null, lockAfter: () => [...kept] });
   const carol = personal("carol");
   lockPartRoute(cloud, "person", "POST", body({ chain: carol.chain }), viewer("carol"));
   const said = refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("this device is not on the lock its person bound in this workspace"), undefined, "carol");

@@ -124,6 +124,18 @@
   signer at hand to sign it after the head. A device keeps what a station showed it and goes by the same fork choice
   (`client/core-ts/src/lock-keep.ts`), so it follows a station that changes branch; refusing a fresh entry decides
   nothing for any other keeper.
+- Where a lock's active chain holds `moved {root}` (2026-11-13, nothing signs one yet), the state in force there is the
+  rules' `state4` of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
+  `mesh/locks/<ws>.bodies.json`), by this station's clock: `Cloud.locked` gives it to every reader of "the lock"
+  (admission, the vault, rigs, the roster); what reads the chain itself (its seq, head, genesis: `lock-sync.ts`, the
+  cloud's copy in `presence.ts`, `lockHead`, pinning) reads `Cloud.chain`. Off is a state (`locked` null, nothing let
+  go); without the root's log or its `open` (`waiting`) nobody is let in and the chain's stations are answered only the
+  lock's own methods. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
+  its workspace, by the list its bodies make, on or off (`Cloud.givenTo`): to a station or device it names
+  (`lock.bodies.*`, `person-sync.ts`; `GET /lock/bodies`, with `lacking`: while off, only to a connection that proves
+  itself a device the list names), and to one a removal took out, that removal and its `prev` chain alone (the rules'
+  list `without` it, the model's `admitsBefore`). A device taken out is told so by its hello's refusal as before; its
+  removal's body reaches it in the core's step. `test/lock-moved-model.test.ts` holds all of it to the model.
 
 ## Screens
 

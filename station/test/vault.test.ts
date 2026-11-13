@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { type Entry, apply, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { bring, handover, station as movedStation, world as movedWorld } from "./lock-moved-world.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { routes } from "../src/api/routes/vault.ts";
 import { type To, isFor } from "../src/api/events.ts";
@@ -608,3 +609,22 @@ test("routes: the plain library (no security mode) is each person's own, version
   assert.deepEqual([gone.deleted, gone.name, gone.listing], [true, "", undefined]);
   assert.equal((await ask("GET", `/vault/plain/item?id=${id}`, "alice")).status, 404);
 });
+
+test("on a lock moved to its people's logs the vault goes by them: their app devices; one taken off its person's log is none", () => {
+  const mw = movedWorld(WS);
+  handover(mw);
+  const phone = { signer: ed(), base: ed() };
+  mw.alice.add("device", { key: phone.signer.id, id: phone.base.hex, label: "phone" });
+  const c = movedStation(mw);
+  for (const l of [mw.alice, mw.bob, mw.carol]) bring(c, l, true, WS);
+  const person = (sub: string, d: { signer: unknown; base: unknown }) => ({ sub, ...d }) as unknown as Person;
+  const w = { alice: person("alice", mw.alice.app), state: c.locked()!.state! } as unknown as ReturnType<typeof lock>;
+  const bob = person("bob", mw.bob.app), ph = person("alice", phone);
+  assert.equal(vaultOk(w.state, null, vaultOf(w, { members: [w.alice, bob] })), null, "members and devices the people's logs say");
+  const both = (st: typeof w.state) => vaultOk(st, null, vaultOf(w, { members: [w.alice], certs: [boxOf(w.alice), boxOf(ph)] }));
+  assert.equal(both(w.state), null, "alice's phone, on her own log");
+  mw.alice.add("device.remove", { key: phone.signer.id });
+  bring(c, mw.alice, false, WS);
+  assert.match(both(c.locked()!.state!)!, /not an app device in the lock/);
+});
+

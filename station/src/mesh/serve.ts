@@ -13,13 +13,12 @@ import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
-import { PersonChains } from "./person-chains.ts";
 import { SeenDevices } from "./seen-devices.ts";
 import { foldChain, takeChain } from "./person-sync.ts";
 import { AT_ODDS } from "./person-chains.ts";
 import { WaysRefusal, setRelays, setWay, waysOf as workspaceWaysOf } from "./ways.ts";
 import { join } from "node:path";
-import { FORK, meshDir } from "../cloud/state.ts";
+import { FORK, NOT_GIVEN, meshDir, personChainsOf } from "../cloud/state.ts";
 import { hashOf } from "../cloud/log-keep.ts";
 import { type Entry, LockRefusal, admit, admitPerson, asEntry, endpointProof, fold, lowerRole, personFold } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
@@ -122,8 +121,9 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
   const entries = raw.map(asEntry);
   if (entries.some((e) => e === null)) return false;
   const ws = joinedOf(cloud, workspace);
-  const state = cloud.locked(ws)?.state;
-  if (!state) return false;
+  // (onto the workspace's own chain, where it has not moved: nothing follows a `moved`)
+  const state = cloud.chain(ws)?.state;
+  if (!state || state.moved !== undefined) return false;
   const all = entries as Entry[];
   if (all[0]!.seq > state.seq + 1 || all.some((e, i) => i > 0 && e.seq !== all[i - 1]!.seq + 1)) return false;
   if (!all.some((e) => e.seq > state.seq && e.kind === "device" && (e.body as { id?: unknown } | null)?.id === base)) return false;
@@ -135,13 +135,32 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
   }
 }
 
-/// The longest chain of each person's own lock this station heard, by the lock's genesis.
-const chains = new WeakMap<Cloud, PersonChains>();
-export function personChainsOf(cloud: Cloud): PersonChains {
-  let c = chains.get(cloud);
-  if (c === undefined) chains.set(cloud, (c = new PersonChains(join(meshDir(cloud.data), "person-chains.json"))));
-  return c;
+/// Where a workspace's chain moved and this station waits for what its state is made of (Cloud `locked`'s `waiting`):
+/// what a hello brings of it, the root's log (`lock.person`, its genesis the root) and statements' bodies
+/// (`lock.bodies`), taken as any are (the log by its rules, each body only against an entry kept that commits to it),
+/// whoever brings them: they let nobody in by themselves. Whether any was.
+function broughtForState(hello: any, cloud: Cloud, workspace: string): boolean {
+  const ws = joinedOf(cloud, workspace);
+  const root = cloud.chain(ws)?.state?.moved;
+  if (root === undefined || cloud.locked(ws)?.waiting !== true) return false;
+  let any = false;
+  const log = hello?.lock?.person;
+  if (Array.isArray(log) && log.length > 0 && log.length <= BROUGHT_MOST) {
+    try {
+      const { genesis, whose } = foldChain(log, null);
+      if (genesis === root) any = personChainsOf(cloud).take(genesis, whose, log, workspace, false).taken > 0 || any;
+    } catch {
+      // (not the root's log, or not one the rules take)
+    }
+  }
+  const bodies = hello?.lock?.bodies;
+  if (Array.isArray(bodies) && bodies.length > 0 && bodies.length <= BROUGHT_MOST) any = cloud.takeBodies(ws, bodies).taken > 0 || any;
+  return any;
 }
+
+/// The longest chain of each person's own lock this station heard, by the lock's genesis (cloud/state.ts, where a
+/// moved workspace's state is made of them).
+export { personChainsOf };
 
 /// The members' devices that came to this station, by workspace (seen-devices.ts).
 const seens = new WeakMap<Cloud, SeenDevices>();
@@ -202,6 +221,45 @@ export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, 
   return { error: (e as Error).message };
 }
 
+/// Whether a device's connection is given `ws`'s bodies and logs: let in by its lock (while on); while its people's
+/// logs say it is off, the connection was let in by the control plane's word alone, so only where the list made of the
+/// bodies names that very device as the lock's admission would (its base key's proof of the endpoint, and an app's
+/// person's log as kept here). A connection that brought no proof (`lock` on its hello) is given none while off. While
+/// the station waits for the root's log or its `open` (`waiting`) nobody is let in, and a connection let in before the
+/// chain moved, still open, is given none either.
+function givesDevice(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"]): boolean {
+  const locked = cloud.locked(ws);
+  if (locked !== null) return locked.waiting !== true;
+  const li = cloud.list(ws);
+  const s = li?.state;
+  if (!s || li!.waiting === true || s.moved !== undefined || cloud.chain(ws)?.state?.moved === undefined) return false;
+  try {
+    const who = { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof };
+    const { device } = admit(s, who, nowSecs());
+    if (device.kind === "app" && s.persons.has(viewer.sub)) {
+      const chain = personChainsOf(cloud).kept(s.persons.get(viewer.sub)!);
+      if (chain === null) return false;
+      admitPerson(s, who, chain);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/// How many bodies one request brings at most.
+const BODIES_MOST = 1024;
+
+/// Bodies a device of the viewer's workspace brings, taken as the rules take them (Cloud `takeBodies`): how many, and
+/// each not taken with why (as `off` says it of entries). Taken while the workspace is off too (a lock pinned: its
+/// chain): the root's next `open` puts it on again, and taking a body gives nobody anything.
+function bodiesTaken(cloud: Cloud, viewer: Admitted["viewer"], bodies: unknown[]): { taken: number; refused?: { hash: string | null; why: string }[] } {
+  const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
+  if (cloud.chain(ws) === null || bodies.length > BODIES_MOST) return { taken: 0, refused: bodies.slice(0, BODIES_MOST).map(() => ({ hash: null, why: "this workspace keeps no statements here" })) };
+  const t = cloud.takeBodies(ws, bodies);
+  return { taken: t.taken, ...(t.refused.length > 0 ? { refused: t.refused } : {}) };
+}
+
 /// How much of a person's own lock a refusal tells at most (a core reads a line of 64 KiB at most).
 const REFUSAL_PERSON_BYTES = 32 * 1024;
 /// How much of the workspace's lock (its last entries) a refusal tells at most.
@@ -220,7 +278,8 @@ function claimed(hello: any): string {
 /// How far this station's lock goes in `ws` (the home workspace when null), for the device to bring it what it has
 /// more (null: no lock pinned there).
 export function lockHead(cloud: Cloud, ws: string | null = null): { seq: number; hash: string; genesis: string } | null {
-  const s = cloud.locked(ws)?.state;
+  // (the chain's own, moved or not: what a device brings it more of)
+  const s = cloud.chain(ws)?.state;
   return s ? { seq: s.seq, hash: s.head, genesis: s.genesis } : null;
 }
 
@@ -250,7 +309,7 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     const from = Number.isSafeInteger(after) ? after : -1;
     const at = from >= 0 ? cloud.lockAfter(from - 1, ws)[0] : undefined;
     const atHash = at !== undefined && at.seq === from ? { after_hash: hashOf(at) } : {};
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks"] }];
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -270,7 +329,7 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   }
   if (entries.length === 0 || entries.some((e) => e === null)) return [400, { error: "entries: lock entries" }];
   try {
-    if (cloud.locked(ws) === null) {
+    if (cloud.chain(ws) === null) {
       if (viewer.role !== "owner") return [403, { error: "only the workspace's owner turns its lock on" }];
       // Brought by one of its owner's devices as the chain brought names them (one approved after the genesis too:
       // the owner takes a station in from the phone they approved since).
@@ -357,11 +416,38 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     try {
       const t = takeChain(chains, said?.chain, viewer.sub, viewer.workspace, said?.keep === true);
       const off = t.off.length > 0 ? { off: t.off } : {};
-      if (!t.on) return [409, { error: AT_ODDS, head: personHead(t.chain), ...off }];
-      return [200, { genesis: t.genesis, length: t.chain.length, ...off }];
+      // (the entries first, then the bodies of the statements among them: one answer)
+      const bodies = Array.isArray(said?.bodies) ? bodiesTaken(cloud, viewer, said.bodies) : {};
+      if (!t.on) return [409, { error: AT_ODDS, head: personHead(t.chain), ...off, ...bodies }];
+      return [200, { genesis: t.genesis, length: t.chain.length, ...off, ...bodies }];
     } catch (e) {
       return [409, { error: (e as Error).message }];
     }
+  }
+  const ws = (part === "bodies" || part === "logs") && viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
+  if (part === "bodies") {
+    // (to a connection let in in this workspace alone: it is in its state, or, before its chain moved, in its chain)
+    if (method === "GET") {
+      if (!givesDevice(cloud, ws, viewer)) return [200, { bodies: [], lacking: [] }];
+      return [200, { bodies: [...cloud.bodies(ws).all().values()], lacking: cloud.lacking(ws) }];
+    }
+    if (method !== "POST") return [405, { error: "GET or POST" }];
+    let said: any;
+    try {
+      said = JSON.parse(body.toString("utf8") || "{}");
+    } catch {
+      return [400, { error: "invalid JSON" }];
+    }
+    if (!Array.isArray(said?.bodies) || said.bodies.length > BODIES_MOST) return [400, { error: "bodies: the statements' bodies" }];
+    return [200, bodiesTaken(cloud, viewer, said.bodies)];
+  }
+  if (part === "logs" && method === "GET") {
+    if (!givesDevice(cloud, ws, viewer)) return [200, { chains: [] }];
+    const chains = personChainsOf(cloud);
+    return [200, { chains: cloud.logsOf(ws).flatMap((genesis) => {
+      const entries = chains.kept(genesis);
+      return entries === null ? [] : [{ genesis, entries }];
+    }) }];
   }
   if (part === "devices" && method === "GET") {
     const manages = viewer.role === "owner" || viewer.role === "admin";
@@ -381,6 +467,8 @@ export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint
   const locked = cloud.locked(ws);
   if (locked === null) return { ...admitted, viewer: { ...admitted.viewer, role: named } };
   if (locked.state === null) throw new LockRefusal("this station's workspace lock is broken; run `stillfail lock reset` on it");
+  // (moved to its people's logs, and the root's log or its `open` not here yet: nobody, until they come)
+  if (locked.waiting === true) throw new LockRefusal(NOT_GIVEN);
   const v = admitted.viewer;
   const { device, role } = admit(locked.state, { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, nowSecs());
   if (device.kind === "app" && locked.state.persons.has(v.sub)) {
@@ -411,6 +499,13 @@ export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, 
     return inLock(cloud, admitted, named, endpoint, hello);
   } catch (e) {
     if (!(e instanceof LockRefusal)) throw e;
+    if (broughtForState(hello, cloud, admitted.viewer.workspace)) {
+      try {
+        return inLock(cloud, admitted, named, endpoint, hello);
+      } catch (again) {
+        if (!(again instanceof LockRefusal)) throw again;
+      }
+    }
     if (brought(hello, cloud, admitted.viewer.workspace, admitted.viewer.lockDevice?.base)) {
       try {
         return inLock(cloud, admitted, named, endpoint, hello);
@@ -737,7 +832,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     const [status, said] = waysRoute(m.cloud, method, body, viewer);
     return answer(status, said);
   }
-  const lockPart = /^\/lock\/(person|devices)$/.exec(at < 0 ? rest : rest.slice(0, at));
+  const lockPart = /^\/lock\/(person|devices|bodies|logs)$/.exec(at < 0 ? rest : rest.slice(0, at));
   if (lockPart) {
     const [status, said] = lockPartRoute(m.cloud, lockPart[1]!, method, body, viewer);
     return answer(status, said);

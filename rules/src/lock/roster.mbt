@@ -101,12 +101,20 @@ fn mgr(role : String?) -> Bool {
 /// longer, then the one of the lower head hash. Whatever the order of `chains` and `bodies`, the same list, each part
 /// of it in MoonBit's `String` order (a shorter text first).
 pub fn roster(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], c : &Crypto) -> Roster {
-  roster_of(ws, root, chains, bodies, c).0
+  roster_of(ws, root, chains, bodies, [], c).0
 }
 
 ///|
-/// `roster`, with the logs it took (by their genesis's hash).
-fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], c : &Crypto) -> (Roster, Map[String, (Person, Array[Json])]) {
+/// `roster` with the statements of the bodies of hash `without` left out of those in force, once what is in force is
+/// decided (a later statement whose `prev` chain goes through one left out still counts): the list as it would be
+/// without them, which says whom a removal took out (station/test/lock-roster4-model.ts `admitsBefore`, its `left`).
+pub fn roster_without(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], c : &Crypto) -> Roster {
+  roster_of(ws, root, chains, bodies, without, c).0
+}
+
+///|
+/// `roster`, with the logs it took (by their genesis's hash); `without` as `roster_without` has it.
+fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], c : &Crypto) -> (Roster, Map[String, (Person, Array[Json])]) {
   let refused : Array[(String, String)] = []
   let logs : Map[String, (Person, Array[Json])] = Map([])
   for chain in chains {
@@ -171,6 +179,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     }
   }
   lacking.sort()
+  let in_force = if without.length() == 0 { in_force } else { in_force.filter(fn(f) { !without.contains(f.1) }) }
   let forced = in_force.map(fn(f) { (f.0, f.1) })
   forced.sort_by(fn(a, b) { a.compare(b) })
   // On or off, and the settings: the root's alone.

@@ -189,6 +189,7 @@ test("a person's entry a station takes while it brings a peer level is brought t
     state: { station: "a" }, peersCurrent: true,
     memberships: () => [{ workspace: "w1", home: true, peers: [{ id: "a" }, { id: "b" }] }],
     listen: (f: () => void) => (listeners.add(f), () => listeners.delete(f)),
+    home: () => "w1", chain: () => null,
   } as unknown as Cloud;
   const c = carols();
   const a = new PersonChains(null), b = new PersonChains(null);

@@ -22,21 +22,19 @@ export const CHAIN_MOST = 1024;
 /// kept every branch.
 export const AT_ODDS = "this device brought a lock at odds with the one its person has here";
 
-/// Round three's statements of a workspace in the clear, which no log ever carried and the rules refuse now
-/// (rules/src/lock/person.mbt `fold_person`: a workspace's statement is a commitment, `ws`): refused here as they were.
-const STATEMENTS = new Set(["ws.member", "ws.member.remove", "ws.station", "ws.station.remove"]);
-
 /// Whose a chain is: its entries name the person's lock (`person:<sub>`).
 export function subOf(chain: readonly unknown[]): string | null {
   const ws = (chain[0] as { ws?: unknown } | undefined)?.ws;
   return typeof ws === "string" && ws.startsWith("person:") ? ws.slice("person:".length) : null;
 }
 
-/// A person log's rules for keeping, of the log of genesis hash `genesis` named `person:<sub>`.
+/// A person log's rules for keeping, of the log of genesis hash `genesis` named `person:<sub>`. A workspace's statement
+/// in the clear (round three's `ws.member` and the rest) is no kind of the rules (rules/src/lock/person.mbt
+/// `fold_person`: a statement is a commitment, `ws {t, h}`, its body kept apart): they refuse it themselves.
 function personRules(genesis: string, ws: string): LogRules {
   return {
     chain: (all) => personChain(all, genesis),
-    pre: (e) => (e.ws !== ws ? "an entry of another lock" : STATEMENTS.has(e.kind) ? `unknown entry kind ${e.kind}` : null),
+    pre: (e) => (e.ws !== ws ? "an entry of another lock" : null),
   };
 }
 
@@ -157,9 +155,36 @@ export class PersonChains {
     return [...this.#kept].filter(([, chain]) => subOf(chain) === sub);
   }
 
-  /// The chains heard in workspace `ws`, by their genesis.
+  /// The logs a workspace's state is made of where its chain moved (the root's, each a statement in force binds a
+  /// member by, each holding an entry of its tag: Cloud's `needs`), which count as heard there.
+  needs: (ws: string) => ReadonlySet<string> = () => new Set();
+
+  /// The chains heard in workspace `ws`, or that its state is made of, by their genesis.
   heardIn(ws: string): [string, unknown[]][] {
-    return [...this.#kept].filter(([genesis]) => this.#heard.get(genesis)?.has(ws) === true);
+    const needed = this.needs(ws);
+    return [...this.#kept].filter(([genesis]) => this.#heard.get(genesis)?.has(ws) === true || needed.has(genesis));
+  }
+
+  /// Every log kept, its active chain, by its genesis.
+  every(): [string, Entry[]][] {
+    return [...this.#kept] as [string, Entry[]][];
+  }
+
+  /// Every `ws` entry kept (on a chain or off it) that commits to the body of hash `h`, with its log from the genesis to
+  /// it: what the rules take a body against (cloud/lock.ts `bodyRefusal`).
+  commitsTo(h: string): { genesis: string; chain: Entry[] }[] {
+    const out: { genesis: string; chain: Entry[] }[] = [];
+    for (const genesis of this.#kept.keys()) {
+      const all = this.all(genesis);
+      const by = new Map(all.map((e) => [hashOf(e), e]));
+      for (const e of all) {
+        if (e.kind !== "ws" || (e.body as { h?: unknown } | null)?.h !== h) continue;
+        const chain: Entry[] = [];
+        for (let at: Entry | undefined = e; at !== undefined && chain.length <= CHAIN_MOST; at = at.prev === null ? undefined : by.get(at.prev)) chain.unshift(at);
+        if (chain.length > 0 && chain[0]!.prev === null) out.push({ genesis, chain });
+      }
+    }
+    return out;
   }
 
   /// Checked and let in on it: its entries kept (as heard in `ws`, when said); then whoever listens told when the chain

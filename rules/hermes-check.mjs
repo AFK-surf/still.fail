@@ -26,6 +26,7 @@ const web = { v: 1, ws: "person:alice", seq: 2, prev: oh, at: 5, kind: "web", bo
 const chain = person_chain_js([station, g, web, admit, opened], gh, crypto);
 print(JSON.stringify({ hashes: chain.hashes, off: chain.off }));
 print(JSON.stringify(body_refusal_js("W", admitBody, [{ genesis: gh, chain: [g, opened, admit] }], crypto)));
-print(JSON.stringify(roster_js("W", gh, [chain.entries], [stationBody, open, admitBody], crypto)));
+print(JSON.stringify(roster_js("W", gh, [chain.entries], [stationBody, open, admitBody], [], crypto)));
+print(JSON.stringify(roster_js("W", gh, [chain.entries], [stationBody, open, admitBody], [body_hash_js(admitBody, crypto)], crypto)));
 print(JSON.stringify(state4_js("W", gh, [chain.entries], [stationBody, open, admitBody], 100, crypto).state));
 print(tie_of_js(gh, key, crypto));

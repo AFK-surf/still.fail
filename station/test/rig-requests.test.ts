@@ -7,7 +7,9 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { type GrantBody, type Timeout, latest, signedBytes } from "../../client/core-ts/src/rig-form.ts";
 import { type Entry, apply, entryHash, genesis, signedBytes as entryBytes } from "../src/cloud/lock.ts";
-import { addRefusal } from "../src/rigs/adds.ts";
+import { RigAdds, addRefusal } from "../src/rigs/adds.ts";
+import { personChainsOf } from "../src/cloud/state.ts";
+import { bring, handover, station as movedStation, world as movedWorld } from "./lock-moved-world.ts";
 import { Refused, type RigRequest, RigRequests, said } from "../src/rigs/requests.ts";
 import { rigTools } from "../src/rigs/tool.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
@@ -246,4 +248,26 @@ test("security mode: a rig is the workspace's once its person signed for it with
   // Out of the workspace, their rigs go with them.
   lock = apply(lock, signed({ v: 1, ws: WS, seq: 2, prev: lock.head, at: 2500, kind: "member.remove", body: { sub: "pat" } }, alice.signer), 2500);
   assert.match(addRefusal(add(pat.signer), WS, RIG, lock, none, 3000)!, /no member who adds rigs here/);
+});
+
+test("on a lock moved to its people's logs a rig's add is held by the state in force, made again when a body changes it", () => {
+  const mw = movedWorld(WS);
+  const said = handover(mw);
+  const c = movedStation(mw);
+  for (const l of [mw.alice, mw.bob, mw.carol]) bring(c, l, true, WS);
+  const rig = { ...RIG, owner: "carol" };
+  const adds = new RigAdds({ db: new DatabaseSync(":memory:"), cloud: c, chain: (g) => personChainsOf(c).kept(g), now: () => 3000 });
+  assert.equal(adds.take(WS, rig, says("add", { v: 1 as const, sub: "carol", ws: WS, rig: rig.id, at: 2000 }, mw.carol.app.signer as unknown as Key)), null);
+  assert.equal(adds.holds(WS, rig), true);
+  // bob (an admin) takes carol's admit back and admits her again as a viewer, who adds no rigs (a lower role given by
+  // a later admit alone changes nothing, rules/src/lock/roster.mbt): bodies of bob's change the state, while the root
+  // log's head (a folded chain's word), whose log binds carol and that log's head do not
+  const head = c.locked()!.state!.head;
+  mw.bob.say("member.remove", { sub: "carol", cancels: [said.carol.h] }, WS);
+  mw.bob.say("member", { sub: "carol", email: "carol@x", lock: mw.carol.genesis, role: "viewer" }, WS);
+  bring(c, mw.bob, true, WS);
+  assert.equal(c.locked()!.state!.head, head);
+  assert.equal(c.locked()!.state!.persons.get("carol"), mw.carol.genesis);
+  assert.equal(c.locked()!.state!.members.get("carol")?.role, "viewer");
+  assert.equal(adds.holds(WS, rig), false, "a viewer's rig is not held");
 });

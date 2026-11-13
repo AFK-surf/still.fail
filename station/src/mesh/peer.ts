@@ -8,7 +8,7 @@
 // chunks of base64 inside it, one request each.
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import { type Cloud, UNPROTECTED } from "../cloud/state.ts";
+import { type Cloud, NOT_GIVEN, UNPROTECTED } from "../cloud/state.ts";
 import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
@@ -373,7 +373,11 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
       } else if (there || (ours && !remote.hearsOutside?.())) {
         member(cloud, peer, envelope.workspace);
         const method = envelope.request?.method;
-        result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace)
+        // (a workspace whose chain moved, this station waiting for its root's log or `open`: its chain's stations are
+        // answered only the lock's own, which bring it what it lacks: Cloud `rosterOf`)
+        const w = envelope.workspace && envelope.workspace !== cloud.home() ? envelope.workspace : null;
+        if (cloud.waiting(w) && !(typeof method === "string" && method.startsWith("lock."))) throw new Error(NOT_GIVEN);
+        result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace, peer)
           // The workspace's ways (mesh/ways.ts), kept level between its stations.
           : typeof method === "string" && method.startsWith("ways.") ? answerWays(waysOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")
           : await remote.handle(envelope.workspace, peer, envelope.request ?? null);

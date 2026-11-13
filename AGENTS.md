@@ -126,7 +126,9 @@ gives the cloud its notices to push through APNs, FCM and Web Push (`cloud/src/p
 
 Signatures the cloud cannot forge are not enough: what the cloud only carries, it can still hold back, delay or lose.
 A new feature puts nothing else in the cloud. The locks are the stations' now: a device reads the workspace lock, its
-person's own lock and the devices that came of the stations (`GET /lock`, `/lock/person`, `/lock/devices`), is told
+person's own lock and the devices that came of the stations (`GET /lock`, `/lock/person`, `/lock/devices`; once a
+workspace's chain moved to its people's logs, the logs its state is made of and its statements' bodies, `/lock/logs`,
+`/lock/bodies`, which only its stations keep and give), is told
 they changed on their event streams (`station/src/mesh/lock-events.ts`) and brings what it signs to them, which keep
 each other level (`station/src/mesh/lock-sync.ts`, `station/src/mesh/person-sync.ts`). The cloud is asked only where
 no station answers (one from before, all offline), and is sent what a station took for the stations and devices from
