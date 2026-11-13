@@ -242,3 +242,88 @@ test "the picture made anew for another thumbnail's in one change (stepped to th
   assert_true(b.flies())
   assert_false(a.flies())
 }
+
+///|
+/// A thumbnail "a" that stays (none where `thumb` is false) and over all of it, while `open` is said, a picture by id "a"
+/// said `with_stays`, made anew where `tier` changes (as a viewer's layer is for another tier of the window): 300 by
+/// 200 at (50, 300), or 200 by 100 at (20, 100) at tier 1. The tree, open, tier, the thumbnail, the picture made last.
+fn with_stays_scene(
+  thumb : Bool,
+) -> (@view.Tree, @signals.Signal[Bool], @signals.Signal[Int], Ref[@view.View?], Ref[@view.View?]) {
+  let open = @signals.signal(false)
+  let tier = @signals.signal(0)
+  let th : Ref[@view.View?] = Ref(None)
+  let big : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(p) {
+      p.grow(Is(1.0)) |> ignore
+      p.box(fn(list) {
+        list.height(Is(Some(100.0))).row(Is(true)).padding(Is((10.0, 10.0, 10.0, 10.0))) |> ignore
+        if thumb {
+          list.box(fn(t) {
+            th.val = Some(t)
+            t.width(Is(Some(40.0))).height(Is(Some(40.0))).ground(Is(red)).shared(Is("a"), straight, stays=true) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+      p.pick(at_once=true, fn() { if open.get() { tier.get() } else { -1 } }, fn(o, k) {
+        if k >= 0 {
+          o.over(Is(true)) |> ignore
+          o.box(fn(b) {
+            big.val = Some(b)
+            let (x, y, w, h) = if k == 0 { (50.0, 300.0, 300.0, 200.0) } else { (20.0, 100.0, 200.0, 100.0) }
+            b
+            .offset(Is((x, y)))
+            .width(Is(Some(w)))
+            .height(Is(Some(h)))
+            .ground(Is(blue))
+            .shared(Is("a"), straight, with_stays=true)
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+    })
+    |> ignore
+  })
+  (tree, open, tier, th, big)
+}
+
+///|
+test "one that moves said with_stays made anew in the place of another of its id (a viewer's layer for another tier): there at once, no flight between; the thumbnail drawn nowhere still; closed, back to it" {
+  let (tree, open, tier, th, big) = with_stays_scene(true)
+  tree.frame(400.0, 800.0, now=0.0) |> ignore
+  tree.event(1000.0, fn() { open.set(true) })
+  tree.frame(400.0, 800.0, now=1000.0) |> ignore
+  assert_true(big.val.unwrap().flies(), msg="flown from the thumbnail")
+  tree.frame(400.0, 800.0, now=2000.0) |> ignore
+  let first = big.val.unwrap()
+  assert_eq(drawn_as(tree, first), Some((50.0, 300.0, 300.0, 200.0, 1.0, blue)))
+  tree.event(3000.0, fn() { tier.set(1) })
+  tree.frame(400.0, 800.0, now=3000.0) |> ignore
+  let again = big.val.unwrap()
+  assert_true(!physical_equal(again, first) && !first.alive(), msg="made anew, the other let go of")
+  assert_true(!again.flies(), msg="no flight between the two")
+  assert_eq(drawn_as(tree, again), Some((20.0, 100.0, 200.0, 100.0, 1.0, blue)))
+  assert_eq(alpha_of(tree, th.val.unwrap()), 0.0, msg="the thumbnail drawn nowhere still")
+  tree.event(4000.0, fn() { open.set(false) })
+  tree.frame(400.0, 800.0, now=4000.0) |> ignore
+  assert_true(th.val.unwrap().flies(), msg="closed: the thumbnail flown back to")
+  tree.frame(400.0, 800.0, now=5000.0) |> ignore
+  assert_eq(drawn_as(tree, th.val.unwrap()), Some((10.0, 10.0, 40.0, 40.0, 1.0, red)))
+}
+
+///|
+test "one said with_stays, none of its id staying: made anew in the place of another, there at once, as without an id" {
+  let (tree, open, tier, _, big) = with_stays_scene(false)
+  tree.frame(400.0, 800.0, now=0.0) |> ignore
+  tree.event(1000.0, fn() { open.set(true) })
+  tree.frame(400.0, 800.0, now=1000.0) |> ignore
+  assert_true(!big.val.unwrap().flies())
+  tree.event(2000.0, fn() { tier.set(1) })
+  tree.frame(400.0, 800.0, now=2000.0) |> ignore
+  assert_true(!big.val.unwrap().flies(), msg="no flight between the two")
+  assert_eq(drawn_as(tree, big.val.unwrap()), Some((20.0, 100.0, 200.0, 100.0, 1.0, blue)))
+}

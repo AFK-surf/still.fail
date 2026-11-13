@@ -19,7 +19,9 @@
 // test fails), and none of them flies. A pair made again on its way (opened, then closed before it is there) sets out
 // from where it is drawn then, its old copy let go of at once.
 // One end may stay where it is (View::shared's `stays`: a picture's thumbnail, the other end the picture opened over
-// everything): it is never let go of for a flight nor made for one, and pairs with no other that stays. While one of its
+// everything): it is never let go of for a flight nor made for one, and pairs with no other that stays. One that moves
+// may fly with one that stays alone (`with_stays`): made in the place of another of its id that moves (the picture's
+// viewer made again for another tier of the window), it is there at once, the other let go of, no flight between. While one of its
 // id that moves lives, it keeps its room and is drawn nowhere, whatever holds it says (the tree's say, by the id, never
 // what holds it). One that moves made in a change while it lives flies from where it was drawn as the change came, as
 // it looked; one that moves let go of in a change while it lives is drawn there no more, and it flies from where that
@@ -113,18 +115,22 @@ priv struct Flying {
 ///|
 /// One with id `id`, flying as `flight` says from the one with its id let go of in the change it is made in (or that
 /// sets it this id): see the head of this file. The id said By follows what it reads; a change of it pairs nothing.
+/// `stays`: the end that stays where it is. `with_stays`: one that moves flying only from or to one of its id that stays,
+/// never from another that moves (the same thing made again in another place, as a window changes tier: there at once).
 #callsite(autofill(loc))
 pub fn View::shared(
   self : View,
   id : Live[String],
   flight : Flight,
   stays? : Bool = false,
+  with_stays? : Bool = false,
   loc~ : SourceLoc,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   ignore(loc)
   n.share_flight = Some(flight)
   n.share_stays = stays
+  n.share_with_stays = with_stays && !stays
   let tree = self.tree
   let at = self.at
   let gen = self.gen
@@ -293,6 +299,13 @@ fn Tree::stays_end(self : Tree, id : String) -> Int? {
     }
   }
   None
+}
+
+///|
+/// Whether one of id `id` that stays (View::shared's `stays`) would be flown to now: one placed, some of it drawn in the
+/// window. What closes the other end asks it, to let that one go at once (flown back to it) rather than fade it out.
+pub fn Tree::stays_seen(self : Tree, id : String) -> Bool {
+  self.stays_end(id) is Some(_)
 }
 
 ///|
@@ -639,7 +652,9 @@ fn Tree::pairs_now(self : Tree) -> Unit {
     } else if come.length() == 1 && living > 1 {
       self.fault(come[0], "shared: \{id} made while another of it lives")
     } else if gone.length() == 1 && come.length() == 1 {
-      if self.paired(gone[0], come[0]) is Some(_) {
+      // (one said `with_stays` made in the place of another that moves: the same thing made again, there at once, the
+      // old let go of with the rest)
+      if !self.nodes[come[0].at].share_with_stays && self.paired(gone[0], come[0]) is Some(_) {
         flown.push(gone[0].held)
       }
     } else if come.length() == 1 && gone.length() == 0 {
@@ -1018,6 +1033,7 @@ fn Tree::share_let_go(self : Tree, at : Int) -> Unit {
     None => ()
   }
   n.share_stays = false
+  n.share_with_stays = false
   n.share_flight = None
   if n.lift is Some(_) {
     match self.flying_of(at) {
