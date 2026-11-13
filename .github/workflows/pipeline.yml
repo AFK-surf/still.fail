@@ -1235,6 +1235,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: sh scripts/changelog-put.sh
+      # monoid's cloud reads its own account's bucket, and answers for still.fail too once CLOUD_MOVED is on: the same
+      # changelog put there (before, its /v1/changelog was empty, the apps' 更新日志 with it, 2026-11-13)
+      - name: Put changelog.json in monoid's bucket
+        if: vars.MONOID_CI == 'on'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/changelog-put.sh
       - name: Delete old installers and beta blockmaps (scripts/release-prune.ts says which stay)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -1268,6 +1275,13 @@ jobs:
       - name: Put changelog.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/changelog-put.sh
+      # monoid's cloud reads its own account's bucket, and answers for still.fail too once CLOUD_MOVED is on: the same
+      # changelog put there (before, its /v1/changelog was empty, the apps' 更新日志 with it, 2026-11-13)
+      - name: Put changelog.json in monoid's bucket
+        if: vars.MONOID_CI == 'on'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: sh scripts/changelog-put.sh
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
