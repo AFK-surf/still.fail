@@ -112,3 +112,155 @@ test "a call's code of two lines in the history: on two lines, each where an old
   assert_true(lines[0].length() == 1 && lines[1].length() == 1 && lines[1][0] > lines[0][0], msg="\{Repr(lines)}")
   steps_reset()
 }
+
+///|
+test "history task keeps its title visible when opened and toggles from its preview line" {
+  let title = "后台任务「跑全量测试」已完成"
+  let preview = "142 passed (18.4s)"
+  let result = "moon test --target wasm-gc\n142 passed (18.4s)"
+  let item : Json = {
+    "body": {
+      "kind": "received",
+      "content": {
+        "note": "",
+        "tasks": [
+          {
+            "text": Json::string(title),
+            "line": Json::string(preview),
+            "result": Json::string(result),
+            "md": [["p", [Json::string(result)]]],
+            "failed": false,
+            "agent": false,
+          },
+        ],
+        "messages": [],
+      },
+    },
+  }
+  steps_reset()
+  @sf.set_words(@sfbase.fill)
+  let src = @sffixture.fixture("history")
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=480.0, h=240.0, tree=fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let tips = @sf.TipLayer::new(fn() { Some(root) })
+    root.box(fn(v) { item_node(v, src, "ws1/st1", "s-c1", "h1", Some(item), false, tips) }) |> ignore
+  })
+  t.draw()
+  assert_true(t.rect_of(title) is Some(_))
+  assert_true(t.rect_of(preview) is Some(_))
+  assert_true(t.rect_of(result) is None)
+  t.tap_text(preview)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.rect_of(title) is Some(_), msg="task title stays visible when expanded")
+  assert_true(t.rect_of(result) is Some(_), msg="task result opens when preview is tapped")
+  assert_true(t.rect_of(@sf.t("web-main.fold")) is Some(_))
+  t.tap_text(@sf.t("web-main.fold"))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.rect_of(title) is Some(_))
+  assert_true(t.rect_of(preview) is Some(_))
+  assert_true(t.rect_of(result) is None)
+  steps_reset()
+}
+
+///|
+test "history text expands on its first line and short single-line text omits fold button" {
+  let short_words = "先看历史面板这几处样式。"
+  let short_item : Json = {
+    "body": {
+      "kind": "text",
+      "content": {
+        "text": Json::string(short_words),
+        "line": Json::string(short_words),
+        "md": [["p", [Json::string(short_words)]]],
+        "subagent": false,
+      },
+    },
+  }
+  let long_words = "列表只建看得见的行，其余的按估计的高度占位；量过一次的行记住它的高度，滚回来时不再跳。"
+  let long_item : Json = {
+    "body": {
+      "kind": "text",
+      "content": {
+        "text": Json::string(long_words),
+        "line": Json::string(long_words),
+        "md": [["p", [Json::string(long_words)]]],
+        "subagent": false,
+      },
+    },
+  }
+  steps_reset()
+  @sf.set_words(@sfbase.fill)
+  let src = @sffixture.fixture("history")
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=420.0, h=300.0, tree=fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let tips = @sf.TipLayer::new(fn() { Some(root) })
+    root.lines_up(Is(None)) |> ignore
+    root.box(fn(v) { item_node(v, src, "ws1/st1", "s-c1", "short", Some(short_item), false, tips) }) |> ignore
+    root.box(fn(v) { item_node(v, src, "ws1/st1", "s-c1", "long", Some(long_item), false, tips) }) |> ignore
+  })
+  t.draw()
+  let (_, short_y, short_w, _) = t.rect_of(short_words).unwrap()
+  let (_, long_y, long_w, long_h) = t.rect_of(long_words).unwrap()
+  assert_true(short_w < 300.0 && long_w > short_w, msg="short single-line text fits on one line without truncation")
+  assert_true(short_y < long_y && long_h <= 20.0)
+  assert_true(t.rect_of(@sf.t("web-main.fold")) is None)
+  let collapsed_y = long_y
+  t.tap_text(long_words)
+  t.run_for(@ui.move_most_ms)
+  let (_, expanded_y, _, expanded_h) = t.rect_of(long_words).unwrap()
+  let fold_y = t.rect_of(@sf.t("web-main.fold")).unwrap().1
+  assert_true(expanded_h > long_h, msg="expanded text wraps across multiple lines: \{expanded_h} vs \{long_h}")
+  assert_true((expanded_y - collapsed_y).abs() <= 4.0, msg="expanded text starts on the first line: \{expanded_y} vs \{collapsed_y}")
+  assert_true((fold_y - expanded_y).abs() <= 6.0, msg="fold button aligns with the first line: \{fold_y} vs \{expanded_y}")
+  steps_reset()
+}
+
+///|
+test "history group thought hides duplicate first-line preview in summary when expanded" {
+  let first = "行高先按估计值占位（摘要）"
+  let full = "行高先按估计值占位，滚过一次就记住实测高度。"
+  let item : Json = {
+    "body": {
+      "kind": "group",
+      "content": {
+        "summary": "读取 1 个文件",
+        "failures": 0,
+        "pending": 0,
+        "rows": [
+          {
+            "kind": "step",
+            "content": { "name": "Read", "said": "", "hint": "src/list.ts", "meta": "40 行", "call": "{}", "failed": false },
+          },
+          {
+            "kind": "thought",
+            "content": {
+              "first": Json::string(first),
+              "text": Json::string(full),
+              "md": [["p", [Json::string(full)]]],
+              "brief": false,
+            },
+          },
+        ],
+      },
+    },
+  }
+  steps_reset()
+  @sf.set_words(@sfbase.fill)
+  let src = @sffixture.fixture("history")
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=480.0, h=300.0, tree=fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let tips = @sf.TipLayer::new(fn() { Some(root) })
+    root.lines_up(Is(None)) |> ignore
+    root.box(fn(v) { item_node(v, src, "ws1/st1", "s-c1", "g1", Some(item), false, tips) }) |> ignore
+  })
+  t.draw()
+  t.tap_text("读取 1 个文件")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.rect_of(first) is Some(_))
+  assert_true(t.rect_of(full) is None)
+  t.tap_text(first)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.rect_of(first) is None, msg="summary preview is hidden once full thought is open")
+  assert_true(t.rect_of(full) is Some(_))
+  steps_reset()
+}
