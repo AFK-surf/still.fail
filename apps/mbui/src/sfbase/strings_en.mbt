@@ -2647,7 +2647,7 @@ let en : Map[String, String] = {
   "web-pages.stations.permissions.section": "Permissions",
   "web-pages.stations.permissions.waiting": "Waiting",
   "web-pages.stations.processesFailed": "Couldn't load processes: {error}",
-  "web-pages.stations.processesLead": "How much CPU, memory and network still.fail's desktop app, the station and the programs agents run use on this computer, by chat. Counted only while this page is open, and on macOS only.",
+  "web-pages.stations.processesLead": "How much CPU, memory and network still.fail's desktop app, the station and the programs agents run use on this computer, by chat. Counted only while this page is open, on macOS and Linux (Linux without the network).",
   "web-pages.stations.processesOffline": "The station is offline, so its processes can't be read",
   "web-pages.stations.total": "{total} total",
   "web-pages.stations.uses": "{name} uses",
