@@ -165,7 +165,8 @@ another; the accounts' list's merge across stations and its refills.
   asked of the device). It is made once and kept in memory while what it is made of stands (`inForceOf`). Nothing is
   signed on a moved chain itself: `Lock.append` answers `lock_moved`, the background writers do nothing, and what was
   pending as the chain moved is told as not taken effect. `test/lock-moved-state.test.ts` holds it to the model.
-  Whether a workspace is in safe mode is `views/lock.ts` `safeMode`, by the lock held; the workspace's view's `locked`
+  Whether a workspace is in safe mode is `src/views/lock.ts` `safeMode`, by the lock held (kept small beside it,
+  `lockSafe`, so a list of every workspace reads a few bytes a workspace); the workspace's view's `locked`
   (the cloud's word, true for good once its chain moved, off or on) only where none is held on (2026-11-14).
 - A change of a moved workspace's list is a statement in the person's own log (`src/lock-statements.ts`, views/lock.ts
   `sayMoved`, personal-lock.ts `say`): an entry `ws {t, h}` signed by the device's key on that log, which asks the

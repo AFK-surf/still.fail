@@ -287,6 +287,8 @@ test("添加 station goes by the lock held, not the workspace's view: moved and 
   assert.equal(off.error, undefined, off.error?.message);
   assert.equal(inForceOf(w.inner, "ws").said, "off");
   viewSays(true);
+  // (what the lock held says kept beside it in a turn of its own, as the state is made anew)
+  await w.r.host.time.pass(100);
   assert.deepEqual(needsLock(), [false, false], "off: to be picked");
 });
 
