@@ -186,7 +186,7 @@ test "home again: a place of the bar tapped from Home at rest, and Home tapped a
         home_again_measure(t, "\{tag} home→\{place}", fn() { t.tap(xs[i], y) })
         println("home-again \{tag}: on \{Repr(place_of(app.nav.top()))} (asked \{place})")
         // (the place made, first visit; Home put by, not laid out again nor let go)
-        assert_eq(home_again_peak.val, if place == "profiles" { (7, 0, 10) } else { (717, 0, 505) }, msg="\{tag} home→\{place}")
+        assert_eq(home_again_peak.val, if place == "profiles" { (7, 0, 10) } else { (723, 0, 506) }, msg="\{tag} home→\{place}")
         t.run_for(kept_switch_over_ms)
         home_again_measure(t, "\{tag} \{place}→home", fn() { t.tap(xs[0], y) })
         println("home-again \{tag}: on \{Repr(place_of(app.nav.top()))} (asked chats)")
@@ -362,7 +362,7 @@ test "home again: Home come back to in a taller phone's window, and from a page 
       let first = if place == "profiles" {
         (7, 0, 10)
       } else if place == "connects" {
-        (717, 0, 505)
+        (723, 0, 506)
       } else {
         (723, 0, 619)
       }

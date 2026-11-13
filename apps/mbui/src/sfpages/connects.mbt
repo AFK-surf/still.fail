@@ -170,7 +170,7 @@ pub fn connects_node(
               @sf.words_node(t, fn() { @sf.t("web-pages.connects.waiting") }, fn() { cn_quiet }) |> ignore
             })
             |> ignore
-            @sf.list_card_node(b, rows)
+            @sf.group_node(b, rows)
           } else {
             @sf.heading_node(b, fn() { @sf.t("web-pages.connects.waiting") })
             @sf.group_node(b, rows)
@@ -410,8 +410,29 @@ fn cn_row_node(
     text(cv(), "modeText") + " · " + text(cv(), "runtimeText") + model
   }
   let on = fn() { [("station", station), ("id", id())] }
-  // (its own picture a face across the row's middle; what it connects to a mark by its first line: a platform's mark
-  // said once on a row, where the row leads with it, else before its team)
+  let wide = look == Wide
+  let end = fn(e : @view.View) {
+    // (wide: where it runs and who made it, dropped before its name where the line has not the room)
+    e.gap(Is(12.0)).fits(Is(wide)) |> ignore
+    if wide {
+      e.box(fn(f) {
+        @sf.style_node(f, fn() { cn_facts })
+        f.drops(Is(cn_drop_facts)) |> ignore
+        cn_station_tag_node(f, station_name, s, stint)
+        cn_owner_node(f, core, fn() { field(cv(), "createdBy") }, tips, stint)
+      })
+      |> ignore
+    }
+    doing_mark_node(e, fn() { is_doing(core, ["connect.delete"], on()) }, fn() { failed_of(core, ["connect.delete"], on()) }, tips~, size=doing_mark_end)
+    e.box(fn(st) {
+      @sf.style_node(st, fn() { cn_narrow_state })
+      @sf.state_dot_node(st, fn() { text(cv(), "presence") })
+      @sf.words_node(st, fn() { text(cv(), "statusText") }, fn() { cn_meta }) |> ignore
+    })
+    |> ignore
+  }
+  // (its lead a 28x28 face across the row's middle; a platform's mark said once on a row, where the row leads with it,
+  // else before its team)
   r.pick(fn() { opt_text(cv(), "botImage") is Some(_) }, fn(p, pictured) {
     @sf.link_row_node(
       p,
@@ -421,7 +442,7 @@ fn cn_row_node(
       note_cut=true,
       chevron=false,
       lead=LeadMade(fn(l) { cn_avatar_node(l, core, cv, stint) }),
-      face=pictured,
+      face=true,
       // its Slack workspace after its name (short of room, its name kept: its team leaves its line first)
       title_after=fn(a) {
         a.drops(Is(cn_drop_team)) |> ignore
@@ -435,27 +456,8 @@ fn cn_row_node(
         |> ignore
       },
       title_after_shown=fn() { opt_text(cv(), "team") is Some(_) },
-      tail=fn(e) {
-        // (wide: where it runs and who made it, dropped before its name where the line has not the room)
-        let wide = look == Wide
-        e.fits(Is(wide)) |> ignore
-        if wide {
-          e.box(fn(f) {
-            @sf.style_node(f, fn() { cn_facts })
-            f.drops(Is(cn_drop_facts)) |> ignore
-            cn_station_tag_node(f, station_name, s, stint)
-            cn_owner_node(f, core, fn() { field(cv(), "createdBy") }, tips, stint)
-          })
-          |> ignore
-        }
-        doing_mark_node(e, fn() { is_doing(core, ["connect.delete"], on()) }, fn() { failed_of(core, ["connect.delete"], on()) }, tips~, size=doing_mark_end)
-        e.box(fn(st) {
-          @sf.style_node(st, fn() { cn_narrow_state })
-          @sf.state_dot_node(st, fn() { text(cv(), "presence") })
-          @sf.words_node(st, fn() { text(cv(), "statusText") }, fn() { cn_meta }) |> ignore
-        })
-        |> ignore
-      },
+      tail?=if wide { None } else { Some(end) },
+      control?=if wide { Some(end) } else { None },
     )
   })
 }
@@ -606,15 +608,16 @@ fn cn_waiting_app_node(
       })
       |> ignore
     }),
+    face=true,
     // its Slack workspace after its name, no mark again (the row leads with Slack's: a platform's mark said once)
     title_after=fn(t) {
       t.drops(Is(cn_drop_team)) |> ignore
       @sf.words_node(t, fn() { text(av(), "team") }, fn() { cn_meta }) |> ignore
     },
     title_after_shown=fn() { opt_text(av(), "team") is Some(_) },
-    tail=fn(e) {
+    control=fn(e) {
       let wide = look == Wide
-      e.fits(Is(wide)) |> ignore
+      e.gap(Is(12.0)).fits(Is(wide)) |> ignore
       if wide {
         e.box(fn(f) {
           @sf.style_node(f, fn() { cn_facts })
@@ -627,21 +630,19 @@ fn cn_waiting_app_node(
         @sf.words_node(w, fn() { @sf.t("web-pages.connects.stationOffline") }, fn() { cn_meta }) |> ignore
       })
       doing_mark_node(e, dropping, fn() { failed_of(core, ["slack.dropApp"], on()) }, tips~, size=doing_mark_end)
-      // (what is done here at its end, last, as high as its first line: link_row's `control`)
       e.show(online, fn(c) {
-        @sf.line_end_node(c, fn(l) {
-          let go = fn() {
-            let (st, id) = @signals.untracked(fn() { (station(), app_id()) })
-            new_connect_dialog(src, core, @signals.untracked(here), st, made_app=id)
-          }
-          if wide {
-            @sf.button_node(l, fn() { @sf.t("web-pages.connects.continue") }, go) |> ignore
-          } else {
-            @sf.tap_text_node(l, fn() { @sf.t("web-pages.connects.continue") }, go)
-          }
-          // dropped from under ⋯ (its menu), asked again first; it stays in Slack
-          l.show(fn() { !dropping() }, fn(m) { cn_more_node(m, drop) })
-        })
+        @sf.style_node(c, fn() { cn_actions })
+        let go = fn() {
+          let (st, id) = @signals.untracked(fn() { (station(), app_id()) })
+          new_connect_dialog(src, core, @signals.untracked(here), st, made_app=id)
+        }
+        if wide {
+          @sf.button_node(c, fn() { @sf.t("web-pages.connects.continue") }, go) |> ignore
+        } else {
+          @sf.tap_text_node(c, fn() { @sf.t("web-pages.connects.continue") }, go)
+        }
+        // dropped from under ⋯ (its menu), asked again first; it stays in Slack
+        c.show(fn() { !dropping() }, fn(m) { cn_more_node(m, drop) })
       })
     },
   )
@@ -771,7 +772,7 @@ let cn_more_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_kind_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
+let cn_kind_box : @ui.Style = @ui.css("w=S7 h=S7 align=ACenter justify=JCenter")
 
 ///|
 /// The filter, as wide as what it says, 8 further under the head than the head's own room, where the web's is
@@ -842,9 +843,13 @@ let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color
 let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
-/// ⋯ (an icon button: 32, its corner 12).
 // kept across runs: a value (no field of it changes)
-let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
+let cn_actions : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+/// ⋯ (an icon button: 32, round).
+// kept across runs: a value (no field of it changes)
+let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 
 ///|

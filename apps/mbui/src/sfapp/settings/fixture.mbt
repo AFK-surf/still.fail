@@ -263,6 +263,11 @@ let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0, des
 let fx_connect_step : Ref[String] = Ref("team")
 
 ///|
+/// 连接 (MBUI_FIXTURE=settings-connects): a Slack app made and not connected yet over the connects, one connect with its
+/// own picture and one with its platform's mark.
+let fx_connects_waiting : Ref[Bool] = Ref(false)
+
+///|
 /// A station with enough accounts in one kind to search its profiles.
 let fx_station_many_profiles : Ref[Bool] = Ref(false)
 
@@ -349,6 +354,7 @@ fn fixture_reset() -> Unit {
   fixture_open.frames = 0
   fixture_open.desk = ""
   fx_connect_step.val = "team"
+  fx_connects_waiting.val = false
 }
 
 ///|
@@ -680,6 +686,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-new-connect-comma" => fx_connect_step.val = "commaBind"
     // a new Slack app's step: its name, its look
     "settings-new-connect-app" => fx_connect_step.val = "app"
+    "settings-connects" => fx_connects_waiting.val = true
     _ => fx_connect_step.val = "team"
   }
   // a new connect's dialog over 连接 (src/sfpages new_connect.mbt), at the step said above
@@ -1320,6 +1327,11 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
     ("id", str(id)),
     ("name", str(name)),
     ("team", str("星火")),
+    ..(if fx_connects_waiting.val && id == "k1" {
+      [("botImage", str("https://app.still.fail/avatars/backend.webp"))]
+    } else {
+      []
+    }),
     ("enabled", Json::boolean(true)),
     ("kind", str("slack")),
     ("mode", str(mode)),
@@ -1632,7 +1644,23 @@ fn fx_station(address : String) -> Json {
           // a new profile's sign-in under way (settings-new-profile-login…)
           ("logins", if fx.new_login { [obj([("id", str("login-new")), ("runtime", str("claude")), ("job", fx_login_job("login-new", "needs_code"))])] } else { [] }),
           ("processesText", str("2 个 agent 进程 · claude 1.2 GB")),
-          ("slackApps", []),
+          (
+            "slackApps",
+            if fx_connects_waiting.val {
+              [
+                obj([
+                  ("appId", str("A07GEMINI01")),
+                  ("name", str("Gemini-Monoid")),
+                  ("teamId", str("T04ACME0001")),
+                  ("team", str("星火")),
+                  ("installed", Json::boolean(false)),
+                  ("install", str("https://slack.com/oauth/v2/authorize?client_id=1")),
+                ]),
+              ]
+            } else {
+              []
+            },
+          ),
           ("drive", obj([("roots", [{ "path": "~/项目", "name": "项目", "state": "ok" }, { "path": "~/文档", "name": "文档", "state": "ok" }]), ("all", Json::boolean(false))])),
           (
             "updates",
