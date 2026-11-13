@@ -33,6 +33,9 @@ pub(all) struct Shell {
   /// what was chosen in a list (a row of a place's list, a pick) shown where the layout has the page: on the tape the
   /// page beside the sidebar in use, brought over from the side panel (show_chosen)
   show : () -> Unit
+  /// what was opened from outside (a notification, an outside link) brought into view on the tape, even from the
+  /// sidebar (bring_chosen)
+  bring : () -> Unit
   /// the rail changed where it is (自定义侧边条), where the layout has a rail beside the pages; none
   /// where it has none
   edit_rail : () -> Unit
@@ -54,6 +57,7 @@ pub fn bare_shell() -> Shell {
     beside_room: fn() { false },
     back: stack_back,
     show: fn() {  },
+    bring: fn() {  },
     edit_rail: fn() {  },
   }
 }
@@ -88,6 +92,13 @@ pub fn back_pop() -> Unit {
 /// chose is the page's (on the tape the page comes over to show it; beside the list or pushed, nothing more).
 pub fn show_chosen() -> Unit {
   (shell.val.show)()
+}
+
+///|
+/// What was opened from outside brought into view where the layout holds panels on a tape (Shell's `bring`): on a
+/// foldable or tablet's tape, even when the sidebar was in use.
+pub fn bring_chosen() -> Unit {
+  (shell.val.bring)()
 }
 
 ///|

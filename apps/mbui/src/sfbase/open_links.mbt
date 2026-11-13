@@ -203,7 +203,15 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
             open_item(src, ws, address, t.chat, None, None)
           } else {
             (shell.val.close_overlays)()
-            open_page_over(Chat(r))
+            if outside {
+              (shell.val.home)()
+              if app.nav.top() != Home {
+                app.nav.replace(Home)
+              }
+              open_page(Chat(r))
+            } else {
+              open_page_over(Chat(r))
+            }
           }
       }
       if t.history != "" {
@@ -254,6 +262,9 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       }
       let route : @settings.Route = if t.opens == "login" { Station(address) } else { AdbShare(address) }
       if t.opens == "adbShare" && app.nav.top() == Setting(route) {
+        if outside {
+          bring_chosen()
+        }
         return true
       }
       let away = ws != current
@@ -300,6 +311,9 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       open_screen(address, t.screen, None)
     }
     _ => return false
+  }
+  if outside && t.opens != "invite" {
+    bring_chosen()
   }
   true
 }
@@ -372,6 +386,7 @@ pub fn open_item(
       Some(job) => open_page(Service(station, job))
       None => ()
     }
+    bring_chosen()
   })
 }
 

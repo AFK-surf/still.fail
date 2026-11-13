@@ -108,6 +108,8 @@ pub let big_file : Double
 
 pub let body_header : String
 
+pub fn bring_chosen() -> Unit
+
 pub fn browse_topic(Source, Map[String, @json.Json]) -> BrowseView?
 
 pub fn browse_view_of(@json.Json?) -> BrowseView?
@@ -3315,6 +3317,7 @@ pub(all) struct Shell {
   detail : (Source, ChatRef, String) -> Unit
   back : () -> (() -> Unit)?
   show : () -> Unit
+  bring : () -> Unit
   edit_rail : () -> Unit
 }
 

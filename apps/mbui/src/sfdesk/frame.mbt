@@ -693,6 +693,8 @@ pub fn wide_back(src : Source) -> (() -> Unit)? {
                 @sfbase.go_place("chats") |> ignore
                 wide.landed.set("")
               })
+            } else if wide.tape_ask.get() == Some(Page) {
+              Some(fn() { wide.tape_ask.set(None) })
             } else {
               None
             }
