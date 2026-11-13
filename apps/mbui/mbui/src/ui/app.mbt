@@ -1773,6 +1773,16 @@ fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 ///|
 fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
   let c = g()
+  // (words a finger picked: back lets go of them first, and nothing else, as Android's back puts away a text's pick and
+  // its menu, the field being written in keeping the keyboard; a gesture begun so, all of it theirs)
+  if (kind == 0 || (kind == 2 && c.back_held is None && !c.back_off)) && picked.finger && selected_words() != "" {
+    input_taped("back", h_now(), [kind.to_double(), x, progress, edge.to_double()])
+    select_none()
+    c.back_held = None
+    c.back_off = kind == 0
+    h_request_frame()
+    return
+  }
   // (what takes it as it goes (held from its start), or what will as it begins: a node of the window's tree's, or the
   // rest of one called off, nobody's: no input of the old views', taped alone; else theirs)
   let theirs = match (kind, c.back_held) {

@@ -17,6 +17,8 @@ fn init {
   station_files_asked.val = @sfdesk.station_files_pick
   // 浏览文件夹 of a preset's folders (sfpages presets.mbt): the files' page's folder picker, a step further in
   @sfbase.folder_pick_asked.val = @sfdesk.folder_pick
+  // a page's own key made as nodes (sfpages' chat page: Space): the tape's page brought over first, as the old page's
+  @sfbase.page_for_key.val = @sfdesk.tape_page_for_key
   // an agent's card's jobs (sfpages): the chat's services and jobs as the screen shows them
   @sfbase.chat_jobs_asked.val = fn(c, src, r) { (@sfbase.chat_jobs_open.val)(src, r, c.window_size().0) }
   @sfbase.chat_jobs_open.val = fn(src, r, w) {
