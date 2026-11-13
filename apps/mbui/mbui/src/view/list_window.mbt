@@ -779,6 +779,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   // (where the scroll was as the anchor was last put: what it moved by since, carried to the anchor)
   let anchor_x : Ref[Double?] = Ref(None)
+  // (an ask put back by the last fill as it was cut short by its foot still going down (the fill's end): not at its
+  // foot meanwhile, nothing following it; and the ask so put back, which the hand lets go of)
+  let ask_cut = Ref(false)
+  let ask_cut_was : Ref[ListAsk[K]?] = Ref(None)
   // (the column marked laid out again: not while it is laid out, its fill going on to what that changed itself)
   let laid_again = fn() {
     if self.tree.rooming != self.at {
@@ -981,7 +985,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (what its foot covers of what shows, for what is brought into sight: the room it keeps under its last block)
   s.foot_covered = fn() { foot_h.get() }
   self.reacts(fn() { at_most.get() }, fn(foot) {
-    if foot && @signals.untracked(follows) && !s.at_foot() {
+    if foot && @signals.untracked(follows) && !s.at_foot() && !ask_cut.val {
       // (back at its foot, having left it: followed again, whatever held it where it was, Scroll::holds_here, a
       // field in a row)
       s.held = false
@@ -1665,8 +1669,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     match anchor_x.val {
       Some(was) if !held && (x - was).abs() > 0.000001 => {
         // (moved by the hand: held where it was no more, nor by what was pressed; held by a field in a row, let go
-        // of as the hand brings it back to its foot)
+        // of as the hand brings it back to its foot; an ask this list put back as it was cut short by its foot still
+        // going down let go of, the list where the hand put it: not one its page gave anew)
         s.held = false
+        match (place, ask_cut_was.val) {
+          (Some(p), Some(was)) if ask_cut.val && p.asked is Some(a) && physical_equal(a, was) => {
+            p.asked = None
+            ask_cut.val = false
+            ask_cut_was.val = None
+          }
+          _ => ()
+        }
         if row_holds {
           row_hand_moved.val = true
         }
@@ -1846,7 +1859,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         press_room.set(dmax(0.0, all.top(i) + aoff + vh - blocks_foot(all)))
       }
       if centring {
-        aoff = all.h(ai) / 2.0 - vh / 2.0
+        aoff = counted(laid.untracked()).h(ai) / 2.0 - vh / 2.0
       }
       let most = dmax(0.0, whole_now() - vh)
       top = if follows_foot || to_end { most } else { dclamp(all.top(ai) + aoff, 0.0, most) }
@@ -1955,8 +1968,32 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // something is laid out, View::laid_window_now) measures nothing, and what it put would be held by a block only
     // counted. The ask put back, unless another came meanwhile: the next fill takes it anew, the block it asks for held
     // through every pass as what shows is made and measured)
+    // So too one that could not put the list where it asks: the place it gives cut short by a foot still to go down
+    // (what comes under it on its way: where all of it ends, the list goes further than it does now), the next fill
+    // taking it anew, each going down with its foot till the block asked is where it was asked; taken for good by the
+    // first not cut short, or cut only where the list ends (asked further than it ever goes: at its foot, done)
+    let cut = match taken {
+      Some(ToEnd) | None => false
+      Some(_) => {
+        let all = places(laid.untracked())
+        if all.length() == 0 {
+          false
+        } else {
+          let i = ai.min(all.length() - 1).max(0)
+          let wants = all.top(i) + aoff
+          let ends = dmax(0.0, whole_of(counted(laid.untracked())) - vh)
+          wants > top + 0.5 && ends > top + 0.5
+        }
+      }
+    }
+    ask_cut.val = false
     match (taken, place) {
-      (Some(ask), Some(p)) if p.asked is None && found.iter().any(fn(k) { !showing.contains(k) }) => p.asked = Some(ask)
+      (Some(ask), Some(p)) if p.asked is None &&
+        (cut || found.iter().any(fn(k) { !showing.contains(k) })) => {
+        p.asked = Some(ask)
+        ask_cut.val = cut
+        ask_cut_was.val = if cut { Some(ask) } else { None }
+      }
       (Some(_), _) =>
         // (what it has in sight owed as of then, told once this layout is done: ListPlace::on_sight)
         self.tree.sight_owe(self.tree.logic_said())
@@ -1992,9 +2029,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         s.put(top)
       }
     }
-    // (back at its foot at rest, where it follows its foot: kept there from now as what it holds grows)
+    // (back at its foot at rest, where it follows its foot: kept there from now as what it holds grows; not where an
+    // ask cut short by its foot still going down was put back, the next fill going on with it)
     if !follows_foot &&
       !held &&
+      !ask_cut.val &&
       !(pin.val is Some((k, _, _, _)) && laid_at.contains(k)) &&
       @signals.untracked(follows) &&
       vh > 0.0 &&
