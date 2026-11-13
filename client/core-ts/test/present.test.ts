@@ -1032,7 +1032,7 @@ test("times copies only what it puts and gives what it gave: arrays, quotas' win
 });
 
 test("devin_fusion_pairings_factor_by_lead_and_sidekick_stay_removable_when_ticked_and_hide_on_shared_copies", () => {
-  const uid = "fusion-gpt-6-sol-max-sidekick-swe-2-medium";
+  const uid = "fusion-gpt-6-sol-sidekick-swe-2-medium";
   const devin = p.profile({
     runtime: "devin",
     runtimes: ["devin"],
@@ -1046,16 +1046,16 @@ test("devin_fusion_pairings_factor_by_lead_and_sidekick_stay_removable_when_tick
   });
   assert.deepEqual(devin.added, [uid]);
   assert.deepEqual(devin.series, [
-    { name: "Fusion", models: [uid] },
     { name: "SWE", models: ["swe-2"] },
+    { name: "Sol", models: [uid] },
   ]);
   assert.equal(devin.fusion, undefined);
   assert.deepEqual(p.buildFusion({ leads: { "gpt-6-sol-max": [0], "claude-opus-5-5-high": [0] }, sides: ["swe-2-medium"] }), {
     leads: [
-      { id: "claude-opus-5-5-high", name: "Opus 5.5 High", maker: { id: "anthropic", name: "Anthropic" }, sides: [0] },
-      { id: "gpt-6-sol-max", name: "GPT-6 Sol Max", maker: { id: "openai", name: "OpenAI" }, sides: [0] },
+      { id: "claude-opus-5-5", name: "Opus 5.5", maker: { id: "anthropic", name: "Anthropic" }, sides: [0] },
+      { id: "gpt-6-sol", name: "GPT-6 Sol", maker: { id: "openai", name: "OpenAI" }, sides: [0] },
     ],
-    sides: [{ id: "swe-2-medium", name: "SWE-2 Medium", maker: { id: "devin", name: "Cognition" } }],
+    sides: [{ id: "swe-2-medium", name: "SWE-2 · 中", maker: { id: "devin", name: "Cognition" } }],
   });
   assert.equal(p.buildFusion(null), null);
 });

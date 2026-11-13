@@ -5,6 +5,7 @@
 import { isAbsolute, join } from "node:path";
 import { afreshThreshold } from "../../../client/core-ts/src/cache-policy.ts";
 import { agyBaseModel } from "../agents/agy.ts";
+import { devinFusionBase, splitDevinFusion } from "../agents/devin.ts";
 import { runtimeKind, runtimeLabel, type Profile as RuntimeProfile } from "../agents/runtime.ts";
 import { profileRuntimes, type Runtime } from "../agents/profiles.ts";
 import { modelKey } from "../read/usage.ts";
@@ -182,6 +183,15 @@ export function spelling(profile: Profile, model: string): string | null {
   if (profile.runtimes.includes("agy")) {
     const base = agyBaseModel(model).model;
     return profile.models.find((m) => m === base || sameModel(m, base) || agyBaseModel(m).model === base) ?? null;
+  }
+  if (profile.runtimes.includes("devin")) {
+    const split = splitDevinFusion(model);
+    if (split !== null) {
+      const base = `fusion-${split.lead}-sidekick-${split.side}`;
+      const match = profile.models.find((m) => m === base || sameModel(m, base) || devinFusionBase(m).model === base);
+      if (match !== undefined) return base;
+      if (profile.models.some((m) => m === split.lead || sameModel(m, split.lead))) return base;
+    }
   }
   return null;
 }

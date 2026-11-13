@@ -2808,6 +2808,8 @@ export const SHAPES: Record<string, Shape> = {
     ["efforts", vec("String")],
     ["contexts", vec("ContextLevel"), { default: true, doc: "How much context it can be kept to (a new chat's or a chat's), its whole window first; none: not\noffered (a runtime that cannot, a model whose window is not known, a station from before)." }],
     ["contextNow", "String", { default: true, doc: "The one of `contexts` picked, by its `id`." }],
+    ["sidekicks", vec("PickSidekick"), { default: true, doc: "Devin Fusion sidekick options when the picked model (or its lead) can run on Devin; empty otherwise." }],
+    ["sidekickNow", "String", { default: true, doc: "The picked sidekick's `id` (\"\" for none)." }],
     ["accounts", vec("PickProfile")],
     ["dropped", opt("String")],
     ["who", "String", { said: true, doc: "The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the\nstation's pick runs low." }],
@@ -2833,6 +2835,12 @@ export const SHAPES: Record<string, Shape> = {
     ["id", "String", { doc: "Its tokens in digits; \"\" the model's whole window." }],
     ["text", "String", { doc: "In words: 完整 · 1M, 500K." }],
   ], { doc: "How much context a model control offers to keep a chat to." }),
+  PickSidekick: struct([
+    ["id", "String", { doc: "The sidekick's id (`swe-2-medium`), or \"\" for none (the lead model alone)." }],
+    ["model", "String", { doc: "The resulting model id when this sidekick is chosen (`claude-opus-5-5` or `fusion-claude-opus-5-5-sidekick-swe-2-medium`)." }],
+    ["text", "String", { doc: "In words: 无, SWE-2 · 中." }],
+    ["maker", opt("Maker")],
+  ], { doc: "A Devin Fusion sidekick offered in a model control's panel (`PickView.sidekicks`)." }),
   NotifyView: struct([
     ["on", "bool"],
     ["asked", "bool"],

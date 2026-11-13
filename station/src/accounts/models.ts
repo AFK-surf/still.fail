@@ -2,6 +2,7 @@
 // (by hand, or ticked on before every model a profile's check found ran) that a newer model of their line, offered on
 // the same profile, replaces once each.
 import { agyBaseModel } from "../agents/agy.ts";
+import { devinFusionBase } from "../agents/devin.ts";
 import { modelKey } from "../read/usage.ts";
 import { facts } from "./catalog.ts";
 
@@ -107,9 +108,15 @@ export function uncheckOutdated(raw: Json, found: (id: string) => readonly strin
       const key = split(m)[0];
       if (done.has(key)) continue;
       const agyBase = p.runtime === "agy" ? agyBaseModel(m).model : null;
-      const newer = agyBase !== null && agyBase !== m && offered.includes(agyBase) ? agyBase : newerOf(m, offered);
+      const devinBase = p.runtime === "devin" ? devinFusionBase(m).model : null;
+      const newer =
+        agyBase !== null && agyBase !== m && offered.includes(agyBase)
+          ? agyBase
+          : devinBase !== null && devinBase !== m && offered.includes(devinBase)
+            ? devinBase
+            : newerOf(m, offered);
       if (newer !== null) {
-        if (!next.some((o) => modelKey(o) === modelKey(newer))) {
+        if (!next.some((o) => o !== m && modelKey(o) === modelKey(newer))) {
           next.push(newer);
           added.push(newer);
         }

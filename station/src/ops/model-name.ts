@@ -21,6 +21,15 @@ function joined(words: string[]): string[] {
   return out;
 }
 
+const EFFORT_SHORT: Record<string, string> = {
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "超高",
+  max: "最高",
+};
+const DEVIN_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
 function namedModel(base: string): string | undefined {
   if (base.startsWith("fusion-")) {
     const splitAt = base.indexOf("-sidekick-");
@@ -28,9 +37,14 @@ function namedModel(base: string): string | undefined {
       const leadRaw = base.slice("fusion-".length, splitAt);
       const sideRaw = base.slice(splitAt + "-sidekick-".length);
       if (sideRaw !== "") {
-        const lead = namedModel(leadRaw) ?? leadRaw;
-        const side = namedModel(sideRaw) ?? sideRaw;
-        return `Fusion · ${lead} + ${side}`;
+        const leadEffort = DEVIN_LEVELS.find((l) => leadRaw.endsWith(`-${l}`) && leadRaw.length > l.length + 1);
+        const leadBase = leadEffort !== undefined ? leadRaw.slice(0, -leadEffort.length - 1) : leadRaw;
+        const sideEffort = DEVIN_LEVELS.find((l) => sideRaw.endsWith(`-${l}`) && sideRaw.length > l.length + 1);
+        const sideBase = sideEffort !== undefined ? sideRaw.slice(0, -sideEffort.length - 1) : sideRaw;
+        const lead = namedModel(leadBase) ?? leadBase;
+        const side = namedModel(sideBase) ?? sideBase;
+        const sideLvl = sideEffort !== undefined ? (EFFORT_SHORT[sideEffort] ?? word(sideEffort)) : undefined;
+        return sideLvl !== undefined ? `${lead} + ${side} (${sideLvl})` : `${lead} + ${side}`;
       }
     }
   }

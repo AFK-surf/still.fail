@@ -1074,6 +1074,7 @@ web-main.model.none
 web-main.model.otherSeries
 web-main.model.pick
 web-main.model.runtime
+web-main.model.sidekick
 web-main.model.search
 web-main.model.selectAll
 web-main.model.speed
@@ -2284,7 +2285,9 @@ web-pages.profiles.fastSave
 web-pages.profiles.finish
 web-pages.profiles.finishing
 web-pages.profiles.fusionHint
+web-pages.profiles.fusionLead
 web-pages.profiles.fusionModels
+web-pages.profiles.fusionSidekick
 web-pages.profiles.generatingLink
 web-pages.profiles.keychainTip
 web-pages.profiles.lastFailed

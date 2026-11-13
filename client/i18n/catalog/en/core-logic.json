@@ -84,6 +84,7 @@
   "core-logic.choose.save.unchanged": "No change",
   "core-logic.choose.speed.plan": "Account default",
   "core-logic.choose.speed.standard": "Standard",
+  "core-logic.choose.sidekick.none": "None",
   "core-logic.choose.context.whole": "Full",
   "core-logic.choose.context.whole_of": "Full · {window}",
   "core-logic.choose.spent": "All accounts for {name} are out of quota. New messages will get replies once quota resets, or switch to another model.",

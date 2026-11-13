@@ -78,6 +78,7 @@
   "core-logic.choose.save.unchanged": "无变更",
   "core-logic.choose.speed.plan": "跟随账号",
   "core-logic.choose.speed.standard": "标准",
+  "core-logic.choose.sidekick.none": "无",
   "core-logic.choose.context.whole": "完整",
   "core-logic.choose.context.whole_of": "完整 · {window}",
   "core-logic.choose.spent": "{name} 可用账号的额度均已用完。新消息需等额度恢复后才会回复，也可以换用其他模型。",

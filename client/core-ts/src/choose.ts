@@ -101,28 +101,54 @@ const wholeWindow = (option: J): string =>
 
 function optionOf(options: J[], m: string | null): J {
   if (m === null || m === "") return undefined;
-  return options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
+  const direct = options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
+  if (direct !== undefined) return direct;
+  const k = model.key(m);
+  const byKey = options.find((o) => typeof o.model === "string" && model.key(o.model) === k);
+  if (byKey !== undefined) return byKey;
+  const fusion = model.splitDevinFusion(k);
+  const sides = fusion !== null ? model.devinFusionSidesFor(fusion.lead) : null;
+  if (fusion === null || sides === null || !sides.includes(fusion.side)) return undefined;
+  const lead = options.find((o) => typeof o.model === "string" && model.key(o.model) === fusion.lead && arr(o.runtimes).includes("devin"));
+  if (lead === undefined) return undefined;
+  return {
+    ...lead,
+    model: k,
+    name: model.name(k),
+    ids: [k],
+    runtimes: ["devin"],
+    efforts: { devin: arr(get(lead.efforts, "devin")) },
+    contexts: { devin: arr(get(lead.contexts, "devin")) },
+    accounts: { devin: arr(get(lead.accounts, "devin")) },
+  };
 }
 
 /// Legacy Antigravity ACP tiered model IDs (`gemini-4-carbon-high`, `claude-opus-5-5-medium`, `gpt-oss-120b-medium`)
-/// matched against a normalized station's base `agy` options when the tiered ID itself is no longer listed.
-function matchTiered(options: J[], m: string | null): { entry: J; effort: string } | null {
+/// and legacy Devin Fusion effort-baked IDs (`fusion-gpt-6-sol-max-sidekick-swe-2-medium`) matched against a
+/// normalized station's options when the tiered ID itself is no longer listed.
+function matchTiered(options: J[], m: string | null): { entry: J; effort: string; runtime: "agy" | "devin" } | null {
   if (m === null || m === "") return null;
-  if (optionOf(options, m) !== undefined) return null;
+  if (options.some((o) => o.model === m || arr(o.ids).some((i) => i === m))) return null;
   const split = model.splitAgyTier(m);
-  if (split === null) return null;
-  const entry = optionOf(options, split.model) ?? options.find((o) => typeof o.model === "string" && model.same(o.model, split.model));
-  if (entry === undefined || !arr(entry.runtimes).includes("agy")) return null;
-  return { entry, effort: split.effort };
+  if (split !== null) {
+    const entry = optionOf(options, split.model) ?? options.find((o) => typeof o.model === "string" && model.same(o.model, split.model));
+    if (entry !== undefined && arr(entry.runtimes).includes("agy")) return { entry, effort: split.effort, runtime: "agy" };
+  }
+  const fusion = model.splitDevinFusion(m);
+  if (fusion !== null && fusion.leadEffort !== null) {
+    const entry = optionOf(options, fusion.model);
+    if (entry !== undefined && arr(entry.runtimes).includes("devin")) return { entry, effort: fusion.leadEffort, runtime: "devin" };
+  }
+  return null;
 }
 
 function normalizeTieredValue(options: J[], value: J): void {
-  if (value.runtime !== "agy" || typeof value.model !== "string") return;
+  if ((value.runtime !== "agy" && value.runtime !== "devin") || typeof value.model !== "string") return;
   const tiered = matchTiered(options, value.model);
-  if (tiered === null) return;
+  if (tiered === null || tiered.runtime !== value.runtime) return;
   value.model = tiered.entry.model;
   if (value.effort === null) {
-    const levels = arr(get(get(tiered.entry, "efforts"), "agy"));
+    const levels = arr(get(get(tiered.entry, "efforts"), tiered.runtime));
     if (levels.includes(tiered.effort)) value.effort = tiered.effort;
   }
 }
@@ -156,8 +182,9 @@ export type Resolved = { entry: J; runtime: string | null; effort: string | null
 export function resolve(options: J[], choice: J, subsets = true): Resolved {
   const rawModel = typeof get(choice, "model") === "string" ? choice.model : null;
   const rawRt = get(choice, "runtime");
-  const tiered = rawRt === "agy" || rawRt === undefined || rawRt === "" || rawRt === null ? matchTiered(options, rawModel) : null;
-  const entry = (tiered !== null ? tiered.entry : optionOf(options, rawModel)) ?? options[0];
+  const tiered = rawRt === "agy" || rawRt === "devin" || rawRt === undefined || rawRt === "" || rawRt === null ? matchTiered(options, rawModel) : null;
+  const useTiered = tiered !== null && (rawRt === tiered.runtime || rawRt === undefined || rawRt === "" || rawRt === null);
+  const entry = (useTiered ? tiered.entry : optionOf(options, rawModel)) ?? options[0];
   const runtimes = entry !== undefined ? arr(entry.runtimes) : [];
   const rt = runtimes.find((r) => equal(r, get(choice, "runtime"))) ?? runtimes[0];
   const runtime = typeof rt === "string" ? rt : null;
@@ -177,7 +204,7 @@ export function resolve(options: J[], choice: J, subsets = true): Resolved {
     const subset = accounts.filter((a) => profiles.includes(a.id));
     if (subset.length > 0) efforts = subsetEfforts(subset, runtime);
   }
-  const e = text(get(choice, "effort")) ?? (tiered !== null && runtime === "agy" ? tiered.effort : null);
+  const e = text(get(choice, "effort")) ?? (useTiered && runtime === tiered.runtime ? tiered.effort : null);
   const effort = e !== null && efforts.some((x) => x === e) ? e : null;
   const fast = typeof get(choice, "fast") === "boolean" && fastRuntime(runtime) ? choice.fast : null;
   const contexts = at("contexts").filter((n): n is number => typeof n === "number");
@@ -282,14 +309,15 @@ export function frequentCombos(history: J[], options: J[], current: Resolved, fi
     if (out.length >= NEAR) break;
     const rawModel = typeof get(v, "model") === "string" ? v.model : null;
     const runtime = get(v, "runtime");
-    const tiered = runtime === "agy" ? matchTiered(options, rawModel) : null;
-    const entry = tiered !== null ? tiered.entry : optionOf(options, rawModel);
+    const tiered = runtime === "agy" || runtime === "devin" ? matchTiered(options, rawModel) : null;
+    const useTiered = tiered !== null && tiered.runtime === runtime;
+    const entry = useTiered ? tiered.entry : optionOf(options, rawModel);
     if (entry === undefined || entry.availability === "borrowable") continue;
     if (typeof runtime !== "string" || !arr(entry.runtimes).some((r) => r === runtime)) continue;
     if (fixed !== null && runtime !== fixed) continue;
     const effort =
       text(get(v, "effort")) ??
-      (tiered !== null && arr(get(get(entry, "efforts"), "agy")).includes(tiered.effort) ? tiered.effort : null);
+      (useTiered && arr(get(get(entry, "efforts"), runtime)).includes(tiered.effort) ? tiered.effort : null);
     const fast = comboFast(v);
     const context = contextOf(get(v, "context"));
     const r = resolve(options, { model: entry.model, runtime, effort, fast, context, profile: current.profile, profiles: current.profiles });
@@ -711,6 +739,10 @@ export class Choose implements Owner {
       if (rt !== null) {
         if (next.runtime !== rt) next.effort = null;
         next.runtime = rt;
+        if (rt !== "devin" && m === null && typeof next.model === "string") {
+          const f = model.splitDevinFusion(next.model);
+          if (f !== null) next.model = f.lead;
+        }
       }
       if (get(params, "profiles") !== undefined && get(params, "profile") === undefined) next.profile = "";
       if (get(params, "profile") !== undefined && get(params, "profiles") === undefined) next.profiles = null;
@@ -924,8 +956,10 @@ export class Choose implements Owner {
     const isPreset = o.kind === "connectNew" && o.form === "preset";
     const draft = this.#drafts.get(topicKey(topic)) ?? {};
     const pickedOf = (field: string) => text(field in draft ? draft[field] : get(value, field));
-    const m = pickedOf("model") ?? (isPreset ? (text(get(this.#onStation(station)[1].entry, "model")) ?? text(get(options[0], "model"))) : null);
+    const rawM = pickedOf("model") ?? (isPreset ? (text(get(this.#onStation(station)[1].entry, "model")) ?? text(get(options[0], "model"))) : null);
     const runtime = pickedOf("runtime");
+    const rawFusion = rawM !== null ? model.splitDevinFusion(rawM) : null;
+    const m = rawFusion !== null && runtime !== null && runtime !== "devin" ? rawFusion.lead : rawM;
     const nonePicked = "profiles" in draft && Array.isArray(draft.profiles) && normProfiles(draft.profiles) === null;
     const draftedAccounts = (): { asked: string[]; multi: boolean } => {
       if ("profiles" in draft) {
@@ -941,7 +975,16 @@ export class Choose implements Owner {
     const { asked, multi } = draftedAccounts();
     const option = optionOf(options, m);
     const valueOption = optionOf(options, typeof value.model === "string" ? value.model : null);
+    const fusionSplit = m !== null ? model.splitDevinFusion(m) : null;
+    const leadOption = fusionSplit !== null ? optionOf(options, fusionSplit.lead) : option;
     const runtimes = option !== undefined ? arr(option.runtimes) : [];
+    const leadRuntimes = leadOption !== undefined ? arr(leadOption.runtimes) : runtimes;
+    const panelOption =
+      option !== undefined
+        ? options.some((o) => o.model === option.model)
+          ? (option.model ?? null)
+          : (fusionSplit?.lead ?? option.model ?? null)
+        : null;
     const on = fixed ? value.runtime : (runtimes.find((r) => r === runtime) ?? runtimes[0] ?? value.runtime);
     const onName = typeof on === "string" ? on : "";
     const rawAccounts = option !== undefined ? arr(get(get(option, "accounts"), onName)) : [];
@@ -1101,7 +1144,7 @@ export class Choose implements Owner {
     work.annotated += options.length;
     const annotated = options.map((opt: J) => {
       const id = typeof opt.model === "string" ? opt.model : "";
-      const ran = id === m ? { runtime: on ?? null, effort, fast, context } : (this.#usual(scope, id, history) ?? byHand(opt));
+      const ran = id === m || id === panelOption ? { runtime: on ?? null, effort, fast, context } : (this.#usual(scope, id, history) ?? byHand(opt));
       const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast, context: ran.context });
       const rts = arr(opt.runtimes);
       const parts: string[] = [];
@@ -1146,6 +1189,32 @@ export class Choose implements Owner {
       return found !== undefined ? [found.model] : [];
     });
     const makers = this.#makers(annotated);
+    const baseLead =
+      fusionSplit !== null
+        ? fusionSplit.lead
+        : option !== undefined && typeof option.model === "string"
+          ? model.key(option.model)
+          : null;
+    const canDevin = onName === "devin" || (!fixed && leadRuntimes.includes("devin"));
+    const availSides = canDevin && baseLead !== null ? (model.devinFusionSidesFor(baseLead) ?? []) : [];
+    const leadModelId =
+      leadOption !== undefined && typeof leadOption.model === "string" ? leadOption.model : (baseLead ?? "");
+    const sidekicks =
+      availSides.length > 0 && baseLead !== null
+        ? [
+            { id: "", text: t("core-logic.choose.sidekick.none"), model: leadModelId, maker: null },
+            ...availSides.map((s) => {
+              const mk = format.makerOf(s);
+              return {
+                id: s,
+                text: model.sidekickName(s),
+                model: `fusion-${baseLead}-sidekick-${s}`,
+                maker: mk !== null ? { id: mk[0], name: mk[1] } : null,
+              };
+            }),
+          ]
+        : [];
+    const sidekickNow = fusionSplit !== null && onName === "devin" ? fusionSplit.side : "";
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
     return {
@@ -1167,8 +1236,9 @@ export class Choose implements Owner {
         valueOption: valueOption ?? null,
         account: accountView,
         draft: { model: m, runtime: on ?? null, effort, profile, ...(nonePicked ? { profiles: [] } : profiles !== null ? { profiles } : {}), fast, context },
-        option: option !== undefined ? (option.model ?? null) : null,
-        runtimes: !fixed && runtimes.length > 1 ? runtimes : [],
+        option: panelOption,
+        runtimes: !fixed && leadRuntimes.length > 1 ? leadRuntimes : [],
+        ...(sidekicks.length > 0 ? { sidekicks, sidekickNow } : {}),
         efforts,
         // The most context it can be kept to, each said ("" its whole window, first), and the one picked.
         contexts: contexts.length === 0 ? [] : [{ id: "", text: wholeWindow(option) }, ...contexts.map((n) => ({ id: String(n), text: format.compactNumber(n) }))],
@@ -1236,7 +1306,7 @@ export class Choose implements Owner {
     const scope = ofAddress(station);
     const key = model.key(m);
     const now = this.#liked(scope, station).filter((k) => {
-      if (k === key) return false;
+      if (model.key(k) === key) return false;
       const split = model.splitAgyTier(k);
       return split === null || model.key(split.model) !== key;
     });
@@ -1256,10 +1326,11 @@ export class Choose implements Owner {
     const overview = this.#env.store.get({ topic: "overview", station });
     const opts = overview !== undefined ? models(overview, this.#env.now()) : [];
     const normEntry = (v: J): J => {
-      if (get(v, "runtime") !== "agy" || typeof get(v, "model") !== "string") return v;
+      const rt = get(v, "runtime");
+      if ((rt !== "agy" && rt !== "devin") || typeof get(v, "model") !== "string") return v;
       const tiered = matchTiered(opts, v.model);
-      if (tiered === null) return v;
-      const eff = text(get(v, "effort")) ?? (arr(get(get(tiered.entry, "efforts"), "agy")).includes(tiered.effort) ? tiered.effort : null);
+      if (tiered === null || tiered.runtime !== rt) return v;
+      const eff = text(get(v, "effort")) ?? (arr(get(get(tiered.entry, "efforts"), rt)).includes(tiered.effort) ? tiered.effort : null);
       return { ...v, model: tiered.entry.model, effort: eff };
     };
     const left = history.filter((v) => !sameCombo(v, choice) && !sameCombo(normEntry(v), choice));
@@ -1305,9 +1376,13 @@ export class Choose implements Owner {
     let newest: J;
     for (const h of history) {
       const hm = get(h, "model");
-      const split = get(h, "runtime") === "agy" && typeof hm === "string" && hm !== m ? model.splitAgyTier(hm) : null;
-      if ((hm === m || (split !== null && split.model === m)) && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) {
-        newest = split !== null && text(get(h, "effort")) === null ? { ...h, effort: split.effort } : h;
+      const hrt = get(h, "runtime");
+      const agySplit = hrt === "agy" && typeof hm === "string" && hm !== m ? model.splitAgyTier(hm) : null;
+      const fusionSplit = hrt === "devin" && typeof hm === "string" && hm !== m ? model.splitDevinFusion(hm) : null;
+      const splitModel = agySplit !== null ? agySplit.model : fusionSplit !== null && fusionSplit.leadEffort !== null ? fusionSplit.model : null;
+      const splitEffort = agySplit !== null ? agySplit.effort : (fusionSplit?.leadEffort ?? null);
+      if ((hm === m || splitModel === m) && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) {
+        newest = splitEffort !== null && text(get(h, "effort")) === null ? { ...h, effort: splitEffort } : h;
       }
     }
     return newest === undefined ? undefined : { runtime: newest.runtime ?? null, effort: text(newest.effort), fast: comboFast(newest), context: null };

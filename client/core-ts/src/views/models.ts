@@ -27,7 +27,11 @@ const runs = (p: J, runtime: string) => arr(get(p, "runtimes")).some((r) => r ==
 /// series); none from a station older than it, or for a model the catalog does not name.
 const madeBy = (overview: J, ids: Iterable<string>): J => {
   const said = get(overview, "modelMakers");
-  for (const id of ids) if (get(said, id) !== undefined) return get(said, id);
+  for (const id of ids) {
+    if (get(said, id) !== undefined) return get(said, id);
+    const lead = model.devinFusionLead(id);
+    if (lead !== null && get(said, lead) !== undefined) return get(said, lead);
+  }
   return null;
 };
 /// A model's maker and series: as the catalog says, its series as still.fail names it first (Opus, not Claude Opus).
@@ -164,8 +168,12 @@ export function contextSteps(overview: J, runtime: string, ids: Iterable<string>
 /// Model `m`'s whole context window (spelled as any of `ids`), as its station's model catalog says it; null, not said.
 export function contextWindow(overview: J, ids: Iterable<string>): number | null {
   let window: number | null = null;
+  const windows = get(get(overview, "contextCaps"), "windows");
   for (const id of ids) {
-    const w = get(get(get(overview, "contextCaps"), "windows"), id);
+    const w = get(windows, id) ?? (() => {
+      const lead = model.devinFusionLead(id);
+      return lead !== null ? get(windows, lead) : undefined;
+    })();
     if (typeof w === "number") window = Math.max(window ?? 0, w);
   }
   return window;
@@ -189,7 +197,7 @@ export function effortDefault(overview: J, runtime: string, m: string | null, pr
   const said = (p: J): string | null => {
     const levels = get(get(get(p, "check"), "modelEffortDefaults"), runtime);
     if (levels === undefined || levels === null || typeof levels !== "object") return null;
-    const base = runtime === "agy" ? (model.splitAgyTier(m)?.model ?? m) : m;
+    const base = runtime === "agy" ? (model.splitAgyTier(m)?.model ?? m) : runtime === "devin" ? (model.devinFusionLead(m) ?? m) : m;
     const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m) || (base !== m && model.same(id, base)));
     return found !== undefined && typeof found[1] === "string" ? found[1] : null;
   };
@@ -217,7 +225,12 @@ function commonEfforts(profiles: J[], runtime: string, m: string | null): string
 }
 
 function profilesRunning(overview: J, runtime: string, m: string | null, current: string | null, now: number): J[] {
-  const base = runtime === "agy" && m !== null ? (model.splitAgyTier(m)?.model ?? m) : m;
+  const base =
+    runtime === "agy" && m !== null
+      ? (model.splitAgyTier(m)?.model ?? m)
+      : runtime === "devin" && m !== null
+        ? (model.devinFusionLead(m) ?? m)
+        : m;
   const profiles = profilesOf(overview)
     .filter((p) => runs(p, runtime))
     .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && (model.same(x, m) || (base !== null && base !== m && model.same(x, base)))));

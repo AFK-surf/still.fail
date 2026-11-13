@@ -1055,7 +1055,8 @@ export function buildFusion(raw: J): J | null {
   if (rawSides.length === 0 || !rawLeads) return null;
   const leadSides = new Map<string, Set<string>>();
   const sideSet = new Set<string>();
-  for (const [lead, idxs] of Object.entries(rawLeads)) {
+  for (const [rawLead, idxs] of Object.entries(rawLeads)) {
+    const lead = model.devinFusionLead(rawLead);
     if (lead === "" || !Array.isArray(idxs)) continue;
     for (const idx of idxs) {
       const side = typeof idx === "number" ? rawSides[idx] : undefined;
@@ -1070,9 +1071,9 @@ export function buildFusion(raw: J): J | null {
     }
   }
   if (leadSides.size === 0 || sideSet.size === 0) return null;
-  const sideIds = [...sideSet].sort(model.compareOrder);
+  const sideIds = rawSides.filter((s, i) => sideSet.has(s) && rawSides.indexOf(s) === i);
   const sideIndex = new Map(sideIds.map((id, i) => [id, i]));
-  const sides = sideIds.map((id) => ({ id, name: model.name(id), maker: maker(id) }));
+  const sides = sideIds.map((id) => ({ id, name: model.sidekickName(id), maker: maker(id) }));
   const leads = [...leadSides.entries()]
     .sort(([a], [b]) => model.compareOrder(a, b))
     .map(([id, set]) => ({

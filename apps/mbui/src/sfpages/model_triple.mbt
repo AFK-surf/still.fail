@@ -38,6 +38,7 @@ priv struct TriplePanel {
   mut query : String
   mut kind : String
   mut all : Bool
+  mut sidekick : Bool
   mut pick : Json?
   /// the level the model picked was last brought into view in (its first, all of them, a kind's; none yet), for each
   /// of a sheet's steps ("" its first, and all of one beside what opened it): once as each is come to, not each frame,
@@ -275,7 +276,7 @@ pub fn open_triple_panel(
   if accounts {
     triple.accounts_asked = true
   }
-  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: triple_no_kind, all: false, pick: None, shown: {}, asks, effort_stops: {}, first: None, combos_shown: None, combos_leaving: {}, combos_seen: {} }
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: triple_no_kind, all: false, sidekick: false, pick: None, shown: {}, asks, effort_stops: {}, first: None, combos_shown: None, combos_leaving: {}, combos_seen: {} }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   // (as wide as its models and how hard it thinks beside them; wider where they are many, their makers a column
   // before them)
@@ -288,7 +289,7 @@ pub fn open_triple_panel(
     w=if many { triple_panel_w_many } else { triple_panel_w },
     // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
     fits=true,
-    foot=fn(c, close) { triple_foot(c, src, station, of, contents, close) },
+    foot=fn(c, close) { triple_foot(c, src, station, of, contents, close, saved~) },
     // (beside what opened it, its title over its models' column, its search beside it, how hard it thinks titled over
     // its own: triple_body's; 2026-11-02 用户「搜索在左边区域，思考深度和模型在同一个层级」)
     heads_itself=true,
@@ -734,7 +735,21 @@ fn triple_body(
   let searching = words != ""
   let model_of = fn(id : Json) -> Json? {
     guard id is String(id) else { return None }
-    options.search_by(fn(o) { text(Some(o), "model") == id }).map(fn(i) { options[i] })
+    match options.search_by(fn(o) { text(Some(o), "model") == id }) {
+      Some(i) => Some(options[i])
+      None =>
+        if id.has_prefix("fusion-") {
+          match id.find("-sidekick-") {
+            Some(at) if at > 7 => {
+              let lead = id.exact_view(start=7, end=at).to_owned()
+              options.search_by(fn(o) { text(Some(o), "model") == lead }).map(fn(i) { options[i] })
+            }
+            _ => None
+          }
+        } else {
+          None
+        }
+    }
   }
   // (as the core says them now: one taken out (`pick.forget`) leaves the panel as it is taken out, not as the panel
   // opens again, the user, 2026-11-13: 「删掉常用模型，只有 x 会消失，然后关掉重新打开才能刷新」)
@@ -783,7 +798,7 @@ fn triple_body(
     @sf.panel_go(
       title,
       fn(c, close) { c.scope(n, fn() { triple_panel(c, src, station, of, contents, saved, close, at=to) }) },
-      foot=fn(c, close) { c.scope(n, fn() { triple_foot(c, src, station, of, contents, close) }) },
+      foot=fn(c, close) { c.scope(n, fn() { triple_foot(c, src, station, of, contents, close, saved~, at=to) }) },
     )
   }
   let rest = listed.filter(fn(o) { searching || kind_of(o) == kind })
@@ -1188,6 +1203,10 @@ fn triple_body(
   // (beside what opened it no wider than its first level needs, 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」; wider
   // only at the level of all of many, their makers a column before a maker's models, and as wide from then on)
   let beside_w = (if all && !searching { triple_panel_w_many } else { triple_panel_w }) - 2.0 * @sf.panel_pad
+  if (sheet && at == "sidekick") || (!sheet && contents.sidekick) {
+    triple_sidekick_step(c, src, station, of, contents, v, sheet, beside_w, level_h)
+    return
+  }
   if sheet {
     models()
     if all_efforts.length() > 0 {
@@ -1327,22 +1346,24 @@ fn triple_find_input(c : @ui.Ctx, t : @sf.Theme, contents : TriplePanel) -> Unit
 }
 
 ///|
-/// One of what goes with the model, at the panel's foot (who runs it, what on, how fast, how much context): a capsule
-/// on the words' tint, its name, what is picked now (`mark`: a runtime's mark before it), a chevron. All of them one
-/// part in one place (2026-11-10: two of them rows with a chevron under the models, three of them words at the foot
-/// with none, read as what it says rather than what is pressed).
+/// One of what goes with the model, at the panel's foot (who runs it, what on, which sidekick, how fast, how much
+/// context): a capsule on the words' tint, its name, what is picked now (`mark`: a runtime's mark before it; `maker`:
+/// a model maker's mark before it), a chevron. All of them one part in one place (2026-11-10: two of them rows with a
+/// chevron under the models, three of them words at the foot with none, read as what it says rather than what is
+/// pressed).
 fn triple_chip(
   c : @ui.Ctx,
   id : Int,
   head : String,
   words : String,
   mark? : String = "",
+  maker? : String = "",
   look? : @ui.TextStyle = triple_who_name,
 ) -> Unit {
   let b = c.box(style=triple_who(), id~, fn() {
     c.text(head, style=triple_who_lead) |> ignore
-    if mark != "" {
-      @sf.maker_mark(c, "", mark, triple_pick_mark) |> ignore
+    if mark != "" || maker != "" {
+      @sf.maker_mark(c, maker, mark, triple_pick_mark) |> ignore
     }
     c.text(words, style=look) |> ignore
     @sf.icon(c, "chevron-down", size=triple_pick_chevron, color=@sf.theme().p.muted) |> ignore
@@ -1431,6 +1452,210 @@ fn triple_runtime(c : @ui.Ctx, src : Source, station : String, of : String, v : 
 }
 
 ///|
+/// Which sidekick runs with the model on Devin Fusion, at the foot beside who runs it: its name and the one picked;
+/// pressed, a secondary panel of `副模型 × 思考深度` (`triple_sidekick_node`).
+fn triple_sidekick(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  of : String,
+  contents : TriplePanel,
+  v : Json?,
+  saved : String,
+  at : String,
+) -> Unit {
+  let head = @sf.t("web-main.model.sidekick")
+  let now = text(v, "sidekickNow")
+  let sidekicks = items(v, "sidekicks")
+  let picked = sidekicks.search_by(fn(sk) { text(Some(sk), "id") == now }).map(fn(i) { sidekicks[i] })
+  let words = match picked {
+    Some(sk) => text(Some(sk), "text")
+    None => @sf.t("web-main.model.sidekickNone")
+  }
+  let maker = match picked {
+    Some(sk) => text(field(Some(sk), "maker"), "id")
+    None => ""
+  }
+  let sheet = !@sf.in_small_panel()
+  let id = c.id("triple/sidekick")
+  c.on_press(id, fn() {
+    if sheet {
+      if at == "sidekick" {
+        @sf.panel_back() |> ignore
+      } else {
+        @sf.panel_go(
+          head,
+          fn(c, close) { c.scope(99, fn() { triple_panel(c, src, station, of, contents, saved, close, at="sidekick") }) },
+          foot=fn(c, close) { c.scope(99, fn() { triple_foot(c, src, station, of, contents, close, saved~, at="sidekick") }) },
+        )
+      }
+    } else {
+      contents.sidekick = !contents.sidekick
+    }
+  })
+  triple_chip(c, id, head, words, maker~, mark=if now != "" { "devin" } else { "" })
+}
+
+///|
+fn triple_sidekick_step(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  of : String,
+  contents : TriplePanel,
+  v : Json?,
+  sheet : Bool,
+  beside_w : Double,
+  level_h : @ui.Size?,
+) -> Unit {
+  let t = @sf.theme()
+  let groups = triple_sidekick_groups(v)
+  let now = text(v, "sidekickNow")
+  let active_idx = groups.search_by(fn(g) { g.efforts.iter().any(fn(w) { w.0 == now }) }).unwrap_or(0)
+  let active_group = groups.get(active_idx).unwrap_or({ id: "", name: "", maker: "", efforts: [] })
+  let active_eff_lbl = active_group.efforts.search_by(fn(w) { w.0 == now }).map(fn(i) { active_group.efforts[i].1 }).unwrap_or("")
+  let h_sidekick = @sf.t("web-main.model.sidekick")
+  let h_effort = @sf.t("web-main.model.effort")
+  let efforts : Array[(String, String)] = if active_group.id == "" || active_group.efforts.is_empty() {
+    [("", "—")]
+  } else {
+    active_group.efforts.map(fn(w) { (w.0, w.1) })
+  }
+  let pick_eff = fn(sid : String) {
+    match active_group.efforts.search_by(fn(w) { w.0 == sid && sid != "" }) {
+      Some(i) => {
+        let chosen = active_group.efforts[i]
+        if chosen.0 != now && chosen.2 != "" {
+          pick_save(src, station, of, { "model": Json::string(chosen.2), "runtime": Json::string("devin") })
+        }
+      }
+      None => ()
+    }
+  }
+  let left_rows = fn() {
+    c.box(style=triple_room, h?=level_h, fn() {
+      c.box(style=triple_rows, fn() {
+        for g in groups {
+          let on = active_group.id == g.id
+          triple_option(
+            c,
+            "triple/sidekick/model/" + g.name,
+            g.name,
+            on,
+            fn() {
+              if g.maker != "" {
+                @sf.maker_mark(c, g.maker, "devin", 14.0) |> ignore
+              } else {
+                c.box(style=triple_kind_mark, fn() {  }) |> ignore
+              }
+              c.text(g.name, style=if on { triple_row_picked } else { triple_row_name }) |> ignore
+            },
+            on_press=fn() {
+              if g.id == "" {
+                let target = g.efforts.get(0).map(fn(w) { w.2 }).unwrap_or("")
+                if now != "" && target != "" {
+                  pick_save(src, station, of, { "model": Json::string(target), "runtime": Json::string("devin") })
+                }
+                if sheet {
+                  @sf.panel_back() |> ignore
+                } else {
+                  contents.sidekick = false
+                }
+              } else {
+                let chosen = match g.efforts.search_by(fn(w) { w.1 == active_eff_lbl && active_eff_lbl != "" }) {
+                  Some(i) => g.efforts[i]
+                  None => g.efforts[0]
+                }
+                if chosen.0 != now && chosen.2 != "" {
+                  pick_save(src, station, of, { "model": Json::string(chosen.2), "runtime": Json::string("devin") })
+                }
+              }
+            },
+          )
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  c.box(style=if sheet { triple_side_by_side } else { triple_side_by_side.then(@ui.style(max_w=Fixed(beside_w))) }, fn() {
+    c.box(style=triple_models_column, fn() {
+      if sheet {
+        triple_column_head(c, @sf.t("android-chat.new.model"))
+      } else {
+        triple_option(
+          c,
+          "triple/sidekick/back",
+          h_sidekick,
+          false,
+          fn() {
+            @sf.icon(c, "chevron-left", size=14.0, color=t.p.muted) |> ignore
+            c.text(h_sidekick, style=triple_picked) |> ignore
+          },
+          checks=false,
+          on_press=fn() { contents.sidekick = false },
+        )
+      }
+      left_rows()
+    })
+    |> ignore
+    if sheet {
+      c.box(style=triple_effort_column, fn() {
+        c.box(style=triple_rule_v, left=-triple_between_rule, top=0.0, bottom=-@sf.panel_rule_over(), fn() {  })
+        |> ignore
+        triple_column_head(c, h_effort)
+        triple_choices(c, "triple/sidekick/effort", "", efforts, if active_group.id == "" { "" } else { now }, pick_eff)
+      })
+      |> ignore
+    } else {
+      c.box(style=triple_effort_column, fn() {
+        c.box(style=triple_rule_v, left=-triple_between_rule, top=-@sf.panel_pad, bottom=-@sf.panel_rule_over(), fn() {  })
+        |> ignore
+        @sf.panel_head(c, h_effort)
+        triple_choices(c, "triple/sidekick/effort", "", efforts, if active_group.id == "" { "" } else { now }, pick_eff)
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+priv struct SidekickGroup {
+  id : String
+  name : String
+  maker : String
+  efforts : Array[(String, String, String)]
+}
+
+///|
+fn triple_sidekick_groups(v : Json?) -> Array[SidekickGroup] {
+  let sidekicks = items(v, "sidekicks")
+  let default_eff = @sf.t("web-main.model.defaultEffort")
+  let groups : Array[SidekickGroup] = []
+  for sk in sidekicks {
+    let sv = Some(sk)
+    let sid = text(sv, "id")
+    let label = text(sv, "text")
+    let target = text(sv, "model")
+    let maker = text(field(sv, "maker"), "id")
+    let (name_part, eff_part) = if sid == "" {
+      (label, "")
+    } else {
+      match label.find(" · ") {
+        Some(idx) => (label.exact_view(start=0, end=idx).to_owned(), label.exact_view(start=idx + 3).to_owned())
+        None => (label, default_eff)
+      }
+    }
+    match groups.search_by(fn(g) { g.name == name_part && (sid == "" || g.id != "") }) {
+      Some(i) => groups[i].efforts.push((sid, eff_part, target))
+      None => groups.push({ id: sid, name: name_part, maker, efforts: [(sid, eff_part, target)] })
+    }
+  }
+  groups
+}
+
+///|
 /// How fast it runs, at the foot beside who runs it (2026-11-02 用户「速度放在面板下面，跟账号差不多的位置」): its name
 /// and how fast it runs; pressed, the two ways in a pick. None picked, how fast its account runs it, said as that
 /// (`fastPlan`; 2026-11-02 用户「谁知道订阅是什么，应该直接显示具体值」).
@@ -1494,7 +1719,16 @@ fn triple_context(c : @ui.Ctx, src : Source, station : String, of : String, v : 
 /// what on where its model runs on more than one, how fast, how much context: on a second line where one is short),
 /// and where the model picked is another station's, borrowing it (asked first). Nothing to confirm: each pick is made
 /// what it runs on as it is picked (2026-11-01 用户「从第一性原理出发重新思考这个组件的使用场景」).
-fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, contents : TriplePanel, close : () -> Unit) -> Unit {
+fn triple_foot(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  of : String,
+  contents : TriplePanel,
+  close : () -> Unit,
+  saved? : String = "",
+  at? : String = "",
+) -> Unit {
   let v = contents.pick_now(src, station, of)
   if v is None {
     return
@@ -1505,6 +1739,9 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
     triple_runs_who(c, src, station, of, v, panel_serial)
     if !flag(v, "runtimeFixed") && items(v, "runtimes").length() > 1 {
       triple_runtime(c, src, station, of, v)
+    }
+    if !items(v, "sidekicks").is_empty() {
+      triple_sidekick(c, src, station, of, contents, v, saved, at)
     }
     if flag(v, "fastAvailable") {
       triple_speed(c, src, station, of, v)
@@ -1619,7 +1856,7 @@ fn triple_model_row(
       // made what it runs on at once, as it last ran here, and the panel closed: nothing of it left to confirm
       triple.open = ""
       close()
-      if !picked || text(field(v, "value"), "model") != model {
+      if !picked || text(field(v, "value"), "model") != text(field(v, "draft"), "model") {
         let p : Map[String, Json] = { "model": Json::string(model) }
         match field(o, "usual") {
           Some(Object(u)) =>

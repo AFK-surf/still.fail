@@ -247,6 +247,19 @@ test("devin_is_offered_after_cursor_each_model_at_its_own_thinking_levels", () =
   const options = [{ model: "swe-2", runtimes: ["devin"], efforts: { devin: ["medium", "high", "max"] }, accounts: {} }];
   const r = resolve(options, { runtime: "devin", model: "swe-2", fast: true, effort: "high" });
   assert.deepEqual([r.runtime, r.fast, r.effort], ["devin", null, "high"]);
+  // A Devin Fusion sidekick combination resolves on the fly from its lead model's Devin option, keeping the lead's thinking levels.
+  const fusionResolved = resolve(list, { runtime: "devin", model: "fusion-claude-opus-5-5-sidekick-swe-2-medium", effort: "high" });
+  assert.deepEqual([fusionResolved.entry?.model, fusionResolved.entry?.name, fusionResolved.runtime, fusionResolved.effort], [
+    "fusion-claude-opus-5-5-sidekick-swe-2-medium",
+    "Opus 5.5 + SWE-2 (中)",
+    "devin",
+    "high",
+  ]);
+  const legacyFusion = resolve(list, { runtime: "devin", model: "fusion-claude-opus-5-5-max-sidekick-swe-2-medium" });
+  assert.deepEqual([legacyFusion.entry?.model, legacyFusion.effort], [
+    "fusion-claude-opus-5-5-sidekick-swe-2-medium",
+    "max",
+  ]);
   assert.equal(machineMeta({ runtime: "devin", cwd: "/tmp/x" }, 0).meta, "Devin · /tmp/x");
 });
 

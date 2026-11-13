@@ -355,7 +355,11 @@ fn panel_node(
                   c.box(style=foot_rule.then(@ui.style(mx=room(-panel_pad))), fn() {  }) |> ignore
                 }
                 let at = if x.ruled { panel_corner_foot().then(@ui.style(pt=room(@ui.capsule_in(r_menu, button_height())))) } else { panel_corner_foot() }
-                c.box(style=panel_foot_at.then(at), fn() { f(c, close) }) |> ignore
+                c.box(style=panel_foot_at.then(at), fn() {
+                  small_panel_now.val = true
+                  f(c, close)
+                  small_panel_now.val = false
+                }) |> ignore
               })
               beside_given.val = was
               words_look(c, held)
