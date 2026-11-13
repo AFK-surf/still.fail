@@ -427,6 +427,20 @@ fn chat_body_node(
       chat_goes_to(v, src, r, jump, place, fn() { rows.get() }, here.view, top, fn() { ask_older(false) }, shows)
       // (over the list: a passage a mouse picked in a message quoted by its pill)
       chat_quote_node(v, src, r, fn() { rows.get() })
+      // something sent from here into the chat (words, an answer picked on a card: sfbase's sent_here_told), read up
+      // the list: it goes to its end as it is sent (where the window is short of the chat's end, as its latest page,
+      // asked by the send, comes in: chat_jump_node's)
+      v.reacts(
+        fn() { @sfbase.sent_here_count(chat) },
+        fn(_) {
+          if @signals.untracked(here.view).newer {
+            jump.latest = true
+          } else if !scroll.at_foot_now() {
+            place.to_end()
+          }
+        },
+        at_start=false,
+      )
       // ⌘↓ (chat.latest, the keymap's Chat with the field empty): as the way to the newest is pressed
       v.on_action("chat.latest", fn(_) {
         chat_to_newest(src, r, jump, place, here.view)

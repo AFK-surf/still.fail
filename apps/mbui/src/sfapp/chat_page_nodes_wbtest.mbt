@@ -1040,6 +1040,29 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: files from
 }
 
 ///|
+test "a chat's page made with its inside nodes, on 小屏: words sent read up the list take it to its end, their row there" {
+  for screen in [("小屏", 390.0, 844.0, 2)] {
+    let (name, w, h, platform) = screen
+    let calls : Array[(String, Json)] = []
+    let (t, _) = chat_nodes_calling(w, h, platform, calls)
+    t.wheel(w / 2.0, h / 2.0, -600.0)
+    t.run_for(@ui.move_most_ms)
+    assert_false(t.at_end(), msg="\{name}: read up the list")
+    guard composer_field(t) is Some((fx, fy, fw, fh)) else { fail("\{name}: no composer's field") }
+    t.tap(fx + fw / 2.0, fy + fh / 2.0)
+    let words = "看看这个"
+    t.type_text(words)
+    tap_send(t)
+    t.run_for(dmax(@ui.move_most_ms, t.rest_of("a list") - t.time()))
+    assert_eq(calls.filter(fn(c) { c.0 == "chat.send" }).length(), 1, msg="\{name}: sent")
+    assert_true(t.at_end(), msg="\{name}: the list at its end once they are sent")
+    guard t.run_rects(words) is [(_, y, _, _), ..] else { fail("\{name}: their row not drawn") }
+    guard composer_field(t) is Some((_, cy, _, _)) else { fail("\{name}: no composer's field") }
+    assert_true(y < cy, msg="\{name}: their row at \{y}, over the composer at \{cy}")
+  }
+}
+
+///|
 test "大屏, a chat's page made with its inside nodes: a 文件 tab's row carried over its messages frosts them with 松开以添加到消息, not over the composer, gone as it leaves; let go on a message or on the composer, into the draft once by its path" {
   let calls : Array[(String, Json)] = []
   let (t, src) = chat_nodes_calling(1280.0, 800.0, 0, calls)
