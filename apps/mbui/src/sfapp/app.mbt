@@ -1373,13 +1373,16 @@ fn wide_reset() -> Unit {
 /// desktop app's hiddenInset: the rail's and the sidebar's tops, a phone's page under their band), on Windows the
 /// system's. On a phone the app is
 /// Android's whatever the phone: on iOS too its lists fling and give at their edges as Android's,
-/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
+/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as). So in a browser
+/// started with a finger (a phone's or a tablet's): a browser has no field's ways of its own for a finger, and the
+/// desktop's give a finger no way to its menu (粘贴 on a field held, its caret's handle tapped), as a finger has none to
+/// right-click.
 pub fn host_setup() -> Unit {
   @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0, inset=true)
   // out of sight till it has more than its ground to show (view_in): the first page as it is shown, else the splash
   // once it says that it waits (splash_label_ms), not an empty window for the page's first moments
   @hostapi.window_hold()
-  if @ui.platform() == 1 {
+  if @ui.platform() == 1 || (@ui.platform() == 4 && @ui.native_pointing() is Finger) {
     @ui.feel_as(2)
   }
 }
