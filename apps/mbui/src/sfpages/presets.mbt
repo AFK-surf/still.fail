@@ -161,7 +161,8 @@ priv struct PresetEditing {
   auto_station : @signals.Signal[Bool]
   station : @signals.Signal[String]
   stations : @signals.Signal[Array[String]]
-  model : @signals.Signal[Json?]
+  initial_model : @signals.Signal[Json?]
+  model_state : @signals.Signal[Int]
   name : @ui.Field
   instructions : @ui.Field
   mut auto : String
@@ -201,7 +202,8 @@ fn preset_dialog(
     auto_station: @signals.signal(false, same=fn(a, b) { a == b }),
     station: @signals.signal("", same=fn(a, b) { a == b }),
     stations: @signals.signal([]),
-    model: @signals.signal(None),
+    initial_model: @signals.signal(None),
+    model_state: @signals.signal(0, same=fn(a, b) { a == b }),
     name: @ui.Field::new(),
     instructions: @ui.Field::new(),
     auto: "",
@@ -275,7 +277,7 @@ fn preset_fields(
     e.auto_station.set(flag(Some(p), "autoStation"))
     e.station.set(text(Some(p), "station"))
     e.stations.set(items(Some(p), "stations").filter_map(fn(s) { if s is String(str) && str != "" { Some(str) } else { None } }))
-    e.model.set(field(Some(p), "model"))
+    e.initial_model.set(field(Some(p), "model"))
   })
   // its name: the first folder's until one is typed
   v.reacts(
@@ -707,18 +709,32 @@ fn preset_foot(
       } else if e.stations.untracked().length() > 0 {
         params["stations"] = Json::array(e.stations.untracked().map(fn(s) { Json::string(s) }))
       }
-      match e.model.untracked() {
-        Some(m) if text(Some(m), "model") != "" => {
-          let pm : Map[String, Json] = { "model": Json::string(text(Some(m), "model")) }
-          if text(Some(m), "runtime") != "" {
-            pm["runtime"] = Json::string(text(Some(m), "runtime"))
-          }
-          if text(Some(m), "effort") != "" {
-            pm["effort"] = Json::string(text(Some(m), "effort"))
-          }
-          params["model"] = Json::object(pm)
+      let pick_val = match e.model_state.untracked() {
+        2 => {
+          let pick_v = @signals.untracked(fn() {
+            src.topic("pick", { "station": Json::string(address), "of": Json::string("connect-new:preset") }).get().value
+          })
+          field(pick_v, "value")
         }
-        _ => ()
+        0 => e.initial_model.untracked()
+        _ => None
+      }
+      if text(pick_val, "model") != "" {
+        let pm : Map[String, Json] = { "model": Json::string(text(pick_val, "model")) }
+        if text(pick_val, "runtime") != "" {
+          pm["runtime"] = Json::string(text(pick_val, "runtime"))
+        }
+        if text(pick_val, "effort") != "" {
+          pm["effort"] = Json::string(text(pick_val, "effort"))
+        }
+        if text(pick_val, "profile") != "" {
+          pm["profile"] = Json::string(text(pick_val, "profile"))
+        }
+        let p_list = items(pick_val, "profiles")
+        if p_list.length() > 0 {
+          pm["profiles"] = Json::array(p_list)
+        }
+        params["model"] = Json::object(pm)
       }
       if id != "" {
         params["id"] = Json::string(id)
@@ -1178,25 +1194,62 @@ fn preset_capsules_node(
       "不限 Station"
     }
   }
-  let has_model = fn() {
-    match e.model.get() {
-      Some(m) => text(Some(m), "model") != ""
-      None => false
+  let pick_v = fn() {
+    src.topic("pick", { "station": Json::string(address), "of": Json::string("connect-new:preset") }).get().value
+  }
+  let pick_val = fn() {
+    match e.model_state.get() {
+      2 => field(pick_v(), "value")
+      0 => e.initial_model.get()
+      _ => None
     }
   }
-  let model_words = fn() {
-    match e.model.get() {
-      Some(m) if text(Some(m), "model") != "" => {
-        let mname = if text(Some(m), "name") != "" { text(Some(m), "name") } else { text(Some(m), "model") }
-        let eff = effort_text(text(Some(m), "effort"))
-        if eff != "" { mname + " · " + eff } else { mname }
+  let pick_vo = fn() {
+    match e.model_state.get() {
+      2 => field(pick_v(), "valueOption")
+      0 => {
+        let mid = text(e.initial_model.get(), "model")
+        if mid == "" {
+          None
+        } else {
+          items(pick_v(), "options").iter().find_first(fn(o) { text(Some(o), "model") == mid })
+        }
       }
-      _ => "不限模型"
+      _ => None
+    }
+  }
+  let has_model = fn() { text(pick_val(), "model") != "" }
+  let model_words = fn() {
+    if !has_model() {
+      "不限模型"
+    } else {
+      let mname = if text(pick_vo(), "name") != "" { text(pick_vo(), "name") } else { text(pick_val(), "model") }
+      let parts = [mname]
+      let rt = text(pick_val(), "runtime")
+      if !flag(pick_v(), "runtimeFixed") && (flag(pick_v(), "showRuntime") || items(pick_vo(), "runtimes").length() > 1) && rt != "" {
+        parts.push(@settings.runtime_short(rt))
+      }
+      let eff = effort_text(text(pick_val(), "effort"))
+      if eff != "" {
+        parts.push(eff)
+      }
+      if e.model_state.get() == 2 {
+        let fast = text(pick_v(), "fastText")
+        if fast != "" {
+          parts.push(fast)
+        }
+        let acc = text(field(pick_v(), "account"), "text")
+        if acc != "" {
+          parts.push(acc)
+        }
+      }
+      join(parts, " · ")
     }
   }
   @sf.field_node(col, fn() { "Station 与模型（可选）" }, fn(b) {
     b.box(fn(bar) {
       @sf.style_node(bar, fn() { preset_simple_capsules })
+      bar.wraps(Is(Some(8.0))) |> ignore
       preset_capsule_pill(
         bar,
         fn(l) {
@@ -1210,7 +1263,7 @@ fn preset_capsules_node(
         },
         station_words,
         has_station,
-        fn() { preset_station_open(src, address, stations, e) },
+        fn(btn) { preset_station_open(src, address, stations, e, Node(btn)) },
         "清除 Station",
         fn() {
           e.auto_station.set(false)
@@ -1221,19 +1274,69 @@ fn preset_capsules_node(
       preset_capsule_pill(
         bar,
         fn(l) {
-          @sf.icon_node(
-            l,
-            "sparks",
-            15.0,
-            By(fn() { if has_model() { @sf.theme().p.accent_text } else { @sf.theme().p.muted } }),
+          l.pick(
+            fn() {
+              if has_model() {
+                Some((text(field(pick_vo(), "maker"), "id"), text(pick_val(), "runtime")))
+              } else {
+                None
+              }
+            },
+            fn(m, picked_maker) {
+              match picked_maker {
+                Some((maker_id, rt)) => @sf.maker_mark_node(m, maker_id, rt, 14.0) |> ignore
+                None => @sf.icon_node(m, "sparks", 15.0, By(fn() { @sf.theme().p.muted })) |> ignore
+              }
+            },
           )
-          |> ignore
         },
         model_words,
         has_model,
-        fn() { preset_model_open(src, address, e) },
+        fn(btn) {
+          let state_was = e.model_state.untracked()
+          if state_was != 2 {
+            match (state_was, e.initial_model.untracked()) {
+              (0, Some(Object(m))) if text(Some(Json::object(m)), "model") != "" => {
+                let save_p : Map[String, Json] = {
+                  "station": Json::string(address),
+                  "of": Json::string("connect-new:preset"),
+                  "model": Json::string(text(Some(Json::object(m)), "model")),
+                }
+                for k in ["runtime", "effort", "profile", "profiles"] {
+                  match m.get(k) {
+                    Some(v) => save_p[k] = v
+                    None => ()
+                  }
+                }
+                (src.call)("pick.save", Json::object(save_p), @sfbase.answer_unread)
+              }
+              _ =>
+                (src.call)(
+                  "pick.set",
+                  { "station": Json::string(address), "of": Json::string("connect-new:preset"), "clear": Json::boolean(true) },
+                  @sfbase.answer_unread,
+                )
+            }
+            e.model_state.set(2)
+          }
+          let (x, y, w, h) = btn.placed_window_now()
+          open_triple_panel(
+            src,
+            address,
+            "connect-new:preset",
+            At(x, y, w, h),
+            asks=fn(borrow) { borrow_ask(src, address, "connect-new:preset", borrow) },
+          )
+        },
         "清除模型",
-        fn() { e.model.set(None) },
+        fn() {
+          e.model_state.set(1)
+          (src.call)(
+            "pick.set",
+            { "station": Json::string(address), "of": Json::string("connect-new:preset"), "clear": Json::boolean(true) },
+            @sfbase.answer_unread,
+          )
+        },
       )
     })
     |> ignore
@@ -1246,13 +1349,15 @@ fn preset_capsule_pill(
   lead : (@view.View) -> Unit,
   words : () -> String,
   has_value : () -> Bool,
-  on_open : () -> Unit,
+  on_open : (@view.View) -> Unit,
   clear_label : String,
   on_clear : () -> Unit,
 ) -> Unit {
   parent.box(fn(pill) {
     @sf.style_node(pill, fn() { preset_capsule_outer })
     pill
+    .shrink(Is(1.0))
+    .min_width(Is(Some(0.0)))
     .radius(Is(999.0))
     .ground(By(fn() { if has_value() { @sf.theme().p.neutral_bg } else { 0L } }))
     .edge(By(fn() { (1.0, @sf.theme().p.line) }))
@@ -1260,13 +1365,20 @@ fn preset_capsule_pill(
     pill.box(fn(btn) {
       @sf.style_node(btn, fn() { if has_value() { preset_capsule_btn_active } else { preset_capsule_btn } })
       btn
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
       .radius(Is(999.0))
       .ground(By(fn() { if @sf.lit_node(btn) { @sf.theme().p.hover } else { 0L } }))
       .says(By(fn() { Some(@view.said(Button, label=words())) }))
       |> ignore
-      @sf.presses_node(btn, on_open)
+      @sf.presses_node(btn, fn() { on_open(btn) })
       lead(btn)
-      @sf.words_node(btn, words, fn() { if has_value() { new_capsule_words } else { preset_capsule_quiet } }) |> ignore
+      @sf.words_node(btn, words, fn() { if has_value() { new_capsule_words } else { preset_capsule_quiet } })
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
+      .cuts(Is(true))
+      .allow_ellipsis(Is(true))
+      |> ignore
       @sf.icon_node(btn, "chevron-down", new_chevron, By(fn() { @sf.theme().p.muted })) |> ignore
     })
     |> ignore
@@ -1274,6 +1386,7 @@ fn preset_capsule_pill(
       c.box(fn(x) {
         @sf.style_node(x, fn() { preset_capsule_clear_btn })
         x
+        .shrink(Is(0.0))
         .radius(Is(999.0))
         .ground(By(fn() { if @sf.lit_node(x) { @sf.theme().p.hover } else { 0L } }))
         .says(Is(Some(@view.said(Button, label=clear_label))))
@@ -1299,6 +1412,7 @@ fn preset_station_open(
   _address : String,
   stations : Array[Json],
   e : PresetEditing,
+  from : @sf.Anchor,
 ) -> Unit {
   let all_ids = stations.map(preset_station_id).filter(fn(id) { id != "" })
   let current_selected = fn() -> Array[String] {
@@ -1392,72 +1506,8 @@ fn preset_station_open(
           },
         )
       }
-      n.box(fn(z) { @sf.style_node(z, fn() { preset_list_end }) }) |> ignore
     },
-    from=Unanchored,
-  )
-}
-
-///|
-fn preset_model_open(src : Source, address : String, e : PresetEditing) -> Unit {
-  let pick_view = fn() {
-    src.topic("pick", { "station": Json::string(address), "of": Json::string("new") }).get().value
-  }
-  @sf.panel_nodes(
-    @sf.t("android-chat.new.model"),
-    fn(n, close) {
-      @sf.choice_row_node(
-        n,
-        fn() { "不限模型" },
-        fn() { !(e.model.get() is Some(_)) },
-        compact=true,
-        note=fn() { "保持新对话当前选中的模型与思考深度" },
-        press=fn() {
-          e.model.set(None)
-          close()
-        },
-      )
-      for opt in items(pick_view(), "options") {
-        let one = Some(opt)
-        let mid = text(one, "model")
-        let mname = if text(one, "name") != "" { text(one, "name") } else { mid }
-        let usual = field(one, "usual")
-        let rt = if text(usual, "runtime") != "" {
-          text(usual, "runtime")
-        } else {
-          match items(one, "runtimes").get(0) {
-            Some(String(r)) => r
-            _ => ""
-          }
-        }
-        let eff = text(usual, "effort")
-        let maker_id = text(field(one, "maker"), "id")
-        let chosen = fn() { text(e.model.get(), "model") == mid }
-        @sf.choice_row_node(
-          n,
-          fn() { mname },
-          chosen,
-          compact=true,
-          lead=fn(l) { ignore(@sf.maker_mark_node(l, maker_id, rt, 16.0)) },
-          note=fn() { text(one, "usualText") },
-          press=fn() {
-            e.model.set(
-              Some(
-                Json::object({
-                  "model": Json::string(mid),
-                  "name": Json::string(mname),
-                  "runtime": Json::string(rt),
-                  "effort": Json::string(eff),
-                }),
-              ),
-            )
-            close()
-          },
-        )
-      }
-      n.box(fn(z) { @sf.style_node(z, fn() { preset_list_end }) }) |> ignore
-    },
-    from=Unanchored,
+    from~,
   )
 }
 
