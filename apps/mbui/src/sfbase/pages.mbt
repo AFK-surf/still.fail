@@ -180,6 +180,9 @@ pub fn chat_page_made(
                   },
                   key~,
                   natural=true,
+                  // (cut to itself, its ground its shape all the way: laid out at its one line as words are sent from
+                  // it, its ground going down to that on its own way drawn whole over its node's top, not cut flat)
+                  over=true,
                 )
                 // (in the list's foot, nothing to the hand but what it holds that takes it: the room round the
                 // composer's capsule, over it and the bar's under it, the page's, as a press or what is let go there
