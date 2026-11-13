@@ -974,7 +974,13 @@ fn link_row_made(
   let at = panel_in_of(parent)
   let in_panel = panel_row_at(at, own=card_pad - corner_inset, card=on_card_node(parent))
   let (out, side) = match in_panel {
-    Some(p) => (p.out, p.side)
+    Some(p) =>
+      if !at.small && at.words > 0.0 && at.sides < panel_card_in {
+        let inset = panel_card_in - at.sides
+        (-inset, dmax(0.0, p.side - inset))
+      } else {
+        (p.out, p.side)
+      }
     None => (0.0, text_in)
   }
   let corner = if in_panel is None {
@@ -982,7 +988,7 @@ fn link_row_made(
   } else if at.small {
     small_panel_inner(r_menu)
   } else {
-    0.0
+    row_corner
   }
   parent.box(made_for=loc, fn(r) {
     r

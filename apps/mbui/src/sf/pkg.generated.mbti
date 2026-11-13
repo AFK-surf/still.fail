@@ -1565,6 +1565,8 @@ pub let panel_pad : Double
 
 pub let panel_pill : Double
 
+pub fn panel_row_corner_node(@view.View) -> Double
+
 pub fn panel_row_in() -> @ui.Style
 
 pub fn panel_row_in_node(@view.View) -> @ui.Style

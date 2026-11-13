@@ -376,11 +376,17 @@ fn picker_row_node(v : @view.View, e : PickerEntry, name : () -> String, note : 
     @sf.style_node(r, fn() { picker_row_at.then(@sf.panel_row_in_node(r)) })
     r
     .ground(By(fn() { if @sf.lit_node(r) { @sf.theme().p.hover } else { 0L } }))
-    .says(By(fn() { Some(@view.said(Button, label=name())) }))
     |> ignore
-    @sf.presses_node(r, press)
+    @sf.rippled_node(r, press, @sf.panel_row_corner_node(r), name)
     r.box(fn(l) {
-      l.shrink(Is(0.0)) |> ignore
+      l
+      .shrink(Is(0.0))
+      .width(Is(Some(picker_tile)))
+      .height(Is(Some(picker_tile)))
+      .row(Is(true))
+      .lies_along(Is(Middle))
+      .lines_up(Is(Some(Middle)))
+      |> ignore
       picker_mark_node(l, e)
     })
     |> ignore
@@ -400,7 +406,7 @@ fn picker_row_node(v : @view.View, e : PickerEntry, name : () -> String, note : 
 /// folder's; each as large as the others.
 fn picker_mark_node(v : @view.View, e : PickerEntry) -> Unit {
   if e.git {
-    @sf.tile_avatar_node(v, fn() { e.path }, fn() { e.name }, fn() { "" }, picker_mark, corner=picker_tile_corner)
+    @sf.tile_avatar_node(v, fn() { e.path }, fn() { e.name }, fn() { "" }, picker_tile, corner=@sf.small_corner)
   } else {
     @sf.icon_node(v, if e.disk { "disk" } else { "folder" }, picker_mark, By(fn() { @sf.theme().p.muted })) |> ignore
   }
@@ -592,7 +598,7 @@ let shut_icon : Double = 32.0
 let picker_mark : Double = 20.0
 
 ///|
-let picker_tile_corner : Double = 5.0
+let picker_tile : Double = 28.0
 
 ///|
 let picker_row_est : Double = 48.0

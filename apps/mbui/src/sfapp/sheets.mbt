@@ -1986,7 +1986,7 @@ fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
 /// A chat written with, its row in the letters' sheet: 18 in, 10 over and under, its two lines 2 apart;
 /// pressed a shade.
 // kept across runs: a value (no field of it changes)
-let letters_row : @ui.Style = @ui.css("w=Full py=S2_5 gap=S0_5 pressed{bg=Hover}")
+let letters_row : @ui.Style = @ui.css("w=Full py=S2_5 gap=S0_5 radius=Xl2 pressed{bg=Hover}")
 
 ///|
 /// Its first line: its title as wide as there is room, how many and when at its end, 8 apart.
@@ -2065,6 +2065,7 @@ fn letter_row(c : @ui.Ctx, key : String, ch : Json?) -> Unit {
     })
     |> ignore
     c.text(text(ch, "last"), style=letters_last) |> ignore
+    @sf.press_ripple(c, id, @sf.row_corner)
   })
   |> ignore
 }
