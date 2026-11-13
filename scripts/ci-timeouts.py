@@ -18,8 +18,8 @@ LIMIT = 5
 # its Android app's with monoid's after it (2026-11-11: cut at 5); the stable station's three platforms, built and signed
 # on a shared Mac (2026-11-13: cut at 5 twice on mini1-2, 3m48s on mini1-3); the stable Mac app's, its build and notary with no warm build
 # (2026-11-12: 4m59s; 2026-11-13: cut at 5); the side run's station part, its simulators one at a time; the iOS app's of
-# a run by hand or the day's, and the Mac app's build of a run by hand, compiling what main's store has none of whole
-# (2026-11-13: cut at 5 after mbui moved)
+# a run by hand or the day's, the Linux packages' too, and the Mac and Windows apps' builds of a run by hand, compiling
+# what main's store has none of whole (2026-11-13: cut at 5 after mbui moved)
 LONGER = {
     ("mbui-ci.yml", "android-devices"): 10,
     ("mbui-ci.yml", "android-oldest"): 10,
@@ -31,6 +31,8 @@ LONGER = {
     ("preview.yml", "windows"): 10,
     ("preview.yml", "ios"): 10,
     ("pipeline.yml", "desktop-build"): 10,
+    ("pipeline.yml", "desktop-win"): 10,
+    ("preview.yml", "linux"): 10,
     ("mbui-check.yml", "native"): 10,
     ("mbui-check.yml", "app"): 10,
     ("mbui-check.yml", "app-rates"): 10,
