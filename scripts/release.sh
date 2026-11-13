@@ -154,6 +154,18 @@ released() {
 }
 [ -z "$(git -C "$root" status --porcelain)" ] || echo "note: the working tree has changes; the apps are numbered by the commit ($build) all the same" >&2
 
+# The station's native parts for each platform asked for side by side first, so station-bundle.sh finds them in the
+# cache: one after another, a stable release's (a day old, its parts gone from the CI Mac's cache) took 8 minutes of its
+# job's 10 (43460534865, 2026-11-13). One not got here is got (or built) there as before.
+for platform in $platforms; do
+  case $platform in desktop | desktop-win | android) continue ;; esac
+  parts="launcher mesh runner reader"
+  [ "$platform" = darwin-arm64 ] && parts="$parts helper"
+  [ "$platform" = win32-x64 ] && parts="$parts screen agent-desktop"
+  for part in $parts; do node "$root/scripts/native.ts" fetch "$part" "$platform" > /dev/null || : & done
+done
+wait
+
 for platform in $platforms; do
   case $platform in
     desktop)
