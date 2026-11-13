@@ -45,6 +45,11 @@ const asideAs = (sub: string) => `personal-lock-aside-${hex(utf8(sub))}`;
 /// What this device signed on the lock that no station took yet (src/lock-pending.ts), kept beside it: a core from
 /// before never reads it (it knows none pending, and leaves them for this one).
 const pendingAs = (sub: string) => `personal-lock-pending-${hex(utf8(sub))}`;
+/// What each statement this device signed for a person's act does, as the person knows it, by its entry's hash, the
+/// last STATED_KEPT of each person's (`#shown`): kept across a restart, as views/lock.ts keeps `lockAsked`, so that one
+/// found lost after it is told still.
+const statedAs = (sub: string) => `personal-lock-stated-${hex(utf8(sub))}`;
+const STATED_KEPT = 64;
 /// The roots (genesis hashes) of the chains this device left behind when it began the lock anew, kept beside it.
 const leftAs = (sub: string) => `personal-lock-left-${hex(utf8(sub))}`;
 /// The form of the key a device signs workspaces' locks with (its signer, views/lock.ts `signerOf`).
@@ -242,6 +247,8 @@ export class PersonalLock {
   /// What each statement this device signed this run does as the person knows it (`say`'s `shown`), by its entry's
   /// hash: one that lost its place is told by it.
   readonly #shown = new Map<string, { act: Act | null; name: string; role?: string }>();
+  /// Of `#shown`, each person's as kept (`statedAs`), oldest first.
+  readonly #stated = new Map<string, [string, { act: Act | null; name: string; role?: string }][]>();
   /// The rows of statements that lost their place, not signed again yet, the person read (`dismissPending`).
   readonly #dismissed = new Set<string>();
   /// Of an act's statements left pending (`say`), by the id of the one the person meant: all it signed, by hash.
@@ -289,6 +296,12 @@ export class PersonalLock {
         this.#left.set(sub, yield* this.#leftKept(sub));
         const pending = parseJson(yield* Effect.orElseSucceed(env.host.storageGet(pendingAs(sub)), () => null)) as unknown;
         if (Array.isArray(pending)) this.#pending.set(sub, (pending as Pending[]).filter((x) => typeof x === "object" && x !== null && typeof x.id === "string" && typeof x.entry === "object"));
+        const stated = parseJson(yield* Effect.orElseSucceed(env.host.storageGet(statedAs(sub)), () => null)) as unknown;
+        if (Array.isArray(stated)) {
+          const kept: [string, { act: Act | null; name: string; role?: string }][] = (stated as unknown[]).flatMap((x) => (Array.isArray(x) && typeof x[0] === "string" && typeof x[1]?.name === "string" ? [[x[0], x[1]] as [string, { act: Act | null; name: string; role?: string }]] : []));
+          this.#stated.set(sub, kept.slice(-STATED_KEPT));
+          for (const [h, as] of kept) if (!this.#shown.has(h)) this.#shown.set(h, as);
+        }
         const id = yield* Effect.orElseSucceed(env.host.storageGet(KEY_ID), () => null);
         if (id !== null) this.#myKey = fromUtf8(id);
         this.#loaded.add(sub);
@@ -1271,10 +1284,18 @@ export class PersonalLock {
       if (entries.length === 0) return Effect.succeed(null);
       if (checkChain(chain, sub) === null) return yield* Effect.fail(new CoreError("lock_invalid", t("core-misc.lock.chainInvalid")));
       this.#env.stations?.kept?.(ws, made.bodies);
+      const said: [string, { act: Act | null; name: string; role?: string }][] = [];
       entries.forEach((e, i) => {
         const as = made.shown[i];
-        if (as !== undefined) this.#shown.set(hashOf(e), as);
+        if (as === undefined || as.act === null) return;
+        this.#shown.set(hashOf(e), as);
+        said.push([hashOf(e), as]);
       });
+      if (said.length > 0) {
+        const kept = [...(this.#stated.get(sub) ?? []), ...said].slice(-STATED_KEPT);
+        this.#stated.set(sub, kept);
+        this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(statedAs(sub), utf8(JSON.stringify(kept))), { log: "Unhandled", message: "personal lock: statements kept" }));
+      }
       const brought = this.#env.stations === undefined ? null : yield* Effect.result(this.#env.stations.bring(sub, chain, within, { ws, bodies: made.bodies }));
       if (brought !== null && brought._tag === "Failure") return yield* Effect.fail(brought.failure);
       const taken = brought === null ? 0 : brought.success;

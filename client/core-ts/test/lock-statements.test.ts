@@ -15,13 +15,15 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { type Entry as StationEntry, entryHash as stationHash } from "../../../station/src/cloud/lock.ts";
 import { key, signed } from "../../../station/test/lock-world-sim.ts";
+import { Core } from "../src/core.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, entryHash, next } from "../src/lock.ts";
 import { bodyHash, wsTag } from "../src/lock-moved.ts";
 import { held, inForceOf, read, roster } from "../src/views/lock.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { hex, utf8 } from "../src/util.ts";
-import { ME, genesis, grant, rig } from "./lock-rig.ts";
+import { HostWire } from "../src/station/wire.ts";
+import { ME, genesis, grant, rig, withoutMesh } from "./lock-rig.ts";
 import { stationLater } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
@@ -123,16 +125,20 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
     if (method === "POST") return Effect.succeed({ taken: 1, head: headOf(x.chain) });
     return Effect.fail(new CoreError("http_404", "no route", 404));
   };
-  const original = inner.stations.requests.call.bind(inner.stations.requests);
-  inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
-    const [ws, id] = addr.toString().split("/");
-    if ((id === A || id === C) && path.startsWith("/lock")) return answer(`${ws}/${id === A ? "A" : "C"}`, method, path, body);
-    if ((id === B || id === D) && path.startsWith("/lock")) return answer(`${ws}/${id === B ? "B" : "D"}`, method, path, body, st2);
-    return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
-  }) as typeof inner.stations.requests.call;
-  const run = async <X>(e: Effect.Effect<X, any>): Promise<{ ok?: X; error?: CoreError }> => {
+  // (the rig's stations reached by a core: this one, or one started anew on the same host)
+  const reach = (at: typeof inner) => {
+    const original = at.stations.requests.call.bind(at.stations.requests);
+    at.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+      const [ws, id] = addr.toString().split("/");
+      if ((id === A || id === C) && path.startsWith("/lock")) return answer(`${ws}/${id === A ? "A" : "C"}`, method, path, body);
+      if ((id === B || id === D) && path.startsWith("/lock")) return answer(`${ws}/${id === B ? "B" : "D"}`, method, path, body, st2);
+      return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
+    }) as typeof at.stations.requests.call;
+  };
+  reach(inner);
+  const run = async <X>(e: Effect.Effect<X, any>, on: typeof inner = inner): Promise<{ ok?: X; error?: CoreError }> => {
     let out: { ok?: X; error?: CoreError } | null = null;
-    inner.runner.fork(Effect.match(e, { onSuccess: (ok) => void (out = { ok }), onFailure: (error) => void (out = { error }) }));
+    on.runner.fork(Effect.match(e, { onSuccess: (ok) => void (out = { ok }), onFailure: (error) => void (out = { error }) }));
     await r.host.time.passUntil(20_000, () => out !== null);
     assert.ok(out !== null, "no answer");
     await r.host.time.pass(100);
@@ -158,14 +164,14 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const asked = () => r.host.secureAsked.length;
   /// Every request the cloud was sent since the start that carries a body's salt: none may.
   const cloudBodies = () => r.host.requests.filter((q) => q.body !== null && q.body !== undefined && /"salt"/.test(typeof q.body === "string" ? q.body : new TextDecoder().decode(q.body as Uint8Array)));
-  return { r, inner, st, st2, run, said, members, asked, cloudBodies, me, bob, xena, lostOff: (more?: (lost: Record<string, unknown>[]) => Record<string, unknown>[]) => lostOff({ inner, st, run, me, r }, more) };
+  return { r, inner, st, st2, run, reach, said, members, asked, cloudBodies, me, bob, xena, lostOff: (more?: (lost: Record<string, unknown>[]) => Record<string, unknown>[], o?: { closed?: boolean }) => lostOff({ inner, st, run, me, r }, more, o) };
 }
 
 /// This device's statements past what s1's log said before, then a read that moves s1's own log off them with no seed
 /// in hand: D2 takes D3 off at the place the first hung (winning there by the rules' second step, a removal), then says
 /// `more` (what it says, as bodies but for `prev` and `salt`), their bodies at the workspace's stations. The statements
 /// lost, their entries and bodies.
-async function lostOff(w: { inner: any; st: any; run: <X>(e: Effect.Effect<X, any>) => Promise<{ ok?: X; error?: CoreError }>; me: Log; r: any }, more: (lost: Record<string, unknown>[]) => Record<string, unknown>[] = () => []) {
+async function lostOff(w: { inner: any; st: any; run: <X>(e: Effect.Effect<X, any>) => Promise<{ ok?: X; error?: CoreError }>; me: Log; r: any }, more: (lost: Record<string, unknown>[]) => Record<string, unknown>[] = () => [], o: { closed?: boolean } = {}) {
   const personal = w.inner.adb.personal();
   const own = personal.entries("s1") as unknown as StationEntry[];
   const at = own.findIndex((e, i) => i >= w.me.chain.length && e.kind === "ws");
@@ -184,6 +190,7 @@ async function lostOff(w: { inner: any; st: any; run: <X>(e: Effect.Effect<X, an
     w.st.bodies.push(b);
   }
   w.st.own = chain as unknown as Entry[];
+  if (o.closed) return { lost, entries: entries as unknown as Entry[] };
   await w.run(personal.refresh("s1"));
   await w.run(read(w.inner, "ws"));
   await w.r.host.time.pass(1000);
@@ -451,4 +458,19 @@ test("the lock's topic: a statement lost with no seed in hand a failed row; let 
   assert.notEqual(let_[0]!.text, lost[0]!.text, "the words of one changed after it");
   await w.r.ask("lock.pendingDismiss", { workspace: "ws", id: let_[0]!.id });
   assert.deepEqual(rowsOf(await lock()), [], "dismissed");
+});
+
+test("a role lowered, then the app closed and s1's log moved off its statements meanwhile: as it starts and finds them lost, told as not in effect", async () => {
+  const w = await setUp({ devices: true });
+  await w.run(roster(w.inner, "s1", "ws", { member: "r2", role: "member" }));
+  await w.lostOff(undefined, { closed: true });
+  const again = await Core.create(w.r.host, { clock: w.r.host.time.clock, sample: 0, wire: () => new HostWire(w.r.host) });
+  again.inner.mesh = () => withoutMesh(ME);
+  w.reach(again.inner);
+  await w.run(again.inner.adb.personal().refresh("s1"), again.inner);
+  await w.run(read(again.inner, "ws"), again.inner);
+  await w.r.host.time.pass(1000);
+  const rows = again.inner.adb.personal().pending("s1");
+  assert.deepEqual(rows.map((x) => x.state), ["failed"], `told as not in effect: ${JSON.stringify(rows)}`);
+  assert.match(rows[0]!.text, /^把 .+ 改为.+：没有生效/);
 });
