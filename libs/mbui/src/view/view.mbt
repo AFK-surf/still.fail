@@ -4856,7 +4856,7 @@ fn Tree::pivot_of(self : Tree, at : Int, w : Double, h : Double) -> (Double, Dou
   let n = self.nodes[at]
   guard n.look.pivot.drawn() else { return n.pivot_at(w, h) }
   if n.drawn_stale {
-    n.drawn_box = self.drawn_box_of(at)
+    n.drawn_box = self.drawn_box_of(at, lines=n.look.pivot is DrawnAcross(_))
     n.drawn_stale = false
   }
   let (x0, y0, x1, y1) = n.drawn_box
@@ -4889,10 +4889,26 @@ fn draws_of(n : Node) -> Bool {
 }
 
 ///|
+/// Whether node `n` draws its words and nothing else of its own (draws_of's).
+fn words_alone(n : Node) -> Bool {
+  let l = n.look
+  (l.words != "" || !l.runs.is_empty()) &&
+  (l.ground & 0xFFL) == 0L &&
+  !(l.edge.0 > 0.0 && (l.edge.1 & 0xFFL) != 0L) &&
+  l.image is None &&
+  l.shapes.is_empty() &&
+  l.lines.is_empty() &&
+  l.picture is None &&
+  !n.hosted
+}
+
+///|
 /// The box round what node `at` and what it holds draw, where it is its own: the boxes of those with a ground or an
 /// edge, words, shapes, lines, a picture or an old view of their own, each where it is laid out and drawn off
-/// (View::offset, View::shift); none (its left past its right) where nothing does.
-fn Tree::drawn_box_of(self : Tree, at : Int) -> (Double, Double, Double, Double) {
+/// (View::offset, View::shift); none (its left past its right) where nothing does. `lines` (Pivot's DrawnAcross): one
+/// that draws words alone across as its lines are laid out, not as its box is (a reply's words in a node as wide as its
+/// column).
+fn Tree::drawn_box_of(self : Tree, at : Int, lines? : Bool = false) -> (Double, Double, Double, Double) {
   self.work.drawn_boxes = self.work.drawn_boxes + 1
   let box = [1.0e30, 1.0e30, -1.0e30, -1.0e30]
   fn take(i : Int, ox : Double, oy : Double) -> Unit {
@@ -4904,9 +4920,20 @@ fn Tree::drawn_box_of(self : Tree, at : Int) -> (Double, Double, Double, Double)
     m.drew = draws
     m.drawn_off = (m.look.dx + m.moved.0, m.look.dy + m.moved.1, m.look.sx, m.look.sy)
     if draws && m.flex.width > 0.0 && m.flex.height > 0.0 {
-      box[0] = if ox < box[0] { ox } else { box[0] }
+      // (lines: one that draws only words draws its lines across, not its box: as wide as the widest, at its start or
+      // in its middle as its words stand)
+      let (x0, x1) = match (lines, m.flex.measure) {
+        (true, Some(f)) if words_alone(m) => {
+          let lw = f(m.flex.width, AtMost, m.flex.height, Exactly).0
+          let lw = if lw < m.flex.width { lw } else { m.flex.width }
+          let at = if m.look.words_center { (m.flex.width - lw) / 2.0 } else { 0.0 }
+          (ox + at, ox + at + lw)
+        }
+        _ => (ox, ox + m.flex.width)
+      }
+      box[0] = if x0 < box[0] { x0 } else { box[0] }
       box[1] = if oy < box[1] { oy } else { box[1] }
-      box[2] = if ox + m.flex.width > box[2] { ox + m.flex.width } else { box[2] }
+      box[2] = if x1 > box[2] { x1 } else { box[2] }
       box[3] = if oy + m.flex.height > box[3] { oy + m.flex.height } else { box[3] }
     }
     for k in m.kids {
