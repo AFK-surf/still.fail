@@ -246,8 +246,8 @@ function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, p
 /// names already under that log is not asked for here (their own devices put it on their log: the personal exchange);
 /// one it names under another (their lock begun anew) is taken out of what bound them before as it is said again with
 /// this one (`again`). The role is what the person on this device chose as they added them here (views/lock.ts
-/// `notedRole`), else a viewer where the view says viewer, else a member: never an admin or an owner on the view's word,
-/// which is the control plane's (one added as an admin on another device comes in a member here, made an admin by an
+/// `notedRole`, else a member), lowered to the view's where that is lower (a viewer, or one lowered elsewhere since):
+/// never an admin or an owner on the view's word, which is the control plane's (one added as an admin on another device comes in a member here, made an admin by an
 /// owner's change of their role). The rules decide whether this device may give it (`plan`, before the person is asked):
 /// one it may not, its note's or the view's (an admin's device and an owner), shows no code. The credential is the
 /// cloud's word that they are a member: it lets nobody in by itself; the code typed face to face here and this device's
@@ -269,10 +269,15 @@ function admitOf(inner: Inner, ws: string, account: string, c: { sub: string; em
   if (viewed !== "owner" && viewed !== "admin" && viewed !== "member" && viewed !== "viewer") return null;
   // (the view's role only lowers or refuses: one this device may not give, as an admin's an owner, shows no code)
   if (movedPlan(inner, ws, account, c.sub, { lock, role: viewed, email: c.email, again: f.members.has(c.sub) }) === null) return null;
+  // (a note this device may not give refuses as well, whatever the view lowers it to)
   const noted = notedRole(inner, ws, account, c.sub, c.email);
-  const a: Admit = { lock, role: noted ?? (viewed === "viewer" ? "viewer" : "member"), email: c.email, again: f.members.has(c.sub) };
+  if (noted !== null && movedPlan(inner, ws, account, c.sub, { lock, role: noted, email: c.email, again: f.members.has(c.sub) }) === null) return null;
+  const a: Admit = { lock, role: lower(noted ?? "member", viewed), email: c.email, again: f.members.has(c.sub) };
   return movedPlan(inner, ws, account, c.sub, a) === null ? null : a;
 }
+/// The lower of two roles (viewer, member, admin, owner): the view's word only lowers what this device noted.
+const RANKS = ["viewer", "member", "admin", "owner"];
+const lower = (a: string, b: string) => (RANKS.indexOf(a) <= RANKS.indexOf(b) ? a : b);
 
 /// What this device would say for `a` (`plan`'s statements), or null where the rules would not have it do what it
 /// means (a role it may not give, its own standing): worked out with nothing signed and nobody asked.

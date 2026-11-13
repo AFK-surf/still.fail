@@ -347,7 +347,7 @@ test("the role at a first admission is never the view's word: one the view calls
 
 test("the role at a first admission: what this person chose here as they added them (by sub, or by email before they had an account), used once; one added on another device a member; the view's viewer a viewer", async () => {
   for (const sub of ["r9", null]) {
-    const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+    const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "admin" }] });
     const before = w.asked();
     assert.equal((await addHere(w, "admin", sub)).error, undefined);
     assert.equal(w.asked(), before, "adding asks nobody");
@@ -375,11 +375,46 @@ test("a note this device's signer may not give (an admin's device, a note saying
   assert.deepEqual(answer, { t: "no", error: "not_here" }, "refused before a code is shown");
   assert.equal(a.asked(), before, "nobody asked");
   assert.deepEqual(a.stated(), []);
-  const b = await setUp({ root: "alice", mine: "admin", view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+  const b = await setUp({ root: "alice", mine: "admin", view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "admin" }] });
   assert.equal((await addHere(b, "admin")).error, undefined);
   const { log, done } = await admitR9(b);
   assert.equal(done?.error, undefined, done?.error?.message);
   assert.deepEqual(b.stated(), [`member r9 admin ${gOf(log).slice(0, 6)}`], "an admin gives admin");
+});
+
+test("the role at a first admission is the lower of the note and the view: noted an admin, the view's viewer a viewer, the view's member a member", async () => {
+  for (const [viewed, said] of [["viewer", "viewer"], ["member", "member"]]) {
+    const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: viewed }] });
+    assert.equal((await addHere(w, "admin")).error, undefined);
+    const { log, done } = await admitR9(w);
+    assert.equal(done?.error, undefined, done?.error?.message);
+    assert.deepEqual(w.stated(), [`member r9 ${said} ${gOf(log).slice(0, 6)}`], `noted an admin, the view says ${viewed}: a ${said}`);
+  }
+});
+
+test("a role changed for someone added whose first device has not come: nothing said, nobody asked, the note the new role", async () => {
+  // (added here as a member, made an admin here; then on a device that held no note for them)
+  for (const first of [true, false]) {
+    const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "admin" }] });
+    if (first) assert.equal((await addHere(w, "member")).error, undefined);
+    const before = w.asked();
+    const changed = await w.run(roster(w.inner, "s1", "ws", { member: "r9", role: "admin" }));
+    assert.equal(changed.error, undefined, changed.error?.message);
+    assert.equal(w.asked(), before, "nobody asked for the change");
+    assert.deepEqual(w.stated(), [], "nothing said");
+    const { log, done } = await admitR9(w);
+    assert.equal(done?.error, undefined, done?.error?.message);
+    assert.equal(w.asked() - before, 1, "the person asked once, for the admission");
+    assert.deepEqual(w.stated(), [`member r9 admin ${gOf(log).slice(0, 6)}`], `made an admin here (${first ? "added here" : "added elsewhere"}): an admin`);
+  }
+  const a = await setUp({ root: "alice", mine: "admin", view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+  assert.equal((await addHere(a, "member")).error, undefined);
+  const owner = await a.run(roster(a.inner, "s1", "ws", { member: "r9", role: "owner" }));
+  assert.equal(owner.error, undefined, owner.error?.message);
+  assert.deepEqual((a.inner.data.record("lockAdded", "ws") as { notes: { who: string; role: string }[] }).notes.map((n) => `${n.who} ${n.role}`), ["r9 member"], "an admin makes no owner: the note as it was");
+  const { log, done } = await admitR9(a);
+  assert.equal(done?.error, undefined, done?.error?.message);
+  assert.deepEqual(a.stated(), [`member r9 member ${gOf(log).slice(0, 6)}`], "a member said");
 });
 
 test("a note goes as the member is taken out before their first device came", async () => {

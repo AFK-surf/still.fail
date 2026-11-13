@@ -2840,8 +2840,8 @@ function saysHere(inner: Inner, sub: string): boolean {
 
 /// `roster`'s change where the chain moved: a member out (`member.remove`), a member's role (`member.remove`, then
 /// `member` with the log that binds them now: the highest admit in force binds, so a lower role given later changes
-/// nothing without the removal; raising too), a station out (`station.remove`). Someone the list has not heard of is
-/// added only with their device (the next step): `lock_moved` still.
+/// nothing without the removal; raising too), a station out (`station.remove`). Someone the list has not heard of (added,
+/// their first device not let in yet) has nothing said: the role chosen is noted here for that admission (`note`).
 function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
   return Effect.suspend(() => {
     if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
@@ -2860,7 +2860,13 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
     if ("gone" in what) unnote(inner, ws, what.member, m?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email")));
     if ("gone" in what) return m === undefined ? Effect.succeed(null) : sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n }));
     if (m?.role === what.role) return Effect.succeed(null);
-    if (m === undefined || lock === undefined) return Effect.fail(lockMoved());
+    // (someone added whose first device has not come: nothing in the lock to change, the cloud's part alone; the role
+    // chosen here now is what their admission here says, `note`, an owner's only by an owner)
+    if (m === undefined) {
+      if (what.role !== "owner" || f.members.get(sub)?.role === "owner") note(inner, ws, sub, what.member, what.role);
+      return Effect.succeed(null);
+    }
+    if (lock === undefined) return Effect.fail(lockMoved());
     const shown = { act: "setRole" as const, name: n, role: roleText(what.role) };
     return sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }, { kind: "member", sub: what.member, email: m.email, lock, role: what.role }], shown, actText(shown));
   });

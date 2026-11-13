@@ -182,10 +182,13 @@ another; the accounts' list's merge across stations and its refills.
   anew; a person's own new device goes on their log alone. Its role is never the workspace's view's word (the lead,
   2026-11-13: a cloud calling a newcomer an owner would have an owner's device sign them in as one, the ask not showing
   the role): what the person chose as they added them on this same device (views/lock.ts `notedRole`, kept here alone,
-  used once), else a viewer where the view says viewer, else a member; one this signer may not give, the note's or the
+  used once, else a member), lowered to the view's where that is lower; one this signer may not give, the note's or the
   view's, shows no code. So someone added as an admin on one device and approved from another comes in a member, and an
   owner makes them an admin by changing their role. Adding a member is the cloud's part alone there (`added`: nothing
-  signed, the role noted). A device taken out
+  signed, the role noted), and so is changing the role of one not let in yet (`rosterMoved`: the note the new role, an
+  owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`); but the
+  vaults go by the chain held (vault.ts `lockOf`, which a moved chain leaves as it was at the move), so none is keyed
+  anew for someone a statement took out, at the asking or after (not built). A device taken out
   takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
   `outOf` says who took it out and when (no words for the page yet). One that lost its
   place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:
