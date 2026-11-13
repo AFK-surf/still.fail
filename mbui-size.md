@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ed9727a1e](https://github.com/AFK-surf/monoid/commit/ed9727a1ec8e87888480d7b2a01ac2bdc6c8cf14) mbui: account rows say name, plan and allowance; m | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.95 | 108.32 |
 | [e5c9cd7ec](https://github.com/AFK-surf/monoid/commit/e5c9cd7ec832482cc1a59cdeecccc05d55117308) app: a chat's picture opened and read whole shows  | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.98 | 108.71 |
 | [a465f1084](https://github.com/AFK-surf/monoid/commit/a465f1084f03e274152f6fc4b2bdef3301ac3de0) natives: a download with nothing coming for 15 s g | 1.97 | 2.69 | 11.42 | 31.01 | 40.97 | 27.63 | 52.78 | 96.04 | 115.5 |
 | [bd1d2fba1](https://github.com/AFK-surf/monoid/commit/bd1d2fba1fd2fade1c56fc3203562d4ab262f744) fix(mbui): a film closed shows its player till the | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 95.77 | 116.71 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f467b2e01](https://github.com/AFK-surf/monoid/commit/f467b2e018cdbef1c131750017f2a43e84feaa00) mbui: a shared end that stays where it is, flown f | 1.96 | 2.63 | 11.35 | 30.87 | 40.74 | 27.51 | 52.58 | 94.36 | 100.06 |
 | [ecfd590f0](https://github.com/AFK-surf/monoid/commit/ecfd590f0ba23a7cfa692ff019a0a30e2195bfb1) fix(mbui): offset slotted viewer flight from its p | 1.96 | 2.63 | 11.32 | 30.82 | 40.64 | 27.47 | 52.52 | 94.21 | 99.86 |
 | [39aff985b](https://github.com/AFK-surf/monoid/commit/39aff985bb774f458a8cfbe31c1fc0d7f82e7159) mbui app: quote_image's and downloads' tests walk  | 1.96 | 2.63 | 11.31 | 30.82 | 40.62 | 27.46 | 52.5 | 94.14 | 102.09 |
-| [19e4afe56](https://github.com/AFK-surf/monoid/commit/19e4afe562bdcadebb774c6da6c1d003912cdbea) mbui: a Tester reads the passage being picked and  | 1.96 | 2.62 | 11.3 | 30.81 | 40.59 | 27.46 | 52.47 | 94.14 | 109.81 |
