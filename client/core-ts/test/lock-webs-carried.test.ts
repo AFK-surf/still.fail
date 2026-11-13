@@ -1,0 +1,225 @@
+// A member's web pages a workspace's chain names, carried onto their own log by their app as it next holds the seed for
+// something they do (personal-lock.ts `#addWebs`, views/lock.ts `websIn`), end to end on a core whose workspace's
+// stations are the station's own code (station/src/cloud/state.ts `Cloud`, mesh/serve.ts `lockRoute`, `lockPartRoute`,
+// `inLockBringing`, `refusalOf`): said once, with the chain's id, label and exp, in the ask the person answered and in
+// no other; a handover after it leaves the page in, nobody asked again; a handover before it leaves the page out (told
+// so, whom to ask) until the member's app next signs something, no code entered. Never said: a page run out, one the
+// chain took off, one the log took off, another person's, one an owner put in for them.
+//
+// The world: `ws`, its chain s0's (the owner, a log of their own, `owner`); s1 a member, this core their app, its log
+// pinned here (`myLog`); r2 a member with a log; stations A and B. s1's pages on the chain: W1 (its own app approved it),
+// WX (runs out), WD (taken off the chain), WL (taken off s1's log), WO (put in by s0); r2's WR.
+import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mock, test } from "node:test";
+import { Effect } from "effect";
+import { type Entry as StationEntry, LockRefusal } from "../../../station/src/cloud/lock.ts";
+import { Cloud, writeState } from "../../../station/src/cloud/state.ts";
+import { wall } from "../../../station/src/ops/fibers.ts";
+import { inLockBringing, lockPartRoute, lockRoute, refusalOf } from "../../../station/src/mesh/serve.ts";
+import { type Key, Log, bring, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
+import { key, signed as simSigned } from "../../../station/test/lock-world-sim.ts";
+import type { CoreError } from "../src/error.ts";
+import { type Entry, type Signer, entryHash, next } from "../src/lock.ts";
+import { httpError } from "../src/station/requests.ts";
+import { hex, utf8 } from "../src/util.ts";
+import { held, inForceOf, read } from "../src/views/lock.ts";
+import { grant, rig, withoutMesh } from "./lock-rig.ts";
+
+type J = any;
+let clock = () => 0;
+mock.method(wall, "now", () => clock());
+
+const MINE = 7101;
+const seedOf = (n: number) => {
+  const s = new Uint8Array(32);
+  new DataView(s.buffer).setUint32(28, n);
+  return s;
+};
+const SETTINGS = (keys: unknown) => ({ origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: keys });
+const DAY = 86400;
+
+async function setUp() {
+  const g = grant();
+  const base = ed();
+  const k = key(MINE);
+  const owner = new Log("s0"), r2 = new Log("r2");
+  const A = ed().hex, B = ed().hex, D = ed().hex;
+  const W1 = ed(), WX = ed(), WD = ed(), WL = ed(), WO = ed(), WR = ed();
+  let mine: Signer | null = null;
+  let now = 0;
+  // s1's own log: this device on it by its key there (no signer said yet: its first ask says it, `#restate`); WL put on
+  // it and taken off it.
+  const myLog: StationEntry[] = [simSigned({ v: 1, ws: "person:s1", seq: 0, prev: null, at: 1000, kind: "genesis", body: { sub: "s1", device: { key: k.id, id: base.hex, label: "s1's app" } } } as Omit<StationEntry, "sig">, k)];
+  const onMine = (kind: string, body: unknown) => {
+    const last = myLog.at(-1)!;
+    myLog.push(simSigned({ v: 1, ws: "person:s1", seq: last.seq + 1, prev: entryHash(last as unknown as Entry), at: 1000, kind, body } as Omit<StationEntry, "sig">, k));
+  };
+  onMine("web", { id: WL.hex, label: "s1's old browser", exp: 1000 + 20 * DAY });
+  onMine("web.remove", { id: WL.hex });
+  const gMe = entryHash(myLog[0] as unknown as Entry);
+  const appOf = (sub: string, l: Log) => ({ id: l.app.base.hex, sub, kind: "app", label: `${sub}'s app`, sign_key: l.app.signer.id });
+  const r = await rig((signer) => {
+    mine = signer;
+    const members = [{ sub: "s0", email: "o@x.com", role: "owner" }, { sub: "s1", email: "a@x.com", role: "member" }, { sub: "r2", email: "b@x.com", role: "member" }];
+    const devices = [appOf("s0", owner), { id: base.hex, sub: "s1", kind: "app", label: "s1's app", sign_key: signer.id }, appOf("r2", r2)];
+    const e = next("ws", null, 1000, "genesis", { owner: "s0", ...SETTINGS(g.keys), members, devices, passkeys: [], stations: [{ key: A, name: "a" }, { key: B, name: "b" }], gateways: [] });
+    return { ws: signed(e as Omit<StationEntry, "sig">, owner.app.signer) as unknown as Entry };
+  }, (host) => {
+    now = Math.floor(host.nowMs() / 1000);
+    host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(myLog)));
+    host.storage.set("personal-signer-id", utf8(k.id));
+    host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
+  }, [A, B], [A, B], undefined, [D], { role: "member" });
+  clock = () => r.host.nowMs();
+  const inner = r.core.inner;
+  inner.mesh = () => withoutMesh(base.hex);
+  const signer = mine! as Signer;
+  const chain: Entry[] = [r.cloud.chains.get("ws")![0]!];
+  const after = (by: Key | Signer, kind: string, body: unknown): Entry => {
+    const last = chain[chain.length - 1]!;
+    const e = next("ws", { seq: last.seq, hash: entryHash(last), genesis: entryHash(chain[0]!) }, Math.max(last.at, now), kind, body);
+    const s = "signBytes" in by ? by.sign(e) : (signed(e as Omit<StationEntry, "sig">, by) as unknown as Entry);
+    chain.push(s);
+    return s;
+  };
+  const web = (k: Key, sub: string, label: string, exp: number) => ({ id: k.hex, sub, kind: "web", label, exp });
+  after(owner.app.signer, "person", { sub: "s0", person: owner.genesis });
+  after(signer, "person", { sub: "s1", person: gMe });
+  after(r2.app.signer, "person", { sub: "r2", person: r2.genesis });
+  after(signer, "device", web(W1, "s1", "s1's browser", now + 10 * DAY));
+  after(signer, "device", web(WX, "s1", "s1's browser, running out", now + 5));
+  after(signer, "device", web(WD, "s1", "s1's browser, taken off", now + 10 * DAY));
+  after(signer, "device.remove", { id: WD.hex });
+  after(signer, "device", web(WL, "s1", "s1's old browser", now + 10 * DAY));
+  after(owner.app.signer, "device", web(WO, "s1", "s1's browser, by the owner", now + 10 * DAY));
+  after(r2.app.signer, "device", web(WR, "r2", "r2's browser", now + 10 * DAY));
+  r.cloud.chains.set("ws", chain);
+  const station = (id: string): Cloud => {
+    const data = mkdtempSync(join(tmpdir(), "lock-webs-carried-"));
+    writeState(data, { origin: "https://stillfail.test", station: id, workspace: "ws", workspace_name: "W", name: id.slice(0, 4), relay_url: "", relay_urls: [], grant_keys: g.keys, peers: [A, B].map((p, i) => ({ id: p, name: `s${i}` })), revocations: [] } as never);
+    const c = new Cloud(data, false);
+    c.takeLock(chain as unknown as StationEntry[]);
+    for (const l of [owner, r2]) bring(c, l, false, "ws");
+    // (s1's log, as their app brought it as it came to the station)
+    const [status] = lockPartRoute(c, "person", "POST", Buffer.from(JSON.stringify({ chain: myLog })), viewerOf("s1", { base }, "member", "ws") as never);
+    assert.equal(status, 200, "s1's log taken");
+    return c;
+  };
+  const stations = { A: station(A), B: station(B) };
+  const viewer = viewerOf("s1", { base }, "member", "ws");
+  const original = inner.stations.requests.call.bind(inner.stations.requests);
+  inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+    const [ws, id] = addr.toString().split("/");
+    if (path.startsWith("/lock") && (id === A || id === B || id === D)) {
+      if (id === D || ws !== "ws") return method === "POST" ? Effect.succeed({}) : Effect.fail(httpError(404, { error: "no route" }));
+      const c = id === A ? stations.A : stations.B;
+      const [p, q] = path.split("?") as [string, string | undefined];
+      const buf = Buffer.from(body === null || body === undefined ? "" : JSON.stringify(body));
+      const [status, out] = p === "/lock" ? lockRoute(c, method, q ? [...new URLSearchParams(q)] : [], buf, viewer as never) : lockPartRoute(c, p.slice("/lock/".length), method, buf, viewer as never);
+      return status === 200 ? Effect.succeed(out) : Effect.fail(httpError(status, out));
+    }
+    return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
+  }) as typeof inner.stations.requests.call;
+  const run = async <X>(e: Effect.Effect<X, any>): Promise<{ ok?: X; error?: CoreError }> => {
+    let out: { ok?: X; error?: CoreError } | null = null;
+    inner.runner.fork(Effect.match(e, { onSuccess: (ok) => void (out = { ok }), onFailure: (error) => void (out = { error }) }));
+    await r.host.time.passUntil(30_000, () => out !== null);
+    assert.ok(out !== null, "no answer");
+    await r.host.time.pass(100);
+    return out;
+  };
+  await run(inner.adb.personal().refresh("s1"));
+  await run(read(inner, "ws"));
+  assert.equal(held(inner, "ws")?.entries.length, chain.length, "the chain held");
+  // (WX runs out)
+  await r.host.time.pass(10_000);
+  const asked = () => r.host.secureAsked.length;
+  /// What s1's log says of web pages past what it said before.
+  const webs = () => inner.adb.personal().entries("s1").slice(myLog.length).filter((e) => e.kind === "web" || e.kind === "web.remove").map((e) => ({ kind: e.kind, ...(e.body as J) }));
+  /// Something else s1 asks for on this app (a chat's grant signed): the person asked once for it.
+  const grantAsked = () => run(inner.adb.personal().signGrants("s1", [], "a grant"));
+  /// s0 hands the chain over to its people's logs, as an owner's app does (views/lock.ts `handOver`): its statements on
+  /// its log, the `moved` on the chain, both at A and B, the core then reading the chain.
+  const handOver = async () => {
+    owner.say("open", { ...SETTINGS(g.keys), email: "o@x.com" }, "ws");
+    owner.say("member", { sub: "s1", email: "a@x.com", lock: gMe, role: "member" }, "ws");
+    owner.say("member", { sub: "r2", email: "b@x.com", lock: r2.genesis, role: "member" }, "ws");
+    owner.say("station", { key: A }, "ws");
+    owner.say("station", { key: B }, "ws");
+    after(owner.app.signer, "moved", { root: owner.genesis });
+    for (const c of Object.values(stations)) {
+      bring(c, owner, true, "ws");
+      c.takeLock([...chain] as unknown as StationEntry[]);
+      assert.equal(c.chain(null)?.state?.moved, owner.genesis, "the station took the moved");
+    }
+    await run(read(inner, "ws"));
+    assert.equal(held(inner, "ws")?.entries.at(-1)?.kind, "moved", "the chain held moved");
+  };
+  /// A web page of s1's (`k`) at a station's hello: in, or refused with what the refusal tells it.
+  const page = (c: Cloud, k: Key): { in: boolean; left?: J } => {
+    const v = viewerOf("s1", { base: k }, "member", "ws");
+    const said = { lock: { device: k.hex, proof: v.lockDevice.proof } };
+    try {
+      inLockBringing(c, { viewer: v, exp: 4102444800, iat: 0, sid: "" } as never, "member", v.device, said);
+      return { in: true };
+    } catch (e) {
+      if (!(e instanceof LockRefusal)) throw e;
+      return { in: false, left: (refusalOf(c, said, v.device, e, undefined, "s1") as J).left };
+    }
+  };
+  return { r, inner, base, stations, W1, WX, WD, WL, WO, WR, asked, webs, grantAsked, handOver, page, run, now: () => now };
+}
+
+test("a member's page their app approved on the chain: said on their log as their app next signs something (a grant), in that one ask, the chain's id, label and exp; again, nothing more said", async () => {
+  const w = await setUp();
+  assert.deepEqual(w.webs(), [], "nothing said by itself");
+  const out = await w.grantAsked();
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.asked(), 1, "the person asked once, for the grant");
+  assert.deepEqual(w.webs(), [{ kind: "web", id: w.W1.hex, label: "s1's browser", exp: w.now() + 10 * DAY }], "W1 said, as the chain names it");
+  const again = await w.grantAsked();
+  assert.equal(again.error, undefined, again.error?.message);
+  assert.equal(w.asked(), 2);
+  assert.equal(w.webs().length, 1, "nothing more said");
+});
+
+test("never said: a page run out, one taken off the chain, one taken off the log, another person's, one an owner put in for them", async () => {
+  const w = await setUp();
+  await w.grantAsked();
+  const ids = w.webs().map((x) => x.id);
+  for (const [name, k] of [["run out", w.WX], ["taken off the chain", w.WD], ["taken off the log", w.WL], ["r2's", w.WR], ["put in by the owner", w.WO]] as const) {
+    assert.ok(!ids.includes(k.hex), `${name}: not said`);
+  }
+});
+
+test("said before the handover: in force after it, let in by both stations, nobody asked again", async () => {
+  const w = await setUp();
+  await w.grantAsked();
+  assert.equal(w.asked(), 1);
+  await w.handOver();
+  assert.ok(inForceOf(w.inner, "ws").f.devices.has(w.W1.hex), "W1 in force here");
+  for (const [n, c] of Object.entries(w.stations)) assert.equal(w.page(c, w.W1).in, true, `W1 let in by ${n}`);
+  assert.equal(w.asked(), 1, "nobody asked again");
+  assert.equal(w.page(w.stations.A, w.WO).in, false, "the owner's page for s1 out");
+});
+
+test("not said before the handover: out after it, told to ask s1's own app; in at both stations once that app next signs something, no code entered", async () => {
+  const w = await setUp();
+  await w.handOver();
+  for (const [n, c] of Object.entries(w.stations)) {
+    const p = w.page(c, w.W1);
+    assert.equal(p.in, false, `W1 out at ${n}`);
+    assert.deepEqual(p.left?.approvers, [w.base.hex], `told to ask s1's own app at ${n}`);
+  }
+  assert.equal(w.asked(), 0);
+  const out = await w.grantAsked();
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.asked(), 1, "the one ask, for the grant");
+  assert.deepEqual(w.webs().map((x) => x.id), [w.W1.hex], "W1 said, from the chain as it moved");
+  for (const [n, c] of Object.entries(w.stations)) assert.equal(w.page(c, w.W1).in, true, `W1 let in by ${n}`);
+  await w.run(read(w.inner, "ws"));
+  assert.ok(inForceOf(w.inner, "ws").f.devices.has(w.W1.hex), "W1 in force here");
+});

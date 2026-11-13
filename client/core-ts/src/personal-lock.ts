@@ -12,7 +12,7 @@ import * as rules from "../../../rules/js/rules.js";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
-import { type Entry, canonical, entryHash, signedBytes } from "./lock.ts";
+import { type Entry, WEB_DEVICE_SECS, canonical, entryHash, signedBytes } from "./lock.ts";
 import { AGAIN_MOST, type LogRules, againOf, hashOf, keep } from "./lock-keep.ts";
 import { type Kind as RigKind, type Signed as RigSigned, signedBytes as rigBytes } from "./rig-form.ts";
 import type { Runner } from "./runtime.ts";
@@ -35,6 +35,10 @@ const LIMITED_TRIES = 6;
 const LIMITED_WAIT = "10 seconds";
 /// How many devices approved in workspaces' locks are put on the lock at one time the seed is in hand (`#addApproved`).
 const APPROVED_AT_ONCE = 16;
+/// How many of the person's web pages workspaces' chains name are said on the lock at one time the seed is in hand
+/// (`#addWebs`).
+const WEBS_AT_ONCE = 16;
+const WEB_ID = /^[0-9a-f]{64}$/;
 /// The key's public half, read without asking anyone.
 const KEY_ID = "personal-signer-id";
 const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
@@ -164,6 +168,10 @@ export type PersonalEnv = {
   /// records them: a device id is anyone's to write), and will take the chain once on it (put in under this device, or
   /// under one whose said key signed an entry of it, `signed`). None whose id or key was `ever` on it.
   approved?: (sub: string, chain: { signers: ReadonlySet<string>; signed: ReadonlySet<string>; ever: { ids: ReadonlySet<string>; keys: ReadonlySet<string> } }) => Device[];
+  /// The person's web pages the chains of their workspaces held here name as theirs, each chain checked here and binding
+  /// them to the lock begun by `genesis` (views/lock.ts `websIn`): each page's `exp` the latest of those chains', `by`
+  /// the key that signed the entry naming it so. What of them `#addWebs` says on the lock.
+  webs?: (sub: string, genesis: string) => ChainWeb[];
   /// The keys said in workspaces' locks by the devices that put this device in there, and those that put them in, up
   /// to the first, each the person's own (views/lock.ts `vouchersIn`, which says what taking them so costs): a chain one
   /// of those keys signed an entry of is its person's lock (`#putOnBy`).
@@ -201,6 +209,10 @@ export type PersonalEnv = {
   /// stations and the cloud take.
   asked?: () => Asked;
 };
+
+/// A web page of the person's as a workspace's chain names it (`device` of kind web): its id, label and when it runs
+/// out, and the key that signed the entry that named it so.
+export type ChainWeb = { id: string; label: string; exp: number; by: string };
 
 /// The bodies of a workspace's statements brought with the chain that commits to them.
 export type Stated = { ws: string; bodies: readonly unknown[] };
@@ -554,6 +566,10 @@ export class PersonalLock {
   /// the stations would let it in once the lock is bound while it held itself as not let in. One whose id or key was
   /// ever on the lock is not put back this way: taken off, it stays off.
   #addApproved(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
+    return Effect.andThen(this.#putApproved(sub, seed, within), this.#addWebs(sub, seed, within));
+  }
+
+  #putApproved(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
     const approved = this.#env.approved;
     if (approved === undefined) return Effect.void;
     return Effect.gen({ self: this }, function* () {
@@ -577,6 +593,47 @@ export class PersonalLock {
         const put = this.#append(sub, seed, "device", { key, id, label, ...(sign_key !== undefined && SIGN_KEY.test(sign_key) ? { sign_key } : {}) }, true, within);
         yield* Effect.ignore(Effect.tapError(put, () => Effect.sync(() => void (failed = true))), { log: "Unhandled", message: "personal lock: a device approved in a workspace put on" });
         if (failed) return;
+      }
+    });
+  }
+
+  /// With the seed in hand for something else (as `#addApproved`, after the devices): the person's web pages the chains
+  /// of their workspaces name as theirs (`webs`), said on the lock as `web {id, label, exp}`, so that a page let in by a
+  /// chain stays in once the chain moved to its people's logs, nobody approving it again (the root AGENTS.md, To people
+  /// there is one safe mode; 2026-11-14). A web page is its own person's to say: only one this person's own device
+  /// approved on the chain (the key that signed it is one the lock records for a device on it, `signKeys`, as
+  /// `#putApproved` matches the device that approved one), never one an owner or admin put in there for them, which the
+  /// person's lock would then let in to every moved workspace of theirs. Each with the chain's id, label and `exp`
+  /// (none later, and none past WEB_DEVICE_SECS from now, as the rules bound one), not run out by this device's clock,
+  /// where the lock does not hold it already with an `exp` as late, and not one the lock took off (its last word of the
+  /// id a `web.remove`): taken off, it stays off. One entry a page whatever number of chains name it, at most
+  /// WEBS_AT_ONCE at a time. Nothing more is asked of the person; a failure only leaves the rest for the next time.
+  #addWebs(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
+    const webs = this.#env.webs;
+    if (webs === undefined) return Effect.void;
+    return Effect.gen({ self: this }, function* () {
+      const entries = this.#pinned.get(sub) ?? [];
+      if (entries.length === 0 || checkChain(entries, sub) === null) return;
+      const said = new Map<string, number | "off">();
+      for (const e of entries) {
+        const id = (e.body as J)?.id;
+        if (typeof id !== "string") continue;
+        if (e.kind === "web") said.set(id, Number((e.body as J).exp));
+        else if (e.kind === "web.remove") said.set(id, "off");
+      }
+      const signers = new Set([...this.signKeys(sub).values()].map((d) => d.sign_key));
+      const at = Math.floor(this.#env.host.nowMs() / 1000);
+      let n = 0;
+      for (const w of webs(sub, entryHash(entries[0]!))) {
+        if (n >= WEBS_AT_ONCE) return;
+        const exp = Math.min(w.exp, at + WEB_DEVICE_SECS);
+        const was = said.get(w.id);
+        if (!signers.has(w.by) || !WEB_ID.test(w.id) || exp <= at || was === "off" || (was !== undefined && was >= exp)) continue;
+        let failed = false;
+        const put = this.#append(sub, seed, "web", { id: w.id, label: w.label, exp }, true, within);
+        yield* Effect.ignore(Effect.tapError(put, () => Effect.sync(() => void (failed = true))), { log: "Unhandled", message: "personal lock: a web page a workspace's chain names said" });
+        if (failed) return;
+        n++;
       }
     });
   }
