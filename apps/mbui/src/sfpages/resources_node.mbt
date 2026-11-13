@@ -5,7 +5,7 @@
 ///|
 /// Its 进程 (station_processes', online): what is counted over the page, then the body; nothing read yet, its bones.
 fn resources_node(p : @view.View, core : Core, here : () -> Here, address : String) -> Unit {
-  let v = fn() { resources_of(core, here(), address) }
+  let v = fn() { station_part_read(core, address, resources_ask(here(), address)).value }
   p.box(fn(k) {
     @sf.style_node(k, fn() { rs_processes })
     @sf.words_node(k, fn() { @sf.t("web-pages.stations.processesLead") }, fn() { st_memory }) |> ignore
@@ -565,12 +565,12 @@ fn rs_foot_node(r : @view.View, v : () -> Json?, basis : Bool) -> Unit {
 ///|
 /// What still.fail uses of the machine (station_uses'): a quiet line, the whole of it opening its 进程; its name beside
 /// its figures where the line has the room for all of them, else over them; the network's figure where the station
-/// reads it.
-fn station_uses_node(p : @view.View, address : String, uv : () -> Json?) -> Unit {
+/// reads it. Pressed, `processes` (its page's choice's press of 进程).
+fn station_uses_node(p : @view.View, uv : () -> Json?, processes : () -> Unit) -> Unit {
   let name = fn() { @sf.t("web-pages.stations.uses", args=[("name", "still.fail")]) }
   p.box(fn(b) {
     @sf.style_node(b, fn() { rs_uses })
-    @sf.presses_node(b, fn() { @settings.station_parts[address] = "processes" })
+    @sf.presses_node(b, processes)
     b.says(By(fn() { Some(@view.said(Link, label=name())) })) |> ignore
     let lit = fn() { @sf.lit_node(b) }
     let figures = fn(f : @view.View) {

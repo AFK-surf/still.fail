@@ -10,7 +10,15 @@
 /// The core's `resources` view of the workspace in view, for station `address` (read, the station looking often,
 /// while shown).
 fn resources_of(core : Core, here : Here, address : String) -> Json? {
-  (core.topic)("resources", { "scope": str(here.workspace), "station": str(address) }).get().value
+  let ask = resources_ask(here, address)
+  (core.topic)(ask.0, ask.1).get().value
+}
+
+///|
+/// What the core is asked for station `address`'s figures (resources_of's, its 进程's and its overview's line's): its
+/// `resources` view of the workspace in view.
+fn resources_ask(here : Here, address : String) -> (String, Map[String, Json]) {
+  ("resources", { "scope": str(here.workspace), "station": str(address) })
 }
 
 ///|

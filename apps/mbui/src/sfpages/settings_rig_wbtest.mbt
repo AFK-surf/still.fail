@@ -133,7 +133,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     Connect(station, id) => connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
     Profile(a, id) => profile_node(p, core, here, a, id, on_back=core.pop, frame~, width~)
     NewProfile(a) => new_profile_node(p, core, src, here, a, on_back=core.pop, frame~, width~)
-    Station(a) => station_node(p, core, here, a, on_back=core.pop, frame~, width~)
+    Station(a) => station_node(p, core, src, here, a, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
       @ui.old(p, fn(c) {

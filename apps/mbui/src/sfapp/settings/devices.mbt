@@ -13,7 +13,14 @@ pub fn devices_listed(core : Core, here : Here) -> Array[Json] {
   if !(core.devices_on)() {
     return []
   }
-  items((core.topic)("devices", { "workspace": str(here.workspace) }).get().value, "devices")
+  let ask = devices_ask(here)
+  items((core.topic)(ask.0, ask.1).get().value, "devices")
+}
+
+///|
+/// What the core is asked for the workspace's devices (devices_listed's, where the core asks them at all): its `devices`.
+pub fn devices_ask(here : Here) -> (String, Map[String, Json]) {
+  ("devices", { "workspace": str(here.workspace) })
 }
 
 ///|

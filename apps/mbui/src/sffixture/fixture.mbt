@@ -2372,6 +2372,7 @@ pub fn fixture(mode : String) -> Source {
     reads_ahead: fn() { false },
     asks_devices: fn() { true },
     asks_outline: fn() { true },
+    switches_ahead: fn() { true },
   }
 }
 

@@ -449,7 +449,7 @@ fn tape_made(
     Setting(Station(address)) if pane_makes.val =>
       made("station/" + address, fn(p, core, here, stint, told, _acts) {
         context_node(p)
-        @sfpages.station_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, stint~)
+        @sfpages.station_node(p, core, src, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, stint~)
       })
     Setting(Permissions) if pane_makes.val =>
       made("permissions", fn(p, core, _here, _stint, told, _acts) {

@@ -671,7 +671,7 @@ fn narrow_made_as(
     // (by its station: another station's another page, not this one become it)
     Setting(Station(address)) =>
       made("station/" + address, fn(p, core, here, frame, stint, _acts) {
-        @sfpages.station_node(p, core, here, address, on_back=core.pop, frame~, stint~)
+        @sfpages.station_node(p, core, src, here, address, on_back=core.pop, frame~, stint~)
       })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {

@@ -151,6 +151,10 @@ pub(all) struct Source {
   /// whether an open chat's page asks for its outline (`chatOutline`: its rail of ticks, its outline's panel): not of a
   /// run seen again that was recorded before the app did
   asks_outline : () -> Bool
+  /// whether a choice that switches what its page reads asks ahead of the switch what it will read, the switch made as
+  /// that is answered (switch_answered): not of a run seen again that was recorded before the app did, whose choice
+  /// switched at the press and asked as the page then read
+  switches_ahead : () -> Bool
 }
 
 ///|
@@ -638,6 +642,7 @@ pub fn made_source(
     reads_ahead: fn() { true },
     asks_devices: fn() { true },
     asks_outline: fn() { true },
+    switches_ahead: fn() { true },
   }
 }
 
