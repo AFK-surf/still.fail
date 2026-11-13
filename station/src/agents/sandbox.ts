@@ -6,11 +6,13 @@
 // `persist` names it), and the bridge copies there what the station gives a program (its runtime's home, the station's
 // agent home, the session's uploads) and copies back what the program writes that the station reads (transcripts, the
 // agent home's memory and skills); `fetch` brings a file the agent attaches.
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { log } from "../ops/log.ts";
 import { sandboxName } from "./sandbox-name.ts";
 export { keyPart, sandboxName } from "./sandbox-name.ts";
 
@@ -39,10 +41,18 @@ export type SandboxConfig = {
   /// How long a session's runtime process may be idle (no turn) before it is ended and its sandbox stopped (once no job
   /// of the session runs there): `stopIdle`.
   idleMinutes: number;
+  /// How many sandboxes are kept made and reached ahead of need, each given to the next session whose agent starts
+  /// without one (`claimFor`), another made in its place: a session starts in seconds, not in the minute and more a
+  /// sandbox takes to be made and booted. They count against the l4es workspace's sandboxes.
+  warm: number;
 };
 
 /// A session's sandbox is stopped this long after its last turn when config.json says nothing else.
 export const IDLE_MINUTES = 10;
+
+/// Sandboxes kept warm when config.json says nothing else, and the most it takes.
+export const WARM = 1;
+export const WARM_MOST = 8;
 
 /// What the bridge copies between here and a sandbox (sandbox-bridge.mjs `sync`).
 export type SyncEntry = { path: string; to?: string; mode: "whole" | "append"; skip?: string[]; push?: boolean; back?: boolean; dir?: boolean };
@@ -60,6 +70,7 @@ export function sandboxConfig(raw: any): SandboxConfig | null {
     ...(typeof s.persist === "string" ? { persist: s.persist } : {}),
     ...(Array.isArray(s.labels) && s.labels.length > 0 ? { labels: s.labels } : {}),
     idleMinutes: typeof s.idleMinutes === "number" ? s.idleMinutes : IDLE_MINUTES,
+    warm: typeof s.warm === "number" ? s.warm : WARM,
   };
 }
 
@@ -74,6 +85,7 @@ export function checkSandbox(raw: any): void {
   if (typeof s.persist === "string" && !s.persist.startsWith("/")) throw new Error("sandbox.persist must be an absolute path in the sandboxes");
   if (s.labels !== undefined && (!Array.isArray(s.labels) || !s.labels.every((l: unknown) => typeof l === "string" && labelName(l)))) throw new Error("sandbox.labels must be a list of node labels (lowercase letters, digits, -, _ and .)");
   if (s.idleMinutes !== undefined && (typeof s.idleMinutes !== "number" || !(s.idleMinutes > 0))) throw new Error("sandbox.idleMinutes must be a number of minutes above 0");
+  if (s.warm !== undefined && (!Number.isInteger(s.warm) || s.warm < 0 || s.warm > WARM_MOST)) throw new Error(`sandbox.warm must be a whole number from 0 to ${WARM_MOST}`);
 }
 
 /// The key a runner's id was made from (agents/process.ts `runnerId`: `<kind>-<clean>[-<hash>]`): the session's for a
@@ -100,7 +112,157 @@ const placed = new Map<string, Placed>();
 /// config says so.
 export function placeIn(data: string, config: () => SandboxConfig | null, ports: () => number[], agentHome = join(data, "agent")): () => void {
   placed.set(data, { config, ports, agentHome });
-  return () => placed.delete(data);
+  pools.set(data, loadPool(data));
+  void warmUp(data);
+  return () => {
+    placed.delete(data);
+    pools.delete(data);
+  };
+}
+
+/// The warm sandboxes of a station (`warm`): `made`, those made or being made and given to no session yet (`ready` of
+/// them reached once, the station's data directory made there); `claims`, the sandbox each session was given in place
+/// of its own name's, until it is stopped. Kept in `run/sandbox/pool.json`, so a station started again finds them (a
+/// runner it takes up still runs in a claimed one). `id` keeps two stations' names apart in one l4es workspace.
+type Pool = { id: string; next: number; made: string[]; ready: Set<string>; claims: Map<string, string>; saving: Promise<void>; last: SandboxConfig | null };
+const pools = new Map<string, Pool>();
+
+const poolFile = (data: string) => join(data, "run", "sandbox", "pool.json");
+
+function loadPool(data: string): Pool {
+  let kept: any = null;
+  try {
+    kept = JSON.parse(readFileSync(poolFile(data), "utf8")); // sync: read once as the station places itself, before it serves
+  } catch {}
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  return {
+    id: typeof kept?.id === "string" ? kept.id : randomBytes(4).toString("hex"),
+    next: Number.isSafeInteger(kept?.next) ? kept.next : 0,
+    made: strings(kept?.made),
+    ready: new Set(),
+    claims: new Map(Object.entries(kept?.claims ?? {}).filter((e): e is [string, string] => typeof e[1] === "string")),
+    saving: Promise.resolve(),
+    last: null,
+  };
+}
+
+/// Writes the pool's file, one write after another, each whole (a new file renamed over the old).
+function savePool(data: string, pool: Pool): Promise<void> {
+  const body = JSON.stringify({ id: pool.id, next: pool.next, made: pool.made, claims: Object.fromEntries(pool.claims) });
+  const file = poolFile(data);
+  pool.saving = pool.saving.then(async () => {
+    await mkdir(join(data, "run", "sandbox"), { recursive: true });
+    await writeFile(`${file}.new`, body);
+    await rename(`${file}.new`, file);
+  }).catch((e) => log.warn("sandbox", "the warm sandboxes' file was not written", { error: (e as Error).message }));
+  return pool.saving;
+}
+
+/// The sandbox `key` (a session's or a runner's) runs in: the warm one it was given, else its own name's.
+export function nameFor(data: string, key: string): string {
+  return pools.get(data)?.claims.get(key) ?? sandboxName(key);
+}
+
+/// The warm sandboxes ready to be given, by name.
+export function warmReady(data: string): string[] {
+  const pool = pools.get(data);
+  return pool === undefined ? [] : pool.made.filter((n) => pool.ready.has(n));
+}
+
+/// Gives `key` a warm sandbox that is ready, when it has none given and one is (another is made in its place); its
+/// sandbox's name either way.
+function claimFor(data: string, key: string): string {
+  const pool = pools.get(data);
+  const given = pool?.claims.get(key);
+  if (pool === undefined || given !== undefined) return given ?? sandboxName(key);
+  const name = pool.made.find((n) => pool.ready.has(n));
+  if (name === undefined) return sandboxName(key);
+  pool.made = pool.made.filter((n) => n !== name);
+  pool.ready.delete(name);
+  pool.claims.set(key, name);
+  void savePool(data, pool);
+  void warmUp(data);
+  log.info("sandbox", "a warm sandbox given to a session", { session: key, sandbox: name });
+  return name;
+}
+
+/// Makes and reaches warm sandboxes until `warm` of them are made, and deletes those beyond it (all of them when the
+/// station runs nothing in sandboxes). Made with `--keep`: the front door's idle expiry passes them over, and the
+/// station deletes each itself (`stopSandbox`, `sweepPool`). A sandbox that could not be had is forgotten; the next
+/// look (a claim, the sweep) makes another.
+export async function warmUp(data: string): Promise<void> {
+  const pool = pools.get(data);
+  const at = placed.get(data);
+  if (pool === undefined || at === undefined) return;
+  const config = at.config();
+  // Switched off, the front door is the one last used.
+  const door = config ?? pool.last;
+  pool.last = door;
+  const want = config?.warm ?? 0;
+  const extra = pool.made.slice(want);
+  if (extra.length > 0 && door !== null) {
+    pool.made = pool.made.slice(0, want);
+    for (const n of extra) pool.ready.delete(n);
+    await savePool(data, pool);
+    for (const n of extra) await removeSandbox(door, n);
+  }
+  if (config === null) return;
+  const making: string[] = [];
+  while (pool.made.length < want) {
+    const name = sandboxName(`warm|${pool.id}|${pool.next++}`);
+    pool.made.push(name);
+    making.push(name);
+  }
+  // Those kept in the file and not reached since the station started are reached again (made already, or made now).
+  for (const n of pool.made) if (!pool.ready.has(n) && !making.includes(n) && !reaching.has(`${data}|${n}`)) making.push(n);
+  if (making.length === 0) return;
+  await savePool(data, pool);
+  await Promise.all(making.map(async (name) => {
+    const id = `${data}|${name}`;
+    reaching.add(id);
+    const reached = await reach(at, config, data, name);
+    reaching.delete(id);
+    if (!pool.made.includes(name)) return;
+    if (reached.ok) pool.ready.add(name);
+    else {
+      pool.made = pool.made.filter((n) => n !== name);
+      await savePool(data, pool);
+      log.warn("sandbox", "a warm sandbox could not be had", { sandbox: name, why: reached.why });
+    }
+  }));
+}
+/// The warm sandboxes being reached now, by data directory and name.
+const reaching = new Set<string>();
+
+/// Whether `name` is one of the station's warm sandboxes, given to a session or not.
+function isWarm(data: string, name: string): boolean {
+  const pool = pools.get(data);
+  return pool !== undefined && (pool.made.includes(name) || [...pool.claims.values()].includes(name));
+}
+
+/// Makes warm sandbox `name` (kept, with the config's labels) and reaches it: the station's data directory made there,
+/// nothing run. Says why not when it cannot.
+function reach(at: Placed, config: SandboxConfig, data: string, name: string, timeoutMs = 300_000, node = process.execPath): Promise<{ ok: true } | { ok: false; why: string }> {
+  const spec = { ssh: sshArgs(config, name), create: createFor(config, name, undefined, true), ports: at.ports(), root: { path: data, ...(config.persist ? { persist: config.persist } : {}) }, dirs: [], sync: [] };
+  return new Promise((resolve) =>
+    execFile(node, [BRIDGE, "host", JSON.stringify(spec)], { timeout: timeoutMs }, (error, _out, err) =>
+      resolve(!error ? { ok: true } : { ok: false, why: (err || error.message).trim().split("\n").pop() ?? "" })));
+}
+
+/// Stops the sandboxes given to sessions whose processes are all gone (`running` says no): one whose process ended
+/// some other way than going idle (it exited, the station restarted without it), which the front door's idle list
+/// does not show, being kept. Then makes or deletes warm ones as `warm` says. At each sweep (hub.ts `sweepSandboxes`).
+export async function sweepPool(data: string, running: (key: string) => boolean): Promise<void> {
+  const pool = pools.get(data);
+  if (pool === undefined) return;
+  for (const key of [...pool.claims.keys()]) if (!running(key)) await stopSandbox(data, key);
+  await warmUp(data);
+}
+
+/// Deletes sandbox `name` at the front door; whether it was.
+function removeSandbox(config: SandboxConfig, name: string, timeoutMs = 60_000): Promise<boolean> {
+  const [ssh, ...args] = sshArgs(config, "_");
+  return new Promise((resolve) => execFile(ssh, [...args, "rm", name], { timeout: timeoutMs }, (error, out) => resolve(!error && /^deleting /m.test(out))));
 }
 
 /// What of a runtime's home is its own, made as it runs, and stays in the sandbox (its login is given each process:
@@ -193,12 +355,18 @@ export function idleSandboxes(data: string, timeoutMs = 60_000): Promise<string[
 /// Stops (deletes) `key`'s sandbox, `size`'s of it when given: what it has on its own disk goes, its files in
 /// `persist` stay for the next. The front door refuses while anything still has a connection to it (a job, a program
 /// started since): then it stays, and is stopped when that ends. Whether it was stopped.
-export function stopSandbox(data: string, key: string, size?: string, timeoutMs = 60_000): Promise<boolean> {
+export async function stopSandbox(data: string, key: string, size?: string, timeoutMs = 60_000): Promise<boolean> {
   const config = placed.get(data)?.config() ?? null;
-  if (config === null) return Promise.resolve(false);
-  const name = size === undefined ? sandboxName(key) : sandboxName(`${key}|${size}`);
-  const [ssh, ...args] = sshArgs(config, "_");
-  return new Promise((resolve) => execFile(ssh, [...args, "rm", name], { timeout: timeoutMs }, (error, out) => resolve(!error && /^deleting /m.test(out))));
+  if (config === null) return false;
+  const name = size === undefined ? nameFor(data, key) : sandboxName(`${key}|${size}`);
+  const stopped = await removeSandbox(config, name, timeoutMs);
+  // A warm one given to the session is gone with it: its next start is given another, or makes its own.
+  const pool = pools.get(data);
+  if (stopped && size === undefined && pool?.claims.get(key) === name) {
+    pool.claims.delete(key);
+    await savePool(data, pool);
+  }
+  return stopped;
 }
 
 /// A size's name as the sandboxes' operator gives them (l4es `SBX_SANDBOX_SIZES`).
@@ -209,10 +377,10 @@ const labelName = (label: string) => /^[a-z0-9][a-z0-9_.-]{0,62}$/.test(label);
 
 /// The front door's command that makes sandbox `name` (or finds it there, made the same way) before it is connected
 /// to: with a size or the config's labels. None: the first connection makes it, of the default size on any node.
-function createFor(config: SandboxConfig, name: string, size?: string): string[] | undefined {
+function createFor(config: SandboxConfig, name: string, size?: string, keep = false): string[] | undefined {
   const labels = config.labels ?? [];
-  if (size === undefined && labels.length === 0) return undefined;
-  return [...sshArgs(config, "_"), "create", name, ...(size === undefined ? [] : ["--size", size]), ...labels];
+  if (size === undefined && labels.length === 0 && !keep) return undefined;
+  return [...sshArgs(config, "_"), "create", name, ...(size === undefined ? [] : ["--size", size]), ...(keep ? ["--keep"] : []), ...labels];
 }
 
 /// How something is started in a sandbox: `node` runs the bridge; with a `size`, in a sandbox of the key's of that size,
@@ -222,7 +390,8 @@ export type Placing = { node?: string; size?: string; agent?: boolean; lostFile?
 
 /// The bridge's spec for sandbox `name`, without a program: what is copied, where the data directory is.
 function bridgeSpec(at: Placed, config: SandboxConfig, data: string, name: string, cwd: string | null, sync: SyncEntry[], size?: string) {
-  const create = createFor(config, name, size);
+  // A warm one is made again as it was (kept) when the front door lost it, not as a session's own.
+  const create = createFor(config, name, size, size === undefined && isWarm(data, name));
   return {
     ssh: sshArgs(config, name), ports: at.ports(), ...(create ? { create } : {}),
     root: { path: data, ...(config.persist ? { persist: config.persist } : {}) },
@@ -237,7 +406,9 @@ export function inSandbox(data: string, key: string, program: string, args: stri
   const at = placed.get(data);
   const config = at?.config() ?? null;
   if (at === undefined || config === null) return null;
-  const name = size === undefined ? sandboxName(key) : sandboxName(`${key}|${size}`);
+  // A session's agent starting without a sandbox of its own takes a warm one; what else it starts (its jobs) goes where
+  // its agent is.
+  const name = size !== undefined ? sandboxName(`${key}|${size}`) : how.agent ? claimFor(data, key) : nameFor(data, key);
   const sync = how.sync ?? sessionSync(data, cwd);
   // What a session's workspace has from the station goes there with it (syncChanged has nothing to copy then).
   if (size === undefined) copied.set(`${data}|${key}`, signature(sessionSync(data, cwd)));
@@ -288,7 +459,7 @@ export function syncNow(data: string, key: string, sync: SyncEntry[], timeoutMs 
   const at = placed.get(data);
   const config = at?.config() ?? null;
   if (at === undefined || config === null || sync.length === 0) return Promise.resolve();
-  const spec = bridgeSpec(at, config, data, sandboxName(key), null, sync);
+  const spec = bridgeSpec(at, config, data, nameFor(data, key), null, sync);
   return new Promise((resolve, reject) => {
     execFile(node, [BRIDGE, "host", JSON.stringify(spec)], { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (error, _out, err) =>
       error ? reject(new Error(err.trim().split("\n").slice(-3).join(" ") || error.message)) : resolve());

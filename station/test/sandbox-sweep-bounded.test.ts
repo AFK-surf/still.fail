@@ -32,7 +32,7 @@ if [ "$last" = ls ]; then cat "$SANDBOX_SWEEP_FIXTURE/ls"; else printf '%s\\n' "
     chmodSync(join(dir, "ssh"), 0o755);
     process.env.PATH = `${dir}:${path}`;
     process.env.SANDBOX_SWEEP_FIXTURE = dir;
-    const unplace = placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []);
+    const unplace = placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []);
     try {
       const put = db.prepare(`INSERT INTO sessions(key,connect,scope,runtime,profile,workspace,token,created_at,last_active_at)
         VALUES (?,'connected','thread','claude','default','.',?,0,0)`);
@@ -76,7 +76,7 @@ if [ "$last" = ls ]; then cat "$SANDBOX_SWEEP_FIXTURE/ls"; else printf '%s\\n' "
   writeFileSync(join(dir, "ls"), `${name} running 0% deleted in 50 min if unused\n`);
   process.env.PATH = `${dir}:${path}`;
   process.env.SANDBOX_SWEEP_FIXTURE = dir;
-  const unplace = placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []);
+  const unplace = placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []);
   const hub = Object.assign(Object.create(Hub.prototype), {
     store, config: () => ({ dataDir: dir }), actors: new Map(), options: { previous: previous.promise },
   });

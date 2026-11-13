@@ -1606,7 +1606,7 @@ test("in sandboxes an idle session's process ends after the sandbox idle time, w
   chmodSync(join(r.dir, "ssh"), 0o755);
   const path = process.env.PATH;
   process.env.PATH = `${r.dir}:${path}`;
-  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", idleMinutes: 0.002 } }), () => []); // 120 ms
+  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0, idleMinutes: 0.002 } }), () => []); // 120 ms
   try {
     const a = message();
     await r.accept(a);
@@ -1651,7 +1651,7 @@ test("a session's idle time goes with it to the next station: taken up, it is no
   const time = testClock();
   const first = new Rig({ clock: time.clock });
   const door = frontDoor(first.dir);
-  const unplace = placeIn(first.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", idleMinutes: 0.002 } }), () => []); // 120 ms
+  const unplace = placeIn(first.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0, idleMinutes: 0.002 } }), () => []); // 120 ms
   try {
     await first.accept(message());
     await settle();
@@ -1683,7 +1683,7 @@ test("a session's idle time goes with it to the next station: taken up, it is no
 test("a sandbox of a session nothing runs in is stopped; one in use, or not this station's, is left", async () => {
   const r = new Rig();
   const door = frontDoor(r.dir);
-  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []);
+  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []);
   try {
     const busy = message();
     await r.accept(busy);

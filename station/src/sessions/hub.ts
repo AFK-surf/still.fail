@@ -19,7 +19,7 @@
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
 // running that nothing took up.
-import { idleSandboxes, keyPart, sandboxIdleMs, sandboxName, sandboxed, sessionSync, stopSandbox, syncChanged } from "../agents/sandbox.ts";
+import { idleSandboxes, keyPart, sandboxIdleMs, sandboxName, sandboxed, sessionSync, stopSandbox, sweepPool, syncChanged } from "../agents/sandbox.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -961,10 +961,14 @@ export class Hub {
   }
 
   /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
-  /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
-  /// station runs things in sandboxes (agents.ts).
+  /// than going idle (it exited, the station restarted without it), left with its sandbox; and keeps the warm ones as
+  /// many as the setting says (agents/sandbox.ts `sweepPool`). Every `SWEEP_MS` while the station runs things in
+  /// sandboxes (agents.ts).
   async sweepSandboxes() {
     const data = this.config().dataDir;
+    // The warm sandboxes given to sessions are kept, so the idle list below does not show them.
+    const running = new Set([...this.actors.values()].filter((a) => a.processState() !== "cold").map((a) => keyPart(a.key)));
+    await sweepPool(data, (key) => running.has(key));
     if (sandboxIdleMs(data) === null) {
       if (sandboxIndexEnabled(this.store.db)) {
         await this.sandboxNameLookup().disable();

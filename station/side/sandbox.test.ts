@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, describe, test } from "node:test";
-import { BRIDGE, CONNECTION_LOST, LOST_EXIT, checkSandbox, fetchFiles, keyPart, sessionSync, stationPath, syncChanged, syncFor, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
+import { BRIDGE, CONNECTION_LOST, LOST_EXIT, checkSandbox, fetchFiles, keyPart, sessionSync, stationPath, stopSandbox, sweepPool, syncChanged, warmReady, syncFor, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
 import { runnerId } from "../src/agents/process.ts";
 import { ClaudeDriver } from "../src/agents/claude.ts";
 import { CodexDriver } from "../src/agents/codex.ts";
@@ -67,6 +67,7 @@ const destination = args[at];
 const command = args.slice(at + 1).join(" ");
 if (destination.startsWith("_")) {
   appendFileSync(${JSON.stringify(join(dir, "made"))}, destination + " " + command + "\\n");
+  if (args[at + 1] === "rm") process.stdout.write("deleting " + args[at + 2] + "\\n");
   process.exit(0);
 }
 appendFileSync(${JSON.stringify(join(dir, "destinations"))}, destination + "\\n");
@@ -255,7 +256,7 @@ describe("jobs", () => {
     cleanups.push(() => store.close());
     const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
     cleanups.push(() => jobs.shutdown().catch(() => undefined));
-    const unplace = placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []);
+    const unplace = placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []);
     cleanups.push(unplace);
     assert.ok(ssh.endsWith("/ssh"));
     const work = join(dir, "work");
@@ -283,7 +284,7 @@ describe("jobs", () => {
     const told: string[] = [];
     const jobs = new Jobs({ store, data: dir, notify: (_s, t) => void told.push(t), link: () => null });
     cleanups.push(() => jobs.shutdown().catch(() => undefined));
-    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []));
     const work = join(dir, "work");
     mkdirSync(work);
     const runs = join(dir, "runs");
@@ -310,7 +311,7 @@ describe("jobs", () => {
     mkdirSync(work);
     // Not while the station runs its jobs here.
     assert.throws(() => jobs.start("s1", "build", "true", work, null, false, false, "large"), /only a job this station runs in a sandbox/);
-    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []));
     assert.throws(() => jobs.start("s1", "web", "true", work, 45998, false, false, "large"), /not a service/);
 
     const job = jobs.start("s1", "build", "echo big", work, null, false, false, "large");
@@ -335,7 +336,7 @@ describe("jobs", () => {
     cleanups.push(() => jobs.shutdown().catch(() => undefined));
     const work = join(dir, "work");
     mkdirSync(work);
-    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", labels: ["lax2"] } }), () => []));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0, labels: ["lax2"] } }), () => []));
 
     const plain = jobs.start("s1", "build", "echo small", work, null, false, false);
     await until("it ends", () => store.getJob(plain.id)!.state === "exited");
@@ -348,6 +349,50 @@ describe("jobs", () => {
     assert.equal(readFileSync(store.getJob(plain.id)!.log, "utf8").trim(), "small");
   });
 
+  test("a session's agent takes a warm sandbox, its jobs follow it there, another is made; stopped, the next start takes the new one", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path}`;
+    cleanups.push(() => (process.env.PATH = path));
+    const made = () => (existsSync(join(dir, "made")) ? readFileSync(join(dir, "made"), "utf8").trim().split("\n") : []);
+    let warm = 1;
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", labels: ["lax2"], warm } }), () => []));
+    // Made kept, on a node with the labels, and reached once before anything needs it.
+    await until("the warm one is reached", () => warmReady(dir).length === 1);
+    const [w1] = warmReady(dir);
+    assert.deepEqual(made(), [`_.ws@host create ${w1} --keep lax2`]);
+    assert.match(w1!, /^s-warm-/);
+    assert.deepEqual(destinations(dir), [`${w1}.ws@host`]);
+
+    const key = keyOfRunner(runnerId("claude", "s1"));
+    const agent = inSandbox(dir, key, "/bin/echo", ["hi"], dir, { agent: true })!;
+    assert.equal(JSON.parse(agent.args[2]!).ssh.at(-1), `${w1}.ws@host`);
+    // Made again as it was, kept, should the front door have lost it.
+    assert.deepEqual(JSON.parse(agent.args[2]!).create.slice(-4), ["create", w1, "--keep", "lax2"]);
+    // A job of the session goes where its agent is; another warm one is made in its place.
+    assert.equal(JSON.parse(inSandbox(dir, keyPart("s1"), "/bin/sh", ["-c", "true"], dir)!.args[2]!).ssh.at(-1), `${w1}.ws@host`);
+    await until("another is reached", () => warmReady(dir).length === 1);
+    const [w2] = warmReady(dir);
+    assert.notEqual(w2, w1);
+
+    // Its process gone without going idle: the sweep stops the one it was given (the idle list never shows a kept one).
+    await sweepPool(dir, () => false);
+    assert.ok(made().includes(`_.ws@host rm ${w1}`));
+    assert.equal(JSON.parse(inSandbox(dir, key, "/bin/echo", ["hi"], dir, { agent: true })!.args[2]!).ssh.at(-1), `${w2}.ws@host`);
+    assert.equal(await stopSandbox(dir, key), true);
+    assert.ok(made().includes(`_.ws@host rm ${w2}`));
+
+    // Fewer asked for: the ones beyond it are deleted; none, and a session's agent makes its own.
+    await until("a third is reached", () => warmReady(dir).length === 1);
+    const [w3] = warmReady(dir);
+    warm = 0;
+    await sweepPool(dir, () => false);
+    assert.ok(made().includes(`_.ws@host rm ${w3}`));
+    const own = inSandbox(dir, keyOfRunner(runnerId("claude", "s2")), "/bin/echo", ["hi"], dir, { agent: true })!;
+    assert.equal(JSON.parse(own.args[2]!).ssh.at(-1), `${sandboxName(keyOfRunner(runnerId("claude", "s2")))}.ws@host`);
+  });
+
 });
 
 describe("a runtime's process", () => {
@@ -358,7 +403,7 @@ describe("a runtime's process", () => {
     const path = process.env.PATH;
     process.env.PATH = `${dir}:${fake}:${path}`;
     cleanups.push(() => (process.env.PATH = path));
-    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []));
     const driver = new ClaudeDriver({ data: dir });
     cleanups.push(() => driver.shutdown());
     const home = join(dir, "home");
@@ -386,7 +431,7 @@ describe("Codex", () => {
     const path = process.env.PATH;
     process.env.PATH = `${dir}:${fake}:${path}`;
     cleanups.push(() => (process.env.PATH = path));
-    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []));
     writeFileSync(join(dir, "cert.pem"), "");
     // A bundle here (the driver names it SSL_CERT_FILE) that the stand-in sandbox does not have at that path.
     const driver = new CodexDriver({ data: dir, hostSkills: join(dir, "skills"), caBundle: join(dir, "cert.pem") });
@@ -456,7 +501,7 @@ describe("paths in a sandbox with persist", () => {
     const [logical, physical] = ran.out.trim().split("\n");
     assert.ok(logical!.endsWith(`/fs${cwd}`), logical);
     assert.ok(physical!.includes("/fs/mnt/sf/st/sessions/s/workspace"), physical);
-    cleanups.push(placeIn(data, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", persist: "/mnt/sf/st/" } }), () => []));
+    cleanups.push(placeIn(data, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0, persist: "/mnt/sf/st/" } }), () => []));
     assert.equal(stationPath(data, "/mnt/sf/st/sessions/s/workspace/a.png"), join(cwd, "a.png"));
     assert.equal(stationPath(data, "/mnt/sf/st"), data);
     assert.equal(stationPath(data, "/mnt/sf/stx/a"), "/mnt/sf/stx/a");
@@ -488,7 +533,7 @@ describe("files, never shared", () => {
     const cwd = join(dir, "sessions", "s1", "workspace");
     mkdirSync(join(cwd, "uploads"), { recursive: true });
     writeFileSync(join(cwd, "uploads", "in.txt"), "from a person");
-    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => [], agentHome));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => [], agentHome));
     const placed = inSandbox(dir, "s1", "/bin/sh", ["-c", [
       // What it was given (relative: the sandbox has the station's paths at its own place).
       "cat ../../../homes/cc/settings.json uploads/in.txt; [ -e ../../../homes/cc/.credentials.json ] && echo LEAKED; readlink ../../../homes/cc/CLAUDE.md",
@@ -519,7 +564,7 @@ describe("files, never shared", () => {
     const path = process.env.PATH;
     process.env.PATH = `${dir}:${path}`;
     cleanups.push(() => (process.env.PATH = path));
-    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0 } }), () => []));
     const cwd = join(dir, "sessions", "s2", "workspace");
     mkdirSync(join(cwd, "uploads"), { recursive: true });
     writeFileSync(join(cwd, "uploads", "a.png"), "png");
@@ -548,7 +593,7 @@ describe("a message's files from the sandbox", () => {
       fakeSsh(r.dir);
       const path = process.env.PATH;
       process.env.PATH = `${r.dir}:${path}`;
-      const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", ...(persist ? { persist: "/mnt/sf/st" } : {}) } }), () => []);
+      const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 0, ...(persist ? { persist: "/mnt/sf/st" } : {}) } }), () => []);
       try {
         const m = say("<@UBOT> chart it");
         await r.accept(m);

@@ -44,7 +44,7 @@ describe("the setting", () => {
     assert.equal(sandboxConfig({}), null);
     assert.equal(sandboxConfig({ sandbox: { ssh: "dev@host" } }), null);
     assert.equal(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", enabled: false } }), null);
-    assert.deepEqual(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", identity: "/k" } }), { enabled: true, ssh: "{name}.ws@host", identity: "/k", idleMinutes: 10 });
+    assert.deepEqual(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", identity: "/k" } }), { enabled: true, ssh: "{name}.ws@host", identity: "/k", idleMinutes: 10, warm: 1 });
     assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}@host", idleMinutes: 0 } }), /idleMinutes/);
     assert.throws(() => checkSandbox({ sandbox: { ssh: "host" } }), /\{name\}/);
     assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}@host", enabled: "yes" } }), /enabled/);
@@ -54,10 +54,14 @@ describe("the setting", () => {
     checkSandbox({ sandbox: { ssh: "{name}.ws@host", labels: ["lax2", "fast"] } });
     assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}.ws@host", labels: "lax2" } }), /labels/);
     assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}.ws@host", labels: ["LAX 2"] } }), /labels/);
+    // One sandbox kept warm unless it says otherwise, from none to eight.
+    assert.equal(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", warm: 3 } })?.warm, 3);
+    checkSandbox({ sandbox: { ssh: "{name}.ws@host", warm: 0 } });
+    for (const warm of [-1, 1.5, 9, "2"]) assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}.ws@host", warm } }), /warm/);
   });
 
   test("ssh is asked for the sandbox by name, with the key and host keys given", () => {
-    const args = sshArgs({ enabled: true, ssh: "{name}.ws@host", identity: "/id", knownHosts: "/kh", idleMinutes: 10 }, "s-a-1");
+    const args = sshArgs({ enabled: true, ssh: "{name}.ws@host", identity: "/id", knownHosts: "/kh", idleMinutes: 10, warm: 0 }, "s-a-1");
     assert.equal(args[0], "ssh");
     assert.equal(args.at(-1), "s-a-1.ws@host");
     assert.ok(args.includes("BatchMode=yes") && args.includes("/id") && args.includes("UserKnownHostsFile=/kh"));
