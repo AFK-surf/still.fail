@@ -439,7 +439,7 @@ if [ $full = 1 ]; then
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station: it and its tests run whenever it, one of its native parts or the words it says changed (station_paths:
   # scripts/plan.sh reads it from this line for CI's check-station).
-  station_paths='^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$'
+  station_paths='^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$|^scripts/station-slice\.sh$'
   # Its tests' native parts, prebuilt (mesh addon, runner, the reader in MoonBit; on a Mac the Rust station's archive
   # command too, for the compatibility tests, which skip themselves without it: it is prebuilt for darwin alone).
   station_natives="mesh runner reader"
