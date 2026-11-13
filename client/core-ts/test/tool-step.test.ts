@@ -46,6 +46,62 @@ test("what_came_back_is_read_by_what_it_is", () => {
   assert.deepEqual(toolResult("x", "{}", "plain words", false, t), [{ kind: "output", text: "plain words" }]);
 });
 
+test("agy_file_and_command_steps_render_diff_code_and_clean_terminal_output", () => {
+  const ws = "/Users/zuozijian/.stillfail/sessions/chat/c-4282c9a37cb40bab469a3b91c261af05/workspace/stillfail";
+  const editCall = JSON.stringify({
+    Path: `${ws}/station/src/mesh/screens.ts`,
+    Target: "const a = 1;\nconst b = 2;",
+    Replacement: "const a = 1;\nconst b = 3;",
+  });
+  assert.deepEqual(toolCall(`File ${ws}/station/src/mesh/screens.ts`, editCall, true, t), [
+    { kind: "path", path: "station/src/mesh/screens.ts" },
+    { kind: "diff", rows: [[" ", "const a = 1;"], ["-", "const b = 2;"], ["+", "const b = 3;"]] },
+  ]);
+  assert.deepEqual(
+    toolResult(
+      `File ${ws}/station/src/mesh/screens.ts`,
+      editCall,
+      `Created At: 2026-11-13T04:00:00+08:00\nCompleted At: 2026-11-13T04:00:01+08:00\n\nMade 1 replacement in ${ws}/station/src/mesh/screens.ts`,
+      false,
+      t,
+    ),
+    [],
+  );
+
+  const readCall = JSON.stringify({ Path: `${ws}/station/src/url.ts`, StartLine: 1, EndLine: 2 });
+  assert.deepEqual(toolCall("read_file", readCall, true, t), [
+    { kind: "path", path: "station/src/url.ts", extra: "第 1 行起，2 行" },
+  ]);
+  assert.deepEqual(
+    toolResult(
+      "read_file",
+      readCall,
+      "Created At: 2026-11-13T04:00:00+08:00\nCompleted At: 2026-11-13T04:00:00+08:00\nShowing lines 1-2 of 10\n1: export const a = 1;\n2: export const b = 2;",
+      false,
+      t,
+    ),
+    [{ kind: "code", text: "export const a = 1;\nexport const b = 2;", lang: "ts" }],
+  );
+
+  const cmdCall = JSON.stringify({ CommandLine: `cd ${ws} && git status --short`, toolSummary: "Git status check", WaitMsBeforeAsync: 5000 });
+  assert.deepEqual(toolCall("run_command", cmdCall, true, t), [
+    { kind: "code", text: "git status --short", lang: "sh" },
+  ]);
+  assert.deepEqual(
+    toolResult(
+      "run_command",
+      cmdCall,
+      "Created At: 2026-11-13T04:00:00+08:00\nCompleted At: 2026-11-13T04:00:02+08:00\nCommand exited with code 0\nCommand output:\nM station/src/url.ts",
+      false,
+      t,
+    ),
+    [
+      { kind: "facts", items: [{ key: "退出码 0", plain: true }] },
+      { kind: "output", text: "M station/src/url.ts" },
+    ],
+  );
+});
+
 test("a_client_asks_the_core_what_a_step_is", async () => {
   assert.deepEqual(parseCall("history.tool", { name: "Bash", call: "{}" }), { kind: "historyTool", name: "Bash", call: "{}", result: null, failed: false, said: false });
   const { host, core } = await cloudCore();

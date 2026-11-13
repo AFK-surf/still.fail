@@ -9,7 +9,7 @@ import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 import { isStationAuthor } from "./titles.ts";
-import { closeCut } from "./tool-step.ts";
+import { cleanCommand, cleanPath, closeCut } from "./tool-step.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -53,26 +53,82 @@ function line(text: string, max: number): string {
   return Array.from(text.split("\n")[0] ?? "").slice(0, max).join("");
 }
 
-export function hint(text: string): string {
+export function hint(text: string, tool = ""): string {
   const a = args(text);
   if (!a) return line(text, 160);
-  const key = ["command", "cmd", "file_path", "path", "pattern", "url", "query", "description", "prompt"].find((k) => a[k] !== undefined && a[k] !== null);
+  const key = ["command", "cmd", "CommandLine", "file_path", "path", "Path", "pattern", "Pattern", "url", "query", "Query", "description", "toolSummary", "prompt", "Prompt"].find((k) => a[k] !== undefined && a[k] !== null);
   const value = key !== undefined ? a[key] : undefined;
-  const s = typeof value === "string" ? value : Array.isArray(value) ? value.map((p) => (typeof p === "string" ? p : "")).join(" ") : "";
-  return line(s, 160);
+  const raw = typeof value === "string" ? value : Array.isArray(value) ? value.map((p) => (typeof p === "string" ? p : "")).join(" ") : "";
+  const cleaned = key === "command" || key === "cmd" || key === "CommandLine" ? cleanCommand(raw) : key === "file_path" || key === "path" || key === "Path" ? cleanPath(raw) : raw;
+  if (cleaned !== "") return line(cleaned, 160);
+  if (tool.startsWith("File ")) return line(cleanPath(tool.slice(5).trim()), 160);
+  if (kindOf(tool, a) === "command" && !["Bash", "bash", "run_command", "run_terminal_command"].includes(toolName(tool))) {
+    return line(cleanCommand(toolName(tool)), 160);
+  }
+  return "";
 }
 
 function describe(text: string): string | null {
-  const d = args(text)?.description;
-  if (typeof d !== "string" || d.trim() === "") return null;
+  const a = args(text);
+  const d = typeof a?.description === "string" ? a.description : typeof a?.toolSummary === "string" ? a.toolSummary : null;
+  if (d === null || d.trim() === "") return null;
   return line(d.trim(), 160);
 }
 
-function fileOf(text: string): string | null {
+function fileOf(text: string, tool = ""): string | null {
+  const a = args(text);
+  if (a) {
+    for (const k of ["file_path", "path", "Path", "notebook_path"]) {
+      if (typeof a[k] === "string" && a[k] !== "") return cleanPath(a[k]);
+    }
+  }
+  if (tool.startsWith("File ")) {
+    const p = tool.slice(5).trim();
+    if (p !== "") return cleanPath(p);
+  }
+  return null;
+}
+
+function lineRangeOf(text: string): [number, number] | null {
   const a = args(text);
   if (!a) return null;
-  for (const k of ["file_path", "path", "notebook_path"]) if (a[k] !== undefined) return typeof a[k] === "string" ? a[k] : null;
+  if (typeof a.StartLine === "number" && typeof a.EndLine === "number" && a.EndLine >= a.StartLine) {
+    return [a.StartLine, a.EndLine];
+  }
+  if (typeof a.offset === "number" && typeof a.limit === "number" && a.limit > 0) {
+    const start = Math.max(1, a.offset);
+    return [start, start + a.limit - 1];
+  }
   return null;
+}
+
+function stepName(tool: string, text: string): string {
+  const name = toolName(tool);
+  const a = args(text);
+  if (name === "edit_file" || name === "replace_file_content" || name === "multi_replace_file_content") return "Edit";
+  if (name === "write_file" || name === "write_to_file") return "Write";
+  if (name === "read_file" || name === "view_file_outline" || name === "view_code_item") return "Read";
+  if (name.startsWith("File ")) {
+    if (a && (a.Target !== undefined || a.Replacement !== undefined || a.old_string !== undefined || a.new_string !== undefined)) return "Edit";
+    if (a && (a.Content !== undefined || a.content !== undefined)) return "Write";
+    return "Read";
+  }
+  if (name === "run_command" || name === "run_terminal_command") return "Bash";
+  if (name === "grep_search") return "Grep";
+  if (name === "find_by_name" || name === "list_dir") return "Glob";
+  if (name === "search_web" || name === "read_url_content") return "WebSearch";
+  if (name === "invoke_subagent" || name === "define_subagent" || name === "manage_subagents" || name === "swarm") return "Agent";
+  if (kindOf(tool, a) === "command" && (a?.CommandLine !== undefined || /^(?:cd|git|pnpm|npm|node|cargo|python3?|sh|bash|zsh|rg|ls|cat|mkdir|rm|cp|mv|curl|gh)\b/.test(name))) {
+    return "Bash";
+  }
+  return name;
+}
+
+const THOUGHT_BOILERPLATE = /^(?:I'm thinking through how to approach this\.|I am thinking through how to approach this\.|Let's think(?:\s+through\s+this|\s+about\s+this)?\.|Thinking(?:\.{3}|…)?)\s*/i;
+
+function cleanThoughtText(raw: string): string {
+  const stripped = raw.replace(THOUGHT_BOILERPLATE, "").trim();
+  return stripped !== "" ? stripped : raw;
 }
 
 /// A message a prompt carried; `station`: a notice of the station's own (via="station"; "ember" before), not a person's; `agent`: an
@@ -359,7 +415,10 @@ export function presentHistory(live: J, cx: Context): J {
   // A page's first entries that go on with an item begun on the page before are left to that page: an item is shown
   // whole, and is the same item (its key, what it counts) however many pages are loaded. Shown in part, a group cut by
   // a page became another item as the page before came (its key its first loaded entry), and what was read jumped.
-  const carried = from > 0 ? carriedOver(held) : 0;
+  const rawCarried = from > 0 ? carriedOver(held) : 0;
+  const carried = from > 0 && rawCarried === held.length && held.length >= 20
+    ? (held[0]?.kind === "tool_result" ? 1 : 0)
+    : rawCarried;
   const timeline: J[] = (carried > 0 ? held.slice(carried) : held).map(worded);
   const base = from + carried;
   const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
@@ -369,6 +428,14 @@ export function presentHistory(live: J, cx: Context): J {
   const { steps, stepAt } = pair(timeline);
   const known: Known = { stations: cx.stations, tasks: tasksOf(timeline) };
   let grouping = false;
+  let groupSteps = 0;
+  let groupPhase: "explore" | "act" | null = null;
+  const phaseOf = (tool: string, text: string): "explore" | "act" | null => {
+    const k = kindOf(tool, text);
+    if (k === "read" || k === "search" || k === "web" || k === "thread") return "explore";
+    if (k === "edit" || k === "command" || k === "agent") return "act";
+    return null;
+  };
   const cover = (i: number) => {
     const last = items[items.length - 1];
     if (last) last[2] = i;
@@ -386,26 +453,58 @@ export function presentHistory(live: J, cx: Context): J {
       if (name === "chat_post" && arg("text") !== null && !sub) {
         items.push([{ kind: "post", step }, i, i]);
         grouping = false;
+        groupSteps = 0;
+        groupPhase = null;
       } else if (name === "chat_state" && arg("kind") !== null && !sub) {
         const sec = a?.seconds;
         const what = arg("for")?.trim() || null;
         items.push([{ kind: "mark", mark: arg("kind") ?? "", seconds: typeof sec === "number" ? Math.trunc(Math.max(sec, 0)) : null, what }, i, i]);
         grouping = false;
+        groupSteps = 0;
+        groupPhase = null;
       } else {
+        const nextPhase = phaseOf(s(e, "tool"), s(e, "text"));
+        if (grouping && groupSteps >= 8) {
+          const last = items[items.length - 1];
+          const prevRows = last[0].kind === "group" ? last[0].rows : [];
+          const hasTrailingThought = prevRows.length > 0 && "thought" in prevRows[prevRows.length - 1];
+          const phaseChanged = nextPhase !== null && groupPhase !== null && nextPhase !== groupPhase;
+          if (phaseChanged || (groupSteps >= 24 && hasTrailingThought) || groupSteps >= 36) {
+            const carriedThoughts: Row[] = [];
+            while (prevRows.length > 0 && "thought" in prevRows[prevRows.length - 1]) {
+              carriedThoughts.unshift(prevRows.pop()!);
+            }
+            if (carriedThoughts.length > 0) {
+              const firstThought = (carriedThoughts[0] as { thought: number }).thought;
+              last[2] = Math.max(last[1], firstThought - 1);
+              items.push([{ kind: "group", rows: carriedThoughts }, firstThought, i]);
+            } else {
+              items.push([{ kind: "group", rows: [] }, i, i]);
+            }
+            groupSteps = 0;
+            groupPhase = null;
+          }
+        }
         if (!grouping) {
           items.push([{ kind: "group", rows: [] }, i, i]);
           grouping = true;
+          groupSteps = 0;
+          groupPhase = null;
         }
         const last = items[items.length - 1];
         if (last[0].kind === "group") {
           last[0].rows.push({ step });
           last[2] = i;
+          groupSteps++;
+          if (nextPhase !== null) groupPhase = nextPhase;
         }
       }
     } else if (kind === "thinking") {
       if (!grouping) {
         items.push([{ kind: "group", rows: [] }, i, i]);
         grouping = true;
+        groupSteps = 0;
+        groupPhase = null;
       }
       const last = items[items.length - 1];
       if (last[0].kind === "group") {
@@ -414,6 +513,8 @@ export function presentHistory(live: J, cx: Context): J {
       }
     } else {
       grouping = false;
+      groupSteps = 0;
+      groupPhase = null;
       items.push([kind === "user" ? { kind: "received", i } : { kind: "text", i }, i, i]);
     }
   });
@@ -677,8 +778,8 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
   const counts: [string, string[], number][] = [];
   for (const m of members) {
     const call = steps[m].call;
-    const kind = kindOf(tool(call));
-    const file = kind === "read" || kind === "edit" ? fileOf(text(call)) : null;
+    const kind = kindOf(tool(call), text(call));
+    const file = kind === "read" || kind === "edit" ? fileOf(text(call), tool(call)) : null;
     let at = counts.findIndex(([k]) => k === kind);
     if (at < 0) {
       counts.push([kind, [], 0]);
@@ -688,56 +789,173 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
       if (!counts[at][1].includes(file)) counts[at][1].push(file);
     } else counts[at][2]++;
   }
-  let title = counts.map(([k, files, n]) => did(k, files.length === 0 ? n : files.length)).join(t("core-logic.history.did.sep"));
-  const chars = Array.from(title);
-  if (chars.length > 0) title = chars[0].toUpperCase() + chars.slice(1).join("");
+  const countOf = ([, files, n]: [string, string[], number]) => (files.length === 0 ? n : files.length);
+  const ordered = counts.slice().sort((a, b) => {
+    if ((a[0] === "other") !== (b[0] === "other")) return a[0] === "other" ? 1 : -1;
+    return countOf(b) - countOf(a);
+  });
+  const formatTitle = (list: [string, string[], number][]) => {
+    const joined = list.map(([k, files, n]) => did(k, files.length === 0 ? n : files.length)).join(t("core-logic.history.did.sep"));
+    const chars = Array.from(joined);
+    return chars.length > 0 ? chars[0].toUpperCase() + chars.slice(1).join("") : "";
+  };
+  const title = formatTitle(ordered);
+  const knownCounts = ordered.filter(([k]) => k !== "other");
   const failed = members.filter((m) => failedOf(steps[m])).length;
   const pending = members.filter((m) => steps[m].result === null).length;
   // a thought's words, read as Markdown, and their first line without its marks
   const thought = (i: number) => {
-    const md = markdown(text(i), store);
-    return { md, first: lineOf(md, text(i)) };
+    const raw = text(i);
+    const cleaned = cleanThoughtText(raw);
+    const md = markdown(raw, store);
+    const first = cleaned !== raw ? lineOf(markdown(cleaned), cleaned) : lineOf(md, raw);
+    return { md, first };
   };
   let summary: string;
   const lastMember = members[members.length - 1];
   if (lastMember === undefined) {
     summary = t("core-logic.history.thinking", { text: thinking.length > 0 ? Array.from(thought(thinking[0]).first).slice(0, 80).join("") : "" });
+  } else if (pending === 0 && members.length > 1 && knownCounts.length > 0) {
+    summary = t("core-logic.history.steps", { doing: formatTitle(knownCounts), n: members.length });
   } else {
     const call = steps[lastMember].call;
     // Said as the chat's activity says the call while it runs (activity.ts doing).
     const now = doing(tool(call), text(call), known);
     summary = members.length === 1 ? now : t("core-logic.history.steps", { doing: now, n: members.length });
   }
+  const stepTookMs = (st: Step): number | null => {
+    const call = timeline[st.call];
+    const result = st.result !== null ? timeline[st.result] : null;
+    const b = result && typeof result.at === "string" ? epochMs(result.at) : null;
+    const a = typeof call?.at === "string" ? epochMs(call.at) : null;
+    if (b !== null && a !== null && b - a >= 50) return b - a;
+    if (result && typeof result.text === "string") {
+      const mTime = /^Created At:\s*(\S+)\r?\nCompleted At:\s*(\S+)/.exec(result.text);
+      if (mTime) {
+        const t0 = epochMs(mTime[1] ?? "");
+        const t1 = epochMs(mTime[2] ?? "");
+        if (t0 !== null && t1 !== null && t1 - t0 >= 50) return t1 - t0;
+      }
+    }
+    return null;
+  };
   const step = (m: number) => {
     const st = steps[m];
     const call = timeline[st.call];
     const result = st.result !== null ? timeline[st.result] : null;
     const isFailed = failedOf(st);
-    const b = result && typeof result.at === "string" ? epochMs(result.at) : null;
-    const a = typeof call?.at === "string" ? epochMs(call.at) : null;
-    const took = b !== null && a !== null && b - a >= 0 ? b - a : null;
+    const took = stepTookMs(st);
     const meta = result === null ? t("core-logic.history.step.running") : isFailed ? t("core-logic.history.step.failed") : took !== null ? format.duration(took) : "";
+    const callText = text(st.call);
+    const callTool = tool(st.call);
+    const name = stepName(callTool, callText);
+    let said = describe(callText) ?? told(callTool, callText, known);
+    let stepHint = hint(callText, callTool);
+    if (said === null && (name === "Read" || name === "Edit" || name === "Write")) {
+      const file = fileOf(callText, callTool);
+      if (file !== null) {
+        const slash = file.lastIndexOf("/");
+        const baseName = slash >= 0 ? file.slice(slash + 1) : file;
+        const dirName = slash > 0 ? file.slice(0, slash) : "";
+        const range = name === "Read" ? lineRangeOf(callText) : null;
+        if (dirName !== "" || range !== null) {
+          said = range !== null ? `${baseName} · ${range[0]}–${range[1]} 行` : baseName;
+          stepHint = dirName;
+        }
+      }
+    }
     return {
-      said: describe(text(st.call)) ?? told(tool(st.call), text(st.call), known),
-      name: toolName(tool(st.call)),
-      hint: hint(text(st.call)),
+      said,
+      name,
+      hint: stepHint,
       meta,
       failed: isFailed,
-      call: text(st.call),
+      call: callText,
       result: result === null ? null : (result.text ?? ""),
       entries: st.result !== null ? [base + st.call, base + st.result] : [base + st.call],
       brief: call?.brief === true || result?.brief === true,
     };
   };
+  const isCompletedReadOf = (m: number): string | null => {
+    const st = steps[m];
+    if (st.result === null || failedOf(st)) return null;
+    const callText = text(st.call);
+    const callTool = tool(st.call);
+    if (stepName(callTool, callText) !== "Read" || describe(callText) !== null) return null;
+    return fileOf(callText, callTool);
+  };
+  const coalescedRead = (run: number[], file: string) => {
+    const firstSt = steps[run[0]];
+    const slash = file.lastIndexOf("/");
+    const baseName = slash >= 0 ? file.slice(slash + 1) : file;
+    const dirName = slash > 0 ? file.slice(0, slash) : file;
+    const ranges = run.map((m) => lineRangeOf(text(steps[m].call))).filter((r): r is [number, number] => r !== null);
+    let rangeText = `共 ${run.length} 次`;
+    let minStart: number | undefined;
+    let maxEnd: number | undefined;
+    if (ranges.length > 0) {
+      minStart = Math.min(...ranges.map((r) => r[0]));
+      maxEnd = Math.max(...ranges.map((r) => r[1]));
+      rangeText = `${minStart}–${maxEnd} 行（共 ${run.length} 段）`;
+    }
+    let totalTook = 0;
+    for (const m of run) {
+      const ms = stepTookMs(steps[m]);
+      if (ms !== null) totalTook += ms;
+    }
+    const mergedCall = minStart !== undefined && maxEnd !== undefined
+      ? JSON.stringify({ Path: file, StartLine: minStart, EndLine: maxEnd })
+      : text(firstSt.call);
+    const mergedResult = run.map((m) => {
+      const r = steps[m].result !== null ? timeline[steps[m].result!] : null;
+      return typeof r?.text === "string" ? r.text : "";
+    }).filter((s) => s !== "").join("\n");
+    const entries: number[] = [];
+    for (const m of run) {
+      entries.push(base + steps[m].call);
+      if (steps[m].result !== null) entries.push(base + steps[m].result!);
+    }
+    const isBrief = run.some((m) => timeline[steps[m].call]?.brief === true || (steps[m].result !== null && timeline[steps[m].result!]?.brief === true));
+    return {
+      said: `${baseName} · ${rangeText}`,
+      name: "Read",
+      hint: dirName,
+      meta: totalTook >= 50 ? format.duration(totalTook) : "",
+      failed: false,
+      call: mergedCall,
+      result: mergedResult,
+      entries: [entries[0], entries[entries.length - 1]],
+      brief: isBrief,
+    };
+  };
+  const outRows: J[] = [];
+  for (let idx = 0; idx < rows.length; idx++) {
+    const r = rows[idx];
+    if ("thought" in r) {
+      outRows.push({ kind: "thought", content: { text: text(r.thought), ...thought(r.thought), entries: [base + r.thought], brief: timeline[r.thought]?.brief === true } });
+    } else {
+      const file = isCompletedReadOf(r.step);
+      if (file !== null) {
+        const run = [r.step];
+        while (idx + 1 < rows.length && "step" in rows[idx + 1] && isCompletedReadOf((rows[idx + 1] as { step: number }).step) === file) {
+          idx++;
+          run.push((rows[idx] as { step: number }).step);
+        }
+        if (run.length > 1) {
+          outRows.push({ kind: "step", content: coalescedRead(run, file) });
+          continue;
+        }
+      }
+      outRows.push({ kind: "step", content: step(r.step) });
+    }
+  }
   return {
     kind: "group",
     summary,
     title,
     failures: failed,
     pending,
-    rows: rows.map((r) => ("thought" in r
-      ? { kind: "thought", content: { text: text(r.thought), ...thought(r.thought), entries: [base + r.thought], brief: timeline[r.thought]?.brief === true } }
-      : { kind: "step", content: step(r.step) })),
+    rows: outRows,
   };
 }
 
