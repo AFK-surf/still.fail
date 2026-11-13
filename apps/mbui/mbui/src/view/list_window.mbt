@@ -1403,9 +1403,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
         let most = dmax(0.0, whole_now() - vh)
         let to = match ask {
+          // (its offset from under what covers its top, as the fill's)
           Bring(k, off) =>
             match laid_at.get(k) {
-              Some(i) if i < all.length() => Some(all.top(i) + off)
+              Some(i) if i < all.length() => Some(all.top(i) + off - @signals.untracked(fn() { s.top_covered() }))
               _ => None
             }
           ToEnd => Some(most)
@@ -2004,7 +2005,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 ai = i
                 follows_foot = false
                 match off {
-                  Some(off) => aoff = off
+                  // (from under what covers its top: as far under that edge as `off` says, as what is in sight
+                  // tells `into`)
+                  Some(off) => aoff = off - @signals.untracked(fn() { s.top_covered() })
                   None => centring = true
                 }
               }
@@ -3008,8 +3011,10 @@ pub fn[K] ListPlace::new() -> ListPlace[K] {
 }
 
 ///|
-/// Block `key` brought to the top of where the list shows (`offset` above it: its top that far over the list's, under
-/// it where less than 0), as far as the list goes (Ctx::list_scroll_to's): gliding there where `glide` and it is near.
+/// Block `key` brought to the top of where the list shows, under what covers its top (Scroll::top_covered: the bar it
+/// runs under; none, its own top), `offset` above that edge (its top that far over it, under it where less than 0: what
+/// is in sight told as `first` and `into`, `first` brought with `into` is where it was), as far as the list goes
+/// (Ctx::list_scroll_to's): gliding there where `glide` and it is near.
 pub fn[K] ListPlace::bring(self : ListPlace[K], key : K, offset? : Double = 0.0, glide? : Bool = false) -> Unit {
   self.from = None
   if glide && (self.glide)(Bring(key, offset)) {

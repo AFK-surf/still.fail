@@ -470,7 +470,7 @@ fn chat_body_node(
       guard has && !lined.val else { return }
       lined.val = true
       if scroll.at_foot_now() && !@sfbase.go_tos.contains(chat) {
-        place.bring("line", offset=-(@signals.untracked(top) + lead))
+        place.bring("line", offset=-lead)
       }
     },
     at_start=false,

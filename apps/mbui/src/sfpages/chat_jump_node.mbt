@@ -49,8 +49,9 @@ let to_newest_away : Double = 120.0
 /// Chat `r`'s list (`jump` what it keeps of it, `place`, its rows `rows`, its view `view`): what it has in sight kept
 /// (whether it is away from its end; where the reader is, for a go-to inside the chat to keep: sfbase's Reading,
 /// keep_place_of), the kept place
-/// forgotten at its end; and the message the chat is to go to (sfbase's go_tos) brought just under the list's room at
-/// its top (`top`), or where the reader was (go_back_to's offset), once its row is among the keys, the page before asked
+/// forgotten at its end; and the message the chat is to go to (sfbase's go_tos) brought just under what covers the
+/// list's top (`cover` tall: the chat's bar), or where the reader was (go_back_to's offset, as kept: sfbase's
+/// kept_place_under), once its row is among the keys, the page before asked
 /// (`older`, one at a time) while it is not and the chat has pages before, or what ⌘F found the window moved about
 /// (chat.around, `src` asked) while its bar is open here; given up where none is left. Asked as the
 /// list is made, as its keys change and as the chat is told to go somewhere.
@@ -62,7 +63,7 @@ fn chat_goes_to(
   place : @view.ListPlace[String],
   rows : () -> ChatBodyRows,
   view : () -> ChatView,
-  top : () -> Double,
+  cover : () -> Double,
   older : () -> Unit,
   shows : () -> Bool,
 ) -> Unit {
@@ -83,7 +84,7 @@ fn chat_goes_to(
     match @signals.untracked(rows).rows.get(s.first).map(fn(row) { row.entry }) {
       Some(Said(m)) => {
         rd.top_seq = m.seq
-        rd.top_off = -s.into
+        rd.top_off = @sfbase.kept_place_of(-s.into, @signals.untracked(cover))
       }
       _ => ()
     }
@@ -133,13 +134,15 @@ fn chat_goes_to(
         let words = @sfbase.go_to_words.get(chat).unwrap_or([])
         @sfbase.go_to_words.remove(chat)
         jump.around = -1.0
+        // (where it is put, as kept: a message gone to at the edge under the bar)
+        let c = @signals.untracked(cover)
         let off = match back {
           Some(off) => off
-          None => @signals.untracked(top)
+          None => @sfbase.kept_place_of(0.0, c)
         }
         jump.went = (target, off)
         jump.put.set(1)
-        place.bring(k, offset=-off)
+        place.bring(k, offset=@sfbase.kept_place_under(off, c))
         // (back where the reader was: nothing of it shown; a search's: its words marked, nothing flashing; else it
         // flashes, from now)
         if back is None {

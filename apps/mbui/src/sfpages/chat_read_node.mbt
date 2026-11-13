@@ -29,7 +29,8 @@ let chat_reads : Map[String, ChatRead] = Map([])
 
 ///|
 /// Chat `r`'s page (in `v`, its view `view` as it changes) telling the core what is read and where it is from what its
-/// list `place` has in sight (the file's head), its rows as `rows` has them, while `shows` (it is drawn).
+/// list `place` has in sight (the file's head), its rows as `rows` has them, while `shows` (it is drawn); where it is
+/// kept and told as a place is (sfbase's kept_place_of), what covers the list's top `cover` tall.
 fn chat_read_node(
   v : @view.View,
   src : Source,
@@ -38,6 +39,7 @@ fn chat_read_node(
   place : @view.ListPlace[String],
   rows : () -> ChatBodyRows,
   shows : () -> Bool,
+  cover : () -> Double,
 ) -> Unit {
   let k = r.station + "\u{1}" + r.session
   // (the chat's while it is open: a page made again for it, as another comes over it and goes, goes on from it)
@@ -62,7 +64,7 @@ fn chat_read_node(
     a.scale = @signals.untracked(fn() { v.pixel_scale() })
     // the message at the top, its top under the list's: where the first in sight is one (else as it was)
     match rs.rows.get(s.first).map(fn(row) { row.entry }) {
-      Some(Said(m)) => a.top = Some((m.seq, -s.into))
+      Some(Said(m)) => a.top = Some((m.seq, @sfbase.kept_place_of(-s.into, @signals.untracked(cover))))
       _ => ()
     }
     // the last message seen whole: the message the last key wholly in sight is, or the last before it

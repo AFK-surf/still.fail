@@ -333,3 +333,32 @@ test "with its top covered 44 and 52, a row partly under the cover and ending ov
     assert_eq((told.first, told.whole), (if cover >= sg_tall { 1 } else { 0 }, whole), msg="covered \{cover}")
   }
 }
+
+///|
+test "with its top covered 0, 44 and 52: a block brought with no offset has its top at the cover's edge; the first in sight brought with how far into it the edge was is where it was, nothing moving, at every rate" {
+  for cover in [0.0, 44.0, 52.0] {
+    for rate in rc_rates {
+      let c = sg_case(30, follows=false, cover~)
+      let at = rc_at
+      c.tree.event(at, fn() { c.place.bring(10) })
+      sg_walk(c, at, at + @flex.move_most_ms + 100.0, rate)
+      let y = rc_y(c.tree, "行10")
+      assert_true((y - cover).abs() < 1.0e-6, msg="covered \{cover}, at \{rate} a second: brought to \{y}")
+      // (read 70 further by the wheel: what is in sight told, and brought back by it)
+      let wheel_at = at + @flex.move_most_ms + 200.0
+      c.tree.at(wheel_at)
+      c.tree.wheel_at(150.0, 100.0, 0.0, 70.0, 0, wheel_at) |> ignore
+      sg_walk(c, wheel_at, wheel_at + 1000.0, rate)
+      let seen = c.place.sight_now().unwrap()
+      let was = rc_y(c.tree, "行\{seen.first}")
+      let back_at = wheel_at + 1100.0
+      c.tree.event(back_at, fn() { c.place.bring(seen.first, offset=seen.into) })
+      sg_walk(c, back_at, back_at + @flex.move_most_ms + 100.0, rate)
+      let now = rc_y(c.tree, "行\{seen.first}")
+      assert_true(
+        (now - was).abs() < 1.0e-6 && (now - (cover - seen.into)).abs() < 1.0e-6,
+        msg="covered \{cover}, at \{rate} a second: \{seen.first} at \{was}, \{seen.into} into it, back at \{now}",
+      )
+    }
+  }
+}
