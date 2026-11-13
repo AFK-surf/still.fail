@@ -297,13 +297,18 @@ test "a chat's first ask on 小屏 and 大屏: how many of its last messages it 
 }
 
 ///|
-/// The heights of the rows of `t`'s list that hold words beginning `said`, at rest.
-fn long_row_heights(t : @ui.Tester, said : String) -> Array[Double] {
-  let words = t.words()
-  t
-  .rows()
-  .filter(fn(r) { words.iter().any(fn(w) { w.2 >= r.1 && w.2 < r.1 + r.2 && w.0.has_prefix(said) }) })
-  .map(fn(r) { r.2 })
+/// The heights of the long chat's rows drawn in `t`'s window `h` high, at rest: from the top of each message's words to
+/// the next's (a row and the room over the next, the same room over each).
+fn long_row_heights(t : @ui.Tester, h : Double) -> Array[Double] {
+  let at = long_places(t.words(), h)
+  let out : Array[Double] = []
+  for n, y in at {
+    match at.get(n + 1) {
+      Some(next) => out.push(next - y)
+      None => ()
+    }
+  }
+  out
 }
 
 ///|
@@ -312,11 +317,11 @@ test "a row the core counts is never shorter than the least a chat's first windo
   for s in long_screens {
     let l = long_chat()
     let t = long_open(l, s)
-    let least = long_row_heights(t, "第").fold(init=1.0e9, fn(a, h) { if h < a { h } else { a } })
+    let least = long_row_heights(t, s.2).fold(init=1.0e9, fn(a, h) { if h < a { h } else { a } })
     assert_true(least >= @sfbase.chat_row_least, msg="\{s.0}: a message \{least} high")
     let n = long_chat(notices=true)
     let t = long_open(n, s)
-    let notice = long_row_heights(t, "第").fold(init=1.0e9, fn(a, h) { if h < a { h } else { a } })
+    let notice = long_row_heights(t, s.2).fold(init=1.0e9, fn(a, h) { if h < a { h } else { a } })
     assert_true(notice >= @sfbase.chat_row_least, msg="\{s.0}: a notice \{notice} high")
     let rows = @sfbase.chat_first_window(s.2)
     said.push("\{s.0}: message \{least.floor().to_int()}, notice \{notice.floor().to_int()}, told \{rows}")
@@ -554,8 +559,9 @@ test "对话目录 of a chat opened on its told window: a row said before it pre
   t.tap_text(row)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_eq(outline_reading().flash, "ts18")
   assert_true(t.find(row) is Some(_))
+  // (lit as it is gone to)
+  assert_true(lit_over(t, row) > 0.0)
 }
 
 ///|

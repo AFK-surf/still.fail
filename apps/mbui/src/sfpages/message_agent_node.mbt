@@ -178,6 +178,9 @@ fn agent_prose_node(
       tree=fn() { m().md },
       size=fn() { body_size },
       found~,
+      // (its tables slid sideways out over the row's side to the pane's edge: the side as the list is laid out when it
+      // is made, markdown_node's bleed being a number)
+      bleed=@signals.untracked(fn() { row_side((here.width)()) }),
       on_link~,
       on_link_hold=Some(on_hold),
       on_link_shown?=shown,

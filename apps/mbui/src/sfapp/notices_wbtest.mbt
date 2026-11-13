@@ -246,6 +246,30 @@ test "put away where the app goes on (a desktop's tray, minimized), its notices 
 }
 
 ///|
+/// How lit the message whose words `words` are is as one gone to: the accent's ground drawn under all of them (a row's
+/// band, a notice's pill), as a share of that ground's opacity; 0 where none is.
+fn lit_over(t : @ui.Tester, words : String) -> Double {
+  let ground = @sf.theme().p.accent_bg
+  guard t.rect_of(words) is Some((wx, wy, ww, wh)) else { return 0.0 }
+  let mut most = 0.0
+  for r in t.drawn_rect_corners() {
+    let (x, y, w, h, c, _) = r
+    if c >> 8 == ground >> 8 &&
+      (c & 0xFFL) != 0L &&
+      x <= wx + 0.5 &&
+      x + w >= wx + ww - 0.5 &&
+      y <= wy + 0.5 &&
+      y + h >= wy + wh - 0.5 {
+      let k = (c & 0xFFL).to_double() / (ground & 0xFFL).to_double()
+      if k > most {
+        most = k
+      }
+    }
+  }
+  most
+}
+
+///|
 test "a message gone to flashes, in and out as the Android app's, nothing of it after" {
   let calls : Array[Made] = []
   let sys = fake_system()
@@ -259,11 +283,11 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   if held > t.time() {
     t.run_for(held - t.time())
   }
-  assert_eq(@sfpages.flashing_now.val.0, "ts2")
-  assert_true(@sfpages.flashing_now.val.1 > 0.99)
+  // (its message's words, 好的，我来处理。, on the accent's ground, whole)
+  assert_true(lit_over(t, "好的，我来处理。") > 0.99)
   t.run_for(flash_ms)
   t.draw()
-  assert_eq(@sfpages.flashing_now.val.1, 0.0)
+  assert_eq(lit_over(t, "好的，我来处理。"), 0.0)
   t.assert_idle()
 }
 
@@ -309,9 +333,10 @@ test "with motion reduced, a message gone to is lit whole for its flash's time, 
   sys.opened.set("/o/ws1/st1/s-c2?message=2\n2")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfpages.flashing_now.val, ("ts2", 1.0))
+  assert_eq(lit_over(t, "好的，我来处理。"), 1.0)
   t.run_for(flash_ms)
-  assert_eq(@sfpages.flashing_now.val.1, 0.0)
+  t.draw()
+  assert_eq(lit_over(t, "好的，我来处理。"), 0.0)
 }
 
 ///|

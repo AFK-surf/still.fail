@@ -34,7 +34,8 @@ fn row_top_kind(room : Double) -> Int {
 /// A row's room in `parent` (row_box's, but its bands): `top` over it (as that changes: none, joined_gap, list_gap),
 /// in from the pane's sides by `side` each (as the list's width gives it: row_side's; the trailing side the system's
 /// inset beside its bars, native_row_inset's), its body made by `body` in the column's middle, as wide as is left.
-/// `over`, told the row's outermost node and `key` once as it is made: what is laid over it (the bands) hung there.
+/// `over`, told the row's outermost node and `key` once as it is made, before what it holds: what is laid over it (the
+/// bands) hung there, under its words.
 fn message_row_frame_node(
   parent : @view.View,
   key : String,
@@ -45,6 +46,7 @@ fn message_row_frame_node(
 ) -> MessageRowNode {
   let node = parent.box(fn(root) {
     @sf.style_node(root, fn() { row_column })
+    over(root, key)
     // (the room over it, as the row before it says: one kind of room in the other's place as that changes (none, a
     // joined one's, the gap between messages), the row's own structure, its way the column's; the list's way of it with
     // its neighbours' once it holds a block's. How tall that kind is follows the list's width at once: the narrow
@@ -67,6 +69,5 @@ fn message_row_frame_node(
     })
     |> ignore
   })
-  over(node, key)
   { key, node, menu_on: fn() { false } }
 }

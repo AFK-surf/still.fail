@@ -123,9 +123,12 @@ test "message links jump to the specified message in this chat or another chat" 
   for path in ["/o/ws1/st1/s-c1", "/o/ws1/st1/s-c2", "/w/ws1/s/st1/chats/s-c2"] {
     let calls : Array[Made] = []
     let t = links_core(calls, "chat")
+    let said = @sfbase.go_tos_said.untracked()
     open_link("https://app.still.fail" + path + "?message=11")
     let session = if path.has_suffix("s-c1") { "s-c1" } else { "s-c2" }
-    assert_eq(@sfbase.go_tos.get("ws1/st1\u{1}" + session), Some(11.0))
+    // (the chat told to go to 11: there yet, or taken already by a page that goes to it as it is told, chat_goes_to)
+    assert_true(@sfbase.go_tos_said.untracked() > said)
+    assert_true(@sfbase.go_tos.get("ws1/st1\u{1}" + session) is (Some(11.0) | None))
     assert_eq(top_chat().map(fn(r) { r.session }), Some(session))
     assert_eq(t.opened().length(), 0)
   }
