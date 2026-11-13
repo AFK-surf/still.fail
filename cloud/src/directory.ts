@@ -34,6 +34,10 @@ export const ROLES: readonly Role[] = ["owner", "admin", "member"];
 const MANAGERS: readonly Role[] = ["owner", "admin"];
 
 export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
+/** How often one email is told by mail that it was added to one workspace, at most (`#toMail`). */
+export const ADDED_MAIL_EVERY_SEC = 24 * 60 * 60;
+/** Who `addMembers` tells by mail, by whom and to which workspace (api.ts sends them, mail.ts `sendAdded`). */
+export type AddedMail = { to: { email: string; joined: boolean }[]; inviter: string; workspace: string };
 export const ENROLLMENT_TTL_SEC = 60 * 60;
 /** How long a device's request to be confirmed into the lock waits before it is dropped (one long gone, a browser profile thrown away). */
 export const LOCK_REQUEST_TTL_SEC = 7 * 24 * 60 * 60;
@@ -136,6 +140,7 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS revocations (workspace TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (workspace, kind, id));
       CREATE TABLE IF NOT EXISTS added (workspace TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, added_by TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, email));
       CREATE INDEX IF NOT EXISTS added_by_email ON added (email);
+      CREATE TABLE IF NOT EXISTS added_mails (workspace TEXT NOT NULL, email TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (workspace, email));
       CREATE TABLE IF NOT EXISTS pending (email TEXT PRIMARY KEY, beta INTEGER, may_create INTEGER, added_by TEXT NOT NULL, added_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER, used_by TEXT, used_at INTEGER, workspace TEXT);
       CREATE TABLE IF NOT EXISTS push (id TEXT PRIMARY KEY, sub TEXT NOT NULL, sid TEXT NOT NULL, kind TEXT NOT NULL, endpoint TEXT, p256dh TEXT, auth TEXT, token TEXT, created INTEGER NOT NULL);
@@ -581,12 +586,38 @@ export class Directory extends DurableObject<Env> {
    * Adds people by email, no invitation to accept: those with an account are members at once, the others as soon as they
    * first sign in with that email. What each became: joined, added (waiting for a first sign-in), or already a member.
    */
-  addMembers(sub: string, workspace: string, role: Role, emails: unknown): { joined: string[]; added: string[]; already: string[]; view: WorkspaceView } {
+  addMembers(sub: string, workspace: string, role: Role, emails: unknown): { joined: string[]; added: string[]; already: string[]; view: WorkspaceView; mail: AddedMail } {
     const mine = this.#role(sub, workspace, MANAGERS);
     if (!ROLES.includes(role)) fail(400, "invalid_role");
     if (role === "owner" && mine !== "owner") fail(403, "forbidden");
     const { joined, added, already } = this.#addEmails(sub, workspace, role, emailsOf(emails));
-    return { joined, added, already, view: this.#view(sub, workspace) };
+    return { joined, added, already, view: this.#view(sub, workspace), mail: this.#toMail(sub, workspace, joined, added) };
+  }
+
+  /**
+   * Who of those just added is told so by mail (api.ts sends it): each email once a day in a workspace at most, so
+   * taking someone out and adding them again cannot send the cloud's address to anyone over and over. Noted as sent
+   * here; one that could not be sent is let go of again (`mailFailed`), so adding them again tries again.
+   */
+  #toMail(by: string, workspace: string, joined: string[], added: string[]): AddedMail {
+    const now = nowSeconds();
+    this.#run("DELETE FROM added_mails WHERE at <= ?", now - ADDED_MAIL_EVERY_SEC);
+    const to: { email: string; joined: boolean }[] = [];
+    for (const [emails, isJoined] of [[joined, true], [added, false]] as const) {
+      for (const email of emails) {
+        if (this.#one("SELECT 1 AS x FROM added_mails WHERE workspace = ? AND email = ?", workspace, email)) continue;
+        this.#run("INSERT INTO added_mails (workspace, email, at) VALUES (?, ?, ?)", workspace, email, now);
+        to.push({ email, joined: isJoined });
+      }
+    }
+    const inviter = this.#one("SELECT COALESCE(NULLIF(name, ''), email) AS n FROM users WHERE sub = ?", by)?.n as string | undefined;
+    const name = this.#one("SELECT name FROM workspaces WHERE id = ?", workspace)?.name as string | undefined;
+    return { to, inviter: inviter ?? "", workspace: name ?? "" };
+  }
+
+  /** Mails of `addMembers` that could not be sent: not counted as sent, so adding them again sends again. */
+  mailFailed(workspace: string, emails: string[]): void {
+    for (const email of emails) this.#run("DELETE FROM added_mails WHERE workspace = ? AND email = ?", workspace, email);
   }
 
   /** addMembers once allowed: each email a member now, or as soon as it first signs in. */
@@ -2291,7 +2322,7 @@ const FAMILIES: Record<string, string> = {
   tellAll: "broadcast", tellStations: "broadcast", modelsMade: "broadcast", tellAdmins: "broadcast", alarm: "broadcast",
 };
 for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWorkspace", "invite", "previewInvitation", "acceptInvitation", "acceptById", "declineById", "revokeInvitation",
-  "feedbackOf", "memberFeedbackReply", "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "createRigEnrollment", "updateStation", "setStationMode", "removeStation", "memberRole", "recordDevice", "devices",
+  "feedbackOf", "memberFeedbackReply", "setRole", "removeMember", "addMembers", "mailFailed", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "createRigEnrollment", "updateStation", "setStationMode", "removeStation", "memberRole", "recordDevice", "devices",
   "lock", "appendLock", "clearLock", "requestLock", "lockRequests", "dropLockRequest"]) FAMILIES[name] = "workspaces";
 for (const name of ["adminUsers", "setMayCreate", "adminPending", "setPending", "removePending", "setBlocked", "setBeta", "adminDeleteWorkspace", "adminCreateWorkspace", "adminSetLimits",
   "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "replyToFeedback", "adminLoad"]) FAMILIES[name] = "admin";

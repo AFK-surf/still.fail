@@ -12,18 +12,23 @@ declare const TEST_NOW_MS: number | null;
 if (TEST_NOW_MS !== null) clock.now = () => TEST_NOW_MS;
 
 /**
- * With TEST_MAIL (harness.ts `mail`), signing in with an email is offered, its codes sent to https://mail.test/send,
+ * With TEST_MAIL (harness.ts `mail`), signing in with an email is offered, its codes (and the API's mails to people
+ * added to a workspace) sent to https://mail.test/send,
  * where the harness keeps them, instead of through Cloudflare Email Service; an answer other than 200 is the error the
  * binding throws, its body the error's code.
  */
+const withTestMail = <E extends Env & { TEST_MAIL?: string }>(env: E): E => {
+  if (!env.TEST_MAIL) return env;
+  const send = async (message: MailMessage) => {
+    const answer = await fetch("https://mail.test/send", { method: "POST", body: JSON.stringify(message) });
+    if (!answer.ok) throw Object.assign(new Error("not sent"), { code: await answer.text() });
+    return { messageId: crypto.randomUUID() };
+  };
+  return { ...env, EMAIL: { send }, EMAIL_FROM: "noreply@relay.example" };
+};
 export class LoginAttempt extends ProductionLoginAttempt {
   constructor(ctx: DurableObjectState, env: Env & { TEST_MAIL?: string }) {
-    const send = async (message: MailMessage) => {
-      const answer = await fetch("https://mail.test/send", { method: "POST", body: JSON.stringify(message) });
-      if (!answer.ok) throw Object.assign(new Error("not sent"), { code: await answer.text() });
-      return { messageId: crypto.randomUUID() };
-    };
-    super(ctx, env.TEST_MAIL ? { ...env, EMAIL: { send }, EMAIL_FROM: "noreply@relay.example" } : env);
+    super(ctx, withTestMail(env));
   }
 }
 
@@ -361,6 +366,7 @@ export class Account extends ProductionAccount {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    env = withTestMail(env);
     const path = new URL(request.url).pathname;
     if (path === "/__test/devices") return reply(deviceRequests);
     if (path === "/__test/sockets") {

@@ -9,9 +9,10 @@ import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { guestOf } from "./guests";
 import type { Live } from "./account";
-import { EVENTS_PROTOCOLS, ROLES, sockets, type Role } from "./directory";
+import { EVENTS_PROTOCOLS, ROLES, sockets, type AddedMail, type Role } from "./directory";
 import type { Env } from "./env";
-import { requestLang, tr } from "./i18n.ts";
+import { requestLang, tr, type Lang } from "./i18n.ts";
+import { mailConfigured, sendAdded } from "./mail";
 import type { AdminFeedback, FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
@@ -51,6 +52,20 @@ function withCommands<T extends { token: string }>(env: Env, made: T, ofBeta: bo
   // Quoted when it asks: zsh (macOS's shell) takes an unquoted ? for a file name to match, and stops.
   const sh = installer("install.sh").includes("?") ? `'${installer("install.sh")}'` : installer("install.sh");
   return { ...made, install: `curl -fsSL ${sh} | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${installer("install.ps1")}))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+}
+
+/**
+ * Those `addMembers` added told so by mail (mail.ts `sendAdded`), in the language of the app that added them (the
+ * receiver's is not known): the emails that could not be sent, which the app says, let go of again by the Directory so
+ * adding them again tries again. Nothing is sent by a cloud with no mail (a local one): none is said unsent then.
+ */
+async function mailAdded(env: Env, lang: Lang, workspace: string, mail: AddedMail): Promise<string[]> {
+  if (!mailConfigured(env) || mail.to.length === 0) return [];
+  const sent = await Promise.allSettled(mail.to.map((m) => sendAdded(env, lang, m.email, m.joined, mail.inviter, mail.workspace)));
+  const failed = mail.to.filter((_, i) => sent[i]!.status === "rejected").map((m) => m.email);
+  for (const s of sent) if (s.status === "rejected") console.warn(`an added member's mail not sent: ${(s.reason as { code?: string })?.code ?? s.reason}`);
+  if (failed.length > 0) await env.DIRECTORY.getByName("primary").mailFailed(workspace, failed);
+  return failed;
 }
 
 async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
@@ -324,7 +339,12 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "relays" && !target && method === "PUT") return directory(() => dir.setRelays(sub, ws, input.relays));
   if (kind === "ways" && !target && method === "PUT") return directory(() => dir.setWay(sub, ws, input.way, input.on));
   if (kind === "invitations" && target && method === "DELETE") return directory(() => dir.revokeInvitation(sub, ws, target));
-  if (kind === "members" && !target && method === "POST") return directory(() => dir.addMembers(sub, ws, role(), input.emails));
+  if (kind === "members" && !target && method === "POST") {
+    return directory(async () => {
+      const { mail, ...made } = await dir.addMembers(sub, ws, role(), input.emails);
+      return { ...made, unmailed: await mailAdded(env, input.lang === "zh" || input.lang === "en" ? input.lang : requestLang(request), ws, mail) };
+    });
+  }
   if (kind === "added" && target && method === "DELETE") return directory(() => dir.removeAdded(sub, ws, target));
   if (kind === "members" && target && method === "PATCH") return directory(() => dir.setRole(sub, ws, target, role()));
   if (kind === "members" && target && method === "DELETE") return directory(() => dir.removeMember(sub, ws, target));

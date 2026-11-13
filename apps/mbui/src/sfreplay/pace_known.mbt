@@ -297,8 +297,8 @@ let strict_known : Map[String, (String, String)] = Map([
   (
     "settings-workspace-people",
     (
-      "its motion at rest at 2767.304931640625 ms, 16.697021484375 ms after the run's next step (2750.60791015625 ms; its timeline 37.575927734375 ms later from its first step); said since the last step that acted: ",
-      "untraced: a motion at rest 16.7 ms after the run's next step, nothing said since the last step that acted",
+      "its motion at rest at 2817.304931640625 ms, 66.697021484375 ms after the run's next step (2750.60791015625 ms; its timeline 37.575927734375 ms later from its first step); said since the last step that acted: ",
+      "untraced: a motion at rest 66.7 ms after the run's next step, nothing said since the last step that acted (50 ms later since #5953: the add panel's note a line longer, its sheet taller)",
     ),
   ),
   (
