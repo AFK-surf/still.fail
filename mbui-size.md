@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [bd1d2fba1](https://github.com/AFK-surf/monoid/commit/bd1d2fba1fd2fade1c56fc3203562d4ab262f744) fix(mbui): a film closed shows its player till the | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 95.77 | 116.71 |
 | [ba8f65307](https://github.com/AFK-surf/monoid/commit/ba8f6530794f19441770da4aae46ca32d5996bf4) test(mbui): the answers' sweeps' jolts at 60 and 1 | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 96.36 | 106.94 |
 | [a936f7d2a](https://github.com/AFK-surf/monoid/commit/a936f7d2a383aefa92b9a8ead339a0019283f991) mbui: what a page's list has in sight, where a blo | 1.97 | 2.69 | 11.41 | 31 | 40.95 | 27.63 | 52.78 | 95.59 | 177.86 |
 | [a88607818](https://github.com/AFK-surf/monoid/commit/a88607818d6c8539750e1f9e4e9e58497412093f) Streams: a frame decoded unseen, a decoder emptied | 1.97 | 2.69 | 11.4 | 30.98 | 40.91 | 27.6 | 52.73 | 95.8 | 106.62 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [19e4afe56](https://github.com/AFK-surf/monoid/commit/19e4afe562bdcadebb774c6da6c1d003912cdbea) mbui: a Tester reads the passage being picked and  | 1.96 | 2.62 | 11.3 | 30.81 | 40.59 | 27.46 | 52.47 | 94.14 | 109.81 |
 | [fad178a33](https://github.com/AFK-surf/monoid/commit/fad178a33d0e80ee3cd933514f263a09d7a11574) fix(mbui): keep video tile at thumbnail width whil | 1.95 | 2.62 | 11.3 | 30.81 | 40.59 | 27.46 | 52.47 | 94.24 | 99.26 |
 | [2f66e50bd](https://github.com/AFK-surf/monoid/commit/2f66e50bd54fb52dd75ae17d40c2a42a979b6dfc) mbui: a long press a cover hands through lands on  | 1.95 | 2.62 | 11.3 | 30.8 | 40.59 | 27.45 | 52.47 | 94.14 | 98.89 |
-| [0b94120f3](https://github.com/AFK-surf/monoid/commit/0b94120f3daa4a73fd10e73ccbda5c4a9279c295) mbui app: a chat's page made as nodes lays its col | 1.95 | 2.62 | 11.3 | 30.79 | 40.57 | 27.44 | 52.47 | 94.39 | 108.48 |
