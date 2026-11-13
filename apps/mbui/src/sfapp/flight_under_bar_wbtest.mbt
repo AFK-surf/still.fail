@@ -23,12 +23,33 @@ fn last_kind_at(t : @ui.Tester, x : Double, y : Double) -> Int {
 
 ///|
 /// The chat's 演示录屏.mp4 (a long reply after it: MBUI_FIXTURE=chat-download-on) in a window `w` wide (`platform`'s), a
-/// row up at a time from the chat's end until it is drawn; where it is.
-fn film_in_chat(platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double, Double) {
+/// row up at a time from the chat's end until it is drawn; where it is. `answer`: what the host does for the app (Tester's
+/// `finish`) done by it instead, at each frame's start.
+fn film_in_chat(
+  platform? : Int = 2,
+  w? : Double = 390.0,
+  answer? : ((@ui.Tester) -> Unit)? = None,
+) -> (@ui.Tester, Double, Double) {
   new_run()
   let src = fixture("chat-download-on")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
+  let made : Ref[@ui.Tester?] = Ref(None)
+  let before = fn() {
+    match (made.val, answer) {
+      (Some(t), Some(f)) => f(t)
+      _ => ()
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, src) },
+    tree=app_tree(src),
+    w~,
+    h=844.0,
+    platform~,
+    finish=(answer is None),
+    before~,
+  )
+  made.val = Some(t)
   nav_rested(t)
   files_page_over(t, w, 844.0)
   let mut tries = 0
