@@ -17,7 +17,7 @@ import { key, signed } from "../../../station/test/lock-world-sim.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, shortCode } from "../src/lock.ts";
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
-import { added, enrolled, held, inForceOf, outOf, read } from "../src/views/lock.ts";
+import { added, enrolled, held, inForceOf, outOf, read, roster } from "../src/views/lock.ts";
 import { hooks } from "../src/core/execute.ts";
 import { ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
 import { ME, genesis, grant, pipe, rig } from "./lock-rig.ts";
@@ -297,8 +297,21 @@ const NEW = key(6109).hex;
 const newcomer = (sub = "r9", n = 6009, device = NEW) => person(sub, n, device);
 const VIEW = [{ sub: "s1", email: "s1@x.com", role: "owner" }, { sub: "r2", email: "b@x.com", role: "admin" }, { sub: "r3", email: "c@x.com", role: "member" }];
 
-test("someone's first device where the chain moved: the code shown by an owner's device, then `member` with the log it brought and the role the view gives, the person asked once", async () => {
+/// The person on this device adds `email` to `ws` as `role` (the cloud's answer: `r9` joined under it, or, `sub` null,
+/// added before they have an account).
+const addHere = (w: Awaited<ReturnType<typeof setUp>>, role: string, sub: string | null = "r9", email = "r9@x.com") =>
+  w.run(added(w.inner, "s1", "ws", role, sub === null ? { joined: [], added: [email], already: [], view: { members: [] } } : { joined: [email], added: [], already: [], view: { members: [{ sub, email, role }] } }));
+/// The whole first admission of r9 (NEW, the log it brings): the hello's answer, then, a code shown, the proof's.
+async function admitR9(w: Awaited<ReturnType<typeof setUp>>) {
+  const log = newcomer();
+  const { phone, answer } = await w.helloApp("r9", NEW, log.chain);
+  if (answer.t !== "code") return { log, answer, done: null };
+  return { log, answer, done: await w.proveApp(phone, NEW) };
+}
+
+test("someone's first device where the chain moved: the code shown by an owner's device, then `member` with the log it brought and the role this person gave them here, the person asked once", async () => {
   const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "admin" }] });
+  assert.equal((await addHere(w, "admin")).error, undefined, "added here as an admin");
   const log = newcomer();
   const before = w.asked();
   const { phone, answer } = await w.helloApp("r9", NEW, log.chain);
@@ -308,10 +321,69 @@ test("someone's first device where the chain moved: the code shown by an owner's
   assert.equal(done.error, undefined, done.error?.message);
   assert.deepEqual((done.ok as { approved: { workspaces: string[] } }).approved.workspaces, ["ws"]);
   assert.equal(w.asked() - before, 1, "the person asked once");
-  assert.deepEqual(w.stated(), [`member r9 admin ${gOf(log).slice(0, 6)}`], "one statement: r9 with their own log, as the view's admin");
+  assert.deepEqual(w.stated(), [`member r9 admin ${gOf(log).slice(0, 6)}`], "one statement: r9 with their own log, as the admin this person added them as here");
   assert.equal(w.members(), "r2 admin, r3 member, r9 admin, s1 owner");
   assert.equal(inForceOf(w.inner, "ws").f.persons.get("r9"), gOf(log), "bound to the log it brought");
   assert.equal(w.r.cloud.posted.length, 0, "nothing on the chain");
+});
+
+/// What this device noted of whom its person added to `ws` (views/lock.ts `lockAdded`): each one's name.
+const notedHere = (w: Awaited<ReturnType<typeof setUp>>) => (((w.inner.data.record("lockAdded", "ws") as { notes?: { who: string }[] } | null)?.notes) ?? []).map((n) => n.who);
+
+test("the role at a first admission is never the view's word: one the view calls an owner or an admin whom nobody added on this device is said a member", async () => {
+  for (const role of ["owner", "admin"]) {
+    const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role }] });
+    const { log, answer, done } = await admitR9(w);
+    assert.deepEqual(answer, { t: "code", workspaces: ["ws"] }, `the view says ${role}: a code shown`);
+    assert.equal(done?.error, undefined, done?.error?.message);
+    assert.deepEqual(w.stated(), [`member r9 member ${gOf(log).slice(0, 6)}`], `the view says ${role}: a member`);
+  }
+});
+
+test("the role at a first admission: what this person chose here as they added them (by sub, or by email before they had an account), used once; one added on another device a member; the view's viewer a viewer", async () => {
+  for (const sub of ["r9", null]) {
+    const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+    const before = w.asked();
+    assert.equal((await addHere(w, "admin", sub)).error, undefined);
+    assert.equal(w.asked(), before, "adding asks nobody");
+    assert.equal(w.stated().length, 0, "adding signs nothing");
+    assert.equal(notedHere(w).length, 1, `noted on this device (${sub ?? "by email"})`);
+    const { log, done } = await admitR9(w);
+    assert.equal(done?.error, undefined, done?.error?.message);
+    assert.deepEqual(w.stated(), [`member r9 admin ${gOf(log).slice(0, 6)}`], `added here as an admin (${sub ?? "by email"}): an admin`);
+    assert.deepEqual(notedHere(w), [], "the note gone once used");
+  }
+  const other = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "admin" }] });
+  const elsewhere = await admitR9(other);
+  assert.deepEqual(other.stated(), [`member r9 member ${gOf(elsewhere.log).slice(0, 6)}`], "added as an admin on another device (the view says admin): a member");
+  const v = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "viewer" }] });
+  const viewer = await admitR9(v);
+  assert.equal(viewer.done?.error, undefined, viewer.done?.error?.message);
+  assert.deepEqual(v.stated(), [`member r9 viewer ${gOf(viewer.log).slice(0, 6)}`], "the view says viewer: a viewer");
+});
+
+test("a note this device's signer may not give (an admin's device, a note saying owner): no code, nobody asked, never an owner; a note it may give (admin) is said", async () => {
+  const a = await setUp({ root: "alice", mine: "admin", view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+  a.inner.data.put("lockAdded", "ws", { notes: [{ by: "s1", who: "r9", role: "owner" }] });
+  const before = a.asked();
+  const { answer } = await admitR9(a);
+  assert.deepEqual(answer, { t: "no", error: "not_here" }, "refused before a code is shown");
+  assert.equal(a.asked(), before, "nobody asked");
+  assert.deepEqual(a.stated(), []);
+  const b = await setUp({ root: "alice", mine: "admin", view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+  assert.equal((await addHere(b, "admin")).error, undefined);
+  const { log, done } = await admitR9(b);
+  assert.equal(done?.error, undefined, done?.error?.message);
+  assert.deepEqual(b.stated(), [`member r9 admin ${gOf(log).slice(0, 6)}`], "an admin gives admin");
+});
+
+test("a note goes as the member is taken out before their first device came", async () => {
+  const w = await setUp({ view: [...VIEW, { sub: "r9", email: "r9@x.com", role: "member" }] });
+  await addHere(w, "admin");
+  assert.deepEqual(notedHere(w), ["r9"]);
+  const out = await w.run(roster(w.inner, "s1", "ws", { member: "r9", gone: true }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.deepEqual(notedHere(w), [], "the note gone");
 });
 
 test("someone's first device bringing a log not of the credential's person, or one it is not on, or none: no code, nothing signed, nobody asked", async () => {

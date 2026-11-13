@@ -1014,8 +1014,8 @@ export class Data {
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
     // Beside it, once its chain moved to its people's logs: the person logs and the statements' bodies its stations
-    // gave (views/lock.ts `lockLogs`, `lockBodies`).
-    if (table === "lockLogs" || table === "lockBodies") return [this.#ofWorkspace(key) ?? null, [key, table]];
+    // gave (views/lock.ts `lockLogs`, `lockBodies`); whom the person here added and as what (`lockAdded`).
+    if (table === "lockLogs" || table === "lockBodies" || table === "lockAdded") return [this.#ofWorkspace(key) ?? null, [key, table]];
     // A workspace's ways as its stations keep them (views/ways-stations.ts): in the workspace's, by its id.
     if (table === "ways") return [this.#ofWorkspace(key) ?? null, [key, "ways"]];
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the

@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, asked, baseOf, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, view, withBound } from "./lock.ts";
+import { Lock, asked, baseOf, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -245,10 +245,13 @@ function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, p
 /// as the credential's person's (`sub`) with the asking device on it (its base key, the connection's peer). One the list
 /// names already under that log is not asked for here (their own devices put it on their log: the personal exchange);
 /// one it names under another (their lock begun anew) is taken out of what bound them before as it is said again with
-/// this one (`again`). The role is the one the workspace's view gives them (the control plane's word of what they were
-/// invited as); the rules decide whether this device may give it (`plan`, before the person is asked: an admin names no
-/// owner). The credential is the cloud's word that they are a member: it lets nobody in by itself; the code typed face
-/// to face here and this device's signature do. Null: no code shown for it.
+/// this one (`again`). The role is what the person on this device chose as they added them here (views/lock.ts
+/// `notedRole`), else a viewer where the view says viewer, else a member: never an admin or an owner on the view's word,
+/// which is the control plane's (one added as an admin on another device comes in a member here, made an admin by an
+/// owner's change of their role). The rules decide whether this device may give it (`plan`, before the person is asked):
+/// one it may not, its note's or the view's (an admin's device and an owner), shows no code. The credential is the
+/// cloud's word that they are a member: it lets nobody in by itself; the code typed face to face here and this device's
+/// signature do. Null: no code shown for it.
 export type Admit = { lock: string; role: string; email: string; again: boolean };
 function admitOf(inner: Inner, ws: string, account: string, c: { sub: string; email: string }, hello: J, peer: string): Admit | null {
   if (c.sub === account || c.email === "") return null;
@@ -262,9 +265,12 @@ function admitOf(inner: Inner, ws: string, account: string, c: { sub: string; em
   const lock = entryHash(log[0]!);
   const bound = f.persons.get(c.sub);
   if (bound === lock) return null;
-  const said = str(arr(get(view(inner, ws), "members")).find((m) => m?.sub === c.sub)?.role);
-  if (said !== "owner" && said !== "admin" && said !== "member" && said !== "viewer") return null;
-  const a: Admit = { lock, role: said, email: c.email, again: f.members.has(c.sub) };
+  const viewed = str(arr(get(view(inner, ws), "members")).find((m) => m?.sub === c.sub)?.role);
+  if (viewed !== "owner" && viewed !== "admin" && viewed !== "member" && viewed !== "viewer") return null;
+  // (the view's role only lowers or refuses: one this device may not give, as an admin's an owner, shows no code)
+  if (movedPlan(inner, ws, account, c.sub, { lock, role: viewed, email: c.email, again: f.members.has(c.sub) }) === null) return null;
+  const noted = notedRole(inner, ws, account, c.sub, c.email);
+  const a: Admit = { lock, role: noted ?? (viewed === "viewer" ? "viewer" : "member"), email: c.email, again: f.members.has(c.sub) };
   return movedPlan(inner, ws, account, c.sub, a) === null ? null : a;
 }
 
@@ -451,8 +457,11 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
     // names it, its hello bringing its log.
     for (const p of a.places.filter((x) => x.admit !== undefined)) {
       const said = yield* Effect.result(sayAdmit(inner, p.account, p.ws, admitSaid(p.sub, p.admit!), a.email || a.name));
-      if (said._tag === "Success") done.push(p.ws);
-      else failed.push({ ws: p.ws, error: said.failure.message });
+      // (what this person noted as they added them here is used: it goes, `unnote`)
+      if (said._tag === "Success") {
+        done.push(p.ws);
+        unnote(inner, p.ws, p.sub, p.admit!.email);
+      } else failed.push({ ws: p.ws, error: said.failure.message });
       if (pending === null && said._tag === "Success" && isObject(said.success) && isObject(said.success.pending)) pending = said.success.pending;
     }
     const moved = a.places.filter((p) => p.moved === true && p.admit === undefined);

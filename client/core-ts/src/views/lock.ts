@@ -2856,6 +2856,8 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
     const m = f.members.get(what.member);
     const lock = f.persons.get(what.member);
     const n = as("member", { sub: what.member });
+    // (what this person noted as they added them goes with them: `unnote`)
+    if ("gone" in what) unnote(inner, ws, what.member, m?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email")));
     if ("gone" in what) return m === undefined ? Effect.succeed(null) : sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n }));
     if (m?.role === what.role) return Effect.succeed(null);
     if (m === undefined || lock === undefined) return Effect.fail(lockMoved());
@@ -2914,6 +2916,37 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
   });
 }
 
+/// Whom the person on this device added to a moved workspace and as what (`added`): their own choice, made here, kept
+/// on this device alone beside the lock (`lockAdded`, a record of its own in the workspace's) and never read from the
+/// workspace's view, which is the control plane's word. Where the chain moved adding someone signs nothing, so this is
+/// what their first admission said here gives them (views/pair.ts `admitOf`): the view's role never raises one (a cloud
+/// calling a newcomer an owner would have an owner's device sign them in as one, the ask not showing the role). `who`
+/// their sub, or `pendingOf` their email until they have an account; `by` the account that added them. Each person's
+/// last only, at most ADDED_KEPT, the oldest let go; one goes once used or as the member is taken out (`unnote`).
+type Noted = { by: string; who: string; role: string };
+const ADDED_KEPT = 64;
+const notesHeld = (inner: Inner, ws: string): Noted[] => {
+  const r = inner.data.record("lockAdded", ws);
+  const notes = isObject(r) && Array.isArray(r.notes) ? r.notes : [];
+  return notes.filter((n): n is Noted => isObject(n) && typeof n.by === "string" && typeof n.who === "string" && typeof n.role === "string");
+};
+function note(inner: Inner, ws: string, by: string, who: string, role: string): void {
+  const notes = notesHeld(inner, ws).filter((n) => n.who !== who);
+  inner.data.put("lockAdded", ws, { notes: [...notes, { by, who, role }].slice(-ADDED_KEPT) });
+}
+/// The role the person of account `by` gave `sub` (or their email's pending name) as they added them on this device.
+export function notedRole(inner: Inner, ws: string, by: string, sub: string, email: string): string | null {
+  const name = pendingOf(email);
+  const notes = notesHeld(inner, ws).filter((n) => n.by === by);
+  return (notes.find((n) => n.who === sub) ?? notes.find((n) => name !== null && n.who === name))?.role ?? null;
+}
+export function unnote(inner: Inner, ws: string, sub: string, email: string | null): void {
+  const name = email === null ? null : pendingOf(email);
+  const notes = notesHeld(inner, ws);
+  const left = notes.filter((n) => n.who !== sub && n.who !== name);
+  if (left.length !== notes.length) inner.data.put("lockAdded", ws, { notes: left });
+}
+
 /// People added to a locked workspace (`workspace.addMembers`, `role`; `answer` the cloud's): in its lock as well, with
 /// that role, by this device's signature where it signs there for an owner or an admin. One with an account under their
 /// sub, as the answer's view names them; one who has not signed in yet under `pendingOf` their email. One the cloud
@@ -2923,8 +2956,21 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
 export function added(inner: Inner, sub: string, ws: string, role: string, answer: unknown): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
     // (where the chain moved: the cloud's word alone, nothing said in the lock until their first device is let in,
-    // which an owner's or admin's device names with the log of their own it brings; a credential lets nobody in)
-    if (movedHere(inner, ws)) return null;
+    // which an owner's or admin's device names with the log of their own it brings; a credential lets nobody in. The
+    // role chosen here is noted here alone, `note`, for that admission: as on a chain, an owner's only by an owner)
+    if (movedHere(inner, ws)) {
+      if (role === "owner" && stateOf(inner, ws).members.get(sub)?.role !== "owner") return null;
+      const listed = stateOf(inner, ws).members;
+      const members = arr(get(get(answer, "view"), "members"));
+      for (const k of ["joined", "already", "added"]) {
+        for (const email of arr(get(answer, k)).flatMap((e) => (typeof e === "string" ? [e.toLowerCase()] : []))) {
+          const subs = k === "added" ? [] : members.filter((x) => typeof x?.sub === "string" && str(x.email)?.toLowerCase() === email).map((x) => x.sub as string);
+          const name = pendingOf(email);
+          for (const who of k === "added" ? (name === null ? [] : [name]) : subs) if (!listed.has(who)) note(inner, ws, sub, who, role);
+        }
+      }
+      return null;
+    }
     const within = asked(inner);
     const m = yield* managed(inner, sub, ws, within);
     if (m === null || (role === "owner" && m.role !== "owner")) return null;

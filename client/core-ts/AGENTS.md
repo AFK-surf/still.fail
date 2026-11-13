@@ -178,9 +178,14 @@ another; the accounts' list's merge across stations and its refills.
   them (views/pair.ts `movedPlace`), one entry and one ask for every moved workspace it asked in, renewed by a later
   `web`, taken off by `web.remove`; someone's first device is `member {sub, email, lock, role}` said by an owner's or
   admin's device once the code is proved, `lock` the log of their own its hello brought (checked as the credential's
-  person's, the asking device on it; `admitOf`), the role the workspace's view gives them as the rules let this signer
-  give it, and the removal of an older binding first where their lock was begun anew; a person's own new device goes
-  on their log alone. Adding a member is the cloud's part alone there (`added`: nothing signed). A device taken out
+  person's, the asking device on it; `admitOf`), and the removal of an older binding first where their lock was begun
+  anew; a person's own new device goes on their log alone. Its role is never the workspace's view's word (the lead,
+  2026-11-13: a cloud calling a newcomer an owner would have an owner's device sign them in as one, the ask not showing
+  the role): what the person chose as they added them on this same device (views/lock.ts `notedRole`, kept here alone,
+  used once), else a viewer where the view says viewer, else a member; one this signer may not give, the note's or the
+  view's, shows no code. So someone added as an admin on one device and approved from another comes in a member, and an
+  owner makes them an admin by changing their role. Adding a member is the cloud's part alone there (`added`: nothing
+  signed, the role noted). A device taken out
   takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
   `outOf` says who took it out and when (no words for the page yet). One that lost its
   place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:
