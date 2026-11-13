@@ -4851,24 +4851,37 @@ pub fn Tree::fades_of(self : Tree, id : NodeId) -> (Double, Double, Double, Doub
 
 ///|
 /// Where node `at` is drawn bigger or smaller about, laid out `w` by `h` (View::scale's pivot): the middle of what it
-/// and what it holds draw where it says `Drawn`, across only where `DrawnAcross`, as laid out now.
+/// and what it holds draw where it says `Drawn`; where `DrawnSide`, across the side of it what they draw is laid from, as
+/// laid out now: its start where what it draws lies nearer its start than its end, its end where nearer its end, its
+/// middle where as near both within a point (pivot_side).
 fn Tree::pivot_of(self : Tree, at : Int, w : Double, h : Double) -> (Double, Double) {
   let n = self.nodes[at]
   guard n.look.pivot.drawn() else { return n.pivot_at(w, h) }
   if n.drawn_stale {
-    n.drawn_box = self.drawn_box_of(at, lines=n.look.pivot is DrawnAcross(_))
+    n.drawn_box = self.drawn_box_of(at, lines=n.look.pivot is DrawnSide(_))
     n.drawn_stale = false
   }
   let (x0, y0, x1, y1) = n.drawn_box
-  // (DrawnAcross: down, its share of its height, whatever is drawn)
-  let down = match n.look.pivot {
-    DrawnAcross(fy) => Some(fy * h)
-    _ => None
+  match n.look.pivot {
+    // (DrawnSide: down, its share of its height, whatever is drawn)
+    DrawnSide(fy) => if x1 < x0 { (w / 2.0, fy * h) } else { (pivot_side(x0, x1, w), fy * h) }
+    _ => if x1 < x0 { (w / 2.0, h / 2.0) } else { ((x0 + x1) / 2.0, (y0 + y1) / 2.0) }
   }
-  if x1 < x0 {
-    (w / 2.0, down.unwrap_or(h / 2.0))
+}
+
+///|
+/// The side across a box `w` wide that what lies from `x0` to `x1` in it is laid from (Pivot's DrawnSide): its start
+/// (`x0`) where the room before it is less than the room after it by more than a point, its end (`x1`) where the room
+/// after it is the less, else its middle: a line laid from an edge belongs to that edge, a thing centred to its middle
+/// (the coordinator of the migration, 2026-11-14).
+fn pivot_side(x0 : Double, x1 : Double, w : Double) -> Double {
+  let (before, after) = (x0, w - x1)
+  if before < after - 1.0 {
+    x0
+  } else if after < before - 1.0 {
+    x1
   } else {
-    ((x0 + x1) / 2.0, down.unwrap_or((y0 + y1) / 2.0))
+    (x0 + x1) / 2.0
   }
 }
 
@@ -4905,7 +4918,7 @@ fn words_alone(n : Node) -> Bool {
 ///|
 /// The box round what node `at` and what it holds draw, where it is its own: the boxes of those with a ground or an
 /// edge, words, shapes, lines, a picture or an old view of their own, each where it is laid out and drawn off
-/// (View::offset, View::shift); none (its left past its right) where nothing does. `lines` (Pivot's DrawnAcross): one
+/// (View::offset, View::shift); none (its left past its right) where nothing does. `lines` (Pivot's DrawnSide): one
 /// that draws words alone across as its lines are laid out, not as its box is (a reply's words in a node as wide as its
 /// column).
 fn Tree::drawn_box_of(self : Tree, at : Int, lines? : Bool = false) -> (Double, Double, Double, Double) {

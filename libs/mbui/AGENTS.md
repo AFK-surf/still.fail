@@ -55,10 +55,12 @@ yet and you can add one, add it.
   where they are seen (at its foot what is above going up with them; scrolled up, what is read staying), each key its
   page says `comes` as it appears and `goes` as it goes (View::scrolls_window; its counts how it all ends, where a block
   is meanwhile read through Places alone); such a key on its way draws what its block holds by how much of it shows,
-  as an old list's row coming or going where it is: as big as that, about the middle of what it draws across (words
-  drawn alone, their lines as laid out, not the box they are laid in: `src/view/list_key_middle_test.mbt`) and its
-  top down, so all of it lies within what shows and nothing is cut (Pivot's `DrawnAcross`), and none at half its size
-  or less, whole at its size (view's `row_held_at`, what both are drawn by), nothing of either at rest, one set out
+  as an old list's row coming or going where it is: as big as that, across from the side what it draws is laid
+  from (a reply its start, one's own bubble its end, what is centred its middle; words drawn alone as their lines are
+  laid out: `src/view/list_key_side_test.mbt`; the coordinator of the migration, 2026-11-14: a line is never seen
+  moving sideways to its place) and down from its top, so all of it lies within what shows and nothing is cut (Pivot's
+  `DrawnSide`), and none at half its size or less, whole at its size (view's `row_held_at`, what both are drawn by),
+  nothing of either at rest, one set out
   from all its height given back whole at once (the user, 2026-10-31 and 2026-11-08: 缩到 50% 左右的时候就变成完全看不见了;
   `src/view/list_keys_seen_test.mbt`); a key its page marks `leaves_room` goes, at its foot, fading where it is,
   its room left under the last block: what comes at its foot takes that room first, what is over it up only by what it

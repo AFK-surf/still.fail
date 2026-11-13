@@ -2469,10 +2469,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
   }
   // (a key coming or going by data on its way drawn by how much of its block shows, as an old list's row coming or
-  // going where it is (ui's row_held_look, by view's row_held_at): what its block holds as big as that, about the middle
-  // of what it draws across and its top down (Pivot's DrawnAcross: what shows of a block on its way is its top, so drawn
-  // there it is all within what shows, nothing of it cut; a bubble to its side grown about its own middle, not the
-  // page's, the user, 2026-10-31: 「有些东西就应该偏心缩放」), and as opaque, none at half its size or less, whole at its
+  // going where it is (ui's row_held_look, by view's row_held_at): what its block holds as big as that, about the side
+  // across what it draws is laid from and its top down (Pivot's DrawnSide: what shows of a block on its way is its top,
+  // so drawn there it is all within what shows, nothing of it cut; a reply from its start, one's own bubble from its
+  // end, not the page's middle, the user, 2026-10-31: 「有些东西就应该偏心缩放」), and as opaque, none at half its size or less, whole at its
   // size; one set out from all its height whole at once, from part of it at that part from the first frame. Its block's
   // own, while it is on its way alone: as it ends, whole and at its size again, nothing of it kept at rest (the user,
   // 2026-10-31 and 2026-11-08: 缩到 50% 左右的时候就变成完全看不见了). Its way read where it is drawn
@@ -2518,7 +2518,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     seen_on_way[v.at] = (v, held)
     v.alpha(By(fn() { row_held_at(shown_share(v)).0 })) |> ignore
     for b in held {
-      b.scale(By(fn() { row_held_at(shown_share(v)).1 }), about=DrawnAcross(0.0)) |> ignore
+      b.scale(By(fn() { row_held_at(shown_share(v)).1 }), about=DrawnSide(0.0)) |> ignore
     }
   }
   let seen_whole = fn(at : Int) {
