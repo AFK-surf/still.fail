@@ -1653,10 +1653,16 @@ fn film_at(vw : Viewer, node : @view.View) -> Double {
 }
 
 ///|
-/// Film `vw`'s flight (Viewer::player_flight), in `parent` laid out over all of the window: the box it is cut to, its
-/// box round, its still on the black, what its thumbnail draws over it; drawn at the moments `mine` says (its own
-/// layer's, or the slot of the page it flies from under that page's bar: viewer_flight_slot), as image_flight is.
-fn film_flight(parent : @view.View, src : Source, vw : Viewer, mine : (Double) -> Bool) -> Unit {
+/// Film `vw`'s flight (Viewer::player_flight), in `parent` (`origin` where `parent` is drawn in the window): the box it
+/// is cut to, its box round, its still on the black, what its thumbnail draws over it; drawn at the moments `mine` says
+/// (its own layer's, or the slot of the page it flies from under that page's bar: viewer_flight_slot), as image_flight is.
+fn film_flight(
+  parent : @view.View,
+  src : Source,
+  vw : Viewer,
+  mine : (Double) -> Bool,
+  origin? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+) -> Unit {
   let at = fn(node) { film_at(vw, node) }
   let mine_flight = fn(node : @view.View) -> (FlightBox, Double)? {
     let t = at(node)
@@ -1678,7 +1684,10 @@ fn film_flight(parent : @view.View, src : Source, vw : Viewer, mine : (Double) -
     .clips(Is(true))
     .offset(By(fn() {
       match flight(cut) {
-        Some(f) => (f.cut.0, f.cut.1)
+        Some(f) => {
+          let (x, y) = origin()
+          (f.cut.0 - x, f.cut.1 - y)
+        }
         None => (0.0, 0.0)
       }
     }))
@@ -2062,9 +2071,9 @@ fn Viewer::asked_now(self : Viewer) -> Bool {
 }
 
 ///|
-/// The picture of viewer `vw` flying in or back, its nodes in `parent`: from the thumbnail as the chat lays it out in
-/// the frame drawn (Viewer::flight_from) to where its zoom has it (on `stage`), as far as its flight has come then
-/// (flight_box): what shows of it on the window (`parent` laid out over all of it), the box it is cut to, its
+/// The picture of viewer `vw` flying in or back, its nodes in `parent` (`origin` where `parent` is drawn in the window):
+/// from the thumbnail as the chat lays it out in the frame drawn (Viewer::flight_from) to where its zoom has it (on
+/// `stage`), as far as its flight has come then (flight_box): what shows of it on the window, the box it is cut to, its
 /// corners round, the picture in it, as Viewer::picture_shown has it, its whole picture judged ready for where it lands
 /// (View::image_for: as what draws the picture judged it, Viewer::shown_picture), which of them decided as it is
 /// drawn; drawn at the moments `mine` says (its own layer's, or the slot of the page it flies from: viewer_flight_slot).
@@ -2074,6 +2083,7 @@ fn image_flight(
   vw : Viewer,
   stage : () -> (Double, Double),
   mine : (Double) -> Bool,
+  origin? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> Unit {
   let flight = fn(n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
     let t = viewer_flight_at(vw, n)
@@ -2094,7 +2104,10 @@ fn image_flight(
     .clips(Is(true))
     .offset(By(fn() {
       match flight(cut) {
-        Some((f, _)) => (f.cut.0, f.cut.1)
+        Some((f, _)) => {
+          let (x, y) = origin()
+          (f.cut.0 - x, f.cut.1 - y)
+        }
         None => (0.0, 0.0)
       }
     }))
@@ -2177,11 +2190,14 @@ impl Eq for FlyingFrom with equal(a, b) {
 /// What of a picture flying from page `serial`'s chat list is drawn in that page, in its node `slot` (between what the
 /// page shows and its bar: chat_page_made's): the viewer's while it flies from there (Viewer::flies_from_page), its
 /// picture drawn here while it is not out from under the bar (Viewer::lifted_at short of 1), the bar over it as over
-/// the list; in its own layer from then, and once nothing flies from here. `stage` its room. Laid out over the whole
-/// window, as the viewer's layer is: a list's flight is slotted only where its bar is its page's nodes (note_list's
-/// `slot`), the narrow shell's pages, which lie over all of it (what moves them, drawn so, moves this with them).
+/// the list; in its own layer from then, and once nothing flies from here. `stage` its room; `slot` in the page where
+/// the page is drawn in the window (what moves the page moves this with it).
 pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage : () -> (Double, Double)) -> Unit {
   slot.over(Is(true)).presses(Is(false)) |> ignore
+  let origin = fn() {
+    let (x, y, _, _) = slot.rect()
+    (x, y)
+  }
   // (the viewer flying from here: the one open, or one going back into it)
   let flying = fn() -> Viewer? {
     for v in [viewer.get(), pv_leaving.get()] {
@@ -2202,9 +2218,9 @@ pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage :
     guard which.from is Some(vw) else { return }
     f.over(Is(true)).presses(Is(false)) |> ignore
     if vw.played() {
-      film_flight(f, src, vw, fn(t) { vw.lifted_at(t) < 1.0 })
+      film_flight(f, src, vw, fn(t) { vw.lifted_at(t) < 1.0 }, origin~)
     } else {
-      image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
+      image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 }, origin~)
     }
   })
 }
