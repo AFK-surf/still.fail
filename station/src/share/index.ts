@@ -140,7 +140,7 @@ type Borrowed = { version: number; hash: string; kind: ShareKind; name: string; 
 type Own = { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string; unread?: string };
 type State = {
   /// What this station shares: its version (raised when what it is changes) and each station told of it, at which
-  /// version (-1: told it is no longer for it).
+  /// version (-1: to be told it is not for it, as who may use it changed; forgotten once it is).
   hosted: Record<string, Hosted>;
   /// What it uses of others': from which station, at which version.
   borrowed: Record<string, Borrowed>;
@@ -154,6 +154,21 @@ type State = {
 /// Whose word a failed request is: the other station's (it answered with a refusal), or this one's (it could not ask, or
 /// no answer came).
 const whoSaid = (e: unknown) => (e instanceof Refused ? "them" : "here");
+/// What a host answers a station a share's `allow` leaves out (NOT_FOR_IT), one in none of the workspaces it is shared
+/// in as the cloud's list has it (NOT_THERE), any while that list is not known (STATIONS_UNKNOWN), and one asking of a
+/// share it does not have (NOT_SHARED: no longer shared, or moved and forgotten).
+const NOT_FOR_IT = "that share is not for this station";
+const NOT_THERE = "that share is not for this station's workspaces";
+const STATIONS_UNKNOWN = "this station does not know its workspaces' stations yet";
+const NOT_SHARED = "this station does not share that";
+/// Whether a host answered that its `allow` leaves this station out (NOT_FOR_IT): the copy it has is not its to keep, as
+/// the `gone` its host tells (share.changed) would have said had it got here. Only that, the host's own word: what the
+/// cloud's list says (NOT_THERE, STATIONS_UNKNOWN) it can hold back or lose a station of a while, a host that forgot a
+/// move answers NOT_SHARED till the new one says it, and a copy taken away loses what was set on it here (`paused`).
+const notOurs = (e: unknown) => e instanceof Error && e.message === NOT_FOR_IT;
+/// Whether two of a share's `allow` let the same stations use it (null: every one), in whatever order.
+const sameStations = (a: string[] | null, b: string[] | null) =>
+  a === null || b === null ? a === b : a.length === b.length && new Set([...a, ...b]).size === new Set(a).size;
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const hashOf = (v: unknown) => createHash("sha256").update(typeof v === "string" ? v : JSON.stringify(v)).digest("hex");
 const newId = () => `sh-${randomBytes(10).toString("hex")}`;
@@ -581,7 +596,13 @@ export class Sharing {
         hosted.hash = now.hash;
       }
       if (now.kind === "skill") hosted.dir = dirKey(join(this.skillsDir(), now.skill!)) ?? hosted.dir;
-      hosted.allow = now.allow;
+      // Who may use it changed: every station it leaves out now is to be told so (-1), not only those down as told of
+      // it: one the cloud's list left out a while is forgotten as told (below), and would keep its copy, told nothing
+      // till it asked again (notOurs). Kept as it was till the stations are known, so that they are told then.
+      if (!sameStations(Array.isArray(hosted.allow) ? hosted.allow : null, now.allow) && rosters !== null) {
+        for (const peer of rosters.keys()) if (!(peer in hosted.told) && !this.mayUse(now.allow, peer)) hosted.told[peer] = -1;
+      }
+      if (rosters !== null) hosted.allow = now.allow;
       hosted.name = now.name;
       state.hosted[id] = hosted;
       // Written before anyone is told, so what they ask for is that version.
@@ -679,6 +700,17 @@ export class Sharing {
         }
         this.checked.add(id);
       } catch (e) {
+        // Its host says who may use it leaves this station out (notOurs) and the word of it never got here: a host told
+        // nothing of a station the cloud's list left out a while, nor of one that did not answer when it was left out
+        // and was then gone from that list. Taken away as that word would have taken it; any other refusal (the
+        // host's list of stations not known, or leaving this one out) is taken as the host not answering.
+        if (notOurs(e)) {
+          log.info("share", "its host says a share is not this station's; its copy is taken away", { id, host: had.host });
+          this.unreachable.delete(had.host);
+          this.drop(id, had);
+          delete state.borrowed[id];
+          continue;
+        }
         pending = true;
         this.unreachable.set(had.host, this.time.now());
         log.info("share", "a share could not be had from its host", { id, host: had.host, by: whoSaid(e), error: (e as Error).message });
@@ -912,8 +944,13 @@ export class Sharing {
     const moved = state.moved[id];
     if (moved && method === "share.version") return { moved: moved.to };
     const own = this.ownShares().get(id);
-    if (!own) throw new Error("this station does not share that");
-    if (!this.mayUse(own.allow, peer) || this.reach(own, peer) === null) throw new Error("that share is not for this station");
+    if (!own) throw new Error(NOT_SHARED);
+    // Who may use it is this station's own word, said as such (a copy is taken away on it, notOurs); where a station
+    // is, the cloud's list (not known, or leaving it out a while): refused apart, a copy kept on that.
+    if (!this.mayUse(own.allow, peer)) throw new Error(NOT_FOR_IT);
+    const rosters = this.rosters();
+    if (rosters === null) throw new Error(STATIONS_UNKNOWN);
+    if (this.reach(own, peer, rosters) === null) throw new Error(NOT_THERE);
     const version = state.hosted[id]?.version ?? 0;
     if (method === "share.version") {
       // A copy of a skill not shown there, as one of that station's own has its name (or shown again).
@@ -1145,6 +1182,12 @@ export class Sharing {
     });
   }
 
+  /// A copy asked of its host again (reconcile's share.version), as at the start of a run.
+  private askAgain(id: string) {
+    this.checked.delete(id);
+    void this.reconcile();
+  }
+
   /// A borrowed Claude subscription's token, from its host; `rejected`, the one a process here was refused with.
   async lendClaude(profile: Json, rejected?: string): Promise<MachineToken> {
     const host = this.hostOf(profile);
@@ -1158,9 +1201,13 @@ export class Sharing {
       this.lentClaude.set(profile.id, token);
       return token;
     } catch (e) {
-      this.unreachable.set(host, this.time.now());
+      // Left out by who may use it (notOurs): nothing lent before is used, and the copy is asked of again, which takes
+      // it away. Any other refusal is the host not answering, as before.
+      const ours = !notOurs(e);
+      if (ours) this.unreachable.set(host, this.time.now());
+      else this.askAgain(profile.share.id);
       this.deps.changed();
-      const kept = this.lentClaude.get(profile.id);
+      const kept = ours ? this.lentClaude.get(profile.id) : undefined;
       if (kept && kept.token !== rejected && kept.expiresAt - this.time.now() >= KEEP_LENT_MS) {
         log.warn("share", "the host did not lend a new token; the one lent before is used", { profile: profile.id, error: (e as Error).message });
         return kept;
@@ -1181,10 +1228,13 @@ export class Sharing {
       got = await this.deps.ask(host, null, { method: "share.lend", id: profile.share.id });
       this.unreachable.delete(host);
     } catch (e) {
-      this.unreachable.set(host, this.time.now());
+      // Left out by who may use it (notOurs): as lendClaude.
+      const ours = !notOurs(e);
+      if (ours) this.unreachable.set(host, this.time.now());
+      else this.askAgain(profile.share.id);
       this.deps.changed();
       const kept = keptCodexExpiry(join(home, "auth.json"));
-      if (!rejected && kept - this.time.now() >= KEEP_LENT_MS) {
+      if (ours && !rejected && kept - this.time.now() >= KEEP_LENT_MS) {
         log.warn("share", "the host did not lend a new login; the one lent before is used", { profile: profile.id, error: (e as Error).message });
         return kept;
       }
