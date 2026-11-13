@@ -8,7 +8,6 @@ fn init {
     "src/sfapp/tape.mbt",
     "src/sfreplay/flows/archive_restore_test.mbt",
     "src/sfreplay/flows/card_motion_test.mbt",
-    "src/sfreplay/flows/chat_audio_test.mbt",
     "src/sfreplay/flows/drive_upload_test.mbt",
     "src/sfreplay/flows/glass_test.mbt",
     "src/sfreplay/flows/new_chat_test.mbt",
