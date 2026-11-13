@@ -99,3 +99,42 @@ test "the words a page's list of the tree draws read as lines of words drawn (Te
     None => fail("no rich paragraph of the tree's")
   }
 }
+
+///|
+test "where a page's list and a sidebar's narrower list made after it are both drawn, a Tester reads the page's (the widest in use), not the one made last; scrolled, that one moves, the sidebar's stays" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  let page = @view.Scroll::list()
+  let side = @view.Scroll::list()
+  set_view_app(fn(root) {
+    root.box(fn(r) {
+      r.row(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      // (the page's list, 300 wide, made first; the sidebar's, 100 wide, after it)
+      r.box(fn(p) {
+        p.height(Is(Some(200.0))).width(Is(Some(300.0))) |> ignore
+        p.scrolls_window(page, fn() { Array::makei(40, fn(i) { i }) }, est=40.0, fn(b, i) {
+          b.box(fn(row) { row.height(Is(Some(40.0))).words(Is("row \{i}")) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      r.box(fn(s) {
+        s.height(Is(Some(200.0))).width(Is(Some(100.0))) |> ignore
+        s.scrolls_window(side, fn() { Array::makei(14, fn(i) { i }) }, est=20.0, fn(b, i) {
+          b.box(fn(row) { row.height(Is(Some(20.0))).words(Is("chat \{i}")) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  assert_eq(t.visible(), (0, 4))
+  assert_true(!t.at_end(), msg="the page's list not at its end (the sidebar's, all 14 in sight, is)")
+  t.scroll_to(10)
+  t.frame()
+  assert_eq(t.visible(), (10, 14))
+  assert_eq(t.list_row_boxes()[1].length(), 10, msg="the sidebar's list as it was")
+}

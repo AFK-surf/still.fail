@@ -1996,8 +1996,8 @@ fn Tester::list_state(self : Tester) -> ListState {
 }
 
 ///|
-/// The (first) list a Tester reads: an old view's, else the page's list of the window's tree made last (tree_lists: the
-/// page on top).
+/// The (first) list a Tester reads: an old view's, else the main list of the page in front of the window's tree
+/// (Tree::list_in_front).
 priv enum ListOn {
   Old(ListState)
   Tree(@view.ListSeen)
@@ -2016,8 +2016,8 @@ fn Tester::list_on(self : Tester) -> ListOn {
       }
     }
   }
-  // (a page's list of the tree's: the one made last, the page on top, as an old view's frame has one list on screen)
-  match tree_lists().last() {
+  // (a page's list of the tree's: the main one of the page in front, as an old view's frame has one list on screen)
+  match view_app.val.bind(fn(tree) { tree.list_in_front() }) {
     Some(l) => Tree(l)
     None => @halt.saying("no list on screen")
   }
