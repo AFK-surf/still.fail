@@ -127,6 +127,46 @@ test "a shared subscription's main switch and its station details remain usable 
 }
 
 ///|
+test "which stations may use a share is said with the stations it was chosen among, so only theirs change" {
+  let calls : Array[Json] = []
+  let t = setting_tester(Profile("ws1/st1", "cc"), 1280.0, h=2400.0, over=fn(s) {
+    { ..s, call: fn(name, params, done) {
+        if name == "profile.share" {
+          calls.push(params)
+          done(Ok(obj([])))
+        } else {
+          (s.call)(name, params, done)
+        }
+      } }
+  })
+  scrolled_to(t, 1280.0, "可用的 station")
+  let among = fn(p : Json) -> Array[String] {
+    match field(Some(p), "among") {
+      Some(Array(a)) => a.filter_map(fn(x) { if x is String(v) { Some(v) } else { None } })
+      _ => []
+    }
+  }
+  // Maple left out: the list of those ticked, and every one listed as what it was chosen among
+  t.tap_text("可用的 station")
+  t.run_for(@kit.presence_in_ms)
+  t.click(Switch, label="Maple")
+  t.frame()
+  t.click(Button, label="完成")
+  t.run_for(@kit.presence_out_ms)
+  assert_eq(calls.length(), 1)
+  assert_eq(field(Some(calls[0]), "allow"), Some(Json::array([Json::string("st1")])))
+  assert_eq(among(calls[0]), ["st1", "st2"])
+  // all of them ticked: no list, so the station keeps what was chosen of the others where it is in several workspaces
+  t.tap_text("可用的 station")
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="完成")
+  t.run_for(@kit.presence_out_ms)
+  assert_eq(calls.length(), 2)
+  assert_eq(field(Some(calls[1]), "allow"), None)
+  assert_eq(among(calls[1]), ["st1", "st2"])
+}
+
+///|
 test "a profile's workspace row shows its own mark, but no repeated initial without one" {
   for (w, platform) in page_cases {
     for (emoji, icon) in [("", ""), ("🌱", ""), ("", "glyph:star")] {

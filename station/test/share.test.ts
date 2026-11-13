@@ -245,6 +245,53 @@ test("a profile is shared with the stations of every workspace it serves, whiche
   await assert.rejects(h.sharing.handle(R1, { method: "share.get", id }, "W2"), /not for this station/);
 });
 
+test("stations chosen among one workspace's change only theirs: a choice in another does not undo it, and all of them allowed again is every station", async () => {
+  const { h, o, r1, r2, every } = joinedWorkspaces();
+  await h.sharing.shareProfile("deepseek", true, null);
+  await settle(...every);
+  const id = h.config.raw().profiles[0].share.id;
+  const has = (s: Station) => s.config.raw().profiles.some((p: any) => p.share?.id === id);
+  const allow = () => h.config.raw().profiles[0].share.allow;
+  // O left out as W1's stations are chosen (H and O): W2's, not among them, keep it.
+  await h.sharing.shareProfile("deepseek", true, [H], [H, O]);
+  await settle(...every);
+  assert.deepEqual([has(o), has(r1), has(r2)], [false, true, true]);
+  assert.deepEqual([...allow()].sort(), [H, R1, R2].sort());
+  // W2's chosen with all of them ticked (its 完成 says no allow): O stays out, as W1 left it.
+  await h.sharing.shareProfile("deepseek", true, null, [H, R1, R2]);
+  await settle(...every);
+  assert.deepEqual([has(o), has(r1), has(r2)], [false, true, true]);
+  // R1 left out there: O still out, R2 still in.
+  await h.sharing.shareProfile("deepseek", true, [H, R2], [H, R1, R2]);
+  await settle(...every);
+  assert.deepEqual([has(o), has(r1), has(r2)], [false, false, true]);
+  assert.deepEqual([...allow()].sort(), [H, R2].sort());
+  // Each ticked again in its workspace: every station again (those to come too).
+  await h.sharing.shareProfile("deepseek", true, [H, O], [H, O]);
+  assert.deepEqual([...allow()].sort(), [H, O, R2].sort());
+  await h.sharing.shareProfile("deepseek", true, null, [H, R1, R2]);
+  await settle(...every);
+  assert.equal(allow(), null);
+  assert.deepEqual([has(o), has(r1), has(r2)], [true, true, true]);
+  // A list said whole (a borrow's, an app from before): as it says.
+  await h.sharing.shareProfile("deepseek", true, [H, R1]);
+  await settle(...every);
+  assert.deepEqual([has(o), has(r1), has(r2)], [false, true, false]);
+});
+
+test("one left out where every station was allowed, while the stations a profile reaches are not said: refused, nothing changed", async () => {
+  const { h, o, every } = joinedWorkspaces();
+  await h.sharing.shareProfile("deepseek", true, null);
+  await settle(...every);
+  // (a station whose cloud has said nothing yet)
+  Object.defineProperty((h.sharing as any).deps.cloud, "state", { get: () => null, configurable: true });
+  await assert.rejects(h.sharing.shareProfile("deepseek", true, [H], [H, O]), /stations its workspaces have|都有哪些 station/);
+  assert.equal(h.config.raw().profiles[0].share.allow, null);
+  // Nothing left out of those chosen among: every station as before, said or not.
+  await h.sharing.shareProfile("deepseek", true, null, [H, O]);
+  assert.equal(h.config.raw().profiles[0].share.allow, null);
+});
+
 test("a skill is shared with its home workspace's stations only, and linked into the skills of the workspace it came in", async () => {
   const { cloud, h, o, r1, r2, every } = joinedWorkspaces();
   const skill = (s: Station, name: string) => {
