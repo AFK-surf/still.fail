@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [8e40aba93](https://github.com/AFK-surf/monoid/commit/8e40aba934f3980ad9fe9873ac47584900944078) mbui app: what is sent and the message it becomes  | 1.97 | 2.68 | 11.4 | 30.97 | 40.9 | 27.6 | 52.73 | 95.75 | 112.86 |
 | [3b7c1fa43](https://github.com/AFK-surf/monoid/commit/3b7c1fa4361d9cd8e89f804c608588ded9a2799f) mbui: a key coming at a page's list's end is one m | 1.97 | 2.68 | 11.4 | 30.95 | 40.88 | 27.6 | 52.75 | 96.01 | 109.79 |
 | [e99808c93](https://github.com/AFK-surf/monoid/commit/e99808c9330741e71d5bc58380e44eb6e2a287dc) fix(mbui): align connects cards, lead icons, and r | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.01 | 109.79 |
 | [ffa55870f](https://github.com/AFK-surf/monoid/commit/ffa55870f01816f0b3661d6bf6d80ff9b0c72f39) fix(mbui): show the floating outline button on wid | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.01 | 109.79 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c238c1155](https://github.com/AFK-surf/monoid/commit/c238c11553e588e8328c87d886b72d768307cd41) fix(station): a Feishu reply brings the message it | 1.95 | 2.62 | 11.24 | 30.7 | 40.37 | 27.36 | 52.32 | 93.91 | 105.18 |
 | [9128d4550](https://github.com/AFK-surf/monoid/commit/9128d4550f4d88bf161c1601baf5baed744ed8ed) Point repository references at AFK-surf/monoid (#5 | 1.95 | 2.62 | 11.24 | 30.7 | 40.37 | 27.36 | 52.3 | 93.98 | 100.45 |
 | [09e08a60c](https://github.com/AFK-surf/monoid/commit/09e08a60cb3f59f3d330f63f984bf55ce3b6489c) mbui app: the bars fall to what main d207ee61's ru | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 93.95 | 100.74 |
-| [7bfaa3583](https://github.com/AFK-surf/monoid/commit/7bfaa3583ef3628401acf4740307b0e8f48f40d5) app tests: chat_page_nodes in two runs on the four | 1.95 | 2.61 | 11.24 | 30.7 | 40.36 | 27.36 | 52.3 | 94.09 | 100.8 |
