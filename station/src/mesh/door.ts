@@ -9,20 +9,23 @@ import { log } from "../ops/log.ts";
 import type { Connection } from "./endpoint.ts";
 import { type Asked, Reader, request, writeLine } from "./wire.ts";
 
-/// How long after a refusal the door closes the connection itself: the refusal's line is to reach the other end first.
+/// How long after a refusal the door closes the connection: the refusal's line is to reach the other end first, and
+/// the other end, which has what it came for once it read the line, may well close it before.
 const REFUSED_CLOSE_MS = 200;
 
-/// A hello refused: the line it is answered, the code and reason the door closes the connection with REFUSED_CLOSE_MS
-/// after that line is written, and what serving the connection fails with, which it does as soon as the line is
-/// written, not waiting for that close. So the door's close is the one the other end sees only where nothing closes
-/// the connection as its serving fails: accept.ts does (as the station's loop did before it), with code 0 and its
-/// own reason, at once, and through it neither this code and reason nor the wait reach the other end.
+/// A hello refused: the line it is answered, the code and reason the door closes the connection with
+/// REFUSED_CLOSE_MS after it was refused (whether or not the other end has taken the line in by then), and what
+/// serving the connection fails with, once it is closed: by that close, by the other end, or by whoever serves it
+/// (accept.ts as its scope closes: the program stopping). Nothing is served on it meanwhile, no stream of it accepted.
+/// So the door's close is the one the other end sees unless something closed the connection before it. Until
+/// 2026-11-14 serving failed as soon as the line was written, the station's loop closed the connection at once with
+/// code 0 and its own reason, and a line that had not all gone by then was cut: its device was told only that the
+/// connection was lost.
 export type Refusal = { line: unknown; code: number; reason: string; error: unknown };
 
 /// Thrown by `renew` (or what its promise fails with) where the renewal's refusal ends the connection: the line it is
 /// answered (`{error}`, its message, where none is given), and the code and reason the door closes the connection
-/// with, REFUSED_CLOSE_MS after it was thrown. Unlike a refused hello's, serving the connection fails only once it is
-/// closed, so that close is the one the other end sees, through accept.ts too.
+/// with, REFUSED_CLOSE_MS after it was thrown, as it closes a refused hello's.
 export class Ending extends Error {
   readonly code: number;
   readonly reason: string;
@@ -73,9 +76,14 @@ export async function door(conn: Connection, admit: Admit): Promise<void> {
   const said = admit(hello, conn);
   if ("refused" in said) {
     const { line, code, reason, error } = said.refused;
-    await writeLine(first, line).catch(() => {});
-    await first.finish().catch(() => {});
-    wall.after(REFUSED_CLOSE_MS, () => conn.close(code, reason));
+    // Its close is set as it is refused, and its line not waited for: the other end may take in nothing of its
+    // control stream, and would keep the connection for as long as it liked.
+    const off = wall.after(REFUSED_CLOSE_MS, () => conn.close(code, reason));
+    void writeLine(first, line).then(() => first.finish()).catch(() => {});
+    // Kept until it is closed, by whichever closes it first; its serving fails then, not before: who serves it closes
+    // it as that fails (accept.ts), which would be before the line has gone.
+    await conn.closed().catch(() => {});
+    off();
     throw error;
   }
   await writeLine(first, said.line);

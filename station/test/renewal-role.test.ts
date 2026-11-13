@@ -169,8 +169,7 @@ test("a hello the lock refuses is told as before: the lock's code, how far it go
   assert.deepEqual(refused.lock, { seq: 0, hash: entryHash(genesis), genesis: entryHash(genesis) });
   // (the lock's last entries are told only to one whose credential checked out)
   assert.deepEqual(refused.entries, [genesis]);
-  // (the close is armed once the line is written and the stream finished: nothing here waits on anything but the loop)
-  for (let i = 0; i < 100 && armed().length === 0; i++) await new Promise((r) => setImmediate(r));
+  // (the close is armed as the hello is refused, before its line is written: armed by the time the line is read)
   assert.deepEqual(armed().map((x) => x.ms), [200]);
   armed()[0]!.fire();
   assert.equal(await conn.closed(), "lock_unconfirmed");

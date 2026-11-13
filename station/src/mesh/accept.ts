@@ -16,10 +16,9 @@ export type Taken = {
   failed?(error: unknown, conn: Connection): void;
   /// The reason a connection is closed with, code 0, as soon as it is served no more: however `serve` ended (it
   /// returned, it failed), and where the fibers' scope closes meanwhile (the program stopping), which is what the
-  /// reason is to say. A connection `serve` closed itself before it ended keeps that close. One it left open to be
-  /// closed later does not: a door's refused hello (door.ts `Refusal`) fails at once, its own close set for a while
-  /// after the refusal's line, so that connection is closed here, at once, with code 0 and this reason, and the
-  /// refusal's code and reason are never the other end's.
+  /// reason is to say. A connection `serve` closed itself before it ended keeps that close: so what is to reach the
+  /// other end before the connection goes (a refusal's line, a close's code and reason) is seen to by `serve`, which
+  /// ends only after it (door.ts does: a refused hello's serving fails once its connection is closed).
   closing: string;
   /// Where the connections' fibers are kept, for one whose connections are to end at another moment of its stopping
   /// than this effect's own scope closes at: by default a set of that scope.
