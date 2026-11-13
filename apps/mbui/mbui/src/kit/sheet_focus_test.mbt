@@ -226,3 +226,48 @@ test "a field tapped through a sinking sheet takes the input method at once; sta
   assert_false(parked.val)
   assert_true(t.ime().0)
 }
+
+///|
+test "popover: pressing a non-focusable button inside an open popover keeps the page field parked while the focus is nowhere" {
+  let open = Ref(false)
+  let toggled = Ref(false)
+  let parked = Ref(false)
+  let field = @ui.Field::new()
+  let t = @ui.Tester::new(
+    fn(c) {
+      parked.val = field.parked()
+      c.editor("msg", field~, placeholder="Message") |> ignore
+      let btn = @kit.button(c, "Services")
+      if btn.clicked {
+        open.val = !open.val
+      }
+      let p = @kit.popover(c, "pop", open.val, btn.id, fn() {
+        @kit.button(c, "First") |> ignore
+        if @kit.button(c, "Toggle job").clicked {
+          toggled.val = !toggled.val
+        }
+      })
+      open.val = p.value
+    },
+    platform=0,
+  )
+  t.tap_text("Message")
+  t.draw()
+  assert_true(field.focused())
+  assert_false(parked.val)
+  t.tap_text("Services")
+  t.run_for(@ui.move_most_ms)
+  assert_true(open.val)
+  assert_false(field.focused())
+  assert_true(parked.val, msg="parked as the popover opens")
+  t.tap_text("Toggle job")
+  t.run_for(@ui.move_most_ms)
+  assert_true(toggled.val)
+  assert_eq(t.ctx().focused_id(), 0, msg="pointer press on a non-focusable button drops focus to 0")
+  assert_true(parked.val, msg="still parked while the open popover holds the return target")
+  t.tap_text("Services")
+  t.run_for(@ui.move_most_ms)
+  assert_false(open.val)
+  assert_true(field.focused())
+  assert_false(parked.val)
+}
