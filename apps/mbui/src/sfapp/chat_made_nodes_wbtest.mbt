@@ -1,6 +1,6 @@
 // A chat's page made with its inside nodes (sfbase's chat_page_nodes on) as what the page is, not as it was made: a
 // new chat become its chat in place (its first words sent) the new page from then, its old view let go; an agent's
-// history asked as a page on 大屏 its chat's new page beside it.
+// history, a service and a file asked as pages on 中屏 and 大屏 their chat's new page beside them, no old page built.
 
 ///|
 /// The fixture's Home with chat_page_nodes as `nodes` says, `w` by `h` on `platform`.
@@ -144,4 +144,78 @@ test "大屏, an agent's history asked as a page with its inside nodes: its chat
   let last = "做完了：列表、跳到最新的按钮"
   assert_true(made_words_at(t, last) is Some(_), msg="its last message not seen")
   assert_true(made_by_nodes(t, last), msg="not the new page's: \{t.sources_of(last)}")
+}
+
+///|
+/// `mode`'s fixture, the history its agent's read as `older_history(4)` (what the history beside it shows), its chat
+/// opened, `w` by `h`, chat_page_nodes as `nodes` says; after the chat's page has come. The chat.
+fn made_beside_tester(mode : String, w : Double, h : Double, nodes : Bool) -> (@ui.Tester, Source, ChatRef) {
+  new_run()
+  @sfbase.chat_page_nodes.set(nodes)
+  let base = fixture(mode)
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "history" {
+        { value: Some(older_history(4)), error: None, version: 1 }
+      } else {
+        (base.topic_read)(name, params)
+      }
+    },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=0)
+  t.run_for(@ui.move_most_ms)
+  (t, src, r)
+}
+
+///|
+/// `p` opened (as a link or a row of the chat's opens it: open_page) on Tester `t`, as long as a page takes to come:
+/// how many of the frames drawn from then had an old view's list's rows (the old chat page's messages: the only
+/// Ctx::list on the chats' place of 中屏 and 大屏).
+fn made_old_frames_opening(t : @ui.Tester, p : Page) -> Int {
+  let old = Ref(0)
+  t.each_frame(Some(fn() { if t.old_list_row_boxes().iter().any(fn(l) { l.length() > 0 }) { old.val += 1 } }))
+  open_page(p)
+  t.run_for(@ui.move_most_ms)
+  t.each_frame(None)
+  old.val
+}
+
+///|
+test "中屏 and 大屏, a chat's detail asked as a page (its agent's history, a service, a file) builds no old chat page from the frame it is opened: its chat the new page, it beside it in front, back where it went" {
+  let file = @sfdesk.file_tab("s-c1", "work/s-c1/release.html", "release.html")
+  let r0 : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
+  let cases : Array[(String, Page, String, Bool)] = [
+    ("chat", History(r0, "s-c1", None), "s-c1", false),
+    ("chat-info", Service("ws1/st1", "j-web"), "service:j-web", true),
+    ("chat-viz", PreviewFile("ws1/st1", "s-c1", "work/s-c1/release.html", "release.html"), file, true),
+  ]
+  for screen in [("大屏", 1280.0, 800.0), ("中屏", 720.0, 800.0)] {
+    let (name, w, h) = screen
+    for case in cases {
+      let (mode, p, tab, under) = case
+      let (t, src, r) = made_beside_tester(mode, w, h, true)
+      let before = app.nav.pages()
+      let old = made_old_frames_opening(t, p)
+      let what = name + " " + @sfbase.page_kind(p)
+      assert_eq(old, 0, msg="\{what}: frames with the old chat page's list")
+      guard app.nav.top() is Chat(c) && c.station == r.station && c.session == r.session else {
+        fail("\{what}: the page not its chat's: \{@sfbase.page_kind(app.nav.top())}")
+      }
+      assert_eq(@sfdesk.side_now(src, r).1, tab, msg="\{what}: not in front beside it")
+      // (back where it went as before: to the chat it was asked from where it is that chat's, its own; else to that)
+      let pages = app.nav.pages()
+      assert_eq(pages.length(), before.length() + (if under { 0 } else { 1 }), msg="\{what}: \{Repr(pages.map(@sfbase.page_kind))}")
+      for k, b in before {
+        assert_true(pages[k] == b, msg="\{what}: under it \{Repr(pages.map(@sfbase.page_kind))}, was \{Repr(before.map(@sfbase.page_kind))}")
+      }
+      let last = "做完了：列表、跳到最新的按钮"
+      assert_true(made_by_nodes(t, last), msg="\{what}: not the new page's: \{t.sources_of(last)}")
+    }
+  }
+  // (what is read sees an old chat page where one is built: the switch off, the chat's page the old one)
+  let (t, _, _) = made_beside_tester("chat", 1280.0, 800.0, false)
+  assert_true(made_old_frames_opening(t, History(r0, "s-c1", None)) > 0, msg="the old chat page not seen")
 }

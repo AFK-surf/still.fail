@@ -466,6 +466,8 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   fold_goes.shift = 0.0
   fold_goes.way.put(1.0)
   nav_hold(src)
+  // (a chat's detail asked as a page put beside its chat as it comes on top, before a frame builds it)
+  beside_follow(v, src)
   v.owns(fn() {
     nav_held.val = fn() { None }
     fold_goes.node = None

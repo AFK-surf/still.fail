@@ -25,21 +25,6 @@ fn history_reset() -> Unit {
 }
 
 ///|
-/// Agent `key`'s history beside its chat `r`, in front (not toggled), brought to transcript entry `entry` if one is
-/// asked: the page the chat's, in place of the one that asked.
-fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
-  match app.nav.top() {
-    History(_, _, _) => app.nav.replace(Chat(r))
-    _ => ()
-  }
-  match entry {
-    Some(e) => @sfpages.history_focus(r.station, key, e)
-    None => ()
-  }
-  side_change(src, r, "open", Some(key))
-}
-
-///|
 /// The history's top: across the panel, on its ground.
 // kept across runs: a value (no field of it changes)
 let history_top_box : @ui.Style = @ui.css("w=Full bg=Bg")

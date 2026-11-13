@@ -901,7 +901,7 @@ pub fn goes_over(p : Page) -> Bool {
 
 ///|
 /// Whether page `p` is a chat's detail asked as a page, which the frame lays beside its chat in its side panel
-/// (main_page): its history, a service, a file. Opened on the tape, the panel comes over with it (tape_frame: a panel
+/// (beside_follow): its history, a service, a file. Opened on the tape, the panel comes over with it (tape_frame: a panel
 /// opened), not the page, which keeps the chat.
 pub fn laid_beside(p : Page) -> Bool {
   p is (History(_, _, _) | Service(_, _) | PreviewFile(_, _, _, _))
@@ -1138,12 +1138,9 @@ fn main_page(
   match page {
     // (its bar the page node's: chat_bar_wide_node)
     Chat(r) => chat_page(c, src, w, r)
-    // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
-    // open beside it at the entry asked, the page the chat's
-    History(r, key, entry) => {
-      c.tell("history-page/" + key, fn() { history_beside(src, r, key, entry) })
-      chat_page(c, src, w, r)
-    }
+    // an agent's history, asked as a page (a link's `?history=…&entry=…`), and a visualization: never on top here,
+    // their chat put in their place with them beside it as they come on top (service_tab.mbt beside_follow)
+    History(_, _, _) | PreviewFile(_, _, _, _) => ()
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // the settings come to beside their list: its first row's page (settings_frame.mbt settings_landing)
@@ -1161,9 +1158,8 @@ fn main_page(
     Screen(_) | DriveRead(_) | DrivePlay(_) => ()
     // 已归档, none of its chats open beside the list: what it is
     Archived => archive_main(c)
-    // a web service, a visualization opened aside: its chat with it beside it (service_tab.mbt)
-    Service(station, job) => service_beside(c, src, w, station, job)
-    PreviewFile(station, key, path, name) => tab_beside(c, src, w, station, key, file_tab(key, path, name))
+    // a web service: as those above once the station says whose chat runs it; till then nothing, not found said so
+    Service(station, job) => service_beside(c, src, station, job)
   }
 }
 
