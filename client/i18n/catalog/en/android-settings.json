@@ -547,6 +547,7 @@
   "android-settings.station.glyphSearch": "Search icons",
   "android-settings.station.glyphNone": "No icons found",
   "android-settings.station.emojiPaste": "Paste or type any emoji",
+  "android-settings.station.pictures": "Picture",
   "android-settings.station.image": "Upload image",
   "android-settings.station.imageAnother": "Another image",
   "android-settings.station.imageFailed": "Couldn't read this image or make it small enough",

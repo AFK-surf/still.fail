@@ -505,6 +505,7 @@
   "android-settings.station.glyphSearch": "搜索图标",
   "android-settings.station.glyphNone": "未找到图标",
   "android-settings.station.emojiPaste": "粘贴或输入任意 emoji",
+  "android-settings.station.pictures": "图片",
   "android-settings.station.image": "上传图片",
   "android-settings.station.imageAnother": "更换图片",
   "android-settings.station.imageFailed": "无法读取此图片，或无法压缩到足够小",

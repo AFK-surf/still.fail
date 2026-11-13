@@ -734,6 +734,7 @@ let zh : Map[String, String] = {
   "android-settings.station.make": "生成命令",
   "android-settings.station.name": "名称",
   "android-settings.station.namePlaceholder": "例如机器名：willow、cedar",
+  "android-settings.station.pictures": "图片",
   "android-settings.station.remove": "移除 station",
   "android-settings.station.removeRow": "从 workspace 移除",
   "android-settings.station.removeText": "它将断开与 {app} cloud 的连接，成员无法再从这里访问它。该机器上的 {app} 和数据不受影响，以后可以重新添加。",

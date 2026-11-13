@@ -111,16 +111,6 @@ fn mark_cells(t : @ui.Tester) -> Array[@ui.SemNode] {
 }
 
 ///|
-/// The grid scrolled to its foot (a picture or none), on to rest.
-fn mark_to_foot(t : @ui.Tester) -> Unit {
-  let (x, y, w, h) = mark_cells(t)[0].rect
-  for _ in 0..<6 {
-    t.wheel(x + w / 2.0, y + h / 2.0, 3000.0)
-  }
-  t.run_for(@ui.move_most_ms)
-}
-
-///|
 /// The colours' buttons as a screen reader is told them: each its name and whether it is the one picked.
 fn mark_colours_said(t : @ui.Tester) -> Array[(String, Bool)] {
   ["图标", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink"].map(fn(l) {
@@ -149,7 +139,7 @@ fn mark_close(t : @ui.Tester) -> Unit {
 }
 
 ///|
-test "图标: on each screen the icons' side, its field, the colours with the mark's own picked, the grid with its icon on the accent, a picture or none under it" {
+test "图标: on each screen the icons' side, its field, the colours with the mark's own picked, the grid with none first and its icon on the accent; a picture its own side" {
   for s in mark_screens {
     let run = mark_open(platform=s.0, wide=s.1)
     let t = run.t
@@ -173,12 +163,17 @@ test "图标: on each screen the icons' side, its field, the colours with the ma
     assert_true(cells.length() >= 12, msg=about)
     assert_true((cells[6].rect.1 - cells[5].rect.1) > cell.3, msg=about)
     assert_true(cells.iter().all(fn(b) { b.selected == Some(b.label == "rocket") }), msg=about)
-    // under the grid, at its foot: a picture or none
-    mark_to_foot(t)
-    let cells = mark_cells(t)
+    // none the grid's first cell, not the mark's; a picture its own side, the third
+    assert_eq(cells[0].label, "不使用图标", msg=about)
+    assert_eq(cells[0].selected, Some(false), msg=about)
+    assert_true(mark_word(t, "图片").0 > side.0, msg=about)
+    assert_true(t.find("上传图片") is None, msg=about)
+    mark_press(t, "图片")
     let up = mark_word(t, "上传图片")
-    let none = mark_word(t, "不使用图标")
-    assert_true(cells[cells.length() - 1].rect.1 < up.1 && up.1 < none.1, msg=about)
+    assert_true(up.1 > side.1, msg=about)
+    assert_eq(mark_cells(t).length(), 0, msg="\{about}: no grid")
+    assert_true(t.find("搜索图标") is None, msg="\{about}: no field")
+    assert_true(mark_buttons(t, "red").length() == 0, msg="\{about}: no colours")
     mark_close(t)
     assert_true(!@sf.presenter_visible(), msg="\{about}: closed")
     assert_eq(run.set, [])
@@ -204,7 +199,7 @@ test "图标: an icon pressed sets it in the colour picked, the sheet going; a c
     // an icon: in the colour picked
     t.click(Button, label="purple")
     t.run_for(@ui.move_most_ms)
-    let others = mark_cells(t).filter(fn(b) { b.label != "rocket" })
+    let others = mark_cells(t).filter(fn(b) { b.label != "rocket" && b.label != "不使用图标" })
     let other = others[0]
     let (ox, oy, ow, oh) = other.rect
     t.tap(ox + ow / 2.0, oy + oh / 2.0)
@@ -215,7 +210,7 @@ test "图标: an icon pressed sets it in the colour picked, the sheet going; a c
 }
 
 ///|
-test "图标: words typed find the icons named by them; none found says so, 不使用图标 under it takes the mark away" {
+test "图标: words typed find the icons named by them; none found says so, none (the grid's first) takes the mark away" {
   for s in mark_screens {
     let about = "platform \{s.0}, wide \{s.1}"
     let run = mark_open(platform=s.0, wide=s.1)
@@ -236,7 +231,8 @@ test "图标: words typed find the icons named by them; none found says so, 不�
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("未找到图标") is Some(_), msg=about)
     assert_eq(mark_buttons(t, "robot").length(), 0, msg=about)
-    mark_press(t, "不使用图标")
+    t.click(Button, label="不使用图标")
+    t.run_for(@ui.move_most_ms)
     assert_eq(run.set, [("", "")], msg=about)
     assert_true(!@sf.presenter_visible(), msg="\{about}: gone")
   }
@@ -279,7 +275,7 @@ test "上传图片: a small picture put up as it is; a large one read and made s
     let about = "platform \{s.0}, wide \{s.1}"
     let run = mark_open(platform=s.0, wide=s.1, finish=false)
     let t = run.t
-    mark_to_foot(t)
+    mark_press(t, "图片")
     mark_press(t, "上传图片")
     (run.asked.val.unwrap())(Some(b"\x89PNG\r\n\x1a\nxyz"))
     t.draw()
@@ -289,7 +285,6 @@ test "上传图片: a small picture put up as it is; a large one read and made s
     // a picture put up: 更换图片
     mark_again(run, name="Willow", icon="data:image/png;base64,iVBORw0KGgp4eXo=")
     t.run_for(@ui.move_most_ms)
-    mark_to_foot(t)
     assert_true(t.find("更换图片") is Some(_), msg=about)
     mark_press(t, "更换图片")
     (run.asked.val.unwrap())(Some(b"BM not one put up as it is"))
@@ -305,7 +300,7 @@ test "上传图片: a small picture put up as it is; a large one read and made s
     // one that does not decode: said so, the sheet staying
     mark_again(run, name="Willow", emoji="🚀")
     t.run_for(@ui.move_most_ms)
-    mark_to_foot(t)
+    mark_press(t, "图片")
     mark_press(t, "上传图片")
     (run.asked.val.unwrap())(Some(b"BM not one either"))
     t.draw()
@@ -326,8 +321,8 @@ test "上传图片: a picture still being read as the sheet is closed is let go 
       let about = "platform \{s.0}, wide \{s.1}, decoded \{ok}"
       let run = mark_open(platform=s.0, wide=s.1, finish=false)
       let t = run.t
-      mark_to_foot(t)
-      mark_press(t, "上传图片")
+        mark_press(t, "图片")
+        mark_press(t, "上传图片")
       (run.asked.val.unwrap())(Some(b"BM not one put up as it is"))
       t.draw()
       mark_close(t)
@@ -345,7 +340,7 @@ test "上传图片: the picker answering after the sheet has closed and opened f
     let about = "platform \{s.0}, wide \{s.1}"
     let run = mark_open(platform=s.0, wide=s.1, finish=false)
     let t = run.t
-    mark_to_foot(t)
+    mark_press(t, "图片")
     mark_press(t, "上传图片")
     let answer = run.asked.val.unwrap()
     mark_close(t)
@@ -393,7 +388,9 @@ test "图标 and Emoji: the grid is the other side's, or what the words typed fi
     t.draw()
     // (the emoji's first row the first of the grid, the icons gone; at rest where the colours were, as they go)
     let cells = mark_cells(t)
-    assert_eq(cells.filter(fn(b) { !station_emoji_has(b.label) }).length(), 0, msg="\{about}: the icons gone")
+    assert_eq(cells.filter(fn(b) { b.label != "不使用图标" && !station_emoji_has(b.label) }).length(), 0, msg="\{about}: the icons gone")
+    // (none not picked there either: the mark is an icon)
+    assert_eq(cells[0].selected, Some(false), msg="\{about}: none")
     assert_true(cells.iter().all(fn(b) { b.rect.1 >= mark_button(t, "🖥️").1 - 0.5 }), msg="\{about}: from its top")
     t.run_for(@ui.move_most_ms)
     assert_true(mark_button(t, "🖥️").1 < top.1 - 30.0, msg="\{about}: \{Repr(mark_button(t, "🖥️"))} \{Repr(top)}")
@@ -463,8 +460,9 @@ test "图标 with keys: Tab goes from the field to the colours, then the grid; E
       ["Button 图标", "Button red", "Button orange", "Button amber", "Button green", "Button teal", "Button blue", "Button purple", "Button pink"],
       msg=about,
     )
-    let first = mark_cells(t)[0].label
-    assert_eq(order[from + 10], "Button \{first}", msg=about)
+    // (none the grid's first, then its icons)
+    assert_eq(order[from + 10], "Button 不使用图标", msg=about)
+    let first = mark_cells(t)[1].label
     // back to blue: Enter picks it, the focus staying there
     for _ in 0..<14 {
       if t.focused() is Some(f) && f.label == "blue" {
@@ -494,4 +492,17 @@ test "图标 with keys: Tab goes from the field to the colours, then the grid; E
 /// Whether `label` is one of the emoji offered.
 fn station_emoji_has(label : String) -> Bool {
   ["🖥️", "💻", "🍎", "🐧", "🪟", "☁️", "🏠", "🏢", "🚀", "⚡", "🔥", "🧪", "🛠️", "🐳", "🦀", "🐙", "🌲", "🌊", "🌙", "☀️", "🍊", "🍋", "🍇", "🐱", "🐶", "🦊", "🐼", "🐸", "🦉", "🐝", "🦄", "🐢", "🌵", "🌸", "🍄", "🌈", "❄️", "⭐", "🪐", "🌍", "🍉", "🍒", "🥑", "🍕", "☕", "🎧", "🎮", "🤖"].contains(label)
+}
+
+///|
+test "不使用图标: a mark with none has none's cell picked, the grid's first, on the icons' side and the emoji's" {
+  for s in mark_screens {
+    let about = "platform \{s.0}, wide \{s.1}"
+    let run = mark_open(platform=s.0, wide=s.1, emoji="", icon="")
+    let t = run.t
+    assert_eq(mark_cells(t).filter(fn(b) { b.selected == Some(true) }).map(fn(b) { b.label }), ["不使用图标"], msg=about)
+    mark_press(t, "Emoji")
+    assert_eq(mark_cells(t).filter(fn(b) { b.selected == Some(true) }).map(fn(b) { b.label }), ["不使用图标"], msg=about)
+    mark_close(t)
+  }
 }

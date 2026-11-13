@@ -751,6 +751,7 @@ let en : Map[String, String] = {
   "android-settings.station.make": "Get command",
   "android-settings.station.name": "Name",
   "android-settings.station.namePlaceholder": "e.g. willow, cedar",
+  "android-settings.station.pictures": "Picture",
   "android-settings.station.remove": "Remove station",
   "android-settings.station.removeRow": "Remove from workspace",
   "android-settings.station.removeText": "It disconnects from {app} cloud and members can't reach it from here. {app} and data on the machine stay; you can add it again later.",
