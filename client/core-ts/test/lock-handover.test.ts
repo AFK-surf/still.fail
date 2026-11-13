@@ -28,7 +28,9 @@ import { key, signed as simSigned } from "../../../station/test/lock-world-sim.t
 import type { CoreError } from "../src/error.ts";
 import { type Entry, type Signer, canonical, entryHash, next } from "../src/lock.ts";
 import { bodyHash } from "../src/lock-moved.ts";
+import { Core } from "../src/core.ts";
 import { httpError } from "../src/station/requests.ts";
+import { HostWire } from "../src/station/wire.ts";
 import { hex, utf8 } from "../src/util.ts";
 import { handOver, handOverState, held, inForceOf, notedRole, pendingHeld, read } from "../src/views/lock.ts";
 import { serveTrusted, tryOne } from "../src/views/pair.ts";
@@ -118,8 +120,7 @@ async function setUp(o: Opts = {}) {
     host.secure.set("personal-signer", { value: seedOf(MINE), user: true });
   }, ours, ours, undefined, [D], o.view === undefined ? {} : { members: o.view });
   clock = () => r.host.nowMs();
-  const inner = r.core.inner;
-  inner.mesh = () => withoutMesh(base.hex);
+  let inner = r.core.inner;
   const signer = mine! as Signer;
   // The chain: the genesis, each member's binding, by their own device; the extras' web page.
   const chain: Entry[] = [r.cloud.chains.get("ws")![0]!];
@@ -176,19 +177,35 @@ async function setUp(o: Opts = {}) {
     }
     return status === 200 ? Effect.succeed(out) : Effect.fail(httpError(status, out));
   };
-  const original = inner.stations.requests.call.bind(inner.stations.requests);
-  inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
-    const [ws, id] = addr.toString().split("/");
-    const n = id === undefined ? null : nameOf(id);
-    if (path.startsWith("/lock") && n !== null && (n === "D" || (stations as Record<string, Cloud | undefined>)[n] !== undefined)) {
-      const at = `${ws}/${n}`;
-      st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
-      if (id === D || ws !== "ws") return method === "POST" ? Effect.succeed({}) : Effect.fail(httpError(404, { error: "no route" }));
-      if (st.down.has(at.slice(-1))) return Effect.fail(httpError(503, { error: "not reached" }));
-      return route((stations as Record<string, Cloud | undefined>)[n]!, method, path, body);
-    }
-    return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
-  }) as typeof inner.stations.requests.call;
+  // (this device's mesh, and its requests to the workspace's stations, on a core as it starts: `restart`)
+  const install = (inner: typeof r.core.inner) => {
+    inner.mesh = () => withoutMesh(base.hex);
+    const original = inner.stations.requests.call.bind(inner.stations.requests);
+    inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+      const [ws, id] = addr.toString().split("/");
+      const n = id === undefined ? null : nameOf(id);
+      if (path.startsWith("/lock") && n !== null && (n === "D" || (stations as Record<string, Cloud | undefined>)[n] !== undefined)) {
+        const at = `${ws}/${n}`;
+        st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
+        if (id === D || ws !== "ws") return method === "POST" ? Effect.succeed({}) : Effect.fail(httpError(404, { error: "no route" }));
+        if (st.down.has(at.slice(-1))) return Effect.fail(httpError(503, { error: "not reached" }));
+        return route((stations as Record<string, Cloud | undefined>)[n]!, method, path, body);
+      }
+      return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
+    }) as typeof inner.stations.requests.call;
+  };
+  install(inner);
+  /// The app started anew on the same host (test/vault.test.ts's): its database and secure storage as they were,
+  /// nothing of the run before in memory; the lock is read as the sync reads it as it starts.
+  const restart = async () => {
+    await Effect.runPromise(inner.data.written);
+    r.core.close();
+    r.host.takeEmitted();
+    r.core = await Core.create(r.host, { clock: r.host.time.clock, sample: 0, wire: () => new HostWire(r.host) });
+    inner = r.core.inner;
+    install(inner);
+    await r.host.time.pass(500);
+  };
   const run = async <X>(e: Effect.Effect<X, any>): Promise<{ ok?: X; error?: CoreError }> => {
     let out: { ok?: X; error?: CoreError } | null = null;
     inner.runner.fork(Effect.match(e, { onSuccess: (ok) => void (out = { ok }), onFailure: (error) => void (out = { error }) }));
@@ -225,7 +242,7 @@ async function setUp(o: Opts = {}) {
   };
   /// An ask of the person's own lock's key for something else: grants signed (none: the ask alone).
   const askGrant = () => run(inner.adb.personal().signGrants("s1", [], "a grant"));
-  return { r, inner, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, crowd, base, WEB, WEB5, A, B, C, viewer, firstApp, g, askGrant, now: () => now };
+  return { r, get inner() { return inner; }, restart, first, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, crowd, base, WEB, WEB5, A, B, C, viewer, firstApp, g, askGrant, now: () => now };
 }
 
 /// A second app device of `log`'s person (`d`) as the product puts it on their own log: a device entry signed by the
@@ -797,4 +814,74 @@ test("a station from before taken out of the chain: no longer waited for, moved"
   await w.run(read(w.inner, "ws"));
   assert.equal(w.stations.A.chain(null)?.state?.moved, w.gMe, "moved at A");
   assert.equal(inForceOf(w.inner, "ws").f.stations.has(w.B), false, "B not in the state in force");
+});
+
+// Two owners' devices both due (the genesis's person no owner any more): each says its own statements and signs its own
+// `moved`, each at a station the other's does not reach; the stations meet: one root everywhere, the list the chain
+// had, this device's statements under a root that lost harming nothing and never signed again. bob's device is played
+// by hand, as in the test of two calls above.
+test("two owners both due hand over by themselves at once: one root at every station and here, the loser's statements harm nothing and are not said again", async () => {
+  const w = await setUp({ auto: true, mine: "second", firstLowered: true, bobOwner: true });
+  const [a, b] = [w.stations.A, w.stations.B];
+  assert.deepEqual(handOverState(w.inner, "ws"), { asks: true }, "this device due");
+  // bob's app hands over at B, which this device does not reach (B said it serves bodies and logs as the lock was read)
+  w.st.down.add("B");
+  const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: w.g.keys };
+  w.bob.say("open", { ...settings, email: "b@x.com" }, "ws");
+  w.bob.say("member", { sub: "s0", email: "o@x.com", lock: w.first.genesis, role: "admin" }, "ws");
+  w.bob.say("member", { sub: "s1", email: "a@x.com", lock: w.gMe, role: "owner" }, "ws");
+  w.bob.say("member", { sub: "r3", email: "c@x.com", lock: w.xena.genesis, role: "member" }, "ws");
+  w.bob.say("station", { key: w.A }, "ws");
+  w.bob.say("station", { key: w.B }, "ws");
+  const [took] = bring(b, w.bob, true, "ws");
+  assert.equal(took, 200);
+  const head = w.chain.at(-1)!;
+  const bobs = signed(next("ws", { seq: head.seq, hash: entryHash(head), genesis: entryHash(w.chain[0]!) }, Math.max(head.at, w.now()), "moved", { root: w.bob.genesis }) as Omit<StationEntry, "sig">, w.bob.app.signer) as unknown as Entry;
+  b.takeLock([...w.chain, bobs] as unknown as StationEntry[]);
+  assert.equal(b.chain(null)?.state?.moved, w.bob.genesis, "B moved to bob's log");
+  // this device, as it answers an ask for something else, then as the lock is read: at A
+  assert.equal((await w.askGrant()).error, undefined);
+  const saidHere = w.said().length;
+  assert.ok(saidHere > 0, "said its own");
+  await w.run(read(w.inner, "ws"));
+  assert.equal(a.chain(null)?.state?.moved, w.gMe, "A moved to s1's log by itself");
+  const list = w.d4Chain(w.chain);
+  meet(a, b);
+  w.st.down.clear();
+  for (let n = 0; n < 3; n++) {
+    await w.run(read(w.inner, "ws"));
+    await w.run(w.inner.adb.personal().refresh("s1"));
+  }
+  const root = a.chain(null)?.state?.moved;
+  assert.ok(root === w.gMe || root === w.bob.genesis, "a moved stands");
+  assert.equal(b.chain(null)?.state?.moved, root, "B goes by the same moved");
+  assert.equal(stationHash(a.lockAfter(-1).at(-1)!), stationHash(b.lockAfter(-1).at(-1)!), "one chain: the same head at both");
+  assert.equal(inForceOf(w.inner, "ws").root, root, "this device goes by the same root");
+  const nowS = Math.floor(w.r.host.nowMs() / 1000);
+  for (const [n, c] of [["A", a], ["B", b]] as const) assert.deepEqual(d4Diff(list, d4Station(c, root!, nowS)), [], `${n}'s state in force is the list the chain had`);
+  assert.deepEqual(d4Diff(list, d4Core(w.inner)), [], "the state in force here is the list the chain had");
+  const mine = (c: Cloud) => c.lockKept(null).filter((e) => e.kind === "moved" && e.sig.key === w.signer.id).length;
+  assert.deepEqual([mine(a), mine(b)], [1, 1], "this device's moved signed once");
+  assert.ok(!pendingHeld(w.inner, "ws").some((x) => x.entry.kind === "moved"), "no moved pending here");
+  assert.equal(w.said().length, saidHere, "nothing said again");
+  assert.equal(handOverState(w.inner, "ws"), null, "moved");
+  assert.equal(w.asked(), 1, "one ask in all");
+});
+
+// The app closed between the statements and the `moved` (here: the moved waited for station B, which had not said it
+// serves bodies and logs; it is updated while the app is closed): the core started anew on the same data moves it as it
+// reads its lock, nobody asked.
+test("the app closed between the statements and the moved: moved as it starts again and reads its lock, no ask", async () => {
+  const w = await setUp({ auto: true, old: ["B"] });
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS, "all said");
+  assert.deepEqual(movedAt(w), [null, null], "nothing moved yet");
+  w.st.old.clear();
+  await w.restart();
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved as the core started again read its lock");
+  assert.equal(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved");
+  assert.equal(w.asked(), 1, "no ask more");
+  assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS, "nothing said twice");
 });
