@@ -1153,6 +1153,44 @@ test("a device taken out of the lock that held a vault's key: the owner's device
   r.core.close();
 });
 
+// The locks' end to end on real stations, round 7b, in the side run of 2026-11-13 (run 43364838565): a device of the
+// owner's taken out of the lock by another of theirs while the vault lived on a station that was frozen; this one,
+// started anew (no key unsealed), read the box key each time the lock came to key the vault anew, its writes waiting on
+// that station: the person asked seven times by a device they were doing nothing on.
+test("a device taken out of the lock by another device of its person's, this one started anew (no key unsealed): nobody asked, the vault waits; the person opening its item is asked once, and the vault is keyed anew with that key", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  assert.ok(r.st.vaults.get(id)!.keys.some((k) => k.cert.device === r.phone.hex), "the phone given the key");
+  await r.restart();
+  const asked = r.host.secureAsked.length;
+  // The phone takes itself out of the lock (an act on the phone), and the lock is read here, again and again.
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: r.phone.hex }, r.phone);
+  for (let n = 0; n < 3; n++) {
+    await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+    await r.host.time.pass(500, 10);
+  }
+  r.take();
+  assert.deepEqual(r.host.secureAsked.slice(asked), [], "nobody asked: nothing was done on this device");
+  assert.equal(r.st.vaults.get(id)!.epoch, 0, "the vault waits to be keyed anew");
+  // The person opens the item: asked once, for that; the vault keyed anew with the key then in hand.
+  assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  await r.host.time.pass(500, 10);
+  r.take();
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY], "asked once, as the item was opened");
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [1, ["ab".repeat(32)]], "keyed anew without the phone");
+  assert.equal(r.st.items.get(put.id)!.epoch, 1, "its item written again under the new key");
+  r.core.close();
+});
+
 // A keying anew stopped half-way: the vault's next version written under a new key, an item not written again under
 // it (the device closed or cut off, or the station refused that write). Nothing wrote it again, and it could not be
 // opened anywhere: its key was forgotten here, and the version sealing it for this device let go.
