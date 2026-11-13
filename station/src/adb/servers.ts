@@ -196,6 +196,14 @@ export class GrantServers {
     return null;
   }
 
+  /// Done once what was asked written of the record so far is written: a test's wait. Nothing of the station waits on
+  /// it, nor on a server's end, as it stops (`close`): a server that does not end at SIGTERM must not hold a station
+  /// that stops or hands over, whose agents, events and store close after this, and a record left naming a server
+  /// that has ended costs the next station one ps (`reap`).
+  written(): Promise<void> {
+    return this.#writing;
+  }
+
   async close(): Promise<void> {
     await Promise.all(this.ids().map((id) => this.stop(id)));
   }
