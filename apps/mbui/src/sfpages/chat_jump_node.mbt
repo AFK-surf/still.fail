@@ -439,8 +439,15 @@ fn chat_gone(jump : ChatJump) -> (String, Double) {
 }
 
 ///|
-/// Colour `c` (0xRRGGBBAA) as clear as `k` (0 to 1) of it.
+/// Colour `c` (0xRRGGBBAA) as clear as `k` (0 to 1) of it; none at all (0) where none of it shows, so a box whose ground
+/// it is draws nothing of its own then (a row gone to at rest, a message's menu shut): not a clear ground over every
+/// row, a box of its own whose height what judges a drawn box's size (ui's sizes_steady) reads as the row's.
 fn lit_by(c : Int64, k : Double) -> Int64 {
   let a = (c & 0xFFL).to_double() * (if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k })
-  (c & 0xFFFFFF00L) | (a + 0.5).to_int64()
+  let a = (a + 0.5).to_int64()
+  if a <= 0L {
+    0L
+  } else {
+    (c & 0xFFFFFF00L) | a
+  }
 }

@@ -1405,3 +1405,38 @@ test "小屏, a chat's page made with its inside nodes: a finger's pick in a mes
   assert_eq(@ui.picked_now(), None)
   assert_eq(calls.filter(fn(c) { c.0 == "composer.quote" }).length(), 0)
 }
+
+///|
+/// The drawn nodes of the window's tree on the accent's ground (a row gone to flashing, chat_flash_node's), how many as
+/// seen (some of the colour); and how many across a row (200 wide or more) of any colour as clear as nothing (a ground
+/// drawn all gone over a row: its flash at rest, its menu's band shut, as they were; not a control's ground under the
+/// pointer, a bar's button's 32 by 32, which is another matter).
+fn flash_grounds() -> (Int, Int) {
+  let accent = @ui.tree_theme().color(AccentBg) & 0xFFFFFF00L
+  let mut seen = 0
+  let mut clear = 0
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.ground != 0L && (d.ground & 0xFFL) == 0L && d.w >= 200.0 {
+      clear += 1
+    } else if (d.ground & 0xFFFFFF00L) == accent && d.ground != 0L {
+      seen += 1
+    }
+  }
+  (seen, clear)
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: a message gone to flashes on the accent's ground; at rest no row draws a ground of it, nor any clear ground (a row's flash, its menu's band)" {
+  for s in long_screens {
+    let (name, _, _, _) = s
+    let l = long_chat()
+    let t = place_long_open(l, s)
+    assert_eq(flash_grounds(), (0, 0), msg="\{name}: opened")
+    go_to(long_ref, (l.first.get() + 3).to_double())
+    @ui.came_from_outside()
+    t.run_for(@sfbase.flash_in_ms + 100.0)
+    assert_true(flash_grounds().0 > 0, msg="\{name}: flashing, no accent's ground drawn: \{Repr(flash_grounds())}")
+    long_run(t, l, @sfbase.flash_ms + long_rest_ms)
+    assert_eq(flash_grounds(), (0, 0), msg="\{name}: at rest")
+  }
+}

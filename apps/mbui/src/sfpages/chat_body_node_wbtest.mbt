@@ -823,9 +823,9 @@ fn body_held(which : BodyHeld) -> String {
     "an HTML page it places, as high, not compared (P12): 1",
     "where it went, narrow, route_line_down further down (meant): 1",
   ]
-    HeldChanges => [
-    "its picture held under the list's top (c.stick): 7",
-  ]
+    // (its turn over no more compared with the old list, which came down there (the changes' sweep, turned on
+    // purpose): one of the 7 counted before was of that step)
+    HeldChanges => ["its picture held under the list's top (c.stick): 6"]
   }
   lines.sort()
   lines.join("\n")
@@ -990,38 +990,52 @@ test "a chat's messages as nodes as its view changes, at rest after each: the sa
       unjudged=true,
     )
     t.run_for(@ui.move_most_ms)
+    let mut before : BodyDrawn? = None
     for i, st in steps {
       let was = made.copy()
       let read = @sfbase.entries_of(st.1)
       view.set(st.1)
       entries.set(read)
       t.run_for(@ui.move_most_ms)
-      body_cmp(
-        {
-          name: "\{s.0} \{st.0}",
-          mode: "chat",
-          w: s.1,
-          h: s.2,
-          entries: body_entries(st.1, read),
-          anchor: None,
-          paged: false,
-          old: olds[i],
-          new: body_drawn(t, s.1, s.2, body_new_rows(views, 2.0)),
-          faults: [],
-          outgrown: [],
-        },
-        known,
-        said,
-      )
+      let drawn = body_drawn(t, s.1, s.2, body_new_rows(views, 2.0))
+      // (its turn over, its agent's line gone with nothing in its place: turned on purpose from the old list's, which
+      // comes down by the line's height; the page made as nodes leaves its room under the last row, each row that stays
+      // where it was at the step before (the user, 2026-11-12: a turn that ends with no answer must not carry what is
+      // read up and let it fall back; #5914's leaves_room; the coordinator of the migration agreed the old page's cases
+      // of it turn on purpose, 2026-11-13). The room as tall as the line was as the step before showed it)
+      if st.0 == "its turn over" {
+        match before {
+          Some(b) => body_turn_over_held(s.0 + " " + st.0, b, drawn, said)
+          None => said.push(s.0 + " " + st.0 + ": no step before it")
+        }
+      } else {
+        body_cmp(
+          {
+            name: "\{s.0} \{st.0}",
+            mode: "chat",
+            w: s.1,
+            h: s.2,
+            entries: body_entries(st.1, read),
+            anchor: None,
+            paged: false,
+            old: olds[i],
+            new: drawn,
+            faults: [],
+            outgrown: [],
+          },
+          known,
+          said,
+        )
+      }
+      before = Some(drawn)
       // what was made for it: only the row that came (or came to be another kind of row), and a row the list let go
       // of as it went out of view coming into it again; none made again for nothing
       let again = made.iter().filter(fn(kv) { was.get(kv.0).unwrap_or(0) != kv.1 }).map(fn(kv) { kv.0 }).collect()
       let want = match st.0 {
         "a message comes" => ["m:ts900"]
         "its agent at work" => ["act:s-c1"]
-        // (its agent's line gone, the list comes down to its end on a phone's window: the message over the rows it
-        // showed comes into it again, made as any row coming into view, no other made again)
-        "its turn over" if s.0 == "小屏" => ["m:ts7"]
+        // (its agent's line gone leaving its room: nothing comes down, so none comes into view to be made; the old
+        // list's case, which came down and made m:ts7 again on a phone's window, turned on purpose (above))
         "one not sent" => ["o:o-9"]
         // (what was sent from here as the core's message: its key the outbox entry's, its row the same, none made: what
         // is sent and what it becomes are one row, its words' node kept so a finger's pick over them stays)
@@ -1042,6 +1056,43 @@ test "a chat's messages as nodes as its view changes, at rest after each: the sa
   }
   assert_eq(said, [], msg=said.join("\n"))
   assert_eq(body_known_said(known), body_held(HeldChanges), msg=body_known_said(known))
+}
+
+///|
+/// Its turn over on the page made as nodes (`name`), `now` against `before` (the step before, its agent's line the last
+/// row): each row both draw where it was, no row of before's but the line gone, and the room under the last row as tall
+/// as the line was drawn then (the line's foot where it was), in `said` where not.
+fn body_turn_over_held(name : String, before : BodyDrawn, now : BodyDrawn, said : Array[String]) -> Unit {
+  guard before.rows.iter().find_first(fn(r) { r.key.has_prefix("act:") }) is Some(line) else {
+    said.push(name + ": no agent's line the step before")
+    return
+  }
+  for r in now.rows {
+    match before.rows.iter().find_first(fn(b) { b.key == r.key }) {
+      Some(b) =>
+        if body_r(b.top) != body_r(r.top) {
+          said.push(name + " " + r.key + ": its top \{body_r(b.top)} the step before, \{body_r(r.top)} now (held)")
+        }
+      None => said.push(name + " " + r.key + ": a row not drawn the step before")
+    }
+  }
+  for b in before.rows {
+    if b.key != line.key && b.top + b.h > 0.0 && !now.rows.iter().any(fn(r) { r.key == b.key }) {
+      said.push(name + " " + b.key + ": drawn the step before, not now")
+    }
+  }
+  match now.rows.last() {
+    Some(last) => {
+      let room = line.top + line.h - (last.top + last.h)
+      if body_r(room) != body_r(line.h) {
+        said.push(name + ": the room under the last row \{body_r(room)}, the line \{body_r(line.h)} high the step before")
+      }
+    }
+    None => said.push(name + ": no row drawn")
+  }
+  if now.rows.iter().any(fn(r) { r.key == line.key }) {
+    said.push(name + ": the agent's line still drawn")
+  }
 }
 
 ///|

@@ -401,6 +401,10 @@ fn chat_body_node(
         }
       },
       follows=fn() { true },
+      // (an agent's line gone at its foot leaves its room under the last row, fading where it is: a turn that ends with
+      // no reply carries nothing up to let it fall back; what comes next takes that room first. The owner, 2026-11-12;
+      // the coordinator of the migration, 2026-11-13: mbui's View::scrolls_window `leaves_room`)
+      leaves_room=fn(k) { k.has_prefix("act:") },
       // (what shows held by what is read: not by the row saying the page before comes, which what comes in is put in
       // under, going on down with what shows)
       holds=fn(k) { k != "older" },
