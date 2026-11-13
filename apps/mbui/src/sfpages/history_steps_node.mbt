@@ -518,8 +518,12 @@ fn item_node(
     "text" =>
       ev_node(v, "said", "", "", rail_last=rail, row=true, fn(b) {
         let words = text(content, "text")
-        one_line_node(b, ik + "/text", fn(l) {
-          if flag(content, "subagent") {
+        let line = text(content, "line")
+        let sub = flag(content, "subagent")
+        if !sub && words == line && !words.contains("\n") && words.length() <= 24 {
+          steps_box_node(b, h_one, fn(o) { steps_words(o, fn() { line }, h_one_words) })
+        } else if sub {
+          one_line_node(b, ik + "/text", fn(l) {
             // (a chip: in bones one piece)
             l.box(fn(tag) {
               @sf.style_node(tag, fn() { h_tag })
@@ -527,8 +531,64 @@ fn item_node(
               steps_words(tag, fn() { @sf.t("web-main.history.subagent") }, h_tag_words)
             })
             |> ignore
-          }
-        }, text(content, "line"), "", fn(w) { md_node(w, words, field(content, "md"), small=true) })
+          }, line, "", fn(w) { md_node(w, words, field(content, "md"), small=true) })
+        } else {
+          let key = ik + "/text"
+          let open = fn() { steps_own.opened.contains(key) }
+          b.pick(open, fn(p, is_open) {
+            p.fills_across(Is(true)).cuts_softly(Is(true)) |> ignore
+            p.box(fn(r) {
+              @sf.style_node(r, fn() { h_one_press })
+              @sf.presses_node(r, fn() { steps_flip(key) })
+              r
+              .says(By(fn() {
+                Some(@view.said(Button, label=if is_open { @sf.t("web-main.fold") } else { line }, expanded=is_open))
+              }))
+              |> ignore
+              if !is_open {
+                r.box(fn(l) {
+                  l.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+                  @sf.words_node(l, fn() { line }, fn() { if @sf.lit_node(r) { h_one_hot } else { h_one_words } })
+                  |> ignore
+                })
+                |> ignore
+                @sf.icon_node(
+                  r,
+                  "chevron-down",
+                  12.0,
+                  By(fn() { if @sf.lit_node(r) { @sf.theme().p.blue } else { @sf.theme().p.muted } }),
+                )
+                |> ignore
+              } else {
+                r.lines_up(Is(Some(Start))) |> ignore
+                steps_box_node(r, h_grow, fn(w) {
+                  steps_box_node(w, h_one_body, fn(m) { md_node(m, words, field(content, "md"), small=true) })
+                }, in_row=true)
+                r.box(fn(o) {
+                  @sf.style_node(o, fn() { h_one_open })
+                  o.min_height(Is(Some(20.0))).shrink(Is(0.0)) |> ignore
+                  @sf.words_node(o, fn() { @sf.t("web-main.fold") }, fn() {
+                    if @sf.lit_node(r) {
+                      h_one_fold_hot
+                    } else {
+                      h_one_fold
+                    }
+                  })
+                  |> ignore
+                  @sf.icon_node(
+                    o,
+                    "chevron-up",
+                    12.0,
+                    By(fn() { if @sf.lit_node(r) { @sf.theme().p.accent } else { @sf.theme().p.blue } }),
+                  )
+                  |> ignore
+                })
+                |> ignore
+              }
+            })
+            |> ignore
+          })
+        }
       })
     "post" => {
       let ends = text(content, "ends")
@@ -587,6 +647,43 @@ fn md_node(v : @view.View, words : String, md : Json?, small? : Bool = false) ->
 }
 
 ///|
+/// A block under its line in `parent` that opens and closes smoothly across the full row width (`cuts_softly`),
+/// without `@motion.reveal_node`'s horizontal center-scaling.
+fn steps_reveal_node(parent : @view.View, open : () -> Bool, make : (@view.View) -> Unit) -> Unit {
+  parent.show(open, fn(s) {
+    s.fills_across(Is(true)).cuts_softly(Is(true)) |> ignore
+    make(s)
+  })
+}
+
+///|
+/// A chevron icon in `parent` that rotates smoothly on `@motion.moved()` when `open` changes (`"chevron-right"`
+/// turns +pi/2 to down; `"chevron-down"` turns -pi to up).
+fn steps_chevron_node(
+  parent : @view.View,
+  name : String,
+  size : Double,
+  color : @view.Live[Int64],
+  open : () -> Bool,
+) -> Unit {
+  let turn_rad = if name == "chevron-right" { 1.5707963267948966 } else { -3.141592653589793 }
+  let way = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
+  let icon = @sf.icon_node(parent, name, size, color)
+  icon.reacts(open, at_start=false, fn(o) {
+    way.go(if o { 1.0 } else { 0.0 }, @motion.moved(), at=icon.cause_at())
+  })
+  icon
+  .turn(
+    By(fn() {
+      way.said()
+      way.value_at(icon.drawn_while(fn(t) { way.goes_at(t) })) * turn_rad
+    }),
+    drawn=true,
+  )
+  |> ignore
+}
+
+///|
 /// An event in one line in `v`: `lead`, then `line` cut at its end; pressed (where there is more), what
 /// `whole` makes under it, the line giving way to 收起.
 fn one_line_node(
@@ -633,8 +730,8 @@ fn one_line_node(
     })
   })
   |> ignore
-  // (opening and closing with its room, sizes_steady.mbt)
-  @motion.reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) }, deferred=true) |> ignore
+  // (opening and closing across its full width with a soft bottom cut)
+  steps_reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) })
 }
 
 ///|
@@ -677,6 +774,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
         // is made)
         room
         .holds_whole()
+        .cuts_softly(By(fn() { long() && shown() < 1.0 }))
         .max_height(By(fn() {
           let k = shown()
           let m = most()
@@ -703,14 +801,13 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
           @sf.style_node(b, fn() { h_fold_toggle })
           steps_pressed(b, fn() { steps_flip(key) }, label=words, folds=true, open~)
           @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
-          @sf.icon_node(b, "chevron-down", 12.0, By(fn() { if @sf.lit_node(b) { @sf.theme().p.accent } else { @sf.theme().p.blue } }), name_now=fn() {
-            if open() {
-              "chevron-up"
-            } else {
-              "chevron-down"
-            }
-          })
-          |> ignore
+          steps_chevron_node(
+            b,
+            "chevron-down",
+            12.0,
+            By(fn() { if @sf.lit_node(b) { @sf.theme().p.accent } else { @sf.theme().p.blue } }),
+            open,
+          )
         })
         |> ignore
       })
@@ -882,15 +979,82 @@ fn task_node(v : @view.View, key : String, task : Json?, rail : Bool, rail_last 
     if !has {
       steps_box_node(b, h_one_wrap, fn(o) { steps_words(o, fn() { text(task, "text") }, if failed { h_one_red_wrap } else { h_one_words_wrap }) })
     } else {
-      one_line_node(b, key, fn(_) {  }, text(task, "text"), if failed { "red" } else { "" }, fn(w) {
-        if agent {
-          md_node(w, answer, field(task, "md"), small=true)
-        } else {
-          steps_run(w, fn() { answer }, h_output, mono=true)
-        }
+      let open = fn() { steps_own.opened.contains(key) }
+      let title = text(task, "text")
+      let preview = text(task, "line")
+      b.box(fn(r) {
+        @sf.style_node(r, fn() { h_one_press })
+        @sf.presses_node(r, fn() { steps_flip(key) })
+        r
+        .says(By(fn() {
+          Some(@view.said(Button, label=if open() { @sf.t("web-main.fold") } else { title }, expanded=open()))
+        }))
+        |> ignore
+        r.box(fn(l) {
+          l.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          @sf.words_node(l, fn() { title }, fn() {
+            if failed {
+              h_one_red
+            } else if @sf.lit_node(r) {
+              h_one_hot
+            } else {
+              h_one_words
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+        r.show(fn() { !open() }, fn(i) {
+          @sf.icon_node(
+            i,
+            "chevron-down",
+            12.0,
+            By(fn() { if @sf.lit_node(r) { @sf.theme().p.blue } else { @sf.theme().p.muted } }),
+          )
+          |> ignore
+        })
+        r.show(open, fn(o) {
+          @sf.style_node(o, fn() { h_one_open })
+          o.grow(Is(1.0)) |> ignore
+          steps_box_node(o, h_grow, fn(_) {  }, in_row=true)
+          @sf.words_node(o, fn() { @sf.t("web-main.fold") }, fn() {
+            if @sf.lit_node(r) {
+              h_one_fold_hot
+            } else {
+              h_one_fold
+            }
+          })
+          |> ignore
+          @sf.icon_node(
+            o,
+            "chevron-up",
+            12.0,
+            By(fn() { if @sf.lit_node(r) { @sf.theme().p.accent } else { @sf.theme().p.blue } }),
+          )
+          |> ignore
+        })
       })
-      b.show(fn() { !steps_own.opened.contains(key) }, fn(s) {
-        steps_box_node(s, h_one, fn(o) { steps_run(o, fn() { text(task, "line") }, h_one_words, mono=!agent) })
+      |> ignore
+      b.pick(open, fn(p, is_open) {
+        p.fills_across(Is(true)).cuts_softly(Is(true)) |> ignore
+        if !is_open {
+          if preview != "" {
+            p.box(fn(s) {
+              @sf.style_node(s, fn() { h_one_press })
+              steps_pressed(s, fn() { steps_flip(key) })
+              steps_run(s, fn() { preview }, h_one_words, mono=!agent)
+            })
+            |> ignore
+          }
+        } else {
+          steps_box_node(p, h_one_body, fn(w) {
+            if agent {
+              md_node(w, answer, field(task, "md"), small=true)
+            } else {
+              steps_run(w, fn() { answer }, h_output, mono=true)
+            }
+          })
+        }
       })
     }
   })
@@ -1041,14 +1205,13 @@ fn group_node(
       steps_pressed(h, fn() { steps_flip(gk) }, label=fn() { text(g, "summary") }, folds=true, open~)
       h.box(fn(i) {
         @sf.style_node(i, fn() { h_icon })
-        @sf.icon_node(i, "chevron-right", 14.0, By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } }), name_now=fn() {
-          if open() {
-            "chevron-down"
-          } else {
-            "chevron-right"
-          }
-        })
-        |> ignore
+        steps_chevron_node(
+          i,
+          "chevron-right",
+          14.0,
+          By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } }),
+          open,
+        )
       })
       |> ignore
       steps_box_node(h, h_grow_clip, fn(w) {
@@ -1075,7 +1238,7 @@ fn group_node(
       ignore(tips)
     })
     |> ignore
-    @motion.reveal_node(gv, open, deferred=true, fn(s) {
+    steps_reveal_node(gv, open, fn(s) {
       steps_box_node(s, h_steps, fn(list) {
         for i, row in rows {
           let rv = Some(row)
@@ -1085,7 +1248,9 @@ fn group_node(
             if calls {
               opened_node(list, src, station, key, rk, content, fn(sum) {
                 steps_words(sum, fn() { @sf.t("web-main.history.thinking") }, h_step_name)
-                steps_box_node(sum, h_grow_clip, fn(c) { steps_words(c, fn() { text(content, "first") }, h_step_hint_line) }, in_row=true)
+                steps_box_node(sum, h_grow_clip, fn(c) {
+                  steps_words(c, fn() { if steps_own.opened.contains(rk) { "" } else { text(content, "first") } }, h_step_hint_line)
+                }, in_row=true)
               }, fn(body) { steps_box_node(body, h_step_body, fn(t) { md_node(t, text(content, "text"), field(content, "md"), small=true) }) })
             } else {
               whole_node(list, src, station, key, rk, content, fn(body) {
@@ -1098,7 +1263,6 @@ fn group_node(
         }
       })
     })
-    |> ignore
   })
 }
 
@@ -1184,23 +1348,16 @@ fn opened_node(
       |> ignore
       steps_pressed(line, fn() { steps_flip(rk) }, folds=true, open~)
       summary(line)
-      @sf.icon_node(
+      steps_chevron_node(
         line,
         "chevron-right",
         12.0,
         By(fn() { if @sf.lit_in_node(line) { @sf.theme().p.blue } else { @sf.theme().p.muted } }),
-        name_now=fn() {
-          if open() {
-            "chevron-down"
-          } else {
-            "chevron-right"
-          }
-        },
+        open,
       )
-      |> ignore
     })
     |> ignore
-    @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, deferred=true) |> ignore
+    steps_reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) })
   })
 }
 
@@ -1253,6 +1410,7 @@ fn whole_node(
       _ => "\u{0}"
     }
   }, fn(p, why) {
+    p.fills_across(Is(true)).cuts_softly(Is(true)) |> ignore
     steps_box_node(p, h_step_body, fn(b) {
       if why == "\u{0}" {
         @sf.wait_line_node(b, fn() { "" }) |> ignore
@@ -1288,6 +1446,7 @@ fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Un
     })
   })
   v.pick(fn() { steps_own.tools.contains(tk) }, fn(p, has) {
+    p.fills_across(Is(true)).cuts_softly(Is(true)) |> ignore
     guard has else {
       steps_box_node(p, h_step_body, fn(b) { @sf.wait_line_node(b, fn() { "" }) |> ignore })
       return
