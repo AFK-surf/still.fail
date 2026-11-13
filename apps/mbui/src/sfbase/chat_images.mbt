@@ -111,6 +111,8 @@ pub fn ChatImages::get(
         self.coming.remove(id)
         self.since.remove(id)
         match r {
+          // (its whole picture given meanwhile, by the viewer that read it: kept, not swapped for the smaller)
+          _ if self.keys.get(id) is Some(k) && k != "" && k != "!" => ()
           Ok((said, Some(bytes))) if bytes.length() > 0 => {
             @ui.add_image(name, bytes)
             self.keys[id] = name
@@ -132,6 +134,22 @@ pub fn ChatImages::get(
       },
       )
       ""
+    }
+  }
+}
+
+///|
+/// The whole of picture `id` read (the viewer's, put up as `key`): what shows it while its own is not here (still
+/// coming, or failed) shows that from now on, its own let go of when it comes; one here already is kept as it is.
+pub fn ChatImages::whole(self : ChatImages, id : String, key : String) -> Unit {
+  match self.keys.get(id) {
+    Some(k) if k != "" && k != "!" => ()
+    _ => {
+      self.keys[id] = key
+      self.unreached.remove(id)
+      self.coming.remove(id)
+      self.since.remove(id)
+      self.tell(id)
     }
   }
 }

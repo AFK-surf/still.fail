@@ -1727,6 +1727,7 @@ pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
           @ui.log(
             "preview: \{v.name} read whole through the core (\{if v.drive is Some(_) { "drive.read" } else if v.named { "file.open" } else { "station.file" }}, \{bytes.length()} bytes)",
           )
+          v.took_whole(src, bytes)
           v.bytes.set(Some(bytes))
           if !v.named {
             keep_read(v.id(), bytes)
@@ -2573,6 +2574,19 @@ fn Viewer::image_name(self : Viewer) -> String {
 }
 
 ///|
+/// Its whole read as `b`: a chat's image put up as its whole picture (Viewer::picture's), and given to the chat's
+/// picture of it, which shows it where its own (the station's thumbnail) is not here yet (ChatImages::whole): an image
+/// opened and read is never missing where its message shows it.
+fn Viewer::took_whole(self : Viewer, src : Source, b : Bytes) -> Unit {
+  guard self.chat_file() && self.shown_kind() == Some(KImage) && b.length() > 0 else { return }
+  if self.image == "" {
+    self.image = self.image_name()
+    @ui.add_image(self.image, b)
+  }
+  src.images.whole(file_image_id(self.station, self.key, self.name), self.image)
+}
+
+///|
 /// What shows of an image: its whole picture once read, else what stands in for it; "" while none is here.
 pub fn Viewer::picture(self : Viewer, src : Source) -> String {
   match self.bytes.get() {
@@ -2621,6 +2635,7 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
             n.fetching.set(false)
             match r {
               Ok(b) => {
+                n.took_whole(src, b)
                 n.bytes.set(Some(b))
                 keep_read(n.id(), b)
               }
