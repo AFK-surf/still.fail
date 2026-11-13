@@ -1,23 +1,34 @@
 // What of the window's tree's words is picked, as a page made of nodes reads it (tree_picked.mbt): a quote's pill over
 // where the pointer let it go (View::beside by picked_end_piece), shown once it is let go, its press keeping what is
-// picked (keeps_picked) and letting it go in its handler (picked_let_go); what each paragraph is of (picked_of).
+// picked (keeps_picked) and letting it go in its handler (picked_let_go); what each paragraph is of (picked_of); a
+// finger's, the app's own item of the system's text menu over it (picked_menu).
 
 ///|
 /// Two rows of words in a page whose words are picked, 40 apart from 40 down, the first's said of "m1", the second's of
 /// "m2", each 300 wide; a pill 40 by 20 over where what is picked ends, 8 off, while a mouse's pick of the tree's words
-/// stands, its press putting what it quotes in `took` (what is picked, what of) and letting it go. The Tester, the two
-/// rows' words' nodes, and the pill's, once made (`pill`).
+/// stands, its press putting what it quotes in `took` (what is picked, what of) and letting it go; the page offering
+/// 引用 in the system's text menu over a finger's pick, doing the same. On `platform`. The Tester, the two rows' words'
+/// nodes, and the pill's, once made (`pill`).
 fn quote_tester(
   took : Array[(String, Array[String])],
   pill : Ref[@view.NodeId?],
+  platform? : Int = 0,
 ) -> (Tester, @view.NodeId, @view.NodeId) {
-  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform~)
   t.check_looks(false)
   let words : Array[@view.NodeId] = []
   set_view_app(fn(root) {
     root.box(fn(page) {
       page.padding(Is((0.0, 40.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
       words_picked(page)
+      picked_menu(page, "引用", fn() {
+        match picked_now() {
+          Some(p) => took.push((p.text, p.of))
+          None => took.push(("", []))
+        }
+        picked_let_go()
+      })
+      |> ignore
       for of in ["m1", "m2"] {
         page.box(fn(row) {
           picked_of(row, of) |> ignore
@@ -123,4 +134,27 @@ test "words of the tree's dragged over from one row into the next: what each is 
   t.frame_at(next)
   assert_eq(picked_now(), None)
   assert_eq(took.length(), 0)
+}
+
+///|
+test "words of the tree's a finger held still on: once lifted, the system's text menu over them offers the page's own item after copy and select all, and no pill; chosen, it is done and they are let go" {
+  let took : Array[(String, Array[String])] = []
+  let pill : Ref[@view.NodeId?] = Ref(None)
+  let (t, first, _) = quote_tester(took, pill, platform=2)
+  t.press_at(60.0, 51.0)
+  t.run_for(long_press_ms)
+  t.release(60.0, 51.0)
+  t.draw()
+  let p = picked_now().unwrap()
+  assert_eq((p.text, p.of, p.ends_in, p.finger), ("wide", ["m1"], first, true))
+  let (shown, _, _, _, _, can) = t.text_menu()
+  assert_true(shown)
+  assert_eq(can, @hostapi.text_menu_copy | @hostapi.text_menu_select_all | @hostapi.text_menu_own_item)
+  assert_eq(t.text_menu_own(), "引用")
+  assert_eq(pill.val, None)
+  t.key(@hostapi.key_menu_own)
+  assert_eq(took, [("wide", ["m1"])])
+  assert_eq(t.ctx().selected_text(), "")
+  assert_eq(picked_now(), None)
+  assert_false(t.text_menu().0)
 }

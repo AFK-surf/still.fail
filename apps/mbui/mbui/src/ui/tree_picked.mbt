@@ -167,6 +167,34 @@ pub fn picked_end_piece(p : WordsPicked) -> (Double, Double) -> (Double, Double,
 }
 
 ///|
+/// What a node offers to do with words a finger picked in what it holds, in the system's floating text menu
+/// (picked_menu): its item's words and what choosing it does.
+// kept across runs: what each node lends (View::lends), let go with it
+let picked_menus : @view.Lent[(String, () -> Unit)] = @view.Lent::new()
+
+///|
+/// Words a finger picked in what node `v` holds (the node they end in, or what holds it) offer `words` in the system's
+/// floating text menu over them, after its copy and select all (@hostapi.text_menu_own: Android's text toolbar, iOS's
+/// edit menu, the web's bar); chosen, `take` is done (a quote of them, reading picked_now; letting them go with
+/// picked_let_go), the menu then gone. A mouse's pick offers none: no such menu comes over it (what a page shows by it
+/// is its own). `v`.
+pub fn picked_menu(v : @view.View, words : String, take : () -> Unit) -> @view.View {
+  v.lends(picked_menus, (words, take))
+}
+
+///|
+/// What the system's floating text menu offers of the app's own over words a finger picked of the tree's (picked_menu):
+/// what holds the node they end in says; None where nothing does, or where they are not a finger's, not let go, or an
+/// old view's.
+fn picked_menu_own() -> (String, () -> Unit)? {
+  guard picked.finger && picked_now_worked() is Some(p) && view_app.val is Some(tree) else { return None }
+  match tree.view_of(p.ends_in) {
+    Some(v) => v.lent(picked_menus)
+    None => None
+  }
+}
+
+///|
 /// What is picked with the pointer let go, by a handler (a quote taken of it), as Ctx::selection_clear.
 pub fn picked_let_go() -> Unit {
   select_none()

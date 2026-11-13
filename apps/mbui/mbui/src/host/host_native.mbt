@@ -108,6 +108,10 @@ extern "C" fn ffi_group_drop(id : Int) -> Unit = "mb_host_group_drop"
 extern "C" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit = "mb_host_text_menu"
 
 ///|
+#borrow(words)
+extern "C" fn ffi_text_menu_own(words : String) -> Unit = "mb_host_text_menu_own"
+
+///|
 extern "C" fn ffi_edit_can(can : Int) -> Unit = "mb_host_edit_can"
 
 #borrow(text)

@@ -582,6 +582,11 @@ impl @hostapi.Host for FakeHost with text_menu(self, shown, x, y, w, h, can) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with text_menu_own(self, words) {
+  self.text_menu_own = words
+}
+
+///|
 impl @hostapi.Host for FakeHost with edit_can(self, can) {
   self.edit_can = can
 }

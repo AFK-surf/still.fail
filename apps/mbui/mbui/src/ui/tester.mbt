@@ -367,6 +367,7 @@ pub fn Tester::new(
     ime_sel: (0, 0),
     ime_told: 0,
     text_menu: (false, 0.0, 0.0, 0.0, 0.0, 0),
+    text_menu_own: "",
     edit_can: -1,
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
@@ -1421,6 +1422,13 @@ pub fn Tester::ime(self : Tester) -> (Bool, String, Int, Int) {
 /// what `can` says (@hostapi.text_menu_*).
 pub fn Tester::text_menu(self : Tester) -> (Bool, Double, Double, Double, Double, Int) {
   self.fake.text_menu
+}
+
+///|
+/// The words of the app's own item of the floating text menu as the host was last told them (@hostapi.text_menu_own;
+/// "" none).
+pub fn Tester::text_menu_own(self : Tester) -> String {
+  self.fake.text_menu_own
 }
 
 ///|

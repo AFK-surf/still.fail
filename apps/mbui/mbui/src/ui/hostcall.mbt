@@ -34,6 +34,8 @@ struct FakeHost {
   /// the floating text menu as the host was last told it (text_menu): shown, where, what it offers; and what the menu
   /// bar's editing items can do (edit_can; -1 not told)
   mut text_menu : (Bool, Double, Double, Double, Double, Int)
+  /// the words of the app's own item of that menu as last told (text_menu_own)
+  mut text_menu_own : String
   mut edit_can : Int
   mut clipboard : String
   /// the last words put there were a secret: taken off this long after (Ctx::copy_secret); -1 not a secret
@@ -782,6 +784,11 @@ fn h_text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can
 ///|
 fn h_edit_can(can : Int) -> Unit {
   @hostapi.edit_can(can)
+}
+
+///|
+fn h_text_menu_own(words : String) -> Unit {
+  @hostapi.text_menu_own(words)
 }
 
 ///|

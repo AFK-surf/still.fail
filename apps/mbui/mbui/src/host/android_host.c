@@ -41,6 +41,7 @@ static JavaVM *vm;
 static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls, notices_cls;
 static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
+static jmethodID m_text_menu_own;
 static jmethodID m_posted;
 static jmethodID m_request_frame, m_wake_after, m_frames_paced, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_glyph_put, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
@@ -96,6 +97,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
   m_text_menu = (*env)->GetStaticMethodID(env, host_cls, "textMenu", "(ZDDDDI)V");
+  m_text_menu_own = (*env)->GetStaticMethodID(env, host_cls, "textMenuOwn", "(Ljava/lang/String;)V");
   m_clipboard_secret = (*env)->GetStaticMethodID(env, host_cls, "clipboardSecret", "(Ljava/lang/String;D)V");
   m_clipboard_secret_off = (*env)->GetStaticMethodID(env, host_cls, "clipboardSecretOff", "()V");
   m_log = (*env)->GetStaticMethodID(env, host_cls, "log", "(Ljava/lang/String;)V");
@@ -889,6 +891,14 @@ void mb_host_edit_can(int32_t can) { (void)can; }
 void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
+}
+
+// The words of the app's own item of that menu (Host.textMenuOwn), offered where its `can` says 64.
+void mb_host_text_menu_own(moonbit_string_t words) {
+  JNIEnv *env = env_();
+  jstring j = jstr(env, words);
+  (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu_own, j);
+  (*env)->DeleteLocalRef(env, j);
 }
 
 // A picture on the clipboard (@hostapi.clipboard_set_image): none here (Android's clipboard takes a picture only as a

@@ -361,6 +361,16 @@ final class Host {
         });
     }
 
+    /**
+     * The words of the app's own item of that menu (@hostapi.text_menu_own), offered where its {@code can} says 64,
+     * after the system's; chosen, the key 19. Said before the menu that offers it (posted in the same order).
+     */
+    static void textMenuOwn(String words) {
+        main.post(() -> {
+            if (view != null) view.textMenuOwn = words;
+        });
+    }
+
     static void clipboardSet(String s) {
         main.post(() -> {
             ClipboardManager cm = (ClipboardManager)
