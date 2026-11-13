@@ -26,6 +26,7 @@ pub fn fixture_reset() -> Unit {
   new_fix.reading = 0
   new_fix.crowded = false
   new_fix.tall = false
+  new_fix.unmarked = false
   new_fix.preset = ""
   new_fix.presets_late = false
   new_fix.clones.clear()

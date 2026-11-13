@@ -433,7 +433,9 @@ fn new_station_control(
     text(station, "name"),
     floating,
     fn() {
-      @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text)
+      // (a station of no mark of its own the server's, as in its pick: with its name left out, the control never a bare
+      // chevron, the user, 2026-11-13: 「怎么 station 还会直接挤消失」)
+      @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text, none="server")
       // (its name left out after what the model's control leaves out, its mark kept: the page says where it starts)
       c.box(style=new_station_name, drop=new_drop_station_name, fn() {
         c.text(text(station, "name"), style=new_capsule_words) |> ignore

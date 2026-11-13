@@ -715,6 +715,7 @@ pub(all) struct NewFix {
   mut reading : Int32
   mut crowded : Bool
   mut tall : Bool
+  mut unmarked : Bool
   mut preset : String
   presets : Array[Json]
   mut presets_late : Bool

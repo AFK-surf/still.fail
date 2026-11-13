@@ -544,6 +544,7 @@ pub fn open_mode(mode : String) -> Unit {
       let n = @sffixture.new_fix
       n.crowded = true
       n.tall = mode == "newchat-tall-model"
+      n.unmarked = mode == "newchat-crowded-unmarked"
       n.providers = mode.has_prefix("newchat-providers")
       n.model = "deepseek-v4-1-flash"
       n.runtime = "dsh"

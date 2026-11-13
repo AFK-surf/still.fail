@@ -29,6 +29,9 @@ pub(all) struct NewFix {
   /// MBUI_FIXTURE=newchat-tall-model: as crowded, how hard it thinks and how fast as Codex offers them (2026-10-30: the
   /// column beside the models taller than they are at most)
   mut tall : Bool
+  /// MBUI_FIXTURE=newchat-crowded-unmarked: as crowded, its first station of no mark of its own (2026-11-13: a person's
+  /// Studio, its control a bare chevron once its name gave way)
+  mut unmarked : Bool
   /// The preset a new chat is opened with ("" for none), and the station's presets (fix_presets)
   mut preset : String
   presets : Array[Json]
@@ -63,6 +66,7 @@ pub let new_fix : NewFix = {
   reading: 0,
   crowded: false,
   tall: false,
+  unmarked: false,
   preset: "",
   presets_late: false,
   clones: [],
@@ -256,7 +260,7 @@ pub fn fix_station(id : String) -> Json {
         "station": "ws1/st1",
         "id": "st1",
         "name": "Willow",
-        "icon": "glyph:desktop",
+        "icon": if new_fix.unmarked { "" } else { "glyph:desktop" },
         "summary": "2 个 agent 正在运行 · Apple M1 Pro · 32 GB · macOS 26",
         "online": true,
         "host": {
