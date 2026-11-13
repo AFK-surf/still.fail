@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [8e65df79d](https://github.com/AFK-surf/monoid/commit/8e65df79d68957c9231b4a2b1f99361a7aff570b) core: the base's words, host and traces its own: n | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.74 | 53.19 | 97.26 | 111.09 |
 | [0b084bbe9](https://github.com/AFK-surf/monoid/commit/0b084bbe9e7db0dad894ab0af7fbe8fba3e63a06) core: a vault is written on a station the workspac | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.85 | 116.71 |
 | [c3fbd4046](https://github.com/AFK-surf/monoid/commit/c3fbd40467787b57b6c344ebfb048560c0e04074) mbui: what an answer changed at once is no jolt of | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.83 | 110.48 |
 | [e86dddefe](https://github.com/AFK-surf/monoid/commit/e86dddefe9778505415fad3df944112b47c9de95) mbui: a key of a page's list on its way draws what | 1.98 | 2.7 | 11.51 | 31.11 | 41.43 | 27.73 | 53.18 | 95.86 | 98.77 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [5982f1c24](https://github.com/AFK-surf/monoid/commit/5982f1c24116c685f2c43650d0984a32984a4151) station: a connection's streams taken in the order | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.14 | 108.84 |
 | [45bffd5e1](https://github.com/AFK-surf/monoid/commit/45bffd5e15c69ea83d3e1f8d12ea186d7232f5d6) mbui: a node drawn off exactly where it says so, b | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.56 | 52.7 | 94.44 | 107.22 |
 | [1a2dddace](https://github.com/AFK-surf/monoid/commit/1a2dddace1dba403106e32259cd39b16dd9f71c7) fix(presets): use real triple model picker for pre | 1.97 | 2.64 | 11.38 | 30.93 | 40.87 | 27.55 | 52.7 | 94.18 | 104.07 |
-| [26c9014f3](https://github.com/AFK-surf/monoid/commit/26c9014f361e4e65d434bbcc9974c803c2e172d8) fix(mbui, ios): prevent stuck iOS keyboard when IM | 1.97 | 2.64 | 11.37 | 30.92 | 40.86 | 27.55 | 52.68 | 94.39 | 110.13 |
