@@ -164,3 +164,15 @@ test("while off, a device is given bodies and logs only where the list names tha
   assert.equal((lockPartRoute(c, "logs", "GET", Buffer.alloc(0), viewerOf("carol", stranger)) as any)[1].chains.length, 0);
   assert.ok((lockPartRoute(c, "logs", "GET", Buffer.alloc(0), viewerOf("carol", w.carol.app)) as any)[1].chains.length >= 3);
 });
+
+test("before the chain moved, a station takes the statements' bodies of a handover, and they are the state in force as the moved comes", () => {
+  const w = world();
+  const said = handover(w);
+  const c = station(w, 0, false);
+  assert.equal(c.chain(null)?.state?.moved, undefined, "not moved");
+  personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
+  assert.deepEqual(c.takeBodies(null, Object.values(said).map((s) => s.body)), { taken: 5, refused: [] });
+  for (const l of [w.bob, w.carol]) bring(c, l);
+  c.takeLock([w.first, w.moved], null, true);
+  assert.deepEqual(roles(c), ["alice owner", "bob admin", "carol member"]);
+});

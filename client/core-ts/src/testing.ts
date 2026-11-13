@@ -443,6 +443,8 @@ export class FakeHost implements Host {
   /// A deterministic xorshift: tests see the same "random" values every run.
   /// Whether it keeps keys as an app does (lock.ts): as a test says.
   appKeys?: boolean;
+  /// Whether it offers `lock.handOver` (host.ts): as a test says.
+  handOverByTests?: boolean;
 
   randomBytes(buf: Uint8Array): void {
     const mask = (1n << 64n) - 1n;
