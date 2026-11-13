@@ -11,7 +11,7 @@ import { LockRefusal, entryHash, fold } from "../src/cloud/lock.ts";
 import { NOT_GIVEN, personChainsOf } from "../src/cloud/state.ts";
 import { wall } from "../src/ops/fibers.ts";
 import { inLock, inLockBringing, lockHead, lockPartRoute, stillIn } from "../src/mesh/serve.ts";
-import { Log, WS, bring, ed, handover, signed, station, viewerOf, world } from "./lock-moved-world.ts";
+import { Log, WS, bring, dev, ed, handover, signed, station, viewerOf, world } from "./lock-moved-world.ts";
 
 const NOW = 2_000_000;
 let clock = NOW;
@@ -45,10 +45,10 @@ test("web devices count by this station's clock: in until their exp, out after i
   const w = world();
   handover(w);
   const web = ed();
-  w.carol.add("web", { id: web.hex, label: "browser", exp: NOW + 86400 }, w.carol.app.signer, NOW);
+  w.carol.add("web", { id: web.hex, label: "browser", exp: NOW + 86400 }, w.carol.app.key, NOW);
   // (one dated ahead of this station's clock by more than ten minutes does not count yet)
   const later = ed();
-  w.carol.add("web", { id: later.hex, label: "later", exp: NOW + 7200 + 86400 }, w.carol.app.signer, NOW + 7200);
+  w.carol.add("web", { id: later.hex, label: "later", exp: NOW + 7200 + 86400 }, w.carol.app.key, NOW + 7200);
   const c = station(w);
   for (const l of [w.alice, w.bob, w.carol]) bring(c, l);
   const webs = () => [...c.locked()!.state!.devices.values()].filter((d) => d.kind === "web").map((d) => d.id).sort();
@@ -67,8 +67,8 @@ test("admission goes by it: a member's app in; a device taken off its log out at
   const w = world();
   const said = handover(w);
   const c = station(w);
-  const phone = { signer: ed(), base: ed() };
-  w.carol.add("device", { key: phone.signer.id, id: phone.base.hex, label: "phone" });
+  const phone = dev();
+  w.carol.add("device", { key: phone.key.id, id: phone.base.hex, label: "phone", sign_key: phone.signer.id });
   for (const l of [w.alice, w.bob, w.carol]) bring(c, l);
   const carol = as("carol", w.carol.app);
   assert.equal(inLock(c, carol, "member", carol.viewer.device).viewer.role, "member");
@@ -76,7 +76,7 @@ test("admission goes by it: a member's app in; a device taken off its log out at
   const inP = inLock(c, p, "member", p.viewer.device);
   assert.equal(inP.viewer.role, "member");
   // carol takes her phone off her own log: out at once
-  w.carol.add("device.remove", { key: phone.signer.id });
+  w.carol.add("device.remove", { key: phone.key.id });
   bring(c, w.carol, false);
   assert.throws(() => stillIn(c, inP, "member", p.viewer.device), LockRefusal);
   // bob (an admin) takes carol out

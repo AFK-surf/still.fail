@@ -613,8 +613,8 @@ test("routes: the plain library (no security mode) is each person's own, version
 test("on a lock moved to its people's logs the vault goes by them: their app devices; one taken off its person's log is none", () => {
   const mw = movedWorld(WS);
   handover(mw);
-  const phone = { signer: ed(), base: ed() };
-  mw.alice.add("device", { key: phone.signer.id, id: phone.base.hex, label: "phone" });
+  const phone = { key: ed(), signer: ed(), base: ed() };
+  mw.alice.add("device", { key: phone.key.id, id: phone.base.hex, label: "phone", sign_key: phone.signer.id });
   const c = movedStation(mw);
   for (const l of [mw.alice, mw.bob, mw.carol]) bring(c, l, true, WS);
   const person = (sub: string, d: { signer: unknown; base: unknown }) => ({ sub, ...d }) as unknown as Person;
@@ -623,7 +623,7 @@ test("on a lock moved to its people's logs the vault goes by them: their app dev
   assert.equal(vaultOk(w.state, null, vaultOf(w, { members: [w.alice, bob] })), null, "members and devices the people's logs say");
   const both = (st: typeof w.state) => vaultOk(st, null, vaultOf(w, { members: [w.alice], certs: [boxOf(w.alice), boxOf(ph)] }));
   assert.equal(both(w.state), null, "alice's phone, on her own log");
-  mw.alice.add("device.remove", { key: phone.signer.id });
+  mw.alice.add("device.remove", { key: phone.key.id });
   bring(c, mw.alice, false, WS);
   assert.match(both(c.locked()!.state!)!, /not an app device in the lock/);
 });

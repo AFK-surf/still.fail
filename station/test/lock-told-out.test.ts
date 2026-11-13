@@ -8,7 +8,7 @@ import { mock, test } from "node:test";
 import { LockRefusal, endpointBytes, entryHash } from "../src/cloud/lock.ts";
 import { wall } from "../src/ops/fibers.ts";
 import { refusalOf } from "../src/mesh/serve.ts";
-import { WS, bring, ed, handover, station, world } from "./lock-moved-world.ts";
+import { WS, bring, dev, ed, handover, station, world } from "./lock-moved-world.ts";
 
 const NOW = 2_000_000;
 mock.method(wall, "now", () => NOW * 1000);
@@ -53,10 +53,10 @@ test("a device taken off its person's own log hears it of that log, no body; one
   const w = world();
   handover(w);
   const c = station(w);
-  const phone = { signer: ed(), base: ed() };
-  w.carol.add("device", { key: phone.signer.id, id: phone.base.hex, label: "phone" });
+  const phone = dev();
+  w.carol.add("device", { key: phone.key.id, id: phone.base.hex, label: "phone", sign_key: phone.signer.id });
   for (const l of [w.alice, w.bob, w.carol]) bring(c, l);
-  w.carol.add("device.remove", { key: phone.signer.id });
+  w.carol.add("device.remove", { key: phone.key.id });
   bring(c, w.carol, false);
   const endpoint = ed().hex;
   const r = refusalOf(c, helloOf(phone, endpoint), endpoint, new LockRefusal("refused"), undefined, "carol") as { out?: unknown; person?: { entries: any[] }[] };

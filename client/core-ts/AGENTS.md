@@ -157,7 +157,9 @@ another; the accounts' list's merge across stations and its refills.
   is told them as a pending one that failed (`#letBe`), never undone unsaid (2026-11-13).
 - Where the chain held holds `moved {root}` (2026-11-13, nothing signs one yet), what is in force is the rules' state of
   its people's logs and the statements' bodies its stations gave (`src/lock-moved.ts`; kept beside the lock, `lockLogs`
-  and `lockBodies`, the person's own log the one personal-lock.ts pins), by this device's clock: every reader of who and
+  and `lockBodies`, the person's own log the one personal-lock.ts pins), by this device's clock, each app device by the
+  signer its log says (`sign_key`; its key on the log signs that log alone, so this device is on a moved workspace by
+  that key on its log, views/pair.ts `movedPlace`): every reader of who and
   what is in the lock reads `src/views/lock.ts` `stateOf`, what reads the chain itself (its own `disable`, its stations
   keeping it, `chosen`, `carry`) reads `fold`. Without the root's log or its `open` it waits (nobody listed, nothing
   asked of the device). It is made once and kept in memory while what it is made of stands (`inForceOf`). Nothing is

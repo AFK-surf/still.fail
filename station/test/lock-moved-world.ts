@@ -21,9 +21,12 @@ export function ed() {
 export type Key = ReturnType<typeof ed>;
 export const signed = (e: Omit<Entry, "sig">, key: Key): Entry => ({ ...e, sig: { key: key.id, alg: "Ed25519", sig: key.sign(signedBytes(entryHash(e as Entry))) } });
 
-/// A device: the key it signs with and its base key (its id).
-export type Dev = { signer: Key; base: Key };
-const dev = (): Dev => ({ signer: ed(), base: ed() });
+/// A device: its key on its person's log (which signs that log alone), the key it signs a workspace's things with
+/// (`signer`: a chain's entries, a vault's versions and certificates; its log says it as `sign_key`) and its base key
+/// (its id). Three keys, as a device has: one key for the first two hid that a moved state named a device by the
+/// wrong one (2026-11-13).
+export type Dev = { key: Key; signer: Key; base: Key };
+export const dev = (): Dev => ({ key: ed(), signer: ed(), base: ed() });
 let salts = 0;
 const salt = () => createHash("sha256").update(`salt ${salts++} ${Math.random()}`).digest("hex").slice(0, 32);
 
@@ -38,7 +41,7 @@ export class Log {
   constructor(sub: string, app: Dev = dev()) {
     this.sub = sub;
     this.app = app;
-    this.entries = [signed({ v: 1, ws: `person:${sub}`, seq: 0, prev: null, at: this.at, kind: "genesis", body: { sub, device: { key: app.signer.id, id: app.base.hex, label: `${sub}'s app` } } }, app.signer)];
+    this.entries = [signed({ v: 1, ws: `person:${sub}`, seq: 0, prev: null, at: this.at, kind: "genesis", body: { sub, device: { key: app.key.id, id: app.base.hex, label: `${sub}'s app`, sign_key: app.signer.id } } }, app.key)];
   }
   get genesis() {
     return entryHash(this.entries[0]!);
@@ -47,7 +50,7 @@ export class Log {
     return this.entries.at(-1)!;
   }
   /// One more entry after the head, signed by `by` (the first device by default).
-  add(kind: string, body: unknown, by: Key = this.app.signer, at = this.at): Entry {
+  add(kind: string, body: unknown, by: Key = this.app.key, at = this.at): Entry {
     const e = signed({ v: 1, ws: `person:${this.sub}`, seq: this.head.seq + 1, prev: entryHash(this.head), at, kind, body }, by);
     this.entries.push(e);
     return e;
@@ -119,7 +122,7 @@ export function bring(c: Cloud, log: Log, bodies = true, ws = WS) {
 }
 
 /// A member's device as a connection of it shows itself: its credential's viewer, its base key's proof of the endpoint.
-export const viewerOf = (sub: string, d: Dev, role = "member", workspace = WS) => {
+export const viewerOf = (sub: string, d: { base: Key }, role = "member", workspace = WS) => {
   const endpoint = ed().hex;
   return { sub, email: `${sub}@x`, name: sub, role, workspace, device: endpoint, lockDevice: { base: d.base.hex, proof: d.base.sign(endpointBytes(workspace, endpoint)) } };
 };

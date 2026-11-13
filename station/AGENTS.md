@@ -130,7 +130,8 @@
   nothing for any other keeper.
 - Where a lock's active chain holds `moved {root}` (2026-11-13, nothing signs one yet), the state in force there is the
   rules' `state4` of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
-  `mesh/locks/<ws>.bodies.json`), by this station's clock: `Cloud.locked` gives it to every reader of "the lock"
+  `mesh/locks/<ws>.bodies.json`), by this station's clock (each app device by the signer its log says, never by its key
+  on the log): `Cloud.locked` gives it to every reader of "the lock"
   (admission, the vault, rigs, the roster); what reads the chain itself (its seq, head, genesis: `lock-sync.ts`, the
   cloud's copy in `presence.ts`, `lockHead`, pinning) reads `Cloud.chain`. Off is a state (`locked` null, nothing let
   go); without the root's log or its `open` (`waiting`) nobody is let in and the chain's stations are answered only the

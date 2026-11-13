@@ -10,7 +10,10 @@
 // hundred in all), RULES_FORK_STEPS=<n> steps a world (120), RULES_FORK_SCRIPTED=<n> seeds of the fourth round's
 // scripted worlds (6). Worker threads as lock-fork-choice.test.ts (lock-fork-pool.ts).
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { type Entry, endpointProof, entryHash, sigValid, validKeyId } from "../src/cloud/lock.ts";
+import { key, signed } from "./lock-world-sim.ts";
 import { VARIANTS } from "./lock-fork-choice-model.ts";
 import { pool, print } from "./lock-fork-pool.ts";
 import { V3 } from "./lock-roster-model.ts";
@@ -98,4 +101,53 @@ test("the rules are the fourth round's model's on its scripted worlds: bodies no
   assert.equal(o.differ.length, 0, "the rules and the model differ (the first are printed above)");
   const m = o.more;
   assert.ok(m.off > 0 && m.moved > 0 && m.afterMoved === m.moved && m.webs > 0 && o.branched > 0 && Object.keys(m.refused).length >= 5, `off ${m.off}, moved ${m.moved}, after it refused ${m.afterMoved}, web devices ${m.webs}, ${o.branched} beaten, ${Object.keys(m.refused).length} reasons a body was refused`);
+});
+
+// A device has three keys: its base key (`id`), its key on its person's log (`key`, sealed for the person's presence:
+// it signs that log alone) and the key it signs a workspace's things with, unasked (a vault's versions and box
+// certificates; a workspace chain's entries), which its log's entries say as `sign_key` (client/core-ts/src/
+// personal-lock.ts `Device`). The fold keeps the last said and every one said; a moved workspace's state names a
+// device by it, never by the log's key (the lead, 2026-11-13: nothing the workspace signer signed checked out against
+// the moved state).
+test("a person's log says each device's signer: the fold keeps it and those said before, and a moved workspace's state names the device by it, never by its key on the log", () => {
+  const crypto = { sha256Hex: (s: string) => createHash("sha256").update(s).digest("hex"), sigValid, validKeyId, endpointProof };
+  const [log1, log2, log3] = [key(7101), key(7102), key(7103)];
+  const [s1, s2a, s2b] = [key(7201), key(7202), key(7203)];
+  const [id1, id2, id3] = [key(7301).hex, key(7302).hex, key(7303).hex];
+  const chain: Entry[] = [];
+  const add = (kind: string, body: unknown) => {
+    const last = chain.at(-1);
+    chain.push(signed({ v: 1, ws: "person:alice", seq: chain.length, prev: last ? entryHash(last) : null, at: 1_790_000_000, kind, body } as Omit<Entry, "sig">, log1));
+  };
+  add("genesis", { sub: "alice", device: { key: log1.id, id: id1, label: "app", sign_key: s1.id } });
+  add("device", { key: log2.id, id: id2, label: "phone", sign_key: s2a.id });
+  // (said again with another signer: that device's signer the one said now, the one before kept)
+  add("device", { key: log2.id, id: id2, label: "phone", sign_key: s2b.id });
+  // (one that says none, and one that says what is no ed25519 key id: none, never a refusal)
+  add("device", { key: log3.id, id: id3, label: "old app" });
+  const p = rules.person_fold_js(chain, "alice", crypto) as any;
+  assert.ok(!("error" in p), JSON.stringify(p));
+  const byId = new Map((p.devices as any[]).map((d) => [d.id, d]));
+  assert.deepEqual([id1, id2, id3].map((id) => [byId.get(id)?.sign_key ?? null, byId.get(id)?.sign_keys]), [[s1.id, [s1.id]], [s2b.id, [s2a.id, s2b.id]], [null, []]], "the fold keeps each device's signer");
+  const bad = [...chain];
+  const last = bad.at(-1)!;
+  bad.push(signed({ v: 1, ws: "person:alice", seq: bad.length, prev: entryHash(last), at: 1_790_000_000, kind: "device", body: { key: log3.id, id: id3, label: "old app", sign_key: "p256:x" } } as Omit<Entry, "sig">, log1));
+  const q = rules.person_fold_js(bad, "alice", crypto) as any;
+  assert.ok(!("error" in q), "a signer that is no key id is none, never a refusal");
+  assert.equal((q.devices as any[]).find((d) => d.id === id3)?.sign_key, undefined);
+  // The workspace said in alice's log (her `open`): its state names each app by its signer.
+  const g = entryHash(chain[0]!);
+  const open = { ws: "ws", kind: "open", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: {}, email: "a@x.com", prev: null, salt: "77".repeat(16) };
+  add("ws", { t: rules.ws_tag_js("ws", g, crypto), h: rules.body_hash_js(open, crypto) });
+  const out = rules.state4_js("ws", g, [chain], [open], 1_790_000_100, crypto) as any;
+  assert.equal(out.on, "on", JSON.stringify(out.error ?? out.on));
+  const devs = new Map((out.state.devices as [string, any][]).map(([id, d]) => [id, d]));
+  const keys = new Map(out.state.signKeys as [string, string[]][]);
+  assert.deepEqual([id1, id2, id3].map((id) => [devs.get(id)?.kind, devs.get(id)?.sign_key ?? null, keys.get(id) ?? []]), [["app", s1.id, [s1.id]], ["app", s2b.id, [s2a.id, s2b.id]], ["app", null, []]], "named by its signer");
+  const logKeys = new Set([log1.id, log2.id, log3.id]);
+  assert.ok([...devs.values()].every((d) => !logKeys.has(d.sign_key)) && [...keys.values()].flat().every((k) => !logKeys.has(k)), "never by its key on the log");
+  // The signer alone signs as the device: `signer_js` finds the app by it, and by its key on the log nothing.
+  assert.equal(rules.signer_js(out.rules, s1.id, null)?.sub, "alice");
+  assert.equal(rules.signer_js(out.rules, log1.id, null), null);
+  assert.equal(rules.signer_js(out.rules, s2a.id, null), null, "a signer said before signs no more");
 });

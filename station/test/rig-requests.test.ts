@@ -257,7 +257,7 @@ test("on a lock moved to its people's logs a rig's add is held by the state in f
   for (const l of [mw.alice, mw.bob, mw.carol]) bring(c, l, true, WS);
   const rig = { ...RIG, owner: "carol" };
   const adds = new RigAdds({ db: new DatabaseSync(":memory:"), cloud: c, chain: (g) => personChainsOf(c).kept(g), now: () => 3000 });
-  assert.equal(adds.take(WS, rig, says("add", { v: 1 as const, sub: "carol", ws: WS, rig: rig.id, at: 2000 }, mw.carol.app.signer as unknown as Key)), null);
+  assert.equal(adds.take(WS, rig, says("add", { v: 1 as const, sub: "carol", ws: WS, rig: rig.id, at: 2000 }, mw.carol.app.key as unknown as Key)), null);
   assert.equal(adds.holds(WS, rig), true);
   // bob (an admin) takes carol's admit back and admits her again as a viewer, who adds no rigs (a lower role given by
   // a later admit alone changes nothing, rules/src/lock/roster.mbt): bodies of bob's change the state, while the root

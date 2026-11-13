@@ -230,7 +230,10 @@ function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, p
   const root = personal.root(account);
   const mine = force.f.devices.get(me);
   if (root === null || personal.standing(account) !== "member" || force.f.persons.get(account) !== root) return null;
-  if (mine === undefined || mine.kind !== "app" || mine.sub !== account || mine.sign_key !== personal.keyId()) return null;
+  // (this device on the log that binds them by its own key there, which signs what it approves: the state names a device
+  // by the key it signs the workspace's things with, never by that one, rules/src/lock/state4.mbt)
+  const key = personal.keyId();
+  if (mine === undefined || mine.kind !== "app" || mine.sub !== account || key === null || personal.chain(account)?.devices.get(key)?.id !== me) return null;
   // (one let in there already, not run out: nothing to sign; renewed on the security page, `Lock.renew`)
   if (live(force.f.devices.get(peer), now) !== undefined) return null;
   const c = credentialOf(str(get(w, "credential")) ?? "", force.settings?.cloud_keys, ws, peer, now);

@@ -839,7 +839,8 @@ export class World4 extends World3 {
     const members = new Map<string, D4Member>();
     for (const [sub, m] of r.members) {
       const k = h.logs.get(m.lock);
-      const apps = k && k.rules.state(m.lock).sub === sub ? [...k.headState().devices.keys()].sort() : [];
+      // (each app by the signer its log says, as the product's state names it: rules/src/lock/state4.mbt)
+      const apps = k && k.rules.state(m.lock).sub === sub ? [...k.headState().devices.values()].flatMap((d) => (d.sign_key === undefined ? [] : [d.sign_key])).sort() : [];
       // (the root has no admit: no statement says its person's email)
       members.set(sub, { role: m.role, email: (m.admit === "" ? oo.settings?.email : f.stmts.get(m.admit)?.email) ?? "-", lock: m.lock, apps, webs: apps.length > 0 ? this.websAt(h, m.lock) : [] });
     }
@@ -1442,7 +1443,7 @@ export function revoked(seed: number, kind: "web" | "off", parent: "same" | "any
   const ks = w.comparable(), d0 = w.d4(ks[0] ?? w.stations[0]);
   const recovered = kind === "web" || (typeof d0 !== "string" && d0.on === "on" && new Set(ks.map((h) => w.stateSaid(h))).size === 1 &&
     [...d0.members.keys()].sort().join() === [...baseList.members.keys()].sort().join() && d0.stations.join() === [...baseList.stations].sort().join());
-  const why = recovered ? [] : d4Diff(base4, d0).filter((d) => !d.startsWith("apps "));
+  const why = recovered ? [] : d4Diff(base4, d0);
   look4.at?.(w, `revoked ${kind} ${parent} seed ${seed}, at the end`);
   return { before, end, differ, letGo, steps, recovered, log: w.log, why };
 }

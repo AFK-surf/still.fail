@@ -19,3 +19,8 @@
   not know, so nothing writes them until this build has been out seven days (the root AGENTS.md, Changes). They are
   held to the models they were written from (`station/test/lock-fork-choice-model.ts`,
   `station/test/lock-roster4-model.ts`) by `station/test/rules-fork.test.ts`: a change to either changes both.
+- A device of a person's log has two keys there: its `key`, sealed for its person's presence, which signs that log
+  alone, and the `sign_key` its entries say, the key it signs a workspace's things with unasked (a vault's versions,
+  items and box certificates). `fold_person` keeps the last `sign_key` said and every one said; `state4` names an app
+  device by it, never by its `key` (the lead, 2026-11-13: nothing the workspace signer signed checked out against a
+  moved state). One whose log says none is listed and signs nothing of the workspace's.
