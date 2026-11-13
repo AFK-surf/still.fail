@@ -247,8 +247,8 @@ function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, p
 /// one it names under another (their lock begun anew) is taken out of what bound them before as it is said again with
 /// this one (`again`). The role is what the person on this device chose as they added them here (views/lock.ts
 /// `notedRole`, else a member), lowered to the view's where that is lower (a viewer, or one lowered elsewhere since):
-/// never an admin or an owner on the view's word, which is the control plane's (one added as an admin on another device comes in a member here, made an admin by an
-/// owner's change of their role). The rules decide whether this device may give it (`plan`, before the person is asked):
+/// never an admin or an owner on the view's word, which is the control plane's (one added as an admin on another
+/// device comes in a member here, made an admin by an owner's change of their role). The rules decide whether this device may give it (`plan`, before the person is asked):
 /// one it may not, its note's or the view's (an admin's device and an owner), shows no code. The credential is the
 /// cloud's word that they are a member: it lets nobody in by itself; the code typed face to face here and this device's
 /// signature do. Null: no code shown for it.
