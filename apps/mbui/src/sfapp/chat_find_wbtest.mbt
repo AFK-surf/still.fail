@@ -270,18 +270,28 @@ test "对话目录: the reader's message, and the one before and after it, among
 }
 
 ///|
-test "对话目录: a wide page's rail at the list's right, 44 wide, clear of the scroll bar; none with fewer than three said, none on a narrow page" {
+test "对话目录: a wide page's rail at the list's right, 44 wide, clear of the scroll bar, and its round button over the way to the newest; no rail with fewer than three said, none on a narrow page" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)
-  let rail = outline_buttons(t)
-  assert_eq(rail.length(), 1, msg="\{Repr(rail)}")
+  let buttons = outline_buttons(t)
+  let rail = buttons.filter(fn(b) { b.2 >= 44.0 })
+  let floats = buttons.filter(fn(b) { b.2 < 44.0 })
+  assert_eq(rail.length(), 1, msg="\{Repr(buttons)}")
+  assert_eq(floats.length(), 1, msg="\{Repr(buttons)}")
   let (x, _, w, _) = rail[0]
   assert_true(w >= 44.0, msg="\{Repr(rail)}")
   assert_true(x + w <= 1280.0 - @ui.scroll_bar_room + 0.5 && x + w >= 1280.0 - 20.0, msg="\{Repr(rail)}")
   // (the outline subscribed while it shows; nothing asked of the core by it)
   assert_eq(named(calls, "chat.bring").length(), 0)
   assert_eq(outline_faults(t), [])
-  // two said: no rail
+  // (pressing the round button on a wide page opens the outline panel beside it)
+  let (fx, fy, fw, fh) = floats[0]
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  let (px, py, pw, ph) = outline_panel(t).unwrap()
+  assert_true(pw < 600.0 && px + pw <= fx + 0.5, msg="panel \{Repr((px, pw))} float at \{fx}")
+  assert_true((py + ph - (fy + fh)).abs() < 12.0, msg="panel \{Repr((py, ph))} float \{Repr((fy, fh))}")
+  // two said: no rail, only the round button while away from the end
   let few : Json = {
     "days": [{ "date": "2026-11-10", "day": "今天", "seqs": [2, 4] }],
     "count": 2,
@@ -291,7 +301,8 @@ test "对话目录: a wide page's rail at the list's right, 44 wide, clear of th
     "whole": true,
   }
   let t = outline_tester(calls, outline=@signals.signal(Some(few)))
-  assert_eq(outline_buttons(t), [])
+  assert_eq(outline_buttons(t).filter(fn(b) { b.2 >= 44.0 }), [])
+  assert_eq(outline_buttons(t).filter(fn(b) { b.2 < 44.0 }).length(), 1)
   // a phone's window: the round button over the way to the newest, 32 round, no rail
   let t = outline_tester(calls, w=390.0, h=844.0, platform=2)
   let floats = outline_buttons(t)
@@ -578,7 +589,7 @@ test "对话目录: the rail's ticks, one for each said, the reader's (the 16th:
     "whole": true,
   }
   let t = outline_tester(calls, outline=@signals.signal(Some(three)))
-  let rails = outline_buttons(t)
+  let rails = outline_buttons(t).filter(fn(b) { b.2 >= 44.0 })
   assert_eq(rails.length(), 1)
   let (_, ry, rw, rh) = rails[0]
   assert_true(rw >= 44.0 && rh >= 44.0, msg="\{Repr(rails)}")
@@ -788,7 +799,7 @@ test "对话目录: in the sheet to a finger no row has a ground at rest, the re
 test "对话目录: the rail and the steps from the outline's index alone: no row asked for while only the rail shows" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)
-  assert_eq(outline_buttons(t).length(), 1)
+  assert_eq(outline_buttons(t).filter(fn(b) { b.2 >= 44.0 }).length(), 1)
   t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
   t.run_for(@ui.move_most_ms)
   assert_true(gone_lit(t, said_20), msg="ts20 flashing")
