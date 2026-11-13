@@ -2388,9 +2388,13 @@ export class StationsSync {
     });
   }
 
-  /// How far the viewer has read a thread, as its summary says.
+  /// How far the viewer has read a thread. A shared sidebar uses the viewer's marks, which may be behind an optimistic
+  /// thread summary after an interrupted write and a restart: a read is not confirmed past either of them.
   readPosition(address: string, thread: number): number | null {
-    return this.#core.data.readPosition(address, thread);
+    const position = this.#core.data.readPosition(address, thread);
+    const link = this.#links.get(address);
+    if (position === null || !link?.shared || !link.sharedThreads.has(thread) || link.marks === null) return position;
+    return Math.min(position, u64(link.marks.reads[String(thread)]) ?? 0);
   }
 
   /// Uploads, files, previews (station/transport.rs), by address.
