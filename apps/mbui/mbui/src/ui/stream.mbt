@@ -89,6 +89,11 @@ pub struct Stream {
   /// the frames that came by a route (its "D" events), and their bytes
   priv mut direct_frames : Int
   priv mut direct_bytes : Int
+  /// the frames handed over not to be shown (`frame`'s `show` false), till their event comes: one said decoded is
+  /// taken as one let go, never shown
+  priv hidden : Array[Double]
+  /// the volume its sound was asked to play at (`audio_volume`), told the host as it opens too
+  priv mut volume : Double?
 }
 
 ///|
@@ -149,6 +154,8 @@ pub fn Stream::new(
     routed: (0, false, false),
     direct_frames: 0,
     direct_bytes: 0,
+    hidden: [],
+    volume: None,
   }
   open_streams.push(s)
   s
@@ -222,8 +229,13 @@ fn Stream::feed_host(self : Stream, f : Feed) -> Unit {
 
 ///|
 /// An H.264 access unit (AVCC: each NAL after its length), a key frame or not, of time `ts` (a whole number: the
-/// decoders carry it as a frame's presentation time, as the sender's are).
-pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double) -> Unit {
+/// decoders carry it as a frame's presentation time, as the sender's are). `show` false: decoded for the frames after
+/// it (a seek's way to its picture) and never shown: its fate said as one let go ("d", `shown(ts)` called all the
+/// same), the picture shown left as it was, and no frame asked for it (it is taken as the next frame begins, whatever
+/// asks for that one). A host that cannot decode one unseen decodes it as any and says it decoded: taken here as let
+/// go all the same, never shown; where the host does not take it at all (@hostapi.stream_frame_shown) it is let go
+/// here, undecoded.
+pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double, show? : Bool = true) -> Unit {
   if self.closed {
     return
   }
@@ -231,17 +243,52 @@ pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double) -> Un
   self.hand_over(ts)
   let decodes = if self.hevc { h265_here() } else { h_h264_here() }
   if self.id == 0 || !self.h264 || !decodes || (self.need_key && !key) {
-    self.let_go(ts)
+    self.let_go(ts, wake=show)
     return
   }
   self.need_key = false
   match self.feed {
     Some(f) => {
+      if !show {
+        self.hidden.push(ts)
+      }
       f.frame(data, key, ts)
       self.fed()
     }
-    None => h_stream_frame(self.id, data, key, ts)
+    None if show => h_stream_frame(self.id, data, key, ts)
+    None =>
+      if @hostapi.stream_frame_shown(self.id, data, key, ts, false) {
+        self.hidden.push(ts)
+      } else {
+        self.let_go(ts, wake=false)
+      }
   }
+}
+
+///|
+/// Its decoder emptied, in its place among the frames handed over (a seek): `drain` false, what is in it let go (each
+/// said "d", none shown); true, decoded out first, each as it would have been, then emptied. The picture shown stays;
+/// nothing after it is taken till a key frame (one that is not, let go here). Where the host has nothing for it
+/// (@hostapi.stream_flush: Windows' alone has), the frames in it come out as ever; nor is a decoder driven from here
+/// (stream_feed.mbt) emptied.
+pub fn Stream::flush(self : Stream, drain? : Bool = false) -> Unit {
+  if self.closed {
+    return
+  }
+  self.need_key = true
+  if self.id != 0 && self.h264 && self.feed is None {
+    @hostapi.stream_flush(self.id, drain)
+  }
+}
+
+///|
+/// Whether frame `ts` was handed over not to be shown: those up to it no longer waited for.
+fn Stream::unhide(self : Stream, ts : Double) -> Bool {
+  let was = self.hidden.contains(ts)
+  if self.hidden.length() > 0 {
+    self.hidden.retain(fn(h) { h > ts })
+  }
+  was
 }
 
 ///|
@@ -324,6 +371,7 @@ pub fn Stream::close(self : Stream) -> Unit {
   self.out.clear()
   self.own.clear()
   self.acks.clear()
+  self.hidden.clear()
   self.feed = None
   match self.view {
     Some(v) => v.close()
@@ -342,6 +390,11 @@ fn Stream::open(self : Stream) -> Unit {
   if !self.opened {
     self.opened = true
     self.id = h_stream_open()
+    // (the volume asked before it opened)
+    match self.volume {
+      Some(v) if self.id != 0 => @hostapi.stream_audio_volume(self.id, v)
+      _ => ()
+    }
     // its system video layer, where the host has one: a native view of its own (kind 4, the stream's id)
     if self.layer && self.id != 0 && h_stream_layers() {
       let v = NativeView::make(4, self.id.to_string(), None)
@@ -420,6 +473,12 @@ fn Stream::take_quietly(self : Stream, e : String) -> Bool {
   match w {
     ["f", t, pw, ph, ..] =>
       match (stream_num(t), stream_num(pw), stream_num(ph)) {
+        (Some(ts), _, _) if self.unhide(ts) => {
+          // (one not to be shown: let go, as its host would have said)
+          self.settled_to(ts, wake=false)
+          (self.shown)(ts)
+          true
+        }
         (Some(ts), Some(fw), Some(fh)) => {
           let size = if self.h264 && self.cw > 0 && self.ch > 0 {
             Some((self.cw, self.ch))
@@ -444,6 +503,7 @@ fn Stream::take_quietly(self : Stream, e : String) -> Bool {
     ["d", t, ..] =>
       match stream_num(t) {
         Some(ts) => {
+          self.unhide(ts) |> ignore
           self.settled_to(ts, wake=false)
           (self.shown)(ts)
           true
@@ -480,10 +540,13 @@ fn Stream::hand_over(self : Stream, ts : Double) -> Unit {
 ///|
 /// Frame `ts` let go here (before a key frame, nothing to decode it): said as the next frame begins, the frame that
 /// takes it asked for unless this one is still to take it. One let go in a frame that took its events already waits
-/// for the next frame's start (streams_frame_start): that frame is owed now (Ctx::owe_next).
-fn Stream::let_go(self : Stream, ts : Double) -> Unit {
+/// for the next frame's start (streams_frame_start): that frame is owed now (Ctx::owe_next). `wake` false (a frame not to
+/// be shown): no frame asked for it, as a host asks none for such a frame.
+fn Stream::let_go(self : Stream, ts : Double, wake? : Bool = true) -> Unit {
   self.own.push("d \{ts}")
-  self.owe()
+  if wake {
+    self.owe()
+  }
 }
 
 ///|
@@ -606,6 +669,11 @@ fn streams_frame_start() -> Unit {
       match w {
         ["f", t, pw, ph, ..] =>
           match (stream_num(t), stream_num(pw), stream_num(ph)) {
+            // (one not to be shown, said decoded: let go, never latched)
+            (Some(ts), _, _) if s.unhide(ts) => {
+              s.acks.push(ts)
+              s.settled_to(ts)
+            }
             (Some(ts), Some(fw), Some(fh)) => {
               s.at = Some(ts)
               s.size = if s.h264 && s.cw > 0 && s.ch > 0 {
@@ -622,6 +690,7 @@ fn streams_frame_start() -> Unit {
         ["d", t, ..] =>
           match stream_num(t) {
             Some(ts) => {
+              s.unhide(ts) |> ignore
               s.acks.push(ts)
               s.settled_to(ts)
             }
@@ -876,7 +945,8 @@ fn fake_said(f : FakeHost, id : Int, e : String) -> Unit {
 
 ///|
 /// What the app handed stream `id`'s host, oldest first, a line each: "h264 WxH avcc=N" a config, "frame key=K ts=T
-/// bytes=N", "jpeg ts=T bytes=N", "show ts=T" the frame it shows from then, "close". Frames let go before reaching it
+/// bytes=N" ("… hidden": one not to be shown), "flush drain=D", "jpeg ts=T bytes=N", "show ts=T" the frame it shows from
+/// then, "audio bytes=N", "volume V", "close". Frames let go before reaching it
 /// (before a key frame, nothing to decode them) are not among them.
 pub fn Tester::stream_fed(self : Tester, id : Int) -> Array[String] {
   self.fake.streams_fed.get(id).unwrap_or([]).copy()
@@ -951,7 +1021,55 @@ pub fn Stream::audio(self : Stream, data : Bytes) -> Unit {
 }
 
 ///|
+/// Samples (48 kHz) of its sound played since its sound began, by the host's clock (@hostapi.stream_audio_played):
+/// counted on across its sound stopped and started again, set back only as the stream closes (the app keeps its own base
+/// where it wants another start). 0 before it opens, once closed, or where the host plays none or counts none.
+pub fn Stream::audio_played(self : Stream) -> Double {
+  if self.closed || self.id == 0 {
+    return 0.0
+  }
+  @hostapi.stream_audio_played(self.id)
+}
+
+///|
+/// Milliseconds of its sound queued and not played yet (@hostapi.stream_audio_queued): 0 where none is, or the host
+/// says none.
+pub fn Stream::audio_queued(self : Stream) -> Double {
+  if self.closed || self.id == 0 {
+    return 0.0
+  }
+  @hostapi.stream_audio_queued(self.id)
+}
+
+///|
+/// Its sound played at volume `v` (1 as it came, 0 silent), from now on, its sound started later too; asked before it
+/// opens, told the host as it does. Where the host has nothing for it, as it came.
+pub fn Stream::audio_volume(self : Stream, v : Double) -> Unit {
+  if self.closed {
+    return
+  }
+  self.volume = Some(v)
+  if self.opened && self.id != 0 {
+    @hostapi.stream_audio_volume(self.id, v)
+  }
+}
+
+///|
 pub fn Tester::set_stream_audio(self : Tester, on : Bool) -> Unit { self.fake.audio_here = on }
+
+///|
+/// What stream `id`'s host says of its sound from now (Stream::audio_played, audio_queued): samples played, and
+/// milliseconds queued.
+pub fn Tester::set_stream_audio_clock(self : Tester, id : Int, played : Double, queued : Double) -> Unit {
+  self.fake.stream_audio_clock[id] = (played, queued)
+}
+
+///|
+/// Whether its host takes a frame not to be shown (@hostapi.stream_frame_shown: Windows'; the default), or has nothing
+/// for one (false: the app lets such a frame go itself, as on every other host).
+pub fn Tester::set_stream_hides(self : Tester, on : Bool) -> Unit {
+  self.fake.stream_hides = on
+}
 
 ///|
 /// Whether its host decodes H.265 (h265_here; false until set).

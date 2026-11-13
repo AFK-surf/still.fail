@@ -215,6 +215,11 @@ pub(open) trait Host {
   nt_text(Self, Int) -> String = _
   st_audio_here(Self) -> Int = _
   st_audio(Self, Int, Bytes) -> Unit = _
+  st_audio_played(Self, Int) -> Double = _
+  st_audio_queued(Self, Int) -> Double = _
+  st_audio_volume(Self, Int, Double) -> Unit = _
+  st_frame_shown(Self, Int, Bytes, Int, Double, Int) -> Int = _
+  st_flush(Self, Int, Int) -> Unit = _
   st_layers(Self) -> Int = _
   st_pointer(Self, Int, Bytes, Double, Double, Double, Double) -> Unit = _
   st_pointer_named(Self, Int, String, () -> Bytes, Double, Double, Double, Double) -> Unit = _
@@ -3189,6 +3194,48 @@ fn st_audio_here() -> Int { current.val.st_audio_here() }
 
 ///|
 fn st_audio(id : Int, data : Bytes) -> Unit { current.val.st_audio(id, data) }
+
+///|
+impl Host with st_audio_played(_, _) { 0.0 }
+
+///|
+impl Host with st_audio_queued(_, _) { 0.0 }
+
+///|
+impl Host with st_audio_volume(_, _, _) { () }
+
+///|
+fn st_audio_played(id : Int) -> Double { current.val.st_audio_played(id) }
+
+///|
+fn st_audio_queued(id : Int) -> Double { current.val.st_audio_queued(id) }
+
+///|
+fn st_audio_volume(id : Int, v : Double) -> Unit { current.val.st_audio_volume(id, v) }
+
+///|
+/// A frame with whether it is to be shown (`show` 0: decoded for what comes after it, never shown): 1 the host took
+/// it, 0 it did not (the app lets it go itself). A host with nothing for frames not shown takes a shown one as
+/// `st_frame` and none other.
+impl Host with st_frame_shown(self, id, data, key, ts, show) {
+  if show != 0 {
+    self.st_frame(id, data, key, ts)
+    1
+  } else {
+    0
+  }
+}
+
+///|
+impl Host with st_flush(_, _, _) { () }
+
+///|
+fn st_frame_shown(id : Int, data : Bytes, key : Int, ts : Double, show : Int) -> Int {
+  current.val.st_frame_shown(id, data, key, ts, show)
+}
+
+///|
+fn st_flush(id : Int, drain : Int) -> Unit { current.val.st_flush(id, drain) }
 
 ///|
 impl Host with st_layers(_) { 0 }

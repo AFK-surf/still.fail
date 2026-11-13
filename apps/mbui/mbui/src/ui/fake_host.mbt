@@ -1973,6 +1973,47 @@ impl @hostapi.Host for FakeHost with st_frame(self, id, data, key, ts) {
 }
 
 ///|
+/// A frame not to be shown: "frame … hidden", taken (as Windows' host does), unless the test said its host has nothing
+/// for one (Tester::set_stream_hides false: one shown as st_frame's, the other not taken).
+impl @hostapi.Host for FakeHost with st_frame_shown(self, id, data, key, ts, show) {
+  if show != 0 {
+    fake_fed(self, id, "frame key=\{key != 0} ts=\{ts} bytes=\{data.length()}")
+    1
+  } else if self.stream_hides {
+    fake_fed(self, id, "frame key=\{key != 0} ts=\{ts} bytes=\{data.length()} hidden")
+    1
+  } else {
+    0
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with st_flush(self, id, drain) {
+  fake_fed(self, id, "flush drain=\{drain != 0}")
+}
+
+///|
+impl @hostapi.Host for FakeHost with st_audio_played(self, id) {
+  match self.stream_audio_clock.get(id) {
+    Some((played, _)) => played
+    None => 0.0
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with st_audio_queued(self, id) {
+  match self.stream_audio_clock.get(id) {
+    Some((_, queued)) => queued
+    None => 0.0
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with st_audio_volume(self, id, v) {
+  fake_fed(self, id, "volume \{v}")
+}
+
+///|
 impl @hostapi.Host for FakeHost with st_jpeg(self, id, data, ts) {
   fake_fed(self, id, "jpeg ts=\{ts} bytes=\{data.length()}")
 }

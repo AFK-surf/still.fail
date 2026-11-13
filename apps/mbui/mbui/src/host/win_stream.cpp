@@ -12,7 +12,9 @@
 //
 // Each frame is kept until the app shows it ("f TS W H", then mb_host_stream_show) or a later one; one that does not
 // decode, or that the decoder passed over, is let go ("d TS"); the decoder failing says "b" and starts anew from the next
-// key frame. Each event asks for a frame (mb_app_wake), or, while the stream shows itself on its layer, tells the app
+// key frame. A frame not to be shown (mb_host_stream_frame_shown) is decoded as any and let go as it comes out ("d TS",
+// nothing copied, no frame asked); a flush (mb_host_stream_flush) empties the decoder in its place among the frames,
+// drained first where asked, and takes nothing after it till a key frame. Each event asks for a frame (mb_app_wake), or, while the stream shows itself on its layer, tells the app
 // between frames (mb_app_streamed: ui's streams_said takes what changes nothing drawn without a frame).
 //
 // Routed (mb_stream_route_take, @hostapi.stream_direct): where the app's engine reads a remote screen itself (its
@@ -86,8 +88,9 @@ struct StreamFrame {
   Gpu gpu;                        // NV12 on the GPU (gpu.tex NULL: none)
 };
 
-// A piece of a stream's work: a JPEG frame, a config (an avcC or an hvcC, the picture's size) or an access unit
-enum { JOB_JPEG, JOB_CONFIG, JOB_FRAME };
+// A piece of a stream's work: a JPEG frame, a config (an avcC or an hvcC, the picture's size), an access unit or its
+// decoder emptied (a flush: `key` 1 drained first)
+enum { JOB_JPEG, JOB_CONFIG, JOB_FRAME, JOB_FLUSH };
 struct StreamJob {
   int kind;
   double ts;
@@ -96,6 +99,7 @@ struct StreamJob {
   int key, w, h;
   int hevc;       // a config's: an hvcC (H.265)
   uint64_t route;  // a frame's: the route it came by (mb_stream_route_take), 0 the app's
+  int hidden;      // a frame's: decoded for those after it, never shown (mb_host_stream_frame_shown's `show` 0)
 };
 
 // What was fed the decoder and is not out of it yet: its sample time there (a count) and its time
@@ -103,6 +107,7 @@ struct Fed {
   LONGLONG n;
   double ts;
   uint64_t route;  // the route it came by, 0 the app's: its fate acknowledged to its sender, not said
+  int hidden;      // not to be shown: out of the decoder it is said "d", not copied, no frame asked for it
 };
 
 // A stream's decoder (its config's, started anew with each and as it fails; the stream's work's alone): the system's
@@ -184,6 +189,11 @@ struct Stream {
   LONGLONG sound_at;
   uint8_t *sound_ring;
   unsigned sound_next;
+  // the samples its voices let go of had played (its sound's clock goes on across them: mb_host_stream_audio_played);
+  // the volume the app asked for (sound_volume_set: asked), given each voice it makes
+  double sound_played_before;
+  float sound_volume;
+  int sound_volume_set;
 };
 
 static Stream **streams;  // by id (ids are not reused)
@@ -428,17 +438,23 @@ static void say(Stream *s, const char *e) {
   tell_app(s);
 }
 
-static void say_dropped(Stream *s, double ts) {
+// "d TS"; `wake` 0 (only frames not to be shown let go): said, no frame asked for it (the app takes it as its next
+// frame begins, whatever asks for that one)
+static void say_dropped(Stream *s, double ts, int wake = 1) {
   char t[40], e[48];
   num(t, sizeof t, ts);
   snprintf(e, sizeof e, "d %s", t);
-  say(s, e);
+  if (wake) return say(s, e);
+  EnterCriticalSection(&lock);
+  say_locked(s, e);
+  LeaveCriticalSection(&lock);
 }
 
-// Frame ts let go: one that came by a route acknowledged to its sender, else said.
-static void let_go(Stream *s, double ts, uint64_t route) {
+// Frame ts let go: one that came by a route acknowledged to its sender, else said (one not to be shown, `hidden`,
+// asking no frame).
+static void let_go(Stream *s, double ts, uint64_t route, int hidden = 0) {
   if (route) route_acked(route, ts);
-  else say_dropped(s, ts);
+  else say_dropped(s, ts, !hidden);
 }
 
 // A frame decoded (srv or gpu its picture: neither, one that was not) kept till it is shown, and said: "f TS W H", or
@@ -603,15 +619,17 @@ static void direct_decoded(Stream *s, double ts, int w, int h, ID3D11ShaderResou
 static void fed_dropped(Stream *s) {
   H264 *d = s->h264;
   if (!d || !d->nfed) return;
-  // (the app's said let go up to the newest of them; a route's acknowledged up to its newest)
+  // (the app's said let go up to the newest of them, a frame asked only where one of them was to be shown; a route's
+  // acknowledged up to its newest)
   double app = -1, direct = -1;
+  int app_wake = 0;
   uint64_t route = 0;
   for (int i = 0; i < d->nfed; i++) {
     if (d->fed[i].route) direct = d->fed[i].ts, route = d->fed[i].route;
-    else app = d->fed[i].ts;
+    else app = d->fed[i].ts, app_wake |= !d->fed[i].hidden;
   }
   d->nfed = 0;
-  if (app >= 0) say_dropped(s, app);
+  if (app >= 0) say_dropped(s, app, app_wake);
   if (direct >= 0) route_acked(route, direct);
 }
 
@@ -935,17 +953,24 @@ static void h264_drain(Stream *s) {
     LONGLONG n = (t + 5000) / 10000;
     double ts = -1, passed = -1, passed_direct = -1;
     uint64_t route = 0, passed_route = 0;
+    int hidden = 0, passed_wake = 0;
     int k = 0;
     while (k < d->nfed && d->fed[k].n <= n) {
-      if (d->fed[k].n == n) ts = d->fed[k].ts, route = d->fed[k].route;
+      if (d->fed[k].n == n) ts = d->fed[k].ts, route = d->fed[k].route, hidden = d->fed[k].hidden;
       else if (d->fed[k].route) passed_direct = d->fed[k].ts, passed_route = d->fed[k].route;
-      else passed = d->fed[k].ts;
+      else passed = d->fed[k].ts, passed_wake |= !d->fed[k].hidden;
       k++;
     }
     memmove(d->fed, d->fed + k, (size_t)(d->nfed - k) * sizeof *d->fed);
     d->nfed -= k;
-    if (passed >= 0) say_dropped(s, passed);
+    if (passed >= 0) say_dropped(s, passed, passed_wake);
     if (passed_direct >= 0) route_acked(passed_route, passed_direct);
+    if (ts >= 0 && hidden && !route) {
+      // (one not to be shown: decoded for those after it, nothing copied off it or kept; said let go, no frame asked)
+      o.pSample->Release();
+      say_dropped(s, ts, 0);
+      continue;
+    }
     ID3D11ShaderResourceView *srv = NULL;
     Gpu gpu = {};
     if (ts >= 0 && d->gpu) {
@@ -995,7 +1020,7 @@ static void h264_frame(Stream *s, StreamJob *j) {
     h264_stop(d);
     h264_start(s, d->cw, d->ch);
   }
-  if (!d || !d->dec || (d->need_key && !j->key)) return let_go(s, j->ts, j->route);
+  if (!d || !d->dec || (d->need_key && !j->key)) return let_go(s, j->ts, j->route, j->hidden);
   d->need_key = 0;
   size_t cap = j->len * 3 + (j->key ? d->nhead : 0) + 16;
   IMFMediaBuffer *buf = NULL;
@@ -1003,7 +1028,7 @@ static void h264_frame(Stream *s, StreamJob *j) {
   BYTE *p = NULL;
   if (FAILED(MFCreateMemoryBuffer((DWORD)cap, &buf)) || FAILED(buf->Lock(&p, NULL, NULL))) {
     if (buf) buf->Release();
-    return let_go(s, j->ts, j->route);
+    return let_go(s, j->ts, j->route, j->hidden);
   }
   size_t k = 0;
   if (j->key) memcpy(p, d->head, d->nhead), k = d->nhead;
@@ -1021,7 +1046,7 @@ static void h264_frame(Stream *s, StreamJob *j) {
   buf->SetCurrentLength((DWORD)k);
   if (FAILED(MFCreateSample(&smp))) {
     buf->Release();
-    return let_go(s, j->ts, j->route);
+    return let_go(s, j->ts, j->route, j->hidden);
   }
   smp->AddBuffer(buf);
   buf->Release();
@@ -1034,7 +1059,7 @@ static void h264_frame(Stream *s, StreamJob *j) {
     d->cap_fed = d->cap_fed ? d->cap_fed * 2 : 16;
     d->fed = (Fed *)realloc(d->fed, (size_t)d->cap_fed * sizeof *d->fed);
   }
-  d->fed[d->nfed++] = {n, j->ts, j->route};
+  d->fed[d->nfed++] = {n, j->ts, j->route, j->hidden};
   HRESULT hr = d->dec->ProcessInput(0, smp, 0);
   if (hr == MF_E_NOTACCEPTING) {
     h264_drain(s);
@@ -1043,6 +1068,27 @@ static void h264_frame(Stream *s, StreamJob *j) {
   smp->Release();
   if (FAILED(hr)) return h264_broken(s, hr);
   h264_drain(s);
+}
+
+// Its decoder emptied (mb_host_stream_flush, in its place among the frames): `drain`, what is in it decoded out first,
+// each as it would have been (shown "f", or "d" for one not to be shown); then flushed, what is left in it let go ("d",
+// none shown). The decoder kept (no config needed again), the frame shown left as it is, and from the next key frame:
+// one that is not let go (h264_frame), never a picture made of references the flush took away.
+static void h264_flush(Stream *s, int drain) {
+  H264 *d = s->h264;
+  if (!d) return;
+  if (d->dec && drain) {
+    HRESULT hr = d->dec->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+    // (out till it wants more: all of it, once drained)
+    if (SUCCEEDED(hr)) h264_drain(s);
+    else fprintf(stdout, "win: stream %d: its decoder not drained (%08lx)\n", s->id, (unsigned long)hr), fflush(stdout);
+  }
+  if (d->dec) {
+    HRESULT hr = d->dec->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0);
+    if (FAILED(hr)) fprintf(stdout, "win: stream %d: its decoder not flushed (%08lx)\n", s->id, (unsigned long)hr), fflush(stdout);
+  }
+  fed_dropped(s);
+  d->need_key = 1;
 }
 
 // Whether this machine has the system's H.264 decoder (not Windows' N editions without their media pack): asked once
@@ -1100,6 +1146,7 @@ static void CALLBACK work(PTP_CALLBACK_INSTANCE inst, void *arg) {
     LeaveCriticalSection(&lock);
     if (j.kind != JOB_JPEG) {
       if (j.kind == JOB_CONFIG) h264_config(s, &j);
+      else if (j.kind == JOB_FLUSH) h264_flush(s, j.key);
       else h264_frame(s, &j);
       free(j.data);
       continue;
@@ -1432,7 +1479,7 @@ int32_t mb_host_stream_open(void) {
 static void queue_bytes(Stream *s, StreamJob j, const uint8_t *data, size_t len) {
   j.data = (uint8_t *)malloc(len ? len : 1);
   j.len = len;
-  memcpy(j.data, data, len);
+  if (len) memcpy(j.data, data, len);
   EnterCriticalSection(&lock);
   if (s->closed) {
     LeaveCriticalSection(&lock);
@@ -1453,7 +1500,7 @@ static void queue_bytes(Stream *s, StreamJob j, const uint8_t *data, size_t len)
     s->njobs--;
     LeaveCriticalSection(&lock);
     free(j.data);
-    if (j.kind != JOB_CONFIG) let_go(s, j.ts, j.route);
+    if (j.kind == JOB_FRAME || j.kind == JOB_JPEG) let_go(s, j.ts, j.route, j.hidden);
   }
 }
 
@@ -1481,6 +1528,20 @@ void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h)
 void mb_host_stream_frame(int32_t id, moonbit_bytes_t data, int32_t key, double ts) {
   Stream *s = stream_of(id);
   if (s) queue_job(s, {JOB_FRAME, ts, NULL, 0, key != 0, 0, 0, 0, 0}, data);
+}
+
+// An access unit `show` 0 decoded for the frames after it and never shown (h264_drain: not copied off, said "d", no
+// frame asked for it); taken, whichever (1), H.264's and H.265's alike, on the GPU or not.
+int32_t mb_host_stream_frame_shown(int32_t id, moonbit_bytes_t data, int32_t key, double ts, int32_t show) {
+  Stream *s = stream_of(id);
+  if (s) queue_job(s, {JOB_FRAME, ts, NULL, 0, key != 0, 0, 0, 0, 0, show == 0}, data);
+  return 1;
+}
+
+// Its decoder emptied, after the frames handed over before it (h264_flush): `drain`, decoded out first.
+void mb_host_stream_flush(int32_t id, int32_t drain) {
+  Stream *s = stream_of(id);
+  if (s) queue_bytes(s, {JOB_FLUSH, 0, NULL, 0, drain != 0, 0, 0, 0, 0}, NULL, 0);
 }
 
 void mb_host_stream_jpeg(int32_t id, moonbit_bytes_t data, double ts) {
@@ -1594,7 +1655,13 @@ static int sound_ready(void) {
 
 // (under sound_lock) its voice let go, what is queued with it
 static void sound_stop(Stream *s) {
-  if (s->voice) s->voice->DestroyVoice();
+  if (s->voice) {
+    // (what it played counted on by the next: the stream's sound's clock)
+    XAUDIO2_VOICE_STATE st;
+    s->voice->GetState(&st, 0);
+    s->sound_played_before += (double)st.SamplesPlayed;
+    s->voice->DestroyVoice();
+  }
   s->voice = NULL;
   s->sound_playing = 0;
   s->sound_at = 0;
@@ -1617,6 +1684,7 @@ static void sound_play(Stream *s, const uint8_t *bytes) {
     }
     if (!s->sound_ring) s->sound_ring = (uint8_t *)malloc((size_t)SOUND_RING * SOUND_PACKET);
     s->sound_playing = 0;
+    if (s->sound_volume_set) s->voice->SetVolume(s->sound_volume);
   }
   if (!s->sound_reserve) s->sound_reserve = 5;
   // how long since the last packet: a gap longer than the reserve covers makes it that long and a packet more
@@ -1669,6 +1737,8 @@ void mb_host_stream_close(int32_t id) {
   AcquireSRWLockExclusive(&sound_lock);
   s->sound_gone = 1;
   sound_stop(s);
+  // (its sound's clock set back: only here)
+  s->sound_played_before = 0;
   ReleaseSRWLockExclusive(&sound_lock);
   layer_drop(s);
   if (s->ptr_px) free(s->ptr_px);
@@ -1768,6 +1838,51 @@ void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) {
   // (stopped: what its route plays stops with it, until the app routes it again)
   if (len == 0) unroute(id, 2);
   sound_take(s, (const uint8_t *)data, len);
+}
+
+// Samples (48 kHz frames) of its sound played since its sound began: its voice's SamplesPlayed, and what the voices
+// before it played (an empty packet lets a voice go, the next made as sound comes again); set back only as the stream
+// closes (0 then), so an app that wants another start keeps its own base. A route's sound counts the same.
+double mb_host_stream_audio_played(int32_t id) {
+  Stream *s = stream_of(id);
+  if (!s) return 0;
+  AcquireSRWLockShared(&sound_lock);
+  double n = s->sound_gone ? 0 : s->sound_played_before;
+  if (!s->sound_gone && s->voice) {
+    XAUDIO2_VOICE_STATE st;
+    s->voice->GetState(&st, 0);
+    n += (double)st.SamplesPlayed;
+  }
+  ReleaseSRWLockShared(&sound_lock);
+  return n;
+}
+
+// Milliseconds of its sound queued and not played yet: its voice's buffers queued, 20 ms each (the one playing counted
+// whole: up to 20 ms over); 0 where it has no voice.
+double mb_host_stream_audio_queued(int32_t id) {
+  Stream *s = stream_of(id);
+  if (!s) return 0;
+  AcquireSRWLockShared(&sound_lock);
+  double ms = 0;
+  if (!s->sound_gone && s->voice) {
+    XAUDIO2_VOICE_STATE st;
+    s->voice->GetState(&st, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+    ms = (double)st.BuffersQueued * 20;
+  }
+  ReleaseSRWLockShared(&sound_lock);
+  return ms;
+}
+
+// Its sound's volume (1 as it came, 0 silent): its voice's now, and kept for a voice made later.
+void mb_host_stream_audio_volume(int32_t id, double v) {
+  Stream *s = stream_of(id);
+  if (!s) return;
+  if (!(v > 0)) v = 0;  // (none below silence, nor NaN)
+  AcquireSRWLockExclusive(&sound_lock);
+  s->sound_volume = (float)v;
+  s->sound_volume_set = 1;
+  if (s->voice) s->voice->SetVolume(s->sound_volume);
+  ReleaseSRWLockExclusive(&sound_lock);
 }
 
 // The app's (the window's thread): stream id takes route's frames (`what` 1) and sound (2) from now, where the last

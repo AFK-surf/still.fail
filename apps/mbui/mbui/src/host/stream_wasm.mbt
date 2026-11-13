@@ -97,3 +97,23 @@ fn st_pointer_at(id : Int, x : Double, y : Double, shown : Int) = "mbhost" "mb_h
 ///|
 fn st_direct(id : Int, route : Double, after : Double, what : Int) = "mbhost" "mb_host_stream_direct"
 
+///|
+fn mbw_mb_host_stream_frame_shown(id : Int, data : Int, key : Int, ts : Double, show : Int) -> Int = "mbhost" "mb_host_stream_frame_shown"
+
+///|
+fn st_frame_shown(id : Int, data : Bytes, key : Int, ts : Double, show : Int) -> Int {
+  mbw_mb_host_stream_frame_shown(id, @wasmrt.bytes_addr(data), key, ts, show)
+}
+
+///|
+fn st_flush(id : Int, drain : Int) = "mbhost" "mb_host_stream_flush"
+
+///|
+fn st_audio_played(id : Int) -> Double = "mbhost" "mb_host_stream_audio_played"
+
+///|
+fn st_audio_queued(id : Int) -> Double = "mbhost" "mb_host_stream_audio_queued"
+
+///|
+fn st_audio_volume(id : Int, v : Double) = "mbhost" "mb_host_stream_audio_volume"
+
