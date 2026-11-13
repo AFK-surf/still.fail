@@ -131,8 +131,11 @@
   cloud's copy in `presence.ts`, `lockHead`, pinning) reads `Cloud.chain`. Off is a state (`locked` null, nothing let
   go); without the root's log or its `open` (`waiting`) nobody is let in and the chain's stations are answered only the
   lock's own methods. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
-  its workspace: to a device let in there (`GET /lock/bodies`, with `lacking`), to a station its state names
-  (`lock.bodies.*`, `person-sync.ts`), and to one a removal took out, that removal and its `prev` chain alone.
+  its workspace, by the list its bodies make, on or off (`Cloud.givenTo`): to a station or device it names
+  (`lock.bodies.*`, `person-sync.ts`; `GET /lock/bodies`, with `lacking`: while off, only to a connection that proves
+  itself a device the list names), and to one a removal took out, that removal and its `prev` chain alone (the rules'
+  list `without` it, the model's `admitsBefore`). A device taken out is told so by its hello's refusal as before; its
+  removal's body reaches it in the core's step. `test/lock-moved-model.test.ts` holds all of it to the model.
 
 ## Screens
 
