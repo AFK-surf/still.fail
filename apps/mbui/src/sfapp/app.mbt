@@ -114,6 +114,7 @@ fn reset() -> Unit {
   cui.restore_error.clear()
   cui.doing.clear()
   pick_reset()
+  chat_bar_reset()
   dv_reset()
   decide_reset()
   @settings.reset()
