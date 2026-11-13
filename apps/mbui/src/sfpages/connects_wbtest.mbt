@@ -19,6 +19,42 @@ test "连接, at each width and with either hand: the connects, each with how it
 }
 
 ///|
+test "连接 with a waiting Slack app and pictured and unpictured connects: cards apart, titles lined up, controls and facts across the row's middle" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(Connects(""), w, platform~, mode="settings-connects")
+    let at = "\{w} platform \{platform}"
+    assert_eq(t.corner_faults(), [], msg=at)
+    assert_eq(t.gap_faults(), [], msg=at)
+    let waiting_title = drawn(t, "Gemini-Monoid")
+    let pictured_title = drawn(t, "星火助手")
+    let unpictured_title = drawn(t, "值班机器人")
+    // (every row's lead is 28 wide, so pictured, unpictured and waiting titles start at the same x)
+    assert_true((pictured_title.0 - unpictured_title.0).abs() <= 0.5, msg="\{at}: \{Repr(pictured_title)} vs \{Repr(unpictured_title)}")
+    assert_true((pictured_title.0 - waiting_title.0).abs() <= 0.5, msg="\{at}: \{Repr(pictured_title)} vs \{Repr(waiting_title)}")
+    let wait_card = ground_round(t, waiting_title)
+    let list_card = ground_round(t, pictured_title)
+    assert_true(list_card.1 - (wait_card.1 + wait_card.3) >= 20.0, msg="\{at}: \{Repr(wait_card)} over \{Repr(list_card)}")
+    let more = t.query(Button, label=@sf.t("web-pages.connects.removeHere")).unwrap().rect
+    let wait_mid = wait_card.1 + wait_card.3 / 2.0
+    assert_true(((more.1 + more.3 / 2.0) - wait_mid).abs() <= 1.0, msg="\{at}: more \{Repr(more)} in \{Repr(wait_card)}")
+    if laid_wide(w) {
+      let cont = t.query(Button, label="继续").unwrap().rect
+      assert_true(((cont.1 + cont.3 / 2.0) - wait_mid).abs() <= 1.0, msg="\{at}: continue \{Repr(cont)} in \{Repr(wait_card)}")
+      if w >= 1100.0 {
+        let owner = drawn(t, "林（你）")
+        let online = t.words().filter(fn(word) { word.0 == "在线" && (word.2 - owner.1).abs() < 8.0 })[0]
+        assert_true(online.1 > owner.0 + owner.2 + 8.0, msg="\{at}: owner \{Repr(owner)} before online \{Repr(online)}")
+        let row_top = pictured_title.1
+        let sub = drawn(t, "每个 thread 一个会话 · Claude Code · Opus 5.5")
+        let row_mid = (row_top + sub.1 + sub.3) / 2.0
+        assert_true(((owner.1 + owner.3 / 2.0) - row_mid).abs() <= 2.0, msg="\{at}: owner \{Repr(owner)} vs row_mid \{row_mid}")
+      }
+    }
+  }
+}
+
+///|
 test "a connect's page, at each width and with either hand: who it is, how it runs; its ⋯ a menu of what is done less often" {
   for case in page_cases {
     let (w, platform) = case
