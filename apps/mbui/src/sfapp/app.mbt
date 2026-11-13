@@ -922,14 +922,15 @@ pub let switch_slide : Double = 30.0
 let place_switch : @motion.Way = @motion.Way::new(1.0)
 
 ///|
-/// How far over the window's foot the toast is, for the window's tree's (toast's, followed): the wide frame's 24 and
-/// the system's tabs across the foot where they are; the narrow one's over the bar's room and the navigation bar.
+/// How far over what the system's bars leave of the window's foot the toast is, for the window's tree's (toast's,
+/// followed): the wide frame's 24; the narrow one's over the bar's room.
 fn toast_bottom_now(v : @view.View) -> Double {
   let wide = !(@sf.layout(v.window().0) is Small) || @sf.native_able()
+  // (over the system's bars at the window's foot: the toaster keeps clear of them itself, View::clear)
   if wide {
-    @sf.toast_bottom + @sf.native_foot()
+    @sf.toast_bottom
   } else {
-    bar_room + nav_foot()
+    bar_room
   }
 }
 
