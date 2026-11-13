@@ -25,6 +25,7 @@ priv enum SideCase {
   GroundFill
   CentredFill
   HugMiddle
+  LineLabel
 }
 
 ///|
@@ -96,6 +97,12 @@ fn ks_side_case(g : Double, how : SideCase, twenty : Double) -> (@view.Tree, @si
               })
               |> ignore
             }
+            // (a line across the list, a label hugging its words in its middle)
+            LineLabel => {
+              b.lines_up(Is(Some(Middle))) |> ignore
+              b.box(fn(l) { l.width(Is(Some(300.0))).height(Is(Some(1.0))).ground(Is(0xCCCCCCFFL)) |> ignore }) |> ignore
+              b.box(fn(x) { x.words(Is(ks_side_words)) |> ignore }) |> ignore
+            }
             // (a box with a ground hugging one line of words, centred by what holds it)
             HugMiddle => {
               b.lines_up(Is(Some(Middle))) |> ignore
@@ -140,6 +147,7 @@ fn ks_side_at(tree : @view.Tree, how : SideCase) -> Double {
       // (the ground holding its words)
       GroundFill if d.words == ks_side_words && up >= 0 => return held[up].0.x
       HugMiddle if d.words == ks_side_words && up >= 0 => return held[up].0.x + held[up].0.w / 2.0
+      LineLabel if d.words == ks_side_words => return d.x + d.w / 2.0
       _ => ()
     }
   }
@@ -150,8 +158,9 @@ fn ks_side_at(tree : @view.Tree, how : SideCase) -> Double {
 test "a key coming at a page's list's foot grows from the side what it draws is laid from: words at the left their left edge, a bubble at the right its right edge, one in the middle its middle; what fills its block as its words are laid; where each rests at every look" {
   let twenty = ks_side_twenty()
   assert_true(twenty > 100.0 && twenty < 300.0, msg="twenty words \{twenty} wide")
+  let faults : Array[String] = []
   for g in [0.0, 3.0] {
-    for how in [WordsLeft, BubbleRight, BubbleMiddle, LinesFill, GroundFill, CentredFill, HugMiddle] {
+    for how in [WordsLeft, BubbleRight, BubbleMiddle, LinesFill, GroundFill, CentredFill, HugMiddle, LineLabel] {
       for rate in rc_rates {
         let (tree, keys) = ks_side_case(g, how, twenty)
         let more = Array::makei(10, fn(i) { i })
@@ -165,14 +174,20 @@ test "a key coming at a page's list's foot grows from the side what it draws is 
         let seen = rc_walk(tree, [(rc_at, fn() { keys.set(more) })], looks, rate, fn() { ks_side_at(tree, how) })
         let rest = seen[seen.length() - 1]
         let what = "\{ks_side_name(how)}, grid \{g}, at \{rate} a second"
-        assert_true(rest != rc_none, msg="\{what}: not drawn at rest")
+        if rest == rc_none {
+          faults.push("\{what}: not drawn at rest")
+          continue
+        }
+        // (each case's first fault said, all the cases run: one run says which hold)
         for i, m in seen {
-          guard m != rc_none else { continue }
-          assert_true((m - rest).abs() <= 0.5, msg="\{what}, look \{i}: its side at \{m}, \{rest} at rest")
+          guard m != rc_none && (m - rest).abs() > 0.5 else { continue }
+          faults.push("\{what}, look \{i}: its side at \{m}, \{rest} at rest")
+          break
         }
       }
     }
   }
+  assert_true(faults.is_empty(), msg=faults.join("\n"))
 }
 
 ///|
@@ -186,5 +201,6 @@ fn ks_side_name(how : SideCase) -> String {
     GroundFill => "a ground as wide as the list, its words at its start"
     CentredFill => "centred lines filling a node of the list's middle"
     HugMiddle => "a ground hugging a line, centred by what holds it"
+    LineLabel => "a line across the list, a label in its middle"
   }
 }
