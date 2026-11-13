@@ -204,11 +204,20 @@ pub fn video_capsule(
 }
 
 ///|
-/// A video's capsule (video_capsule's, as a node, at rest: nothing coming) laid over `parent`, in its foot's start corner
-/// concentric with a message's file's (or `corner`, a quote's picture's): a small play mark and how long it is
-/// (`duration`, none where that is not known) on the video's shade.
+/// A video's capsule (video_capsule's, as a node) laid over `parent`, in its foot's start corner concentric with a
+/// message's file's (or `corner`, a quote's picture's): a small play mark and how long it is (`duration`, none where that
+/// is not known) on the video's shade; while `coming` says how far the core has brought it here, a ring of that share
+/// and the share in words in their place, each one in the other's place along the capsule's row (never both seen, the
+/// capsule's width making its way between them); told nothing of its coming (a tile's), nothing made for that. Not yet: the one going out faded before the other comes in, as
+/// video_capsule's (View::pick's `leave` reads the time in its fader's binding, View::going: a clock read here).
 #callsite(autofill(loc))
-pub fn video_capsule_node(parent : @view.View, duration : Double, corner? : Double = message_file_corner, loc~ : SourceLoc) -> Unit {
+pub fn video_capsule_node(
+  parent : @view.View,
+  duration : Double,
+  corner? : Double = message_file_corner,
+  coming? : () -> Double?,
+  loc~ : SourceLoc,
+) -> Unit {
   let length = if duration > 0.0 { clock(duration) } else { "" }
   parent.box(made_for=loc, fn(foot) {
     foot.over(Is(true)) |> ignore
@@ -219,9 +228,44 @@ pub fn video_capsule_node(parent : @view.View, duration : Double, corner? : Doub
       style_node(b, fn() { box_at(video_capsule_kept, video_capsule_box, video_capsule_h, video_capsule_words, b.words_scale()) })
       b.box(fn(row) {
         style_node(row, fn() { video_capsule_row })
-        icon_node(row, "play", video_capsule_mark, Is(white)) |> ignore
-        if length != "" {
-          words_node(row, fn() { length }, fn() { video_capsule_words }) |> ignore
+        match coming {
+          // (told nothing of its coming, a tile's: its mark and its length, nothing made to choose)
+          None => {
+            icon_node(row, "play", video_capsule_mark, Is(white)) |> ignore
+            if length != "" {
+              words_node(row, fn() { length }, fn() { video_capsule_words }) |> ignore
+            }
+          }
+          Some(coming) => {
+            // (how far, the last said kept as it goes out: video_capsule_last's)
+            let last = Ref(0.0)
+            let part = fn() {
+              match coming() {
+                Some(p) => {
+                  last.val = p
+                  p
+                }
+                None => last.val
+              }
+            }
+            let shown = fn() { coming() is Some(_) }
+            // its mark and its words each a pick of its own, so each has the other beside it to make its way along
+            row.pick(along_row=true, shown, fn(m, on) {
+              if on {
+                progress_ring_node(m, video_capsule_ring, part, fn() { white }) |> ignore
+              } else {
+                icon_node(m, "play", video_capsule_mark, Is(white)) |> ignore
+              }
+            })
+            row.pick(along_row=true, shown, fn(m, on) {
+              if on {
+                words_node(m, fn() { "\{(dmin(1.0, dmax(0.0, part())) * 100.0).floor().to_int()}%" }, fn() { video_capsule_words })
+                |> ignore
+              } else if length != "" {
+                words_node(m, fn() { length }, fn() { video_capsule_words }) |> ignore
+              }
+            })
+          }
         }
       })
       |> ignore

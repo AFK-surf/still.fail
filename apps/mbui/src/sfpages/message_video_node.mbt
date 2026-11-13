@@ -8,9 +8,8 @@
 /// up); right clicked, its menu where; held by a finger, its menu, the video lifted while it is up: 引用, 在侧边打开,
 /// 下载, and 加载 (brought onto this device before everything else) or 停止加载 while it is brought. Its name whole in a
 /// tip in `tips` while what it shows shows cut short (video_item's, repeats). Made for one file (its still is read for
-/// it): another in its place is made anew.
-/// Not yet: how far the core has brought it on its capsule (the capsule's width between its length and that share
-/// waits for the framework: a row's way along it for what comes and goes, as a column's).
+/// it): another in its place is made anew. While the core downloads it, or brings it after all else (加载, or opened
+/// and let go: fill.ts), how far on its capsule (video_item's).
 fn message_video_node(
   parent : @view.View,
   src : Source,
@@ -133,7 +132,20 @@ fn message_video_node(
     |> ignore
     f.box(fn(o) {
       o.over(Is(true)).width(Is(Some(w))).height(Is(Some(h))) |> ignore
-      @sf.video_capsule_node(o, a().duration, corner~)
+      // (downloading, else brought after all else: how far)
+      let coming = fn() -> Double? {
+        let name = stored_name(a().path)
+        let dl = download_of(src, station(), owner(), name)
+        if flag(dl, "active") {
+          Some(number(dl, "progress"))
+        } else {
+          match keeping_of(src, station(), owner(), name) {
+            Some(_) as kept => Some(number(kept, "progress"))
+            None => None
+          }
+        }
+      }
+      @sf.video_capsule_node(o, a().duration, corner~, coming~)
     })
     |> ignore
   })

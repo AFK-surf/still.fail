@@ -5,7 +5,8 @@
 test "a chat's picture in its things' tile (a node) shows once it is here, nothing else drawing the page again" {
   for platform in [0, 2] {
     let images = @sfbase.ChatImages::new()
-    let answers : Array[(Result[(Json, Bytes?), Json]) -> Unit] = []
+    // (each ask: the picture's name, and its answer)
+    let answers : Array[(String, (Result[(Json, Bytes?), Json]) -> Unit)] = []
     let src : Ref[Source?] = Ref(None)
     // (made as the window's tree is first made, as the screens' sweep makes it: squeeze_wbtest.mbt's screen_in)
     let made = fn() {
@@ -18,7 +19,7 @@ test "a chat's picture in its things' tile (a node) shows once it is here, nothi
             ..base,
             file: fn(station, key, name) {
               images.get(station, @sfbase.file_image_id(station, key, name), "mem:told/" + name, fn(_, done) {
-                answers.push(done)
+                answers.push((name, done))
               })
             },
             images,
@@ -37,15 +38,32 @@ test "a chat's picture in its things' tile (a node) shows once it is here, nothi
       platform~,
     )
     t.run_for(squeeze_opening)
-    let told = fn() { t.drawlist_images().filter(fn(i) { i.1.has_prefix("mem:told/") }).length() }
+    let told = fn() { t.drawlist_images().filter(fn(i) { i.1.has_prefix("mem:told/") }).map(fn(i) { i.1 }) }
     assert_true(answers.length() > 0, msg="\{platform}: its tiles ask for their pictures")
-    assert_eq(told(), 0, msg="\{platform}")
+    assert_eq(told().length(), 0, msg="\{platform}")
+    // (each asked once: a list may ask ahead of what shows, never twice)
+    let asked = answers.map(fn(a) { a.0 })
+    for a in asked {
+      assert_eq(asked.filter(fn(b) { b == a }).length(), 1, msg="\{platform}: \{a} asked twice: \{Repr(asked)}")
+    }
     // (each comes, nothing else changed)
-    let n = answers.length()
-    for done in answers {
-      done(Ok((Json::object({}), Some(png_head()))))
+    for a in answers {
+      (a.1)(Ok((Json::object({}), Some(png_head()))))
     }
     t.run_for(@ui.move_most_ms)
-    assert_eq(told(), n, msg="\{platform}: each tile's picture drawn once it is here")
+    // each tile on the screen (as a screen reader has it, 查看 …) drawn with its picture, nothing else drawn
+    let (ww, wh) = t.size()
+    let shown = asked.filter(fn(a) {
+      t.all(Button, label=tr("web-main.file.view", args=[("name", a)])).iter().any(fn(s) {
+        let (x, y, w, h) = s.rect
+        x < ww && x + w > 0.0 && y < wh && y + h > 0.0
+      })
+    })
+    assert_true(shown.length() > 0, msg="\{platform}: a tile on the screen")
+    let drawn = told()
+    drawn.sort()
+    let want = shown.map(fn(a) { "mem:told/" + a })
+    want.sort()
+    assert_eq(drawn, want, msg="\{platform}: each tile's picture drawn once it is here")
   }
 }
