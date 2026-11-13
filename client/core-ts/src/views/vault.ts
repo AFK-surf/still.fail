@@ -201,7 +201,8 @@ function lockOf(inner: Inner, ws: string): Checked | CoreError {
   const force = inForceOf(inner, ws);
   // (where the chain moved, off is a statement, not an entry of it: the workspace off, as a chain disabled is)
   if (force.said === "off") return new CoreError("vault_needs_lock", t("core-misc.vault.needsLock"));
-  if (force.checked !== undefined) return force.checked;
+  // (moved: the state in force or, made of nothing the rules give, none that checks out; never the chain at the move)
+  if (force.said !== "chain") return force.checked ?? new CoreError("vault_lock_invalid", "the workspace's lock does not check out: no state in force");
   const m = mem(inner);
   const at = `${head}/${entries.length}`;
   const had = m.checked.get(ws);

@@ -14,12 +14,14 @@ import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
 import { hooks } from "../src/core/execute.ts";
 import { PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
-import { utf8 } from "../src/util.ts";
+import { hex, utf8 } from "../src/util.ts";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { bodyHash, wsTag } from "../src/lock-moved.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
-import { Lock, TAKEN_MS, bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, pendingHeld, putOnBound, read, signerOf } from "../src/views/lock.ts";
+import { Lock, TAKEN_MS, bindPerson, fold, held, inForceOf, keepToPerson, onBoundPerson, pairs, pendingHeld, putOnBound, read, signerOf } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalBegin, served, serveTrusted, trying, tryOne } from "../src/views/pair.ts";
 import { ME, PHONE, elsewhere, genesis, grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
@@ -992,6 +994,76 @@ test("a device on the person's own lock that a second workspace bound to it hold
   const length = held(inner, "ws")!.entries.length;
   await run(keepToPerson(inner, "ws"));
   assert.equal(held(inner, "ws")!.entries.length, length);
+});
+
+// A workspace of theirs whose chain moved says no key of its own: its chain is as it was at the move, and a device's
+// signer said again on its person's log since is the one its state names (views/lock.ts `signKeysElsewhere`).
+test("a device whose signer its person's log said again since a workspace of theirs moved is put in a second workspace with the signer the log says now, never the moved chain's", async () => {
+  const LAPTOP = "77".repeat(32), OLD = "ed25519:" + "22".repeat(32), NOW = "ed25519:" + "24".repeat(32), LAPTOP_KEY = "ed25519:" + "55".repeat(32);
+  const g = grant();
+  let me: Signer | null = null;
+  const m = await rig((s) => {
+    me = s;
+    return {
+      ws: genesis("ws", s, true, [], g.keys, ME, [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: OLD }]),
+      w2: genesis("w2", s, true, [], g.keys, ME, [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop" }]),
+    };
+  });
+  await m.watch({ topic: "lock", workspace: "ws" });
+  await m.watch({ topic: "lock", workspace: "w2" });
+  const inner = m.core.inner;
+  const run = async <A>(e: Effect.Effect<A, any>) => {
+    const out: unknown[] = [];
+    inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x)));
+    await m.host.time.passUntil(5000, () => out.length !== 0);
+  };
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  const laptopIn = (ws: string) => fold(held(inner, ws)!.entries).devices.get(LAPTOP);
+  await run(read(inner, "ws"));
+  await run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  // (the laptop's signer said again on their log: the chain of `ws` names the one before)
+  await run(personal.addDevice("s1", { key: LAPTOP_KEY, id: LAPTOP, label: "laptop", sign_key: NOW }, "why"));
+  await run(read(inner, "ws"));
+  await run(bindPerson(inner, "ws"));
+  await run(read(inner, "ws"));
+  assert.equal(laptopIn("ws")?.sign_key, OLD, "the first workspace's chain names the signer before");
+  // `ws` moves to their log, its settings said there (their `open`), the laptop's signer there the one said now.
+  const pinned = personal.pinnedOf("s1");
+  const root = entryHash(pinned[0]!);
+  const open = { ws: "ws", kind: "open", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys, email: "a@x.com", prev: null, salt: "61".repeat(16) };
+  const seed = sealed.get("personal-signer")!;
+  const last = pinned.at(-1)!;
+  const e = { v: 1 as const, ws: "person:s1", seq: pinned.length, prev: entryHash(last), at: last.at + 1, kind: "ws", body: { t: wsTag("ws", root), h: bodyHash(open)! } };
+  kept.entries = [...pinned, { ...e, sig: { key: personal.keyId()!, alg: "Ed25519" as const, sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } }];
+  await run(personal.refresh("s1"));
+  inner.data.put("lockBodies", "ws", { bodies: [open] });
+  const chain = m.cloud.chains.get("ws")!;
+  const tail = chain.at(-1)!;
+  m.cloud.chains.set("ws", [...chain, me!.sign(next("ws", { seq: tail.seq, hash: entryHash(tail), genesis: entryHash(chain[0]!) }, tail.at + 1, "moved", { root }))]);
+  await run(read(inner, "ws"));
+  const force = inForceOf(inner, "ws");
+  assert.deepEqual([force.said, force.f.persons.has("s1"), force.f.devices.get(LAPTOP)?.sign_key, laptopIn("ws")?.sign_key], ["on", true, NOW, OLD], "moved: the state names the signer now, the chain the one before");
+  await run(read(inner, "w2"));
+  await run(personal.signGrant("s1", { station: "w2/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  await run(read(inner, "w2"));
+  await run(bindPerson(inner, "w2"));
+  await run(read(inner, "w2"));
+  assert.ok(fold(held(inner, "w2")!.entries).persons.has("s1"), "bound in w2");
+  await run(keepToPerson(inner, "w2"));
+  assert.equal(laptopIn("w2")?.sign_key, NOW, "put in with the signer the log says now");
 });
 
 test("a device on the person's own lock that no workspace's lock holds with its key is put in with the one their lock records for it", async () => {
