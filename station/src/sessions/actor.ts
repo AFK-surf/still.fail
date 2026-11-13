@@ -157,6 +157,8 @@ export type SessionDeps = {
   reposDir(): string;
   /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
   memoryPath(key: string): string;
+  /// What the deployment adds to every session's instructions (instructions.ts `readSiteInstructions`); none by default.
+  siteInstructions?(): string;
   maxNudges(): number;
   /// The chat session `key` last heard from (its address), when it has no title and nobody is at work in it.
   untitled?(key: string): string | null;
@@ -1320,7 +1322,7 @@ export class SessionActor {
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
       // A session begun in a terminal and continued here: its first turn here says so, with how still.fail works.
-      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), await this.deps.linkSkills(row))) : null;
+      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), await this.deps.linkSkills(row), this.deps.siteInstructions?.())) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
       // What people chose on its cards without a message since it was last handed anything: before what it is handed.
@@ -1346,7 +1348,7 @@ export class SessionActor {
           try {
             const preset = row.cwd ? null : presetCopyOf(row.workspace);
             const memory = await this.deps.linkSkills(row);
-            await writeFile(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key), memory) + (preset ? presetInstructions(preset) : ""));
+            await writeFile(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key), memory, this.deps.siteInstructions?.()) + (preset ? presetInstructions(preset) : ""));
           } catch {}
         }
         store.setToldNotes(this.key, latestNote());
@@ -1474,7 +1476,7 @@ export class SessionActor {
     // Its context cleared by hand (clear): no runtime session now, those before on record. A new one, told so; one
     // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).
     const wasCleared = row.runtimeSessionId === null && (store.runtimeSessions?.(this.key).length ?? 0) > 0;
-    if (wasCleared && row.cwd) base.instructions = sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), memory);
+    if (wasCleared && row.cwd) base.instructions = sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), memory, this.deps.siteInstructions?.());
     // A runtime started where the station may not read exits at once with nothing to say why (macOS privacy protection
     // on a session continued in ~/Documents): told as it is instead. A directory someone named (one continued from a
     // terminal) is looked at as ops/places.ts does, never on this thread in a folder macOS protects (still.fail Helper
@@ -2050,7 +2052,7 @@ export async function linkSkills(row: any, deps: Pick<SessionDeps, "memoryPath">
 }
 
 /// `memory`: its workspace's memory as `linkSkills` gave it.
-export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">, memory: string): OpenOptions {
+export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath" | "siteInstructions">, memory: string): OpenOptions {
   const skills = row.cwd ? undefined : join(dirname(deps.memoryPath(row.key)), "skills");
   // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
   const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
@@ -2066,7 +2068,7 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     ...(typeof row.context === "number" ? { context: row.context } : {}),
     ...(typeof row.fast === "boolean" ? { fast: row.fast } : {}),
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
-    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key), memory) + (preset ? presetInstructions(preset) : ""),
+    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key), memory, deps.siteInstructions?.()) + (preset ? presetInstructions(preset) : ""),
     ...(skills !== undefined ? { skills } : {}),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),

@@ -57,6 +57,7 @@
   "cloud.login.password.submit": "登录",
   "cloud.login.password.wrong": "邮箱或密码错误",
   "cloud.login.device.continue": "使用 Google 账号继续",
+  "cloud.login.oidc.continue": "使用 {name} 账号继续",
   "cloud.login.device.reach": "登录后可以访问你所在 workspace 里的 station。",
   "cloud.login.device.signingIn": "正在为 {name} 登录 still.fail。",
   "cloud.login.device.title": "允许设备使用公网连接",

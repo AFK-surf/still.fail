@@ -74,8 +74,15 @@ export interface Env {
   STATUS_REPO_ID?: string;
   /** still.fail's own relay process, in the relay's Worker (relay-worker.ts): its counters, read by the cron. Unset: not read. */
   RELAY?: DurableObjectNamespace<Relay>;
+  /** The OAuth client people sign in through: Google's, or OIDC_ISSUER's. Unset: only with an email (EMAIL). */
   GOOGLE_CLIENT_ID: string;
+  /** Its secret; another provider's public client (PKCE alone) has none. */
   GOOGLE_CLIENT_SECRET: string;
+  /** An OpenID provider in Google's place (https://auth.example.com, its discovery document under it): a self-hosted
+   * cloud's (selfhost/README.md). Unset: Google. */
+  OIDC_ISSUER?: string;
+  /** What the sign-in page calls that provider (使用 {name} 继续). Unset: its host. */
+  OIDC_NAME?: string;
   AUTH_SIGNING_KEY: string;
   ADMIN_TOKEN?: string;
   /**

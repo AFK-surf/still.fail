@@ -8,10 +8,24 @@ import { STATION_AUTHOR } from "../store/rows.ts";
 
 
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
-/// `memory`: the workspace's memory as it is now (`readMemory`).
-export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string, memory: string): string {
+/// `memory`: the workspace's memory as it is now (`readMemory`). `site`: what the deployment adds (`readSiteInstructions`).
+export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string, memory: string, site = ""): string {
   const projectLine = project === null ? "" : `- Project directory: ${project}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n`;
-  return instructions(projectLine, workspace, repos_dir, memory_path) + (memory === "" ? "" : `\n\n<memory path="${memory_path}">\n${memory}\n</memory>`);
+  return instructions(projectLine, workspace, repos_dir, memory_path) + (site === "" ? "" : `\n\n${site}`) + (memory === "" ? "" : `\n\n<memory path="${memory_path}">\n${memory}\n</memory>`);
+}
+
+/// The most of the deployment's text an agent is told: a few lines that point at its skills, not a manual.
+export const SITE_INSTRUCTIONS_MAX = 4096;
+
+/// What the deployment the station runs in adds to every session's instructions (`STILLFAIL_SITE_INSTRUCTIONS`: a file,
+/// read as the station starts), after still.fail's own: a machine that runs the station as part of itself (a Monoid
+/// Machine) says what it is and which of its skills to read. None by default, and none when the file does not read;
+/// cut at SITE_INSTRUCTIONS_MAX.
+export async function readSiteInstructions(env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  const path = env.STILLFAIL_SITE_INSTRUCTIONS;
+  if (!path) return "";
+  const text = (await readFile(path, "utf8").catch(() => "")).trim();
+  return text.length > SITE_INSTRUCTIONS_MAX ? text.slice(0, SITE_INSTRUCTIONS_MAX) : text;
 }
 
 /// The workspace's memory as it is now, told after the instructions: given with them, not by the runtime's home (a

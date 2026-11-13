@@ -62,7 +62,7 @@ pnpm install --frozen-lockfile
 cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 ```
 
-**自托管**技术上可行，但目前不作为产品支持。部署脚本和 Wrangler 配置面向托管的 still.fail 服务（它的域名、中继和管理员账号），部署自己的实例前需要替换这些配置。见[生产环境自托管](docs/development.md#production-self-hosting)。
+**自托管**：云端可以脱离 Cloudflare 跑在 workerd 上，域名、中继和登录方式都用你自己的，见 [cloud/selfhost](cloud/selfhost/README.md)。部署脚本和 Wrangler 配置面向托管的 still.fail 服务（它的域名、中继和管理员账号），见[生产环境自托管](docs/development.md#production-self-hosting)。
 
 ## 隐私和遥测
 

@@ -18,7 +18,7 @@ export function signedInPage(lang: Lang, app: string | null): Response {
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import type { Env } from "./env";
-import { CODE_TTL_SEC, LOGIN_TTL_SEC, REFRESH_RETRY_SEC, digest, googleIdentity, limited, nowSeconds, randomSecret, readText, reply, seal, unseal, validRedirect, validSecret, type Identity, type Tokens } from "./auth";
+import { CODE_TTL_SEC, LOGIN_TTL_SEC, REFRESH_RETRY_SEC, digest, googleIdentity, provider, providerConfigured, limited, nowSeconds, randomSecret, readText, reply, seal, unseal, validRedirect, validSecret, type Identity, type Tokens } from "./auth";
 
 type Attempt = {
   redirect: string;
@@ -134,7 +134,7 @@ export class LoginAttempt extends DurableObject<Env> {
   }
 
   private async google(id: string, attempt: Attempt, browser: string): Promise<Response> {
-    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    const url = new URL((await provider(this.#env)).authorization);
     for (const [key, value] of Object.entries({
       client_id: this.#env.GOOGLE_CLIENT_ID,
       redirect_uri: `${this.#env.PUBLIC_ORIGIN}/v1/auth/google/callback`,
@@ -188,8 +188,9 @@ export class LoginAttempt extends DurableObject<Env> {
         return devicePage(
           lang,
           tr(lang, "cloud.login.device.title"),
-          `<p>${tr(lang, "cloud.login.device.signingIn", { name: `<strong>${escape(attempt.name)}</strong>` })}</p><p>${tr(lang, "cloud.login.device.reach")}</p><form method="post"><input type="hidden" name="csrf" value="${browser}"><button class="secondary">${GOOGLE_MARK}${tr(lang, "cloud.login.device.continue")}</button></form>`,
+          `<p>${tr(lang, "cloud.login.device.signingIn", { name: `<strong>${escape(attempt.name)}</strong>` })}</p><p>${tr(lang, "cloud.login.device.reach")}</p><form method="post"><input type="hidden" name="csrf" value="${browser}"><button class="secondary">${this.continueWith(lang)}</button></form>`,
           cookie(this.#env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+          await this.providerSource(),
         );
       }
       const browser = cookieOf(request, this.#env.PUBLIC_ORIGIN, id);
@@ -328,16 +329,30 @@ export class LoginAttempt extends DurableObject<Env> {
     return finish;
   }
 
-  /** The page that asks how to sign in: Google, or a code sent to an email (`email` typed, `error` with it). */
-  private choosePage(lang: Lang, id: string, attempt: Attempt, browser: string, email = "", error?: string): Response {
+  /** What the button that signs in through the provider says: Google's, with its mark, or OIDC_NAME's (its host's). */
+  private continueWith(lang: Lang): string {
+    const issuer = this.#env.OIDC_ISSUER;
+    if (!issuer || new URL(issuer).origin === "https://accounts.google.com") return `${GOOGLE_MARK}${tr(lang, "cloud.login.device.continue")}`;
+    return tr(lang, "cloud.login.oidc.continue", { name: escape(this.#env.OIDC_NAME || new URL(issuer).host) });
+  }
+
+  /** Where a page's form may send the browser on to besides Google (page.ts): another provider's sign-in page. */
+  private async providerSource(): Promise<string | undefined> {
+    if (!this.#env.OIDC_ISSUER || !providerConfigured(this.#env)) return undefined;
+    return new URL((await provider(this.#env)).authorization).origin;
+  }
+
+  /** The page that asks how to sign in: through the provider (where there is one), or a code sent to an email (`email`
+   * typed, `error` with it). */
+  private async choosePage(lang: Lang, id: string, attempt: Attempt, browser: string, email = "", error?: string): Promise<Response> {
     const csrf = `<input type="hidden" name="csrf" value="${browser}">`;
     const action = `/v1/auth/login/${id}`;
     const device = attempt.device ? `<p>${tr(lang, "cloud.login.device.signingIn", { name: `<strong>${escape(attempt.name)}</strong>` })}</p><p>${tr(lang, "cloud.login.device.reach")}</p>` : "";
     return devicePage(
       lang,
       tr(lang, attempt.device ? "cloud.login.device.title" : "cloud.login.choose.title"),
-      `${device}<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button class="secondary">${GOOGLE_MARK}${tr(lang, "cloud.login.device.continue")}</button></form>` +
-        `<p class="or">${tr(lang, "cloud.login.choose.or")}</p>` +
+      device +
+        (providerConfigured(this.#env) ? `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button class="secondary">${this.continueWith(lang)}</button></form><p class="or">${tr(lang, "cloud.login.choose.or")}</p>` : "") +
         `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="email"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="email" required maxlength="254"><button>${tr(lang, "cloud.login.email.send")}</button></form>` +
         (error ? `<p class="error">${escape(error)}</p>` : "") +
         // With a password, for the accounts set up for it (password.ts): a page of its own behind a quiet link, as the web's
@@ -345,6 +360,7 @@ export class LoginAttempt extends DurableObject<Env> {
         `<p class="links"><button form="password" class="link">${tr(lang, "cloud.login.password.open")}</button></p><form id="password" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="password-page"></form>` +
         `<p class="legal">${tr(lang, "cloud.login.choose.agree", { terms: legalLink(lang, "terms"), privacy: legalLink(lang, "privacy") })}</p>`,
       cookie(this.#env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      await this.providerSource(),
     );
   }
 
@@ -436,7 +452,7 @@ export class LoginAttempt extends DurableObject<Env> {
         return this.codePage(lang, id, attempt, browser);
       };
       const via = form.get("via");
-      if (via === "google") {
+      if (via === "google" && providerConfigured(this.#env)) {
         attempt.phase = "started";
         this.ctx.storage.kv.put("attempt", attempt);
         return this.google(id, attempt, browser);

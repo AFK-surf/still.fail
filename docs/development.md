@@ -131,6 +131,8 @@ The desktop apps are mbui's (`apps/mbui/`): `apps/mbui/scripts/mac-app.sh` makes
 
 ## Production self-hosting
 
+Outside Cloudflare, the cloud runs on workerd: [cloud/selfhost/README.md](../cloud/selfhost/README.md) (`node cloud/selfhost/build.ts`). On Cloudflare:
+
 The production path is Cloudflare-specific: Workers, Durable Objects, R2 and the relay Container, plus your own domains and Google OAuth client. Review `cloud/wrangler*.jsonc` and `cloud/deploy.py` before adapting it. The checked-in routes and release scripts target the maintainers' hosted service. Do not run them unchanged against a different account.
 
 Keep secrets in an external deployment directory selected by `STILLFAIL_DEPLOY_DIR`; see the inputs documented at the top of `cloud/deploy.py`. Firebase push, Google Cloud telemetry and PostHog are additional integrations, not prerequisites for the mocked local cloud. Existing operations notes include historical deployment details and are not a turnkey self-hosting guide.

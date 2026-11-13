@@ -11,7 +11,44 @@ export const REFRESH_RETRY_SEC = 120;
 const ISSUER = "stillfail-cloud";
 const ACCEPTED_ISSUERS = [ISSUER];
 const encoder = new TextEncoder();
-const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+
+/** Where signing in goes for an identity (login.ts google, googleIdentity): Google, or the OpenID provider OIDC_ISSUER
+ * names (a self-hosted cloud's, cloud/selfhost/README.md), found by its discovery document. */
+export type Provider = { issuer: string; issuers: string[]; authorization: string; token: string; keys: ReturnType<typeof createRemoteJWKSet> };
+const GOOGLE: Provider = {
+  issuer: "https://accounts.google.com",
+  issuers: ["https://accounts.google.com", "accounts.google.com"],
+  authorization: "https://accounts.google.com/o/oauth2/v2/auth",
+  token: "https://oauth2.googleapis.com/token",
+  keys: createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs")),
+};
+const discovered = new Map<string, Promise<Provider>>();
+
+/** The provider `env` signs in with: Google's endpoints as they are, another's as its discovery document says (read
+ * once an isolate, again after it failed). */
+export function provider(env: Env): Promise<Provider> {
+  const issuer = (env.OIDC_ISSUER ?? "").replace(/\/+$/, "");
+  if (!issuer || issuer === GOOGLE.issuer) return Promise.resolve(GOOGLE);
+  let found = discovered.get(issuer);
+  if (!found) {
+    found = discover(issuer);
+    discovered.set(issuer, found);
+    found.catch(() => discovered.delete(issuer));
+  }
+  return found;
+}
+
+async function discover(issuer: string): Promise<Provider> {
+  const response = await fetch(`${issuer}/.well-known/openid-configuration`, { redirect: "manual", signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error("oidc_discovery_failed");
+  const doc = (await response.json()) as { issuer?: unknown; authorization_endpoint?: unknown; token_endpoint?: unknown; jwks_uri?: unknown };
+  const https = (value: unknown): value is string => typeof value === "string" && /^https:\/\//.test(value);
+  if (doc.issuer !== issuer || !https(doc.authorization_endpoint) || !https(doc.token_endpoint) || !https(doc.jwks_uri)) throw new Error("oidc_discovery_invalid");
+  return { issuer, issuers: [issuer], authorization: doc.authorization_endpoint, token: doc.token_endpoint, keys: createRemoteJWKSet(new URL(doc.jwks_uri)) };
+}
+
+/** Whether signing in through the provider is set up: a client, with its secret (a public client of another provider's, with PKCE alone, needs none). */
+export const providerConfigured = (env: Env): boolean => Boolean(env.GOOGLE_CLIENT_ID && (env.GOOGLE_CLIENT_SECRET || env.OIDC_ISSUER));
 
 /** A Google account. name and picture come from the profile scope and may be empty. */
 export type Identity = { sub: string; email: string; name: string; picture: string };
@@ -73,8 +110,9 @@ export function bearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
+/** Whether anyone can sign in: through the provider, or with a code sent to an email (mail.ts), or both. */
 export function authConfigured(env: Env): boolean {
-  return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.AUTH_SIGNING_KEY?.length >= 43 && env.PUBLIC_ORIGIN);
+  return Boolean((providerConfigured(env) || (env.EMAIL && env.EMAIL_FROM)) && env.AUTH_SIGNING_KEY?.length >= 43 && env.PUBLIC_ORIGIN);
 }
 
 export function reply(body: unknown, status = 200, headers: HeadersInit = {}): Response {
@@ -178,9 +216,10 @@ export async function unseal(env: Env, value: string): Promise<Tokens> {
   return payload.value as Tokens;
 }
 
-/** `origin`: the one Google called back to, whose callback the login gave Google (PUBLIC_ORIGIN's, or an old one's for a login started before the move). */
+/** `origin`: the one Google called back to, whose callback the login gave Google (PUBLIC_ORIGIN's, or an old one's for a login started before the move). Another provider's account is named apart from Google's (`oi-…`, as an email's is `em-…`), as its `sub` is that provider's alone. */
 export async function googleIdentity(env: Env, code: string, verifier: string, nonce: string, origin = env.PUBLIC_ORIGIN): Promise<Identity> {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+  const from = await provider(env);
+  const response = await fetch(from.token, {
     method: "POST",
     redirect: "manual",
     signal: AbortSignal.timeout(10_000),
@@ -188,7 +227,7 @@ export async function googleIdentity(env: Env, code: string, verifier: string, n
     body: new URLSearchParams({
       code,
       client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
+      ...(env.GOOGLE_CLIENT_SECRET ? { client_secret: env.GOOGLE_CLIENT_SECRET } : {}),
       redirect_uri: `${origin}/v1/auth/google/callback`,
       grant_type: "authorization_code",
       code_verifier: verifier,
@@ -197,9 +236,9 @@ export async function googleIdentity(env: Env, code: string, verifier: string, n
   if (!response.ok) throw new Error("google_exchange_failed");
   const tokens = (await response.json()) as { id_token?: string };
   if (!tokens.id_token) throw new Error("google_identity_missing");
-  const { payload } = await jwtVerify(tokens.id_token, googleKeys, {
-    algorithms: ["RS256"],
-    issuer: ["https://accounts.google.com", "accounts.google.com"],
+  const { payload } = await jwtVerify(tokens.id_token, from.keys, {
+    algorithms: from === GOOGLE ? ["RS256"] : ["RS256", "PS256", "ES256", "EdDSA"],
+    issuer: from.issuers,
     audience: env.GOOGLE_CLIENT_ID,
     requiredClaims: ["sub", "exp", "iat", "nonce", "email", "email_verified"],
     currentDate: new Date(clock.now()),
@@ -209,12 +248,13 @@ export async function googleIdentity(env: Env, code: string, verifier: string, n
     payload.email_verified !== true ||
     typeof payload.email !== "string" ||
     typeof payload.sub !== "string" ||
-    !/^[A-Za-z0-9_-]{1,128}$/.test(payload.sub) ||
+    !(from === GOOGLE ? /^[A-Za-z0-9_-]{1,128}$/ : /^[\x21-\x7e]{1,255}$/).test(payload.sub) ||
     typeof payload.iat !== "number" ||
     payload.iat > nowSeconds() + 30 ||
     (payload.azp !== undefined && payload.azp !== env.GOOGLE_CLIENT_ID)
   )
     throw new Error("google_identity_mismatch");
+  const sub = from === GOOGLE ? payload.sub : `oi-${(await digest(`${from.issuer}\0${payload.sub}`)).slice(0, 32)}`;
   const text = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
-  return { sub: payload.sub, email: payload.email, name: text(payload.name, 120), picture: /^https:\/\//.test(text(payload.picture, 1024)) ? text(payload.picture, 1024) : "" };
+  return { sub, email: payload.email, name: text(payload.name, 120), picture: /^https:\/\//.test(text(payload.picture, 1024)) ? text(payload.picture, 1024) : "" };
 }

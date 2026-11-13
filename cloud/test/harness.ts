@@ -40,6 +40,9 @@ export interface OutboundRequest {
   body: Uint8Array;
 }
 
+/** The OpenID provider the harness's `oidc` puts in Google's place. */
+export const OIDC_ISSUER = "https://sso.example.test";
+
 /** The Cloudflare Access team the harness's `access` puts in front of the console. */
 const ACCESS_TEAM = "https://team.cloudflareaccess.example";
 
@@ -91,6 +94,9 @@ export async function harness(
     /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
      * error code, and the binding throws as Cloudflare's would). */
     mail?: true | ((message: MailMessage) => boolean | string);
+    /** An OpenID provider in Google's place (OIDC_ISSUER; its client a public one, without a secret),
+     * its discovery, keys and token endpoint answered here; `codes` hold what it gave, as Google's do (their `sub` its). */
+    oidc?: true;
     /** Cloudflare Access in front of the console's host (ACCESS_TEAM_DOMAIN, ACCESS_AUD): `accessToken` makes its tokens. */
     access?: true;
     /** Another cloud's releases its own bucket lacks some of (RELEASES_UPSTREAM, https://upstream.test/releases): its answer to each file asked there. */
@@ -186,7 +192,8 @@ export async function harness(
         ADMIN_ORIGIN_ALIASES: oldAdminOrigin,
         BETA_ORIGIN: betaOrigin,
         GOOGLE_CLIENT_ID: options.noGoogle ? "" : "test-google-client",
-        GOOGLE_CLIENT_SECRET: randomSecret(),
+        GOOGLE_CLIENT_SECRET: options.oidc ? "" : randomSecret(),
+        ...(options.oidc ? { OIDC_ISSUER: OIDC_ISSUER, OIDC_NAME: "Example SSO" } : {}),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
         FEEDBACK_TOKEN: feedbackToken,
@@ -224,6 +231,25 @@ export async function harness(
         if (options.upstream && url.href.startsWith("https://upstream.test/releases/")) {
           const answer = options.upstream(url.pathname.slice("/releases/".length), { url: url.href, method: request.method, headers: Object.fromEntries(request.headers), body: new Uint8Array() });
           return new MFResponse(answer.body ?? null, { status: answer.status, headers: answer.headers ?? {} });
+        }
+        if (options.oidc && url.href === `${OIDC_ISSUER}/.well-known/openid-configuration`) {
+          return MFResponse.json({ issuer: OIDC_ISSUER, authorization_endpoint: `${OIDC_ISSUER}/authorize`, token_endpoint: `${OIDC_ISSUER}/token`, jwks_uri: `${OIDC_ISSUER}/keys` });
+        }
+        if (options.oidc && url.href === `${OIDC_ISSUER}/keys`) return MFResponse.json({ keys: [publicJwk] });
+        if (options.oidc && url.href === `${OIDC_ISSUER}/token`) {
+          const body = new URLSearchParams(await request.text());
+          const code = codes.get(body.get("code") ?? "");
+          codes.delete(body.get("code") ?? "");
+          // (a public client: it sends no secret)
+          if (!code || body.has("client_secret") || (await digest(body.get("code_verifier") ?? "")) !== code.challenge || body.get("redirect_uri") !== origin + "/v1/auth/google/callback") return new MFResponse(null, { status: 401 });
+          const idToken = await new SignJWT({ nonce: code.nonce, sub: code.sub, email: `${code.sub.replace(/\W/g, "")}@sso.example.test`, email_verified: true, name: `SSO ${code.sub}` })
+            .setProtectedHeader({ alg: "RS256", kid: "test-google" })
+            .setIssuedAt(now())
+            .setExpirationTime(now() + 300)
+            .setIssuer(OIDC_ISSUER)
+            .setAudience("test-google-client")
+            .sign(privateKey);
+          return MFResponse.json({ id_token: idToken });
         }
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
           return MFResponse.json({ keys: [publicJwk] }, { headers: { "cache-control": "max-age=3600" } });

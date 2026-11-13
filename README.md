@@ -62,7 +62,7 @@ pnpm install --frozen-lockfile
 cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 ```
 
-**Self-hosting** is possible but not yet supported as a product. The deployment scripts and Wrangler configurations target the hosted still.fail service (its domains, relays and admin account); replace that configuration before deploying your own instance. See [Production self-hosting](docs/development.md#production-self-hosting).
+**Self-hosting**: the cloud runs on workerd outside Cloudflare, with its names, relay and sign-in your own; see [cloud/selfhost](cloud/selfhost/README.md). The deployment scripts and Wrangler configurations target the hosted still.fail service (its domains, relays and admin account); see [Production self-hosting](docs/development.md#production-self-hosting).
 
 ## Privacy and telemetry
 

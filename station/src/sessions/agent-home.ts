@@ -59,10 +59,17 @@ function onlySkill(dir: string): boolean {
   }
 }
 
+/// The skills of the deployment the station runs in (`STILLFAIL_SITE_SKILLS`: a directory of them, each `<name>/SKILL.md`
+/// and what it brings), when it names one: a machine that runs the station as part of itself (a Monoid Machine) tells
+/// its agents about itself this way. None by default.
+export const siteSkills = (env: NodeJS.ProcessEnv = process.env): string | null => env.STILLFAIL_SITE_SKILLS || null;
+
 /// Writes the station's own skills into the shared skills directory; `feedback`: the stillfail-feedback skill too
-/// (else it is taken away, unless someone added to it).
-export function writeBuiltinSkills(agentHome: string, feedback: boolean) {
+/// (else it is taken away, unless someone added to it); `site`: the deployment's skills linked beside them
+/// (`linkSiteSkills`).
+export function writeBuiltinSkills(agentHome: string, feedback: boolean, site: string | null = siteSkills()) {
   const [, skills] = agentHomePaths(agentHome);
+  if (site !== null) linkSiteSkills(skills, site);
   if (!feedback && onlySkill(join(skills, FEEDBACK_SKILL))) rmSync(join(skills, FEEDBACK_SKILL), { recursive: true, force: true });
   for (const name of feedback ? [...BUILTIN_SKILLS, FEEDBACK_SKILL] : BUILTIN_SKILLS) {
     const text = builtinSkill(name);
@@ -82,6 +89,27 @@ export function writeBuiltinSkills(agentHome: string, feedback: boolean) {
       } catch {}
       if (had === null || !had.equals(body)) writeFileSync(at, body, { mode: 0o755 });
     }
+  }
+}
+
+/// Links each of the deployment's skills (the entries of directory `site`) into `skills`, an agent home's, where they
+/// change with the deployment: not copied, as the station's own are, since the deployment may write them after the
+/// station started (the facts of the machine it runs on) and keeps them read-only. One is linked whether its SKILL.md is
+/// there yet or not (a session takes only the skills that have one, `sessionSkills`); a link to one gone from `site` is
+/// taken away; a skill of the same name the team has is left as it is, and said once.
+export function linkSiteSkills(skills: string, site: string) {
+  const names = entries(site).filter((name) => !name.startsWith("."));
+  mkdirSync(skills, { recursive: true }); // sync: at the start and as the config changes, as the station's own skills are written
+  for (const entry of entries(skills)) if (!names.includes(entry) && linksInto(join(skills, entry), site)) rmSync(join(skills, entry), { force: true }); // sync: as above
+  for (const name of names) {
+    const [at, target] = [join(skills, name), join(site, name)];
+    if (linksTo(at, target)) continue;
+    if (lstatSync(at, { throwIfNoEntry: false }) !== undefined) { // sync: as above
+      if (!leftAlone.has(at)) log.warn("agent_home", "a team's skill has the name of one the deployment brings: the team's kept", { skill: name, path: at });
+      leftAlone.add(at);
+      continue;
+    }
+    linkSync(target, at, { junction: true }); // sync: as above
   }
 }
 

@@ -25,6 +25,34 @@ test("the session instructions tell the memory they name, as it is now", async (
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("what the deployment adds is told after still.fail's own instructions, before the memory, and nothing without it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "instructions-"));
+  const path = join(dir, "site.md");
+  writeFileSync(path, "\nThis machine is a Monoid Machine: read skill monoid-machine.\n\n");
+  assert.equal(await ts.readSiteInstructions({}), "", "none by default");
+  assert.equal(await ts.readSiteInstructions({ STILLFAIL_SITE_INSTRUCTIONS: join(dir, "absent.md") }), "", "none when the file does not read");
+  const site = await ts.readSiteInstructions({ STILLFAIL_SITE_INSTRUCTIONS: path });
+  assert.equal(site, "This machine is a Monoid Machine: read skill monoid-machine.");
+  const plain = ts.sessionInstructions("/w/s/workspace", null, "/w/repos", "/w/agent/MEMORY.md", "# lessons");
+  assert.equal(ts.sessionInstructions("/w/s/workspace", null, "/w/repos", "/w/agent/MEMORY.md", "# lessons", ""), plain, "unchanged without a site");
+  const told = ts.sessionInstructions("/w/s/workspace", null, "/w/repos", "/w/agent/MEMORY.md", "# lessons", site);
+  assert.equal(told, plain.replace('\n\n<memory path=', `\n\n${site}\n\n<memory path=`));
+  writeFileSync(path, "x".repeat(ts.SITE_INSTRUCTIONS_MAX + 10));
+  assert.equal((await ts.readSiteInstructions({ STILLFAIL_SITE_INSTRUCTIONS: path })).length, ts.SITE_INSTRUCTIONS_MAX, "cut: a few lines, not a manual");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a session is opened with what the deployment adds to its instructions", async () => {
+  const { openOptions } = await import("../src/sessions/actor.ts");
+  const row = { key: "k", workspace: "/w/s/workspace", token: "t", cwd: null };
+  const deps = { mcpUrl: () => "http://127.0.0.1:1/mcp", reposDir: () => "/w/repos", memoryPath: () => "/w/agent/MEMORY.md" };
+  const profile = { id: "p", runtime: "claude", runtimes: ["claude"], home: "/h", models: [], named: [], name: "p", backgroundOnMessage: true, enabled: true } as never;
+  const without = openOptions(row, profile, deps, "").instructions;
+  assert.ok(!without.includes("Monoid"));
+  const site = openOptions(row, profile, { ...deps, siteInstructions: () => "This machine is a Monoid Machine." }, "").instructions;
+  assert.equal(site, `${without}\n\nThis machine is a Monoid Machine.`);
+});
+
 test("the fixed prompts", () => {
   for (const name of ["NUDGE", "RESUME_AFTER_RESTART", "GO_ON_AFTER_AUTH", "GO_ON_AFTER_SPENT"] as const) assert.ok(ts[name].length > 20, name);
   assert.ok(ts.waitOver(90).includes("(90 seconds)"));
