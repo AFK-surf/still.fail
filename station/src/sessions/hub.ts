@@ -19,7 +19,6 @@
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
 // running that nothing took up.
-import { idleSandboxes, keyPart, sandboxIdleMs, sandboxName, sandboxed, sessionSync, stopSandbox, syncChanged } from "../agents/sandbox.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -515,7 +514,7 @@ export class Hub {
         key: row.key,
         runtime,
         agent: null,
-        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", lostRetried: turn.summary.kind === "sandbox_retry", codexRetried: turn.summary.kind === "codex_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
+        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", codexRetried: turn.summary.kind === "codex_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
         workingFor: [],
         notices: [],
         waitingMs: null,
@@ -900,20 +899,6 @@ export class Hub {
   private evictIdle() {
     const config = this.config();
     const now = this.now();
-    // In sandboxes every session's process goes once idle long enough, whatever its runtime, and its sandbox with it:
-    // nothing is kept warm there (agents/sandbox.ts `sandboxIdleMs`).
-    const sandboxIdle = sandboxIdleMs(config.dataDir);
-    if (sandboxIdle !== null) {
-      for (const actor of this.actors.values()) {
-        const ms = actor.idleMs(now);
-        if (ms !== null && ms >= sandboxIdle) {
-          const work = this.stopIdle(actor);
-          this.options.background?.(work);
-          void work.catch((error) => log.warn("hub", "idle sandbox cleanup failed", { session: actor.key, error: (error as Error).message }));
-        }
-      }
-      return;
-    }
     const idle = [...this.actors.values()]
       .filter((a) => a.runtime !== "codex")
       .flatMap((a) => {
@@ -929,19 +914,10 @@ export class Hub {
     }
   }
 
-  /// Ends an idle session's process, then stops its sandbox, unless something started there again meanwhile (the front
-  /// door refuses while a job or a new process has a connection to it).
-  private async stopIdle(actor: SessionActor) {
-    await actor.evict();
-    if (actor.processState() !== "cold") return;
-    const data = this.config().dataDir;
-    if (await stopSandbox(data, keyPart(actor.key))) log.info("hub", "idle session's sandbox stopped", { session: actor.key });
-  }
-
-  /// The same session-name lookup serves idle sandboxes and runners, whose ids use the same session-key part.
+  /// The session-name lookup of runners, whose ids use the session-key part (it served sessions' sandboxes before
+  /// sandboxes as station_task's targets took their place: no longer prepared).
   private sandboxNameLookup(): SandboxNameBuilder {
-    return this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(),
-      () => sandboxIdleMs(this.config().dataDir) !== null);
+    return this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(), () => false);
   }
 
   runnerNameSessions(runners: readonly { id: string; part: string }[]): Map<string, string> | "fallback" {
@@ -960,33 +936,10 @@ export class Hub {
     return this.processJobs ??= new ProcessJobsBuilder(this.store, this.options?.previous ?? Promise.resolve());
   }
 
-  /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
-  /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
-  /// station runs things in sandboxes (agents.ts).
+  /// The lookup of sessions by their sandbox's name a station kept while sessions ran in sandboxes, taken down (its
+  /// triggers on sessions with it). Every `SWEEP_MS` (agents.ts), till there is none.
   async sweepSandboxes() {
-    const data = this.config().dataDir;
-    if (sandboxIdleMs(data) === null) {
-      if (sandboxIndexEnabled(this.store.db)) {
-        await this.sandboxNameLookup().disable();
-      }
-      return;
-    }
-    const idle = await idleSandboxes(data);
-    // Once the lookup exists, keep its journal caught up even when no sandbox is idle. A station that has never
-    // needed it does no preparation at all until an idle sandbox is seen.
-    if (idle.length === 0 && !sandboxIndexEnabled(this.store.db)) return;
-    const lookup = this.sandboxNameLookup();
-    let sessions = await lookup.sessions(idle);
-    // Keep the previous immediate sweep while a handover or a failed preparation keeps the lookup unavailable.
-    if (sessions === "fallback" && idle.length > 0)
-      sessions = new Map(this.store.listSessions().map((row) => [sandboxName(keyPart(row.key)), row.key]));
-    if (sessions === null || sessions === "fallback") return;
-    for (const name of idle) {
-      const key = sessions.get(name);
-      if (key === undefined) continue;
-      if ((this.actors.get(key)?.processState() ?? "cold") !== "cold") continue;
-      if (await stopSandbox(data, keyPart(key))) log.info("hub", "a sandbox nothing ran in stopped", { session: key });
-    }
+    if (sandboxIndexEnabled(this.store.db)) await this.sandboxNameLookup().disable();
   }
 
   /// A process went idle: look again when it has idled past warmMs.
@@ -1002,7 +955,7 @@ export class Hub {
     if (old) this.interrupt(old);
     // When it will have idled long enough: from when it went idle (one taken up from the previous station may have been
     // idle a while already).
-    const limit = Math.min(this.config().warmMs, sandboxIdleMs(this.config().dataDir) ?? Infinity);
+    const limit = this.config().warmMs;
     const idleFor = this.actors.get(key)?.idleMs(this.now()) ?? 0;
     const fiber = this.runFork(
       Effect.sleep(Math.max(0, limit - idleFor)).pipe(
@@ -1436,11 +1389,6 @@ export class Hub {
       refillsAt: (key) => this.accounts.refillsAt(key),
       recheck: (profile) => this.accounts.recheck(profile),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
-      toSandbox: async (key) => {
-        const data = this.config().dataDir;
-        const row = this.store.getSession(key);
-        if (row && sandboxed(data)) await syncChanged(data, keyPart(key), sessionSync(data, row.workspace));
-      },
       reposDir: () => this.reposDir(),
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,

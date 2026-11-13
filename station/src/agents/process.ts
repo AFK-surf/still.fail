@@ -10,7 +10,7 @@ import { statSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { join } from "node:path";
-import { keyPart } from "./sandbox.ts";
+import { keyPart } from "./sandbox-name.ts";
 import { log } from "../ops/log.ts";
 import { Lines, RunnerConnection, leave, listening, listeningSoon, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
@@ -77,8 +77,6 @@ export type ProcessOptions = {
   /// It exited (all of its output handled), as `describeExit` says, unless it was let go first; with the last lines it
   /// wrote to stderr (STDERR_TAIL of them, "" when none): what a runtime that fails as it starts says of why.
   exit: (said: string, stderr: string) => void;
-  /// Run here even when the station runs things in sandboxes (agents/sandbox.ts): a process no session's work runs in.
-  local?: boolean;
 };
 
 /// How many of a runtime's last stderr lines its exit carries, and how long each may be.
@@ -143,7 +141,7 @@ export class AgentProcess {
   /// nobody took up) is ended first, as process.rs reap_stale_groups did.
   static async start(data: string, id: string, program: string, args: string[], env: Record<string, string>, cwd: string, options: ProcessOptions) {
     await endRunner(data, id, options.label);
-    const info = await startRunner(data, id, program, args, env, cwd, options.local === true);
+    const info = await startRunner(data, id, program, args, env, cwd);
     return new AgentProcess(info, options);
   }
 

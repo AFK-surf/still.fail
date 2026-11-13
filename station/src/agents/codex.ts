@@ -14,7 +14,6 @@ import { log } from "../ops/log.ts";
 import { rememberCodexRollout } from "../read/transcript.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
-import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, bytesWithin, debug, findRunner, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
@@ -244,8 +243,7 @@ class Host {
   /// Where the station before kept, handed over (Host.adopt `from`).
   handedFrom = 0;
   readonly profile: string;
-  /// Which app-server of the driver's it is (`hostKey`): its profile's, or one session's when the station runs things in
-  /// sandboxes.
+  /// Which app-server of the driver's it is (`hostKey`): its profile's.
   readonly key: string;
   /// What the process was started with; a profile edit that changes it needs a new process.
   readonly signature: string;
@@ -266,8 +264,7 @@ class Host {
   /// When the login it was started with runs out, if it was lent by another station.
   lentUntil: number | null = null;
 
-  /// `cwd`: where it runs, its profile's home; a session's own app-server in the session's workspace (in its sandbox,
-  /// made there with it).
+  /// `cwd`: where it runs, its profile's home.
   /// `id`: its runner's (`runnerId`, or another while one of the same key is being replaced: `runnerFor`).
   static async start(profile: Profile, key: string, command: string, data: string, env: Env, caBundle: string, lent?: CodexDriverOptions["lent"], cwd = profile.home, id = runnerId("codex", key)): Promise<Host> {
     mkdirSync(profile.home, { recursive: true });
@@ -279,9 +276,7 @@ class Host {
     const host = new Host(profile.id, hostSignature(profile), 1, false, key);
     host.lentUntil = until;
     const label = `codex app-server ${key}`;
-    // A profile's own app-server (its account's limits and models, no session's work) runs here; a session's in its
-    // sandbox when the station runs things there.
-    host.proc = await AgentProcess.start(data, id, command, hostArgs(profile), childEnv, cwd, { ...host.processOptions(label), local: key === profile.id });
+    host.proc = await AgentProcess.start(data, id, command, hostArgs(profile), childEnv, cwd, host.processOptions(label));
     return host;
   }
 
@@ -576,10 +571,9 @@ export class CodexDriver implements AgentDriver {
     return true;
   }
 
-  /// Which app-server a session's threads go to: its profile's, shared by the profile's sessions; while the station runs
-  /// things in sandboxes (agents/sandbox.ts), the session's own, so that each session has a sandbox of its own.
-  private hostKey(profileId: string, session?: string): string {
-    return session !== undefined && sandboxed(this.data) ? session : profileId;
+  /// Which app-server a session's threads go to: its profile's, shared by the profile's sessions.
+  private hostKey(profileId: string, _session?: string): string {
+    return profileId;
   }
 
   /// The version of Codex installed now, read again when the last reading is old or `fresh` asks.
@@ -941,8 +935,8 @@ export class CodexDriver implements AgentDriver {
   }
 
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
-    // A text-only request uses no tools; in a sandbox the command belongs to that environment, not this filesystem.
-    if (!options.textOnly && !sandboxed(this.data)) {
+    // A text-only request uses no tools.
+    if (!options.textOnly) {
       const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "codex"), options.profile.id), CODEX_HOME: options.profile.home };
       const missing = await (this.options.missingHost ?? findMissingCodexHost)(this.command, env);
       if (missing) {
@@ -1127,10 +1121,6 @@ export class CodexDriver implements AgentDriver {
     if (host.lentUntil === null || host.lentUntil - wall.now() >= LENT_RENEW_MS || !lent?.borrowed(profile)) return;
     try {
       host.lentUntil = await lent.write(profile);
-      // In a sandbox, its app-server reads the login there: the new one goes there too.
-      if (sandboxed(this.data)) {
-        await syncNow(this.data, keyOfRunner(host.proc.info.id), [{ path: lentFile(this.data, profile.home), to: join(profile.home, "auth.json"), mode: "whole", back: false }]);
-      }
       log.info("agents::codex", "its borrowed login runs out; a new one is lent under its app-server", { profile: profile.id });
     } catch (error) {
       // It goes on with the one it has: asked again at its next turn.
@@ -1411,8 +1401,6 @@ export class CodexSession implements AgentSession {
     this.host.turns.delete(this.threadId);
     // Handed over, the thread is the next station's.
     if (this.host.proc.handed()) return;
-    // A session's own app-server (in its sandbox) goes with its last thread: left, it would keep the sandbox.
-    if (this.host.key !== this.host.profile && this.host.threads.size === 0) return this.driver.retire(this.host);
     // Best effort: the thread just stays loaded.
     await this.host.request("thread/unsubscribe", { threadId: this.threadId }).catch(() => {});
   }

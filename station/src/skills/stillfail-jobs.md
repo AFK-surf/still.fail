@@ -104,7 +104,10 @@ you can. Only when the machine is about to run out of memory does the station st
 there, and tells its agent why.
 
 Prepare `station_task` with a stable `key`, upload inputs with `station_file`, then start the same key. Commands
-run as the target OS user, not a sandbox. All tasks of this session share one directory on the target (the working
+run as the target OS user, not a sandbox. A sandbox of this station's (`station_list`: kind `sandbox`, by its name;
+config.json's `sandboxes`) takes `station_task` the same way: a Linux sandbox of this chat's, made for its first task
+and deleted once idle, with nothing installed there; give `dir` to sync what it builds and `back` for what comes back.
+It has no screen. All tasks of this session share one directory on the target (the working
 directory of each task), so a later task can build in what an earlier one cloned. Keep checkouts, worktrees and build
 output inside it rather than elsewhere on that machine (or over ssh): it is removed with anything still running when
 this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and

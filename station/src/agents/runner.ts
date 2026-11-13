@@ -14,7 +14,6 @@ import { niced } from "../ops/nice.ts";
 import { withShellCommand } from "../ops/shell-path.ts";
 import { platform } from "../platform/index.ts";
 import { runnerBinary } from "../platform/processes.ts";
-import { inSandbox, keyOfRunner, syncFor } from "./sandbox.ts";
 
 export type RunnerInfo = {
   id: string;
@@ -52,16 +51,10 @@ export class CommandMissing extends Error {
 }
 
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
-/// `local`: here even when the station runs things in sandboxes.
-export async function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string, local = false): Promise<RunnerInfo> {
-  // In the session's sandbox when the station runs things there (agents/sandbox.ts): the runner here runs the bridge.
-  const placed = local ? null : inSandbox(data, keyOfRunner(id), program, args, cwd, { agent: true, sync: syncFor(data, id.split("-")[0], env, cwd) });
-  if (placed !== null) ({ program, args } = placed);
+export async function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<RunnerInfo> {
   // Looked for as the runner would (its PATH is `env`'s): one not there is told apart from a runner that failed.
-  else {
-    env = await withShellCommand(program, env);
-    if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
-  }
+  env = await withShellCommand(program, env);
+  if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
   return new Promise((resolve, reject) => {
     // Lower than the station (ops/nice.ts), the runtime it starts and what that starts too.
     const [command, given] = niced(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, "--", program, ...args]);

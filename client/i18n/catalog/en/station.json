@@ -305,7 +305,6 @@
   "station.notice.codexUpdating": "Codex is out of date. Updating it and retrying this turn",
   "station.notice.codexUpdateFailed": "Couldn't update Codex: {why}",
   "station.notice.codexStillOld": "Codex still doesn't support this model after the update. Check Codex in this station's software settings",
-  "station.notice.codexUpdateSandbox": "This conversation runs in an isolated environment; its Codex cannot be updated here",
   "station.notice.codexVersionUnknown": "Couldn't verify the updated Codex version. Check this station's software settings",
   "station.notice.codexNoNewVersion": "No newer Codex version is available. Check this station's software settings",
   "station.notice.codexDifferentPath": "This profile uses a different Codex installation from software settings, so it cannot be updated here",

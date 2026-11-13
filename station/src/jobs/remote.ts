@@ -33,6 +33,7 @@ import { type Inbox, MESH_WAIT_MS, NoBytes, type PeerCall, PeerBus, Refused, byt
 import { fileBytes, readBytes, stopBytes, writeBytes } from "../mesh/files.ts";
 import { Bulk, LINK, PACKED, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
 import { DEFAULT_LIMIT, WorkspaceReader } from "./workspace-size.ts";
+import { SANDBOX, type Sandbox, ensureIdentity, sandboxDescribed } from "../agents/sandbox.ts";
 
 // The requests between stations are the platform's bus (mesh/bus.ts); its types, here as they always were.
 export { type Inbox, MESH_WAIT_MS, type PeerCall, Refused } from "../mesh/bus.ts";
@@ -413,6 +414,9 @@ export class Remote {
   private removeMirror: (path: string) => Promise<void>;
   private described: ((peer: string, workspace: string) => Json) | null = null;
   private rigs: ((workspace: string, session: string, rig: Json, described: Json | null) => Promise<Json>) | null = null;
+  /// This station's sandboxes (config.json's `sandboxes`, agents/sandbox.ts): stations of a kind of their own for
+  /// station_task, named `sandbox:<name>`, whose tasks this station takes itself and runs there.
+  private sandboxes: (() => Sandbox[]) | null = null;
   private removeTask: (path: string) => Promise<void>;
 
   constructor(options: RemoteOptions) {
@@ -1298,6 +1302,9 @@ export class Remote {
     // ones, in the same list, `mode: "tasks"`: asked the same way, at once.
     const rigs = Array.isArray(roster?.rigs) ? (roster.rigs as Json[]) : [];
     const said = this.rigs;
+    // Its sandboxes too (agents/sandbox.ts), by `sandbox:<name>`: nothing to ask, they are this station's.
+    const sandboxes = (this.sandboxes?.() ?? []).map((d) => ({ id: SANDBOX + d.name, name: d.name, ...sandboxDescribed(d) }));
+    listed.push(...sandboxes);
     if (rigs.length === 0 || said === null) return { ...roster, stations: [...listed, ...left], rigs: undefined, rigsWaiting: undefined };
     const listedRigs = await Promise.all(
       rigs.map(async (rig: Json) => {
@@ -1317,6 +1324,10 @@ export class Remote {
   /// goes on as given, to be refused or reached as an id.
   private async stationNamed(workspace: string, named: string): Promise<string> {
     if (named === "") return named;
+    // One of its sandboxes, by `sandbox:<name>` or its name.
+    const lower = named.toLowerCase();
+    const sandbox = (this.sandboxes?.() ?? []).find((d) => (SANDBOX + d.name).toLowerCase() === lower || d.name.toLowerCase() === lower);
+    if (sandbox !== undefined) return SANDBOX + sandbox.name;
     let stations: Json[] = [];
     let roster: Json;
     try {
@@ -1364,9 +1375,22 @@ export class Remote {
     return this.bus.handleOutside(peer, request, workspace);
   }
 
-  /// A request to another station of the workspace (session_send's messages, and this module's own).
+  /// A request to another station of the workspace (session_send's messages, and this module's own). One to a sandbox
+  /// is this station's own: answered here as a station's would be, its tasks run in the sandbox.
   ask(station: string, request: Json): Promise<Json> {
+    if (station.startsWith(SANDBOX)) {
+      const workspace = text(request, "workspace");
+      const sandbox = this.sandboxes?.().find((d) => SANDBOX + d.name === station);
+      if (sandbox === undefined) return Promise.reject(new Refused("no such sandbox on this station (config.json's sandboxes)"));
+      if (text(request, "method") === "describe") return Promise.resolve(sandboxDescribed(sandbox));
+      return this.bus.handle(workspace, station, request);
+    }
     return this.bus.ask(station, request);
+  }
+
+  /// Where this station's sandboxes come from (config.json's, sessions/agents.ts).
+  setSandboxes(list: () => Sandbox[]): void {
+    this.sandboxes = list;
   }
 
   /// Called only after the transport authenticates the source station and checks current workspace membership.
@@ -1549,7 +1573,14 @@ export class Remote {
         }
         const spec = field(meta, "spec");
         // Through the station's queue (jobs/admit.ts): started now if there is room, else when there is.
-        const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId, false, { screen: field(spec, "screen") === true, small: field(spec, "small") === true });
+        // A sandbox's (this station's own, `ask`): run there, nothing of this machine's taken, so not queued here.
+        const inSandbox = peer.startsWith(SANDBOX);
+        if (inSandbox && field(spec, "screen") === true) throw new Error("a sandbox has no screen: run what needs one on a station");
+        const back = field(spec, "back");
+        if (inSandbox) await ensureIdentity(this.data);
+        const started = inSandbox
+          ? this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId, false, null, { sandbox: peer.slice(SANDBOX.length), session, back: Array.isArray(back) ? back.filter((b: unknown): b is string => typeof b === "string") : [] })
+          : this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId, false, { screen: field(spec, "screen") === true, small: field(spec, "small") === true });
         // Where its source wants to be told of it (`pushOut`): from its first start, as it is then (a start asked again
         // keeps what was told).
         const push = text(request, "push");
@@ -1820,6 +1851,8 @@ export class Remote {
         }
         const peer = text(meta, "station");
         if (rosters.some((r) => text(meta, "workspace") === r.workspace && r.peers.includes(peer))) continue;
+        // A sandbox's task is this station's own, not a peer's (agents/sandbox.ts).
+        if (peer.startsWith(SANDBOX)) continue;
         const id = `remote_${name}`;
         if (this.store.getJob(id)?.state === "running") {
           try {

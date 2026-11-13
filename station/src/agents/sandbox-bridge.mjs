@@ -1,4 +1,4 @@
-// Runs a program in a sandbox reached over SSH (station/src/agents/sandbox.ts), as if it ran here: what a runner starts
+// Runs a program in a sandbox reached over SSH (station/src/agents/sandbox.ts), as if it ran here: what a job starts
 // in place of the program itself. One SSH exec channel carries everything, as the sandbox's front door forwards no
 // ports: the program's stdin, stdout and stderr, its exit, TCP connections it makes to the station's ports on
 // 127.0.0.1 (its tools, a job's notify), which the far side listens for at the same ports in the sandbox, and the files

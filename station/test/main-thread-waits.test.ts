@@ -76,7 +76,8 @@ const STATEMENTS = {
   lengthsWritten: 4,
   // 98 until #5188 (6810813bf): a session whose model no account enables is kept on its account before each turn, so the
   // pool is not asked to pick and no longer reads each running session's row (hub.ts `running`, `getSession`).
-  turn: 97,
+  // 97 until sessions stopped running in sandboxes: a turn no longer reads its session's row to copy its files there.
+  turn: 96,
   toolCall: 4,
   // A call recorded with compact usage installed, as a station has it: BEGIN, whether it was recorded before, its
   // session's context as kept, the call, its context, its file's position, COMMIT. (12 before: sqlite_master asked twice,

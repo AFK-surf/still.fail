@@ -1,13 +1,13 @@
 // What config.json must be before it is taken (the Rust station's config.rs `parse_config`'s refusals, and the shapes its
 // serde types insist on): `checkConfig` throws what is wrong, in the same words. Set as `ConfigFile.check`, so an edit
 // that does not pass is not written. What parse_config fills in is read elsewhere (sessions/config.ts `hubConfig`).
+import { checkSandboxes } from "../agents/sandbox.ts";
 import { accessKinds, needsKey, runtimesFor } from "./profiles.ts";
 import { cleanEndpoint, endpoints, find } from "../agents/providers.ts";
 import { fallbackEfforts } from "../sessions/pool.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { checkNetwork } from "../mesh/settings.ts";
 import { checkAgentEnv } from "../ops/agent-env.ts";
-import { checkSandbox } from "../agents/sandbox.ts";
 
 const ACCESS_KINDS = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
 const RUNTIMES: string[] = RUNTIME_KINDS;
@@ -55,8 +55,8 @@ export function checkConfig(raw: any, _data: string): void {
   // The variables for what it starts for its agents (src/ops/agent-env.ts).
   checkAgentEnv(raw.agentEnv);
   checkNetwork(raw.network);
-  // Execution in sandboxes (src/agents/sandbox.ts).
-  checkSandbox(raw);
+  // Its sandboxes, targets of station_task (src/agents/sandbox.ts).
+  checkSandboxes(raw);
   // The drive's folders (src/drive/drive.ts).
   if (raw.drive !== undefined && raw.drive !== null) {
     if (!isObject(raw.drive)) throw new Error(`invalid type: ${describe(raw.drive)}, expected struct RawDrive`);

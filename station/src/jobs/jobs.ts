@@ -20,7 +20,7 @@ import { log } from "../ops/log.ts";
 import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import { inSandbox, keyPart, sandboxed, stopSandbox } from "../agents/sandbox.ts";
+import { type Sandbox, type SandboxPlace, sandboxCommand } from "../agents/sandbox.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
@@ -271,6 +271,8 @@ export class Jobs {
   private link: Link;
   /// Where `stillfail-job notify` posts (the MCP endpoint's /jobs/notify).
   private notifyUrl = "";
+  /// This station's sandboxes, by name (config.json's, sessions/agents.ts): where a sandbox's task runs.
+  private sandboxes: (name: string) => Sandbox | null = () => null;
   private running = new Map<string, Running>();
   /// Shutting down: jobs go on without the station and stay recorded as running, to be taken up by the next one.
   private closing = false;
@@ -300,6 +302,11 @@ export class Jobs {
   private readingPerson = false;
   /// The claims whose agents were told they had held the screen long while others waited (job, pid, since).
   private toldLong = new Set<string>();
+
+  /// Where this station's sandboxes are found (sessions/agents.ts).
+  setSandboxes(find: (name: string) => Sandbox | null): void {
+    this.sandboxes = find;
+  }
 
   constructor(options: JobsOptions) {
     this.store = options.store;
@@ -368,16 +375,17 @@ export class Jobs {
   /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port. `checked`: its caller
   /// looked at `cwd` already (ops/places.ts), which is not looked at again here (in a folder macOS protects, that would
   /// hold the station's thread).
-  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false, size: string | null = null): JobRow {
-    return this.startId(session, name, command, cwd, port, watch, null, checked, null, size);
+  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false): JobRow {
+    return this.startId(session, name, command, cwd, port, watch, null, checked);
   }
 
   /// A remote task supplies a stable id. Its caller serializes starts; an existing record is never spawned again.
   /// `queue`: it waits in the station's queue (jobs/admit.ts) when there is no room for it now; `screen`: it uses the
-  /// screen, one such at a time. `size`: it runs in a sandbox of its own of that size (agents/sandbox.ts).
+  /// screen, one such at a time. `sandbox`: a sandbox's task, run in the chat's sandbox there (agents/sandbox.ts),
+  /// never queued here: it takes nothing of this machine's.
   startId(
     session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false,
-    queue: { screen: boolean; small?: boolean } | null = null, size: string | null = null,
+    queue: { screen: boolean; small?: boolean } | null = null, sandbox: SandboxPlace | null = null,
   ): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
@@ -392,9 +400,7 @@ export class Jobs {
     if (!isDir) throw new Error(`no such directory: ${cwd}`);
     if (port !== null && port < 1024) throw new Error("a service's port is 1024 or above");
     if (watch && port !== null) throw new Error("a watch is a job, not a web service: give it no port");
-    if (size !== null && (port !== null || queue !== null || !sandboxed(this.data))) {
-      throw new Error("only a job this station runs in a sandbox has a size: not a service, not another station's task, and only while the station runs jobs in sandboxes");
-    }
+    if (sandbox !== null && (port !== null || queue !== null)) throw new Error("a sandbox's task is neither a service nor queued here");
     if (this.store.runningJobsAtLeast(session, MAX_RUNNING)) {
       throw new Error(`this session runs ${MAX_RUNNING} jobs already; stop some first`);
     }
@@ -423,7 +429,7 @@ export class Jobs {
       watch,
       ...(queue !== null ? { queued: true, screen: queue.screen } : {}),
       ...(queue?.small === true ? { small: true } : {}),
-      ...(size !== null ? { size } : {}),
+      ...(sandbox !== null ? { sandbox } : {}),
     };
     this.store.insertJob(job);
     if (queue !== null) {
@@ -705,12 +711,14 @@ export class Jobs {
     // appending (its handle may only append). Lower than the station (ops/nice.ts): nice runs the shell in its own
     // process, the pid the same.
     const shell: [string, string[]] = [platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]];
-    // In its session's sandbox when the station runs things there (agents/sandbox.ts), but a service (its port is
-    // served here) or another station's task (its files are mirrored here, jobs/remote.ts). Its command runs there
-    // through the bridge, which the shell here runs in its place: its output comes back to the log here, its exit code
-    // to the exit file here.
-    const placed = job.port === null && !queues(job) ? inSandbox(this.data, keyPart(job.sessionKey), "/bin/sh", ["-c", job.command], job.cwd, { size: job.size, lostFile: this.lostFile(job.id) }) : null;
-    if (placed !== null) shell[1][3] = [placed.program, ...placed.args].map(quoted).join(" ");
+    // A sandbox's task (agents/sandbox.ts): its command runs there through the bridge, which the shell here runs
+    // in its place: its output comes back to the log here, its exit code to the exit file here.
+    if (job.sandbox !== undefined) {
+      const sandbox = this.sandboxes(job.sandbox.sandbox);
+      if (sandbox === null) throw new Error(`no sandbox ${job.sandbox.sandbox} in this station's config.json any more`);
+      const door = Number(new URL(this.notifyUrl || "http://127.0.0.1:0").port);
+      shell[1][3] = sandboxCommand(this.data, sandbox, job.sandbox, job.command, job.cwd, door > 0 ? [door] : [], this.lostFile(job.id));
+    }
     // Where `stillfail-job screen` asks for the screen: this machine's, which a sandbox's commands do not have (and
     // their processes are not this machine's to look at).
     else if (this.notifyUrl !== "") env.STILLFAIL_JOB_SCREEN = this.notifyUrl.replace(/\/notify$/, "/screen");
@@ -841,9 +849,6 @@ export class Jobs {
       }
       this.store.jobEnded(id, "exited", code);
       this.tell(job, `${named(job)} ended with ${said}.${last}`);
-      // A sandbox of its own size: stopped now that it ended (refused while another of the session's jobs of that
-      // size still runs there).
-      if (job.size !== undefined) void stopSandbox(this.data, keyPart(job.sessionKey), job.size);
       return;
     }
     // A service is kept up: at once after a steady run, else after a pause that grows with each quick end.

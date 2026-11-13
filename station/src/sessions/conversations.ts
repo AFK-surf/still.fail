@@ -1,7 +1,6 @@
 // What agents do in their own conversations (the Rust station's hub.rs: chat_post, chat_state, chat_history, slack_api and
 // what they rest on): post (with files and a card, ending the turn or not), record how the turn ends, read a thread,
 // and call Slack as their bot. What a tool says of the turn reaches its session's actor, in turn with the rest.
-import { fetchFiles, keyPart, sandboxed, stationPath } from "../agents/sandbox.ts";
 import { mkdirSync, rmSync } from "node:fs";
 import { copyFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
@@ -226,34 +225,6 @@ export function target(hub: Hub, key: string, to: Json): SessionThread {
 /// The most a file an agent attaches is (attach, peer-files.ts MAX_SENT).
 const MOST_ATTACHED = 50 * 1024 * 1024;
 
-/// While the station runs things in sandboxes (agents/sandbox.ts): a message's files (`files`, and with `links` the
-/// local links in `text`) named as the station names them (not by where the data directory's link leads in the
-/// sandbox), and brought here from the session's sandbox when only it has them, before anything here looks for them.
-export async function fromSandbox(hub: Hub, key: string, args: Args, links: boolean): Promise<Args> {
-  const data = hub.config().dataDir;
-  const row = hub.store.getSession(key);
-  if (!row || !sandboxed(data)) return args;
-  const full = (given: string) => stationPath(data, isAbsolute(given) ? given : join(row.workspace, given));
-  let next = args;
-  const wanted: string[] = [];
-  if (Array.isArray(args.files)) {
-    const files = args.files.map((f) => full(jsString(f)));
-    wanted.push(...files);
-    next = { ...next, files };
-  }
-  if (links && typeof args.text === "string") {
-    let text = args.text;
-    for (const { destination, path } of namedLocalPaths(text)) {
-      const station = stationPath(data, path);
-      wanted.push(station);
-      if (station !== path) text = text.split(`](<${destination}>`).join(`](<${station}>`).split(`](${destination}`).join(`](${station.includes(" ") ? `<${station}>` : station}`);
-    }
-    next = { ...next, text };
-  }
-  await fetchFiles(data, keyPart(key), wanted);
-  return next;
-}
-
 /// Whether `staged` may have something to copy: files named, or (with `links`) a local link into a folder macOS
 /// protects, on a Mac.
 export function mayStage(hub: Hub, args: Args, links: boolean): boolean {
@@ -320,19 +291,12 @@ export async function staged(hub: Hub, key: string, args: Args, links: boolean):
 }
 
 /// Copies files the agent attaches into the session's uploads (`into`'s, when it sends them to that session), so the
-/// message keeps them even if the originals change, and measures images so pages can hold their place. Ones that are
-/// only in the session's sandbox (its agent runs there, agents/sandbox.ts) are brought here first.
+/// message keeps them even if the originals change, and measures images so pages can hold their place.
 export async function attach(hub: Hub, key: string, paths: string[], into: string = key): Promise<Attachment[]> {
   const row = hub.store.getSession(key);
   const target = into === key ? row : hub.store.getSession(into);
   if (!row || !target) throw new Error("unknown session");
   if (paths.length > 10) throw new Error("at most 10 files per message");
-  const data = hub.config().dataDir;
-  if (sandboxed(data)) {
-    // Named as the agent sees them there, and brought here from there when only it has them.
-    paths = paths.map((given) => stationPath(data, isAbsolute(given) ? given : join(row.workspace, given)));
-    await fetchFiles(data, keyPart(key), paths);
-  }
   const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
   // Copied off the station's thread: a large file, or one read back from disk on a machine short of memory, held it
@@ -344,7 +308,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
     try {
       meta = await stat(path);
     } catch {
-      throw new Error(sandboxed(hub.config().dataDir) ? `no such file, here or in this session's sandbox: ${given}` : `no such file: ${given}`);
+      throw new Error(`no such file: ${given}`);
     }
     if (!meta.isFile()) throw new Error(`not a file: ${given}`);
     if (meta.size > 50 * 1024 * 1024) throw new Error(`too large (over 50 MB): ${given}`);

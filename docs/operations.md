@@ -51,6 +51,7 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 - 账号的 `home` 相对数据目录。用订阅登录时，对这个目录登录一次：`CLAUDE_CONFIG_DIR=<home> claude`，或 `CODEX_HOME=<home> codex login`。
 - `env` 里的 `{route}` 会替换成每个会话的路由 ID（Codex 的 app-server 按账号共享，替换成账号 ID），用于 OpenCode Go 这类需要会话亲和头的服务。
 - 账号的 `access` 决定运行时怎么接模型：`subscription`（订阅登录）、`opencode-go`、`anthropic-api`（后两种要 `key`）、`api-provider`（用 `provider` 指定服务商，如 `openai`、`deepseek`、`openrouter`、`azure-openai`、`custom`，再加 `key`；Azure OpenAI、Cloudflare、`custom` 还要 `endpoint`，`custom` 的 key 可省），或 `env`（只用 `env` 里手写的变量）。`api-provider` 按服务商目录里的协议决定能跑什么：有 Anthropic 接口的跑 Claude Code，有 Responses 接口的跑 Codex，有 Chat Completions 接口的可用于自动决策；只有 Chat Completions 的服务商不跑任何运行时，`runtimes` 为空。旧版 still.fail 读到 `api-provider` 的账号会显示成 `env`。still.fail 据此生成环境变量；Codex 的服务商配置在启动 app-server 时用 `-c` 传入，不改 `config.toml`。
+- `sandboxes`：托管重任务的沙箱，`[{ "name": "l4es-large", "target": "{name}.team@l4es.afk.surf", "size": "large" }]`。每一项是 `station_list` 里一个可排任务的目标，`station_task` 的 station 填它的 `name`，任务在这个对话自己的沙箱里跑（第一次用时建，闲置后由沙箱服务删除），沙箱里不用装任何东西，有 node 就行。`target` 是沙箱服务的入口，`{name}` 处会换成每台沙箱的名字；`size` 是服务方提供的规格，省略用默认；`identity` 是登录用的私钥路径，省略时用 station 自己生成的 `<数据目录>/run/sandbox/id_ed25519`（第一次用时沙箱服务若要求绑定这把 key，绑定链接会出现在任务日志里）。
 - `telemetry.errors` 打开后，这台 station 的错误（不带内容）上报到 still.fail 的 PostHog 项目，默认关闭。
 - 共享的记忆和 skills 在 `<数据目录>/agent/`（`MEMORY.md` 和 `skills/`），启动时链接进每个账号的配置目录。
 
