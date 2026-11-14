@@ -282,6 +282,11 @@ fn drop_on_page(v : @view.View, x : Double, y : Double) -> @view.NodeId? {
 /// chat_composer's; nothing over it or let go into it yet (chat_talk's layers).
 fn chat_composer_nodes(c : @ui.Ctx, src : Source, r : ChatRef, apart : Bool) -> Unit {
   guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
+  // (the chat a new chat just became: its composer at the list's foot from the frame it became it, under the words sent,
+  // not carried down from the new chat's middle through them: composer_laid_here)
+  if @sfbase.fresh.became.get() == Some(r) {
+    @sfpages.composer_laid_here(false)
+  }
   let foot = c.box(style=@ui.style(w=Full, min_h=Fixed(@sfpages.composer_open_room(c, c.width))), fn() {
     c.spacer()
     @sfpages.chat_composer(c, src, w, r, view_of_chat(src, r).0, apart~)

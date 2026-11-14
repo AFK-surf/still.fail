@@ -214,6 +214,18 @@ fn composing_reset() -> Unit {
 pub let composer_field_key : String = "composer/field"
 
 ///|
+/// The composer next built laid out `roomy` or not where it is laid out, carried from nowhere it was laid out for
+/// another page (a new chat's roomy in the page's middle): a chat's page made as nodes, whose composer stands in its
+/// list's foot under the rows, its chat one a new chat just became there (sfdesk's chat_composer_nodes). The page
+/// becoming its chat is no cause of a way of the composer's: it is at the chat's foot in that frame, the words sent
+/// from it over it in their row from then (comes_whole), nothing of it going down through them.
+pub fn composer_laid_here(roomy : Bool) -> Unit {
+  if composing.roomy is Some(_) && composing.roomy != Some(roomy) {
+    composing.roomy = Some(roomy)
+  }
+}
+
+///|
 /// The menu belonging to a notice's choice, keyed by the chat and notice that showed it.
 fn notice_choice_key(chat : String, mark : String) -> String {
   "composer/notice/" + chat + "/" + mark + "/choice"
