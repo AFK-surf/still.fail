@@ -703,22 +703,46 @@ test "a message said just after the chat opened comes in with the list gliding a
   t.run_for(said_soon_ms)
   fix_clock_set(clock, clock.val + 1.0)
   t.draw()
-  let mut from : Double? = None
+  // (what is over it: the card of the newest message before it, where it is drawn)
+  let above = fn() { t.drawn_of("先不换").map(fn(d) { d.1 }) }
+  guard above() is Some(a0) else { fail("nothing over it drawn") }
+  // where its words are drawn seen (at an alpha over 0)
+  let seen = fn() {
+    t.words().iter().find_first(fn(w) { w.0 == words && w.5 > 0.0 }).map(fn(w) { w.2 })
+  }
+  // The list sets out in the frame after its cause, what is over it going up then; and from the first frame its words
+  // are seen they only go up, to where they rest. Till 2026-11-14 this said its words went up more than 20 from where
+  // they were first found (Tester::drawn_of, which reads no alpha): on the old page they were found at 676.88 in the
+  // cause's frame at alpha 0, 26.4 over their rest; seen (alpha over 0) they go up 10.2 there, 9.8 on the page made
+  // as nodes, which draws nothing of a row half open or less. So the 20 held only of words drawn unseen.
+  let mut a1 : Double? = None
+  let ys : Array[Double] = []
   let mut n = 0
-  while from is None && n < 60 {
+  while n < 60 {
     t.frame()
-    from = t.drawn_of(words).map(fn(d) { d.1 })
+    if n == 0 {
+      a1 = above()
+    }
+    match seen() {
+      Some(y) => ys.push(y)
+      None => ()
+    }
     n += 1
   }
-  guard from is Some(y0) else { fail("「\{words}」 never came in") }
+  assert_true(a1 is Some(a) && a < a0 - 0.01, msg="set out in the frame after its cause: \{a0} → \{Repr(a1)}")
+  guard ys.length() > 0 else { fail("「\{words}」 never seen") }
   let rest = t.rest_of("a list")
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
   t.run_for(@sf.enter_ms)
-  let (_, y1) = t.drawn_of(words).unwrap()
-  // (more than its rise in: the list went up after it)
-  assert_true(y0 - y1 > 20.0, msg="glided up after it: \{y0} → \{y1}")
+  guard seen() is Some(y1) else { fail("「\{words}」 not seen at rest") }
+  // (up only, within half a device pixel, to its rest: more than none of the way seen)
+  for i, y in ys {
+    let before = if i > 0 { ys[i - 1] } else { y }
+    assert_true(y <= before + 0.25 && y >= y1 - 0.25, msg="frame \{i}: \{Repr(ys)}, at rest \{y1}")
+  }
+  assert_true(ys[0] - y1 > 1.0, msg="seen going up after it: \{ys[0]} → \{y1}")
   fix_clock.val = None
 }
 
