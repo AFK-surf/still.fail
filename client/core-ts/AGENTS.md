@@ -141,6 +141,19 @@ made raises its `making` (their digests say so). What a kept row cannot hold is 
 what is changing or asked here (`src/views/local.ts`), a message that did not go (`#unsentRow`), a chat opened from
 another; the accounts' list's merge across stations and its refills.
 
+## A person's presets and starred models
+
+- They are the person's, carried by their own devices (the user, 2026-11-14): the device keeps its records of each
+  workspace (`src/presets-kept.ts`, `presetRecords`; the stars in `choice` `ws:<ws>:liked`), every topic reads those,
+  and `src/views/presets.ts` brings each station what it lacks by the one rule (`src/preset-records.ts`, shared with
+  the station; never a second copy of it). A change is made here at once and carried as a link opens, as a station
+  tells `presets` or `stars`, and as it is made: never on a timer, and a station is brought only what is strictly newer
+  than what it said.
+- A station from before (GET /presets/kept answers `no route`) is never PUT to, read and written the old way, and a
+  chat on it is opened by the preset's id where it lists it; everywhere else by `presetCopy` of what the device holds.
+- People see their own presets; others' only at a press (`otherPresets`, read as shown, kept in memory but for the one
+  picked). Someone else's is looked at, opened with and copied (`preset.copy`), never changed from here.
+
 ## A lock held here
 
 - A lock's chain held (the workspace's `lock` record, a person's pinned chain) is written only through `src/views/lock.ts`

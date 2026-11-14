@@ -1210,6 +1210,44 @@ export function overviewMoved(base: number, at: number, what: "decided" | "updat
   return { ...o, automaticDecisions: { ...ad, recent: [made, ...ad.recent.slice(0, -1)], policy: { ...ad.policy, checked: ad.policy.checked + 1 } } };
 }
 
+/// The person's presets as the device carries them (src/presets-kept.ts): Maple's two and one made on Willow, one of
+/// theirs deleted; none of a station from before.
+function presetRecordsOf(now: number): J {
+  const maple = presetsOf(now, 0).presets as J[];
+  const rec = (p: J, home: string, rev: number) => ({
+    ...p, dirs: p.dirs.map((d: J) => ({ path: d.path, repo: d.repo, station: `ws/${home}` })), createdBy: PEOPLE[0]!.email, owner: "s1", rev, home,
+  });
+  const records: J = {
+    "p-app": rec(maple[0], "maple", 3),
+    "p-infra": rec(maple[1], "maple", 2),
+    "p-web": rec({ id: "p-web", name: "官网", dirs: [{ path: "/Users/willow/src/website", repo: "github.com/acme/website" }], instructions: "改文案前先看 i18n 的五种语言是否都要改。", createdAt: now - 12 * DAY, updatedAt: now - DAY }, "willow", 1),
+    "p-old": { id: "p-old", owner: "s1", rev: 4, gone: true, updatedAt: now - 30 * DAY },
+  };
+  return { records, before: [] };
+}
+
+/// What the device holds once one of the person's presets was changed on another device of theirs at `at` (carried to
+/// it as a station told `presets`).
+export function presetRecordsChanged(base: number, at: number): J {
+  const held = presetRecordsOf(base);
+  const was = held.records["p-web"];
+  return { ...held, records: { ...held.records, "p-web": { ...was, name: "官网 · 文案", updatedAt: at, rev: was.rev + 1 } } };
+}
+
+/// Others' presets as Maple gives them at a press (GET /presets/others): each of a member's, as many as a team of real
+/// size has (two a member of the first dozen).
+export function othersPresetsOf(now: number): J[] {
+  return PEOPLE.slice(1, 12).flatMap((p, i) => [0, 1].map((j) => ({
+    id: `p-${p.sub}-${j}`, name: j === 0 ? `${p.name} 的代码审查` : `${pick(TITLES, i * 2 + j)}`.slice(0, 40), dirs: [{ path: `/Users/maple/src/${["app", "station", "infra"][(i + j) % 3]}`, repo: `github.com/acme/${["app", "station", "infra"][(i + j) % 3]}`, station: "ws/maple" }],
+    instructions: "先跑测试再提交；改动大的先在 thread 里说一声。", createdBy: p.email, createdAt: now - (40 - i) * DAY - j * HOUR, updatedAt: now - i * HOUR, owner: p.sub, rev: 1 + j, home: "maple",
+  })));
+}
+
+/// Others' presets as Maple gives them read again once one of them changed one at `at`.
+export function othersPresetsChanged(base: number, at: number): J[] {
+  return othersPresetsOf(base).map((r: J, i: number) => (i === 0 ? { ...r, name: `${r.name}（新）`, updatedAt: at, rev: r.rev + 1 } : r));
+}
+
 /// Maple's presets once one was changed on another device at `at`.
 export function presetsChanged(base: number, at: number): J {
   const p = presetsOf(base, 0);
@@ -1272,6 +1310,7 @@ export function records(now: number): [string, string, unknown][] {
     ["me", "s1", me],
     ["choice", "ws:ws:frequent", frequent],
     ["choice", "ws:ws:preset", { id: "p-app", station: "ws/maple" }],
+    ["presetRecords", "ws", presetRecordsOf(now)],
     ...UP.map((at, st): [string, string, unknown] => ["memberships", at, { workspaces: [{ workspace: "ws", workspaceName: "Acme", name: STATIONS[st]!.name, home: true }], canJoin: true }]),
     ["lock", "ws", lockOf(now)],
     ["lockPending", "ws", pendingOf(now)],

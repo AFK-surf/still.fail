@@ -273,9 +273,17 @@ export class PresetViews implements Owner {
         if (listed._tag === "Failure") return;
         found = arr(get(listed.success, "presets")).flatMap((p) => fromBefore(p, address) ?? []).filter((r) => !theirs(r, who));
       } else return;
-      self.#others.get(ws)?.at.set(address, found);
-      self.#refreshPicked(ws, found);
+      self.heard(ws, address, found);
     });
+  }
+
+  /// Others' presets as station `address` of `ws` said them now.
+  heard(ws: string, address: string, found: PresetRecord[]): void {
+    const read = this.#others.get(ws) ?? { at: new Map(), reading: new Set() };
+    this.#others.set(ws, read);
+    read.at.set(address, found);
+    this.#refreshPicked(ws, found);
+    this.#marks.touch(ws);
   }
 
   /// A preset of someone else's picked for the new chat's page, kept with its content as read then: as read now.
