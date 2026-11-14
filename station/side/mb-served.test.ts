@@ -171,6 +171,25 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     catch (e) { theirs = { status: (e as { status: number }).status, body: { error: (e as Error).message } }; }
     assert.deepEqual(ours, theirs, `${path}: ${diffAt(ours, theirs)}`);
   }
+  // several in one (admin.ts `batch`): each as its own GET, one it does not read in a batch refused there
+  const gets = [`/threads/${thread}/entries?limit=5`, "/sessions/s0", "/sessions/s0/timeline?limit=3", `/threads/${thread}`, "/nope"];
+  const bs = await theirs.openBi();
+  await bs.write(Buffer.from(`${JSON.stringify({ ...routedHead, method: "POST", path: "/admin/api/batch" })}\n${JSON.stringify({ gets })}`));
+  await bs.finish();
+  const all = await readAll(bs);
+  const at = all.indexOf(10);
+  const bh = JSON.parse(all.subarray(0, at).toString());
+  const bb = all.subarray(at + 1);
+  const batched = JSON.parse((bh.headers["content-encoding"] === "zstd" ? zstdDecompressSync(bb) : bb).toString());
+  const expected = { answers: [
+    { status: 200, body: JSON.parse(await worker.read("entries", { viewer, thread, params: [["limit", "5"]] }, "en")) },
+    { status: 200, body: JSON.parse(await worker.read("session", { key: "s0", viewer, lang: "en" }, "en")) },
+    { status: 200, body: JSON.parse(await worker.read("timeline", { key: "s0", lang: "en", limit: "3" }, "en")) },
+    { status: 200, body: JSON.parse(await worker.read("thread", { id: String(thread), viewer, lang: "en" }, "en")) },
+    { status: 400, body: { error: "not read in a batch: /nope" } },
+  ] };
+  assert.equal(bh.status, 200, JSON.stringify(bh));
+  assert.deepEqual(batched, expected, diffAt(batched, expected) ?? "");
   assert.equal(given.length, givenBefore, `given to Node: ${given.slice(givenBefore).map((g) => g.head.path).join(", ")}`);
   // what is of another workspace, and a thread that is no number: not there, as the admin API says
   assert.deepEqual(await read("/sessions/elsewhere"), { status: 404, body: { error: "unknown session elsewhere" } });

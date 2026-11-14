@@ -51,8 +51,8 @@ const PIPE_FAILED : Int = 0xFFFFFFFD
 const PIPE_MOST : Int = 1048576
 
 ///|
-/// A request's body at most here: what is routed here asks with none.
-const BODY_MOST : Int = 65536
+/// A request's body at most here (a batch's is under a megabyte: admin.ts `batch`).
+const BODY_MOST : Int = 1048576
 
 ///|
 pub async fn serve_reads(host : @host.Host, reader : Reader, socket : String) -> Unit {
@@ -369,6 +369,83 @@ async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json
     Some(String(p)) => p
     _ => ""
   }
+  let error = (m : String) => ({ "error": Json::string(m) } : Json).stringify()
+  // Several reads in one (admin.ts `batch`): each as its own GET would be, all here or all Node's.
+  let route = match path.find("?") {
+    Some(at) => path[0:at].to_string()
+    None => path
+  }
+  if asked.value("method") == Some(Json::string("POST")) && route == "/admin/api/batch" {
+    if body.length() > 1000000 {
+      return self.whole(headers, @utf8.encode(error("request too large")), status=413)
+    }
+    let parsed = try { Some(@json.parse(@utf8.decode_lossy(body))) } catch { _ => None }
+    let paths : Array[String] = []
+    let fine = match parsed {
+      Some(Object(m)) =>
+        match m.get("gets") {
+          Some(Array(a)) if a.length() <= 64 => {
+            let mut all = true
+            for g in a {
+              match g {
+                String(s) => paths.push(s)
+                _ => all = false
+              }
+            }
+            all
+          }
+          _ => false
+        }
+      _ => false
+    }
+    guard fine else { return self.whole(headers, @utf8.encode(error("gets: at most 64 paths to read")), status=400) }
+    let answers = StringBuilder::new()
+    for i, got in paths {
+      let route = match got.find("?") {
+        Some(at) => got[0:at].to_string()
+        None => got
+      }
+      let one = if batched(route) {
+        self.read_path(who, lang, words, "/admin/api" + got)
+      } else {
+        Text(400, error("not read in a batch: \{route}"))
+      }
+      guard one is Text(status, text) else { return self.fallback(conn, asked, body) }
+      if i > 0 {
+        answers.write_string(",")
+      }
+      answers.write_string("{\"status\":\{status},\"body\":\{if text == "" { "\"\"" } else { text }}}")
+    }
+    return self.whole(headers, @utf8.encode("{\"answers\":[\{answers}]}"), level=9)
+  }
+  match self.read_path(who, lang, words, path) {
+    Text(status, text) => self.whole(headers, @utf8.encode(text), status~)
+    Give => self.fallback(conn, asked, body)
+  }
+}
+
+///|
+/// What a path read here comes to: its status and its JSON's text, or Node's to answer (`Give`).
+priv enum Done {
+  Text(Int, String)
+  Give
+}
+
+///|
+/// admin.ts `BATCHED`: what a batch reads (after /admin/api).
+fn batched(route : String) -> Bool {
+  let parts : Array[String] = route.split("/").map(p => p.to_string()).collect()
+  match parts {
+    ["", "threads", id, "entries" | "letters"] | ["", "threads", id] => digits(id)
+    ["", "sessions", key] | ["", "sessions", key, "timeline"] => key != ""
+    _ => false
+  }
+}
+
+///|
+/// One GET of `who`'s read here (`path` with its /admin/api and its query), as the admin API answers it.
+fn Serving::read_path(self : Serving, who : Member, lang : String, words : Json, path : String) -> Done raise {
+  let error = (m : String) => ({ "error": Json::string(m) } : Json).stringify()
   let (route, query) = match path.find("?") {
     Some(at) => (path[0:at].to_string(), path[at + 1:].to_string())
     None => (path, "")
@@ -376,15 +453,15 @@ async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json
   let pairs = query_pairs(query)
   // A session or a chat of another workspace than the member's is none for them (api/seen.ts `elsewhere`).
   if self.elsewhere(route, who.viewer) is Some(m) {
-    return self.whole(headers, @utf8.encode(({ "error": Json::string(m) } : Json).stringify()), status=404)
+    return Text(404, error(m))
   }
   let read = match route_read(route, pairs, who.viewer, lang) {
     Read(op, args) => (op, args)
-    Missing(m) => return self.whole(headers, @utf8.encode(({ "error": Json::string(m) } : Json).stringify()), status=404)
-    Not => return self.fallback(conn, asked, body)
+    Missing(m) => return Text(404, error(m))
+    Not => return Give
   }
   let (op, args) = read
-  guard args is Object(a) else { return self.fallback(conn, asked, body) }
+  guard args is Object(a) else { return Give }
   // (the words and the time the pool gives a read: read/pool.ts `wordsIn`; a session's history only its own word)
   if op == "timeline" {
     a["words"] = { "inScriptOutput": words.value("inScriptOutput").unwrap_or(Json::string("")) }
@@ -410,25 +487,27 @@ async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json
     @readops.Refused(status, m) => Err((status, m))
     e => raise e
   }
-  // Refused: for what the pool prepares first (its `pending`), Node's to answer; else as the admin API says it.
-  if text is Err((status, m)) {
-    let pending = match self.set.value("pending") {
-      Some(Array(all)) => all.iter().any(p => p is String(p) && m.has_prefix(p))
-      _ => true
+  match text {
+    Ok(text) => Text(200, text)
+    // Refused: for what the pool prepares first (its `pending`), Node's to answer; else as the admin API says it.
+    Err((status, m)) => {
+      let pending = match self.set.value("pending") {
+        Some(Array(all)) => all.iter().any(p => p is String(p) && m.has_prefix(p))
+        _ => true
+      }
+      if pending {
+        Give
+      } else {
+        Text(status, error(m))
+      }
     }
-    if pending {
-      return self.fallback(conn, asked, body)
-    }
-    return self.whole(headers, @utf8.encode(({ "error": Json::string(m) } : Json).stringify()), status~)
   }
-  guard text is Ok(text) else { return self.fallback(conn, asked, body) }
-  self.whole(headers, @utf8.encode(text))
 }
 
 ///|
 /// An answer's head and its body as it goes: the admin API's headers, compressed where the core asks so
 /// (mesh/compress.ts: zstd, from 512 bytes, at its level and window).
-async fn Serving::whole(self : Serving, asked : Json, bytes : Bytes, status? : Int = 200) -> (Json, Bytes) raise {
+async fn Serving::whole(self : Serving, asked : Json, bytes : Bytes, status? : Int = 200, level? : Int = 3) -> (Json, Bytes) raise {
   let headers : Map[String, Json] = {
     "content-type": "application/json",
     "cache-control": "no-store",
@@ -441,7 +520,7 @@ async fn Serving::whole(self : Serving, asked : Json, bytes : Bytes, status? : I
   }
   let status = Json::number(status.to_double())
   if zstd && bytes.length() >= 512 {
-    let (_, out) = self.host.shell("zstd.compress", { "level": 3, "window": 20 }, bytes~)
+    let (_, out) = self.host.shell("zstd.compress", { "level": Json::number(level.to_double()), "window": 20 }, bytes~)
     headers["content-encoding"] = "zstd"
     return ({ "status": status, "headers": Json::object(headers) }, out.unwrap_or(b""))
   }
