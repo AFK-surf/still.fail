@@ -44,6 +44,8 @@ priv enum ChatBodyGap {
 priv struct ChatBodyKept {
   sent : Map[Double, String]
   sent_as : Map[String, String]
+  /// the keys what was sent from here goes by (as it was sent: kept as the core's row takes it over)
+  here : Map[String, Bool]
 }
 
 ///|
@@ -85,6 +87,7 @@ fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending
   let still : Array[@sfbase.LocalSent] = []
   for l in sending {
     let key = "o:" + l.row.id
+    kept.here[key] = true
     if taken_by.contains(key) {
       continue
     }
@@ -312,7 +315,7 @@ fn chat_body_node(
   // (the list's top: the bar and the room under it, its head; where it opens, where a go-to puts a message and the
   // unread line are counted from it, as before the bar's own edge was told the list)
   let top = fn() { cover() + room }
-  let kept : ChatBodyKept = { sent: {}, sent_as: {} }
+  let kept : ChatBodyKept = { sent: {}, sent_as: {}, here: {} }
   // (when each key came into the list by data, by the list's `comes`, asked at its cause: what its row reads as it is
   // made; none for one there as the chat opened, simply there, or come by an answer at once)
   let came_at : Map[String, Double] = Map([])
@@ -457,6 +460,10 @@ fn chat_body_node(
       // no reply carries nothing up to let it fall back; what comes next takes that room first. The owner, 2026-11-12;
       // the coordinator of the migration, 2026-11-13: mbui's View::scrolls_window `leaves_room`)
       leaves_room=fn(k) { k.has_prefix("act:") },
+      // (the viewer's own words sent from here: in the list whole from the press, at their size and full ink, over the
+      // composer they leave, their room opening on the list's one way: no flight on this page; mbui's
+      // View::scrolls_window `comes_whole`, the coordinator of the migration, 2026-11-14)
+      comes_whole=fn(k) { kept.here.contains(k) },
       // (what shows held by what is read: not by the row saying the page before comes, which what comes in is put in
       // under, going on down with what shows)
       holds=fn(k) { k != "older" },

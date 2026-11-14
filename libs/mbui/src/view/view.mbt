@@ -663,6 +663,9 @@ struct Node {
   mut come_wake : (() -> Unit)?
   /// whether it is said to cut what it draws at its edges (View::clips), as it is cut too while it makes its way
   mut clips_said : Bool
+  /// on its way whole (a page's list's key said `comes_whole`, View::scrolls_window): not cut to its room as it makes
+  /// its way, nor what it holds; cut as what holds it cuts it
+  mut come_uncut : Bool
   /// it, and what it holds, take no press (View::presses)
   mut inert : Bool
   /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
@@ -772,6 +775,15 @@ pub struct Tree {
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
   priv list_feet : Map[Int, Int]
+  /// each page's list's block drawn over the rest of its list (its keys under it, its pinned foot) while it makes its
+  /// way whole (View::scrolls_window's `comes_whole`), by the list's node: Tree::raised_blocks, the paint's alone
+  priv list_raised : Map[Int, NodeId]
+  /// how many builds of the old views hosted in the tree have begun and how many are done (Tree::old_views_building,
+  /// old_views_built), and what waits for the next done (a page's list's set-out from what its foot gave back, where an
+  /// old view in that foot lays its height only as it is built: View::scrolls_window)
+  mut old_builds_begun : Int
+  mut old_builds : Int
+  priv old_built_waits : Array[() -> Unit]
   /// the nodes whose ground is drawn by how tall another shows (View::shown_by), each with that one and how; and for
   /// each so followed, those that follow it: placed again as it is laid out on its way
   priv shown_bys : Map[Int, (NodeId, (Double) -> GroundShape)]
@@ -1341,6 +1353,10 @@ pub fn Tree::new(
     list_inner: {},
     pick_waits: {},
     list_feet: {},
+    list_raised: {},
+    old_builds_begun: 0,
+    old_builds: 0,
+    old_built_waits: [],
     shown_bys: {},
     shown_followers: {},
     told: 0,
@@ -1774,6 +1790,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.come_off = fn() {  }
       n.come_wake = None
       n.clips_said = false
+      n.come_uncut = false
       n.inert = false
       n.modal = false
       n.back_goes_on = false
@@ -1933,6 +1950,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         come_off: fn() {  },
         come_wake: None,
         clips_said: false,
+        come_uncut: false,
         inert: false,
         modal: false,
         back_goes_on: false,
@@ -4184,7 +4202,7 @@ pub fn View::clips(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
   self.bind(loc~, Clips, on, Paint, fn(on) {
     let n = self.tree.nodes[self.at]
     n.clips_said = on
-    n.look.clips = on || n.coming
+    n.look.clips = on || (n.coming && !n.come_uncut)
   })
   self
 }
@@ -8938,7 +8956,7 @@ fn View::comes(
   n.coming = true
   // (one way with what else comes or goes in its column at this moment and what is on its way there now)
   tree.come_group_join(v, st, at)
-  n.look.clips = true
+  n.look.clips = n.clips_said || !n.come_uncut
   (n.come_off)()
   n.come_off = fn() {  }
   let said = match n.come_said {
@@ -8980,7 +8998,7 @@ fn View::comes(
             return
           }
           m.flex.style.come_now = now
-          m.look.clips = m.clips_said || m.coming
+          m.look.clips = m.clips_said || (m.coming && !m.come_uncut)
           tree.layout_marked_at(vat)
           tree.look_marked_at(vat)
           // (what draws its ground by how tall this shows: drawn again by it, View::shown_by)
@@ -9267,6 +9285,7 @@ fn Tree::come_group_settle(
 fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   let st = m.flex.style
   m.coming = false
+  m.come_uncut = false
   st.come_grid = 0.0
   st.come_foot = false
   m.come_off = fn() {  }
@@ -11032,7 +11051,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     shadow: n.look.shadow,
     hosted: n.hosted,
     clips: n.look.clips,
-    clips_self: n.look.clips && n.coming,
+    clips_self: n.look.clips && n.coming && !n.come_uncut,
     words_center: n.look.words_center,
     words_breaks: n.look.words_breaks,
     glyphs_said: n.look.glyphs_said,
@@ -13615,4 +13634,83 @@ fn Tree::sights_now(self : Tree) -> Unit {
     }
   })
   self.sights_telling = false
+}
+
+///|
+/// Each page's list's block drawn over the rest of its list while it makes its way whole (View::scrolls_window's
+/// `comes_whole`): the list's node and the block's, both alive. Read by the paint, which moves what the block draws to
+/// after what the list draws (its keys under it, its pinned foot), cut as where it is: none on a list with none.
+pub fn Tree::raised_blocks(self : Tree) -> Array[(NodeId, NodeId)] {
+  if self.list_raised.is_empty() {
+    return []
+  }
+  let out = []
+  self.list_raised.each(fn(list, b) {
+    if list >= 0 && list < self.nodes.length() && self.nodes[list].live && self.alive_id(b) {
+      out.push(({ at: list, gen: self.nodes[list].gen }, b))
+    }
+  })
+  out
+}
+
+///|
+/// Block `b` of the page's list at node `list` drawn over the rest of it (Some) or none (None): the list's own.
+fn Tree::raise_in_list(self : Tree, list : Int, b : NodeId?) -> Unit {
+  let was = self.list_raised.get(list)
+  match b {
+    Some(id) => self.list_raised[list] = id
+    None => self.list_raised.remove(list)
+  }
+  if was != b {
+    // (drawn in another order: painted again)
+    self.draws_rev = self.draws_rev + 1
+    self.draws_any_rev = self.draws_any_rev + 1
+    self.marked()
+  }
+}
+
+///|
+/// A build of the old views hosted in the tree begun (the old frame's, a pass of it): counted.
+pub fn Tree::old_views_building(self : Tree) -> Unit {
+  self.old_builds_begun = self.old_builds_begun + 1
+}
+
+///|
+/// A build of the old views hosted in the tree done (laid out, and told the tree before the tree is brought for it):
+/// counted, and what waited for it done (a page's list's set-out from what its pinned foot gave back, where an old view
+/// in that foot lays its new height only as it is built: View::scrolls_window). A bridge while old views are hosted in a
+/// list's foot (the chat's composer); it goes with them (the coordinator of the migration, 2026-11-14).
+pub fn Tree::old_views_built(self : Tree) -> Unit {
+  self.old_builds = self.old_builds + 1
+  self.old_waits_run()
+}
+
+///|
+/// All the frame builds of the old views done, the frame about to be painted: what still waited for a build is done
+/// now, by what the old views are laid out as (none of it is left to a later frame: Tree::old_views_built).
+pub fn Tree::old_views_settled(self : Tree) -> Unit {
+  self.old_waits_run()
+}
+
+///|
+fn Tree::old_waits_run(self : Tree) -> Unit {
+  if self.old_built_waits.is_empty() {
+    return
+  }
+  let waits = self.old_built_waits.copy()
+  self.old_built_waits.clear()
+  for w in waits {
+    w()
+  }
+}
+
+///|
+/// Whether node `at` or what it holds is an old view hosted in the tree (View::hosted).
+fn Tree::holds_hosted(self : Tree, at : Int) -> Bool {
+  guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return false }
+  let n = self.nodes[at]
+  if n.hosted {
+    return true
+  }
+  n.kids.iter().any(fn(k) { self.holds_hosted(k) })
 }
