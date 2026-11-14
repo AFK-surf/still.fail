@@ -827,17 +827,20 @@ for (const n of [50, 300]) {
     weighed(w, from, n, "one statement");
     check(readsOf(w, from), ["A GET /lock/heads", `A POST /lock/given ${asks([w.bob.genesis], [said.h])}`, "B GET /lock/heads", `B POST /lock/given ${asks([w.bob.genesis], [said.h])}`], "its body and its signer's log");
     check(inForceOf(w.inner, "ws").f.members.has("r3"), false, "xena out here");
-    // nothing changed again, a body held: no body hashed again (the rules' body_hash_js hashes a body's canonical text
-    // by the crypto it is given, `sha256Hex`: counted by what it hashes, a statement's body)
+    // nothing changed again, a body held: a read hashes it once as kept here, the next hashes no body again (the
+    // rules' body_hash_js hashes a body's canonical text by the crypto it is given, `sha256Hex`: counted by what it
+    // hashes, a statement's body)
+    await w.run(read(w.inner, "ws"));
     const hashed = { bodies: 0 };
-    const sha = mock.method(crypto, "sha256Hex", function (this: unknown, text: string) {
+    const original = crypto.sha256Hex;
+    const sha = mock.method(crypto, "sha256Hex", (text: string) => {
       try {
         const v = JSON.parse(text);
         if (v !== null && typeof v === "object" && "salt" in v && "kind" in v && !("sig" in v)) hashed.bodies++;
       } catch {
         // (not JSON: not a body)
       }
-      return sha.mock.original.call(this, text);
+      return original(text);
     });
     from = w.st.asked.length;
     await w.run(read(w.inner, "ws"));
