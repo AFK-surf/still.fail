@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { after, test } from "node:test";
-import { AgyDriver, SESSIONS, agyAccountFile, agyBaseModel, agyCatalog, agyConversations, agyEnv, agyHome, agyToken, agyVariant, classifyFailure, geminiDir } from "../src/agents/agy.ts";
+import { AGY_FILE_TOKENS, AgyDriver, SESSIONS, agyAccountFile, agyKeychain, goKeyringValue, agyBaseModel, agyCatalog, agyConversations, agyEnv, agyHome, agyToken, agyVariant, classifyFailure, geminiDir } from "../src/agents/agy.ts";
 import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 import { allLeft } from "../src/agents/runner.ts";
 import { profileRuntimes } from "../src/agents/profiles.ts";
@@ -393,31 +393,39 @@ test("an Antigravity CLI account's Gemini and Claude / GPT windows weigh only on
   assert.equal(pool.refillsAt("s-claude"), 6000);
 });
 
-test("macOS keychain migration: check and email survive `agy` moving `antigravity-oauth-token` into the login keychain, while unsigned and revoked profiles report login", async () => {
+test("macOS keychain: `agy` is kept to the profile's file, and a sign-in it had moved into the machine's one keychain item is taken back only by the profile whose account it is", async () => {
   const dir = join(data, "keychain-accounts");
   mkdirSync(dir, { recursive: true });
   const unsignedHome = join(dir, "homes", "unsigned");
   const preExistingHome = join(dir, "homes", "preexisting");
   const notedHome = join(dir, "homes", "noted");
-  const noEmailHome = join(dir, "homes", "no-email");
+  const otherHome = join(dir, "homes", "other");
   const envHome = join(dir, "homes", "env");
   const apiHome = join(dir, "homes", "api");
   // `linkTranscripts` creates `agy/sessions` even before a profile has ever signed in.
   mkdirSync(join(agyHome(unsignedHome), SESSIONS), { recursive: true });
   mkdirSync(join(geminiDir(unsignedHome), "antigravity-cli"), { recursive: true });
-  // A profile signed in before `account.json` existed, whose token file was migrated to the macOS login keychain by `agy acp`.
+  // A profile signed in before `account.json` existed, whose token file `agy acp` moved into the keychain: whose
+  // account the item is cannot be told, so it signs in again.
   mkdirSync(agyConversations(preExistingHome), { recursive: true });
   writeFileSync(join(agyConversations(preExistingHome), "c1.db"), "db");
-  // A profile signed in via station (noted email), then its token file unlinked by `agy` migrating to the keychain.
+  // A profile signed in via station (noted email), then its token file moved into the keychain by `agy`.
+  const token = JSON.stringify({ token: { access_token: "ya29.x" }, auth_method: "consumer", id_token_email: "someone@gmail.com" });
   mkdirSync(join(geminiDir(notedHome), "antigravity-cli"), { recursive: true });
-  writeFileSync(agyToken(notedHome), JSON.stringify({ token: { access_token: "ya29.x" }, id_token_email: "someone@gmail.com" }));
-  // A valid token file omitting `id_token_email` still keeps the sign-in marker without stale email attribution.
-  mkdirSync(join(geminiDir(noEmailHome), "antigravity-cli"), { recursive: true });
-  writeFileSync(agyAccountFile(noEmailHome), JSON.stringify({ email: "stale@gmail.com" }));
-  writeFileSync(agyToken(noEmailHome), JSON.stringify({ token: { access_token: "ya29.noemail" } }));
+  writeFileSync(agyToken(notedHome), token);
+  // Another account's profile, its file moved too: the one item holds the account signed in last, not this one.
+  mkdirSync(agyHome(otherHome), { recursive: true });
+  writeFileSync(agyAccountFile(otherHome), JSON.stringify({ email: "other@gmail.com" }));
 
   const hadKeychain = platform.hasKeychain;
+  const read = agyKeychain.read;
   platform.hasKeychain = true;
+  let item: string | null = null;
+  let reads = 0;
+  agyKeychain.read = async () => {
+    reads++;
+    return item;
+  };
   const store = Store.open(":memory:", null);
   const config = new ConfigFile(dir);
   config.update((raw) => {
@@ -425,6 +433,7 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
       { id: "ag-u", name: "Unsigned", runtime: "agy", home: unsignedHome, access: { kind: "subscription" } },
       { id: "ag-p", name: "PreExisting", runtime: "agy", home: preExistingHome, access: { kind: "subscription" } },
       { id: "ag-n", name: "Noted", runtime: "agy", home: notedHome, access: { kind: "subscription" } },
+      { id: "ag-o", name: "Other", runtime: "agy", home: otherHome, access: { kind: "subscription" } },
       { id: "ag-env", name: "Env", runtime: "agy", home: envHome, access: { kind: "env" } },
       { id: "ag-api", name: "Api", runtime: "agy", home: apiHome, access: { kind: "api-provider", provider: "google", key: "bad-key" } },
     ];
@@ -453,47 +462,48 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
       }) as never,
   });
   try {
-    // 1. First check notes email, then `agy` unlinks `antigravity-oauth-token` after migrating to keychain.
+    // Its processes keep the sign-in in the file alone: never the keychain's one item for every profile.
+    const { options } = setup();
+    assert.equal(agyEnv(options).SSH_CLIENT, AGY_FILE_TOKENS.SSH_CLIENT);
+
+    // 1. The first check notes the email; then `agy` (before) moved the file into the keychain, as go-keyring writes it.
     const first = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: notedHome, env: {}, machine: false, lang: "en" });
     assert.equal(first.state, "ok");
     assert.match(first.detail, /someone@gmail\.com/);
+    assert.equal(reads, 0, "a profile with its file reads no keychain");
     rmSync(agyToken(notedHome));
+    item = `go-keyring-base64:${Buffer.from(token).toString("base64")}`;
     assert.equal(accountEmail("agy", notedHome), "someone@gmail.com");
-    assert.equal(await accountEmailSoon("agy", notedHome), "someone@gmail.com");
 
-    const afterMigration = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: notedHome, env: {}, machine: false, lang: "en" });
-    assert.equal(afterMigration.state, "ok");
-    assert.match(afterMigration.detail, /someone@gmail\.com/);
+    // 2. The item is this profile's account: taken back into its file, and it is signed in on it.
+    const back = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: notedHome, env: {}, machine: false, lang: "en" });
+    assert.equal(back.state, "ok");
+    assert.match(back.detail, /someone@gmail\.com/);
+    assert.equal(readFileSync(agyToken(notedHome), "utf8"), token);
 
-    // A valid token file without `id_token_email` clears any stale email while keeping the keychain sign-in marker.
-    await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: noEmailHome, env: {}, machine: false, lang: "en" });
-    rmSync(agyToken(noEmailHome));
-    assert.equal(accountEmail("agy", noEmailHome), null);
-    const noEmailAfter = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: noEmailHome, env: {}, machine: false, lang: "en" });
-    assert.equal(noEmailAfter.state, "ok");
-    assert.equal(noEmailAfter.detail, tr("en", "station.profile.signedIn"));
+    // 3. The item is another account's: not taken, signed out (it ran on someone@'s quota before).
+    const other = await checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home: otherHome, env: {}, machine: false, lang: "en" });
+    assert.equal(other.state, "login");
+    assert.equal(existsSync(agyToken(otherHome)), false);
 
-    // 2. Unsigned profile stays `login` without probing `agy acp`.
-    const uCheck = await accounts.check("ag-u", "en");
-    assert.equal(uCheck.state, "login");
+    // 4. Unsigned and pre-existing profiles (no noted account) stay `login` without probing `agy acp`.
+    assert.equal((await accounts.check("ag-u", "en")).state, "login");
+    assert.equal((await accounts.check("ag-p", "en")).state, "login");
     assert.equal(driverCalls, 0);
 
-    // 3. Both pre-existing and noted keychain-migrated profiles probe `agy acp` and report `ok` with models.
-    const pCheck = await accounts.check("ag-p", "en");
-    assert.equal(pCheck.state, "ok");
-    assert.deepEqual(pCheck.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
+    // 5. The taken-back profile probes `agy acp` and reports `ok` with models.
     const nCheck = await accounts.check("ag-n", "en");
     assert.equal(nCheck.state, "ok");
     assert.deepEqual(nCheck.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
 
-    // 4. Revoked/missing keychain sign-in (`Authentication required`) flips a subscription check back to `login` while preserving known models.
+    // 6. A revoked sign-in (`Authentication required`) flips a subscription check back to `login` while preserving known models.
     driverMode = "auth";
-    const revoked = await accounts.check("ag-p", "en");
+    const revoked = await accounts.check("ag-n", "en");
     assert.equal(revoked.state, "login");
     assert.equal(revoked.detail, tr("en", "station.profile.signedOut"));
     assert.deepEqual(revoked.models, ["gemini-3.5-flash", "gemini-3.1-pro"]);
 
-    // 5. Non-subscription `agy` profiles (`env` and `api-provider`) never get mapped to `login`:
+    // 7. Non-subscription `agy` profiles (`env` and `api-provider`) never get mapped to `login`:
     //    `env` reports `failed` (`agyFailed`), and an already-failed `api-provider` key check preserves its `keyRefused` error without spawning `agy acp`.
     const callsBeforeEnv = driverCalls;
     const envFailed = await accounts.check("ag-env", "en");
@@ -506,16 +516,24 @@ test("macOS keychain migration: check and email survive `agy` moving `antigravit
     assert.equal(apiFailed.detail, "Google refused the key (401)");
     assert.equal(driverCalls, callsBeforeEnv + 1, "already-failed api-provider check does not spawn agy acp");
 
-    // 6. Non-auth launch error still reports `failed`.
+    // 8. Non-auth launch error still reports `failed`.
     driverMode = "crash";
     const crashed = await accounts.check("ag-n", "en");
     assert.equal(crashed.state, "failed");
     assert.match(crashed.detail, /ENOENT/);
   } finally {
     platform.hasKeychain = hadKeychain;
+    agyKeychain.read = read;
     await accounts.close();
     store.close();
   }
+});
+
+test("go-keyring's stored values, as `agy` left them in the keychain", () => {
+  const text = JSON.stringify({ id_token_email: "a@b.c" });
+  assert.equal(goKeyringValue(`go-keyring-base64:${Buffer.from(text).toString("base64")}`), text);
+  assert.equal(goKeyringValue(`go-keyring-encoded:${Buffer.from(text).toString("hex")}`), text);
+  assert.equal(goKeyringValue(text), text);
 });
 
 test("uncheckOutdated migrates legacy tiered agy model IDs in config.json to base models", () => {
