@@ -104,6 +104,7 @@ fn sg_seen(c : SgCase) -> @view.Sight[Int] {
     from_foot,
     shows: sg_shows,
     at_foot: from_foot.abs() < 1.0e-6,
+    foot_whole: from_foot.abs() < 1.0e-6,
   }
 }
 
@@ -135,7 +136,7 @@ test "a page's list tells what is in sight once after its first layout: at its f
   let c = sg_case(30)
   assert_eq(c.told.length(), 1, msg="\{Repr(c.told)}")
   assert_eq(c.told[0].1, sg_seen(c))
-  assert_eq(c.told[0].1, { first: 25, into: 0.0, last: 29, whole: Some(29), from_foot: 0.0, shows: sg_shows, at_foot: true })
+  assert_eq(c.told[0].1, { first: 25, into: 0.0, last: 29, whole: Some(29), from_foot: 0.0, shows: sg_shows, at_foot: true, foot_whole: true })
   assert_eq(c.place.sight_now(), Some(c.told[0].1))
 }
 
@@ -183,7 +184,7 @@ test "a fling tells nothing while it glides and what is in sight once at its end
 }
 
 ///|
-test "a key come at its foot as it follows it tells, at the data's moment, where its way ends: the new key the last, wholly shown, at its foot; nothing on the way's frames, the same at every rate" {
+test "a key come at its foot as it follows it tells, at the data's moment, where its way ends but the key not whole yet; at that way's end, the new key wholly shown, at its foot; nothing on the way's frames between, the same at every rate" {
   for rate in rc_rates {
     let c = sg_case(30)
     let at = rc_at
@@ -192,11 +193,12 @@ test "a key come at its foot as it follows it tells, at the data's moment, where
     sg_walk(c, at, at + @flex.move_most_ms + 100.0, rate)
     assert_eq(then.length(), 1, msg="at \{rate} a second: \{Repr(c.told)}")
     assert_eq(then[0].0, at, msg="at \{rate} a second: told at the data's moment")
-    assert_eq(c.told.length(), 2, msg="at \{rate} a second, nothing on its way: \{Repr(c.told)}")
     assert_eq(then[0].1.last, 30, msg="at \{rate} a second")
-    assert_eq(then[0].1.whole, Some(30), msg="at \{rate} a second")
-    assert_true(then[0].1.at_foot, msg="at \{rate} a second")
-    assert_eq(then[0].1, sg_seen(c), msg="at \{rate} a second")
+    assert_eq(then[0].1.whole, Some(29), msg="at \{rate} a second")
+    assert_true(then[0].1.at_foot && !then[0].1.foot_whole, msg="at \{rate} a second")
+    assert_eq(c.told.length(), 3, msg="at \{rate} a second, nothing on its way: \{Repr(c.told)}")
+    assert_eq(c.told[2].1, sg_seen(c), msg="at \{rate} a second")
+    assert_true(c.told[2].0 > at, msg="at \{rate} a second")
   }
 }
 
@@ -288,7 +290,7 @@ test "with its top covered 0, 44 and 52: the first key the first with something 
     let (first, into) = if cover >= sg_tall { (1, cover - sg_tall) } else { (0, cover) }
     assert_eq(
       at_top,
-      { first, into, last: 4, whole: Some(4), from_foot: c.scroll.most(), shows: sg_shows, at_foot: false },
+      { first, into, last: 4, whole: Some(4), from_foot: c.scroll.most(), shows: sg_shows, at_foot: false, foot_whole: false },
       msg="covered \{cover}, at its top",
     )
     // (at its foot: block 25 at the top of what shows, under the cover where it is 40 or more)
@@ -297,7 +299,7 @@ test "with its top covered 0, 44 and 52: the first key the first with something 
     let (first, into) = if cover >= sg_tall { (26, cover - sg_tall) } else { (25, cover) }
     assert_eq(
       at_foot,
-      { first, into, last: 29, whole: Some(29), from_foot: 0.0, shows: sg_shows, at_foot: true },
+      { first, into, last: 29, whole: Some(29), from_foot: 0.0, shows: sg_shows, at_foot: true, foot_whole: true },
       msg="covered \{cover}, at its foot",
     )
   }

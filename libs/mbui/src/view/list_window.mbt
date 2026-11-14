@@ -1630,7 +1630,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       p.sight_of = fn() {
         @signals.untracked(fn() {
           let all = Places::counted(laid.get())
-          match sight_counted(all, s, self.tree.logic_said(), room_under(), foot_room.get()) {
+          let t = self.tree.logic_said()
+          // (the keys on their way in, not at its end then: not drawn whole till it, list_sight.mbt)
+          let coming = ways.filter_map(fn(w) {
+            guard w.0.live() is Some(m) && m.coming && m.flex.style.come_to >= 1.0 && laid_at.get(w.1) is Some(q) else {
+              return None
+            }
+            let st = m.flex.style
+            let ends = if st.come_ends == st.come_ends { st.come_ends } else { st.come_at + @flex.move_most_ms }
+            if ends > t { Some(q) } else { None }
+          })
+          match sight_counted(all, s, t, room_under(), foot_room.get(), coming) {
             // (a key gone leaving its room, kept among its blocks while it fades: never told, the one over it in its
             // place, its height still counted where the foot is)
             Some(sg) if fading.val is Some((k, _)) && all.length() >= 2 => {

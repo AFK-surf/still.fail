@@ -9,7 +9,11 @@
 // glide or a way goes; only as it differs from what was told last; and once the layout that does what its place asked
 // (ListPlace::bring, centre, to_end) is done. It is read off the blocks as they are counted (one not measured yet as
 // `est`, told again with its height at its way's end) and the scroll: telling lays out and measures nothing. A list
-// none listens to (no ListPlace::on_sight) has nothing of it worked out or owed, at any moment.
+// none listens to (no ListPlace::on_sight) has nothing of it worked out or owed, at any moment. A key coming by data
+// on its way in is not seen whole, nor the list at its foot with all of it there whole, till that key is drawn whole:
+// at its way's end, told then once (its way's end a moment the hand is found again at); where it comes at once (an
+// answer's, an at_once list's, motion reduced), in the change (the coordinator of the migration, 2026-11-14: a chat
+// told a message read before its words showed). Where the list is (`at_foot`, `from_foot`) is as it lays out.
 
 ///|
 /// What a page's list (View::scrolls_window) has in sight, counted by its keys' blocks (its head and its foot never
@@ -17,8 +21,10 @@
 /// runs under; none, its own top) and `into` how far that edge is down its block's top (less than 0 where its head
 /// shows under it: as much as the head shows, a table of contents telling that from its first key at the top), `last`
 /// the last that shows, `whole` the last wholly in what shows (its top no higher than the edge under what covers its
-/// top, its foot over the foot's top, where it has them; none where none is), `from_foot` how far it is scrolled from
-/// its foot, `shows` how tall what shows is, `at_foot` whether it is at its foot.
+/// top, its foot over the foot's top, where it has them; none where none is) and drawn whole (before the first in
+/// sight still on its way in), `from_foot` how far it is scrolled from its foot, `shows` how tall what shows is,
+/// `at_foot` whether it is at its foot (where the list is, as it lays out: what follows it, a way back to it),
+/// `foot_whole` whether it is at its foot with none from the first in sight on still on its way in (its end seen).
 #derive(Eq, Debug)
 pub(all) struct Sight[K] {
   first : K
@@ -28,6 +34,7 @@ pub(all) struct Sight[K] {
   from_foot : Double
   shows : Double
   at_foot : Bool
+  foot_whole : Bool
 }
 
 ///|
@@ -67,8 +74,16 @@ fn[K : Eq] ListPlace::sight_tell(self : ListPlace[K]) -> Unit {
 ///|
 /// What blocks `all` (as they are counted) have in sight in scroll `s` at moment `t`, the foot's room `foot` under them
 /// and the room kept under the last block `room` over that (View::scrolls_window's foot_room: at its foot is at that
-/// room's foot) (Sight's); none where none is or nothing shows yet.
-fn[K] sight_counted(all : Places[K], s : Scroll, t : Double, foot : Double, room : Double) -> Sight[K]? {
+/// room's foot), the blocks at `coming` (by where each is among them) on their way in (Sight's); none where none is or
+/// nothing shows yet.
+fn[K] sight_counted(
+  all : Places[K],
+  s : Scroll,
+  t : Double,
+  foot : Double,
+  room : Double,
+  coming : Array[Int],
+) -> Sight[K]? {
   let n = all.length()
   guard n > 0 && s.seen.get() is Some((_, vh)) && vh > 0.0 else { return None }
   let most = dmax(0.0, all.foot() + room + foot + s.tuck_room.get() - vh)
@@ -90,7 +105,14 @@ fn[K] sight_counted(all : Places[K], s : Scroll, t : Double, foot : Double, room
   let j = (all.first_past(below - 1.0e-6).min(n - 1)).max(i)
   // (wholly in what shows: its foot no lower than the foot's top, its top no higher than the edge under what covers its
   // top)
-  let k = all.first_past(below - foot + 1.0e-6) - 1
+  // (and drawn whole: before the first from the first in sight on still on its way in)
+  let mut c = n
+  for q in coming {
+    if q >= i && q < c {
+      c = q
+    }
+  }
+  let k = (all.first_past(below - foot + 1.0e-6) - 1).min(c - 1)
   let whole = if k >= 0 && k >= i && all.top(k) >= under - 1.0e-6 { Some(all.key(k)) } else { None }
   Some({
     first: all.key(i),
@@ -100,5 +122,6 @@ fn[K] sight_counted(all : Places[K], s : Scroll, t : Double, foot : Double, room
     from_foot: most - x,
     shows: vh,
     at_foot: most - x <= 1.0e-6,
+    foot_whole: most - x <= 1.0e-6 && c == n,
   })
 }

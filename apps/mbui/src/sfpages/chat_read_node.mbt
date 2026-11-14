@@ -1,7 +1,8 @@
 // What a chat's page made as nodes tells the core of what is read and where the chat is, out of one fact: what its list
 // has in sight (@view.ListPlace::on_sight), as the old page's list told it (sfbase's chat_list.mbt): the chat shows
 // (`client.focus {chat}`) as that changes, where it is (`chat.place`) at rest alone. The chat shows: its end seen (at
-// its foot, the window not short of the chat's end) and the last message seen whole, which marks what is read and
+// its foot with all there drawn whole, a message on its way in not yet: Sight's `foot_whole`; the window not short of
+// the chat's end) and the last message seen whole (drawn whole), which marks what is read and
 // places the unread line; where it is (`chat.place`): the message at the top and how far its top
 // is under the list's (in the screen's pixels), none at its end, told as the message at the top changes; as the page goes
 // (sfapp's chat_left, chat_read_left), that it shows no more and where it was left. Told while the page is drawn (sfbase's
@@ -112,7 +113,8 @@ fn chat_read_node(
         return
       }
       let cv = @signals.untracked(view)
-      chat_read_focus(src, r, cv, a, !cv.newer && s.at_foot)
+      // (its end seen: at its foot with all there drawn whole, not a message still on its way in; @view.Sight's)
+      chat_read_focus(src, r, cv, a, !cv.newer && s.foot_whole)
       if placing.val && !@signals.untracked(fn() { scroll.in_hand() }) {
         placing.val = false
         chat_read_place(src, r, cv, a, exact=false)
