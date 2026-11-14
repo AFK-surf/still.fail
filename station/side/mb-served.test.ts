@@ -13,6 +13,7 @@ import { Readers } from "../src/read/pool.ts";
 import { withFront } from "../src/mesh/front.ts";
 import { SERVED_ROUTES, Served } from "../src/mesh/served.ts";
 import { RUNTIME_KINDS } from "../src/agents/runtime.ts";
+import { tr } from "../src/ops/i18n.ts";
 import { type Endpoint, type Stream, loadMesh } from "../src/mesh/native.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 
@@ -275,6 +276,36 @@ test("a routed request is answered by the MoonBit program as the admin API answe
       await new Promise((r) => setTimeout(r, 50));
     }
     await events.wentAway;
+  }
+  // a member's own marks (routes/marks.ts): written there, what changed told the store's followers, answered as there
+  {
+    const told: any[] = [];
+    served.changed = (changes) => told.push(...changes);
+    const put = async (method: string, path: string, body?: unknown) => {
+      const ms = await theirs.openBi();
+      await ms.write(Buffer.from(`${JSON.stringify({ ...routedHead, method, path: `/admin/api${path}` })}\n${body === undefined ? "" : JSON.stringify(body)}`));
+      await ms.finish();
+      const got = await readAll(ms);
+      const at3 = got.indexOf(10);
+      return { status: JSON.parse(got.subarray(0, at3).toString()).status, body: JSON.parse(got.subarray(at3 + 1).toString()) };
+    };
+    assert.deepEqual(await put("PUT", `/threads/${thread}/read`, { n: 7 }), { status: 200, body: { viewer: "p@x", thread, n: 7 } });
+    assert.deepEqual(await put("PUT", `/threads/${thread}/read`, { n: 3 }), { status: 200, body: { viewer: "p@x", thread, n: 7 } });
+    assert.equal(store.readPosition("p@x", thread), 7);
+    assert.deepEqual(await put("PUT", `/threads/${thread}/read`, { n: -1 }), { status: 400, body: { error: tr("en", "station.admin.badN") } });
+    assert.deepEqual(await put("PUT", `/threads/${thread}/hidden`, { hidden: true }), { status: 200, body: { hidden: true } });
+    assert.deepEqual(await put("PUT", `/threads/${thread}/muted`, { muted: true }), { status: 200, body: { muted: true } });
+    assert.deepEqual(await put("PUT", `/threads/${thread}/muted`, { muted: "x" }), { status: 400, body: { error: "muted must be a boolean" } });
+    assert.deepEqual(await put("PUT", `/threads/${thread}/keep`), { status: 200, body: { kept: true } });
+    assert.deepEqual([...store.keptChats("p@x")], [thread]);
+    assert.deepEqual(await put("DELETE", `/threads/${thread}/keep`), { status: 200, body: { kept: false } });
+    assert.deepEqual(await put("PUT", "/sessions/s0/pin"), { status: 200, body: { session: "s0", pinned: true } });
+    assert.ok(store.pins("p@x").has("s0"));
+    assert.deepEqual(await put("DELETE", "/sessions/s0/pin"), { status: 200, body: { session: "s0", pinned: false } });
+    assert.deepEqual(await put("PUT", "/sessions/none/pin"), { status: 404, body: { error: "unknown session none" } });
+    assert.deepEqual(await put("PUT", `/threads/${hidden}/read`, { n: 1 }), { status: 404, body: { error: `unknown thread ${hidden}` } });
+    assert.deepEqual(told.map((c) => c.type), ["read", "read", "hidden", "muted", "dismissed", "dismissed", "pins", "pins"]);
+    assert.deepEqual(told[3], { type: "muted", viewer: "p@x", thread, muted: true });
   }
   // a list read again as what changed of it (routes/changed.ts): what the device holds of it, by digest
   for (const [list, args, id] of [

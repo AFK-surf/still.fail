@@ -28,6 +28,9 @@ export const SERVED_ROUTES = [
   "POST /admin/api/changed/chats", "POST /admin/api/changed/sessions", "POST /admin/api/changed/threads",
   // (what changes, as it changes: made by Node's events, carried and compressed by the program, `relay`)
   "GET /admin/api/events",
+  // (a member's own marks, written there: api/routes/marks.ts; what changed told the store's followers)
+  "PUT /admin/api/threads/*/read", "PUT /admin/api/threads/*/hidden", "PUT /admin/api/threads/*/muted",
+  "PUT /admin/api/threads/*/keep", "DELETE /admin/api/threads/*/keep", "PUT /admin/api/sessions/*/pin", "DELETE /admin/api/sessions/*/pin",
 ];
 /// How many of the program answer at once (each one read at a time, as a reader of the pool's).
 const SERVERS = 2;
@@ -50,6 +53,8 @@ export class Served {
   readonly #told = new Map<number, string>();
   readonly #names = new Map<string, string>();
   #closed = false;
+  /// What the program wrote (a device's marks), told the store's followers (store.ts `told`).
+  changed: ((changes: any[]) => void) | undefined;
 
   /// `answer`: a request of a connection's member given back, answered as serve.ts answers one; `built`: the build a
   /// connection's device says.
@@ -88,6 +93,7 @@ export class Served {
         if (viewer !== null) this.#built(viewer, typeof said.build.build === "number" ? said.build.build : null);
       }
       else if (typeof said?.fallback === "number") void (said.stream === true ? this.#relay(server, said) : this.#fallback(server, said));
+      else if (Array.isArray(said?.changes)) this.changed?.(said.changes);
       else if (typeof said?.stop === "number") this.#streaming.get(child)?.get(said.stop)?.();
     });
     child.on("error", (error: Error) => log.warn("served", "a serving program failed", { error: error.message }));
@@ -109,7 +115,7 @@ export class Served {
     const words = Object.fromEntries((["zh", "en"] as const).map((lang) => [lang, {
       localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin"),
       untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"),
-      quotedOnly: tr(lang, "station.chat.quotedOnly"), updateApp: tr(lang, "station.admin.updateApp"),
+      quotedOnly: tr(lang, "station.chat.quotedOnly"), updateApp: tr(lang, "station.admin.updateApp"), badN: tr(lang, "station.admin.badN"),
       notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
       fromAndTo: tr(lang, "station.admin.fromAndTo"), inScriptOutput: tr(lang, "station.transcript.inScriptOutput"),
     }]));

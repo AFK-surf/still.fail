@@ -173,6 +173,7 @@ export const MeshLive = Layer.effectDiscard(
           (served) => Effect.promise(() => served.close()),
         );
         members.served = served;
+        served.changed = (changes) => store?.told(changes);
         yield* Effect.forkScoped(Effect.promise(async () => {
           try {
             const paths = await served.start();

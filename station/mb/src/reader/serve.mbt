@@ -447,6 +447,13 @@ async fn Serving::answer(self : Serving, id : Json, conn : Json, who : Member, a
     }
     return self.whole(headers, @utf8.encode("{\"answers\":[\{answers}]}"), level=9)
   }
+  // A mark the member puts on a chat or a session (api/routes/marks.ts): written here, Node told what changed.
+  if asked.value("method") is Some(String("PUT" | "DELETE" as method)) {
+    return match self.mark(who, method, path, body, words) {
+      Text(status, text) => self.whole(headers, @utf8.encode(text), status~)
+      Give => self.fallback(conn, asked, body)
+    }
+  }
   let posted = if asked.value("method") == Some(Json::string("POST")) { Some((body, runtimes)) } else { None }
   match self.read_path(who, lang, words, path, posted?) {
     Text(status, text) => self.whole(headers, @utf8.encode(text), status~)
@@ -1035,4 +1042,161 @@ async fn Serving::frames(self : Serving, id : Json, bytes : Bytes) -> Bool {
   } catch {
     _ => false
   }
+}
+
+///|
+/// api/routes/marks.ts's marks of a member's own: a chat's read position, hidden, muted, kept; a session pinned. As
+/// the admin API answers them (a read-only member writes only the first three: admin.ts `OWN_MARKS`; one of another
+/// workspace is not there: api/seen.ts), written in a transaction that writes, and what changed told Node
+/// (`changes`, store.ts `#with`'s), which tells its followers as the store's own writes are told. Any other: Node's.
+fn Serving::mark(self : Serving, who : Member, method : String, path : String, body : Bytes, words : Json) -> Done raise {
+  let error = (m : String) => ({ "error": Json::string(m) } : Json).stringify()
+  let route = match path.find("?") {
+    Some(at) => path[0:at].to_string()
+    None => path
+  }
+  let parts : Array[String] = route.split("/").map(p => p.to_string()).collect()
+  guard parts.length() >= 4 && parts[1] == "admin" && parts[2] == "api" else { return Give }
+  let what = match (method, parts[3:]) {
+    ("PUT", ["threads", _, "read" | "hidden" | "muted" | "keep" as w]) => w.to_string()
+    ("DELETE", ["threads", _, "keep"]) => "unkeep"
+    ("PUT" | "DELETE", ["sessions", _, "pin"]) => "pin"
+    _ => return Give
+  }
+  let viewer = who.viewer
+  if viewer.value("role") == Some(Json::string("viewer")) && (what == "keep" || what == "unkeep" || what == "pin") {
+    return Text(403, error("read-only members cannot change this station"))
+  }
+  if self.elsewhere(route, viewer) is Some(m) {
+    return Text(404, error(m))
+  }
+  let email = match viewer.value("email") {
+    Some(String(e)) => e
+    _ => return Give
+  }
+  let input = if body.length() == 0 {
+    Map([])
+  } else {
+    match (try { Some(@json.parse(@utf8.decode_lossy(body))) } catch { _ => None }) {
+      Some(Object(m)) => m
+      Some(_) => Map([])
+      None => return Text(400, error("invalid JSON"))
+    }
+  }
+  let db = self.reader.db_now()
+  let now = Json::number(self.now().to_double())
+  let id = segment(parts[4])
+  if what == "pin" {
+    guard db.all("SELECT 1 AS x FROM sessions WHERE key = ?", [Json::string(id)]) is [_, ..] else {
+      return Text(404, error("unknown session \{id}"))
+    }
+    let pinned = method == "PUT"
+    let key = Json::string(id)
+    let at = self.writing(db, () => {
+      if pinned {
+        ignore(db.run("INSERT OR IGNORE INTO pins (viewer, session, at) VALUES (?, ?, ?)", [Json::string(email), key, now]))
+        match db.all("SELECT at FROM pins WHERE viewer = ? AND session = ?", [Json::string(email), key]) {
+          [r, ..] => r.get("at").unwrap_or(Json::null())
+          _ => Json::null()
+        }
+      } else {
+        ignore(db.run("DELETE FROM pins WHERE viewer = ? AND session = ?", [Json::string(email), key]))
+        Json::null()
+      }
+    })
+    self.changed([{ "type": "pins", "viewer": Json::string(email), "session": key, "at": at }])
+    return Text(200, ({ "session": key, "pinned": Json::boolean(pinned) } : Json).stringify())
+  }
+  // (marks.ts `thread`: a number SQLite keeps, and a chat there)
+  guard signed_digits(id) && signed_number(id).abs() <= 9007199254740991.0 else { return Text(404, error("unknown thread \{id}")) }
+  let thread = Json::number(signed_number(id))
+  guard db.all("SELECT 1 AS x FROM threads WHERE id = ?", [thread]) is [_, ..] else {
+    return Text(404, error("unknown thread \{id}"))
+  }
+  let v = Json::string(email)
+  match what {
+    "read" => {
+      let n = match input.get("n") {
+        Some(Number(n, ..)) if n >= 0.0 && n == n.floor() => Json::number(n)
+        _ => {
+          let said = match words.value("badN") {
+            Some(String(w)) => w
+            _ => ""
+          }
+          return Text(400, error(said))
+        }
+      }
+      let at = self.writing(db, () => {
+        ignore(
+          db.run(
+            "INSERT INTO reads (viewer, thread, n, at) VALUES (?, ?, ?, ?) ON CONFLICT (viewer, thread) DO UPDATE SET n = MAX(n, excluded.n), at = excluded.at",
+            [v, thread, n, now],
+          ),
+        )
+        match db.all("SELECT n FROM reads WHERE viewer = ? AND thread = ?", [v, thread]) {
+          [r, ..] => r.get("n").unwrap_or(Json::number(0.0))
+          _ => Json::number(0.0)
+        }
+      })
+      self.changed([{ "type": "read", "viewer": v, "thread": thread, "n": at }])
+      Text(200, ({ "viewer": v, "thread": thread, "n": at } : Json).stringify())
+    }
+    "hidden" | "muted" => {
+      guard input.get(what) is Some(True | False as flag) else { return Text(400, error("\{what} must be a boolean")) }
+      let on = flag is True
+      let table = if what == "hidden" { "hidden_chats" } else { "muted_chats" }
+      // (muted by the email as it is in lower case: store.ts `setChatMuted`)
+      let as_kept = if what == "muted" { Json::string(email.to_lower()) } else { v }
+      ignore(self.writing(db, () => {
+        if on {
+          ignore(db.run("INSERT OR IGNORE INTO \{table} (viewer, thread) VALUES (?, ?)", [as_kept, thread]))
+        } else {
+          ignore(db.run("DELETE FROM \{table} WHERE viewer = ? AND thread = ?", [as_kept, thread]))
+        }
+        Json::null()
+      }))
+      let change : Map[String, Json] = { "type": Json::string(what), "viewer": v, "thread": thread }
+      change[what] = Json::boolean(on)
+      self.changed([Json::object(change)])
+      let answer : Map[String, Json] = {}
+      answer[what] = Json::boolean(on)
+      Text(200, Json::object(answer).stringify())
+    }
+    _ => {
+      let kept = what == "keep"
+      ignore(self.writing(db, () => {
+        if kept {
+          ignore(db.run("INSERT OR IGNORE INTO kept_chats (viewer, thread) VALUES (?, ?)", [v, thread]))
+        } else {
+          ignore(db.run("DELETE FROM kept_chats WHERE viewer = ? AND thread = ?", [v, thread]))
+        }
+        Json::null()
+      }))
+      self.changed([{ "type": "dismissed", "viewer": v, "kept": { "thread": thread, "kept": Json::boolean(kept) } }])
+      Text(200, ({ "kept": Json::boolean(kept) } : Json).stringify())
+    }
+  }
+}
+
+///|
+/// `write` in a transaction that writes (BEGIN IMMEDIATE: waits its turn as the store's do), committed as it returns.
+fn Serving::writing(self : Serving, db : @sql.Db, write : () -> Json raise) -> Json raise {
+  ignore(self)
+  db.exec("BEGIN IMMEDIATE")
+  let out = write() catch {
+    e => {
+      db.exec("ROLLBACK") catch {
+        _ => ()
+      }
+      raise e
+    }
+  }
+  db.exec("COMMIT")
+  out
+}
+
+///|
+/// What changed told Node, which tells its followers (store.ts `told`).
+fn Serving::changed(self : Serving, changes : Array[Json]) -> Unit {
+  self.host.say(({ "changes": Json::array(changes) } : Json).stringify())
 }

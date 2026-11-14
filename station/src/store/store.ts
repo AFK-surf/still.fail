@@ -850,6 +850,12 @@ export class Store {
     return this.#archiveDir;
   }
 
+  /// What another writer of the database wrote, told those who follow the store as its own writes are (mesh/served.ts:
+  /// the marks the MoonBit program writes for a device).
+  told(changes: Changes): void {
+    this.#send(changes);
+  }
+
   #send(changes: Changes): void {
     const listeners = this.#listeners;
     for (const change of changes) {
