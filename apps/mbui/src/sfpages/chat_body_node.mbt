@@ -513,13 +513,20 @@ fn chat_body_node(
       menus_image_node(v)
       // something sent from here into the chat (words, an answer picked on a card: sfbase's sent_here_told), read up
       // the list: it goes to its end as it is sent (where the window is short of the chat's end, as its latest page,
-      // asked by the send, comes in: chat_jump_node's)
+      // asked by the send, comes in: chat_jump_node's). Whether the list is at its foot read with the count, by this
+      // watch, done only as the count changes: read in the `then` with nothing following it, the list's at-foot, which
+      // holds the chat's subscription, was let go and taken again at each send (before #6239, while nothing else
+      // followed it, held past the page)
+      let sent_was = Ref(@signals.untracked(fn() { @sfbase.sent_here_count(chat) }))
       v.reacts(
-        fn() { @sfbase.sent_here_count(chat) },
-        fn(_) {
+        fn() { (@sfbase.sent_here_count(chat), scroll.at_foot_now()) },
+        fn(now) {
+          let (count, at_foot) = now
+          guard count != sent_was.val else { return }
+          sent_was.val = count
           if @signals.untracked(here.view).newer {
             jump.latest = true
-          } else if !scroll.at_foot_now() {
+          } else if !at_foot {
             place.to_end()
           }
         },
@@ -545,13 +552,15 @@ fn chat_body_node(
   }
   // the unread line come after it was made (what came while the app was away, read after the chat opened): there once,
   // as at a chat opened with it, while the list is still at its end and no message is asked to be gone to
+  // (whether the list is at its foot read with it, by this watch, as the sends' reaction's)
   let lined = Ref(@signals.untracked(fn() { rows.get().rows.contains("line") }))
   v.reacts(
-    fn() { rows.get().rows.contains("line") },
-    fn(has) {
+    fn() { (rows.get().rows.contains("line"), scroll.at_foot_now()) },
+    fn(now) {
+      let (has, at_foot) = now
       guard has && !lined.val else { return }
       lined.val = true
-      if scroll.at_foot_now() && !@sfbase.go_tos.contains(chat) {
+      if at_foot && !@sfbase.go_tos.contains(chat) {
         place.bring("line", offset=@sfbase.kept_place_under(@signals.untracked(top) + lead, @signals.untracked(cover)))
       }
     },

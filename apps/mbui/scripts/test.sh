@@ -706,6 +706,9 @@ for t in $targets; do
   [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
   # (each flow's pace passes, where each split from its strict pass (src/sfreplay's orders), past LINES_OUT's tail)
   grep -a '^PACE [^ ]*: ' "$out"
+  # (what holds something read with nothing following it, said where a Tester finds it (mbui's src/ui/held_read.mbt):
+  # all of it kept, past LINES_OUT's tail)
+  grep -a '^HELD-READ ' "$out"
   grep -v "$F" "$out" | grep -av '^MOTION ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
   # (and each test that failed, whole, its lines under it too, wherever it fell: past LINES_OUT's tail behind a run's
   # CLOCKREAD lines, main df98aad1's words_large failures were in no line of app 2/4's log nor in its What failed,

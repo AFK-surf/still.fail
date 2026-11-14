@@ -188,6 +188,13 @@ yet and you can add one, add it.
   (`Tester::frame`; a pass that kept rows compared with one built whole, `src/ui/tester_rows.mbt`): a test that changes
   the value and looks sees what a device would, the old (sfdesk's `wide.tape`, a plain field read by the rail's
   corners till 2026-11-11).
+- What nothing follows is to hold nothing (the coordinator of the migration, 2026-11-14): a computed whose reads reach a
+  resource (a core's subscription: signals' `holds`) read with nothing following it (an `untracked`, a reaction's
+  `then`, a handler) keeps what it read linked for good, the resource with it (#6239). A reader follows what it reads
+  (a reaction's own tracked read, a binding); a Tester names each read that does not, counted per file
+  (`src/ui/held_read.mbt`, `HELD-READ` lines, `held_read_known`), nothing stopped yet. That such a read lets go of what
+  it read (as `computed_scoped`'s does) is the rule to come: not yet, as the shipped page's tests keep a chat's
+  subscription only while it does not (`apps/mbui/src/sfapp/core_signal_wbtest.mbt`'s popped chat).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
   is made by the width a node is given, or by how tall something in it comes to, is made in `View::by_room`
   (`src/view/room.mbt`) as that layout comes to it; what it would change outside its room is a fault. Nothing outside

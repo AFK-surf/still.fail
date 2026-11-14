@@ -583,6 +583,7 @@ pub fn Tester::new(
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)
   gaps_steady_begin(loc.to_string(), words_over_held)
+  held_read_begin(loc.to_string())
   seen_whole.val = ""
   said_log.on = false
   frame_said.val = None

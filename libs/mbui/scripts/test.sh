@@ -16,8 +16,11 @@ if [ -z "${GITHUB_ACTIONS:-}" ] && [ "${MBUI_WHOLE_SUITE:-}" != 1 ]; then
 fi
 cd "$D/.."
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
-moon_tests -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/headless -p mbui/figure -p mbui/dmath -p mbui/zip ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
-code=${PIPESTATUS[0]}
+moon_tests -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/headless -p mbui/figure -p mbui/dmath -p mbui/zip ${UPDATE:+--update} > /tmp/held-read-ui.txt 2>&1
+code=$?
+# (what holds something read with nothing following it, src/ui/held_read.mbt: all of it kept, past the tail)
+grep -a '^HELD-READ ' /tmp/held-read-ui.txt
+grep -v "$F" /tmp/held-read-ui.txt | tail -${LINES_OUT:-60}
 moon_tests -p mbui/text 2>&1 | grep -v "$F" | tail -8
 [ ${PIPESTATUS[0]} = 0 ] || code=1
 if [ "${TEXTDIFF:-1}" != 0 ]; then

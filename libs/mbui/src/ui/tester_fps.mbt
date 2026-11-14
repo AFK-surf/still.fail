@@ -86,3 +86,10 @@ fn motion_known_said(check : String, file : String, n : Int, bar : Int, what : S
 fn test_corners_looked() -> Bool {
   @env.get_env_var("MBUI_CORNERS_LOOK").unwrap_or("") != "0"
 }
+
+///|
+/// Whether a Tester checks what holds something read with nothing following it (held_read.mbt): every test program's
+/// run.
+fn held_read_checked() -> Bool {
+  true
+}

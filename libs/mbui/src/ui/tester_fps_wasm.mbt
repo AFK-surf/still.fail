@@ -35,3 +35,9 @@ fn motion_bars_said(_check : String, _bars : Array[(String, Int)]) -> Unit {
 fn motion_known_said(_check : String, _file : String, _n : Int, _bar : Int, _what : String) -> Unit {
   ()
 }
+
+///|
+/// (not a Wasm program a shell runs, a bench: what it counts is a device's path, held_read.mbt's check none of it)
+fn held_read_checked() -> Bool {
+  false
+}
