@@ -52,7 +52,8 @@ priv struct ChatBodyKept {
 /// message sent from here by its outbox entry's key; what was sent from here, and the core's row that took it over
 /// once it came, by the key it was sent as; the rest Entry::id), what is sent from here not in the chat yet after its
 /// outbox and before where it stands and its agents' lines (sent_among's, its row before it followed where it is
-/// joined), the room over each (top_at's). Its Top and Foot are the list's room over and under its rows, not rows.
+/// joined), the agents whose card that answers at work after the rest (answered_at's), the room over each (top_at's).
+/// Its Top and Foot are the list's room over and under its rows, not rows.
 fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending : Array[@sfbase.LocalSent]) -> ChatBodyRows {
   for o in v.outbox {
     if o.seq >= 0.0 {
@@ -143,6 +144,13 @@ fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending
         }
       }
     }
+  }
+  // (an agent whose card what is on its way from here answers: at work from the frame it is sent, under the key its
+  // line will have once the core says so (Entry::id), its line coming with the answer, after the agents' lines the
+  // core says: sfbase's answered_at, as row_keys has it)
+  for a in @sfbase.answered_at(v, list) {
+    list.push(Working(a))
+    at_keys.push("act:" + a.key)
   }
   let rows : Map[String, ChatBodyRow] = Map([])
   for i, e in list {
