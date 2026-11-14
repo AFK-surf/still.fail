@@ -21,7 +21,7 @@
 /// view comes and laid out again as its login's card does, a lateness later, before it slides in, unseen; the Tester
 /// sees that row go, once a Tester (rows_steady's), and this file's own judge looks only at what is in the window.
 fn init {
-  @ui.host_image_bytes_known([("src/sfapp/chat_opens_whole_wbtest.mbt", 4000000)])
+  @ui.host_image_bytes_known([("src/sfapp/chat_opens_whole_wbtest.mbt", 64168)])
   @ui.rows_steady_known([("src/sfapp/chat_opens_whole_wbtest.mbt", 1)])
 }
 
