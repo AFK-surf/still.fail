@@ -80,6 +80,8 @@ function listen() {
 const ends = (events: RuntimeEvent[]) => events.filter((e) => e.type === "turnEnded");
 const ended = (k: number) => (events: RuntimeEvent[]) => ends(events).length >= k;
 const deltas = (events: RuntimeEvent[]) => events.flatMap((e) => (e.type === "live" && e.event.kind === "delta" ? [e.event.text] : []));
+/// What the deltas said, joined: read by the MoonBit program, an item's that come together are told as one.
+const said = (events: RuntimeEvent[]) => deltas(events).join("");
 const outcome = (events: RuntimeEvent[], k = 0) => (ends(events)[k] as Extract<RuntimeEvent, { type: "turnEnded" }>).outcome;
 const starts = (dump: string) => readFileSync(dump, "utf8").trim().split("\n").map((l) => JSON.parse(l));
 const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().split("\n").map((l) => JSON.parse(l));
@@ -407,18 +409,18 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(await session.steer("more"), true);
     await until(ended(1));
     assert.deepEqual(outcome(events), { kind: "completed" });
-    assert.ok(deltas(events).includes("steer:more"));
+    assert.ok(said(events).includes("steer:more"));
     const steer = stdin(p.dump).find((m) => m.method === "turn/steer");
     assert.deepEqual(steer.params, { threadId: session.id(), input: [{ type: "text", text: "more" }], expectedTurnId: steer.params.expectedTurnId });
     assert.match(steer.params.expectedTurnId, /^tu-/);
 
-    assert.deepEqual(deltas(events), ["d0 ", "steer:more"]);
+    assert.equal(said(events), "d0 steer:more");
     await session.prompt("hold:3");
-    await until((e) => deltas(e).length >= 5);
+    await until((e) => said(e).includes("d2 "));
     await session.abort();
     await until(ended(2));
     assert.deepEqual(outcome(events, 1), { kind: "aborted" });
-    assert.deepEqual(deltas(events).slice(2), ["d0 ", "d1 ", "d2 "]);
+    assert.equal(said(events), "d0 steer:mored0 d1 d2 ");
     const interrupt = stdin(p.dump).find((m) => m.method === "turn/interrupt");
     assert.equal(interrupt.params.threadId, session.id());
     assert.match(interrupt.params.turnId, /^tu-/);
@@ -463,7 +465,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(session.id(), before.id());
     await session.prompt("mcp");
     await until(ended(1));
-    assert.deepEqual(deltas(events), ["connected"]);
+    assert.equal(said(events), "connected");
     // Both times without the thread's history, which the reply would otherwise carry whole.
     assert.deepEqual(stdin(p.dump).filter((m) => m.method === "thread/resume").map((m) => m.params.excludeTurns), [true, true]);
   });
@@ -481,7 +483,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     const session = await d.open(options(p, { key: first.key, resume: failed.id() }), push);
     await session.prompt("mcp");
     await until(ended(1));
-    assert.deepEqual(deltas(events), ["connected"]);
+    assert.equal(said(events), "connected");
   });
 
   test("the app-server exiting fails the thread's turn as exited and closes every thread on it", async () => {
@@ -655,8 +657,8 @@ describe("the Codex driver", { concurrency: true }, () => {
       const [gateOne, gateTwo] = [gates(p.dump, "one"), gates(p.dump, "two")];
       await one.prompt("gate:12:4:one");
       await two.prompt("gate:14:4:two");
-      await a.until((e) => deltas(e).length >= 4);
-      await a2.until((e) => deltas(e).length >= 4);
+      await a.until((e) => said(e).includes("d3 "));
+      await a2.until((e) => said(e).includes("d3 "));
       // A request in flight as it lets go: its reply goes to the next driver, which drops it.
       const steering = one.steer("late");
       let snapshots: unknown[] = [null, null];
@@ -688,13 +690,13 @@ describe("the Codex driver", { concurrency: true }, () => {
         const all = [...before.events, ...now.events];
         assert.equal(ends(all).length, 1, "the turn's end, once");
         assert.deepEqual(outcome(now.events), { kind: "completed" });
-        const said = deltas(all).filter((t) => !t.startsWith("steer:"));
-        assert.deepEqual(said, Array.from({ length: count }, (_, i) => `d${i} `), "every delta once, in order");
+        const words = said(all).replaceAll("steer:late", "");
+        assert.equal(words, Array.from({ length: count }, (_, i) => `d${i} `).join(""), "every delta once, in order");
         assert.equal(all.filter((e) => e.type === "live" && e.event.kind === "start").length, 1);
         assert.equal(all.filter((e) => e.type === "live" && e.event.kind === "end").length, 1);
         assert.equal(now.events.filter((e) => e.type === "turnStarted").length, crashed ? 1 : 0);
       }
-      assert.ok(deltas([...a.events, ...b.events]).includes("steer:late"), "the steer itself reached the turn");
+      assert.ok(said([...a.events, ...b.events]).includes("steer:late"), "the steer itself reached the turn");
       assert.equal(starts(p.dump).length, 1, "the same app-server");
       // It goes on: new requests on the app-server taken up.
       await takenOne.prompt("say:after");
@@ -716,7 +718,7 @@ describe("the Codex driver", { concurrency: true }, () => {
       const idle = await d.open(options(p), b.push);
       const gate = gates(p.dump, `drain${after.length}`);
       await long.prompt(`gate:6:3:drain${after.length}`);
-      await a.until((e) => deltas(e).length >= 3);
+      await a.until((e) => said(e).includes("d2 "));
       // Its output past the limit from now on (every app-server has written more than this by now).
       (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
       // Another's turn ends while that one runs: the app-server is replaced now, the one with no turn let go of.
@@ -743,7 +745,7 @@ describe("the Codex driver", { concurrency: true }, () => {
       await eventually(gate.said);
       await gate.open("b");
       await x.until(ended(1));
-      assert.deepEqual(deltas([...a.events, ...(x === a ? [] : x.events)]), Array.from({ length: 6 }, (_, i) => `d${i} `), "its turn to the end, once, on the one being replaced");
+      assert.equal(said([...a.events, ...(x === a ? [] : x.events)]), Array.from({ length: 6 }, (_, i) => `d${i} `).join(""), "its turn to the end, once, on the one being replaced");
       assert.deepEqual(outcome(x.events), { kind: "completed" });
       // Its last turn over: it is let go of, and ends with its runner (its output gone with it).
       await x.until((e) => e.some((y) => y.type === "closed"));
@@ -768,7 +770,7 @@ describe("the Codex driver", { concurrency: true }, () => {
       const gate = gates(p.dump, `held${after.length}`);
       const unsub = gates(p.dump, "unsub");
       await long.prompt(`gate:6:3:held${after.length}`);
-      await a.until((e) => deltas(e).length >= 3);
+      await a.until((e) => said(e).includes("d2 "));
       (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
       await idle.prompt("say:x");
       await b.until((e) => e.some((x) => x.type === "closed"));
@@ -805,7 +807,7 @@ describe("the Codex driver", { concurrency: true }, () => {
       await gate.open("b");
       await x.until(ended(1));
       assert.deepEqual(outcome(x.events), { kind: "completed" });
-      assert.deepEqual(deltas([...a.events, ...(x === a ? [] : x.events)]), Array.from({ length: 6 }, (_, i) => `d${i} `));
+      assert.equal(said([...a.events, ...(x === a ? [] : x.events)]), Array.from({ length: 6 }, (_, i) => `d${i} `).join(""));
     });
   }
 
@@ -819,7 +821,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     const gate = gates(p.dump, "none");
     const unsub = gates(p.dump, "unsub");
     await long.prompt("gate:4:2:none");
-    await a.until((e) => deltas(e).length >= 2);
+    await a.until((e) => said(e).includes("d1 "));
     (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
     await idle.prompt("say:x");
     await b.until((e) => e.some((x) => x.type === "closed"));
@@ -861,7 +863,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     const idle = await d.open(options(p), b.push);
     const gate = gates(p.dump, "refuse");
     await long.prompt("gate:4:2:refuse");
-    await a.until((e) => deltas(e).length >= 2);
+    await a.until((e) => said(e).includes("d1 "));
     writeFileSync(`${p.dump}.unsub.fail`, "");
     (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
     await idle.prompt("say:x");
@@ -888,7 +890,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     const idle = await d.open(options(p), b.push);
     const gate = gates(p.dump, "slow");
     await long.prompt("gate:4:2:slow");
-    await a.until((e) => deltas(e).length >= 2);
+    await a.until((e) => said(e).includes("d1 "));
     (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
     await idle.prompt("say:x");
     await b.until((e) => e.some((x) => x.type === "closed"));
@@ -965,7 +967,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     };
     const gate = gates(p.dump, "kept");
     await two.prompt("gate:6:3:kept");
-    await a2.until((e) => deltas(e).length >= 3);
+    await a2.until((e) => said(e).includes("d2 "));
     // Another turn ends while that one runs, saying more than the runner gives back at once (32 MiB, native/runner
     // `punch`): reading again still begins where that one began, and the runner keeps it.
     await one.prompt(`say:${"x".repeat(34 * 1024 * 1024)}`);
@@ -988,7 +990,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     await b2.until(ended(1));
     const all = [...a2.events, ...b2.events];
     assert.equal(ends(all).length, 1, "its end, once");
-    assert.deepEqual(deltas(all), Array.from({ length: 6 }, (_, i) => `d${i} `), "every delta once, in order");
+    assert.equal(said(all), Array.from({ length: 6 }, (_, i) => `d${i} `).join(""), "every delta once, in order");
     assert.equal(b2.events.filter((e) => e.type === "turnStarted").length, 1, "read again as running");
     assert.equal(b.events.filter((e) => e.type === "turnStarted").length, 0, "the one whose turns had ended, idle");
     // None running now: reading again begins past it.
@@ -1012,7 +1014,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     const one = await first.open(options(p), a.push);
     const gate = gates(p.dump, "early");
     await one.prompt("gate:6:3:early");
-    await a.until((e) => deltas(e).length >= 3);
+    await a.until((e) => said(e).includes("d2 "));
     // The next station asks the profile's quota as it starts, before what the one before left is taken up: it does not
     // so much as look for an app-server yet.
     const taken = Promise.withResolvers<void>();
@@ -1025,7 +1027,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     await eventually(gate.said);
     await gate.open("b");
     await a.until(ended(1));
-    assert.deepEqual(deltas(a.events), Array.from({ length: 6 }, (_, i) => `d${i} `), "all of its turn, to the station before");
+    assert.equal(said(a.events), Array.from({ length: 6 }, (_, i) => `d${i} `).join(""), "all of its turn, to the station before");
     // That one hands over: its snapshot, its runner let go; the next takes the session up from it, then the rest.
     const snapshot = JSON.parse(JSON.stringify(one.snapshot()));
     first.detach();
