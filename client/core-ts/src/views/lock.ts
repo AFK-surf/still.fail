@@ -3595,6 +3595,9 @@ function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web"
     const f = stateOf(inner, ws);
     const d = f.devices.get(id);
     if (d === undefined) return Effect.fail(CoreError.invalid("no such device in the lock"));
+    // (an app device of this person's own, renewed: its log lets it in with no expiry, so nothing is to be done;
+    // 2026-11-14, the locks' end to end after #6102 had it refused as another member's)
+    if (d.kind !== "web" && kind === "web" && d.sub === sub) return Effect.succeed(null);
     // (another's app device: theirs alone to take off or renew, on their own log; an owner takes the person out)
     if (d.kind !== "web") return Effect.fail(new CoreError("lock_moved", t("core-misc.lock.othersDevice"), 409));
     if (d.sub !== sub || f.persons.get(sub) !== inner.adb.personal().root(sub)) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
