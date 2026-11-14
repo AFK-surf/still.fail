@@ -1,5 +1,5 @@
 // slack_api: any Slack Web API method, as the session's bot (or the bot of one of its Slack
-// conversations, `to`; a still.fail chat's, the station's Slack bot, `bot`). The method's shape, what is not for agents, and the threads rule for writes (WRITES) are
+// conversations, `to`; a still.fail chat's, the station's Slack bot, `bot`). The method's shape, what is not for agents, and the threads rule for writes (mcp.ts `isSlackWrite`) are
 // src/sessions/conversations.ts's `slackApi`.
 import { jsString } from "../sessions/args.ts";
 import { slackApi, target } from "../sessions/conversations.ts";

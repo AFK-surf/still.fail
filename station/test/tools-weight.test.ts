@@ -11,29 +11,10 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
-import { PHONE_SEND, adbTools, phoneTools } from "../src/adb/tool.ts";
-import { browserTools } from "../src/browser/tool.ts";
-import { deviceTools } from "../src/devices/tool.ts";
-import { feishuTools } from "../src/feishu/tool.ts";
-import { loginTools } from "../src/logins/tool.ts";
-import { rigTools } from "../src/rigs/tool.ts";
-import { searchTools } from "../src/search/tool.ts";
-import { archiveTools } from "../src/tools/archive.ts";
-import { chatTools } from "../src/tools/chat.ts";
-import { computerTools } from "../src/tools/computer.ts";
-import { feedbackTools } from "../src/tools/feedback.ts";
-import { forwardTools } from "../src/tools/forward.ts";
-import { jobTools } from "../src/tools/jobs.ts";
 import { CORE, type Tool, weight } from "../src/tools/mcp.ts";
-import { permissionTools } from "../src/tools/permissions.ts";
-import { relayTools } from "../src/tools/relays.ts";
-import { remoteTools } from "../src/tools/remote.ts";
-import { retireTools } from "../src/tools/retire.ts";
-import { screenTools } from "../src/tools/screen.ts";
-import { workspaceSizeTools } from "../src/tools/workspace-size.ts";
-import { vaultTools } from "../src/vault/tool.ts";
+import { stationTools } from "./station-tools.ts";
 
-/// The factories the list below is made of, by the names their callers call them by.
+/// The factories the list (test/station-tools.ts `stationTools`) is made of, by the names their callers call them by.
 const FACTORIES = [
   "chatTools", "archiveTools", "remoteTools", "workspaceSizeTools", "jobTools", "screenTools", "permissionTools", "computerTools", "forwardTools", "relayTools",
   "phoneTools", "adbTools", "browserTools", "deviceTools", "feedbackTools", "feishuTools", "loginTools", "retireTools", "rigTools", "searchTools", "vaultTools",
@@ -41,37 +22,6 @@ const FACTORIES = [
 /// How many times the parts give tools (`parts.tools(`, anywhere in src/): one a factory above but adb's, which also
 /// gives phone_send by itself.
 const PARTS_GIVE = 12;
-
-/// Every tool a station declares to a session, where it declares the most (a stable station of still.fail cloud, which
-/// has the feedback tools too): those of src/sessions/agents.ts, then the parts' (their modules' `parts.tools(…)`), each
-/// factory given nothing, since a declaration reads none of it.
-function stationTools(): Tool[] {
-  const none = {} as any;
-  return [
-    ...chatTools(none),
-    ...archiveTools(none),
-    ...remoteTools(none),
-    ...workspaceSizeTools(none, none),
-    ...jobTools(none, () => null),
-    ...screenTools(none, () => null),
-    ...permissionTools(null, () => null),
-    ...computerTools(none),
-    ...forwardTools(none),
-    ...relayTools(none),
-    ...phoneTools(none, async () => ""),
-    { ...PHONE_SEND, run: async () => "" },
-    ...adbTools(() => []),
-    ...browserTools(none),
-    ...deviceTools(none),
-    ...feedbackTools(none, () => null, () => null),
-    ...feishuTools(() => undefined, () => false),
-    ...loginTools(none),
-    ...retireTools(none),
-    ...rigTools(none),
-    ...searchTools(none),
-    ...vaultTools(none, () => null, none),
-  ];
-}
 
 // The ceilings, in bytes: what the list weighed once it was slimmed (2026-11-14: 60,925 in all, from 80,230; the core
 // ones 13,951, from 22,140; chat_post the heaviest at 4,705, from 8,125), each rounded up to the next thousand. The
@@ -100,12 +50,12 @@ test("the list here is the station's: every factory its tools are given by, and 
   // The factories called where tools are given: the agents' own list, and any file a part gives tools in.
   const called = new Set([...texts].filter(([f, text]) => f === "sessions/agents.ts" || givesIn(text) > 0).flatMap(([, text]) => [...text.matchAll(/\b([A-Za-z]+Tools)\(/g)].map((m) => m[1]!)));
   called.delete("allTools");
-  assert.deepEqual([...called].sort(), [...FACTORIES].sort(), "a factory of tools was added or taken away: make stationTools() in this test of the same ones, so that its tools are weighed");
+  assert.deepEqual([...called].sort(), [...FACTORIES].sort(), "a factory of tools was added or taken away: make stationTools() in test/station-tools.ts of the same ones, so that its tools are weighed");
   const gives = [...texts.values()].reduce((n, text) => n + givesIn(text), 0);
-  assert.equal(gives, PARTS_GIVE, "a part gives tools somewhere new (parts.tools): add them to stationTools() in this test, so that they are weighed");
+  assert.equal(gives, PARTS_GIVE, "a part gives tools somewhere new (parts.tools): add them to stationTools() in test/station-tools.ts, so that they are weighed");
   // Every tool the source declares is weighed, and nothing else: one added inside a list already given is seen here.
   const declared = new Set([...texts.values()].flatMap((text) => [...text.matchAll(/\bname: "([a-z][a-z_]*)",\s*description\b/g)].map((m) => m[1]!)));
-  assert.deepEqual([...declared].sort(), stationTools().map((t) => t.name).sort(), "the tools src/ declares (name, then description) are not those this test weighs: add the new one to stationTools() here, or take out the one that went");
+  assert.deepEqual([...declared].sort(), stationTools().map((t) => t.name).sort(), "the tools src/ declares (name, then description) are not those this test weighs: add the new one to stationTools() in test/station-tools.ts, or take out the one that went");
 });
 
 test("the tools a station declares stay under their ceilings: the whole list, the core ones, the heaviest, a schema", (t) => {

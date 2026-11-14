@@ -284,19 +284,3 @@ export function isSlackMethod(method: string): boolean {
   const [first, ...rest] = method.split(".");
   return /^[a-z][A-Za-z]*$/.test(first ?? "") && rest.length > 0 && rest.every((p) => /^[A-Za-z]+$/.test(p));
 }
-
-/// Methods that land in a thread: the threads rule applies to them.
-export const WRITES = [
-  "chat.postMessage",
-  "chat.postEphemeral",
-  "chat.scheduleMessage",
-  "chat.update",
-  "chat.delete",
-  "chat.meMessage",
-  "reactions.add",
-  "reactions.remove",
-  "pins.add",
-  "pins.remove",
-  "files.completeUploadExternal",
-  "assistant.threads.",
-];
