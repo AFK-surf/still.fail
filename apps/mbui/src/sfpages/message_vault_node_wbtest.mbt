@@ -416,14 +416,8 @@ fn vault_card_both(m : Message, doing : String, w : Double, at : String, scale? 
 /// name and time, and the line saying how it went where its middle is under the time (「已过期，无人批准」 112 wide,
 /// 「未存入 …」 130, 「已拒绝使用 …」 and 「已存入密码 …」 154, from 40); one granted to use says for how long after
 /// its item, its middle past the time (as card_rig_rooms' longer ones).
-fn vault_card_rooms(c : (String, Message, String)) -> Int {
-  if c.1.card is Some({ ask: Some({ status: "", .. }), .. }) {
-    return 0
-  }
-  match c.0 {
-    "granted" | "granted for a time" => 2
-    _ => 3
-  }
+fn vault_card_rooms(_c : (String, Message, String)) -> Int {
+  0
 }
 
 ///|
@@ -515,7 +509,7 @@ test "a vault item's request decided as its card shows: the card goes, the line 
   let line = "已允许使用 GitHub token · 本对话内"
   assert_true(t.find(line) is Some(_), msg="how it went, its item named")
   // (granted: its line's middle is past the head's time, vault_card_rooms)
-  card_audit(t, "decided", 2)
+  card_audit(t, "decided", 0)
   t.click(Button, label=line + " · " + @sf.t("web-main.history.details"))
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())

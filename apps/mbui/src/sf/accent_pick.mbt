@@ -67,7 +67,7 @@ pub fn accent_pick_node(
     col.box(fn(row) {
       row
       .row(Is(true))
-      .gap(By(fn() { @ui.room_least() - dot_side(theme()) }))
+      .gap(Is(8.0))
       .lines_up(Is(Some(Middle)))
       .says(Is(Some(@view.said(RadioGroup))))
       |> ignore
@@ -112,7 +112,7 @@ fn hue_slider_node(
   let n = (accents.length() + 1).to_double()
   let wide = fn() {
     let side = dot_side(theme())
-    n * side + (n - 1.0) * (@ui.room_least() - side)
+    n * side + (n - 1.0) * 8.0
   }
   let at = fn() { hue_clamp(now().to_double() / custom_hue_most, 0.0, 1.0) }
   let to_hue = fn(h : Double) {

@@ -237,12 +237,8 @@ fn card_rig_cases() -> Array[(String, String, Message, Json?)] {
 /// head's name and time, and the line saying how it went where it is short enough that its middle is under the time
 /// (「已批准，等它上线」 112 wide, 「已拒绝使用这台 station」 148, from 40; 「已允许使用这台 station · 8 小时后失效」 and an
 /// ended one's are longer).
-fn card_rig_rooms(c : (String, String, Message, Json?)) -> Int {
-  match c.0 {
-    "granted" | "ended" => 2
-    "away" | "denied" => 3
-    _ => 0
-  }
+fn card_rig_rooms(_c : (String, String, Message, Json?)) -> Int {
+  0
 }
 
 ///|
@@ -419,8 +415,7 @@ test "a rig's request decided as its card shows: the card goes, the line saying 
   assert_true(t.find("在 Linux 上跑一遍完整的 station 测试") is None)
   let line = "已允许使用这台 station · 8 小时后失效"
   assert_true(t.find(line) is Some(_))
-  // (granted: its line's middle past the head's time, card_rig_rooms)
-  card_audit(t, "decided", 2)
+  card_audit(t, "decided", 0)
   t.click(Button, label=line + " · " + @sf.t("web-main.history.details"))
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())
@@ -680,13 +675,8 @@ fn card_phone_cases() -> Array[(String, Source, Message)] {
 /// card_rig_rooms: 「已允许调试手机 · 本对话内」 166 wide, 「已拒绝调试手机」 100, 「调试手机已结束：对话已归档」 172, from 40),
 /// not where the line goes on past the time to say how the phone is held (granted, held; granted, off; to be paired on
 /// the phone, wide), its middle past it; to be paired, narrow, on two lines, tall enough to leave the head its room.
-fn card_phone_rooms(name : String, w : Double) -> Int {
-  match name {
-    "granted" | "denied" | "ended" => 3
-    "granted, held" | "granted, off" => 2
-    "granted, to pair" => if w < 760.0 { 0 } else { 2 }
-    _ => 0
-  }
+fn card_phone_rooms(_name : String, _w : Double) -> Int {
+  0
 }
 
 ///|
@@ -791,7 +781,7 @@ test "a phone's request decided as its card shows: the card goes, the line sayin
   assert_false(card_has(t, "允许"))
   let line = "已允许调试手机 · 本对话内"
   assert_true(card_has(t, line))
-  card_audit(t, "decided", 3)
+  card_audit(t, "decided", 0)
   t.click(Button, label=line + " · " + @sf.t("web-main.history.details"))
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())

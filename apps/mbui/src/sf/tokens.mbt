@@ -2353,7 +2353,8 @@ pub fn keys_gap(size? : Double = bar_key_side, least? : Double = 2.0) -> @ui.Spa
 ///|
 /// keys_gap's room as a number (where it is worked into a width: a key coming in with the room before it).
 pub fn keys_apart(size? : Double = bar_key_side, least? : Double = 2.0) -> Double {
-  dmax(least, @ui.room_least() - size)
+  ignore(size)
+  least
 }
 
 ///|

@@ -31,12 +31,7 @@ pub let ask_foot : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 /// Between the foot's lines, where its buttons go on to a second: 8, more where a press's room is taller than a button
 /// and the one under it (a finger's 44 round a button of 34).
 pub fn ask_foot_lines() -> Double {
-  let more = @ui.room_least() - button_height()
-  if more > 8.0 {
-    more
-  } else {
-    8.0
-  }
+  8.0
 }
 
 ///|

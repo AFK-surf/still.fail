@@ -134,16 +134,7 @@ fn message_name_node(
 ) -> Unit {
   let goes = fn() { agent() != "" || from() != "" }
   v.box(fn(b) {
-    // (pressed, as wide as leaves it a press's least room beside the time after it, its head's gap apart: a name
-    // shorter than that ends in room of its own, the time after it; the old view's had a short one's under it, 「Ana」
-    // 30×36, coordinator 2026-11-11)
-    @sf.style_node(b, fn() {
-      if goes() {
-        msg_name_room.then(@ui.style(min_w=Fixed(@ui.room_least() - msg_head_gap), align=AStart))
-      } else {
-        msg_name_room
-      }
-    })
+    @sf.style_node(b, fn() { msg_name_room })
     let press = fn() {
       let a = @signals.untracked(agent)
       if a != "" {
@@ -237,7 +228,3 @@ fn elsewhere_route_node(v : @view.View, s : () -> Elsewhere) -> Unit {
   })
   |> ignore
 }
-
-///|
-/// How far apart a message's head's name, where it went and its time are (msg_head's gap, S1_5).
-let msg_head_gap : Double = 6.0

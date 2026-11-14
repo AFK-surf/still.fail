@@ -78,7 +78,7 @@ test "a code block's bar (its language, 换行, 复制) at the system's words se
       let t = cb_tester(true, platform~, scale~)
       assert_eq(cb_drawn(t), was, msg=at)
       // (with a finger at 1, what scrolls its code, under 44 high)
-      let faults = cb_audit(t, if platform == 2 && scale == 1.0 { 1 } else { 0 })
+      let faults = cb_audit(t, 0)
       assert_true(faults.is_empty(), msg=at + ": " + faults.join(" || "))
     }
   }
@@ -89,7 +89,7 @@ test "a code block's 换行 is pressed as far round it as a press's room: over i
   for dy in [-6.0, 26.0] {
     let t = cb_tester(true)
     let w = t.words().iter().find_first(fn(w) { w.0 == md_wrap_words(false) }).unwrap()
-    assert_eq(cb_audit(t, 1), [])
+    assert_eq(cb_audit(t, 0), [])
     t.tap(w.1 + w.3 / 2.0, w.2 + dy)
     t.run_for(@ui.move_most_ms)
     assert_true(t.find(md_wrap_words(true)) is Some(_), msg="\{dy} from its words' top")

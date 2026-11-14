@@ -43,7 +43,7 @@ fn row_drags(t : @ui.Tester, what : String, from : Double, y? : Double = 22.0, k
 /// 文件's 显示方式 at 922), found as the press's judgment came to be the hit
 /// test's (Tester::press_lands_at). Only falls.
 // kept across runs: a value (no field of it changes)
-let row_dead_known : Map[String, Array[Double]] = { "文件": [922.0] }
+let row_dead_known : Map[String, Array[Double]] = Map([])
 
 ///|
 test "a Mac's window: the top row drags it on every page, with a bar there or not, but for what is pressed there" {

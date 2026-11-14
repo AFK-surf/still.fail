@@ -374,11 +374,8 @@ fn wide_bar_medium(calls : Array[Made]) -> Array[(String, () -> @ui.Tester)] {
 /// old bar's own as it was laid out (the old view held them to no rule; reported, pinned, 2026-11-11): its agents but
 /// the first, 20 marks 10 apart, pressed in 33 × 36 (AGENTS, NARROW: two each). (A station's screens' count, 2.27:1 on
 /// the amber of one driven, went with the count itself, 2026-11-13.)
-fn wide_bar_known(name : String) -> Array[String] {
-  match name {
-    "AGENTS" | "NARROW" | "M-AGENTS" | "M-NARROW" => ["has 33×36 to be pressed in, under 36", "has 33×36 to be pressed in, under 36"]
-    _ => []
-  }
+fn wide_bar_known(_name : String) -> Array[String] {
+  []
 }
 
 ///|

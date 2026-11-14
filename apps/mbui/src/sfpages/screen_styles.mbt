@@ -614,7 +614,7 @@ let debug_tab_box : @ui.Style = @ui.css("w=Full gap=S1")
 /// Rows of a panel's group that come and go together (matched or not, the app started again), as far apart as the
 /// group's (panel_group_box's).
 // kept across runs: a value (no field of it changes)
-let debug_rows_box : @ui.Style = @ui.css("w=Full gap=S0_5")
+let debug_rows_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
