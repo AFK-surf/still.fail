@@ -438,9 +438,12 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
     },
     topic_read: fn(name, params) {
       if name == "newChat" && reading.get() {
+        // (the key its chat is to be made under, as the core gives it whatever it has read)
+        let next = text(base.topic(name, params).get().snapshot().value, "next")
         {
           value: Some({
             "kept": "st1",
+            "next": Json::string(next),
             "any": false,
             "waiting": false,
           }),
@@ -456,7 +459,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
 }
 
 ///|
-test "a new chat while its stations are read: its page and composer as they will be, only the station's parts waiting" {
+test "a new chat while its stations are read: its page as it will be, its first words sent at once to the station it last started on" {
   let reading = @signals.signal(true)
   let made = Ref(0)
   let t = reading_core(reading, made)
@@ -467,22 +470,19 @@ test "a new chat while its stations are read: its page and composer as they will
   assert_true(t.find("想让 agent 做什么？") is Some(_))
   assert_true(t.find("它会在") is None)
   assert_true(t.find("没有可用模型") is None)
-  // words taken while they are read, nothing sent
+  // sent while they are read: made at once on the station it last started on (the owner, 2026-11-14: 「new chat 发消息
+  // 任何时候都应该立即发出去」), the field emptied, never a press taken for nothing
   t.tap_text("做任何事")
   t.type_text("先写一半")
   t.draw()
   tap_send(t)
   t.draw()
-  assert_eq(made.val, 0)
+  assert_eq(made.val, 1)
   let (_, field, _, _) = t.ime()
-  assert_eq(field, "先写一半")
-  // read: the page on the station it started on, the same words in the same field, and they go
+  assert_eq(field, "")
+  assert_true(app.nav.top() is Chat(_))
+  // read meanwhile: nothing more made
   reading.set(false)
-  t.draw()
-  assert_true(t.find("它会在 Willow 上") is Some(_))
-  let (_, kept, _, _) = t.ime()
-  assert_eq(kept, "先写一半")
-  tap_send(t)
   t.draw()
   assert_eq(made.val, 1)
 }

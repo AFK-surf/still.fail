@@ -718,6 +718,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"你好\",\"here\":\"01M6HRQEHBR5PGAX1Q0T4CZSAS/ecc4cb8ada81bc85715af159dcc4e1b53f84f202e199a70b2cf4b81e4df0d3ae\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"你好\",\"here\":\"01M6WR7XDC1465T5GC1A3Z91KW/ba1d27ea96539280cc2602a6d00a185de7acca1dec6bbdd42ade0010af0f0392\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"先上屏\",\"here\":\"ws1/st1\"}",{"refs":[]}]
+  #|["words","{\"call\":\"ref.pasted\",\"text\":\"先写一半\",\"here\":\"ws1/st1\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"先把 app 的合了\",\"here\":\"ws1/st1\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"先看 @[季度路线图] 再定\",\"here\":\"ws1/st1\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"先看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 再说\",\"here\":\"ws1/st1\"}",{"refs":[{"start":3,"end":54,"title":"首页","station":"ws1/st1","id":"s-c2","history":""}]}]
