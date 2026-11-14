@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [93c11f443](https://github.com/AFK-surf/monoid/commit/93c11f443550f7fab3ea6837e56a0729eb2dec55) presets: name presets alone in the menu; a control | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.62 | 109.24 |
 | [d53e54908](https://github.com/AFK-surf/monoid/commit/d53e54908b54d27778233e54e1b9c16fbecd0e77) station, core, app: an agent assists a station's r | 1.99 | 2.72 | 11.59 | 31.2 | 41.65 | 27.81 | 53.36 | 96.63 | 114.47 |
 | [3ee6f477a](https://github.com/AFK-surf/monoid/commit/3ee6f477a9ecbf33555410466e907673d9ac1107) mbui: a key of a page's list on its way grows from | 1.99 | 2.72 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.42 | 102.72 |
 | [c3432a641](https://github.com/AFK-surf/monoid/commit/c3432a641c2f7c96a0e1b7ac423f3dc2f0679620) vault: agents ask to delete an item (secret_delete | 1.99 | 2.71 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.6 | 110.87 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [26e2cffa0](https://github.com/AFK-surf/monoid/commit/26e2cffa0f7303317690ee26d7fcd3e73cc872ed) Windows: no more than 120 frames a second by defau | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.95 | 104.62 |
 | [f1011412c](https://github.com/AFK-surf/monoid/commit/f1011412cbd55a950c83f2a62464226f94753938) fix(mbui): a viewer closed sets out no way after i | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.83 | 104.33 |
 | [8e40aba93](https://github.com/AFK-surf/monoid/commit/8e40aba934f3980ad9fe9873ac47584900944078) mbui app: what is sent and the message it becomes  | 1.97 | 2.68 | 11.4 | 30.97 | 40.9 | 27.6 | 52.73 | 95.75 | 112.86 |
-| [3b7c1fa43](https://github.com/AFK-surf/monoid/commit/3b7c1fa4361d9cd8e89f804c608588ded9a2799f) mbui: a key coming at a page's list's end is one m | 1.97 | 2.68 | 11.4 | 30.95 | 40.88 | 27.6 | 52.75 | 96.01 | 109.79 |
