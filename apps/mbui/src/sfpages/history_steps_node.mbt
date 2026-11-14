@@ -430,13 +430,86 @@ fn steps_main_node(v : @view.View, body : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
-/// Vertical side line inside an expanded group or step container, marking the exact start-to-end scope of the
-/// subordinate content below its parent header without a full-icon-column indent or wrapper card.
-fn sub_line_node(parent : @view.View, look : @ui.Style, failed? : Bool = false) -> Unit {
-  parent.box(fn(r) {
-    r.over(Is(true)) |> ignore
-    @sf.style_node(r, fn() { look })
-    steps_box_node(r, if failed { step_bar_line_red } else { step_bar_line }, fn(_) {  })
+// kept across runs: a value (no field of it changes)
+let quarter_arc : Array[(Double, Double)] = [
+  (1.0, 0.0),
+  (0.980785, 0.195090),
+  (0.923880, 0.382683),
+  (0.831470, 0.555570),
+  (0.707107, 0.707107),
+  (0.555570, 0.831470),
+  (0.382683, 0.923880),
+  (0.195090, 0.980785),
+  (0.0, 1.0),
+]
+
+///|
+/// Builds the single continuous curved side-rail stroke for an expanded group of height `h`:
+/// starts at `x = 10.0` directly under the center of the `20×20` group chevron icon, glides smoothly via two tangent
+/// `67.5°` circular arcs (`r = 5.67`, `╭─╯`) to `x = 3.0`, runs straight down the left edge, and finishes with a
+/// rounded bottom hook (`╰─`, `r = 4.5`) back to `x = 10.0` at `y = h - 1.5`.
+fn curved_rail_shapes(h : Double) -> Array[@ui.Shape] {
+  if h <= 16.0 {
+    return [@ui.shape_of([([10.0, 0.0, 10.0, dmax(1.0, h - 1.0)], false)], stroke=0x000000FFL, width=1.25)]
+  }
+  let pts : Array[Double] = []
+  let top_idx = 6
+  let (c_top, s_top) = quarter_arc[top_idx]
+  let r1 = 3.5 / (1.0 - c_top)
+  let top_y = 0.0
+  for i in 0..<=top_idx {
+    let (c, s) = quarter_arc[i]
+    pts.push(10.0 - r1 * (1.0 - c))
+    pts.push(top_y + r1 * s)
+  }
+  for j in 1..<=top_idx {
+    let (c, s) = quarter_arc[top_idx - j]
+    pts.push(3.0 + r1 * (1.0 - c))
+    pts.push(top_y + 2.0 * r1 * s_top - r1 * s)
+  }
+  let r2 = 4.5
+  let bot_y = h - 1.5
+  for pair in quarter_arc {
+    let (c, s) = pair
+    pts.push(3.0 + r2 * (1.0 - c))
+    pts.push(bot_y - r2 + r2 * s)
+  }
+  pts.push(10.0)
+  pts.push(bot_y)
+  [@ui.shape_of([(pts, false)], stroke=0x000000FFL, width=1.25)]
+}
+
+///|
+/// Wraps `body` in a box with `look` and draws the single curved side rail aligned with the parent chevron icon.
+fn curved_rail_box_node(
+  parent : @view.View,
+  look : @ui.Style,
+  failed? : Bool = false,
+  body : (@view.View) -> Unit,
+) -> Unit {
+  parent.by_room(fn(v, room) {
+    v.fills_across(Is(true)) |> ignore
+    let inner : Ref[@view.View?] = Ref(None)
+    let tall = fn() {
+      match inner.val {
+        Some(i) => room.tall(i)
+        None => 0.0
+      }
+    }
+    steps_box_node(v, look, fn(i) {
+      inner.val = Some(i)
+      body(i)
+    })
+    v.box(fn(r) {
+      r
+      .over(Is(true))
+      .width(Is(Some(12.0)))
+      .height(By(fn() { Some(dmax(0.0, tall())) }))
+      .shapes(By(fn() { curved_rail_shapes(tall()) }))
+      .tint(By(fn() { @ui.tree_theme().color(if failed { Danger } else { Border }) }))
+      |> ignore
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -757,12 +830,7 @@ fn one_line_node(
   })
   |> ignore
   // (opening and closing across its full width with a soft bottom cut)
-  steps_reveal_node(v, open, fn(b) {
-    steps_box_node(b, h_one_sub, fn(c) {
-      sub_line_node(c, h_step_line, failed=tone == "red")
-      whole(c)
-    })
-  })
+  steps_reveal_node(v, open, fn(b) { steps_box_node(b, h_one_card, whole) })
 }
 
 ///|
@@ -1122,12 +1190,13 @@ fn task_node(v : @view.View, key : String, task : Json?, rail : Bool, rail_last 
             |> ignore
           }
         } else {
-          steps_box_node(p, h_one_sub, fn(w) {
-            sub_line_node(w, h_step_line, failed~)
+          steps_box_node(p, if agent { h_one_card } else { h_one_body }, fn(w) {
             if agent {
               md_node(w, answer, field(task, "md"), small=true)
             } else {
-              steps_run(w, fn() { answer }, h_output, mono=true)
+              steps_box_node(w, if failed { tool_box_red } else { tool_box }, fn(bx) {
+                steps_run(bx, fn() { answer }, h_output, mono=true)
+              })
             }
           })
         }
@@ -1320,8 +1389,7 @@ fn group_rows_node(
   rows : Array[Json],
   calls : Bool,
 ) -> Unit {
-  steps_box_node(s, h_steps, fn(list) {
-    sub_line_node(list, h_group_line)
+  curved_rail_box_node(s, h_steps, fn(list) {
     for i, row in rows {
       let rv = Some(row)
       let content = field(rv, "content")
@@ -1335,8 +1403,7 @@ fn group_rows_node(
               steps_words(c, fn() { if steps_own.opened.contains(rk) { "" } else { text(content, "first") } }, h_step_hint_line)
             }, in_row=true)
           }, fn(body) {
-            steps_box_node(body, h_step_body, fn(t) {
-              sub_line_node(t, h_step_line)
+            steps_box_node(body, h_step_card, fn(t) {
               md_node(t, thought_words, field(content, "md"), small=true)
             })
           })
@@ -1982,17 +2049,44 @@ fn tool_body_node(v : @view.View, src : Source, station : String, key : String, 
         true
       }
     })
-    steps_box_node(p, tool_body_box, fn(b) {
-      sub_line_node(b, h_step_line, failed~)
+    let is_bare_single_box = call_parts.length() + result_parts.length() == 1 &&
+      !failed &&
+      ({
+        let only = if call_parts.length() == 1 { Some(call_parts[0]) } else { Some(result_parts[0]) }
+        let k = text(only, "kind")
+        k == "code" || k == "diff" || k == "output" || k == "json"
+      })
+    let body_style = if is_bare_single_box {
+      tool_body_box
+    } else if failed {
+      tool_body_card_red
+    } else {
+      tool_body_card
+    }
+    let in_card = !is_bare_single_box
+    steps_box_node(p, body_style, fn(b) {
       if call_parts.length() > 0 {
-        steps_box_node(b, tool_section, fn(s) {
+        steps_box_node(b, if in_card { tool_section_card } else { tool_section }, fn(s) {
           for idx, part in call_parts {
-            tool_part_node(s, Some(part), rk=rk + "/c" + idx.to_string(), src~, station~, key~)
+            tool_part_node(s, Some(part), rk=rk + "/c" + idx.to_string(), src~, station~, key~, in_card~)
           }
         })
       }
       if result_parts.length() > 0 {
-        steps_box_node(b, if call_parts.length() > 0 { tool_result_box } else { tool_section }, fn(s) {
+        let res_style = if call_parts.length() > 0 {
+          if failed {
+            tool_result_card_red
+          } else if in_card {
+            tool_result_card
+          } else {
+            tool_result_box
+          }
+        } else if in_card {
+          tool_section_card
+        } else {
+          tool_section
+        }
+        steps_box_node(b, res_style, fn(s) {
           if call_parts.length() > 0 || failed {
             steps_box_node(s, tool_result_head, fn(h) {
               steps_words(
@@ -2003,7 +2097,7 @@ fn tool_body_node(v : @view.View, src : Source, station : String, key : String, 
             })
           }
           for idx, part in result_parts {
-            tool_part_node(s, Some(part), rk=rk + "/r" + idx.to_string(), src~, station~, key~)
+            tool_part_node(s, Some(part), rk=rk + "/r" + idx.to_string(), src~, station~, key~, in_card~)
           }
         })
       }
@@ -2307,8 +2401,10 @@ fn tool_part_node(
   src? : Source = @sfbase.sample_source,
   station? : String = "",
   key? : String = "",
+  in_card? : Bool = false,
 ) -> Unit {
   let fold_key = if rk != "" { rk } else { "tool-part" }
+  let inner_box = if in_card { tool_box_in_card } else { tool_box }
   match text(part, "kind") {
     "code" => {
       let code_text = text(part, "text")
@@ -2502,7 +2598,7 @@ fn tool_part_node(
                     })
                   }
                 })
-                steps_box_node(f, tool_box, render_json_val)
+                  steps_box_node(f, inner_box, render_json_val)
               })
             }
             _ =>
@@ -2524,7 +2620,7 @@ fn tool_part_node(
     "output" => {
       let out_text = text(part, "text")
       let is_failed = flag(part, "failed")
-      let box_look = if is_failed { tool_box_red } else { tool_box }
+      let box_look = if is_failed { tool_box_red } else { inner_box }
       let text_look = if is_failed { tool_mono } else { tool_mono_muted }
       if is_long_block(out_text) {
         steps_box_node(v, tool_field_stack, fn(stack) {
@@ -2556,14 +2652,14 @@ fn tool_part_node(
               steps_run(rb, fn() { json_text }, tool_mono, mono=true)
             })
           })
-          steps_box_node(stack, tool_box, fn(b) {
+          steps_box_node(stack, inner_box, fn(b) {
             fold_node(b, fold_key + "/json", 16, words_line, fn(f) {
               steps_run(f, fn() { json_text }, tool_mono, mono=true)
             })
           })
         })
       } else {
-        steps_box_node(v, tool_box, fn(b) { steps_run(b, fn() { json_text }, tool_mono, mono=true) })
+        steps_box_node(v, inner_box, fn(b) { steps_run(b, fn() { json_text }, tool_mono, mono=true) })
       }
     }
     _ => ()
@@ -2873,23 +2969,6 @@ let h_ev : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 let h_ev_stack : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
-/// Vertical side line under an expanded group's chevron (`pl=S1_25` = `5px`), and under an expanded step's label (`pl=S0_5` = `2px`).
-// kept across runs: a value (no field of it changes)
-let h_group_line : @ui.Style = @ui.css("w=Full h=Full pl=S1_25 py=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_step_line : @ui.Style = @ui.css("w=Full h=Full pl=S0_5 py=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let step_bar_line : @ui.Style = @ui.css("w=SPx h=Full radius=Full bg=Border")
-
-///|
-// kept across runs: a value (no field of it changes)
-let step_bar_line_red : @ui.Style = @ui.css("w=SPx h=Full radius=Full bg=Danger")
-
-///|
 /// An event's mark (hIcon): 20 square, on whatever it stands on: the turn's rail runs from under it, so nothing of it
 /// covers the rail. As high as its event's first line (ev's `row`), its mark in its middle.
 // kept across runs: a value (no field of it changes)
@@ -3043,11 +3122,11 @@ let h_one_fold_hot : @ui.TextStyle = h_one_fold.then(@ui.text_style(color=Accent
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_body : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1")
+let h_one_body : @ui.Style = @ui.css("w=Full pt=S1 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_sub : @ui.Style = @ui.css("w=Full pl=S3 pt=S1 pb=S1_5")
+let h_one_card : @ui.Style = @ui.style(w=Full, mt=S1, mb=S1_5, py=S2, px=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3107,9 +3186,9 @@ let h_group_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 let h_group_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// Its calls, opened (hSteps): compact 12px left offset beside the group's side line (`x = 5px`), 2 apart, 2 under its line.
+/// Its calls, opened (hSteps): 12px left offset beside the group's curved side rail (`x = 10 -> 3 -> 10`), 2 apart.
 // kept across runs: a value (no field of it changes)
-let h_steps : @ui.Style = @ui.css("w=Full pl=S3 pt=S0_5 gap=SPx")
+let h_steps : @ui.Style = @ui.css("w=Full pl=S3 pt=S1_5 pb=S1_5 gap=SPx")
 
 ///|
 /// A call's line (hStep summary): 4 by 4 in, round 8, 8 apart, 12; the pointer's ground on it.
@@ -3141,9 +3220,13 @@ let h_step_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=f
 let h_step_meta_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A step's or thought's words (hStepBody: 12px left offset beside the step's side line, 4 over, 8 under, 12); a thought alone (hThinking: 2 over, 6 under, muted).
+/// A step's or thought's words (hStepBody: 4 over, 8 under, 12; hStepCard: rounded faint surface card); a thought alone (hThinking: 2 over, 6 under, muted).
 // kept across runs: a value (no field of it changes)
-let h_step_body : @ui.Style = @ui.css("w=Full pl=S3 pt=S1 pb=S2")
+let h_step_body : @ui.Style = @ui.css("w=Full pt=S1 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_step_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, px=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3172,10 +3255,18 @@ let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false
 let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
-/// A call opened: 12px left offset beside the step's side line, 2 over, 6 under, the call and what came back 6 apart; each a section, its
-/// parts 6 apart (what came back 4).
+/// A call opened: 2 over, 6 under, the call and what came back 6 apart; multi-part or structured steps sit in a faint
+/// rounded container (`tool_body_card`) so each expanded step's start and end are clear without a second vertical line.
 // kept across runs: a value (no field of it changes)
-let tool_body_box : @ui.Style = @ui.css("w=Full pl=S3 pt=S0_5 pb=S1_5 gap=S1_5")
+let tool_body_box : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5 gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_body_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, px=S3, gap=S1_5, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_body_card_red : @ui.Style = tool_body_card.then(@ui.css("border=B1 border_color=Danger"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3183,7 +3274,19 @@ let tool_section : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
+let tool_section_card : @ui.Style = @ui.css("w=Full gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
 let tool_result_box : @ui.Style = @ui.css("w=Full pt=S1 gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_result_card : @ui.Style = @ui.css("w=Full pt=S1 gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_result_card_red : @ui.Style = @ui.css("w=Full pt=S1 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3234,6 +3337,10 @@ let tool_dispatch_target_words_hot : @ui.TextStyle = @ui.text_style(size=Caption
 /// failed.
 // kept across runs: a value (no field of it changes)
 let tool_box : @ui.Style = @ui.style(w=Full, py=S2, px=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_box_in_card : @ui.Style = @ui.style(w=Full, py=S1_5, px=S2_5, radius=@sf.custom_field_r, bg=@sf.faint_ground)
 
 ///|
 // kept across runs: a value (no field of it changes)
