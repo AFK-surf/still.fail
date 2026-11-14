@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [85119b95f](https://github.com/AFK-surf/monoid/commit/85119b95f7981afd5f533ba68cfb699dd93b819c) core: farview.view and farview.send carry a Farvie | 2.01 | 2.76 | 11.86 | 31.75 | 44.19 | 28.37 | 55.56 | 98.03 | 110.99 |
 | [d9843e2c7](https://github.com/AFK-surf/monoid/commit/d9843e2c718d73954fe8a6c17ee1540040b23421) mbui app: switches_still's tests 52-68 cut at 60,  | 2.01 | 2.76 | 11.86 | 31.73 | 44.19 | 28.34 | 55.51 | 97.99 | 112.55 |
 | [ccb596e15](https://github.com/AFK-surf/monoid/commit/ccb596e15dff188924f64bfc807e284ead6a315a) mbui film, app: a picture says every rule its fram | 2.01 | 2.76 | 11.86 | 31.73 | 43.86 | 28.34 | 55.51 | 97.24 | 106.15 |
 | [dde6fa102](https://github.com/AFK-surf/monoid/commit/dde6fa102d3d2d63bbacb78ed807d2a66b06ba40) mbui app: the chat's page made as nodes has its 对话 | 2.01 | 2.76 | 11.86 | 31.73 | 43.86 | 28.34 | 55.51 | 97.24 | 106.15 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a45d412ed](https://github.com/AFK-surf/monoid/commit/a45d412ed392045339548bcb107b4ec086d75a63) mbui, core: a chat opens with its cards answered,  | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [fe8ed4ae2](https://github.com/AFK-surf/monoid/commit/fe8ed4ae2ec03b714b2e8bf0bf819a09875f07c5) mbui: the window's tree's nodes put among the fram | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [3e0ee8e1e](https://github.com/AFK-surf/monoid/commit/3e0ee8e1e87a03d245e66661a9c2e77a60f7bd2d) station: presets and starred models kept as record | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
-| [2e2176c2c](https://github.com/AFK-surf/monoid/commit/2e2176c2c1a853c09045c023068842d4dfa8493c) lock: a code typed before its device's answer is t | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [85119b95f](https://github.com/AFK-surf/monoid/commit/85119b95f7981afd5f533ba68cfb699dd93b819c) core: farview.view and farview.send carry a Farvie | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.28 |
 | [d9843e2c7](https://github.com/AFK-surf/monoid/commit/d9843e2c718d73954fe8a6c17ee1540040b23421) mbui app: switches_still's tests 52-68 cut at 60,  | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.28 |
 | [ccb596e15](https://github.com/AFK-surf/monoid/commit/ccb596e15dff188924f64bfc807e284ead6a315a) mbui film, app: a picture says every rule its fram | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.28 |
 | [dde6fa102](https://github.com/AFK-surf/monoid/commit/dde6fa102d3d2d63bbacb78ed807d2a66b06ba40) mbui app: the chat's page made as nodes has its 对话 | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.69 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a45d412ed](https://github.com/AFK-surf/monoid/commit/a45d412ed392045339548bcb107b4ec086d75a63) mbui, core: a chat opens with its cards answered,  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.13 |
 | [fe8ed4ae2](https://github.com/AFK-surf/monoid/commit/fe8ed4ae2ec03b714b2e8bf0bf819a09875f07c5) mbui: the window's tree's nodes put among the fram | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.13 |
 | [3e0ee8e1e](https://github.com/AFK-surf/monoid/commit/3e0ee8e1e87a03d245e66661a9c2e77a60f7bd2d) station: presets and starred models kept as record | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
-| [2e2176c2c](https://github.com/AFK-surf/monoid/commit/2e2176c2c1a853c09045c023068842d4dfa8493c) lock: a code typed before its device's answer is t | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
