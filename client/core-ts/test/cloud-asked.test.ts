@@ -193,3 +193,20 @@ test("a device's dials at once ask the cloud for its credential once", async () 
   assert.deepEqual(asked(s.host, from), { "POST /v1/workspaces/ws/credential": 1 });
   s.core.close();
 });
+
+test("an account its `/v1/me` says is no operator reads no operator's lists as its socket opens; one a cloud from before says nothing of, as before", async () => {
+  const opened = async (me: Record<string, unknown> | undefined) => {
+    const s = await started(undefined, 0, undefined, (x) => {
+      x.cloud.me = me;
+    });
+    await s.host.time.pass(5_000, 100);
+    const asked = s.host.requests.filter((r) => r.url.startsWith("https://stillfail.test/v1/admin/")).length;
+    s.core.close();
+    return asked;
+  };
+  const none = await opened({ operator: false });
+  const before = await opened(undefined);
+  console.log(`OPERATOR none ${none}, before ${before}`);
+  assert.equal(none, 0, "no operator: nothing of /v1/admin asked");
+  assert.ok(before >= 1, "a cloud from before: /v1/admin/me asked as before");
+});

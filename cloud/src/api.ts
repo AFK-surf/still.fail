@@ -6,7 +6,7 @@
 // routes to (index.ts).
 import { consoleAdmin, isAdmin } from "./admin";
 import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
-import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
+import { adminOrigins, betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { guestOf } from "./guests";
 import type { Live } from "./account";
 import { EVENTS_PROTOCOLS, ROLES, sockets, type AddedMail, type Role } from "./directory";
@@ -273,7 +273,10 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const role = (): Role => (ROLES.includes(input.role as Role) ? (input.role as Role) : "member");
 
   if (path === "/v1/me" && method === "GET") {
-    return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true) }));
+    // (`operator`: whether `/v1/admin/me` would answer this same request (on the console's host, index.ts), so that a device reads the operator's lists only
+    // where it is one: every device of everyone asked it at every open of its events socket, the locks' end to end,
+    // 2026-11-15)
+    return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true), operator: adminOrigins(env).includes(new URL(request.url).origin) && (await consoleAdmin(request, env, claims.email)) }));
   }
   // The person's own lock, which the cloud keeps and carries but does not decide (personal-lock.ts).
   if (path === "/v1/me/personal-lock") {

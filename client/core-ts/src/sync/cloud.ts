@@ -156,7 +156,9 @@ export class CloudSync {
       if (this.#core.provider.supports("feedback")) for (const id of ids) if (this.#core.workspaces.owner(id) === sub) this.feedbackChanged(id);
       // What only some providers have: login sessions, an operator's lists.
       if (this.#core.provider.supports("loginSessions")) scheduler.enqueue("cloud", `sessions/${sub}`, Priority.background, this.#loginSessions(sub));
-      if (this.#core.provider.supports("admin")) scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+      // (an operator's lists only where its `/v1/me` does not say it is none: a cloud from before says nothing)
+      if (this.#core.provider.supports("admin") && pointer(me, "/operator") !== false) scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+      else this.#admins.delete(sub);
     });
   }
 
