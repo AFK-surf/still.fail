@@ -2048,7 +2048,11 @@ export class Views implements Owner {
         const slackUsers = arr(get(part, "slackUsers")).filter((u): u is string => typeof u === "string");
         this.local.settle(s.address, data.rowsRev(s.address));
         const listed = arr(read.ok);
-        const asked = this.local.pendingRows(s.address);
+        const asked = [...this.local.pendingRows(s.address), ...this.local.restoringRows(s.address).filter((row) => {
+          const thread = get(row, "thread");
+          const session = get(row, "session");
+          return (typeof thread === "number" ? data.chatOfThread(s.address, thread) : data.chatOfSession(s.address, String(session ?? ""))) === undefined;
+        })];
         // What failed to go in the station's chats, once for the list (looked up for each row, 1400 of them, on every
         // change of one: 2026-11-08).
         const failed = this.local.failedOutboxes(s.address);

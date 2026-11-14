@@ -1,6 +1,6 @@
 // What a person did here that their station has not confirmed yet (rules 3 and 4): messages on
 // their way (the outbox), chats asked for and not made (pending), messages to an agent before it has a chat (firsts),
-// chats renamed, pinned, kept or archived (changing, archiving). Each is held here and kept in its account's database
+// chats renamed, pinned, kept or archived (changing). Each is held here and kept in its account's database
 // (tables outbox, pending, first, changing: written again on their own if the rest could not be), so it shows at once,
 // survives a restart, and goes on where it was; the views lay it over what the stations hold. Nothing here waits on
 // the network: the calls that change it answer as their station has it, the views show it meanwhile.
@@ -60,6 +60,8 @@ export type Change = {
   row: Record<string, unknown>;
   /// Out of the archive (or into it): what its page says meanwhile.
   archived: boolean | null;
+  /// The last listed row, while an undo waits for its station to list it again.
+  restore?: J;
   /// Done: how often its station's rows had changed when it answered (`undefined`: not answered); shown so until they
   /// change again.
   done?: { rev: number };
@@ -71,7 +73,6 @@ type LocalChange =
   | { kind: "pending"; key: string }
   | { kind: "first"; station: string; key: string }
   | { kind: "changing"; station: string }
-  | { kind: "archiving" }
   | { kind: "letGo"; station: string; thread: number }
   /// A vault request decided here (`request`): update its card in the chat and the pending list.
   | { kind: "vault"; request: string };
@@ -97,8 +98,8 @@ export class Local {
   readonly #made = new Map<string, string>();
   readonly #firsts = new Map<string, First>();
   readonly #changing: Change[] = [];
-  /// Chats on their way into the archive from here: station, thread (none: an agent with no chat), session.
-  readonly #archiving: [string, number | null, string][] = [];
+  /// Recent rows archived here, for the undo offered by the app after their station has dropped them from its list.
+  readonly #archiveRows = new Map<string, J>();
   /// Recent outbox-to-message identities (the UI may skip the acknowledgement frame), by `station␁thread␁seq`.
   readonly delivered = new Map<string, string>();
   /// Files put up from here (from this device's bytes, or while their message waited), by the name the station keeps
@@ -114,8 +115,8 @@ export class Local {
   readonly #vaultDecided: { request: string; outcome: VaultOutcome }[] = [];
   /// What reads each kind of it, by what it is of (reactive.ts Marks): made again as that changes. A chat's outbox and
   /// what is let go of in it by `station thread`; a chat asked for by its key; an agent's first messages by `station key`;
-  /// a vault request by its id; the changes of a station by the station; the archiving, all of it.
-  readonly #seen = { outbox: new Marks(), pending: new Marks(), first: new Marks(), letGo: new Marks(), vault: new Marks(), archiving: new Marks(), changing: new Marks() };
+  /// a vault request by its id; the changes of a station by the station.
+  readonly #seen = { outbox: new Marks(), pending: new Marks(), first: new Marks(), letGo: new Marks(), vault: new Marks(), changing: new Marks() };
   onMade: (station: string, key: string) => void = () => {};
 
   constructor(data: Data, now: () => number) {
@@ -152,7 +153,6 @@ export class Local {
       case "first": return seen.first.touch(`${change.station} ${change.key}`);
       case "letGo": return seen.letGo.touch(`${change.station} ${change.thread}`);
       case "vault": return seen.vault.touch(change.request);
-      case "archiving": return seen.archiving.touch();
       case "changing": return seen.changing.touch(change.station);
     }
   }
@@ -676,31 +676,31 @@ export class Local {
 
   // ── archiving and changing ──
 
-  archiving(station: string, thread: number | null, session: string, on: boolean): void {
-    if (on) this.#archiving.push([station, thread, session]);
-    else {
-      const i = this.#archiving.findIndex(([s, t, k]) => s === station && t === thread && k === session);
-      if (i >= 0) this.#archiving.splice(i, 1);
-    }
-    this.#changed({ kind: "archiving" });
-  }
-
   /// Whether nothing done here changes how a station's rows show (none of its chats being archived or changed from here):
   /// a list's rows made before are then as they would be made again (views.ts keptBetween).
   rowsQuiet(station: string): boolean {
-    this.#seen.archiving.read();
     this.#seen.changing.read(station);
-    return !this.#archiving.some(([s]) => s === station) && !this.#changing.some((c) => c.station === station);
+    return !this.#changing.some((c) => c.station === station);
   }
 
   beingArchived(station: string, row: J): boolean {
-    this.#seen.archiving.read();
-    return this.#archiving.some(([s, thread, session]) => s === station && (thread !== null ? get(row, "thread") === thread : get(row, "session") === session));
+    const thread = typeof get(row, "thread") === "number" ? row.thread : null;
+    const session = typeof get(row, "session") === "string" ? row.session : null;
+    return this.archivedChanging(station, thread, session) === true;
   }
 
   changing(station: string, thread: number | null, session: string, row: Record<string, unknown>, archived: boolean | null): number {
     const id = ++this.#changes;
-    const change: Change = { id, station, thread, session, row, archived };
+    const key = join([station, thread === null ? `s:${session}` : `t:${thread}`]);
+    if (archived === true) {
+      const listed = thread === null ? this.#data.chatOfSession(station, session) : this.#data.chatOfThread(station, thread);
+      const remembered = this.archivedChanging(station, thread, session) === false ? this.#archiveRows.get(key) : undefined;
+      this.#archiveRows.delete(key);
+      if (listed !== undefined || remembered !== undefined) this.#archiveRows.set(key, listed ?? remembered);
+      if (this.#archiveRows.size > 32) this.#archiveRows.delete(this.#archiveRows.keys().next().value!);
+    }
+    const restore = archived === false ? this.#archiveRows.get(key) : undefined;
+    const change: Change = { id, station, thread, session, row, archived, ...(restore === undefined ? {} : { restore }) };
     this.#changing.push(change);
     this.#data.putLocal(CHANGING, station, String(id), change);
     this.#changed({ kind: "changing", station });
@@ -723,7 +723,8 @@ export class Local {
     this.#changed({ kind: "changing", station: change.station });
   }
 
-  /// Lets go of what is done that its station's rows have had since (they changed after it answered).
+  /// Lets go of what is done that its station's rows have had since (they changed after it answered). A restore's
+  /// saved row stays until the station lists that chat, even if an unrelated row changed in the meantime.
   settle(station: string, rev: number): void {
     for (let i = this.#lettingGo.length - 1; i >= 0; i--) {
       const l = this.#lettingGo[i];
@@ -732,7 +733,10 @@ export class Local {
     for (let i = this.#changing.length - 1; i >= 0; i--) {
       const c = this.#changing[i];
       if (c.station !== station || c.done === undefined) continue;
-      if (c.done.rev !== rev) {
+      const listed = c.archived === null ? undefined : c.thread === null
+        ? this.#data.chatOfSession(station, c.session)
+        : this.#data.chatOfThread(station, c.thread);
+      if (c.done.rev !== rev && (c.archived !== false || listed !== undefined)) {
         this.#changing.splice(i, 1);
         this.#data.putLocal(CHANGING, c.station, String(c.id), undefined);
       }
@@ -779,13 +783,24 @@ export class Local {
     return this.archivedChanging(station, thread, session) === false;
   }
 
+  /// Rows brought back by an undo, until the station lists them again.
+  restoringRows(station: string): J[] {
+    this.#seen.changing.read(station);
+    const rows = new Map<string, J>();
+    for (const c of this.#changing) {
+      if (c.station !== station || c.archived !== false || c.restore === undefined ||
+          this.archivedChanging(station, c.thread, c.session) !== false) continue;
+      rows.set(c.thread === null ? `s:${c.session}` : `t:${c.thread}`, c.restore);
+    }
+    return [...rows.values()];
+  }
+
   /// The threads and sessions of a station's chats whose rows show otherwise here than their records say: changed or
   /// being archived from here (asChanging, beingArchived, restoring: matched by these), or made from a chat asked for
   /// here (pendingKey: its key here, by its session). What reads rows by their columns reads these apart, by their keys,
   /// as their lists read them (views.ts #chats, archive.ts). More than those may be named, never fewer.
   overlaid(station: string): { threads: number[]; sessions: string[] } {
     this.#seen.changing.read(station);
-    this.#seen.archiving.read();
     this.#seen.pending.read();
     const threads: number[] = [];
     const sessions: string[] = [];
@@ -794,7 +809,6 @@ export class Local {
       else if (session !== null) sessions.push(session);
     };
     for (const c of this.#changing) if (c.station === station) add(c.thread, c.session);
-    for (const [s, thread, session] of this.#archiving) if (s === station) add(thread, session);
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station || !chat.made) continue;
       sessions.push(chat.made[0], key);
