@@ -17,7 +17,7 @@ import { key, signed } from "../../../station/test/lock-world-sim.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, shortCode } from "../src/lock.ts";
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
-import { added, enrolled, held, inForceOf, lockView, outOf, read, roster } from "../src/views/lock.ts";
+import { added, enrolled, held, inForceOf, lockView, offOwnLock, outOf, read, roster } from "../src/views/lock.ts";
 import * as format from "../src/format.ts";
 import { hooks } from "../src/core/execute.ts";
 import { dialer, ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
@@ -614,6 +614,18 @@ test("the new device whose person has no log of their own: it begins one as it a
   const log = hello.log ?? [];
   assert.equal(log.length > 0 && entryHash(log[0]!), entryHash(personal.entries("s1")[0]!), "its hello carries the log begun");
   assert.equal((log[0]?.body as { sub?: string; device?: { key?: string } } | undefined)?.device?.key, personal.keyId(), "this device's key its genesis's");
+});
+
+// A device not let in where the chain moved is given no state, so what it knows of whom to ask is its person's own log
+// (`standing`): one it is not on is what it joins, as before a move where they bound it (views/lock.ts `offOwnLock`). Its
+// page says so (`me.ownLock`, the pair shown being that log's) and its refusal names its own trusted devices alone
+// (2026-11-14, the locks' end to end after #6102: J's page never said `ownLock`, and its refusal sent it to an admin too).
+test("the new device whose person has a log it is not on, where the chain moved: its page says it joins that log (so its refusal names its own trusted devices, no admin)", async () => {
+  const w = await asking("other");
+  const lock = await w.r.watch({ topic: "lock", workspace: "ws" });
+  const me = (await lock()).me;
+  assert.equal(me?.ownLock, true, `joins its own log: ${JSON.stringify(me)}`);
+  assert.equal(offOwnLock(w.inner, "ws"), true);
 });
 
 test("the new device whose person has a log it is not on: nothing asked in the moved workspace, no log begun; once on that log (the personal exchange) it asks there with it, nobody asked", async () => {

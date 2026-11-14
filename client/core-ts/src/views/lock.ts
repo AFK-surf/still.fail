@@ -1407,6 +1407,14 @@ export function offOwnLock(inner: Inner, ws: string): boolean {
   const sub = inner.workspaces.owner(ws);
   const h = held(inner, ws);
   if (sub === null || !h?.head || !inner.host.appKeys) return false;
+  // Where the chain moved a device not let in is given no state to read whom it names: its person having a log of their
+  // own it is not on (`standing`, of their stations' GET /lock/person) is all it knows, and is enough, as only their own
+  // app devices put it on that log and so let it in (2026-11-14, the locks' end to end after #6102: its page and refusal
+  // said to ask its trusted devices or an admin, and nothing on it said its request was its own log's).
+  if (movedHere(inner, ws) && !stateOf(inner, ws, h.entries).devices.has(part(inner, ws).base ?? bases.get(inner) ?? "")) {
+    const standing = inner.adb.personal().standing(sub);
+    if (standing !== "none" && standing !== "member") return true;
+  }
   return stateOf(inner, ws, h.entries).persons.has(sub) && !onBoundPerson(inner, ws);
 }
 
@@ -2771,8 +2779,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // refused (the stations let their app devices in on that lock alone), so it asks to join that one instead, the
         // same code shown on a device on it (2026-11-10: a new phone approved here went on being refused, 「已经批过了啊」).
         // (where the chain moved, its person having a log of their own this device is not on: so too, `waitingIn`)
-        const standing = inner.adb.personal().standing(sub);
-        if (offOwnLock(inner, c.workspace) || (movedHere(inner, c.workspace) && inner.host.appKeys === true && standing !== "none" && standing !== "member")) {
+        if (offOwnLock(inner, c.workspace)) {
           const sub = inner.workspaces.owner(c.workspace);
           if (sub !== null) return yield* inner.adb.run({ kind: "personalJoin", sub });
         }
