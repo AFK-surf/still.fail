@@ -125,6 +125,13 @@ yet and you can add one, add it.
   what it holds keeps to its foot all the way, cut at its top (flex Style's `come_foot`; an old view hosted in it too):
   a composer grows from its foot, what is over it going up with it as one (`src/view/list_foot_keeps_foot_test.mbt`;
   the coordinator of the migration, 2026-11-14).
+- A page's list holds what is read where it is on the screen, in every frame (the owner's: what the reader has
+  before their eyes does not move): a block marks where what is read in it starts (`View::read_from`, a message's
+  words under its head line), and the list holds the first key whose marked start is at or under what covers its top
+  and over its pinned foot, by that start, kept while it shows till the hand moves the list or it is asked elsewhere;
+  what is over that start gives and takes its room upward, its own growth goes down (`src/view/list_read_from.mbt`).
+  A list that marks none is held by the block the top of what shows lies in, by its top, as before (the coordinator of
+  the migration, 2026-11-14).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.
