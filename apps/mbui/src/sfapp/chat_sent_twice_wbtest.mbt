@@ -143,8 +143,13 @@ fn st_faults(frames : Array[StFrame], second : Int, at : String) -> Array[String
   }
   // (the agent's line against the composer's top, frame by frame from the one before the press, where it shows: it may
   // still be on its own way in, from the first words; it never goes down toward the composer by more than half a
-  // device pixel, and never steps: no frame moves it more than twice what the frames beside it do, past half a device
-  // pixel)
+  // device pixel, and never steps: no frame moves it more than twice what the frames beside it do at their pace over
+  // this frame's time, past one pixel of the rows' grid (the host's pixels its rows rest on), half a device pixel where
+  // that is less. Weighed by time: a frame due a few ms after another (a moment the timeline has) shows a row on the
+  // grid crossing no pixel, and is no neighbour of a whole pixel's step a display frame makes; till 2026-11-14 each was
+  // counted a neighbour at any distance and the step against half a pixel of the Tester's 2, less than 大屏's grid's
+  // one: the coordinator of the migration)
+  let grid_px = dmax(st_half_px, 1.0 / @ui.view_tree().unwrap().rows_grid_now())
   let lines : Array[(Int, Double)] = []
   for i in second..<frames.length() {
     match (frames[i].line, frames[i].foot_top) {
@@ -162,11 +167,22 @@ fn st_faults(frames : Array[StFrame], second : Int, at : String) -> Array[String
     most = dmax(most, d)
     if j > 0 {
       let step = (d - lines[j - 1].1).abs()
+      let at = fn(k : Int) { frames[lines[k].0].at }
+      let dt = at(j) - at(j - 1)
+      // (the pace of the frames beside, over this frame's time)
+      let pace = fn(k : Int) {
+        let span = at(k) - at(k - 1)
+        if span > 0.0 {
+          (lines[k].1 - lines[k - 1].1).abs() / span * dt
+        } else {
+          0.0
+        }
+      }
       let by = dmax(
-        if j > 1 { (lines[j - 1].1 - lines[j - 2].1).abs() } else { 0.0 },
-        if j + 1 < lines.length() { (lines[j + 1].1 - d).abs() } else { 0.0 },
+        if j > 1 { pace(j - 1) } else { 0.0 },
+        if j + 1 < lines.length() { pace(j + 1) } else { 0.0 },
       )
-      if step > 2.0 * by + st_half_px {
+      if step > 2.0 * by + grid_px {
         out.push("\{here}: the agent's line stepped \{step} against the composer's top, \{by} the frames beside")
       }
     }
