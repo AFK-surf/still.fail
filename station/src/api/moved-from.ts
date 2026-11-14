@@ -7,10 +7,10 @@
 // told to update where a chain moved, mesh/serve.ts) and by the core (a handover waits for every app device the chain
 // lets in to run one, client/core-ts src/lock-handover.ts): nothing else here, so the core takes this file as it is.
 //
-// 9170: a little above the commit on main that brings a carried member's own `bind` and the rule between two of them to
-// the station and the core (rules/src/lock/roster.mbt `binds_of`; main stood at 9141 as it was set, 2026-11-14; 9100
-// before, for `state4_moved` alone, under which no app moved a chain: they were held), never below it: a build from that
-// commit up to 9170 has this code and is taken as not able, so it moves nothing itself (views/lock.ts `heldBack` holds
-// this device's own build too) and waits to be updated past it, which costs a few hours once; a number under that
-// commit would take a build without this code as able.
-export const MOVED_FROM_BUILD = 9170;
+// 9144: the build after the commit on main that brings a carried member's own `bind` and the rule between two of them to
+// the station and the core (rules/src/lock/roster.mbt `binds_of`; #6217, main's build 9143), never below it: a number
+// under that commit would take a build without this code as able. (9100 before, for `state4_moved` alone, under which
+// no app moved a chain: they were held; 9170 for the eighteen commits after the hold went, set before #6217's build was
+// known, which kept the builds that took the hold out, 9153 on, from moving anything until main reached it: a wait
+// nothing needed.) A build from 9144 to 9152 reads a moved chain whole and still holds its own back.
+export const MOVED_FROM_BUILD = 9144;
