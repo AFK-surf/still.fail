@@ -911,3 +911,28 @@ pub fn update_on_release(c : @ui.Ctx, src : Source) -> Unit {
     })
   }
 }
+
+///|
+/// The app's newer build as a row of a list of updates, the stations' beside it (sfpages station_updates.mbt: one
+/// dialog for both where both wait, the user, 2026-11-14 「带 app 更新呢？」): None while none is to be shown there; else
+/// what its row says under the app's name, as 关于's row says it (有新版本 0.1.1 · its size, 正在下载 … · 40%, 重启以更新到
+/// …), how far while it comes, and what its press says ("": nothing to press, under way). Pressed: update_go.
+pub fn update_as_row() -> (String, Double??, String)? {
+  let said = fn() {
+    let s = update_stands()
+    if s.note == "" {
+      s.label
+    } else {
+      s.label + " · " + s.note
+    }
+  }
+  match update_now() {
+    Offered(_, ..) | Failed(_, _) => Some((said(), None, @sf.t("web-main.versions.update")))
+    Coming(_, part) => Some((said(), Some(part), ""))
+    Ready(_, away~) if !away => Some((said(), None, @sf.t("desktop.update.restart")))
+    Ready(_, ..) => Some((said(), None, ""))
+    Allow(_) => Some((said(), None, @sf.t("web-main.versions.update")))
+    Installing(_) => Some((said(), None, ""))
+    _ => None
+  }
+}

@@ -150,7 +150,7 @@ test("a_chat_opens_the_same_on_a_database_from_before_its_part_and_while_a_core_
   // Brought to it as it opens: the column added, the triggers and every part made again, by SQLite.
   const anew = await chatAnew(host, base);
   assert.deepEqual(sql.all("SELECT count(*), count(chat) FROM station_part")[0], [5, 5]);
-  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly, profiles, profiled)"));
+  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly, profiles, profiled, software)"));
   assert.deepEqual([anew.made.overviewsRead, anew.made.overviews], [0, 0]);
   assert.deepEqual(anew.value, kept.value);
   // A core from before it opening the database meanwhile (a web page still open from before) keeps the parts by its

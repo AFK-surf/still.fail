@@ -247,12 +247,23 @@ export const overviewProfiledOf = (j: string) => `CASE WHEN json_type(${j}) = 'o
       WHERE o.key IN ('profiles', 'sharing', 'mesh', 'machineLogins')))
     END`;
 
+/// The station's own software of an overview, the JSON `j` (its `updates`' entry of id `station`), as SQL: what the
+/// workspace's offer of its stations' newer releases reads (views/station-updates.ts): what runs and what is out (of
+/// which channel), whether it updates itself, can be updated from here and how its update goes, each as the overview has it (null where
+/// it says none); NULL where it lists no such entry. Kept in a column of its own (`station_part.software`): read of
+/// the overview, every station's whole for a few fields, as the sidebar's offer stands on every screen.
+export const overviewSoftwareOf = (j: string) => `(SELECT json_object('version', u.value -> '$.version', 'latest', u.value -> '$.latest',
+      'newer', u.value -> '$.newer', 'channel', u.value -> '$.channel', 'auto', u.value -> '$.auto', 'updatable', u.value -> '$.updatable', 'state', u.value -> '$.state',
+      'percent', u.value -> '$.percent', 'progress', u.value -> '$.progress', 'message', u.value -> '$.message')
+    FROM json_each(CASE json_type(${j}, '$.updates') WHEN 'array' THEN ${j} ELSE '{"updates":[]}' END, '$.updates') AS u
+    WHERE u.type = 'object' AND json_type(u.value, '$.id') = 'text' AND json_extract(u.value, '$.id') = 'station' LIMIT 1)`;
+
 /// The fields of an overview the workspace's profiles read (overviewProfiledOf), for where they are made of an overview
 /// in the core (one shown with what is being done to it here: data.ts overviewProfiled).
 export const OVERVIEW_PROFILED = ["profiles", "sharing", "mesh", "machineLogins"] as const;
 
 /// Each column of an overview's part (`station_part`) and how SQLite makes it of the overview's JSON.
-export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overviewPartOf], ["row", overviewRowOf], ["chat", overviewChatOf], ["formerly", overviewFormerlyOf], ["profiles", overviewProfilesOf], ["profiled", overviewProfiledOf]];
+export const PART_COLUMNS: [string, (j: string) => string][] = [["part", overviewPartOf], ["row", overviewRowOf], ["chat", overviewChatOf], ["formerly", overviewFormerlyOf], ["profiles", overviewProfilesOf], ["profiled", overviewProfiledOf], ["software", overviewSoftwareOf]];
 /// The revision of a column of the part (`<column>_rev`), beside it: raised by the triggers as its text changes, so that
 /// a write is told what of the part changed by a few numbers, the texts not read (account.ts #overviewWritten). NULL
 /// where no trigger of this core counted it (a row a core that knows nothing of them put in).

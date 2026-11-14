@@ -1335,6 +1335,13 @@ export class Data {
     return this.of(station)?.overviewFormerly(station);
   }
 
+  /// A station's own software as its overview lists it (account.ts overviewSoftware), kept beside it: read in a
+  /// computed, it is made again only as that changes.
+  overviewSoftware(station: string): unknown {
+    this.#readQuery({ topic: "$overview-software", station });
+    return this.of(station)?.overviewSoftware(station);
+  }
+
   /// How the views make a declaration's values (db/kept.ts), for each database to make them as their records are
   /// written and keep them beside them.
   makes<V>(d: Kept<V>, maker: Maker<V> | null): void {

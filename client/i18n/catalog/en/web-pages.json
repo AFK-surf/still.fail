@@ -934,6 +934,7 @@
   "web-pages.stations.offline": "Offline",
   "web-pages.stations.software": "Software",
   "web-pages.stations.softwareOffline": "The station is offline. Updates appear once it connects.",
+  "web-pages.stationUpdates.app": "This app",
   "web-pages.stations.settingsOffline": "The station is offline. Its settings appear once it connects.",
   "web-pages.stations.uses": "{name} uses",
   "web-pages.stations.total": "{total} total",

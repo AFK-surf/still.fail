@@ -312,7 +312,8 @@ pub fn open_fixture_mode(mode : String) -> Unit {
     @sffixture.fixture_update_goes("0.1.5640", "ready", away=false)
   }
   // the same build's first two stages there: offered (有新版本), coming (40%)
-  if mode == "home-update-offered" {
+  // (and the stations' newer releases beside it: one key, the dialog of both, sfpages station_updates.mbt)
+  if mode == "home-update-offered" || mode == "home-station-updates-app" || mode == "station-updates-app" {
     @sffixture.fixture_update("0.1.5640")
   }
   if mode == "home-update-coming" {
@@ -428,6 +429,11 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   }
   // a new workspace over Home: nothing typed yet; and named, an invite code typed that still.fail cloud found wrong
   // (what is wrong with it under its field)
+  // the stations' newer releases waiting for this person: their key over Home (home-station-updates); their dialog open
+  // over it (station-updates)
+  if mode == "station-updates" || mode == "station-updates-app" {
+    @sfpages.station_updates_dialog(src, settings_core(src, { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "lin@example.com" }), "ws1")
+  }
   if mode == "new-workspace" {
     @sfpages.new_workspace_put(src, name="", code="", error_code="")
   }

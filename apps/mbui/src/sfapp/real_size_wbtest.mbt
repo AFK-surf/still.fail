@@ -46,7 +46,7 @@ let real_size_windows : Array[(String, Double, Double, Int, String)] = [
 /// `chatRow`, the stations, the workspace): the same
 /// shell on every screen, so their changes are given on one, Home (or the first screen that reads a way Home does not).
 let real_size_shell_ways : Array[String] = [
-  "chats", "chatRow", "workspaceMarks", "lock", "stations", "longJobs", "workspace",
+  "chats", "chatRow", "workspaceMarks", "lock", "stations", "longJobs", "workspace", "stationUpdates",
 ]
 
 ///|

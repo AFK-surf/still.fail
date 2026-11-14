@@ -1854,7 +1854,7 @@ test("a_database_from_before_the_rows_part_and_verdicts_is_brought_to_them_and_l
   assert.deepEqual(parts(), ["ws/a object", "ws/b object", "ws/c object"]);
   // (what the chat list reads, and an older core reads, as it was)
   assert.deepEqual(sql.all("SELECT address, part FROM station_part ORDER BY address"), partsBefore);
-  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly, profiles, profiled)"));
+  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly, profiles, profiled, software)"));
   assert.equal(again.made.overviewsRead, 3, "read only to be judged");
   assert.deepEqual(rowsOf(again.list), rowsOf(first.list));
   await again.t.host.time.pass(100);
