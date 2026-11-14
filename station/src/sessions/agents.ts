@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import { Context, Effect, Layer, Schedule, Stream, SubscriptionRef } from "effect";
 import { Fibers, wall } from "../ops/fibers.ts";
-import { ClaudeDriver } from "../agents/claude.ts";
+import { CLAUDE_TOOL_LOADED, ClaudeDriver } from "../agents/claude.ts";
 import { readSiteInstructions } from "../agents/instructions.ts";
 import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
@@ -18,6 +18,7 @@ import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { HermesDriver } from "../agents/hermes.ts";
 import { AGY_TOOL_BUDGET, AgyDriver } from "../agents/agy.ts";
+import { type RuntimeKind, runtimeKind } from "../agents/runtime.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
@@ -47,7 +48,7 @@ import { jobTools } from "../tools/jobs.ts";
 import { forwardTools } from "../tools/forward.ts";
 import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
-import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
+import { type Listing, McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { workspaceSizeTools } from "../tools/workspace-size.ts";
 import { relayTools } from "../tools/relays.ts";
@@ -89,6 +90,13 @@ import { type PageBase, sessionPage } from "./page.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
+
+/// What a runtime needs of its sessions' list of tools (tools/mcp.ts `Listing`), each by what was measured of it
+/// (agents/agy.ts, agents/claude.ts); one not named here is declared every tool as it is.
+const LISTINGS: Partial<Record<RuntimeKind, Listing>> = {
+  agy: { budget: AGY_TOOL_BUDGET },
+  claude: { loaded: CLAUDE_TOOL_LOADED },
+};
 
 /// How often the old sandbox-name lookup is looked for, to take it down (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
@@ -552,12 +560,16 @@ export const AgentsLive = (control: Control) =>
         return ws === null || cloud.membership(ws) !== null;
       };
       // The agents' tools, and those the station's parts add as they are made (parts.ts).
-      // A runtime that declares only so many bytes of tools to its model is given those that fit (Antigravity CLI).
+      // A runtime that declares only so many bytes of tools to its model is given those that fit (Antigravity CLI); one
+      // that keeps tools back until its model searches for them is told which every turn needs (Claude Code).
       const mcp = new McpEndpoint(
         (token) => store.sessionKeyByToken(token) ?? undefined,
         () => [...tools, ...parts.allTools()],
         (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL),
-        (session) => (store.getSession(session)?.runtime === "agy" ? AGY_TOOL_BUDGET : undefined),
+        (session) => {
+          const runtime = runtimeKind(store.getSession(session)?.runtime);
+          return runtime === undefined ? undefined : LISTINGS[runtime];
+        },
       );
 
       let taken = false;

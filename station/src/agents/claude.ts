@@ -189,6 +189,19 @@ const RENEWED = { CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: "1", CLAUDE_CODE_ENTRYPOINT
 /// A CLI that does not ask (one too old) retries a 401 on its own: past this attempt it is stopped as before.
 const RENEW_ATTEMPTS = 2;
 
+/// What Claude Code reads on a tool of an MCP server's list as "never deferred" (tools/mcp.ts `Listing.loaded`). By
+/// itself it keeps every MCP tool behind its ToolSearch: the first request of a session carries none of the station's
+/// tools, only their names in a reminder, and a turn began with a search for chat_post and chat_state before it could
+/// answer. Observed on 2.1.323, 2026-11-14, in the requests it made to a made-up Messages API, with ENABLE_TOOL_SEARCH
+/// unset as with it true: a tool so marked is in the first request's `tools` whole (description and schema, the mark
+/// itself not sent on), the others stay names, and that request waits for the server's tools/list (one answered 3 s
+/// late was waited for). Not its server-wide `alwaysLoad`: the station's tools together were 73 KB (agents/agy.ts),
+/// which its deferral rightly keeps out of every request. A subagent it starts (its Agent tool; general-purpose and
+/// Explore, same day) is listed as its parent is: the two whole in its first request (10.7 KB as the station declares
+/// them), where it had their names before, and nothing of the station's instructions, which --append-system-prompt
+/// gives the main agent alone: it holds chat_post unsearched, untold how a chat is posted to.
+export const CLAUDE_TOOL_LOADED = Object.freeze({ "anthropic/alwaysLoad": true });
+
 /// What Claude Code brings of its own that a station's chat agent cannot or must not use, kept out of its context (a
 /// fresh session began at 30k tokens, a third of them these; checked on 2.1.289):
 /// - its own scheduling: still.fail's jobs are the station's (stillfail-cron); a wakeup or cron of the process's own

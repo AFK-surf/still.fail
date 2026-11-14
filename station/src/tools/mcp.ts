@@ -29,14 +29,28 @@ export type Tool = {
 
 export type Reply = { status: number; body?: unknown };
 
-/// A tool as tools/list declares it.
-const declared = (t: Tool) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema });
+/// A tool as tools/list declares it; `_meta` only where its session's runtime reads one (`Listing.loaded`).
+export type Declared = { name: string; description: string; inputSchema: unknown; _meta?: Readonly<Record<string, unknown>> };
+const declared = (t: Tool): Declared => ({ name: t.name, description: t.description, inputSchema: t.inputSchema });
 /// What a tool's declaration weighs: its bytes as JSON, as a runtime that budgets its tools measures them closely enough.
 export const weight = (t: Tool) => Buffer.byteLength(JSON.stringify(declared(t)));
 
 /// Declared first, whatever the budget: what every turn needs (posting, ending it, reading the chat) and the work
 /// sent elsewhere.
 export const CORE = ["chat_post", "chat_state", "chat_history", "chat_read", "job_start", "job_log", "job_list", "job_stop", "station_task", "station_file", "skill_read"];
+
+/// What every turn calls: an agent's answer reaches people only through chat_post, and a turn ends with chat_state.
+export const EVERY_TURN = ["chat_post", "chat_state"];
+
+/// What a session's runtime needs of its list of tools; nothing said, the list is every tool as it is.
+export type Listing = {
+  /// How many bytes of tools it declares to its model, for one that drops those beyond (`fitted`).
+  budget?: number;
+  /// The `_meta` by which it declares a tool to its model from the first request, for one that otherwise keeps a
+  /// server's tools back until its model searches for them: put on the EVERY_TURN tools alone, so that a turn does not
+  /// begin with a search for what it must call, and the rest stay as cheap as that runtime made them.
+  loaded?: Readonly<Record<string, unknown>>;
+};
 
 /// The tool that reaches those a budget left undeclared.
 export const INDIRECT = "station_tool";
@@ -109,23 +123,27 @@ export class McpEndpoint {
   private resolve: (token: string) => string | undefined;
   /// Why the OUTWARD tools are refused now for a session, if they are.
   private gate?: (session: string) => string | undefined;
-  /// How many bytes of tools a session's runtime declares to its model, for one that drops those beyond (`fitted`).
-  private budget?: (session: string) => number | undefined;
+  /// What a session's runtime needs of its list, where it needs anything.
+  private listing?: (session: string) => Listing | undefined;
 
-  constructor(resolve: (token: string) => string | undefined, tools: readonly Tool[] | (() => readonly Tool[]), gate?: (session: string) => string | undefined, budget?: (session: string) => number | undefined) {
+  constructor(resolve: (token: string) => string | undefined, tools: readonly Tool[] | (() => readonly Tool[]), gate?: (session: string) => string | undefined, listing?: (session: string) => Listing | undefined) {
     this.tools = typeof tools === "function" ? tools : () => tools;
     this.resolve = resolve;
     this.gate = gate;
-    this.budget = budget;
+    this.listing = listing;
   }
 
-  /// The tools a session is declared: all of them, or those within its runtime's budget and INDIRECT for the rest.
-  private listed(session: string): Tool[] {
+  /// The tools a session is declared: all of them, or those within its runtime's budget and INDIRECT for the rest;
+  /// the EVERY_TURN ones with its runtime's `loaded`, whose bytes its budget counts. A runtime that needs nothing is
+  /// declared them byte for byte as before there was any of this: some validate or weigh what they are given.
+  private listed(session: string): Declared[] {
     const all = this.tools();
-    const budget = this.budget?.(session);
-    if (budget === undefined) return [...all];
-    const { declared, indirect } = fitted(all, budget);
-    return indirect.length === 0 ? declared : [...declared, indirectTool(indirect)];
+    const { budget, loaded } = this.listing?.(session) ?? {};
+    const say = (t: Tool): Declared => (loaded !== undefined && EVERY_TURN.includes(t.name) ? { ...declared(t), _meta: loaded } : declared(t));
+    if (budget === undefined) return all.map(say);
+    const marks = all.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(say(t))) - weight(t), 0);
+    const { declared: fit, indirect } = fitted(all, budget - marks);
+    return (indirect.length === 0 ? fit : [...fit, indirectTool(indirect)]).map(say);
   }
 
   async handle(method: string, authorization: string | undefined, body: Buffer | string, signal?: AbortSignal): Promise<Reply> {
@@ -154,7 +172,7 @@ export class McpEndpoint {
       case "ping":
         return reply({ result: {} });
       case "tools/list":
-        return reply({ result: { tools: this.listed(session).map(declared) } });
+        return reply({ result: { tools: this.listed(session) } });
       case "tools/call": {
         let name = typeof params?.name === "string" ? params.name : "";
         let given = params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {};
