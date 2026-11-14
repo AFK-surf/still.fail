@@ -288,7 +288,7 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
 /// 安全模式有一项升级尚未完成 (the core's `upgrade`, on the owner's device that is to finish it), as the page's list's
 /// blocks (`out`, after what is there): its title a heading, then each line it waits for a block of its own by where it
 /// stands (the core's lines have no ids: six at most and how many more), a row a piece of the section's card, and its
-/// button where only the person's ask is lacking, the card's last piece; none while there is none.
+/// button where only the person's ask is lacking, on a card of its own; none while there is none.
 fn upgrade_keys(l : Json?, out : Array[String]) -> Unit {
   let u = field(l, "upgrade")
   guard u is Some(Object(_)) else { return }
@@ -306,9 +306,10 @@ fn upgrade_keys(l : Json?, out : Array[String]) -> Unit {
 let upgrade_key : String = "upgrade/"
 
 ///|
-/// How many pieces the upgrade's card is made of: its lines, and its button where it has one.
+/// How many pieces the upgrade's card is made of: its lines (its button, where only the ask is lacking, on a card of its
+/// own: the core gives no line with it).
 fn upgrade_pieces(u : Json?) -> Int {
-  items(u, "lines").length() + (if text(u, "askText") != "" { 1 } else { 0 })
+  items(u, "lines").length()
 }
 
 ///|
@@ -409,29 +410,18 @@ fn upgrade_update(core : Core, station : String, sending : @signals.Signal[Bool]
 
 ///|
 /// The upgrade's button where only the person's ask is lacking (`askText`: `lock.handOver`, which asks them once and
-/// finishes it), the card's last piece; a ring on it while that goes.
+/// finishes it), on a card of its own (the core gives no line with it); a ring on it while that goes.
 fn upgrade_ask_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?) -> Unit {
-  let u = fn() { field(lock(), "upgrade") }
-  let label = fn() { text(u(), "askText") }
+  let label = fn() { text(field(lock(), "upgrade"), "askText") }
   let asking = fn() { is_doing(core, ["lock.handOver"], [("workspace", ws())]) }
-  parent.grow(Is(1.0)) |> ignore
-  @sf.card_piece_node(
-    parent,
-    fn() {
-      let n = upgrade_pieces(u())
-      @sf.card_piece_of(n - 1, n)
-    },
-    wide_card=true,
-    wide_gap=sec_rows_gap,
-    fn(k) {
-      k.box(fn(a) {
-        @sf.style_node(a, fn() { sec_actions })
-        @sf.button_node(a, label, fn() { lock_call(core, @signals.untracked(ws), "handOver", @signals.untracked(label), []) }, tone=Primary, busy=asking)
-        |> ignore
-      })
+  @sf.page_card_node(parent, fn(k) {
+    k.box(fn(a) {
+      @sf.style_node(a, fn() { sec_actions })
+      @sf.button_node(a, label, fn() { lock_call(core, @signals.untracked(ws), "handOver", @signals.untracked(label), []) }, tone=Primary, busy=asking)
       |> ignore
-    },
-  )
+    })
+    |> ignore
+  })
 }
 
 ///|
