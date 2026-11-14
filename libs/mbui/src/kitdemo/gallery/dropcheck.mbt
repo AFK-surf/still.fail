@@ -11,6 +11,11 @@
 let drop_check_shown : @signals.Signal[String] = @signals.signal("")
 
 ///|
+/// The window whole, what files are let go on
+// kept across runs: a style, the same every run
+let drop_check_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
 pub fn drop_check_run(c : @ui.Ctx) -> Unit {
   let id = c.id("drop-check")
   c.takes_presses(id)
@@ -32,5 +37,8 @@ pub fn drop_check_run(c : @ui.Ctx) -> Unit {
       |> ignore
     })
   })
-  c.box(id~, w=Fill(1.0), h=Fill(1.0), fn() { c.text(if drop_check_shown.get() == "" { "drop check" } else { drop_check_shown.get() }) |> ignore }) |> ignore
+  c.box(id~, style=drop_check_whole, fn() {
+    c.text(if drop_check_shown.get() == "" { "drop check" } else { drop_check_shown.get() }) |> ignore
+  })
+  |> ignore
 }
