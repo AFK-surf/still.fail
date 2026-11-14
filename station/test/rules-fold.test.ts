@@ -5,7 +5,7 @@
 // whole state, 1.6 s in Node and about 110 s in Hermes for a chain of 1000 members (handover measurements).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type Entry, apply, entryHash, fold } from "../src/cloud/lock.ts";
+import { type Entry, apply, entryHash, fold, lockChain } from "../src/cloud/lock.ts";
 import { ed, signed } from "./lock-moved-world.ts";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../rules/js/rules.js";
@@ -53,4 +53,19 @@ test("apply leaves the state it was given as it was", () => {
   assert.equal(next.members.size, members.length + 1, "the new one has the member");
   // (and the same entry applied again to it gives the same, as the fork choice does for each child of one parent)
   assert.deepEqual([...apply(s, es[3]!, null).members.keys()], [...next.members.keys()]);
+});
+
+/// The map entries the rules copy choosing the active chain of `entries` (the fork choice, chain.mbt `active`).
+function copiedChoosing(entries: Entry[]): number {
+  const before: number = rules.copied_js();
+  const c = lockChain(entries, entryHash(entries[0]!));
+  assert.equal(c.hashes.length, entries.length, "every entry on the chain");
+  return rules.copied_js() - before;
+}
+
+test("the fork choice on a chain without forks, four times as long, copies no more for each of its entries", () => {
+  const short = chain(100), long = chain(400);
+  const a = copiedChoosing(short), b = copiedChoosing(long);
+  console.log(`map entries copied choosing the chain of 101 entries: ${a} (${(a / short.length).toFixed(1)} an entry); 401 entries: ${b} (${(b / long.length).toFixed(1)} an entry)`);
+  assert.ok(b / long.length <= a / short.length, `copies an entry grew with the chain: ${(a / short.length).toFixed(1)} -> ${(b / long.length).toFixed(1)}`);
 });

@@ -35,6 +35,9 @@ pub(all) struct Chain {
 priv struct Log[S] {
   start : (Json) -> S raise LockError
   next : (S, Json) -> S raise LockError
+  /// `next` where the state given is let go (`active`: a parent with one child of one entry, whose state nothing reads
+  /// after but a weight no choice among one looks at): taken into it rather than into a copy of it.
+  next_in : (S, Json) -> S raise LockError
   weight : (S, Json) -> Int
   removal : (S, Json) -> Bool
 }
@@ -151,8 +154,14 @@ fn[S] active(entries : Array[Json], genesis : String, log : Log[S], c : &Crypto)
   while true {
     guard todo.pop() is Some(p) else { break }
     let ks : Array[Node[S]] = []
-    for h in kids.get(p.hash).unwrap_or([]) {
-      if first(h, fn(e) { (log.next)(p.state, e) }) is Some(n) {
+    let hs = kids.get(p.hash).unwrap_or([])
+    // (one child of one entry: the parent's state is read after only for that child's weight and removal, which a
+    // choice among one never compares (`@fork.best` of one is it), so the child is taken into it; a child refused
+    // there leaves the parent a leaf whose state nobody reads. Two or more, or two entries of one hash tried in turn:
+    // each from the parent's state as it was.)
+    let alone = hs.length() == 1 && by_hash.get(hs[0]).unwrap().length() == 1
+    for h in hs {
+      if first(h, fn(e) { if alone { (log.next_in)(p.state, e) } else { (log.next)(p.state, e) } }) is Some(n) {
         nodes[h] = n
         ks.push(n)
         todo.push(n)
@@ -227,6 +236,7 @@ pub fn lock_chain(entries : Array[Json], root : String, votes : Votes, now : Dou
   active(entries, root, {
     start: fn(e) { genesis(e, c) },
     next: fn(s, e) { apply(s, e, now, c) },
+    next_in: fn(s, e) { step(s, e, now, c, true) },
     weight: fn(s, e) {
       match votes {
         Flat => 1
@@ -256,6 +266,7 @@ pub fn person_chain(entries : Array[Json], root : String, c : &Crypto) -> Chain 
       person_step(None, e, sub, c)
     },
     next: fn(p, e) { person_step(Some(p), e, p.sub, c) },
+    next_in: fn(p, e) { person_step(Some(p), e, p.sub, c) },
     weight: fn(_, _) { 1 },
     removal: fn(_, e) { text_of(field(Some(e), "kind")) == Some("device.remove") },
   }, c)
