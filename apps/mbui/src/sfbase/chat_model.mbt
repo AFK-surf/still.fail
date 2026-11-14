@@ -369,6 +369,20 @@ pub(all) struct LinkedChat {
 }
 
 ///|
+/// A chat's run changed to another runtime or model, as the core says it (RunSides): what changed as it was and as it
+/// is now, each drawn after the mark of who made its model ("": its runtime's maker's, @sf.maker_mark's), and what
+/// leads what it is now said alone (换成).
+pub(all) struct RunSides {
+  was : String
+  now : String
+  to : String
+  was_maker : String
+  was_runtime : String
+  now_maker : String
+  now_runtime : String
+}
+
+///|
 /// A message of the chat (ChatMessage), with what the core decides of it.
 pub(all) struct Message {
   seq : Double
@@ -423,6 +437,8 @@ pub(all) struct Message {
   /// ("": none), and how it ran and runs, whole, shown in place of its words once it is opened
   notice_short : String
   notice_lines : Array[String]
+  /// a chat's run changed to another runtime or model: its words' two sides apart, each drawn after its mark
+  notice_sides : RunSides?
   /// the chats its words link to that their lists have (archived ones too)
   chats : Array[LinkedChat]
 }
@@ -589,6 +605,19 @@ pub fn message_of(m : Json) -> Message {
         _ => None
       }
     }),
+    notice_sides: match field(field(s, "notice"), "sides") {
+      Some(Object(_)) as d =>
+        Some({
+          was: text(d, "was"),
+          now: text(d, "now"),
+          to: text(d, "to"),
+          was_maker: text(d, "wasMaker"),
+          was_runtime: text(d, "wasRuntime"),
+          now_maker: text(d, "nowMaker"),
+          now_runtime: text(d, "nowRuntime"),
+        })
+      _ => None
+    },
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
       { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }

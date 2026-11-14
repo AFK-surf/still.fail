@@ -99,12 +99,13 @@ fn notice_body_node(
 }
 
 ///|
-/// How a notice's words are drawn now (system_notice's): a chat's run changed, open, a line each (`Lines`), else on one
-/// line or what changed (`Short`); about a profile, its link at its end (`Linked`); else its Markdown, open or on one
-/// line (`Md`).
+/// How a notice's words are drawn now (system_notice's): a chat's run changed, open, a line each (`Lines`), else to
+/// another runtime or model each side after its mark (`Sides`), else on one line or what changed (`Short`); about a
+/// profile, its link at its end (`Linked`); else its Markdown, open or on one line (`Md`).
 #derive(Eq)
 priv enum NoticeWords {
   Lines
+  Sides
   Short
   Linked(Bool)
   Md(Bool)
@@ -114,7 +115,13 @@ priv enum NoticeWords {
 /// How notice `m`'s words are drawn, `open` or not (NoticeWords).
 fn notice_words_of(m : Message, open : Bool) -> NoticeWords {
   if m.notice_short != "" || m.notice_lines.length() > 0 {
-    if open && m.notice_lines.length() > 0 { Lines } else { Short }
+    if open && m.notice_lines.length() > 0 {
+      Lines
+    } else if m.notice_sides is Some(_) {
+      Sides
+    } else {
+      Short
+    }
   } else if m.profile != "" && m.notice_link >= 0 && m.notice_link <= m.notice_words.length() {
     Linked(open)
   } else {
@@ -212,6 +219,30 @@ fn notice_words_node(v : @view.View, here : MessageNodeHere, m : () -> Message, 
       v.each(fn() { m().notice_lines.mapi(fn(i, l) { (i, l) }) }, fn(l) { l.0 }, fn(b, l) {
         @sf.words_node(b, fn() { l.get().1 }, fn() { style(true) }) |> ignore
       })
+    Sides =>
+      // (where the line has not the room for both, what it ran on left out and what it runs on now led by 换成:
+      // View::fits, View::drops)
+      v.box(fn(r) {
+        @sf.style_node(r, fn() { notice_sides }, in_row=true)
+        r.fits(Is(true)) |> ignore
+        let sides = fn() { m().notice_sides.unwrap_or(no_sides) }
+        let st = fn() { style(false) }
+        r.box(fn(lead) {
+          @sf.style_node(lead, fn() { notice_sides_part }, in_row=true)
+          lead.drops(Is(-1)) |> ignore
+          @sf.words_node(lead, fn() { sides().to }, st) |> ignore
+        })
+        |> ignore
+        r.box(fn(was) {
+          @sf.style_node(was, fn() { notice_sides_part }, in_row=true)
+          was.drops(Is(1)) |> ignore
+          notice_side_node(was, fn() { (sides().was_maker, sides().was_runtime) }, fn() { sides().was }, st, cuts=false)
+          @sf.words_node(was, fn() { "→" }, st) |> ignore
+        })
+        |> ignore
+        notice_side_node(r, fn() { (sides().now_maker, sides().now_runtime) }, fn() { sides().now }, st, cuts=true)
+      })
+      |> ignore
     Short =>
       v.box(fn(w) {
         w
@@ -267,6 +298,34 @@ fn notice_words_node(v : @view.View, here : MessageNodeHere, m : () -> Message, 
       |> ignore
     }
   }
+}
+
+///|
+/// A run's change with no sides (a notice's words that are none such: drawn as nothing).
+let no_sides : RunSides = { was: "", now: "", to: "", was_maker: "", was_runtime: "", now_maker: "", now_runtime: "" }
+
+///|
+/// A side of a run's change (notice_words_node's `Sides`) in `v`: the mark of who made its model (`mark`: its maker,
+/// its runtime), then its words in `style`, cut short where the line has not the room where it `cuts`.
+fn notice_side_node(
+  v : @view.View,
+  mark : () -> (String, String),
+  words : () -> String,
+  style : () -> @ui.TextStyle,
+  cuts~ : Bool,
+) -> Unit {
+  let size = @ui.tree_theme().text_size(notice_size).0
+  v.pick(mark, fn(b, now) { @sf.maker_mark_node(b, now.0, now.1, size) |> ignore })
+  v.box(fn(w) {
+    w
+    .words(By(words))
+    .words_look(By(fn() { @ui.style_words(style()) }))
+    .ink(By(fn() { @ui.style_ink(style()) }))
+    .allow_ellipsis(Is(true))
+    .cuts(Is(cuts))
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|

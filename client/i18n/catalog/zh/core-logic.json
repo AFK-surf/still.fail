@@ -521,5 +521,6 @@
   "core-logic.notice.run.now": "现在：{run}",
   "core-logic.notice.run.speed": "速度：{change}",
   "core-logic.notice.run.to": "换成 {now}",
+  "core-logic.notice.run.toLead": "换成",
   "core-logic.notice.run.was": "之前：{run}"
 }
