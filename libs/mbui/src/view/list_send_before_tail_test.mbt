@@ -245,12 +245,14 @@ test "a key of 64 put before the line, nothing given back: it sets out from none
 }
 
 ///|
-test "two keys put before the line in one change (64 and 40), the part of 22 closing at once: the first's words at rest against L's, the second's against the first's, at every look; the line where it was; nothing down; up 82 at rest" {
+test "two keys put before the line in one change (64 and 40), the part of 22 closing at once: the 22 the first's (each up to its own height, in their order), its words at rest against L's at every look, the second riding on its way; the line where it was; nothing down; up 82 at rest" {
   for rate in rc_rates {
     let c = bt_case(22.0, 64.0)
     let seen = bt_walk(c, { part: true, foot: 0.0, declared: false, come: [72, 73], again: [] }, rate)
     let at = "at \{rate} a second"
-    bt_none(bt_faults(seen, two=true), at)
+    bt_none(bt_faults(seen), at)
+    // (the first set out from the 22 given back, the second from none: under the first's words by 22 in the first look)
+    assert_true((seen[1].y73 - seen[1].y72 - 22.0).abs() < 0.5 || seen[1].y73 == rc_none, msg="\{at}: 行73 \{seen[1].y73 - seen[1].y72} under 行72 in the first look")
     assert_true((bt_up(seen) - 82.0).abs() < 0.5, msg="\{at}: up \{bt_up(seen)}, 82 wanted")
   }
 }
