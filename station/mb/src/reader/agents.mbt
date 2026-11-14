@@ -46,6 +46,9 @@ priv struct Hosted {
   mut pending : Array[@jsjson.JValue]
   mut pending_to : Int64
   mut later : Bool
+  /// a Codex app-server's deltas held (`given`), and up to where what was given Node goes
+  held_lines : Array[Held]
+  mut given_to : Int64
   mut left : Bool
   mut exited : Bool
   stderr : Array[String]
@@ -127,6 +130,7 @@ fn Agents::told(self : Agents, line : String) -> Unit {
         }
         // (what it holds told first: the state said next is of all it read)
         self.flush(h)
+        self.flush_lines(h)
         h.frozen = true
         states[k.to_string()] = Json::object({
           "turn": turn_json(h.turn),
@@ -242,6 +246,8 @@ fn hosted(n : Int, turn : @claude.Turn, live : @claude.Live, lines_only~ : Bool)
     pending: [],
     pending_to: 0L,
     later: false,
+    held_lines: [],
+    given_to: 0L,
     left: false,
     exited: false,
     stderr: [],
@@ -356,6 +362,7 @@ fn Agents::message(self : Agents, h : Hosted, message : Json) -> Unit {
     }
     { "op": "exit", .. } => {
       self.flush(h)
+      self.flush_lines(h)
       h.exited = true
       self.host.say(
         ({
@@ -656,23 +663,149 @@ const DIFF : Bytes = b"{\"method\":\"turn/diff/updated\""
 /// keeps nothing of: acknowledged at once where none is given and nothing given is waiting.
 fn Agents::given(self : Agents, h : Hosted, lines : Array[(Bytes, Int64)]) -> Unit {
   let end = lines[lines.length() - 1].1
-  let kept = lines.filter(l => !(l.0.length() >= DIFF.length() && l.0[0:DIFF.length()] == DIFF[:]))
-  if kept.length() == 0 && h.told <= h.acked_out {
-    h.acked_out = end
-    h.told = end
-    self.ack(h)
-    return
-  }
-  h.told = end
-  let body = @buffer.new()
-  let at = []
-  for l in kept {
+  // (what goes to Node: each line with where it begins and ends; a run of one item's deltas held, told as one)
+  let out : Array[(Bytes, Int64, Int64)] = []
+  let mut safe = -1L
+  for l in lines {
     let line = if l.0.length() > 0 && l.0[l.0.length() - 1] == b'\r' { l.0[0:l.0.length() - 1].to_bytes() } else { l.0 }
     let from = l.1 - (l.0.length() + 1).to_int64()
-    at.push("[\{from},\{l.1},\{line.length()}]")
-    body.write_bytes(line)
+    if line.length() >= DIFF.length() && line[0:DIFF.length()] == DIFF[:] {
+      if h.held_lines.length() == 0 {
+        safe = l.1
+      } else {
+        h.pending_to = l.1
+      }
+      continue
+    }
+    match codex_delta(line) {
+      Some(d) => {
+        match h.held_lines.last() {
+          Some(last) if last.key == d.key => {
+            last.delta.append(d.delta)
+            last.to = l.1
+          }
+          _ => h.held_lines.push({ ..d, from, to: l.1 })
+        }
+        h.pending_to = l.1
+      }
+      None => {
+        self.held_into(h, out)
+        out.push((line, from, l.1))
+        safe = l.1
+      }
+    }
+  }
+  h.told = end
+  if h.held_lines.length() > 0 {
+    self.soon_lines(h)
+  }
+  if out.length() == 0 {
+    // (nothing for Node: acknowledged at once where nothing given it waits for its acknowledgement)
+    if safe >= 0L && h.acked_out >= h.given_to {
+      h.acked_out = safe
+      h.given_to = safe
+      self.ack(h)
+    } else if safe >= 0L {
+      self.give(h, [], safe)
+    }
+    return
+  }
+  self.give(h, out, safe)
+}
+
+///|
+/// A Codex item's delta of words, thinking, a plan or a command's output (live.ts `LiveFromCodex` reads only its
+/// thread, turn, item and words), and the lines it was made of.
+priv struct Held {
+  key : String
+  method : Array[Int]
+  thread : Array[Int]
+  turn : @jsjson.JValue?
+  item : Array[Int]
+  delta : Array[Int]
+  from : Int64
+  mut to : Int64
+}
+
+///|
+const ITEM : Bytes = b"{\"method\":\"item/"
+
+///|
+fn codex_delta(line : Bytes) -> Held? {
+  guard line.length() >= ITEM.length() && line[0:ITEM.length()] == ITEM[:] else { return None }
+  let v = @jsjson.parse(@utf8.decode_lossy(line)) catch { _ => return None }
+  guard v.get("method") is Some(Str(m)) else { return None }
+  let methods = ["item/agentMessage/delta", "item/reasoning/textDelta", "item/reasoning/summaryTextDelta", "item/plan/delta", "item/commandExecution/outputDelta"]
+  guard methods.iter().any(x => @jsjson.units(x) == m) else { return None }
+  guard v.get("params") is Some(Obj(_) as p) else { return None }
+  guard p.get("threadId") is Some(Str(thread)) && p.get("itemId") is Some(Str(item)) && p.get("delta") is Some(Str(delta)) else {
+    return None
+  }
+  // (only these: what else a delta says nothing reads)
+  for e in (match p { Obj(es) => es; _ => [] }) {
+    let k = @jsjson.raw_text(e.0)
+    if !["threadId", "turnId", "itemId", "delta"].contains(k) && !(k == "summaryIndex" || k == "contentIndex") {
+      return None
+    }
+  }
+  let turn = p.get("turnId")
+  let key = "\{@jsjson.raw_text(m)}\x00\{@jsjson.raw_text(thread)}\x00\{@jsjson.raw_text(item)}\x00\{@jsjson.stringify(turn.unwrap_or(Null))}"
+  Some({ key, method: m, thread, turn, item, delta: delta.copy(), from: 0L, to: 0L })
+}
+
+///|
+/// What is held put out, as lines of their own.
+fn Agents::held_into(self : Agents, h : Hosted, out : Array[(Bytes, Int64, Int64)]) -> Unit {
+  ignore(self)
+  let u = @jsjson.units
+  for d in h.held_lines {
+    let params : Array[(Array[Int], @jsjson.JValue)] = [(u("threadId"), Str(d.thread))]
+    if d.turn is Some(t) {
+      params.push((u("turnId"), t))
+    }
+    params.push((u("itemId"), Str(d.item)))
+    params.push((u("delta"), Str(d.delta)))
+    let line = @jsjson.stringify(Obj([(u("method"), Str(d.method)), (u("params"), Obj(params))]))
+    out.push((@utf8.encode(line), d.from, d.to))
+  }
+  h.held_lines.clear()
+}
+
+///|
+fn Agents::give(self : Agents, h : Hosted, out : Array[(Bytes, Int64, Int64)], to : Int64) -> Unit {
+  let body = @buffer.new()
+  let at = []
+  for l in out {
+    at.push("[\{l.1},\{l.2},\{l.0.length()}]")
+    body.write_bytes(l.0)
   }
   let bytes = body.to_bytes()
-  self.host.say("{\"lines\":\{h.n},\"to\":\{end},\"at\":[\{at.join(",")}],\"bytes\":\{bytes.length()}}")
+  h.given_to = to
+  self.host.say("{\"lines\":\{h.n},\"to\":\{to},\"at\":[\{at.join(",")}],\"bytes\":\{bytes.length()}}")
   self.host.out(bytes)
+}
+
+///|
+fn Agents::soon_lines(self : Agents, h : Hosted) -> Unit {
+  if h.later {
+    return
+  }
+  h.later = true
+  ignore(
+    self.host.rt.fork(name="agent deltas", () => {
+      @effect.sleep(DELTAS_MS)
+      h.later = false
+      self.flush_lines(h)
+    }),
+  )
+}
+
+///|
+fn Agents::flush_lines(self : Agents, h : Hosted) -> Unit {
+  if h.held_lines.length() == 0 || h.left || h.frozen {
+    return
+  }
+  let out = []
+  self.held_into(h, out)
+  self.give(h, out, h.pending_to)
 }
