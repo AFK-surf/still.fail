@@ -18,6 +18,14 @@
 //     started anew let in by both.
 //   22 alice's new app N after P went: refused by both, its page joining her own log, no admin named; it asks from the
 //     page that waits, A shows the code, nothing asked on N; given A's vault, nothing done on A.
+//   23 ivy, carried with no log of her own: set up at round 19's start while A says a release under MOVED_FROM_BUILD
+//     (the chain held unmoved), her app J one that never says the key of a lock of one's own (no sealer) approved
+//     by A, then I, which can, by J, and I begins no log while J stands unsaid (views/lock.ts `ownLockOnce`'s `waiting`)
+//     and J holds no move back (it says no build, taken as able): the commonest member at a move, a stale second app
+//     in their list (the lead, 2026-11-14). A comes back on a release that moves the chain, and it moves with nobody
+//     asked, ivy carried, bound to no log. At the end: I approves her third app K from its page (one ask on I, nobody
+//     else asked, K given her vault, ivy bound to the log begun in that ask by her own `bind`), her web page W, takes J
+//     off; A makes her an admin and takes her out, as any member.
 // Chains are handed over by themselves on every build from HAND_OVER_FROM (client/core-ts src/lock-handover.ts; the
 // user, 2026-11-14: 无感迁移, no date, no switch), so by default nothing calls `lock.handOver`: P's joining alice's own
 // lock face to face, the ask for something else that A answers, is moved from round 19's start to where the call was
@@ -37,7 +45,8 @@ const auto = process.env.E2E_HANDOVER !== "call";
 const short = (s: J) => JSON.stringify({ state: s.state, cause: s.cause, message: s.message });
 
 // alice's two apps and her web page; frank, an admin, and gina, a member, an app each
-const vDev = new Device("A");
+// (A says a release under MOVED_FROM_BUILD until ivy is set up, round 19's start: the chain held unmoved meanwhile)
+const vDev = new Device("A", "alice", { build: "0.1.9000" });
 const pDev = new Device("P");
 const xDev = new Device("X", "alice", { page: true });
 const qDev = new Device("Q", "frank");
@@ -50,6 +59,12 @@ const sDev = new Device("S", "hank");
 const yDev = new Device("Y", "frank", { page: true });
 // alice's new app after P was taken off (round 22)
 const nDev = new Device("N");
+// ivy's apps: J, one that never says the key of a lock of one's own (no sealer), and I, an app of today; her third app
+// and her web page (round 23)
+const jDev = new Device("J", "ivy", { sealed: false });
+const iDev = new Device("I", "ivy");
+const kDev = new Device("K", "ivy");
+const wDev = new Device("W", "ivy", { page: true });
 const fifthData = `${process.env.E2E_STATION}/data`;
 const sixthData = `${process.env.E2E_STATION}-b/data`;
 try {
@@ -62,8 +77,9 @@ try {
   const vBase = await baseOf(vDev);
   const inThree = (x: Device, id: string, ok: (s: J) => boolean, ms = 90_000) => x.stationState(three, ok, ms, id);
   const both = () => [fifthId, sixthId];
-  /// `x` approved into the workspace's lock from its waiting page, the code shown on `approver` (as locks.ts's `approvedBy`).
-  const approvedInThree = async (x: Device, page = false, approver: Device = vDev) => {
+  /// `x` approved into the workspace's lock from its waiting page, the code shown on `approver` (as locks.ts's `approvedBy`),
+  /// let in by `at` (both stations by default).
+  const approvedInThree = async (x: Device, page = false, approver: Device = vDev, at: () => string[] = both) => {
     await x.lock(three, (l) => l.me?.waiting && !l.me?.ownLock, 90_000);
     const shown = approver.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await x.call("lock.pair", { workspace: three });
@@ -71,7 +87,7 @@ try {
     await x.lock(three, (l) => l.me?.pair?.state === "code", 60_000);
     await x.call("lock.pairCode", { workspace: three, code: p.code });
     await x.lock(three, (l) => (page || l.signs) && l.me?.confirmed, 90_000);
-    for (const id of both()) await inThree(x, id, (s) => s.state === "online");
+    for (const id of at()) await inThree(x, id, (s) => s.state === "online");
   };
   /// `d` on `approver`'s person's own lock face to face, as locks.ts's `joinVia` (typed once the field for the code is shown).
   const joinVia = async (approver: Device, d: Device) => {
@@ -93,6 +109,47 @@ try {
     await vDev.call("lock.open", { workspace: three });
     await vDev.lock(three, (l) => l.locked && l.signs);
     await vDev.personal((p) => p.standing === "member", 90_000);
+  });
+  // ── round 23's setup: ivy, before the chain moves (A on a release under MOVED_FROM_BUILD) ──
+  const memberAt = (said: string, who: string) => said.match(new RegExp(`^MEMBER ${who} (\\S+)`, "m"))?.[1] ?? null;
+  const personAt = (said: string, who: string) => new RegExp(`^PERSON ${who} `, "m").test(said);
+  const firstSays = () => threeSays("fifth").split("\n").filter((x) => !x.startsWith("DEVICE")).join("; ");
+  const ivyVault = { vault: "", item: "", secret: "" };
+  await must("A adds ivy; her app J (no sealer) approved by A, then her app I by J (her own, as before a move): on the chain, no log of hers", async () => {
+    await vDev.call("workspace.addMembers", { account: vDev.sub, workspace: three, role: "member", emails: ["ivy@example.test"] });
+    // (the second station not enrolled yet: let in by the first; I, ivy's second app, asks her own J, views/pair.ts
+    // `waitingIn`: J signs, so she is no first device to owners and admins)
+    await jDev.signIn();
+    await approvedInThree(jDev, false, vDev, () => [fifthId]);
+    await iDev.signIn();
+    await approvedInThree(iDev, false, jDev, () => [fifthId]);
+    await whenChanged([fifthData], () => !/^MOVED /m.test(threeSays("fifth")) && memberAt(threeSays("fifth"), iDev.sub) === "member" && !personAt(threeSays("fifth"), iDev.sub), 60_000, () => `the first: ${firstSays()}`);
+    const p = await iDev.personal(() => true, 30_000).catch(() => null);
+    log(`  I's own lock: ${p?.standing ?? "none listed"}`);
+    if (p !== null && p.standing !== "none") throw new Error(`I stands ${p.standing} on a lock of ivy's own`);
+  });
+  await check("I sets up ivy's vault on the chain with an item", async () => {
+    await iDev.call("vault.setup", { workspace: three });
+    await iDev.until({ topic: "vaults", workspace: three }, (v) => v?.setUp, 60_000);
+    ivyVault.secret = `ghp_ivy_${Date.now()}`;
+    ivyVault.vault = (await iDev.call("vault.create", { workspace: three, name: "ivy", station: fifthId })).id as string;
+    ivyVault.item = (await iDev.call("vault.putItem", {
+      workspace: three, vault: ivyVault.vault,
+      plain: { kind: "token", name: "ivy-token", fields: { value: ivyVault.secret }, domains: [], notes: "" },
+      listing: { name: "ivy-token", kind: "token", modes: ["proxy"], hosts: ["api.example.test"] },
+    })).id as string;
+  });
+  await must("A back on a release that moves it: the chain moves by itself, nobody asked; ivy carried, bound to no log; I still in", async () => {
+    const from = [vDev, iDev].map((x) => [x, x.asked()] as const);
+    vDev.build = "0.1.9100";
+    await vDev.restart();
+    await whenChanged([fifthData], () => /^MOVED \S+ on /m.test(threeSays("fifth")) && memberAt(threeSays("fifth"), iDev.sub) === "member" && !personAt(threeSays("fifth"), iDev.sub), 120_000, () => `the first: ${firstSays()}`);
+    for (const [x, n] of from) if (x.asked() !== n) throw new Error(`${x.name} asked the person: ${x.askedWhat(n).join("; ")}`);
+    await inThree(iDev, fifthId, (s) => s.state === "online");
+  });
+  await check("I opens ivy's vault after the move", async () => {
+    const o = await iDev.call("vault.open", { workspace: three, item: ivyVault.item });
+    if (o?.plain?.fields?.value !== ivyVault.secret) throw new Error(`I opened: ${JSON.stringify(o)?.slice(0, 300)}`);
   });
   await must("A enrolls a second station with the lock's hash and takes it into the lock by its code: both in the lock, alice bound", async () => {
     const made = await vDev.call("workspace.enroll", { account: vDev.sub, workspace: three, name: "second" });
@@ -274,7 +331,6 @@ try {
   // its code and taken out; P taken off alice's own lock, her vault waiting and keyed anew as A next opens it; gina
   // taken out, refused by both, her page's topic as it stands; off and on again by A (alice's, the root), frank, an
   // owner now, answered `lock_root_only` ──
-  const memberAt = (said: string, who: string) => said.match(new RegExp(`^MEMBER ${who} (\\S+)`, "m"))?.[1] ?? null;
   await check("frank made an owner by A: an owner at both stations, A asked once", async () => {
     const asked = await asksOf(vDev, () => vDev.call("workspace.setRole", { account: vDev.sub, workspace: three, member: qDev.sub, role: "owner" }));
     log(`  A asked: ${asked.join("; ") || "nothing"}`);
@@ -500,9 +556,63 @@ try {
     if (o?.plain?.fields?.value !== v.secret) throw new Error(`N opened: ${JSON.stringify(o)?.slice(0, 300)}`);
     if (vDev.asked() !== aFrom) throw new Error(`A asked the person: ${vDev.askedWhat(aFrom).join("; ")}`);
   });
+  // ── round 23: ivy, carried with no log of her own (set up at round 19's start) ──
+  await check("ivy carried, bound to no log at both", async () => {
+    await atBoth("ivy carried", (s) => memberAt(s, iDev.sub) === "member" && !personAt(s, iDev.sub));
+  });
+  await kDev.signIn();
+  await must("K, ivy's third app, asks from the page that waits; I shows the code: one ask on I, nothing on K nor on A or Q; K in at both, ivy bound to a log of her own", async () => {
+    await kDev.lock(three, (l) => l.me?.waiting, 90_000);
+    const others = [vDev, qDev, kDev].map((x) => [x, x.asked()] as const);
+    let typed = 0;
+    const asked = await asksOf(iDev, async () => {
+      const shown = iDev.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
+      await kDev.call("lock.pair", { workspace: three });
+      const p = await shown;
+      await kDev.lock(three, (l) => l.me?.pair?.state === "code", 60_000);
+      await kDev.call("lock.pairCode", { workspace: three, code: p.code });
+      typed = Date.now();
+      await kDev.personal((p) => p.standing === "member", 90_000);
+    });
+    log(`  I asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`I asked ${asked.length} times`);
+    for (const [x, n] of others) if (x.asked() !== n) throw new Error(`${x.name} asked the person: ${x.askedWhat(n).join("; ")}`);
+    for (const id of both()) await inThree(kDev, id, (s) => s.state === "online");
+    log(`  K in at both ${Date.now() - typed} ms after its code was typed`);
+    await atBoth("ivy bound", (s) => personAt(s, iDev.sub));
+  });
+  await check("K given ivy's vault and opens its item, nothing asked on I for it", async () => {
+    const iFrom = iDev.asked();
+    await kDev.lock(three, (l) => l.signs && l.me?.confirmed, 90_000);
+    await kDev.call("vault.setup", { workspace: three });
+    await kDev.until({ topic: "vaults", workspace: three }, (x) => (x?.vaults ?? []).find((y: J) => y.id === ivyVault.vault && y.keyed), 90_000);
+    const o = await kDev.call("vault.open", { workspace: three, item: ivyVault.item });
+    if (o?.plain?.fields?.value !== ivyVault.secret) throw new Error(`K opened: ${JSON.stringify(o)?.slice(0, 300)}`);
+    if (iDev.asked() !== iFrom) throw new Error(`I asked the person: ${iDev.askedWhat(iFrom).join("; ")}`);
+  });
+  await check("W, ivy's web page, approved on I face to face: one ask on I, in at both", async () => {
+    await wDev.signIn();
+    const asked = await asksOf(iDev, () => approvedInThree(wDev, true, iDev));
+    log(`  I asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`I asked ${asked.length} times`);
+  });
+  await check("J taken off by I as lost: one ask on I, J out at both and refused", async () => {
+    const jBase = await baseOf(jDev);
+    const asked = await asksOf(iDev, () => iDev.call("lock.removeDevice", { workspace: three, device: jBase }));
+    log(`  I asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`I asked ${asked.length} times`);
+    await atBoth("J out", (s) => !s.includes(`DEVICE ${jBase.slice(0, 12)} `));
+    for (const id of both()) await inThree(jDev, id, (s) => s.state !== "online" && s.state !== "connecting");
+  });
+  await check("A makes ivy an admin and takes her out, as any member: admin at both, then out at both", async () => {
+    await vDev.call("workspace.setRole", { account: vDev.sub, workspace: three, member: iDev.sub, role: "admin" });
+    await atBoth("ivy an admin", (s) => memberAt(s, iDev.sub) === "admin");
+    await vDev.call("workspace.removeMember", { account: vDev.sub, workspace: three, member: iDev.sub });
+    await atBoth("ivy out", (s) => memberAt(s, iDev.sub) === null);
+  });
 } catch (e) {
   fail("the run", e);
 }
 log(failures() === 0 ? "ALL PASSED" : `${failures()} FAILED`);
-await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev, nDev].map((x) => x.close())), 5000);
+await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev, nDev, iDev, jDev, kDev, wDev].map((x) => x.close())), 5000);
 process.exit(failures() === 0 ? 0 : 1);

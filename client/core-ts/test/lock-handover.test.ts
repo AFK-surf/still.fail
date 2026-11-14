@@ -970,10 +970,15 @@ test("an unbound owner takes a member out: one ask, bound in it, the member out 
   for (const c of Object.values(w.stations)) assert.equal(c.locked()!.state!.members.has("r3"), false, "out at the stations");
 });
 
-// A member the chain bound to no log who has no log of their own at all (the common case at a move: apps from before
-// own logs; the lead, 2026-11-14): what they do for themselves on their own devices begins their log in that act's one
-// ask, as views/pair.ts `ownLogFor` begins a newcomer's, binds them to it (`bind`) and then does it (personal-lock.ts
-// `seedFor`): nobody else involved, nothing asked more than before the move.
+// A member the chain bound to no log who has no log of their own at all, at their app's first read of the moved chain
+// (the lead, 2026-11-14). Whom it stands for: a member with another app on the chain that never said the key of a lock
+// of one's own (a stale laptop, or one that seals nothing), while which their app in hand begins none (views/lock.ts
+// `ownLockOnce`'s `waiting`) and which holds no move back; and an app not seen since before own logs for IDLE_SECS,
+// which the move does not wait for. An app of today that is let in alone begins its person's log by itself before any
+// move (`ownLockOnce`), so this is not that one. What they do for themselves on their own devices begins their log in
+// that act's one ask, as views/pair.ts `ownLogFor` begins a newcomer's, binds them to it (`bind`) and then does it
+// (personal-lock.ts `seedFor`): nobody else involved, nothing asked more than before the move. (locks-moved.ts round
+// 23 holds the first of them on real stations.)
 async function noLog(o: Opts = {}) {
   const { w, phone } = await unboundMoved({ noLog: true, ...o });
   assert.equal(w.inner.adb.personal().standing("s1"), "none", "no log of their own");
