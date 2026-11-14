@@ -10,8 +10,8 @@
 #   MBUI_LINUX_CORE=0 scripts/linux.sh build   the app alone, the engine and the shell put beside it
 #   scripts/linux.sh core                      the core's bytecode (out/core/core.hbc)
 #   scripts/linux.sh put                       the core's bytecode, the engine and the shell put beside the app
-D="$(cd "$(dirname "$0")" && pwd)"
-. "$D/env.sh"
+AD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$AD/env.sh"
 export APP=${APP:-stillfail}
 if [ -n "${MBUI_IN_LINUX_SH:-}" ]; then
   if [ "$APP" = stillfail ]; then
@@ -21,7 +21,7 @@ if [ -n "${MBUI_IN_LINUX_SH:-}" ]; then
     export MBUI_LINUX_CFLAGS="-I$A/engine -I$MBUI_DIR/src/host $(pkg-config --cflags libsecret-1)"
     export MBUI_LINUX_LDFLAGS="-L$engine -L$shell -lstillfail_engine -lstillfail_shell $(pkg-config --libs libsecret-1) -Wl,-rpath,\$ORIGIN"
   fi
-  core() { HERMESC="$engine/hermesc" bash "$D/core.sh" hermes; }
+  core() { HERMESC="$engine/hermesc" bash "$AD/core.sh" hermes; }
   # put [core]: the engine and the shell beside the app's executable, the core's bytecode too when asked
   put() {
     . "$MBUI_DIR/scripts/env.sh"
@@ -49,5 +49,5 @@ if [ -n "${MBUI_IN_LINUX_SH:-}" ]; then
   }
   return 0 2>/dev/null || exit 0
 fi
-export MBUI_IN_LINUX_SH=1 MBUI_LINUX_HOOK="$D/linux.sh"
+export MBUI_IN_LINUX_SH=1 MBUI_LINUX_HOOK="$AD/linux.sh"
 exec bash "$MBUI_DIR/scripts/linux.sh" "$@"
