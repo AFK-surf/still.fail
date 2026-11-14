@@ -174,8 +174,8 @@ if (process.argv[2] === "device") {
   // host, no app's keys and nothing sealed)
   // (its record goes on in the same file when started `again`, as its data does)
   // (`handOverByTests`: the core offers `lock.handOver` to this driver, as no app's host does: views/lock.ts `handOver`;
-  // `handOverAuto` with E2E_HANDOVER=auto, a chain handed over by itself as it would be from HAND_OVER_FROM, e2e/locks-moved.ts)
-  const options = { handOverByTests: true, handOverAuto: process.env.E2E_HANDOVER === "auto", ...(process.argv[5] === "page" ? { page: true, record } : process.argv[5] === "plain" ? { record } : { sealer, record }) };
+  // `handOverAuto` but with E2E_HANDOVER=call, a chain handed over by itself as it is from HAND_OVER_FROM, e2e/locks-moved.ts)
+  const options = { handOverByTests: true, handOverAuto: process.env.E2E_HANDOVER !== "call", ...(process.argv[5] === "page" ? { page: true, record } : process.argv[5] === "plain" ? { record } : { sealer, record }) };
   const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, options);
   const client = core.connect();
   process.on("message", (m: J) => {
