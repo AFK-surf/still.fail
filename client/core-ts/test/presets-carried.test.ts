@@ -462,6 +462,6 @@ test("a preset of nobody said yet, deleted on one station by someone else's app 
   assert.ok(isGone(gone), "deleted on A's device");
   assert.equal(gone.owner, ME.sub);
   const at = (s: Rig) => s.presets.kept(null, { sub: ME.sub, email: ME.email }).find((r) => r.id === old.id);
-  assert.ok(isGone(at(s2)!), "and on S2");
-  assert.deepEqual([isGone(at(s1)!), at(s1)!.owner], [true, ME.sub], "S1's of nobody replaced by A's");
+  assert.deepEqual([at(s2)?.owner, at(s2) !== undefined && isGone(at(s2)!)], [ME.sub, true], "and on S2");
+  assert.deepEqual([at(s1)?.owner, at(s1) !== undefined && isGone(at(s1)!)], [ME.sub, true], "S1's of nobody replaced by A's");
 });
