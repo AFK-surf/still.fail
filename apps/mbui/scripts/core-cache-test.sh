@@ -139,6 +139,29 @@ if [ "${1:-all}" != checkout ]; then
     echo "a change to tsconfig.json alone must make the core again, under a new key: $said" >&2
     exit 1
   fi
+  # ... and so is such a file come later to a directory between a path of the key and the root, where there was none:
+  # esbuild makes the files under it by it from then on (the nearest), and the core kept before it is not taken.
+  for config in client/tsconfig.json web/package.json; do
+    before=$(key) made=$(builds)
+    printf '{}\n' > "$repo/$config"
+    git -C "$repo" add "$config"
+    commit "$config"
+    built
+    if [ -z "$(key)" ] || [ "$(key)" = "$before" ] || [ "$(builds)" = "$made" ]; then
+      echo "$config added over files of the bundle must make the core again, under a new key: $said" >&2
+      exit 1
+    fi
+  done
+  # ... one added and not committed is no key.
+  printf '{}\n' > "$repo/rules/package.json"
+  git -C "$repo" add rules/package.json
+  built
+  if [ -n "$(key)" ] || ! printf '%s\n' "$said" | grep -q 'core.hbc has no key.*: rules/package.json is changed'; then
+    echo "a package.json added over files of the bundle and not committed is no key, and said: $said" >&2
+    exit 1
+  fi
+  git -C "$repo" rm -qf client/tsconfig.json web/package.json rules/package.json
+  commit 'no config but the root has'
   echo 'core cache key follows every input of the bundle, and nothing else'
 
   # A bundle that takes a file the key does not cover is refused where it is made, the file and the line to change
@@ -166,20 +189,24 @@ if [ "${1:-all}" != checkout ]; then
     echo "with no key, a bundle taking a file git does not track is made and not kept: $said" >&2
     exit 1
   fi
-  # ... and so is one made by a tsconfig.json the key does not cover: the nearest over a file of it, what that extends.
-  printf '{}\n' > "$repo/client/tsconfig.json"
-  printf 'core under a tsconfig\n' > "$repo/client/core-ts/src/store.ts"
-  git -C "$repo" add client/tsconfig.json
-  commit 'a tsconfig.json over the core'
-  if said=$(build b) || ! printf '%s\n' "$said" | grep -q 'made by client/tsconfig.json.*HBC_TREES' || [ -f "$work/out/core/core.hbc" ]; then
-    echo "a bundle made by a tracked tsconfig.json outside the key's trees must be refused, naming it and HBC_TREES: $said" >&2
+  # ... and so is one made by a tsconfig.json the key does not cover. The nearest over a file of the key's is in the
+  # key wherever it is, so that is one over a file itself refused, said to come with that file, and what one extends,
+  # said to be added.
+  printf '{}\n' > "$repo/docs/tsconfig.json"
+  printf 'other\n' > "$repo/docs/other.ts"
+  printf 'core with docs\n' > "$repo/client/core-ts/src/store.ts"
+  commit 'the core imports docs/other.ts, a tsconfig.json over it'
+  if said=$(FAKE_IMPORTS=docs/other.ts build b) || ! printf '%s\n' "$said" | grep -q 'takes docs/other.ts.*add it (or its directory) to HBC_TREES' \
+    || ! printf '%s\n' "$said" | grep -q 'made by docs/tsconfig.json.*it does once docs/other.ts (or its directory) is in HBC_TREES' \
+    || [ -f "$work/out/core/core.hbc" ]; then
+    echo "a bundle made by a tracked tsconfig.json over a file outside the key's trees must be refused, naming both and HBC_TREES: $said" >&2
     exit 1
   fi
-  git -C "$repo" rm -q client/tsconfig.json
+  git -C "$repo" rm -q docs/tsconfig.json docs/other.ts
   printf '{}\n' > "$repo/docs/base.json"
   printf '{\n  // as the root says\n  "extends": "./docs/base",\n}\n' > "$repo/tsconfig.json"
   commit 'the tsconfig.json extends another'
-  if said=$(build b) || ! printf '%s\n' "$said" | grep -q 'made by docs/base.json.*HBC_TREES' || [ -f "$work/out/core/core.hbc" ]; then
+  if said=$(build b) || ! printf '%s\n' "$said" | grep -q 'made by docs/base.json (tsconfig.json extends it,.*add it to HBC_TREES' || [ -f "$work/out/core/core.hbc" ]; then
     echo "a bundle made by what its tsconfig.json extends, outside the key's trees, must be refused, naming it: $said" >&2
     exit 1
   fi
