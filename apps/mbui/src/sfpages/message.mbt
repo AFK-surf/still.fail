@@ -829,7 +829,14 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
         c.look(g, @ui.look(alpha=lit))
       }
       c.box(style=notice_line, fn() {
-        c.box(style=notice_words_room, fn() {
+        // (its runs' lines laid as wide as they are once open all the way, cut by the pill as it widens: never laid
+        // anew at each width, where a line let go of its wrap mid-way and what is under it jumped up a line)
+        let words_room = match widened {
+          Some((_, across_w)) if shown_open && opened_by < 1.0 && m.notice_lines.length() > 0 =>
+            notice_words_room.then(@ui.style(w=Fixed(across_w - notice_pill_inset)))
+          _ => notice_words_room
+        }
+        c.box(style=words_room, keep=shown_open && opened_by < 1.0, fn() {
           if m.notice_short != "" || m.notice_lines.length() > 0 {
             // a chat's run changed: closed, what changed on its line, else what it runs on now; opened, both runs whole
             if shown_open && m.notice_lines.length() > 0 {
