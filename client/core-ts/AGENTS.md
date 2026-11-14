@@ -200,7 +200,13 @@ another; the accounts' list's merge across stations and its refills.
   owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`); one of the
   person's own devices taken off their log on this device does, as before a move (views/lock.ts `takeOffBound`,
   vault.ts `tookOutMoved`): a vault left waiting is shown to no device begun anew, so their next device would see none
-  of it (2026-11-14). The vaults
+  of it (2026-11-14). Before taking a device or a member out this device reads the vaults again (`levelVaults`, at most
+  its own wait, asking nothing), so a version the one taken out wrote while in is taken while it can be checked; where
+  no station could be read, the keying anew that meets another version (`vault_conflict`) reads the station again and
+  takes one that checks: on a chain by the chain as it stood, where the chain moved one the device this one just took
+  out wrote by the state just before that removal (vault.ts `takeBefore`), the same acceptance as a chain's, no wider
+  (the lead, 2026-11-14: a moved workspace does for people what an unmoved one does); one that checks against neither
+  is not taken and the vault waits, as on a chain. The vaults
   go by the state in force (vault.ts `lockOf`: `inForceOf`'s `checked`, as a station's do; waiting, one naming nobody):
   a vault keyed for someone a statement, or their own log, took out waits, read by what of the state took its version
   (kept beside the vaults, `vaultTook`, as the vaults held change and as the state is made anew, never as a topic is
@@ -216,7 +222,10 @@ another; the accounts' list's merge across stations and its refills.
   `heardLeft`, `leftIn`; station/src/mesh/serve.ts `leftOf`; 2026-11-14): its page is as before a move, not
   confirmed and able to ask, its try dialling those (views/pair.ts `waitingIn`), a hint that lets nobody in; once let
   in it is tried again as the read after its approval finds it refused (`refusedAgain`). Only waiting (no refusal
-  says so), it waits as before. A web page whose stations said the list names no app of its person's (their `left.apps`)
+  says so), it waits as before. A device refused where the chain moved asks that station again at its link's own retry
+  (backoff and cap, the link's "a retry after a failure"; views/lock.ts `waiting`): before a move its approval moved the
+  chain's head, which the cloud's copy told it; after one nothing it can see changes, and nobody is to open the app or
+  press because of a move (the lead, 2026-11-14). Opened again, or the person pressing to ask, it asks at once. A web page whose stations said the list names no app of its person's (their `left.apps`)
   is one nobody can approve there: it asks nobody and says to install an app first (`needsAppIn`, `me.needsAppText`,
   and `lock.pair`'s refusal `lock_needs_app`); one told by a station from before (no `apps`) asks as before.
   `test/lock-left-out.test.ts` runs it on the station's own code. One that lost its

@@ -32,7 +32,7 @@ import {
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
-import { BOX_KEY, BOX_PUB, UNLOCK_MS, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
+import { BOX_KEY, BOX_PUB, UNLOCK_MS, levelVaults, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
 import { handOver, inForceOf, pendingHeld, read as readLock, roster } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { withoutMesh } from "./lock-rig.ts";
@@ -193,6 +193,7 @@ function fakeStation() {
   const plainSaves: unknown[] = [];
   const uses: unknown[] = [];
   const plainLock = { on: false };
+  const readsOff = { on: false };
   const plainLasts: { lasts?: string; at?: number } = {};
   const reply = (req: HttpRequest): unknown => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
@@ -230,6 +231,8 @@ function fakeStation() {
         return { requests };
     }
     if (!locked.on) return status(409, { error: "no lock", code: "vault_needs_lock" });
+    // (`readsOff`: the station not read, as one unreachable for a moment)
+    if (readsOff.on && req.method === "GET") return status(503, { error: "away", code: "unavailable" });
     switch (key) {
       case "GET /vault/vaults":
         // (a member's: as the station lists them, those this person is in)
@@ -315,7 +318,7 @@ function fakeStation() {
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, described, removed, plainSaves, reply };
+  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, described, removed, plainSaves, readsOff, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -1190,6 +1193,59 @@ test("a device taken out of the lock that held a vault's key: the owner's device
   assert.equal(JSON.parse(new TextDecoder().decode(decrypt(fresh, item.ct, itemContext("ws", id, item.id, 1, 1)))).fields.value, "ghp_x", "written again under the new key");
   assert.equal(vaults().vaults.length, 1, "shown still");
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  r.core.close();
+});
+
+// The same race on a chain that has not moved (every workspace while chains are held from moving, and the path a removal
+// went by before a move): the phone's next version at the station, not read here, as the phone is taken out. Read first
+// (`levelVaults`, as views/lock.ts runs it before a removal it signs), it is taken while the phone is in and keyed anew
+// from; not read, the station's refusal of the keying anew has it read again, and the chain as it stood checks it.
+async function phoneWroteUnread() {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  const old = r.st.vaults.get(id)!;
+  assert.ok(old.keys.some((k) => k.cert.device === r.phone.hex), "the phone given the key");
+  // (the phone writes the vault's next version, as it does giving a key: told to no one here)
+  const { sig: _, ...rest } = old;
+  const phones = sign({ ...rest, seq: old.seq + 1, at: old.at + 1 }, TAG.vault, r.phone);
+  r.st.vaults.set(id, phones);
+  const takeOut = async () => {
+    stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+    grow(r, "device.remove", { id: r.phone.hex });
+    for (let n = 0; n < 2; n++) {
+      await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+      await r.host.time.pass(500, 10);
+    }
+    r.take();
+  };
+  return { r, id, old, phones, takeOut };
+}
+
+test("a chain not moved: the phone's version not read here as the phone is taken out, the vaults read first: taken while the phone is in, keyed anew from it, nothing written past", async () => {
+  const { r, id, old, phones, takeOut } = await phoneWroteUnread();
+  await r.core.inner.runner.run(levelVaults(r.core.inner, "ws"));
+  await takeOut();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], "keyed anew from the phone's version, without it");
+  r.core.close();
+});
+
+// (on a chain the version is checked against the chain as it stood, a prefix vouching for it, `waitingAs`: read again
+// on the station's refusal, it is taken and keyed anew from, nothing written past; before, the keying anew was refused
+// for good, the station holding the phone's version)
+test("a chain not moved: the phone's version not read here as the phone is taken out, not read first: read again on the station's refusal, taken by the chain as it stood, keyed anew from it", async () => {
+  const { r, id, old, phones, takeOut } = await phoneWroteUnread();
+  await takeOut();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], `keyed anew from the phone's version (station at seq ${v.seq})`);
+  assert.equal((await r.ask("vault.open", { item: [...r.st.items.keys()][0] })).plain.fields.value, "ghp_x", "its item opened");
   r.core.close();
 });
 
@@ -2493,6 +2549,58 @@ test("a moved workspace: the person taking off a device of theirs the chain carr
   const v = r.st.vaults.get(id)!;
   assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [old.epoch + 1, ["ab".repeat(32)]], "keyed anew without the phone");
   assert.equal(vaults().vaults[0]?.waits, undefined, "not waiting");
+  r.core.close();
+});
+
+// A version a device wrote while in, not read here yet as the person takes that device off on this one: before, the
+// vault was keyed anew from the version held here, the station refused it (another version there, `vault_conflict`),
+// and once that device was out its version could never be checked here, so it stayed so for good (2026-11-14, the
+// locks' end to end, round 5: B let in again took A off a fraction of a second after). Now the removal reads the vaults
+// first (`levelVaults`), while that device is still in; where no station could be read then, the keying anew writes past
+// the station's version by its numbers alone, never taking what it cannot check.
+test("a moved workspace: a version the phone wrote while in, not read here yet, as the person takes the phone off on this device: read first and taken, keyed anew from it, nothing written past", async () => {
+  const r = await movedRig(true, { phone: true });
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const id = vaults().vaults[0].id;
+  const old = r.st.vaults.get(id)!;
+  // (the phone writes the vault's next version, as it does giving a key: told to no one here)
+  const { sig: _, ...rest } = old;
+  const phones = sign({ ...rest, seq: old.seq + 1, at: old.at + 1 }, TAG.vault, r.phone);
+  r.st.vaults.set(id, phones);
+  await r.ask("lock.removeDevice", { device: r.phone.hex });
+  await r.settle();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], "keyed anew from the phone's version, without the phone");
+  r.core.close();
+});
+
+// (not read before the removal: the station's refusal of the keying anew has it read again, and the phone's version is
+// taken by the state just before the removal this device made, as a chain's prefix takes it; before 2026-11-14 (late)
+// it was written past, what the phone wrote lost, which a chain not moved keeps)
+test("a moved workspace: the same with the station not read as the phone is taken off: read again on the station's refusal, the phone's version taken by the state just before the removal, keyed anew from it; one the phone signs after, presented by the station, changes nothing", async () => {
+  const r = await movedRig(true, { phone: true });
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const id = vaults().vaults[0].id;
+  const old = r.st.vaults.get(id)!;
+  const { sig: _, ...rest } = old;
+  const phones = sign({ ...rest, seq: old.seq + 1, at: old.at + 1 }, TAG.vault, r.phone);
+  r.st.vaults.set(id, phones);
+  r.st.readsOff.on = true;
+  await r.ask("lock.removeDevice", { device: r.phone.hex });
+  await r.host.time.pass(5_000, 10);
+  r.st.readsOff.on = false;
+  // (the lock read again: the vaults keyed anew as it comes, `vaultCome`)
+  await r.settle();
+  await r.settle();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], `keyed anew from the phone's version, without the phone (station at seq ${v.seq}, held ${(r.core.inner.data.record("vault", "ws") as any)?.vaults?.[id]?.seq})`);
+  assert.notEqual(v.sig.key, r.phone.id, "not the phone's");
+  // (the phone, out, signs another past it; the station presents it)
+  const { sig: _2, ...ours } = v;
+  const after = sign({ ...ours, seq: v.seq + 1, at: v.at + 1 }, TAG.vault, r.phone);
+  r.push("vault", after);
+  await r.host.time.pass(500, 10);
+  assert.equal((r.core.inner.data.record("vault", "ws") as any).vaults[id].seq, v.seq, "the phone's version after its removal not taken");
   r.core.close();
 });
 

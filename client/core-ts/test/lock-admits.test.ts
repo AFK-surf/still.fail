@@ -61,7 +61,7 @@ type Asked = { at: string; method: string; path: string; body: string };
 /// `root: "alice"`: alice's log (r1) is the root and says those, and s1 as `mine` (`none`: not at all). `view`: the
 /// workspace's view's members (the control plane's word of each one's role). `own`: s1's own log, this device on it
 /// (`on`), none at all (`none`), or one of another device of theirs this device is not on (`other`).
-async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: "owner" | "admin" | "member" | "none"; view?: { sub: string; email: string; role: string }[]; own?: "on" | "none" | "other"; keyMade?: number } = {}) {
+async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: "owner" | "admin" | "member" | "none"; view?: { sub: string; email: string; role: string }[]; own?: "on" | "none" | "other"; keyMade?: number; quiet?: "A" | "C" } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const me = person("s1", MINE, ME);
@@ -106,6 +106,8 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
   const st2 = { chain: g2 === null ? [] : [g2, signer.sign(next("w2", headOf([g2]), 1001, "moved", { root: gOf(me) }))] as Entry[], logs: [] as Log[], bodies: bodies2, brought: [] as Brought[], silent: false };
   const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked"> = st): Effect.Effect<unknown, CoreError> => {
     st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
+    // (`quiet`: that station, seen lately, never answers a read of the person's own lock: asleep since)
+    if (o.quiet !== undefined && at.endsWith(`/${o.quiet}`) && method === "GET" && path === "/lock/person") return Effect.never;
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
     if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) return Effect.succeed({ head: headOf(x.chain), entries: x.chain, ...serves });
     // (a device the list does not name is given no log and no body: it is told it is left out, `asking`)
@@ -493,6 +495,18 @@ test("a device on its person's own log brings that log where the chain moved: in
 // its key was made then).
 test("a device with no log of its person's where the chain moved: one begun as it asks to be let in, nobody asked, its key made then", async () => {
   const w = await setUp({ own: "none" });
+  const before = w.asked();
+  const log = await w.run(ownLogFor(w.inner, ["ws"]));
+  assert.equal(log.error, undefined, log.error?.message);
+  assert.equal((log.ok as Entry[] | null)?.[0]?.kind, "genesis", "a log begun");
+  assert.equal(w.inner.adb.personal().standing("s1"), "member", "this device on it");
+  assert.deepEqual(w.r.host.secureAsked.slice(before), [], "nobody asked");
+});
+
+// (before 2026-11-14 it waited for the station, told so in words the owner refused: kept out of the workspace on a
+// machine the person may not be able to turn on, where before a move they got in)
+test("a device with no log of its person's where the chain moved, a station of theirs seen lately not answering: its log begun as it asks, nobody asked, not held out", async () => {
+  const w = await setUp({ own: "none", quiet: "C" });
   const before = w.asked();
   const log = await w.run(ownLogFor(w.inner, ["ws"]));
   assert.equal(log.error, undefined, log.error?.message);

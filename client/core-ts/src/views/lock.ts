@@ -42,7 +42,7 @@ import type { SpanContext } from "../trace.ts";
 import { get, hex, isObject, sha256, utf8 } from "../util.ts";
 import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
 import { AGAIN_MOST, againOf, hashOf, keep, links } from "../lock-keep.ts";
-import { tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
+import { levelVaults, levelVaultsOf, tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
@@ -1176,6 +1176,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   heardRefused(inner, ws, told?.person);
   heardTail(inner, ws, told?.entries);
   heardOut(inner, ws, told?.out);
+  heardOwnOnPage(inner, ws, told?.person);
   heardLeft(inner, ws, station, told?.left);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
@@ -1216,6 +1217,19 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   p.refused.set(station, h?.head?.hash ?? null);
   touch(inner, ws);
   return unconfirmed(inner, ws);
+}
+
+/// A web page refused where the chain moved takes its person's own log as the refusal tells it (`person`, as an app
+/// takes it on its own lock, `heardRefused`): a page holds no lock of its person's own, and that log is where it was
+/// taken off (`web.remove`). Else it kept the log as it was given it while in, the state it made still naming it, and
+/// was told for good that the station had not heard of its approval yet (`core-misc.lock.behind`), its page confirmed,
+/// 30 days left (2026-11-14, the locks' end to end, round 16: W taken out on 设置 › 安全).
+function heardOwnOnPage(inner: Inner, ws: string, raw: unknown): void {
+  if (inner.host.appKeys === true || !movedHere(inner, ws) || !Array.isArray(raw)) return;
+  if (keepLogs(inner, ws, raw)) {
+    touch(inner, ws);
+    keepSafe(inner, ws);
+  }
 }
 
 /// What took this device out of a moved workspace, as a station's refusal tells it (station/src/mesh/serve.ts
@@ -1316,10 +1330,16 @@ function outText(inner: Inner, ws: string): string | null {
   return t("core-misc.lock.out", { name, time: format.dateClock(ms, inner.host.utcOffsetMin(ms)) });
 }
 
-/// Why a station is not asked now: it refused this device and the lock has not moved on since.
+/// Why a station is not asked now: it refused this device and the lock has not moved on since. Where the chain moved
+/// it never moves on (what lets a device in is said in its people's logs, which one left out is not given, and nothing
+/// of it reaches the cloud), so a station of the same lock that refused it is asked again at its link's own retry, its
+/// backoff and cap (station/link.ts), as a station that is down is: else a device let in by a statement it is not given
+/// came in only as the person opened the app again or pressed, which a move must not add (the lead, 2026-11-14; the
+/// locks' end to end, round 12: bob's second app, after he was made a member again, never asked again).
 function waiting(inner: Inner, ws: string, station: string): CoreError | null {
   const p = inner.workspaces.get(ws)?.own.get("lock") as Part | undefined;
   if (!p || !p.refused.has(station)) return null;
+  if (movedHere(inner, ws) && keeps(inner, ws, station)) return null;
   if (p.refused.get(station) !== (held(inner, ws)?.head?.hash ?? null)) {
     p.refused.delete(station);
     return null;
@@ -2149,6 +2169,8 @@ function personShownOf(inner: Inner) {
 /// as it comes, a late one too: `answered` is whether every station of theirs the control plane saw in SEEN_SECS did,
 /// and one at least. A lock of theirs kept only by a station that did not answer would get a second one begun beside
 /// it; one the control plane has not seen for a month is not waited for.
+
+
 export function personalStations(inner: Inner): NonNullable<PersonalEnv["stations"]> {
   const heardOf = (sub: string): Set<string> => {
     let m = answeredOf.get(inner);
@@ -2796,6 +2818,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // 设置 › 安全 did nothing that lasted).
         const own = onOwnLock(inner, c.workspace, param("device"));
         if (own !== null) {
+          // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+          yield* levelVaultsOf(inner, own.sub, param("device"));
           const off = yield* withBound(inner, own.sub, Effect.tap(inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove")), () => takeOffBound(inner, own.sub, param("device"))));
           // (pending on their own lock, or, taken there by a station of another workspace of theirs, in this one's:
           // said so either way, as this workspace's page shows it)
@@ -2809,6 +2833,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         if (movedHere(inner, c.workspace) && carriedOwn(inner, c.workspace, param("device")) !== null) {
           const d = carriedOwn(inner, c.workspace, param("device"))!;
           const name = deviceText({ kind: "app", label: d.label });
+          // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+          yield* levelVaultsOf(inner, d.sub, param("device"));
           // (the vaults of theirs that held a key for it keyed anew at once, in every moved workspace their log binds, as
           // `takeOffBound` does: `tookOutMoved`)
           result = yield* Effect.tap(inner.adb.personal().removeCarried(d.sub, param("device"), d.label, actText({ act: "removeDevice", name })), () =>
@@ -2818,7 +2844,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
             }));
           break;
         }
-        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* lock.append("device.remove", { id: param("device") });
+        // (on the chain, the vaults read first while the device is still in: views/vault.ts `levelVaults`)
+        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* Effect.andThen(levelVaults(inner, c.workspace), lock.append("device.remove", { id: param("device") }));
         break;
       }
       case "disable": {
@@ -2996,7 +3023,8 @@ export function roster(inner: Inner, sub: string, ws: string, what: Roster): Eff
     if ("station" in what) return f.stations.has(what.station) ? yield* lock.append("station.remove", { key: what.station }) : null;
     const member = f.members.get(what.member);
     if ("gone" in what) {
-      if (member !== undefined) return yield* lock.append("member.remove", { sub: what.member });
+      // (the vaults read first, while the member is still in: views/vault.ts `levelVaults`)
+      if (member !== undefined) return yield* Effect.andThen(levelVaults(inner, ws), lock.append("member.remove", { sub: what.member }));
       // Only pending (added here while no station was up): that adding dropped, never having taken effect; signed after
       // it, a removal would mean nothing, and the adding would take effect once a station is next up.
       const items = pendingHeld(inner, ws);
@@ -3442,7 +3470,8 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
     const n = as("member", { sub: what.member });
     // (what this person noted as they added them goes with them: `unnote`)
     if ("gone" in what) unnote(inner, ws, what.member, m?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email")));
-    if ("gone" in what) return m === undefined ? Effect.succeed(null) : sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n }));
+    // (the vaults read first, while the member is still in: views/vault.ts `levelVaults`)
+    if ("gone" in what) return m === undefined ? Effect.succeed(null) : Effect.andThen(levelVaults(inner, ws, what.member), sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n })));
     if (m?.role === what.role) return Effect.succeed(null);
     // (someone added whose first device has not come: nothing in the lock to change, the cloud's part alone; the role
     // chosen here now is what their admission here says, `note`, an owner's only by an owner)
@@ -3505,7 +3534,17 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
     const s = arr(get(view(inner, ws), "stations")).find((x) => x?.id === station);
     if (!s) return Effect.fail(CoreError.invalid("not a station of this workspace"));
     const name = str(s.name) || station.slice(0, 8);
-    return sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name }));
+    // Said, and the state in force here naming it: the chain as it moved brought to that station with the logs and
+    // bodies its state is made of, as `joinStation` brings a station the whole chain before a move (the door a station
+    // keeping no lock pins one by: its owner's device, station/src/mesh/moved-pin.ts `pinBrought`, which pins only
+    // where that state names it and lets this device in as an owner's). One that keeps the lock already takes nothing
+    // of it; one that refuses it stays as the security page shows it, not protected.
+    return Effect.tap(sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name })), () => Effect.sync(() => {
+      const entries = held(inner, ws)?.entries ?? [];
+      if (!stateOf(inner, ws).stations.has(station) || entries.length === 0) return;
+      const said = { entries, logs: [...logsOf(inner, ws, false).values()], bodies: bodiesHeld(inner, ws) };
+      inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, station), "POST", "/lock", said, { quiet: true }), { log: "Unhandled", message: "a moved lock brought to the station protected" }));
+    }));
   });
 }
 

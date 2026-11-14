@@ -426,6 +426,16 @@ export class Cloud {
   /// Which of a locked workspace's rigs its person signed for (rigs/adds.ts sets it): until then none of them is
   /// taken, the control plane's word counting for nothing there.
   rigVouched: (workspace: string, rig: Rig) => boolean = () => false;
+  /// The plane's chain of a workspace this station joined and pins no lock of (`leftOut` "unpinned"), where that chain
+  /// moved: what this station may come to keep once the state the logs and bodies make names it (mesh/moved-pin.ts),
+  /// never by the plane's word alone (cloud/presence.ts `takeFromPlane`). By workspace; let go once pinned. (None until
+  /// one is offered, as `planeParted` is: a state made without the constructor has none.)
+  movedOffered?: Map<string, Entry[]>;
+  /// The plane brought `ws`'s chain, moved: kept as offered (`movedOffered`) and those who follow the state told.
+  offerMoved(ws: string, entries: Entry[]): void {
+    (this.movedOffered ??= new Map()).set(ws, entries);
+    this.tell();
+  }
   /// What the control plane last said of the roster and gateways, before the lock filtered them (this run only).
   private planePeers: any[] | null = null;
   private planeGateways: string[] | undefined;

@@ -714,12 +714,12 @@ export function ownLogFor(inner: Inner, workspaces: readonly string[]): Effect.E
     const read = yield* Effect.result(personal.refresh(sub, undefined, personal.asked()));
     if (personal.standing(sub) === "none") {
       if (read._tag === "Failure") return yield* Effect.fail(read.failure);
-      // Begun as a device begins its person's lock before a move: with nobody asked where it may (`mayBeginQuietly`: no
-      // key of its own made before, its stations answered), else the person asked in this device's own words, never
-      // the approver's (2026-11-14, the locks' end to end after #6102: a newcomer's first app was asked 「批准你的新设备」
-      // as it asked to be let in, its key made then).
-      const quiet = personal.mayBeginQuietly(sub) && (yield* personal.beginQuietly(sub));
-      if (!quiet && personal.standing(sub) === "none") yield* personal.begin(sub, t("core-misc.personal.reason.open"));
+      // Begun on the person's act (they asked to be let in): with nobody asked where this device made no key of its own
+      // before (`beginQuietly`'s `acted`: the read just made found none kept, every station it reached saying so; a
+      // station that did not answer holds nobody out of the workspace, as it did not before a move: the lead,
+      // 2026-11-14, after the owner refused a wait said in words), else the person asked once in this device's own
+      // words, never the approver's (the locks' end to end after #6102: a newcomer's first app was asked 「批准你的新设备」).
+      if (!(personal.mayBeginQuietly(sub) && (yield* personal.beginQuietly(sub, true)))) yield* personal.begin(sub, t("core-misc.personal.reason.open"));
     }
     if (personal.standing(sub) !== "member") return null;
     const log = personal.entries(sub);

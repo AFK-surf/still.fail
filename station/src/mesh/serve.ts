@@ -28,6 +28,7 @@ import { hashOf } from "../cloud/log-keep.ts";
 import { type Entry, LockRefusal, admit, admitPerson, asEntry, endpointProof, fold, lowerRole, personFold } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
+import { pinBrought } from "./moved-pin.ts";
 import type { ScreenHub } from "../screens/hub.ts";
 import type { MemberAsk } from "../parts.ts";
 import { compressed } from "./compress.ts";
@@ -385,8 +386,10 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
   let keep = false;
+  let withState: { logs: unknown; bodies: unknown } = { logs: undefined, bodies: undefined };
   try {
     const said = JSON.parse(body.toString("utf8") || "{}");
+    withState = { logs: said?.logs, bodies: said?.bodies };
     // (`keep`: what is brought was taken by another keeper already, a station the device read it of: kept as a station's
     // would be, also off the chain gone by; else only what goes on from its head, cloud/state.ts `keepLock`)
     keep = said?.keep === true;
@@ -402,6 +405,15 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   try {
     if (cloud.chain(ws) === null) {
       if (viewer.role !== "owner") return [403, { error: "only the workspace's owner turns its lock on" }];
+      // A moved chain: by the same door, on the same condition read on its state in force (moved-pin.ts `pinBrought`).
+      if ((entries as Entry[]).some((e) => e.kind === "moved")) {
+        try {
+          pinBrought(cloud, ws, viewer.workspace || cloud.home() || "", entries as Entry[], withState.logs, withState.bodies, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, cloud.state?.station ?? "");
+        } catch (e) {
+          return [403, { error: (e as Error).message }];
+        }
+        return [200, { taken: entries.length, head: lockHead(cloud, ws) }];
+      }
       // Brought by one of its owner's devices as the chain brought names them (one approved after the genesis too:
       // the owner takes a station in from the phone they approved since).
       const brought = fold(entries as Entry[], nowSecs());

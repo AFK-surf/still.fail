@@ -470,6 +470,10 @@ function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null, 
           named = false;
         }
         if (named) s.takeLock(entries as Entry[], ws);
+        // (moved, its stations a statement adds are said in its people's logs, which the chain never names: offered,
+        // pinned once the state its logs and bodies make names this station, fetched of a station of it, mesh/moved-pin.ts;
+        // 2026-11-14, the locks' end to end, round 17: 「保护」 after a move left the station unprotected for good)
+        else if ((entries as Entry[]).some((e) => e.kind === "moved")) s.offerMoved(ws, entries as Entry[]);
         return;
       }
       if (pending === null) return;
