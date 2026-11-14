@@ -654,8 +654,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
   # Every screen's switches pressed over a core answering late, each held to its row of switches_known (src/sfapp's
   # switches_still_wbtest.mbt): main's own run after a merge and the day's, never a branch's pushes (the coordinator of
-  # the migration, 2026-11-13: too long for them), at the default rate alone, on four runners, its thirty-two runs
-  # dealt round them (scripts/test.sh APP_GROUP=switches)
+  # the migration, 2026-11-13: too long for them), at the default rate alone, on four runners, its runs dealt round
+  # them (scripts/test.sh APP_GROUP=switches)
   switches:
     name: native (app switches part ${{ matrix.part }})
     needs: app-build
