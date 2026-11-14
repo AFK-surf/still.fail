@@ -324,7 +324,6 @@ let switches_known : Map[String, Int] = Map([
     ("大屏 files: radio 「分栏」", 2),
     ("大屏 files: radio 「文件树」", 2),
     ("大屏 history-details: toggle 「详情」", 2),
-    ("大屏 history: toggle 「详情」", 2),
     ("大屏 newchat-files: choice row 「下载」", 2),
     ("大屏 newchat-files: choice row 「文档」", 2),
     ("大屏 newchat-files: choice row 「项目」", 2),
