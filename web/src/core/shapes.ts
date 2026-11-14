@@ -1889,6 +1889,11 @@ export interface NoticeShown {
 	/** The session waiting to retry at capacity, while this exact notice can cancel its retry. */
 	retrySession?: string;
 	/**
+	 * The session whose turn failed where its allowance, asked again, showed a limit, while this exact notice can move it
+	 * to another account (重新分配账号: `session.reassign`).
+	 */
+	reassignSession?: string;
+	/**
 	 * The session whose turn failed for the provider or the connection, or that the station stopped asking for a state,
 	 * while this exact notice can try it again (重试: `session.retry`).
 	 */

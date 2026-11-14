@@ -2112,6 +2112,13 @@ pub fn fixture(mode : String) -> Source {
           }
           done(Ok(Json::object({})))
         }
+        "session.reassign" => {
+          if f.mode == "chat-turn-limit" {
+            f.step += 1
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
         "session.cancelRetry" => {
           if f.mode == "chat-overload-after" {
             f.step += 1

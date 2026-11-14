@@ -3,6 +3,7 @@ export interface OperationParams {
   "session.stop": { key: string };
   "session.cancelRetry": { key: string; thread: number; seq: number };
   "session.retry": { key: string; thread: number; seq: number };
+  "session.reassign": { key: string; thread: number; seq: number };
   "tools.access": {  };
   "tools.setAccess": { access: string };
   "agentEnv.set": { env?: unknown; text?: string | null | undefined };
@@ -193,6 +194,7 @@ export function bindStationOperations(call: Call) {
     sessionStop: <T = unknown>(params: OperationParams["session.stop"]) => call("session.stop", params) as Promise<T>,
     sessionCancelRetry: <T = unknown>(params: OperationParams["session.cancelRetry"]) => call("session.cancelRetry", params) as Promise<T>,
     sessionRetry: <T = unknown>(params: OperationParams["session.retry"]) => call("session.retry", params) as Promise<T>,
+    sessionReassign: <T = unknown>(params: OperationParams["session.reassign"]) => call("session.reassign", params) as Promise<T>,
     toolsAccess: <T = unknown>(params: OperationParams["tools.access"] = {}) => call("tools.access", params) as Promise<T>,
     toolsSetAccess: <T = unknown>(params: OperationParams["tools.setAccess"]) => call("tools.setAccess", params) as Promise<T>,
     agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,

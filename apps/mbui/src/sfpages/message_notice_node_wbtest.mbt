@@ -19,6 +19,7 @@ fn nt_msg(
   reportable? : Bool = false,
   retry? : Bool = false,
   again? : Bool = false,
+  reassign? : Bool = false,
   short? : String = "",
   lines? : Array[String] = [],
   sides? : Json? = None,
@@ -37,6 +38,9 @@ fn nt_msg(
   }
   if again {
     n["againSession"] = "s-c1"
+  }
+  if reassign {
+    n["reassignSession"] = "s-c1"
   }
   if short != "" {
     n["short"] = Json::string(short)
@@ -82,7 +86,7 @@ fn nt_opened() -> Message {
 /// The core's doing with `call` (session.cancelRetry, chat.report, software.update) on the fixture's notice.
 fn nt_doing(call : String) -> Json {
   let params : Json = match call {
-    "session.cancelRetry" | "session.retry" => { "station": "ws1/st1", "key": "s-c1" }
+    "session.cancelRetry" | "session.retry" | "session.reassign" => { "station": "ws1/st1", "key": "s-c1" }
     "software.update" => { "station": "ws1/st1", "id": "codex" }
     _ => { "station": "ws1/st1", "thread": "7", "seq": "9" }
   }
@@ -245,6 +249,8 @@ fn nt_cases() -> Array[(String, Message, Json?, Bool)] {
     // 390 and 1.3, as 取消's are with words as long, with or without either)
     ("again", nt_msg(words="模型服务出错，回复即可重试", failed=true, again=true), None, false),
     ("trying again", nt_msg(words="模型服务出错，回复即可重试", failed=true, again=true), Some(nt_doing("session.retry")), false),
+    ("reassign", nt_msg(words="Fable 额度已用完", failed=true, reassign=true), None, false),
+    ("reassigning", nt_msg(words="Fable 额度已用完", failed=true, reassign=true), Some(nt_doing("session.reassign")), false),
     ("run changed", run, None, false),
     ("run changed open", run, None, true),
     ("run changed sides", sided, None, false),
@@ -285,7 +291,7 @@ fn nt_audit(t : @ui.Tester, time : Int, copy : Int, act : Int, dot : Int) -> Arr
   let kinds : Array[(String, (String) -> Bool, Int)] = [
     ("time", fn(f) { room(f, ["1 分钟前"], "message_head_node.mbt") }, time),
     ("copy", fn(f) { room(f, ["复制"], "message_notice_node.mbt") }, copy),
-    ("act", fn(f) { room(f, ["安装", "上报"], "message_notice_node.mbt") }, act),
+    ("act", fn(f) { room(f, ["安装", "上报", "取消", "重试", "重新分配账号"], "message_notice_node.mbt") }, act),
     (
       "dot",
       fn(f) { f.has_prefix("words \"·\"") && f.contains("stillfail/src/sfpages/message_notice_node.mbt") && f.contains(":1, under 4.5") },
@@ -309,7 +315,7 @@ fn nt_audit(t : @ui.Tester, time : Int, copy : Int, act : Int, dot : Int) -> Arr
 fn nt_known(c : (String, Message, Json?, Bool), scale : Double) -> (Int, Int, Int, Int) {
   let (_, m, doing, _open) = c
   let small = scale == 1.0
-  let ends = (m.install is Some(_) || m.reportable) && m.notice_short == "" && m.notice_lines.is_empty()
+  let ends = (m.install is Some(_) || notice_after(m) is Some(_) || m.reportable) && m.notice_short == "" && m.notice_lines.is_empty()
   (
     0,
     0,
@@ -339,14 +345,15 @@ fn nt_drawn(t : @ui.Tester, under? : (Double, Double, Double)? = None) -> String
 }
 
 ///|
-/// Where the old view underlines notice `m`'s · 安装 or · 上报 at the system's size of words `scale` (its x, its y), if
+/// Where the old view underlines notice `m`'s · 安装, its 取消, 重试 or 重新分配账号, or · 上报 at the system's size of words `scale` (its x, its y), if
 /// it ends in one and that is not the default size of words: the nodes' 0.1 lower (the old view's rich line puts it
 /// 18.9 under its words' top where they stand at 25.6, the nodes' runs 19, as they do for the profile's link at 22).
 fn nt_under(t : @ui.Tester, m : Message, scale : Double) -> (Double, Double, Double)? {
   guard scale != 1.0 else { return None }
-  let act = match m.install {
-    Some(_) => "安装"
-    None => if m.reportable { "上报" } else { "" }
+  let act = match (m.install, notice_after(m)) {
+    (Some(_), _) => "安装"
+    (None, Some((_, label, _))) => label
+    (None, None) => if m.reportable { "上报" } else { "" }
   }
   guard act != "" && m.notice_short == "" else { return None }
   let words = t.words().iter().find_first(fn(w) { w.0 == act })
@@ -469,6 +476,7 @@ test "· 上报 asks first, then reports the failure (chat.report) and says what
   assert_eq(@sfbase.toast_words(), "已上报为 FB-42")
   t.run_for(@ui.move_most_ms)
   assert_true(!@sf.presenting(), msg="closed once it went")
+  // (· 上报's room as nt_known's `act` says it, no 取消 beside the pill any more)
   let faults = nt_audit(t, 0, 0, 1, 1)
   assert_true(faults.is_empty(), msg=faults.join(" | "))
 }
@@ -499,7 +507,7 @@ test "取消 while its agent waits to retry cancels it (session.cancelRetry); no
     t.tap_text("取消")
     t.frame()
     assert_eq(calls.length(), 0)
-    let faults = nt_audit(t, 0, 0, 0, 0)
+    let faults = nt_audit(t, 0, 0, 0, 1)
     assert_true(faults.is_empty(), msg=faults.join(" | "))
   }
 }
@@ -561,34 +569,61 @@ test "the pill told with the row's key as it is made, for what lights it as the 
 }
 
 ///|
-test "取消 makes its way along the row as a retry begins and as it ends: the pill moved aside on the way, centred again once it is gone" {
+test "取消 comes at the end of the pill's line as a retry begins and goes as it ends, as · 安装 does" {
   let calls : Array[(String, Json)] = []
   let retry = @signals.signal(false)
   let words = "模型满载，自动重试，与额度无关"
   let m = fn() { nt_msg(words~, failed=true, retry=retry.get()) }
   let t = nt_new(760.0, nt_src(None, calls), m)
   t.run_for(@ui.move_most_ms)
-  let alone = t.rect_of(words).unwrap().0
   assert_true(t.find("取消") is None)
-  // (a retry begins: 取消 comes along the row, the pill moved aside as it does)
   retry.set(true)
-  t.frame()
-  t.frame()
-  let coming = t.rect_of(words).unwrap().0
   t.run_for(@ui.move_most_ms)
-  let beside = t.rect_of(words).unwrap().0
-  assert_true(beside < coming && coming < alone, msg="the pill on its way aside: \{Repr((alone, coming, beside))}")
-  let (px, _, pw, _) = t.rect_of(words).unwrap()
-  assert_true(t.rect_of("取消").unwrap().0 > px + pw, msg="取消 after the pill")
-  // (the retry over: 取消 goes along the row, the pill back to the middle as it does)
+  let (wx, wy, ww, _) = t.rect_of(words).unwrap()
+  let (cx, cy, _, _) = t.rect_of("取消").unwrap()
+  assert_true(cx > wx + ww && (cy - wy).abs() < 2.0, msg="取消 after its words, on their line: \{Repr((wx, wy, ww, cx, cy))}")
   retry.set(false)
-  t.frame()
-  t.frame()
-  let going = t.rect_of(words).unwrap().0
-  assert_true(beside < going && going < alone, msg="the pill on its way back: \{Repr((beside, going, alone))}")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("取消") is None, msg="gone once its way is over")
-  assert_true((t.rect_of(words).unwrap().0 - alone).abs() < 0.01, msg="the pill centred again")
+  assert_true(t.find("取消") is None, msg="gone once the retry is over")
   let faults = nt_audit(t, 0, 0, 0, 0)
+  assert_true(faults.is_empty(), msg=faults.join(" | "))
+}
+
+///|
+test "重新分配账号 on a notice whose allowance showed a limit moves it (session.reassign); gone once it goes on" {
+  let calls : Array[(String, Json)] = []
+  let offered = @signals.signal(true)
+  let m = fn() { nt_msg(words="查了额度：Fable 在这个账号上已用完", failed=true, reassign=offered.get()) }
+  let t = nt_new(760.0, nt_src(None, calls), m)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重试") is None)
+  t.click(Button, label="重新分配账号")
+  t.frame()
+  let sent = calls.filter(fn(c) { c.0 == "session.reassign" })
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].1), "key"), "s-c1")
+  assert_eq(number(Some(sent[0].1), "thread"), 7.0)
+  assert_eq(number(Some(sent[0].1), "seq"), 9.0)
+  offered.set(false)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重新分配账号") is None, msg="gone once its agent goes on")
+  let faults = nt_audit(t, 0, 0, 0, 0)
+  assert_true(faults.is_empty(), msg=faults.join(" | "))
+}
+
+///|
+test "a notice's action at the end of its first line, closed and opened: it never changes its place" {
+  let said = "You've hit your Fable limit · resets Nov 20 at 9am (Asia/Tokyo). Switch to another model to continue."
+  let words = "这个账号的 Fable 额度已用完"
+  let t = nt_new(390.0, nt_src(None, []), fn() { nt_msg(words~, detail=said, failed=true, reassign=true) })
+  t.run_for(@ui.move_most_ms)
+  let (wx, wy, ww, _) = t.rect_of(words).unwrap()
+  let (ax, ay, _, _) = t.rect_of("重新分配账号").unwrap()
+  assert_true(ax > wx + ww && (ay - wy).abs() < 2.0, msg="closed, after its words on their line: \{Repr((wx, wy, ww, ax, ay))}")
+  nt_open(t)
+  let (ox, oy, ow, _) = t.rect_of(words).unwrap()
+  let (bx, by, _, _) = t.rect_of("重新分配账号").unwrap()
+  assert_true(bx > ox + ow && (by - oy).abs() < 2.0, msg="opened, still after its words on their line: \{Repr((ox, oy, ow, bx, by))}")
+  let faults = nt_audit(t, 0, 0, 0, 1)
   assert_true(faults.is_empty(), msg=faults.join(" | "))
 }

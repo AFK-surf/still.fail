@@ -725,6 +725,7 @@ let zh : Map[String, String] = {
   "common.report.lead": "仅在你认为这是 still.fail 本身的问题时上报。网络、代理、账号额度或模型服务的问题，请先自行排查。",
   "common.report.sends": "将发送此报错、出错这一轮的原因、agent 和 station 的版本、agent 环境变量的名称（不含值）、此对话相关的 station 日志，以及你的名字和邮箱。",
   "common.report.title": "上报给 still.fail 团队？",
+  "common.reassignAccount": "重新分配账号",
   "common.retry": "重试",
   "common.save": "保存",
   "common.search": "搜索",

@@ -110,7 +110,7 @@ export type AccountsDeps = {
   /// Starts reviewing the done chats no decision has answered (review.ts): how many, or null without a usable model.
   reviewUndecided?: () => number | null | Promise<number | null>;
   hub?: {
-    accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth; setRecheck?(recheck: (id: string) => Promise<unknown>): void };
+    accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth; setRecheck?(recheck: (id: string) => Promise<unknown>): void; setQuotaAgain?(read: (id: string) => Promise<unknown>): void };
     /// A profile was deleted: its sessions are taken on by another, or stopped.
     profileGone?(id: string): Promise<void>;
     /// A manual reset lets sessions waiting on this account continue.
@@ -309,6 +309,12 @@ export class Accounts {
           this.codexLogin(id, true);
         }
       } else await this.check(id);
+    });
+    // Asked after a turn failed for no reason its words gave: the one on its way waited for, else a new one.
+    this.deps.hub?.accounts.setQuotaAgain?.(async (id) => {
+      const busy = this.quotaBusy.get(id);
+      if (busy) await busy;
+      else await this.readQuota(id, false);
     });
     this.uncheckOutdated();
     // A finished sign-in changes what the profile can do; it is checked again right away.

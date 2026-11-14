@@ -2818,6 +2818,30 @@ test("only the notice of a failed turn still where its agent stands offers 重�
   assert.equal(u.value.messages[1].notice.againSession, undefined);
 });
 
+test("the notice of a failure where the allowance showed a limit offers 重新分配账号, not 重试, while its agent stands there", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const chat = thread(7, ["k"], t.host.nowMs());
+  t.set(threads("ws/a"), [chat]);
+  const entries = [1, 2].map((n) => ({
+    ...entry(n, "⚠️ 这个账号的 Fable 额度已用完"), authorKind: "ember", author: "ember",
+  }));
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries, end: false, thread: chat });
+  const failed = {
+    kind: "input", outcome: "failed", declared: null, detail: "limit:Fable: You've hit your Fable limit",
+    about: { thread: 7, seq: 2, ts: "2.0" }, startedAt: 10, endedAt: 11,
+  };
+  t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { lastTurn: failed }), threads: [chat], turns: [] });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[1].notice.reassignSession, "k");
+  assert.equal(u.value.messages[1].notice.againSession, undefined);
+  assert.equal(u.value.messages[0].notice.reassignSession, undefined);
+  t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { pending: 1, lastTurn: failed }), threads: [chat], turns: [] });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[1].notice.reassignSession, undefined);
+});
+
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   const t = setup();
   const u = ui();

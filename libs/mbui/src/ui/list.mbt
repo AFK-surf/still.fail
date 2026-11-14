@@ -1393,6 +1393,24 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
 }
 
 ///|
+/// List `key` holds its row `item` where it stands now (a row pressed to open: what it opens grows down from where it
+/// was, never pushing what is over it up, the list at its end or not): followed from its top (list_follow_from) that far
+/// under the view's top as it was last laid out. Nothing where that row is not in view.
+pub fn Ctx::list_hold_row(self : Ctx, key : String, item : Int) -> Unit {
+  match self.lists.get(self.id(key)) {
+    Some(st) if st.vis_first >= 0 && item >= st.vis_first && item < st.heights.length() => {
+      let mut top = -st.anchor_off
+      for j in st.vis_first..<item {
+        top = top + st.heights[j]
+      }
+      st.follow_item = item
+      st.follow_margin = top
+    }
+    _ => ()
+  }
+}
+
+///|
 /// Scrolls list `key` by `dy` (down when positive), as a wheel does.
 pub fn Ctx::list_scroll_by(self : Ctx, key : String, dy : Double) -> Unit {
   self.scroll_list(self.id(key), dy)

@@ -2838,6 +2838,7 @@ pub(all) struct Message {
   notice_md : @json.Json?
   notice_retry_session : String
   notice_again_session : String
+  notice_reassign_session : String
   notice_detail : String
   notice_short : String
   notice_lines : Array[String]
