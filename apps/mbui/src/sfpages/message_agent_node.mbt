@@ -248,7 +248,7 @@ fn agent_prose_node(
     )
     |> ignore
   })
-  message_files_node(v, src, here.tips, place, rest, fn() { false }, by, at)
+  message_files_node(v, src, here.tips, place, rest, fn() { false }, by, at, over=fn() { if m().text != "" { files_under_words } else { 0.0 } })
 }
 
 ///|

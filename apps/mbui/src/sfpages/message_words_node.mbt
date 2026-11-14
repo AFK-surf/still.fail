@@ -338,6 +338,7 @@ fn person_said_node(
           fn() { false },
           fn() { Some((m().by.name, "person", m().ts)) },
           at + "/f",
+          over=fn() { if m().text != "" { files_under_words - msg_gap } else { 0.0 } },
         )
       },
       share~,

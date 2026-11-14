@@ -290,7 +290,8 @@ test "a chat's first ask on 小屏 and 大屏: how many of its last messages it 
   // before only once the reader moves it off its end)
   assert_eq(said, [
     "小屏: [window 30, sub] held 30, drawn 10, bones 0",
-    "大屏: [window 30, sub] held 30, drawn 11, bones 0",
+    // (10 on 大屏 since a message's head and words are 4 apart again, msg_main_share's gap: 11 before)
+    "大屏: [window 30, sub] held 30, drawn 10, bones 0",
     "小屏 notices: [window 30, sub] held 30, drawn 19, bones 0",
     "大屏 notices: [window 30, sub] held 30, drawn 18, bones 0",
   ])
@@ -327,7 +328,7 @@ test "a row the core counts is never shorter than the least a chat's first windo
     said.push("\{s.0}: message \{least.floor().to_int()}, notice \{notice.floor().to_int()}, told \{rows}")
     assert_true(rows.to_double() * notice >= s.2, msg="\{s.0}: \{rows} notices \{notice} high")
   }
-  assert_eq(said, ["小屏: message 55, notice 38, told 30", "大屏: message 57, notice 38, told 30"])
+  assert_eq(said, ["小屏: message 55, notice 38, told 30", "大屏: message 61, notice 38, told 30"])
 }
 
 ///|

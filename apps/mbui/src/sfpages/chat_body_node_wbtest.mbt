@@ -812,7 +812,9 @@ fn body_held(which : BodyHeld) -> String {
   let lines = match which {
     HeldMain => [
     "an HTML page it places, as high, not compared (P12): 6",
-    "its picture held under the list's top (c.stick): 43",
+    // (43 till a message's parts were 4 apart again and its files and how it went 8 under what is over them: its
+    // rows taller, four more of the places swept have a row's picture across the list's top; no other kind came)
+    "its picture held under the list's top (c.stick): 47",
   ]
     HeldLarge => [
     "a pill or a capsule as high as its words at a larger size (meant): 2",
