@@ -7,6 +7,8 @@
 // told to update where a chain moved, mesh/serve.ts) and by the core (a handover waits for every app device the chain
 // lets in to run one, client/core-ts src/lock-handover.ts): nothing else here, so the core takes this file as it is.
 //
-// PLACEHOLDER (2026-11-14): the number of the commit on main that brings `state4_moved` to the station and the core, set
-// by whoever merges it (`gh api -i "repos/AFK-surf/still.fail/commits?sha=<sha>&per_page=1"`'s last page).
-export const MOVED_FROM_BUILD = 9999;
+// 9100: a little above the commit on main that brings `state4_moved` to the station and the core (main stood at 9073 as
+// it was set, 2026-11-14), never below it: a build from that commit up to 9100 has this code and is taken as not able,
+// so it moves nothing itself (views/lock.ts `heldBack` holds this device's own build too) and waits to be updated
+// past it, which costs a few hours once; a number under that commit would take a build without this code as able.
+export const MOVED_FROM_BUILD = 9100;
