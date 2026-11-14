@@ -164,7 +164,10 @@ another; the accounts' list's merge across stations and its refills.
   keeping it, `chosen`, `carry`) reads `fold`. Without the root's log or its `open` it waits (nobody listed, nothing
   asked of the device). It is made once and kept in memory while what it is made of stands (`inForceOf`). Nothing is
   signed on a moved chain itself: `Lock.append` answers `lock_moved`, the background writers do nothing, and what was
-  pending as the chain moved is told as not taken effect. `test/lock-moved-state.test.ts` holds it to the model.
+  pending as the chain moved is told as not taken effect. A change a person asks for there from a device on no log
+  of theirs answers `lock_moved` in the words of one not trusted (`core-misc.lock.notSigner`, views/lock.ts
+  `notTrustedHere`), and one of another member's app devices says it is theirs alone (`core-misc.lock.othersDevice`);
+  `lockMoved`'s English is the background writers' and older paths' alone. `test/lock-moved-state.test.ts` holds it to the model.
   Whether a workspace is in safe mode is `src/views/lock.ts` `safeMode`, by the lock held (kept small beside it,
   `lockSafe`, so a list of every workspace reads a few bytes a workspace); the workspace's view's `locked`
   (the cloud's word, true for good once its chain moved, off or on) only where none is held on (2026-11-14).
