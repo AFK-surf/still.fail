@@ -120,7 +120,7 @@ const PAGES = new Set(["timeline", "machineSessions"]);
 const HISTORY = new Set(["timeline", "transcriptState"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage", "sessionPlace"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage", "sessionPlace", "changed"]);
 /// The reads of this machine's own Claude Code and Codex sessions: the MoonBit reader is told where they are kept, from
 /// this process's environment (read/machine.ts `roots`), as the worker reads it.
 const MACHINE = new Set(["machineSessions", "machineSession"]);
@@ -156,6 +156,12 @@ const wordsIn = (op: string, lang: Ask["lang"]) => ({
   ...(op === "outflowChats" || op === "openJobs" || op === "resourceChats" || op === "usage" ? { untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage") } : {}),
   ...(op === "chats" || op === "chatRows" ? { untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"), quotedOnly: tr(lang, "station.chat.quotedOnly") } : {}),
 });
+
+/// `changed`'s list's own args, given the words and the time its read is given (`WORDED`).
+const changedOf = (args: unknown, lang: Ask["lang"]) => {
+  const a = args as { op: string; args?: unknown };
+  return { ...a, args: { ...(a.args as object), words: wordsIn(a.op, lang), now: wall.now() } };
+};
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -675,6 +681,8 @@ export class Readers {
       : line !== this.moved ? args
       : MACHINE.has(op) ? { ...(args as object), roots: machineRoots() }
       : op === "sessionPlace" ? placeOf(args)
+      // (what of a list changed: the list read as its own read is, given its words; read/digest.ts `changedOf`)
+      : op === "changed" && WORDED.has((args as { op?: string }).op ?? "") ? changedOf(args, lang)
       // (the usage page says its words in the language its args name, as read/ops-usage.ts reads it)
       : WORDED.has(op) ? { ...(args as object), words: wordsIn(op, op === "usage" ? argsLang(args) ?? lang : lang), now: wall.now() }
       : args;
