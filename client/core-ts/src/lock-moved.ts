@@ -185,6 +185,19 @@ export function goodFor(chains: Iterable<readonly Entry[]>, now: number, entries
   return { from, until };
 }
 
+/// `entries` read as they moved, once (rules `carried_js`): kept by their array while it is the same chain, its length
+/// and last entry as they were (the `lock` record's entries, the object the database's cache holds until the lock is
+/// written; an array pushed onto in place is read again), since nothing follows a `moved` and that reading of 1000
+/// members was four fifths of making the state again as a log or a body came (2026-11-15). Another array: read anew.
+const carriedKept = new WeakMap<readonly Entry[], { length: number; last: Entry | undefined; handle: unknown }>();
+function carriedOf(entries: readonly Entry[]): unknown {
+  const was = carriedKept.get(entries);
+  if (was !== undefined && was.length === entries.length && was.last === entries[entries.length - 1]) return was.handle;
+  const handle: unknown = rules.carried_js(entries, crypto);
+  carriedKept.set(entries, { length: entries.length, last: entries[entries.length - 1], handle });
+  return handle;
+}
+
 /// How often `inForce` was run: what the rules' state costs, counted for test/lock-moved.test.ts (views/lock.ts makes
 /// it once while what it is made of stands, `inForceOf`).
 export const made: { count: number } = { count: 0 };
@@ -198,7 +211,7 @@ export function inForce(ws: string, entries: readonly Entry[], chains: ReadonlyM
   const root = movedRoot(entries);
   if (root === null) return { said: "chain", root: null, f: fold(entries) };
   const now = Math.floor(nowMs / 1000);
-  const out = rules.state4_moved_js(ws, entries, [...chains.values()], bodies, now, crypto) as J;
+  const out = rules.state4_carried_js(ws, carriedOf(entries), [...chains.values()], bodies, now, crypto) as J;
   // (a state the rules cannot make of what is kept is none: nobody is listed)
   if ("error" in out || (out.on !== "on" && out.on !== "off")) return { said: "waiting", root, f: none(), checked: checkedOf(rules.state4_js(ws, root, [], [], now, crypto)) };
   const s = out.state as J;

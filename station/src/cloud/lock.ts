@@ -352,16 +352,29 @@ export function state4(ws: string, root: string, chains: unknown[][], bodies: un
 /// (rules/src/lock/roster.mbt `binds_of`).
 /// `rootIn`: whether the root's person is bound by `~root` (rules/src/lock/state4.mbt `root_in`).
 export function state4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState; rootIn: boolean } {
-  const out = rules.state4_moved_js(ws, chain, chains, bodies, now, crypto);
+  const out = rules.state4_carried_js(ws, carriedOf(chain), chains, bodies, now, crypto);
   return { on: out.on, state: taken(out), rootIn: out.root_in === true };
 }
 
 /// `roster4` of a workspace whose chain moved, as `state4Moved` reads it: and `carried_keys`, the keys of the app
 /// devices the chain as it moved still says, each `{key, sub}`.
 export function roster4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], without: string[] = []): ReturnType<typeof roster4> & { carried_keys: { key: string; sub: string }[] } {
-  const out = rules.roster_moved_js(ws, chain, chains, bodies, without, crypto);
+  const out = rules.roster_carried_js(ws, carriedOf(chain), chains, bodies, without, crypto);
   if ("error" in out) throw new Error(out.error);
   return out;
+}
+
+/// `chain` read as it moved, once (rules `carried_js`): kept by its array while that is the same chain, its length and
+/// last entry as they were (the kept lock's `entries`, replaced whole as the lock changes; an array pushed onto in
+/// place is read again), since nothing follows a `moved` and the reading of 1000 members was four fifths of making
+/// the state again at every log or body that came (2026-11-15). Another array is read anew: the same, only slower.
+const carriedKept = new WeakMap<readonly Entry[], { length: number; last: Entry | undefined; handle: unknown }>();
+function carriedOf(chain: readonly Entry[]): unknown {
+  const was = carriedKept.get(chain);
+  if (was !== undefined && was.length === chain.length && was.last === chain[chain.length - 1]) return was.handle;
+  const handle: unknown = rules.carried_js(chain, crypto);
+  carriedKept.set(chain, { length: chain.length, last: chain[chain.length - 1], handle });
+  return handle;
 }
 
 /// Workspace `ws`'s list as the rules work it out of the same (rules/src/lock/roster.mbt): what is in force (`in_force`,

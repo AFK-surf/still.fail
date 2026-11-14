@@ -383,6 +383,12 @@ pub fn copied_js() -> Int {
 }
 
 ///|
+/// How many entries of a workspace's chain the rules stepped since they loaded (`@lock.stepped`).
+pub fn stepped_js() -> Int {
+  @lock.stepped.val
+}
+
+///|
 /// A whole chain folded (station/src/cloud/lock.ts `fold`), as `genesis_js` and `apply_js` give it: `{state, rules}`
 /// or `{error}`; the state made into JS once, at the end.
 pub fn fold_held_js(entries : JsValue, now : JsValue, crypto : JsCrypto) -> JsValue {
@@ -718,9 +724,15 @@ pub fn roster_js(ws : String, root : String, chains : JsValue, bodies : JsValue,
 /// `roster_moved`), rooted in the log its `moved` names, with what the chain as it moved still says; `carried_keys`
 /// beside the rest, `[{key, sub}]`.
 pub fn roster_moved_js(ws : String, chain : JsValue, chains : JsValue, bodies : JsValue, without : JsValue, crypto : JsCrypto) -> JsValue {
+  roster_carried_js(ws, carried_js(chain, crypto), chains, bodies, without, crypto)
+}
+
+///|
+/// `roster_moved_js` of a chain read once (`carried_js`).
+pub fn roster_carried_js(ws : String, h : CarriedHandle, chains : JsValue, bodies : JsValue, without : JsValue, crypto : JsCrypto) -> JsValue {
   let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
-  let ch = entries_of(chain) catch { @form.Invalid(why) => return refused(why) }
-  roster_json(@lock.roster_moved(ws, ch, cs, bodies_of(bodies), texts_of(without), crypto))
+  guard h.moved is Some(m) else { return refused(h.invalid) }
+  roster_json(@lock.roster_carried(ws, m, cs, bodies_of(bodies), texts_of(without), crypto))
 }
 
 ///|
@@ -791,9 +803,30 @@ pub fn state4_js(ws : String, root : String, chains : JsValue, bodies : JsValue,
 /// `state4_moved`), rooted in the log its `moved` names, with what the chain as it moved still says; and `root_in`,
 /// whether the root's person is bound by `~root`.
 pub fn state4_moved_js(ws : String, chain : JsValue, chains : JsValue, bodies : JsValue, now : Double, crypto : JsCrypto) -> JsValue {
+  state4_carried_js(ws, carried_js(chain, crypto), chains, bodies, now, crypto)
+}
+
+///|
+/// A workspace's chain read as it moved, once (`@lock.moved_of`): a handle the station and the core keep while that
+/// is their chain (nothing follows a `moved`) and give `state4_carried_js` and `roster_carried_js` in the chain's
+/// place. One whose entries are not entries says why, as those then answer.
+pub(all) struct CarriedHandle {
+  moved : @lock.Moved?
+  invalid : String
+}
+
+///|
+pub fn carried_js(chain : JsValue, crypto : JsCrypto) -> CarriedHandle {
+  let ch = entries_of(chain) catch { @form.Invalid(why) => return { moved: None, invalid: why } }
+  { moved: Some(@lock.moved_of(ch, crypto)), invalid: "" }
+}
+
+///|
+/// `state4_moved_js` of a chain read once (`carried_js`).
+pub fn state4_carried_js(ws : String, h : CarriedHandle, chains : JsValue, bodies : JsValue, now : Double, crypto : JsCrypto) -> JsValue {
   let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
-  let ch = entries_of(chain) catch { @form.Invalid(why) => return refused(why) }
-  let st = @lock.state4_moved(ws, ch, cs, bodies_of(bodies), now, crypto)
+  guard h.moved is Some(m) else { return refused(h.invalid) }
+  let st = @lock.state4_carried(ws, m, cs, bodies_of(bodies), now, crypto)
   let o = held(st.lock)
   js_put(o, "on", js_of_str(st.on))
   js_put(o, "root_in", js_of_bool(st.root_in))

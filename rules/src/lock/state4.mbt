@@ -44,8 +44,13 @@ pub fn state4(ws : String, root : String, chains : Array[Array[Json]], bodies : 
 /// `state4` of a workspace whose chain moved (`chain`, its active chain, the `moved` last), rooted in the log its
 /// `moved` names, with what the chain as it moved still says. A chain that does not fold or did not move: "no root".
 pub fn state4_moved(ws : String, chain : Array[Json], chains : Array[Array[Json]], bodies : Array[Json], now : Double, c : &Crypto) -> State4 {
-  let (root, carried) = carried_of(chain, c)
-  state4_of(ws, root, chains, bodies, now, carried, c)
+  state4_carried(ws, moved_of(chain, c), chains, bodies, now, c)
+}
+
+///|
+/// `state4_moved` of a chain read once (`moved_of`).
+pub fn state4_carried(ws : String, m : Moved, chains : Array[Array[Json]], bodies : Array[Json], now : Double, c : &Crypto) -> State4 {
+  state4_of(ws, m.root, chains, bodies, now, m.carried, c)
 }
 
 ///|

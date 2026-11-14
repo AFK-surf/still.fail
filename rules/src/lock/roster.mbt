@@ -138,8 +138,29 @@ pub fn roster(ws : String, root : String, chains : Array[Array[Json]], bodies : 
 /// that `moved` names, with what the chain as it moved still says (`Carried`). A chain that does not fold, or does not
 /// end in a `moved`, roots it in nothing ("no root": nothing is told).
 pub fn roster_moved(ws : String, chain : Array[Json], chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], c : &Crypto) -> Roster {
+  roster_carried(ws, moved_of(chain, c), chains, bodies, without, c)
+}
+
+///|
+/// A moved chain read once (`moved_of`): the root its `moved` names and what the chain as it moved still says. Nothing
+/// follows a `moved`, so it stands for its chain while that is the chain held; what reads it (`roster_carried`,
+/// `state4_carried`) only reads it.
+pub(all) struct Moved {
+  root : String
+  carried : Carried?
+}
+
+///|
+/// `chain` (its active chain, the `moved` last) read as it moved (`carried_of`).
+pub fn moved_of(chain : Array[Json], c : &Crypto) -> Moved {
   let (root, carried) = carried_of(chain, c)
-  roster_of(ws, root, chains, bodies, without, carried, c).0
+  { root, carried }
+}
+
+///|
+/// `roster_moved` of a chain read once (`moved_of`).
+pub fn roster_carried(ws : String, m : Moved, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], c : &Crypto) -> Roster {
+  roster_of(ws, m.root, chains, bodies, without, m.carried, c).0
 }
 
 ///|
