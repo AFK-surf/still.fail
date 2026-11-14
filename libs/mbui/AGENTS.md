@@ -133,7 +133,11 @@ yet and you can add one, add it.
   and over its pinned foot, by that start, kept while it shows till the hand moves the list or it is asked elsewhere;
   what is over that start gives and takes its room upward, its own growth goes down (`src/view/list_read_from.mbt`).
   A list that marks none is held by the block the top of what shows lies in, by its top, as before (the coordinator of
-  the migration, 2026-11-14).
+  the migration, 2026-11-14). Following its foot, it follows it no further than a key's top its page names
+  (`ListPlace::follow_from`: a chat's answer read from its top), that top a margin under what covers the list's top: a
+  standing limit, which while it binds holds the list by that top and has it off its foot to every rule of its foot,
+  however near the foot, and stands till the hand takes the list, an ask, another named, or its key goes
+  (`src/view/list_follow_from_test.mbt`; the coordinator of the migration, 2026-11-14).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.
