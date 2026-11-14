@@ -549,7 +549,10 @@ jobs:
           # with nothing said could not be told why, fix-update-jitter 40539668024)
           quiet() { "$@" > "$RUNNER_TEMP/packages.log" 2>&1 || { c=$?; cat "$RUNNER_TEMP/packages.log"; echo "packages: $* in $PWD: exit $c"; return $c; }; }
           quiet pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
-          (cd client/core-ts && quiet pnpm install --frozen-lockfile --prefer-offline)
+          # (append-only: what its install scripts run and say, in the log, not only the packages: the core's ended 127
+          # once more with every package added and nothing said after, #6305's 43616724205, 2026-11-14; esbuild's
+          # postinstall is the one script it runs, pnpm-workspace.yaml's onlyBuiltDependencies)
+          (cd client/core-ts && quiet pnpm install --frozen-lockfile --prefer-offline --reporter=append-only)
           # (the cloud and the test station: the e2e flow's alone)
           [ -n "$E2E" ] || exit 0
           (cd cloud && quiet pnpm install --frozen-lockfile --prefer-offline)
