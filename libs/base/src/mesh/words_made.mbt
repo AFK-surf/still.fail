@@ -1,0 +1,56 @@
+// Made by scripts/mb-base-words.ts from client/core-ts/src/lang.zh.json and lang.en.json (the device base's own words):
+// do not edit.
+
+///|
+let made_zh : Map[String, String] = {
+  "core-logic.mesh.bad_device_key": "设备密钥应为 32 字节",
+  "core-logic.mesh.bad_station_id": "服务器 id 无效：{id}",
+  "core-logic.mesh.bind_failed": "无法启动此设备的网络连接",
+  "core-logic.mesh.closed": "连接已关闭",
+  "core-logic.mesh.closed_by_station": "服务器断开了连接：{reason}",
+  "core-logic.mesh.credential_closed": "服务器关闭了授权通道",
+  "core-logic.mesh.credential_expired": "授权已过期",
+  "core-logic.mesh.credential_refused": "服务器拒绝了授权",
+  "core-logic.mesh.credential_refused_why": "服务器拒绝了授权：{reason}",
+  "core-logic.mesh.credential_revoked": "授权已被撤销",
+  "core-logic.mesh.cut": "与服务器的连接中断",
+  "core-logic.mesh.credential_unreadable": "无法解析服务器的授权响应",
+  "core-logic.mesh.head_too_long": "服务器返回的头部过长",
+  "core-logic.mesh.no_answer": "无法连接服务器：无响应",
+  "core-logic.mesh.no_reply": "服务器无响应",
+  "core-logic.mesh.not_connected": "尚未连接服务器",
+  "core-logic.mesh.all_off": "连接服务器的所有方式都已关闭",
+  "core-logic.mesh.reply_cut": "服务器的响应在行中断开",
+  "core-logic.mesh.reply_no_status": "服务器的响应缺少状态码",
+  "core-logic.mesh.reply_unreadable": "无法解析服务器的响应",
+  "core-logic.mesh.station_removed": "服务器断开了连接：station_removed",
+  "core-logic.mesh.timed_out": "连接超时",
+  "core-logic.mesh.unreached": "无法连接服务器",
+}
+
+///|
+let made_en : Map[String, String] = {
+  "core-logic.mesh.bad_device_key": "Device key must be 32 bytes",
+  "core-logic.mesh.bad_station_id": "Invalid server id: {id}",
+  "core-logic.mesh.bind_failed": "Couldn't start this device's network connection",
+  "core-logic.mesh.closed": "Connection closed",
+  "core-logic.mesh.closed_by_station": "The server closed the connection: {reason}",
+  "core-logic.mesh.credential_closed": "The server closed the access channel",
+  "core-logic.mesh.credential_expired": "Access expired",
+  "core-logic.mesh.credential_refused": "The server refused access",
+  "core-logic.mesh.credential_refused_why": "The server refused access: {reason}",
+  "core-logic.mesh.credential_revoked": "Access revoked",
+  "core-logic.mesh.cut": "Lost connection to the server",
+  "core-logic.mesh.credential_unreadable": "Unreadable access response from the server",
+  "core-logic.mesh.head_too_long": "The server's header is too long",
+  "core-logic.mesh.no_answer": "Can't reach the server: no response",
+  "core-logic.mesh.no_reply": "The server didn't respond",
+  "core-logic.mesh.not_connected": "Not connected to the server yet",
+  "core-logic.mesh.all_off": "Every way to reach the server is turned off",
+  "core-logic.mesh.reply_cut": "The server's response was cut off mid-line",
+  "core-logic.mesh.reply_no_status": "The server's response has no status code",
+  "core-logic.mesh.reply_unreadable": "Unreadable response from the server",
+  "core-logic.mesh.station_removed": "The server closed the connection: station_removed",
+  "core-logic.mesh.timed_out": "Timed out",
+  "core-logic.mesh.unreached": "Couldn't reach the server",
+}

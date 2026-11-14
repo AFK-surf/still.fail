@@ -11,7 +11,8 @@
 #   sh scripts/check.sh all           full, as if every file changed
 #
 # STILLFAIL_CHECK_PART="<part> …" (ts, core-tests, station, station-tests, core) runs only those parts of it: ts the
-# icons, the clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud);
+# icons, the clients' types and bindings, TypeScript, release notes, the tests run by node (web, scripts, cloud) and
+# the base in MoonBit (libs/base);
 # core-tests the core's own tests (client/core-ts/test), all of them or, with STILLFAIL_CORE_SHARD="<i>/<n>", the i-th
 # slice of n; station the station (station/: its typecheck, its programs in MoonBit) and its native parts' own
 # tests (station/native); station-tests the station's tests (station/test), all of them or, with
@@ -384,6 +385,17 @@ if part ts; then
   if touches '^station/src/|^scripts/mesh-base\.ts$'; then
     step "the mesh's base imports nothing of the station's business" node scripts/mesh-base.ts
   fi
+  # The base in MoonBit (libs/base/AGENTS.md) knows no program: its packages import their own, mbui's effect and
+  # MoonBit's core, and say neither still.fail's name nor a program's but where the script's NAMED lets one be. And its
+  # mesh's words are what the device base's own make (client/core-ts/src/lang.zh.json, lang.en.json).
+  # (the first for a change to an mbui package's imports too: it holds which of them the base is built with, the ones
+  # the moon step below is run for)
+  if touches '^libs/base/|^scripts/mb-base\.ts$|^libs/mbui/src/[^/]+/moon\.pkg$'; then
+    step "the base in MoonBit knows no program" node scripts/mb-base.ts
+  fi
+  if touches '^libs/base/|^client/core-ts/src/lang\.(zh|en)\.json$|^scripts/mb-base-words\.ts$'; then
+    step "the base in MoonBit says the device base's words" node scripts/mb-base-words.ts --check
+  fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.
   core_tests=0
@@ -428,6 +440,19 @@ if [ $full = 1 ]; then
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root after core pnpm test; fi
+  fi
+  # The base in MoonBit (libs/base): every package under its src/ (each directory with a moon.pkg) type-checked for
+  # native and for js, and every package's tests run on both (today wire alone has any); for a change to it or to
+  # what it is built with of mbui: effect, and halt, which effect imports (scripts/mb-base.ts holds that list to
+  # effect's moon.pkg and to the line below). By package, never the workspace, and writing no interface (--no-mbti):
+  # mbui is a member of its workspace, and moon would write mbui's pkg.generated.mbti files too. No Rust shell is
+  # linked here: a native test that reaches the shell's C does not link, and says so (libs/base/AGENTS.md). No test
+  # opens a link, and nothing reads the page's shell's JavaScript.
+  if part ts && touches '^libs/base/|^libs/mbui/src/(effect|halt)/|^libs/mbui/moon\.(mod|work)$'; then
+    if has moon; then
+      # shellcheck disable=SC2016 # the command's own variable, expanded by its shell
+      step "the base in MoonBit: every package checked for native and js, its tests on both" sh -c 'cd libs/base && pkgs=$(find src -name moon.pkg -exec dirname {} \; | sort) && [ -n "$pkgs" ] && moon check --no-mbti --target native $pkgs && moon check --no-mbti --target js $pkgs && moon test --target native $pkgs && moon test --target js $pkgs'
+    else later "the base in MoonBit"; fi
   fi
   # The TypeScript core's own tests; its mesh tests on a simulated network, a few over the station's addon, prebuilt (its
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.

@@ -1,0 +1,7 @@
+import {
+  "base/shell",
+  "base/wire",
+  "mbui/effect",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
