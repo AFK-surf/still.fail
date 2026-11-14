@@ -688,7 +688,7 @@ export type Candidate = { path: string; name: string; repo: string | null; chats
 /// (most, then the latest), the rest by when they last changed; and those other presets name. Read off the main
 /// thread's way (a cache can hold many clones, each many worktrees).
 /// `here`: whether a folder's station is this one (Presets `isHere`).
-export async function candidates(reposDir: string, presets: { dirs: PresetDir[]; updatedAt: number }[], found: Candidate[] = [], here: (station: string) => boolean = () => false): Promise<Candidate[]> {
+export async function candidates(reposDir: string, presets: { dirs: PresetDir[]; updatedAt: number; [more: string]: unknown }[], found: Candidate[] = [], here: (station: string) => boolean = () => false): Promise<Candidate[]> {
   const list = async (dir: string) => readdir(dir).catch(() => [] as string[]);
   const cached = await Promise.all(
     (await list(reposDir)).map(async (name): Promise<Candidate | null> => {

@@ -95,7 +95,7 @@ test("of the same records the newer is one, whatever order they are folded in", 
   // what both sides make of a record is what they make of that again
   const made = recordOf({ ...base, name: " Work ", rev: 1, updatedAt: 1, stations: ["s1"], model: { model: " opus ", profiles: ["a", "a"] }, dirs: [base.dirs[0], base.dirs[0]] });
   assert.equal(canonical(recordOf(made)), canonical(made));
-  assert.deepEqual(made.dirs.length, 1);
+  assert.deepEqual((made as { dirs: unknown[] }).dirs.length, 1);
   assert.throws(() => recordOf({ ...base, rev: 0, updatedAt: 1 }), /rev/);
   assert.throws(() => recordOf({ ...base, rev: 1, updatedAt: 1, dirs: [{ path: "/a", repo: null }] }), /station/);
 });
