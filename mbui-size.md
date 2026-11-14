@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [590bf6907](https://github.com/AFK-surf/monoid/commit/590bf69073a62fa834b7f772a052e4105fc0f4ee) station: a person's taps on a Farview tab land whe | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 96.86 | 117.74 |
 | [9af154ee0](https://github.com/AFK-surf/monoid/commit/9af154ee08cfe09244330dbf9dd1775716609a46) fix(mbui,core): send new chat immediately on Enter | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 97.03 | 108.8 |
 | [76d5976b2](https://github.com/AFK-surf/monoid/commit/76d5976b26223d234e8a38ae985146807aece46a) app: a chat's page made as nodes lets go with the  | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 97.03 | 108.8 |
 | [2d8076f76](https://github.com/AFK-surf/monoid/commit/2d8076f7619bd042d184db62c7b65aa4f8ab23a3) mbui app: the search field tucked over the chats'  | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.27 | 55.38 | 97.04 | 115.29 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 2 | 2.73 | 11.65 | 31.29 | 41.89 | 27.9 | 53.58 | 96.7 | 101.12 |
 | [d09a449d5](https://github.com/AFK-surf/monoid/commit/d09a449d525be999873a4f1776d31f04004ad158) mbui: decouple touch hit-area from visual layout s | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.6 | 112.55 |
 | [a6a55e699](https://github.com/AFK-surf/monoid/commit/a6a55e6998f1a6c834830956ac055b6e232d8816) app: a chat opens on its login cards' answers too, | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.6 | 112.55 |
-| [f48bb1220](https://github.com/AFK-surf/monoid/commit/f48bb12201bb9ee671a7f489cb0dfcc86742f45f) base: a link's pings are measured and say how its  | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.89 | 53.58 | 96.63 | 110.68 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [590bf6907](https://github.com/AFK-surf/monoid/commit/590bf69073a62fa834b7f772a052e4105fc0f4ee) station: a person's taps on a Farview tab land whe | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.25 |
 | [9af154ee0](https://github.com/AFK-surf/monoid/commit/9af154ee08cfe09244330dbf9dd1775716609a46) fix(mbui,core): send new chat immediately on Enter | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.25 |
 | [76d5976b2](https://github.com/AFK-surf/monoid/commit/76d5976b26223d234e8a38ae985146807aece46a) app: a chat's page made as nodes lets go with the  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.12 |
 | [2d8076f76](https://github.com/AFK-surf/monoid/commit/2d8076f7619bd042d184db62c7b65aa4f8ab23a3) mbui app: the search field tucked over the chats'  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.12 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
 | [d09a449d5](https://github.com/AFK-surf/monoid/commit/d09a449d525be999873a4f1776d31f04004ad158) mbui: decouple touch hit-area from visual layout s | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
 | [a6a55e699](https://github.com/AFK-surf/monoid/commit/a6a55e6998f1a6c834830956ac055b6e232d8816) app: a chat opens on its login cards' answers too, | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
-| [f48bb1220](https://github.com/AFK-surf/monoid/commit/f48bb12201bb9ee671a7f489cb0dfcc86742f45f) base: a link's pings are measured and say how its  | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
