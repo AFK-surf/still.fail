@@ -106,6 +106,20 @@ test("the MoonBit reader reads the shared chat list as the worker does", { skip:
   db.prepare("INSERT INTO reads (viewer, thread, n, at) VALUES ('p@x', ?, 2, 1)").run(both);
   db.prepare("INSERT INTO pins (viewer, session, at) VALUES ('p@x', 'a1', 5)").run();
   db.prepare("INSERT INTO identities (viewer, slack_user, at) VALUES ('p@x', 'U1', 1)").run();
+  // The archive: a session archived with its own chat, a chat archived alone, the archived one beside a chat's agents.
+  session("arch", { ws: "w", lastActiveAt: 900 });
+  const archChat = chat("arch", "Archived", ["arch"]);
+  db.prepare("UPDATE threads SET home = 'arch' WHERE id = ?").run(archChat);
+  say(archChat, "person", "p@x", "before it went");
+  db.prepare("UPDATE sessions SET archived_at = 6500, archived_by = 'auto' WHERE key = 'arch'").run();
+  db.prepare("UPDATE threads SET hidden_at = 6500, hidden_by = 'auto' WHERE id = ?").run(archChat);
+  // An agent come of a Feishu group, with nothing said there yet: named by the group.
+  writeFileSync(join(data, "feishu-names.json"), JSON.stringify({ "c:fs:oc_abc": { channel: "The group" } }));
+  session("fsess", { connect: "fs", ws: "w", lastActiveAt: 950 });
+  store.joinThread(store.openThread("feishu:fs", "oc_abc", "f.1", null, null).id, "fsess", "fs");
+  const lonely = chat("lonely", null, ["a3"]);
+  say(lonely, "person", "p@x", "alone");
+  db.prepare("UPDATE threads SET hidden_at = 6600 WHERE id = ?").run(lonely);
   const readers = (mb: string | null) => {
     const r = new Readers(data, 1);
     r.mbReader = mb;
@@ -131,6 +145,11 @@ test("the MoonBit reader reads the shared chat list as the worker does", { skip:
       for (const viewer of [{ email: "p@x", workspace: "w", home: true }, { email: "Q@X", workspace: "w" }, { email: "u@x", workspace: "x", home: false }]) {
         out.push(await read(r, "chatMarks", { viewer, scope: null }, lang));
         out.push(await read(r, "chatMarks", { viewer, scope: { sessions: ["a1", "a3", "gone"], threads: [need, twice] } }, lang));
+        // A device that does not make its list itself, and the archive a page at a time.
+        out.push(await read(r, "chats", { viewer, archived: false }, lang));
+        out.push(await read(r, "chats", { viewer, archived: true }, lang));
+        for (const page of ["", "  :x", "6600:", "6500:arch", "abc:x", " 7000 :zzz", "0x1F00:a", "9999999999999999:z"]) out.push(await read(r, "chats", { viewer, archived: true, page }, lang));
+        out.push(await read(r, "chatRows", { viewer, sessions: ["a1", "s1"], threads: [need, slack] }, lang));
       }
     }
     return out;
