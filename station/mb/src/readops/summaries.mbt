@@ -113,7 +113,7 @@ fn list_bindings(db : @sql.Db, keys : Array[String]) -> Map[String, Array[Json]]
     return out
   }
   if !session_bindings_ready(db) {
-    fail("session binding index is still being prepared")
+    raise Failure("session binding index is still being prepared")
   }
   for r in db.all(session_bindings_selected_sql, [ids_json(unique_keys([keys]).map(Json::string))]) {
     let k = js_text(field(r, "session"))
@@ -187,7 +187,7 @@ fn lengths_and_usages(db : @sql.Db, keys : Array[String]) -> (Map[String, Json],
     let source = if incremental { "session_usage u JOIN usage_totals_source_sessions c ON c.session = u.session AND c.done = 1" } else { "session_usage u" }
     let found : Array[(String, Json)] = []
     for r in db.all("SELECT u.session, u.usage FROM \{source} WHERE u.session IN (SELECT value FROM json_each(?))", list) {
-      guard field(r, "usage") is String(u) else { fail("usage") }
+      guard field(r, "usage") is String(u) else { raise Failure("usage") }
       found.push((js_text(field(r, "session")), to_json(@jsjson.parse(u))))
     }
     found
@@ -257,10 +257,10 @@ pub fn session_summary(db : @sql.Db, host : @host.Host, data : String, sep : Str
 /// session-list-index.ts `sessionListReady`.
 fn session_list_ready(db : @sql.Db) -> Bool raise {
   guard one(db, "SELECT version, complete FROM session_list_meta WHERE id = 1", []) is Some(m) else {
-    fail("session list index version marker is missing")
+    raise Failure("session list index version marker is missing")
   }
   if !(field(m, "version") is Number(1.0, ..)) {
-    fail("session list index version \{js_text(field(m, "version"))} is incompatible with 1")
+    raise Failure("session list index version \{js_text(field(m, "version"))} is incompatible with 1")
   }
   field(m, "complete") is Number(1.0, ..)
 }
@@ -287,7 +287,7 @@ pub fn session_list(db : @sql.Db, host : @host.Host, data : String, sep : String
     }
     _ => {
       if !session_list_ready(db) {
-        fail("session list index is still being prepared")
+        raise Failure("session list index is still being prepared")
       }
       match viewer {
         None => db.all(session_list_connect_sql, [Json::number(if archived { 1.0 } else { 0.0 }), Json::string(connect.unwrap())])
