@@ -39,7 +39,6 @@ fn init {
     "src/sfapp/tape_wbtest.mbt",
     "src/sfapp/viewer_flight_wbtest.mbt",
     "src/sfapp/viewer_media_over_wbtest.mbt",
-    "src/sfapp/viewers_desk_wbtest.mbt",
     "src/sfapp/wide_rail_wbtest.mbt",
     "src/sfapp/wide_wbtest.mbt",
   ])
