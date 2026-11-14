@@ -3180,7 +3180,7 @@ export function stationsWaited(inner: Inner, ws: string, entries: readonly Entry
 /// What `handOver` answers where its `moved` waits for stations (`stationsWaited`): the lines the owner's page shows of
 /// them (`waitedLines`), joined.
 export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[]): CoreError =>
-  new CoreError("lock_stations_not_ready", waitedLines(inner, ws, { waits: [], stations: ids }).join(t("core-misc.lock.listSep")), 409);
+  new CoreError("lock_stations_not_ready", waitedLines(inner, ws, { waits: [], stations: ids }).map((l) => l.text).join(t("core-misc.lock.listSep")), 409);
 
 /// Whether chains are handed over by themselves here: from HAND_OVER_FROM by this device's clock (src/lock-handover.ts:
 /// on every build from it, each workspace once what uses it takes a moved one, `heldBack`), or on a host made for tests
@@ -3197,7 +3197,7 @@ const HAND_OVER_ROUNDS = 3;
 /// bound yet: their devices take their own lock by themselves, `ownLockFor`; or an app device of theirs on the chain
 /// and not on their log): the lines the owner's page shows of them (`waitedLines`), joined.
 export const notReady = (inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[] }): CoreError =>
-  new CoreError("lock_not_ready", waitedLines(inner, ws, { ...w, stations: [] }).join(t("core-misc.lock.listSep")), 409);
+  new CoreError("lock_not_ready", waitedLines(inner, ws, { ...w, stations: [] }).map((l) => l.text).join(t("core-misc.lock.listSep")), 409);
 /// What `lock.handOver` answers where only what says nothing holds it back (`heldBack`): waiting as `lock_not_ready`
 /// waits, in the words the page says of an upgrade not done (none of what holds it back is said: nobody is told to
 /// update, the user, 2026-11-14).
@@ -3208,34 +3208,84 @@ const handOverReason = () => t("core-misc.lock.reason.handOver");
 /// How many of those a handover waits for the owner's page names, one a line (`waitedLines`); the rest in a last line.
 const WAITED_LINES = 6;
 
-/// Whom and what a handover of `ws` waits for, a sentence each, saying what to do (the owner's page, `upgradeOf`, and
-/// the refusals `lock_not_ready` and `lock_stations_not_ready`): each member not ready by their name (or email), a
-/// device of theirs on the chain and not on their log by its name where the chain names it, each station by its name;
-/// WAITED_LINES at most, the rest counted in a last line.
-function waitedLines(inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[]; stations: readonly string[] }): string[] {
+/// A line of the upgrade of safe mode (the `lock` topic's `upgrade.lines`): its sentence and what it is of; a station's
+/// its address (the workspace it is asked in and its id) and, by its overview as last told, how its update goes while it
+/// does, else whether this person may update it from here (`stationLine`).
+type UpgradeLine = { text: string; of: "member" | "device" | "station" | "more"; station?: string; canUpdate?: true; updating?: true; percent?: number };
+
+/// Whom and what a handover of `ws` waits for, a line each, its sentence saying what to do (the owner's page,
+/// `upgradeOf`, and the refusals `lock_not_ready` and `lock_stations_not_ready`): each member not ready by their name (or
+/// email), a device of theirs on the chain and not on their log by its name where the chain names it, each station by
+/// its name; WAITED_LINES at most, the rest counted in a last line.
+function waitedLines(inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[]; stations: readonly string[] }): UpgradeLine[] {
   const chain = fold(held(inner, ws)?.entries ?? []);
   const people = arr(get(view(inner, ws), "members"));
   const who = (sub: string) => str(get(people.find((m) => m?.sub === sub), "name")) || chain.members.get(sub)?.email || str(get(people.find((m) => m?.sub === sub), "email")) || sub;
-  const lines: string[] = [];
+  const lines: UpgradeLine[] = [];
   for (const sub of w.waits) {
     const named = (w.devices ?? []).filter((d) => d.sub === sub).map((d) => chain.devices.get(d.id)).filter((d): d is J => d !== undefined && typeof d.label === "string" && d.label !== "");
-    if (named.length === 0 && (w.devices ?? []).some((d) => d.sub === sub)) lines.push(t("core-misc.lock.upgrade.deviceUnnamed", { name: who(sub) }));
-    else if (named.length === 0) lines.push(t("core-misc.lock.upgrade.member", { name: who(sub) }));
-    for (const d of named) lines.push(t("core-misc.lock.upgrade.device", { name: who(sub), device: deviceText({ kind: "app", label: d.label, older: Array.isArray(d.endpoints) }) }));
+    if (named.length === 0 && (w.devices ?? []).some((d) => d.sub === sub)) lines.push({ text: t("core-misc.lock.upgrade.deviceUnnamed", { name: who(sub) }), of: "device" });
+    else if (named.length === 0) lines.push({ text: t("core-misc.lock.upgrade.member", { name: who(sub) }), of: "member" });
+    for (const d of named) lines.push({ text: t("core-misc.lock.upgrade.device", { name: who(sub), device: deviceText({ kind: "app", label: d.label, older: Array.isArray(d.endpoints) }) }), of: "device" });
   }
   const stations = arr(get(view(inner, ws), "stations"));
-  for (const id of w.stations) lines.push(t("core-misc.lock.upgrade.station", { name: str(stations.find((s) => s?.id === id)?.name) || chain.stations.get(id) || id.slice(0, 8) }));
-  return lines.length <= WAITED_LINES ? lines : [...lines.slice(0, WAITED_LINES), t("core-misc.lock.upgrade.more", { n: lines.length - WAITED_LINES })];
+  for (const id of w.stations) lines.push(stationLine(inner, new StationAddr(ws, id), t("core-misc.lock.upgrade.station", { name: str(stations.find((s) => s?.id === id)?.name) || chain.stations.get(id) || id.slice(0, 8) })));
+  return capped(lines);
+}
+
+/// WAITED_LINES of `lines` at most, the rest counted in a last line.
+const capped = (lines: UpgradeLine[]): UpgradeLine[] =>
+  lines.length <= WAITED_LINES ? lines : [...lines.slice(0, WAITED_LINES), { text: t("core-misc.lock.upgrade.more", { n: lines.length - WAITED_LINES }), of: "more" }];
+
+/// The line of station `at` saying `text`: its address, and by what its overview last said of its own software, its
+/// update under way (how much of it is in, where said), else whether this person may update it from here, as the
+/// station's own page offers its update (the app's sfpages/station_node.mbt `software_end_node`: an owner or admin of
+/// its workspace, the station online, its software `updatable` and newer, or its update failed). Nothing asked of it:
+/// what the device holds of it, which the sync keeps current for every station of every workspace it reaches.
+function stationLine(inner: Inner, at: StationAddr, text: string): UpgradeLine {
+  const station = at.toString();
+  const u = arr(get(inner.data.shared({ topic: "overview", station }), "updates")).find((x) => get(x, "id") === "station");
+  if (get(u, "state") === "updating") {
+    const p = get(u, "percent");
+    return { text, of: "station", station, updating: true, ...(typeof p === "number" ? { percent: Math.max(0, Math.min(100, Math.round(p))) } : {}) };
+  }
+  const v = view(inner, at.workspace);
+  const manages = get(v, "role") === "owner" || get(v, "role") === "admin";
+  const online = arr(get(v, "stations")).find((s) => s?.id === at.station)?.online !== false;
+  const can = manages && online && get(u, "updatable") === true && (get(u, "newer") === true || get(u, "state") === "failed");
+  return { text, of: "station", station, ...(can ? { canUpdate: true as const } : {}) };
+}
+
+/// The stations of `sub`'s workspaces here that hold back what they may write in their own log (`mayWriteNew`): those
+/// that never said on GET /lock/person that they serve `logs` and `builds` (never reached, or one from before: the same
+/// line), each by the workspace it is asked in, this workspace's as its own waited for are said. The devices' builds
+/// that hold it back too say nothing (the user, 2026-11-14: nobody is told to update an app).
+function writerLines(inner: Inner, ws: string, sub: string): UpgradeLine[] {
+  const seen = buildsHeld(inner, PERSON_BUILDS, sub);
+  return capped(personStations(inner, sub).filter((at) => typeof seen.since[at.station] !== "number").map((at) => {
+    const v = view(inner, at.workspace);
+    const name = str(arr(get(v, "stations")).find((s) => s?.id === at.station)?.name) || at.station.slice(0, 8);
+    return stationLine(inner, at, at.workspace === ws
+      ? t("core-misc.lock.upgrade.station", { name })
+      : t("core-misc.lock.upgrade.stationOther", { workspace: str(get(v, "name")) || at.workspace, name }));
+  }));
 }
 
 /// What the owner's device that is to hand `ws` over says of it (the `lock` topic's `upgrade`): whom and what it waits
 /// for (`handOverState`'s `waits` and `stations`), or, where only an ask is lacking (`asks`), the button that asks
-/// (`askText`, `lock.handOver`). None while the `moved` is on its way, once moved, and on any other device.
+/// (`askText`, `lock.handOver`). Where only what says nothing holds it back (`heldBack`), nothing; but where the person
+/// may not write in their own log for stations of theirs that never said they take it (`writerLines`), those, so that
+/// an upgrade not finished is never shown with no line. None while the `moved` is on its way, once moved, and on any
+/// other device.
 function upgradeOf(inner: Inner, ws: string): J | null {
   const s = handOverWhere(inner, ws);
-  // (held back by what says nothing to anyone, `heldBack`: no line, no button)
-  if (s === null || "moving" in s || "held" in s) return null;
+  if (s === null || "moving" in s) return null;
   const titleText = t("core-misc.lock.upgrade.title");
+  if ("held" in s) {
+    const sub = inner.workspaces.owner(ws);
+    const lines = s.held.includes("writer") && sub !== null ? writerLines(inner, ws, sub) : [];
+    return lines.length > 0 ? { titleText, lines } : null;
+  }
   return "asks" in s ? { titleText, lines: [], askText: t("core-misc.lock.upgrade.ask") } : { titleText, lines: waitedLines(inner, ws, s) };
 }
 /// A handover's `moved` refused in its turn because what is to be said changed: worked out again (`handOver`).

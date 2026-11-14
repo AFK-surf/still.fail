@@ -269,9 +269,10 @@ another; the accounts' list's merge across stations and its refills.
   already, or every station of every workspace of theirs here said `logs` and `builds` on GET /lock/person and each
   app device on their log is able or idle, `personBuilds`, where one approved face to face is noted by the build its
   hello says, views/lock.ts `noteBuild`), before the first statement is said and again before the
-  `moved`, as `#addWebs` waits for it too. The devices' builds and the writer's other workspaces say nothing to anyone
-  (`heldBack`; `handOverState`'s `held` names them for the tests; `lock.handOver` answers `lock_not_ready` in the
-  upgrade's title). For now, each lifted by its own change, nor is a chain with a web page whose person has no app on
+  `moved`, as `#addWebs` waits for it too. The devices' builds say nothing to anyone (`heldBack`; `handOverState`'s
+  `held` names them for the tests; `lock.handOver` answers `lock_not_ready` in the upgrade's title); the stations of
+  the writer's workspaces that never said `logs` and `builds` there are named on the owner's page where nothing else of
+  the chain is waited for (views/lock.ts `writerLines`; the owner, 2026-11-14: no upgrade shown not done with no line). For now, each lifted by its own change, nor is a chain with a web page whose person has no app on
   it (`webOnlyIn`: the page telling them to install one is not drawn yet, and the move would shut them out unsaid),
   more than `HAND_OVER_MEMBERS_MOST` members bound to a log, or a root's log past `HAND_OVER_LOG_MOST` with the
   statements (past `LOGS_MOST` and `CHAIN_MOST` a moved workspace is a dead end); a host made for tests that calls
@@ -281,7 +282,8 @@ another; the accounts' list's merge across stations and its refills.
   (`mayHandOver`); after the move only that person turns safe mode off or on again (`lock_root_only`, as it is); a member
   not ready (`lock_not_ready`) makes it wait with no deadline, `handOverState` naming them. To people it is 安全模式的升级
   (the owner, 2026-11-14), never a handover: that device's `lock` topic says whom and what it waits for, a sentence each
-  saying what to do (`upgrade`, views/lock.ts `upgradeOf`, `waitedLines`), and `lock_not_ready` and
+  saying what to do (`upgrade`, views/lock.ts `upgradeOf`, `waitedLines`; a station's line says whether this person may
+  update it from here, as its own page offers its update, and how its update goes, `stationLine`), and `lock_not_ready` and
   `lock_stations_not_ready` say the same sentences; its statements and `moved` pending are one row, 完成安全模式的升级. A handover asks nobody by itself (2026-11-13): what it says rides on the next ask of the person's
   own lock's key for something else (personal-lock.ts `#addHandOvers`, after `#addApproved`'s devices and pages, each
   workspace's plan worked out in the turn against the log with what is pending, so nothing is said twice), and the

@@ -280,7 +280,7 @@ async function setUp(o: Opts = {}) {
   };
   /// An ask of the person's own lock's key for something else: grants signed (none: the ask alone).
   const askGrant = () => run(inner.adb.personal().signGrants("s1", [], "a grant"));
-  return { r, get inner() { return inner; }, restart, first, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, crowd, base, WEB, WEB5, A, B, C, viewer, firstApp, g, askGrant, now: () => now };
+  return { r, get inner() { return inner; }, restart, first, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, crowd, base, WEB, WEB5, A, B, C, D, viewer, firstApp, g, askGrant, now: () => now };
 }
 
 /// A second app device of `log`'s person (`d`) as the product puts it on their own log: a device entry signed by the
@@ -760,10 +760,10 @@ test("a web page that is the only device not able (it said no build): not waited
   assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved");
 });
 
-test("the writer in a second workspace whose station does not say builds: nothing written in their log, not handed over; that station says it: handed over", async () => {
+test("the writer in a second workspace whose station does not say builds: nothing written in their log, not handed over, that station named on the owner's page; that station says it: handed over", async () => {
   const w = await setUp({ dOld: true });
   assert.deepEqual(handOverState(w.inner, "ws"), { held: ["writer"] });
-  assert.equal(lockView(w.inner, "ws").upgrade, undefined, "no line");
+  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [{ text: DAILY, of: "station", station: `w2/${w.D}` }] }, "named, by the workspace it is asked in");
   assert.equal((await w.askGrant()).error, undefined);
   assert.deepEqual(w.inner.adb.personal().entries("s1").filter((e) => e.kind === "ws" || e.kind === "web"), [], "nothing new in their log");
   await w.run(read(w.inner, "ws"));
@@ -963,7 +963,7 @@ test("a station that does not say it serves bodies, logs and builds: nothing sai
 test("a station that serves bodies and logs and says nothing of builds: waited for and named as one from before; it says so: handed over", async () => {
   const w = await setUp({ noBuilds: ["B"] });
   assert.deepEqual(handOverState(w.inner, "ws"), { waits: [], stations: [w.B] });
-  const lines = lockView(w.inner, "ws").upgrade?.lines as string[];
+  const lines = texts(lockView(w.inner, "ws").upgrade);
   assert.equal(lines.length, 1);
   assert.match(lines[0]!, /^等待 station studio 2：请将它更新到最新版本并保持在线/);
   assert.equal((await w.askGrant()).error, undefined);
@@ -1086,11 +1086,13 @@ test("the app closed between the statements and the moved: moved as it starts ag
 // the same; where only an ask is lacking, the button, which `lock.handOver` answers once chains are handed over by
 // themselves; a pending handover is one row of its own; after the move, off and on again are the root's person's alone.
 const TITLE = "安全模式有一项升级尚未完成";
+/// The sentences of the `lock` topic's `upgrade`, a line each.
+const texts = (u: unknown): string[] => ((u as { lines?: { text: string }[] } | undefined)?.lines ?? []).map((l) => l.text);
 
 test("words: a member not ready, the owner's page names them and what to do, the refusal says the same", async () => {
   const w = await setUp({ more: ["notReady"] });
   const line = "等待 d@x.com：请其在自己的受信任设备上将 still.fail 更新到最新版本并打开一次";
-  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [line] });
+  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [{ text: line, of: "member" }] });
   const out = await w.hand();
   assert.equal(out.error?.code, "lock_not_ready");
   assert.equal(out.error?.message, line);
@@ -1103,11 +1105,11 @@ test("words: a member's app device on the chain and not on their log, named; a s
   for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
   await w.run(read(w.inner, "ws"));
   const line = "等待 b@x.com 的设备「bob's phone」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除";
-  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [line] });
+  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [{ text: line, of: "device" }] });
   assert.equal((await w.hand()).error?.message, line);
 
   const v = await setUp({ old: ["B"] });
-  const lines = lockView(v.inner, "ws").upgrade?.lines as string[];
+  const lines = texts(lockView(v.inner, "ws").upgrade);
   assert.equal(lines.length, 1);
   assert.match(lines[0]!, /^等待 station studio 2：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」$/);
   assert.equal((await v.askGrant()).error, undefined);
@@ -1124,10 +1126,60 @@ test("words: more than six waited for, six lines and how many more", async () =>
   }
   for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[]);
   await w.run(read(w.inner, "ws"));
-  const lines = lockView(w.inner, "ws").upgrade?.lines as string[];
+  const lines = texts(lockView(w.inner, "ws").upgrade);
   assert.equal(lines.length, 7);
+  assert.deepEqual((lockView(w.inner, "ws").upgrade?.lines as { of: string }[]).map((l) => l.of), [...Array(6).fill("device"), "more"]);
   assert.equal(lines[0], "等待 m0@x.com 的设备「m0's phone」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除");
   assert.equal(lines[6], "以及另外 2 项");
+});
+
+// A station line says whether this person may update that station from here, as its own page offers its update (an
+// owner or admin of its workspace, it online, its software updatable and newer, or its update failed; by its overview as
+// the device last holds it), and how its update goes while it does; a station of another workspace that holds the
+// person's own log back is named where nothing of this workspace is waited for besides (the owner, 2026-11-14: the page
+// says what the upgrade waits for, and updates a station with one press).
+const DAILY = "等待「日常」的 station daily 1：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」";
+const overviewOf = (w: Awaited<ReturnType<typeof setUp>>, station: string, own: Record<string, unknown> | null) =>
+  w.inner.data.set({ topic: "overview", station } as never, own === null ? {} : { updates: [{ id: "station", name: "still.fail station", installed: true, ...own }] });
+
+test("words: a station waited for, by its overview: updatable and newer, an owner's press; an admin's too; up to date, failed, a member, offline as the cloud says: as its own page offers", async () => {
+  const w = await setUp({ old: ["B"] });
+  const at = `ws/${w.B}`;
+  const line = () => (lockView(w.inner, "ws").upgrade?.lines as Record<string, unknown>[])[0];
+  assert.deepEqual(line(), { text: texts(lockView(w.inner, "ws").upgrade)[0], of: "station", station: at }, "nothing held of its overview: no press");
+  overviewOf(w, at, { updatable: true, newer: true, version: "0.1.9000", latest: "0.1.9100" });
+  assert.equal(line()?.canUpdate, true, "updatable and newer, this person an owner");
+  overviewOf(w, at, { updatable: true, newer: false });
+  assert.equal(line()?.canUpdate, undefined, "nothing newer: no press, as its page offers none");
+  overviewOf(w, at, { updatable: true, state: "failed", message: "x" });
+  assert.equal(line()?.canUpdate, true, "its update failed: pressed again, as its page's 重试");
+  overviewOf(w, at, { updatable: false, newer: true });
+  assert.equal(line()?.canUpdate, undefined, "not updatable from the pages");
+  overviewOf(w, at, { state: "updating", percent: 41.6 });
+  assert.deepEqual([line()?.updating, line()?.percent, line()?.canUpdate], [true, 42, undefined], "under way: how much of it, no press");
+  overviewOf(w, at, { state: "updating" });
+  assert.deepEqual([line()?.updating, line()?.percent], [true, undefined], "under way, how much not said");
+  overviewOf(w, at, { updatable: true, newer: true });
+  for (const [role, can] of [["admin", true], ["member", undefined]] as const) {
+    w.inner.data.set({ topic: "workspace", workspace: "ws" } as never, { ...(w.inner.data.shared({ topic: "workspace", workspace: "ws" } as never) as object), role });
+    assert.equal(line()?.canUpdate, can, `the workspace's ${role}`);
+  }
+  const stations = (w.inner.data.shared({ topic: "workspace", workspace: "ws" } as never) as { stations: Record<string, unknown>[] }).stations;
+  w.inner.data.set({ topic: "workspace", workspace: "ws" } as never, { ...(w.inner.data.shared({ topic: "workspace", workspace: "ws" } as never) as object), role: "owner", stations: stations.map((s) => (s.id === w.B ? { ...s, online: false } : s)) });
+  assert.equal(line()?.canUpdate, undefined, "offline: no press, as its page shows its software only online");
+});
+
+test("words: a station of the writer's other workspace, its update by its overview there; the role there decides; it says builds: no line", async () => {
+  const w = await setUp({ dOld: true });
+  const at = `w2/${w.D}`;
+  overviewOf(w, at, { updatable: true, newer: true });
+  assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [{ text: DAILY, of: "station", station: at, canUpdate: true }] });
+  overviewOf(w, at, { state: "updating", percent: 10 });
+  assert.deepEqual(lockView(w.inner, "ws").upgrade?.lines, [{ text: DAILY, of: "station", station: at, updating: true, percent: 10 }]);
+  w.st.dOld = false;
+  await w.run(w.inner.adb.personal().refresh("s1"));
+  assert.deepEqual(handOverState(w.inner, "ws"), { asks: true });
+  assert.deepEqual(texts(lockView(w.inner, "ws").upgrade), [], "only the ask lacking: no station line");
 });
 
 test("words: only an ask lacking, the button; lock.handOver answered where chains are handed over by themselves, asked in the page's words; none once moved, none with the switch off", async () => {
