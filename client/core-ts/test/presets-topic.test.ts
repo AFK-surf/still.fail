@@ -4,7 +4,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply as applyOps } from "../src/delta.ts";
 import { answers, apply, call, readsOf, subscribe, v } from "./helpers.ts";
-import { base, overview, started } from "./station-fixture.ts";
+import { base, overview, started, stationReplies } from "./station-fixture.ts";
+import type { HttpRequest } from "../src/host.ts";
+import type { StationAddr } from "../src/station/addr.ts";
+import { HostWire, type RequestHead, type StationWire } from "../src/station/wire.ts";
+import type { FakeHost } from "../src/testing.ts";
 
 const S = "ws/st";
 const preset = (id: string, name: string) => ({ id, name, dirs: [{ path: `/repos/${id}`, repo: `github.com/acme/${id}` }], instructions: "", createdBy: "a@x.com", createdAt: 1, updatedAt: 1 });
@@ -326,6 +330,70 @@ test("what_a_preset_binds_is_not_changed_on_the_page_nor_sent_otherwise", async 
   call(core, ui, 9, "newChat.create", { station: S, key: v(values, 2).next });
   await host.settle();
   assert.ok("error" in (answered(9) ?? {}), "refused before anything is asked of the station");
+  assert.equal(host.requests.slice(before).filter((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions")).length, 0);
+  core.close();
+});
+
+test("a_preset_that_binds_a_model_starts_only_on_stations_that_run_it_never_on_another_model", async () => {
+  // `ws/st` (studio) runs Sonnet, `ws/st2` (mini) only Opus, both answering at the same origin: which one a request is
+  // for, as the wire says (the user, 2026-11-14: an Argon preset switched to another station ran another model).
+  const AT = "x-test-station";
+  const wire = (h: FakeHost) => {
+    const inner = new HostWire(h);
+    return { request: (station: StationAddr, head: RequestHead, body: Uint8Array) => inner.request(station, { ...head, headers: [...head.headers, [AT, station.station]] }, body) } as StationWire;
+  };
+  const sonnet = { ...profile, id: "p2", name: "p2@x.com", models: ["claude-opus-5-5", "claude-sonnet-5-5"] };
+  const bound = {
+    id: "review", name: "Code Review", dirs: [], instructions: "", model: { model: "claude-sonnet-5-5", runtime: "claude", effort: "high" },
+    createdBy: "a@x.com", createdAt: 1, updatedAt: 1,
+  };
+  const nowhere = { ...bound, id: "fable", name: "Fable", model: { model: "claude-fable-5-2", runtime: "claude" } };
+  const { host, core } = await started({ ...base(), "POST /sessions": { key: "chat:c-new", thread: { id: 9, threadTs: "9.0" } } } as never, 0, wire, (x) => {
+    x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: true, last_seen: null }] };
+    stationReplies(x.host, (req: HttpRequest) => {
+      const asked = `${req.method} ${req.url.replace("https://stillfail.test/admin/api", "")}`;
+      const mini = req.headers.some(([k, val]) => k === AT && val === "st2");
+      if (asked === "GET /overview") return { ...overview, profiles: [mini ? profile : sonnet] };
+      if (asked === "GET /presets") return mini ? { presets: [], candidates: [] } : { presets: [bound, nowhere], candidates: [candidate] };
+      return undefined;
+    });
+  });
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  const answered = (id: number) => answers(host.takeEmitted(), id) as { error?: { message: string } } | undefined;
+  subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+  await host.time.pass(500);
+  await host.settle();
+  apply(host, values);
+  // On mini before the preset is picked: picking it moves the page to a station that runs its model.
+  call(core, ui, 2, "newChat.pick", { scope: "ws", station: "st2" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st2");
+  call(core, ui, 3, "newChat.pick", { scope: "ws", preset: "review", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st");
+  assert.equal(v(values, 1).pick.value.model, "claude-sonnet-5-5");
+  // Mini is not offered, and asked for it is refused saying why, the page as it was.
+  assert.deepEqual(v(values, 1).stations.map((s: { id: string }) => s.id), ["st"]);
+  call(core, ui, 4, "newChat.pick", { scope: "ws", station: "st2" });
+  await host.settle();
+  assert.match(answered(4)?.error?.message ?? "", /Code Review/);
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st");
+
+  // A preset whose model no station runs: the page stays, says so, and makes no chat on another model.
+  call(core, ui, 5, "newChat.pick", { scope: "ws", preset: "fable", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st");
+  assert.match(v(values, 1).problem, /Fable/);
+  assert.equal(v(values, 1).pick.value.model, "claude-fable-5-2", "its control shows the preset's model, never the station's first");
+  const before = host.requests.length;
+  call(core, ui, 6, "newChat.create", { station: S, key: v(values, 1).next });
+  await host.settle();
+  assert.match(answered(6)?.error?.message ?? "", /Fable/);
   assert.equal(host.requests.slice(before).filter((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions")).length, 0);
   core.close();
 });

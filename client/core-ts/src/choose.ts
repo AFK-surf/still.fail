@@ -9,6 +9,7 @@ import { CoreError } from "./error.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as ops from "./ops.ts";
+import * as present from "./present.ts";
 import type { Owner } from "./core/routing.ts";
 import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
@@ -428,6 +429,17 @@ export class Choose implements Owner {
     return stations === null || stations === undefined || stations.includes(id);
   }
 
+  /// Whether station `addr` runs the model a preset binds (`pm`; and its runtime, where it names one), as the station's
+  /// overview lists its models: a preset's chats run with what it names on any station they start on (the user,
+  /// 2026-11-14: 「我一个 argon 的预设，切到其它 station，模型不是 argon，这他妈对吗？」), so a station that does not run
+  /// it is neither offered nor started on, never one the station's own first model stands in for.
+  #runsBound(addr: string, pm: J): boolean {
+    const entry = optionOf(this.#onStation(addr)[0], text(get(pm, "model")));
+    if (entry === undefined) return false;
+    const rt = text(get(pm, "runtime"));
+    return rt === null || arr(entry.runtimes).includes(rt);
+  }
+
   #keepChoice(scope: string, id: string, choice: J, key = `ws:${scope}:station:${id}`): void {
     const kept: J = {};
     for (const f of FIELDS) {
@@ -569,6 +581,18 @@ export class Choose implements Owner {
       const named = binds.stations;
       view.stations = arr(view.stations).filter((s) => s === station || named.includes(typeof s.id === "string" ? s.id : ""));
     }
+    if (binds !== null && binds.model !== null) {
+      const pm = binds.model;
+      view.stations = arr(view.stations).filter((s) => s === station || (typeof s.station === "string" && this.#runsBound(s.station, pm)));
+      if (overview !== null && !this.#runsBound(addr, pm)) {
+        // its control shows the preset's model as it names it, never the station's own first one in its place
+        const m = String(pm.model);
+        // (`model` stays the station's: the page asks only whether there is one)
+        const runtime = text(get(pm, "runtime")) ?? view.runtime;
+        view.pick = { value: { model: m, runtime, effort: text(get(pm, "effort")) }, valueOption: { name: model.name(m), maker: present.maker(m), runtimes: [] }, efforts: [] };
+        if (view.problem === null) view.problem = t("core-logic.choose.problem.preset_model_missing", { name, preset: text(get(picked!.p, "name")) ?? "", model: model.name(m) });
+      }
+    }
     view.station = station;
     return view;
   }
@@ -667,6 +691,9 @@ export class Choose implements Owner {
     if (bound !== undefined && bound.stations !== null && station !== null && !bound.stations.includes(station)) {
       throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
     }
+    if (bound !== undefined && bound.model !== null && station !== null && !this.#runsBound(address(scope, station), bound.model)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model_station", { name: bound.name, model: model.name(String(bound.model.model)) }));
+    }
     if (station !== null) this.#keepStation(scope, station);
     // the preset, whichever station it is of (`presetStation`, its address; "" for none)
     const preset = get(params, "preset");
@@ -679,15 +706,12 @@ export class Choose implements Owner {
         const picked = this.#picked(scope, this.#workspacePresets(online));
         if (picked !== undefined) {
           const p = picked.p;
-          const pm = get(p, "model");
-          const wantModel = isObject(pm) ? text(get(pm, "model")) : null;
+          const pm = presetBinds(p).model;
+          const runs = (s: J) => pm === null || (typeof s.station === "string" && this.#runsBound(s.station, pm));
+          // the least busy of `pool` that runs the model it binds (none: the page says the one it is on does not)
           const pickBest = (pool: J[]): string | null => {
-            if (pool.length === 0) return null;
-            const compatible =
-              wantModel !== null
-                ? pool.filter((s) => typeof s.station === "string" && optionOf(this.#onStation(s.station)[0], wantModel) !== undefined)
-                : pool;
-            const list = compatible.length > 0 ? compatible : pool;
+            const list = pool.filter(runs);
+            if (list.length === 0) return null;
             const sorted = [...list].sort((a, b) => {
               const ra = typeof get(get(get(a, "overview"), "counts"), "running") === "number" ? a.overview.counts.running : 0;
               const rb = typeof get(get(get(b, "overview"), "counts"), "running") === "number" ? b.overview.counts.running : 0;
@@ -709,6 +733,10 @@ export class Choose implements Owner {
             targetStationId = pickBest(pool);
           } else if (get(p, "autoStation") === true) {
             targetStationId = pickBest(online);
+          } else if (pm !== null) {
+            // any station: the one it is on where that runs its model, else the least busy that does
+            const on = this.#held(scope) ?? online[0];
+            if (on !== undefined && !runs(on)) targetStationId = pickBest(online);
           }
           if (targetStationId !== null && targetStationId !== "") {
             this.#keepStation(scope, targetStationId);
@@ -768,6 +796,9 @@ export class Choose implements Owner {
     const bound = this.#bound(scope);
     if (bound !== undefined && bound.stations !== null && !bound.stations.includes(stationId(station))) {
       throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
+    }
+    if (bound !== undefined && bound.model !== null && !this.#runsBound(station, bound.model)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model_station", { name: bound.name, model: model.name(String(bound.model.model)) }));
     }
     const online = (() => {
       const v = this.#env.store.value({ topic: "stations", scope });
