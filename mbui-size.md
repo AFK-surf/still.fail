@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [f48bb1220](https://github.com/AFK-surf/monoid/commit/f48bb12201bb9ee671a7f489cb0dfcc86742f45f) base: a link's pings are measured and say how its  | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.89 | 53.58 | 96.63 | 110.68 |
 | [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 2 | 2.73 | 11.64 | 31.28 | 41.84 | 27.88 | 53.53 | 96.68 | 116.53 |
 | [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9e98b2805](https://github.com/AFK-surf/monoid/commit/9e98b28053e67b8599b637dc99dd0540034f1bf2) app: 小屏's chat bar names its key to the chat's ser | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.76 | 53.23 | 96.93 | 116.85 |
 | [ab6f4880d](https://github.com/AFK-surf/monoid/commit/ab6f4880dd477b8290a50b1b392e3a3984426186) fix(mbui): a station's 设置 whole as it comes; what  | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.23 | 96.78 | 108.75 |
 | [41b38a6ec](https://github.com/AFK-surf/monoid/commit/41b38a6ecdc8183b81d040100fb94b96cef1755c) core: a workspace's chain handed over by itself, b | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.21 | 96.58 | 113.48 |
-| [d32206ba1](https://github.com/AFK-surf/monoid/commit/d32206ba19b7943c81adb9d5a561918ae1d668eb) mbui app: a chat's page made as nodes, its compose | 1.98 | 2.71 | 11.53 | 31.13 | 41.48 | 27.75 | 53.21 | 96.75 | 104.52 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [f48bb1220](https://github.com/AFK-surf/monoid/commit/f48bb12201bb9ee671a7f489cb0dfcc86742f45f) base: a link's pings are measured and say how its  | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.26 |
