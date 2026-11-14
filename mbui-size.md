@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2e2176c2c](https://github.com/AFK-surf/monoid/commit/2e2176c2c1a853c09045c023068842d4dfa8493c) lock: a code typed before its device's answer is t | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [de8259c6a](https://github.com/AFK-surf/monoid/commit/de8259c6a7d28a71ef0bd832d3a2e133734e3a0a) mbui: list_part_test leaves motion_counted and siz | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 27.92 | 53.63 | 96.67 | 115.89 |
 | [ef56bb5d9](https://github.com/AFK-surf/monoid/commit/ef56bb5d9011151d7fd0b278c357ea1cdaac3ed1) app: simplify the workspace relays panel to inline | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.67 | 115.89 |
 | [059d395fb](https://github.com/AFK-surf/monoid/commit/059d395fbd56c640d83268da1843419dbe633cd3) mbui: what nothing asks for is not drawn on a span | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.67 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [fd28048c8](https://github.com/AFK-surf/monoid/commit/fd28048c844aaa0989ab874a8508cfd90ac76f9f) mbui: the first headless component, a button, its  | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.57 | 114.37 |
 | [4cbff594b](https://github.com/AFK-surf/monoid/commit/4cbff594ba9559cab9eb5c0d5141b41be09e7027) lock: a workspace hands itself over once everythin | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.63 | 117.11 |
 | [7b3640858](https://github.com/AFK-surf/monoid/commit/7b3640858fa10fb1eb1a710c951205aa4b2dc92d) mbui: a height on its way under a page's list on a | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.54 | 111.03 |
-| [9f35adb9e](https://github.com/AFK-surf/monoid/commit/9f35adb9ea7f320bedea545262bbf469726ab14d) mbui: the new chat page's answered agent at work f | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.37 | 111.2 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2e2176c2c](https://github.com/AFK-surf/monoid/commit/2e2176c2c1a853c09045c023068842d4dfa8493c) lock: a code typed before its device's answer is t | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
 | [de8259c6a](https://github.com/AFK-surf/monoid/commit/de8259c6a7d28a71ef0bd832d3a2e133734e3a0a) mbui: list_part_test leaves motion_counted and siz | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
 | [ef56bb5d9](https://github.com/AFK-surf/monoid/commit/ef56bb5d9011151d7fd0b278c357ea1cdaac3ed1) app: simplify the workspace relays panel to inline | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
 | [059d395fb](https://github.com/AFK-surf/monoid/commit/059d395fbd56c640d83268da1843419dbe633cd3) mbui: what nothing asks for is not drawn on a span | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
