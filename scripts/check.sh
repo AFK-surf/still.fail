@@ -503,7 +503,7 @@ if [ $full = 1 ]; then
     fi
   fi
   # The station's tests (station/test): every file, or one slice of them (STILLFAIL_STATION_SHARD="<i>/<n>": the
-  # longest files one to a slice first, then the rest in order, every n-th: scripts/station-slice.sh). CI runs them in slices on Linux runners of their own (pipeline.yml,
+  # files dealt by what each costs, the longest first, each onto the slice with the least: scripts/station-slice.sh). CI runs them in slices on Linux runners of their own (pipeline.yml,
   # check-station), not on macos-ci: four runners share that Mac, the tests took 2.3 to 4.1 minutes there by what else
   # ran, and three checks at once went past the job's five (6 of some 18 in half a day, 2026-11-09; the files doubled
   # in the five days before). A machine to itself, a slice takes the same every run.
