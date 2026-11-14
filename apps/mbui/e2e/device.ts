@@ -220,6 +220,9 @@ export class Device {
   /// Whose device: the dev cloud's mock account (alice, or bob) and, once signed in, its subject.
   user: string;
   sub = "";
+  /// The last six characters of the access token it was signed in with: how the dev cloud's log (LOG_REQUESTS,
+  /// cloud/test/dev.ts) names its requests, so a run can count an account's requests a minute.
+  tokenTail = "";
   /// Whether its host seals what it keeps (an app of today); false: an app from before, with no sealer.
   sealed: boolean;
   /// A web page's, not an app's (no keys of an app, nothing sealed).
@@ -379,6 +382,7 @@ export class Device {
     const text = await r.text();
     if (!r.ok) throw new SignInFailed(`${this.name} dev sign-in: ${r.status} ${text.slice(0, 200)}`);
     const account = JSON.parse(text);
+    this.tokenTail = String(account.access ?? "").slice(-6);
     await this.call("migrate", { accounts: [account] });
     const accounts = await this.until({ topic: "accounts" }, (v) => (Array.isArray(v) && v.length > 0 ? v : undefined));
     this.sub = accounts[0].sub;

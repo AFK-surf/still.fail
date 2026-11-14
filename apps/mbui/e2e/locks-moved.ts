@@ -25,8 +25,9 @@
 //     in their list (the lead, 2026-11-14). A comes back on a release that moves the chain, and it moves with nobody
 //     asked, ivy carried, bound to no log. At the end: I approves her third app K from its page (one ask on I, nobody
 //     else asked, K given her vault, ivy bound to the log begun in that ask by her own `bind`), her web page W, takes J
-//     off; A makes her an admin and takes her out, as any member; added again, her new app L is a newcomer and A
-//     approves it face to face (one ask on A, nothing on L).
+//     off; frank (an owner) makes her an admin and takes her out, as any member; added again by him, her new app L is
+//     a newcomer and his Q approves it face to face (one ask on Q, nothing on L). What alice's and frank's sign-ins
+//     asked the cloud in the minute before is logged (`requestsOf`): alice's account is near its 120 by then.
 // Chains are handed over by themselves on every build from HAND_OVER_FROM (client/core-ts src/lock-handover.ts; the
 // user, 2026-11-14: 无感迁移, no date, no switch), so by default nothing calls `lock.handOver`: P's joining alice's own
 // lock face to face, the ask for something else that A answers, is moved from round 19's start to where the call was
@@ -80,6 +81,31 @@ try {
   const vBase = await baseOf(vDev);
   const inThree = (x: Device, id: string, ok: (s: J) => boolean, ms = 90_000) => x.stationState(three, ok, ms, id);
   const both = () => [fifthId, sixthId];
+  /// What `devices`' sign-ins asked the dev cloud, by its log (LOG_REQUESTS, cloud/test/dev.ts: each request's time,
+  /// route and token's last six characters): in the clock's minute the cloud counts now (account.ts `charge`) and in the
+  /// last 60 s, the locks' routes apart (a minute of their own, api.ts LOCK_ROUTE). A token refreshed since its sign-in
+  /// is not counted.
+  const requestsOf = (devices: Device[]) => {
+    const tails = new Set(devices.map((d) => d.tokenTail).filter((t) => t !== ""));
+    const at = (t: string) => {
+      const [h, m, s] = t.split(":");
+      return (Number(h) * 60 + Number(m)) * 60_000 + Number(s) * 1000;
+    };
+    const now = new Date().toISOString().slice(11, 23);
+    let minute = 0, last = 0, locks = 0;
+    for (const line of readFileSync(`${process.env.E2E_WORK}/run/cloud.log`, "utf8").split("\n")) {
+      const m = line.match(/REQ (\d\d:\d\d:\d\d\.\d+) \d+ \S+ (\S+) (\S+)/);
+      if (!m || !tails.has(m[3]!)) continue;
+      const ago = at(now) - at(m[1]!);
+      if (/^\/v1\/(me\/personal-lock|workspaces\/[^/]+\/(lock(\/.*)?|devices))$/.test(m[2]!)) {
+        if (ago >= 0 && ago < 60_000) locks++;
+        continue;
+      }
+      if (m[1]!.slice(0, 5) === now.slice(0, 5)) minute++;
+      if (ago >= 0 && ago < 60_000) last++;
+    }
+    return `${minute} in this minute, ${last} in the last 60 s (${locks} more on the locks' routes)`;
+  };
   /// `x` approved into the workspace's lock from its waiting page, the code shown on `approver` (as locks.ts's `approvedBy`),
   /// let in by `at` (both stations by default).
   const approvedInThree = async (x: Device, page = false, approver: Device = vDev, at: () => string[] = both) => {
@@ -607,19 +633,23 @@ try {
     await atBoth("J out", (s) => !s.includes(`DEVICE ${jBase.slice(0, 12)} `));
     for (const id of both()) await inThree(jDev, id, (s) => s.state !== "online" && s.state !== "connecting");
   });
-  await check("A makes ivy an admin and takes her out, as any member: admin at both, then out at both", async () => {
-    await vDev.call("workspace.setRole", { account: vDev.sub, workspace: three, member: iDev.sub, role: "admin" });
+  // (frank's, an owner's, as round 20's acts: alice's devices ask the cloud at every change of the list, and by here
+  // her account is near the cloud's 120 a minute, account.ts LIMITS: a setRole of A's was refused 429 here, the lead,
+  // 2026-11-14; never a wait or a retry to get under it)
+  log(`  requests signed as alice: ${requestsOf([vDev, pDev, xDev, nDev])}; as frank: ${requestsOf([qDev, yDev])}`);
+  await check("frank (an owner) makes ivy an admin and takes her out, as any member: admin at both, then out at both", async () => {
+    await qDev.call("workspace.setRole", { account: qDev.sub, workspace: three, member: iDev.sub, role: "admin" });
     await atBoth("ivy an admin", (s) => memberAt(s, iDev.sub) === "admin");
-    await vDev.call("workspace.removeMember", { account: vDev.sub, workspace: three, member: iDev.sub });
+    await qDev.call("workspace.removeMember", { account: qDev.sub, workspace: three, member: iDev.sub });
     await atBoth("ivy out", (s) => memberAt(s, iDev.sub) === null);
   });
-  await check("A adds ivy again; her new app L, a newcomer now (the list names no app of hers), approved by A face to face: in at both, one ask on A, nothing on L", async () => {
-    await vDev.call("workspace.addMembers", { account: vDev.sub, workspace: three, role: "member", emails: ["ivy@example.test"] });
+  await check("frank adds ivy again; her new app L, a newcomer now (the list names no app of hers), approved by frank's Q face to face: in at both, one ask on Q, nothing on L", async () => {
+    await qDev.call("workspace.addMembers", { account: qDev.sub, workspace: three, role: "member", emails: ["ivy@example.test"] });
     await lDev.signIn();
     const lFrom = lDev.asked();
-    const asked = await asksOf(vDev, () => approvedInThree(lDev));
-    log(`  A asked: ${asked.join("; ") || "nothing"}`);
-    if (asked.length !== 1) throw new Error(`A asked ${asked.length} times`);
+    const asked = await asksOf(qDev, () => approvedInThree(lDev, false, qDev));
+    log(`  Q asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`Q asked ${asked.length} times`);
     if (lDev.asked() !== lFrom) throw new Error(`L asked the person: ${lDev.askedWhat(lFrom).join("; ")}`);
     await atBoth("ivy in again, bound", (s) => memberAt(s, iDev.sub) === "member" && personAt(s, iDev.sub));
   });
