@@ -811,17 +811,13 @@ priv enum BodyHeld {
 fn body_held(which : BodyHeld) -> String {
   let lines = match which {
     HeldMain => [
-    "a code block pressed in 42 (markdown_node's): 1",
     "an HTML page it places, as high, not compared (P12): 6",
-    "its head's time pressed short (message_head_node's): 33",
     "its picture held under the list's top (c.stick): 43",
-    "where it went, narrow, route_line_down further down (meant): 7",
   ]
     HeldLarge => [
     "a pill or a capsule as high as its words at a larger size (meant): 2",
     "a screen's card's lines as high as their words at a larger size (meant): 1",
     "an HTML page it places, as high, not compared (P12): 1",
-    "where it went, narrow, route_line_down further down (meant): 1",
   ]
     // (its turn over no more compared with the old list, which came down there (the changes' sweep, turned on
     // purpose): one of the 7 counted before was of that step)

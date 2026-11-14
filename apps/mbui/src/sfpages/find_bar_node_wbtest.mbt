@@ -153,7 +153,7 @@ test "⌘F's bar made once as nodes is drawn as the old view's: what it did not 
     }
     let known = all.filter(cut)
     let faults = all.filter(fn(f) { !cut(f) })
-    assert_eq(known.length(), if before >= 560.0 { 2 } else { 0 }, msg="\{name}: \{Repr(known)}")
+    assert_eq(known.length(), if before >= 560.0 { 1 } else { 0 }, msg="\{name}: \{Repr(known)}")
     assert_eq(faults, [], msg="\{name}: \{Repr(faults)}")
   }
   find_close()
