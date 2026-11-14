@@ -34,6 +34,7 @@ test "squeeze: every screen fits what people, agents and stations wrote in it at
       let at = "\{win.0}-zh \{mode}"
       let t = screen_in(mode, win, "zh", said=true, motion_judged=false)
       let faults = t.squeeze_faults()
+      faults.append(figures_cut(t))
       let known = said_known.get(at).unwrap_or(0)
       if faults.length() != known {
         wrong.push(
@@ -76,3 +77,40 @@ let said_modes : Array[String] = [
 /// What each screen still has squeezed with what people wrote at its longest, by window, language and screen: the bar
 /// it may only fall from. A screen not listed has none.
 let said_known : Map[String, Int] = Map([])
+
+///|
+/// The figures the core writes, each at its widest (widest_paths), that `t` shows cut short: a figure is never cut,
+/// though words may be (mbui's squeeze.mbt gives words that way to give): $1,9… says no amount (the owner's 「数字都省
+/// 略了我他妈看你妈逼」, 2026-11-14, the agent's tiles at $1,911 and 430.5K, which its fixture's $4.20 never showed).
+fn figures_cut(t : @ui.Tester) -> Array[String] {
+  let widest : Array[String] = []
+  for _, paths in @sffixture.widest_paths {
+    for p in paths {
+      if !widest.contains(p.1) {
+        widest.push(p.1)
+      }
+    }
+  }
+  let out = []
+  for w in t.words() {
+    match w.0.strip_suffix("…") {
+      Some(kept) if kept.length() > 0 =>
+        for f in widest {
+          if f != kept.to_owned() && f.has_prefix(kept) {
+            out.push("a figure cut short: \{w.0} of \{f} at (\{w.1}, \{w.2})")
+            break
+          }
+        }
+      _ => ()
+    }
+  }
+  out
+}
+
+///|
+test "said_stretch: a figure made what leaf makes of it, the rest as it was" {
+  let v : Json = { "cost": "$4.20", "note": "x" }
+  let out = said_stretch(v, ["cost"][:], leaf=fn(s) { if s == "" { s } else { "$8,888" } })
+  let expected : Json = { "cost": "$8,888", "note": "x" }
+  assert_eq(out, expected)
+}

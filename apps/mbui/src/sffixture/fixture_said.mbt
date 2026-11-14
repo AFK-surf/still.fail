@@ -21,28 +21,28 @@ pub fn said_longest(s : String) -> String {
 
 ///|
 /// `value` with the words at `path` (fields by name, `*` each item of a list or a map, `<tag>=<word>` a union's variant
-/// where its tag says that word) at their longest, the rest as it was.
-pub fn said_stretch(value : Json, path : ArrayView[String]) -> Json {
+/// where its tag says that word) at their longest, or made what `leaf` makes of them; the rest as it was.
+pub fn said_stretch(value : Json, path : ArrayView[String], leaf? : (String) -> String = said_longest) -> Json {
   match path {
     [step, .. rest] if step.contains("=") =>
       // (a union's variant: on where its tag says that word)
       match (step.split("=").collect(), value) {
         ([tag, word], Object(m)) if m.get(tag.to_owned()) == Some(Json::string(word.to_owned())) =>
-          said_stretch(value, rest)
+          said_stretch(value, rest, leaf~)
         _ => value
       }
     [] =>
       match value {
-        String(s) => Json::string(said_longest(s))
+        String(s) => Json::string(leaf(s))
         _ => value
       }
     ["*", .. rest] =>
       match value {
-        Array(a) => Json::array(a.map(fn(x) { said_stretch(x, rest) }))
+        Array(a) => Json::array(a.map(fn(x) { said_stretch(x, rest, leaf~) }))
         Object(m) => {
           let o : Map[String, Json] = Map([])
           for k, v in m {
-            o[k] = said_stretch(v, rest)
+            o[k] = said_stretch(v, rest, leaf~)
           }
           Json::object(o)
         }
@@ -54,7 +54,7 @@ pub fn said_stretch(value : Json, path : ArrayView[String]) -> Json {
           match m.get(k) {
             Some(v) => {
               let o = m.copy()
-              o[k] = said_stretch(v, rest)
+              o[k] = said_stretch(v, rest, leaf~)
               Json::object(o)
             }
             None => value
@@ -86,19 +86,45 @@ pub fn said_steps_of(topic : String) -> Array[Array[String]] {
 }
 
 ///|
-/// `src` with what people, agents and stations wrote in each topic at its longest (said_paths): the squeeze sweep's
-/// stretched pass (squeeze_said_wbtest.mbt), sffix's and sffilm's MBUI_SAID=1 (scripts/squeeze.sh SAID=1).
+/// widest_paths, each path as its steps with the figure at its widest.
+// kept across runs: widest_paths as steps, made once (never changed)
+let widest_steps : Ref[Map[String, Array[(Array[String], String)]]?] = Ref(None)
+
+///|
+fn widest_steps_of(topic : String) -> Array[(Array[String], String)] {
+  let all = match widest_steps.val {
+    Some(m) => m
+    None => {
+      let m : Map[String, Array[(Array[String], String)]] = Map([])
+      for name, paths in widest_paths {
+        m[name] = paths.map(fn(p) { (p.0.split(".").map(fn(v) { v.to_owned() }).collect(), p.1) })
+      }
+      widest_steps.val = Some(m)
+      m
+    }
+  }
+  all.get(topic).unwrap_or([])
+}
+
+///|
+/// `src` with what people, agents and stations wrote in each topic at its longest (said_paths), and each figure the
+/// core writes at its widest (widest_paths: none stays none): the squeeze sweep's stretched pass
+/// (squeeze_said_wbtest.mbt), sffix's and sffilm's MBUI_SAID=1 (scripts/squeeze.sh SAID=1).
 pub fn said_longest_source(src : Source) -> Source {
   {
     ..src,
     topic_read: fn(name, params) {
       let t = src.topic(name, params).get().snapshot()
       let steps = said_steps_of(name)
+      let widest = widest_steps_of(name)
       match t.value {
-        Some(v) if steps.length() > 0 => {
+        Some(v) if steps.length() > 0 || widest.length() > 0 => {
           let mut v = v
           for path in steps {
             v = said_stretch(v, path[:])
+          }
+          for w in widest {
+            v = said_stretch(v, w.0[:], leaf=fn(s) { if s == "" { s } else { w.1 } })
           }
           { ..t, value: Some(v) }
         }

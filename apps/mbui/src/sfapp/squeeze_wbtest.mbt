@@ -58,15 +58,17 @@ fn screen_in(
             open_fixture_over(mode, s)
             s
           }
-          None => {
-            let s = fixture_app(mode)
-            // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
-            if said {
-              said_longest_source(s)
-            } else {
-              s
-            }
+          None if said => {
+            // (`said`: what people, agents and stations wrote in it at its longest, and each figure the core writes at
+            // its widest: squeeze_said_wbtest.mbt. What the mode puts up over its pages (a panel, the agent's sheet)
+            // opened over that too, reading it: until 2026-11-14 they were opened over the fixture as it was, so the
+            // agent's sheet was never seen at its longest)
+            reset()
+            let s = said_longest_source(@sffixture.fixture(mode))
+            open_fixture_over(mode, s)
+            s
           }
+          None => fixture_app(mode)
         }
         src.val = Some(s)
         s
