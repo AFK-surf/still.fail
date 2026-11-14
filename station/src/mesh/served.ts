@@ -14,9 +14,14 @@ import { MbProcess } from "../read/mb-reader.ts";
 import { COUNTED_FROM, OLDEST_CORE, stationBuild } from "../api/oldest.ts";
 import { MOVED_FROM_BUILD } from "../api/moved-from.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
+import { READS_PENDING } from "../read/pool.ts";
 
-/// The routes answered there: GET /chats in each of its forms (api/routes/chats.ts), every one a read moved to MoonBit.
-export const SERVED_ROUTES = ["GET /admin/api/chats"];
+/// The routes answered there (api/routes/chats.ts, sessions.ts), every one a read moved to MoonBit; `*` a segment.
+export const SERVED_ROUTES = [
+  "GET /admin/api/chats",
+  "GET /admin/api/sessions", "GET /admin/api/sessions/*", "GET /admin/api/sessions/*/timeline",
+  "GET /admin/api/threads", "GET /admin/api/threads/*", "GET /admin/api/threads/*/entries", "GET /admin/api/threads/*/letters",
+];
 /// How many of the program answer at once (each one read at a time, as a reader of the pool's).
 const SERVERS = 2;
 
@@ -88,9 +93,11 @@ export class Served {
       localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin"),
       untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"),
       quotedOnly: tr(lang, "station.chat.quotedOnly"), updateApp: tr(lang, "station.admin.updateApp"),
+      notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
+      fromAndTo: tr(lang, "station.admin.fromAndTo"), inScriptOutput: tr(lang, "station.transcript.inScriptOutput"),
     }]));
     server.process.postMessage({
-      set: { words, oldestCore: OLDEST_CORE, countedFrom: COUNTED_FROM, movedFromBuild: MOVED_FROM_BUILD, build: stationBuild(), runtimes: RUNTIME_KINDS },
+      set: { words, oldestCore: OLDEST_CORE, countedFrom: COUNTED_FROM, movedFromBuild: MOVED_FROM_BUILD, build: stationBuild(), runtimes: RUNTIME_KINDS, pending: READS_PENDING },
       wall: wall.now(),
     });
     if (this.#names.size > 0) server.process.postMessage({ names: [...this.#names] });

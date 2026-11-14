@@ -374,15 +374,24 @@ async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json
     None => (path, "")
   }
   let pairs = query_pairs(query)
-  let read = match chats_read(route, pairs, who.viewer) {
-    Some(r) => r
-    None => return self.fallback(conn, asked, body)
+  // A session or a chat of another workspace than the member's is none for them (api/seen.ts `elsewhere`).
+  if self.elsewhere(route, who.viewer) is Some(m) {
+    return self.whole(headers, @utf8.encode(({ "error": Json::string(m) } : Json).stringify()), status=404)
+  }
+  let read = match route_read(route, pairs, who.viewer, lang) {
+    Read(op, args) => (op, args)
+    Missing(m) => return self.whole(headers, @utf8.encode(({ "error": Json::string(m) } : Json).stringify()), status=404)
+    Not => return self.fallback(conn, asked, body)
   }
   let (op, args) = read
-  // (the words and the time the pool gives a read: read/pool.ts `wordsIn`)
   guard args is Object(a) else { return self.fallback(conn, asked, body) }
-  a["words"] = words
-  a["now"] = Json::number(self.now().to_double())
+  // (the words and the time the pool gives a read: read/pool.ts `wordsIn`; a session's history only its own word)
+  if op == "timeline" {
+    a["words"] = { "inScriptOutput": words.value("inScriptOutput").unwrap_or(Json::string("")) }
+  } else {
+    a["words"] = words
+    a["now"] = Json::number(self.now().to_double())
+  }
   let names = []
   for email, name in self.names {
     names.push(Json::array([Json::string(email), Json::string(name)]))
@@ -398,17 +407,28 @@ async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json
   let text = try {
     Ok(self.reader.read(op, ask).stringify())
   } catch {
-    @readops.Refused(_, _) => Err(())
+    @readops.Refused(status, m) => Err((status, m))
     e => raise e
   }
+  // Refused: for what the pool prepares first (its `pending`), Node's to answer; else as the admin API says it.
+  if text is Err((status, m)) {
+    let pending = match self.set.value("pending") {
+      Some(Array(all)) => all.iter().any(p => p is String(p) && m.has_prefix(p))
+      _ => true
+    }
+    if pending {
+      return self.fallback(conn, asked, body)
+    }
+    return self.whole(headers, @utf8.encode(({ "error": Json::string(m) } : Json).stringify()), status~)
+  }
   guard text is Ok(text) else { return self.fallback(conn, asked, body) }
-  self.whole(headers, @utf8.encode(text), path)
+  self.whole(headers, @utf8.encode(text))
 }
 
 ///|
 /// An answer's head and its body as it goes: the admin API's headers, compressed where the core asks so
 /// (mesh/compress.ts: zstd, from 512 bytes, at its level and window).
-async fn Serving::whole(self : Serving, asked : Json, bytes : Bytes, path : String) -> (Json, Bytes) raise {
+async fn Serving::whole(self : Serving, asked : Json, bytes : Bytes, status? : Int = 200) -> (Json, Bytes) raise {
   let headers : Map[String, Json] = {
     "content-type": "application/json",
     "cache-control": "no-store",
@@ -419,14 +439,14 @@ async fn Serving::whole(self : Serving, asked : Json, bytes : Bytes, path : Stri
     Some(s) => s.split(",").any(e => @jscase.trim_white(e.to_string()) == "zstd")
     None => false
   }
-  ignore(path)
+  let status = Json::number(status.to_double())
   if zstd && bytes.length() >= 512 {
     let (_, out) = self.host.shell("zstd.compress", { "level": 3, "window": 20 }, bytes~)
     headers["content-encoding"] = "zstd"
-    return ({ "status": 200, "headers": Json::object(headers) }, out.unwrap_or(b""))
+    return ({ "status": status, "headers": Json::object(headers) }, out.unwrap_or(b""))
   }
   headers["content-length"] = Json::string(bytes.length().to_string())
-  ({ "status": 200, "headers": Json::object(headers) }, bytes)
+  ({ "status": status, "headers": Json::object(headers) }, bytes)
 }
 
 ///|
@@ -475,9 +495,152 @@ async fn Serving::fallback(self : Serving, conn : Json, asked : Json, body : Byt
 }
 
 ///|
-/// api/routes/chats.ts's GET /chats: the read and its args for that query (None: not that route).
-fn chats_read(route : String, pairs : Array[(String, String)], viewer : Json) -> (String, Json)? {
-  guard route == "/admin/api/chats" else { return None }
+/// What a route reads: its read and args, a 404 of its own, or not one answered here (given Node).
+priv enum Route {
+  Read(String, Json)
+  Missing(String)
+  Not
+}
+
+///|
+/// admin/mod.rs `segment_decode`, as the routes read a key: a `+` is a `+`.
+fn segment(s : String) -> String {
+  percent_decode(s.replace_all(old="+", new="%2B"))
+}
+
+///|
+/// JS's Number() of a thread's id as api/routes/chats.ts takes it (`[+-]?digits`, checked before).
+fn signed_number(s : String) -> Double {
+  if s.has_prefix("-") {
+    -parse_double(s[1:].to_string())
+  } else if s.has_prefix("+") {
+    parse_double(s[1:].to_string())
+  } else {
+    parse_double(s)
+  }
+}
+
+///|
+fn signed_digits(s : String) -> Bool {
+  if s.has_prefix("-") || s.has_prefix("+") {
+    digits(s[1:].to_string())
+  } else {
+    digits(s)
+  }
+}
+
+///|
+/// api/seen.ts `elsewhere`: the 404 a request is answered with when the session or chat its path names is there but of
+/// another workspace than the member's (rows.ts `sees`); None otherwise.
+fn Serving::elsewhere(self : Serving, route : String, viewer : Json) -> String? raise {
+  let parts : Array[String] = route.split("/").map(p => p.to_string()).collect()
+  guard parts.length() >= 5 && parts[1] == "admin" && parts[2] == "api" else { return None }
+  let id = segment(parts[4])
+  let sees = (ws : Json) => match ws {
+    String(_) => ws == viewer.value("workspace").unwrap_or(Json::null())
+    _ => !(viewer.value("home") is Some(False))
+  }
+  let db = self.reader.db_now()
+  match parts[3] {
+    "sessions" =>
+      match db.all("SELECT ws FROM sessions WHERE key = ?", [Json::string(id)]) {
+        [row, ..] if !sees(row.get("ws").unwrap_or(Json::null())) => Some("unknown session \{id}")
+        _ => None
+      }
+    "threads" => {
+      guard signed_digits(id) else { return None }
+      let n = signed_number(id)
+      guard n.abs() <= 9007199254740991.0 else { return None }
+      guard db.all("SELECT 1 AS x FROM threads WHERE id = ?", [Json::number(n)]) is [_, ..] else { return None }
+      let members = db.all("SELECT s.ws AS ws FROM thread_sessions t LEFT JOIN sessions s ON s.key = t.session WHERE t.thread = ?", [
+        Json::number(n),
+      ])
+      let seen = if members.is_empty() {
+        sees(Json::null())
+      } else {
+        members.iter().any(m => sees(m.get("ws").unwrap_or(Json::null())))
+      }
+      if seen {
+        None
+      } else {
+        Some("unknown thread \{id}")
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// The routes answered here and what each reads, as api/routes/chats.ts and sessions.ts read them.
+fn route_read(route : String, pairs : Array[(String, String)], viewer : Json, lang : String) -> Route {
+  let parts : Array[String] = route.split("/").map(p => p.to_string()).collect()
+  guard parts.length() >= 4 && parts[0] == "" && parts[1] == "admin" && parts[2] == "api" else { return Not }
+  let param = (name : String) => {
+    for p in pairs {
+      if p.0 == name {
+        return Some(p.1)
+      }
+    }
+    None
+  }
+  // (what a route says only where it is asked: undefined in the TypeScript's args)
+  let given = (args : Map[String, Json], names : Array[String]) => {
+    for n in names {
+      if param(n) is Some(v) {
+        args[n] = Json::string(v)
+      }
+    }
+  }
+  let l = Json::string(lang)
+  match parts[3:] {
+    ["chats"] =>
+      match chats_read(pairs, viewer) {
+        Some((op, args)) => Read(op, args)
+        None => Not
+      }
+    ["sessions"] =>
+      Read("sessions", {
+        "connect": match param("connect") {
+          Some(c) => Json::string(c)
+          None => Json::null()
+        },
+        "archived": Json::boolean(param("archived") == Some("1")),
+        "lang": l,
+        "viewer": viewer,
+      })
+    ["sessions", key] => {
+      let args : Map[String, Json] = { "key": Json::string(segment(key)), "viewer": viewer, "lang": l }
+      given(args, ["turns", "jobs"])
+      Read("session", Json::object(args))
+    }
+    ["sessions", key, "timeline"] => {
+      let args : Map[String, Json] = { "key": Json::string(segment(key)), "lang": l }
+      given(args, ["before", "limit", "from", "to", "brief", "after"])
+      Read("timeline", Json::object(args))
+    }
+    ["threads"] =>
+      Read("threads", {
+        "viewer": viewer,
+        "session": match param("session") {
+          Some(c) => Json::string(c)
+          None => Json::null()
+        },
+        "lang": l,
+      })
+    ["threads", id] => Read("thread", { "id": Json::string(segment(id)), "viewer": viewer, "lang": l })
+    ["threads", id, ("entries" | "letters") as which] => {
+      // (a thread id is an i64 in the Rust route; one that is no number is no thread)
+      guard signed_digits(id) else { return Missing("unknown thread \{id}") }
+      let params = pairs.map(p => Json::array([Json::string(p.0), Json::string(p.1)]))
+      Read(which.to_string(), { "viewer": viewer, "thread": Json::number(signed_number(id)), "params": Json::array(params) })
+    }
+    _ => Not
+  }
+}
+
+///|
+/// api/routes/chats.ts's GET /chats: the read and its args for that query.
+fn chats_read(pairs : Array[(String, String)], viewer : Json) -> (String, Json)? {
   let param = (name : String) => {
     for p in pairs {
       if p.0 == name {
@@ -513,6 +676,7 @@ fn chats_read(route : String, pairs : Array[(String, String)], viewer : Json) ->
   }
   Some(("chats", Json::object(args)))
 }
+
 
 ///|
 /// api/request.ts `queryPairs`: `&`-separated, each `name=value` percent-decoded.
@@ -570,4 +734,17 @@ fn parse_double(s : String) -> Double {
     v = v * 10.0 + (c.to_int() - 48).to_double()
   }
   v
+}
+
+///|
+/// The connection reads are made on (made at the first, as `read` makes it).
+fn Reader::db_now(self : Reader) -> @sql.Db raise {
+  match self.reading {
+    Some(db) => db
+    None => {
+      let db = @sql.Db::attach(self.host, self.db, wait=5000)
+      self.reading = Some(db)
+      db
+    }
+  }
 }

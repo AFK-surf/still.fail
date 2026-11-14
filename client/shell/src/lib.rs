@@ -778,6 +778,20 @@ fn route_of(read: &[u8]) -> Option<String> {
     Some(format!("{method} {}", path.split('?').next().unwrap_or(path)))
 }
 
+/// Whether route `r` (`"GET /a/b"`) is one `pattern` names: the same method and as many segments, each the same or `*`
+/// (any one, not empty).
+fn route_matches(pattern: &str, r: &str) -> bool {
+    let (mut p, mut r) = (pattern.split('/'), r.split('/'));
+    loop {
+        match (p.next(), r.next()) {
+            (None, None) => return true,
+            (Some("*"), Some(s)) if !s.is_empty() => {}
+            (Some(a), Some(b)) if a == b => {}
+            _ => return false,
+        }
+    }
+}
+
 /// `bytes` said to the Unix socket at `path` on a connection of their own, then that connection ended.
 async fn tell_unix(path: &str, bytes: &[u8]) -> Result<(), String> {
     #[cfg(unix)]
@@ -1855,13 +1869,13 @@ impl Inner {
             // With `front` (Unix sockets' paths, each taking the next in turn) and `routes` ("GET /admin/api/chats", …): a stream past the first
             // whose head line (its first, read here) asks one of those, by its method and its path without the query,
             // goes there instead, with what was read of it, and `path` is told its index went elsewhere (its head the
-            // ids, a 3 and the index): what the front answers itself.
+            // ids, a 3 and the index): what the front answers itself. A route's segment `*` is any one segment.
             "conn.hand" => {
                 let on = id_of(&a)?;
                 let path = str_of(&a, "path")?.to_string();
                 let fronts: Vec<String> = a.get("front").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
                 let mut turn = 0usize;
-                let routes: Arc<std::collections::HashSet<String>> = Arc::new(
+                let routes: Arc<Vec<String>> = Arc::new(
                     a.get("routes").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect(),
                 );
                 let Handle::Conn(conn) = self.handle(on)? else { return Ok(Answer::json(json!({}))) };
@@ -1894,7 +1908,7 @@ impl Inner {
                         let mut to = &path;
                         if let (Some(front), true) = (&front, index > 0 && !routes.is_empty()) {
                             let read = read_head_line(&halves).await;
-                            if route_of(&read).is_some_and(|r| routes.contains(&r)) {
+                            if route_of(&read).is_some_and(|r| routes.iter().any(|p| route_matches(p, &r))) {
                                 let mut skip = head[..16].to_vec();
                                 skip.push(3);
                                 skip.extend(index.to_be_bytes());

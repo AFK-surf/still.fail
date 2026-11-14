@@ -47,9 +47,20 @@ async function ask(conn: { openBi(): Promise<Stream> }, head: object): Promise<{
   return { head: JSON.parse(all.subarray(0, at).toString()), body: all.subarray(at + 1) };
 }
 
+function diffAt(a: unknown, b: unknown, at = ""): string | null {
+  if (JSON.stringify(a) === JSON.stringify(b)) return null;
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const d = diffAt((a as any)[k], (b as any)[k], `${at}.${k}`);
+      if (d !== null) return d;
+    }
+  }
+  return `${at}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`;
+}
+
 const addrOf = (e: Endpoint) => ({ id: e.id(), ips: e.sockets().filter((s) => /^\d/.test(s)).map((s) => s.replace(/^0\.0\.0\.0/, "127.0.0.1")) });
 
-test("a routed request is answered by the MoonBit program as the admin API answers it; the rest come to Node in order", { skip }, async (t) => {
+test("a routed request is answered by the MoonBit program as the admin API answers it; the rest come to Node in order", { skip, timeout: 60_000 }, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "mbsv-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const data = join(dir, "data");
@@ -61,6 +72,10 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     store.joinThread(t, `s${k}`, "ember");
     store.insertMessage({ ...newMessage(t, "1", "person", "p@x", `hello ${k} ${"words ".repeat(30)}`), at: 100 + k } as ReturnType<typeof newMessage>);
   }
+  // (one of another workspace: none for this member)
+  store.insertSession({ key: "elsewhere", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "e", createdAt: 1, lastActiveAt: 1, ws: "other" } as Parameters<Store["insertSession"]>[0]);
+  const hidden = store.openThread("ember", "CHAT", "ce", "Elsewhere", null).id;
+  store.joinThread(hidden, "elsewhere", "ember");
   const thread = store.openThread("ember", "CHAT", "c", "Served", null).id;
   for (let i = 0; i < 40; i++) store.insertMessage({ ...newMessage(thread, String(i + 1), "person", "p@x", `message ${i} ${"words ".repeat(20)}`), at: (i + 1) * 10 } as ReturnType<typeof newMessage>);
   t.after(() => store.close());
@@ -97,12 +112,12 @@ test("a routed request is answered by the MoonBit program as the admin API answe
   const routedHead = { method: "GET", path: "/admin/api/chats?shared=1", headers: { "stillfail-build": "0.1.9200", "stillfail-runtimes": RUNTIME_KINDS.join(","), "accept-encoding": "zstd", "stillfail-lang": "en" } };
   const routed = ask(theirs, routedHead);
   const third = await theirs.openBi();
-  await third.write(Buffer.from('{"method":"GET","path":"/admin/api/sessions"}\n'));
+  await third.write(Buffer.from('{"method":"GET","path":"/admin/api/host"}\n'));
   const a = (await conn.acceptBi())!;
   const c = (await conn.acceptBi())!;
   const lineOf = async (s: Stream) => (await s.read())!.toString();
   assert.equal(await lineOf(a), '{"hello":1}\n');
-  assert.equal(await lineOf(c), '{"method":"GET","path":"/admin/api/sessions"}\n');
+  assert.equal(await lineOf(c), '{"method":"GET","path":"/admin/api/host"}\n');
 
   // the member said once the connection is let in: the request waits for it
   served.viewer(conn.handed!, viewer);
@@ -119,18 +134,48 @@ test("a routed request is answered by the MoonBit program as the admin API answe
   const theirsText = await worker.read("sharedChats", { viewer, sessions: null, threads: null }, "en");
   const ours = JSON.parse(zstdDecompressSync(answer.body).toString());
   assert.ok(Array.isArray(ours) ? ours.length > 0 : Object.keys(ours).length > 0, said);
-  const diffAt = (a: unknown, b: unknown, at = ""): string | null => {
-    if (JSON.stringify(a) === JSON.stringify(b)) return null;
-    if (a && b && typeof a === "object" && typeof b === "object") {
-      for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
-        const d = diffAt((a as any)[k], (b as any)[k], `${at}.${k}`);
-        if (d !== null) return d;
-      }
-    }
-    return `${at}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`;
-  };
   assert.deepEqual(ours, JSON.parse(theirsText), diffAt(ours, JSON.parse(theirsText)) ?? "");
   assert.deepEqual(builds, [9200]);
+
+  // each route answered there, as the worker reads it (sessions.ts, chats.ts)
+  const read = async (path: string) => {
+    const got = await ask(theirs, { ...routedHead, path: `/admin/api${path}` });
+    const text = got.head.headers["content-encoding"] === "zstd" ? zstdDecompressSync(got.body).toString() : got.body.toString();
+    return { status: got.head.status, body: JSON.parse(text) };
+  };
+  const routes = [
+    ["/sessions", "sessions", { connect: null, archived: false, lang: "en", viewer }],
+    ["/sessions?archived=1", "sessions", { connect: null, archived: true, lang: "en", viewer }],
+    ["/sessions/s0", "session", { key: "s0", viewer, lang: "en" }],
+    ["/sessions/s0?turns=2", "session", { key: "s0", viewer, lang: "en", turns: "2" }],
+    ["/sessions/s0/timeline?limit=5", "timeline", { key: "s0", lang: "en", limit: "5" }],
+    ["/threads", "threads", { viewer, session: null, lang: "en" }],
+    ["/threads?session=s1", "threads", { viewer, session: "s1", lang: "en" }],
+    [`/threads/${thread}`, "thread", { id: String(thread), viewer, lang: "en" }],
+    [`/threads/${thread}/entries`, "entries", { viewer, thread, params: [] }],
+    [`/threads/${thread}/entries?before=20&limit=5`, "entries", { viewer, thread, params: [["before", "20"], ["limit", "5"]] }],
+    [`/threads/${thread}/entries?before=x`, "entries", { viewer, thread, params: [["before", "x"]] }],
+    [`/threads/${thread}/letters`, "letters", { viewer, thread, params: [] }],
+  ] as const;
+  // What a read needs prepared first (a station's pool prepares it as a read is refused for it, and the program gives such
+  // a request to Node meanwhile), prepared as the station's own readers do: then the program answers each itself.
+  const pool = new Readers(data, 1);
+  pool.mbReader = binary!;
+  t.after(() => pool.close());
+  for (const [, op, args] of routes) await pool.read(op, args, "en").catch(() => {});
+  const givenBefore = given.length;
+  for (const [path, op, args] of routes) {
+    const ours = await read(path);
+    let theirs: { status: number; body: unknown };
+    try { theirs = { status: 200, body: JSON.parse(await worker.read(op, args, "en")) }; }
+    catch (e) { theirs = { status: (e as { status: number }).status, body: { error: (e as Error).message } }; }
+    assert.deepEqual(ours, theirs, `${path}: ${diffAt(ours, theirs)}`);
+  }
+  assert.equal(given.length, givenBefore, `given to Node: ${given.slice(givenBefore).map((g) => g.head.path).join(", ")}`);
+  // what is of another workspace, and a thread that is no number: not there, as the admin API says
+  assert.deepEqual(await read("/sessions/elsewhere"), { status: 404, body: { error: "unknown session elsewhere" } });
+  assert.deepEqual(await read(`/threads/${hidden}/entries`), { status: 404, body: { error: `unknown thread ${hidden}` } });
+  assert.deepEqual(await read("/threads/abc/entries"), { status: 404, body: { error: "unknown thread abc" } });
 
   // a core that does not take every runtime: given to Node, its answer said as Node made it
   const old = await ask(theirs, { ...routedHead, headers: { ...routedHead.headers, "stillfail-runtimes": "claude" } });
