@@ -2,8 +2,8 @@
 // results): the way back to the newest, and a message gone to. Out of what the list has in sight (ListPlace::on_sight,
 // told at causes) and what the chat is told to go to (sfbase's go_tos, told by go_tos_said); its own state made with
 // the list and let go with it (ChatJump). What floats over the list's foot with the way to the newest (the bell to what
-// waits to be decided, the round button to 对话目录), and what a message gone to shows of it (its flash; a search's
-// words marked in it).
+// waits to be decided, the round button to 对话目录; 对话目录's rail at the list's right on a wide page), and what a
+// message gone to shows of it (its flash; a search's words marked in it).
 
 ///|
 /// What a chat's list keeps of its way to the newest: whether it is away from its end (more than a corner of the screen
@@ -14,7 +14,10 @@
 /// message ⌘F last asked the window moved about (chat.around, -1 none); the row last gone to that flashes, the moment
 /// it was gone to and the passage of it a quote that led there quoted, where its words have it ("" none: the row lit
 /// whole); the row a search opened the chat at and its words,
-/// marked there for as long as the list is; 对话目录's round button while it shows (what ⌘G opens the outline beside).
+/// marked there for as long as the list is; 对话目录's round button while it shows (what ⌘G opens the outline beside);
+/// where the reader is as the list last had it in sight (the message at the top of what shows, whether at the chat's
+/// end: what the rail's long tick follows); 对话目录's rail while it shows (what ⌘G opens it beside where the round
+/// button does not show).
 priv struct ChatJump {
   away : @signals.Signal[Bool]
   mut latest : Bool
@@ -25,6 +28,8 @@ priv struct ChatJump {
   flashed : @signals.Signal[(String, Double, String)]
   found : @signals.Signal[(String, Array[String])]
   mut outline_at : @view.View?
+  reader : @signals.Signal[(Double, Bool)]
+  mut rail_at : @view.View?
 }
 
 ///|
@@ -40,6 +45,8 @@ fn ChatJump::new() -> ChatJump {
     flashed: @signals.signal(("", -1.0, ""), same=fn(a, b) { a == b }),
     found: @signals.signal(("", []), same=fn(a, b) { a == b }),
     outline_at: None,
+    reader: @signals.signal((-1.0, true), same=fn(a, b) { a == b }),
+    rail_at: None,
   }
 }
 
@@ -106,6 +113,8 @@ fn chat_goes_to(
     if s.at_foot && !cv.newer {
       @sfbase.place_forget(chat)
     }
+    // (where the reader is, told: the rail's long tick)
+    jump.reader.set((rd.top_seq, rd.at_end))
   })
   v.reacts(shows, fn(on) { @sfbase.reading_of(chat).placed = on && place.sight_now() is Some(_) }, at_start=false)
   let goes = fn() {
@@ -370,6 +379,201 @@ fn chat_outline_node(
     }
   })
 }
+
+///|
+/// What 对话目录's rail of chat `r` (its view `view`) shows: each day's count of what people said and their seqs, oldest
+/// first (the core's chatOutline, subscribed only while it may show), while the outline may be asked for (Source's
+/// `asks_outline`), the chat is made, the list `width` wide leaves the rail room at its right (rail_fits) and people
+/// said three things or more (rail_least); none otherwise. `outline`: the chat's outline, read only then.
+fn chat_rail_said(
+  src : Source,
+  outline : @signals.Computed[@sfbase.TopicState],
+  view : () -> ChatView,
+  width : () -> Double,
+) -> (Array[Int], Array[Double])? {
+  guard (src.asks_outline)() && rail_fits(width()) && view().thread is Some(_) else { return None }
+  let value = outline.get().value
+  let said = outline_seqs(value)
+  guard said.length() >= rail_least else { return None }
+  Some((items(value, "days").map(fn(d) { items(Some(d), "seqs").length() }), said))
+}
+
+///|
+/// A tick of the rail as its row draws it (rail_ticks' RailTick, laid out one under another): its place, the message it
+/// stands for (its place among what people said), how long its turn is, whether it is the reader's, whether a day starts
+/// at it after another (a day's gap over it).
+#derive(Eq)
+priv struct ChatRailTick {
+  i : Int
+  at : Int
+  turn : Int
+  reader : Bool
+  day : Bool
+}
+
+///|
+/// The rail's ticks in a row, one after another, for what `said` says (chat_rail_said's), the reader at `reader`
+/// (ChatJump's: the message at the top of what shows, whether at the end), the chat's newest message `latest`, in
+/// `most` tall.
+fn chat_rail_ticks(said : (Array[Int], Array[Double]), reader : (Double, Bool), latest : Double, most : Double) -> Array[ChatRailTick] {
+  let (days, seqs) = said
+  let current = outline_current(seqs, reader.0, reader.1)
+  let at = seqs.search(current).unwrap_or(seqs.length() - 1)
+  let out : Array[ChatRailTick] = []
+  for g, group in rail_ticks(days, at, rail_turns(seqs, latest), most) {
+    for j, t in group {
+      out.push({ i: out.length(), at: t.at, turn: t.turn, reader: t.reader, day: g > 0 && j == 0 })
+    }
+  }
+  out
+}
+
+///|
+/// Which of `ticks` (chat_rail_ticks') a press at `y` down the rail's press `h` tall lies on: the one whose middle is
+/// nearest, as they are laid out in its middle (each tick_gap and its line tall, a day's tick_day_gap over the first of
+/// a day). None where there are none.
+fn chat_rail_tick_at(ticks : Array[ChatRailTick], y : Double, h : Double) -> ChatRailTick? {
+  let room = tick_thick + tick_gap.px()
+  let tall = ticks.fold(init=0.0, fn(a, t) { a + room + (if t.day { tick_day_gap.px() } else { 0.0 }) })
+  let mut top = (h - tall) / 2.0
+  let mut best : ChatRailTick? = None
+  let mut far = 1.0e9
+  for t in ticks {
+    if t.day {
+      top = top + tick_day_gap.px()
+    }
+    let d = (top + room / 2.0 - y).abs()
+    if d < far {
+      far = d
+      best = Some(t)
+    }
+    top = top + room
+  }
+  best
+}
+
+///|
+/// 对话目录's rail (the old view's outline_rail, made once as nodes): where the list `width` wide leaves it room at its
+/// right, while chat_rail_said says what it shows, a strip of ticks, one for each message a person said, as long as its
+/// turn, the reader's (ChatJump's `reader`) longest and in the ink; standing in the middle of the list `anchor` (what
+/// holds the page's list), at its right, clear of its scroll bar. Made in the list's foot `foot` (a stand of no height
+/// there), so a wheel over it is the list's as anywhere (what holds it the list's foot); placed beside nothing but the
+/// list, out of any column's flow, so it comes and goes at once, with the page as it is made, never making its way in
+/// (no cause of its own: the outline answered, the page made wider). Pressed with the hand where a tick is, the chat goes
+/// to its message (@sfbase.go_to: flashing, where the reader was kept for ↓); pressed by the keys or a screen reader,
+/// the outline opens beside it. As tall as a press at least, its ticks half the list's height at most (of the window's,
+/// under the bar's `top`): past that a steady map of the whole chat (rail_ticks). Its tip says ⌘G's 对话目录. While it
+/// shows, ⌘G opens the outline beside it (`jump`'s rail_at) where the round button does not show.
+fn chat_rail_node(
+  foot : @view.View,
+  src : Source,
+  r : ChatRef,
+  jump : ChatJump,
+  view : () -> ChatView,
+  width : () -> Double,
+  top : () -> Double,
+  anchor : @view.View,
+  tips : @sf.TipLayer,
+  stint : () -> Int,
+) -> Unit {
+  // (the chat's thread as the page is made: a page made as nodes is of a chat made, never a new one, Nav::become)
+  guard @signals.untracked(view).thread is Some(th) else { return }
+  let outline = src.topic("chatOutline", outline_params(r, th))
+  let said = @signals.computed(fn(_) { chat_rail_said(src, outline, view, width) }, same=fn(a, b) {
+    match (a, b) {
+      (Some((d1, s1)), Some((d2, s2))) => d1 == d2 && s1 == s2
+      (None, None) => true
+      _ => false
+    }
+  })
+  foot.box(fn(stand) {
+    stand.height(Is(Some(0.0))) |> ignore
+    stand.show(fn() { said.get() is Some(_) }, at_once=true, fn(o) {
+      o
+      .beside(anchor.id(), side=Right, along=Middle, offset=-(rail_press_w + @ui.scroll_bar_room), padding=0.0)
+      |> ignore
+      let ticks = @signals.computed(fn(_) {
+        match said.get() {
+          Some(s) => {
+            let latest = view().messages.fold(init=-1.0, fn(m, x) { if x.seq > m { x.seq } else { m } })
+            let (_, h) = o.window()
+            let most = dmax(0.0, (h - top()) * rail_share - 2.0 * rail_pad.px())
+            chat_rail_ticks(s, jump.reader.get(), latest, most)
+          }
+          None => []
+        }
+      }, same=fn(a, b) { a == b })
+      let go = fn(t : ChatRailTick) {
+        guard @signals.untracked(fn() { said.get() }) is Some((_, seqs)) && seqs.get(t.at) is Some(seq) else { return }
+        @sfbase.go_to(r, seq)
+      }
+      o.box(fn(press) {
+        @sf.style_node(press, fn() { chat_rail_press })
+        press
+        .says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.outline.title"))) }))
+        .cursor(Is(Some(Hand)))
+        // (the keys' or a screen reader's press: the outline beside it, at the message the reader is at)
+        .on_press(fn() {
+          let cv = @signals.untracked(view)
+          guard cv.thread is Some(th) && @signals.untracked(fn() { said.get() }) is Some((_, seqs)) else { return }
+          let (seq, at_end) = jump.reader.untracked()
+          let current = outline_current(seqs, seq, at_end)
+          open_outline(src, r, th, current, from=Node(press), side=Left, along=Middle, stint=@signals.untracked(stint))
+        })
+        // (the hand's, a finger's or the pointer's: the message of the tick it went down on)
+        .gesture(@ui.touch_slop(), tap=fn(d) {
+          match chat_rail_tick_at(@signals.untracked(fn() { ticks.get() }), d.y, d.h) {
+            Some(t) => go(t)
+            None => ()
+          }
+        })
+        |> ignore
+        press.each(
+          fn() { ticks.get() },
+          fn(t) { t.i },
+          fn(row, t) {
+            // (a day's gap over the first of a day after another)
+            row.box(fn(g) { g.height(By(fn() { Some(if t.get().day { tick_day_gap.px() } else { 0.0 }) })) |> ignore })
+            |> ignore
+            row.box(fn(room) {
+              @sf.style_node(room, fn() { tick_room })
+              room.box(fn(line) {
+                line
+                .width(By(fn() { Some(if t.get().reader { tick_long } else { tick_w(t.get().turn) }) }))
+                .height(Is(Some(tick_thick)))
+                .ground(By(fn() { @ui.tree_theme().color(if t.get().reader { Fg } else { Line }) }))
+                |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+          },
+          // (a map of the chat, steady: no tick makes its way, as none of the old rail's did)
+          at_once=true,
+        )
+        @sf.tip_node(tips, press, fn() { @sf.t("web-main.keymap.chat.outline") }, side=Left, shortcut="chat.outline")
+        |> ignore
+        jump.rail_at = Some(press)
+        press.owns(fn() { if jump.rail_at.map(fn(b) { b.id() }) == Some(press.id()) { jump.rail_at = None } }) |> ignore
+      })
+      |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+/// The rail's press (rail_press's): 44 wide and 44 tall at least, its ticks one under another in its middle at its
+/// right, rail_pad in over, under and at its right.
+// kept across runs: a value (no field of it changes)
+let chat_rail_press : @ui.Style = @ui.style(
+  w=Fixed(rail_press_w),
+  min_h=Fixed(rail_press_w),
+  align=AEnd,
+  justify=JCenter,
+  py=rail_pad,
+  pr=rail_pad,
+)
 
 ///|
 /// The bell to what waits to be decided in chat `r` (to_ask's: the core's `asks`) over the round buttons that show
