@@ -162,8 +162,18 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   });
   // (LOG_REQUESTS: each request a line, its time, answer, route and whose sign-in it came with (the token's last
   // characters): what used an account's requests a minute up, as scripts/e2e-local.sh's cloud log keeps it)
-  if (process.env.LOG_REQUESTS) console.log(`REQ ${new Date().toISOString().slice(11, 23)} ${response.status} ${req.method} ${url.pathname} ${(headers.authorization ?? "").slice(-6) || "-"}`);
+  if (process.env.LOG_REQUESTS) console.log(`REQ ${new Date().toISOString().slice(11, 23)} ${response.status} ${req.method} ${url.pathname} ${(headers.authorization ?? "").slice(-6) || "-"} ${whose(headers.authorization?.slice(7))}`);
   res.writeHead(response.status, Object.fromEntries(response.headers)).end(Buffer.from(await response.arrayBuffer()));
+}
+
+/** Whose sign-in a token is (its account and session, as LOG_REQUESTS writes them), read unchecked: `-` for none. */
+function whose(token: string | undefined): string {
+  try {
+    const claims = JSON.parse(Buffer.from(String(token).split(".")[1] ?? "", "base64url").toString());
+    return typeof claims.sub === "string" ? `${claims.sub} ${String(claims.sid ?? "-")}` : "- -";
+  } catch {
+    return "- -";
+  }
 }
 
 /** A request that fails (the Worker's sign-in rate limit, say) answers 500 rather than ending the dev cloud. */
@@ -178,6 +188,9 @@ function handle(base: string) {
 const server = createServer(handle(origin));
 // The upgrade goes to miniflare byte for byte, Host included, so the Worker sees this origin.
 server.on("upgrade", (req, socket, head) => {
+  // (LOG_REQUESTS: an events socket opened is one of the account's requests a minute too, account.ts `events`)
+  const offered = /stillfail-token\.([A-Za-z0-9._-]+)/.exec(String(req.headers["sec-websocket-protocol"] ?? ""))?.[1];
+  if (process.env.LOG_REQUESTS && offered) console.log(`REQ ${new Date().toISOString().slice(11, 23)} 101 GET ${new URL(req.url ?? "/", origin).pathname} ${offered.slice(-6)} ${whose(offered)}`);
   const upstream = connect(port + 1, "127.0.0.1", () => {
     const lines = [`${req.method} ${req.url} HTTP/1.1`];
     for (let i = 0; i < req.rawHeaders.length; i += 2) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
