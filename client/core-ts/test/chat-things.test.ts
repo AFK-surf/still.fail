@@ -222,6 +222,15 @@ test("a_chats_outline_is_which_messages_people_said_by_the_day_oldest_first_and_
     [1, true, "a@x.com", "a@x.com", "先看看列表"], [3, false, "b@x.com", "Bo", "（文件）"], [5, true, "a@x.com", "a@x.com", "第二天再说"], [6, false, "b@x.com", "Bo", "还有一件"],
   ]);
   assert.match(rows[0].clock, /^\d\d:\d\d$/);
+  // A message that is only a quote with what the person said of it (the composer's comment, its text empty): that.
+  push("thread", { id: 7, entries: [said(8, { authorKind: "person", author: "a@x.com", text: "", quotes: [
+    { author: "Opus", text: "好，我看看", comment: "", ts: "2.0", role: "agent" },
+    { author: "Opus", text: "好，我看看", comment: "  这里\n为什么  ", ts: "2.0", role: "agent" },
+  ], at: AT + DAY + 3000 })] });
+  await host.time.pass(500, 10);
+  call(core, ui, 3, "chat.outline.rows", { station: S, thread: 7, seqs: [8] });
+  await host.time.pass(100);
+  assert.deepEqual(answer(host, 3).ok.rows.map((r: J) => [r.seq, r.words]), [[8, "这里 为什么"]]);
   core.close();
 });
 
