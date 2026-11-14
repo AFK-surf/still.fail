@@ -449,10 +449,54 @@ export function parsePrompt(text: string): [Sourced[], string] {
   }
   rest += second.slice(at);
   const note = rest
+    .replace(/<card-state\b[^>]*>[\s\S]*?(?:<\/card-state>|$)/g, "")
     .split("\n")
     .filter((l) => !(l.startsWith("(Thread ") && l.endsWith(")") && l.includes(" had messages before you were brought in;")))
     .join("\n");
   return [messages, note.trim()];
+}
+
+/// Cleans station-injected prompt wrappers (`[Quote] From ...`, `Attached files:`, pasted-text instructions) in a
+/// received user message so the person's own words stay front and center in the execution history.
+export function cleanReceivedMessageText(raw: string): string {
+  let cleaned = raw.replace(
+    /(?:^|\n\n)\[Quote\] From [^\n]+:\n((?:>[^\n]*(?:\n|$))+)(?:Their comment on it:[ \t]*([^\n]*)(?:\n|$))?/g,
+    (full, passage: string, comment?: string) => {
+      const leadingBreak = full.startsWith("\n\n") ? "\n\n" : "";
+      const nonEmpty = passage
+        .split("\n")
+        .map((l) => l.replace(/^>\s?/, "").trim())
+        .filter((l) => l !== "");
+      const first = nonEmpty[0] ?? "";
+      const clipped = Array.from(first).slice(0, 100).join("");
+      const suffix = nonEmpty.length > 1 || clipped.length < first.length ? " …" : "";
+      const quoteLine = clipped !== "" ? `> ${clipped}${suffix}` : "";
+      const commentLine = comment !== undefined && comment.trim() !== "" ? comment.trim() : "";
+      const combined = [quoteLine, commentLine].filter(Boolean).join("\n");
+      return combined !== "" ? `${leadingBreak}${combined}\n` : leadingBreak;
+    },
+  );
+  cleaned = cleaned.replace(
+    /(?:\n\n|^)The user pasted text into the composer; its full contents are in these text attachments\. Read them as part of the user's message:\n(?:- [^\n]+(?:\n|$))+/g,
+    "",
+  );
+  cleaned = cleaned.replace(
+    /(?:\n\n|^)Attached files:\n((?:- [^\n]+(?:\n|$))+)/g,
+    (_full, list: string) => {
+      const names = list
+        .trim()
+        .split("\n")
+        .map((l) => {
+          const m = /^- \/.*? \((.+), \d+ bytes\)$/.exec(l.trim());
+          if (m?.[1]) return m[1];
+          const p = l.replace(/^- /, "").trim();
+          return p.split("/").pop() || p;
+        })
+        .filter(Boolean);
+      return names.length > 0 ? `\n[附件: ${names.join(", ")}]` : "";
+    },
+  );
+  return cleaned.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /// Work the agent started on its own that told it how it ended (Claude Code's `<task-notification>`): a background command
@@ -773,7 +817,7 @@ export function presentHistory(live: J, cx: Context): J {
               from = { name, slackUser: null, bound: false };
             }
             // A person's words are drawn as they wrote them; an agent's are Markdown, as a chat's page reads them.
-            const said = mentions(m.text, cx);
+            const said = mentions(cleanReceivedMessageText(m.text), cx);
             return [{ key: m.ts, from, text: said, place: place(m.thread, m.slack ? m.ts : null), ...(m.agent ? { md: markdown(said, cx.md) } : {}) }];
           }),
         };

@@ -206,7 +206,18 @@ fn wh_details_node(
       d,
       fn(m) { @sfpages.agent_mark_node(m, fn() { text(field(s(), "maker"), "id") }, fn() { text(s(), "runtime") }, wh_mark_side) },
       fn(w) {
-        @sf.words_node(w, fn() { text(s(), "runtimeText") }, fn() { wh_words })
+        @sf.words_node(w, fn() {
+          let rt = match text(s(), "runtimeText") {
+            "" => text(s(), "agentText")
+            r => r
+          }
+          let pt = text(s(), "processText")
+          if text(s(), "process") != "warm" && pt != "" {
+            rt + " · " + pt
+          } else {
+            rt
+          }
+        }, fn() { wh_words })
         .shrink(Is(1.0))
         .min_width(Is(Some(0.0)))
         |> ignore
@@ -219,8 +230,8 @@ fn wh_details_node(
         |> ignore
       },
     )
-    // process state and evict action on their own single line aligned under the runtime name (never wrapped beside centered icons)
-    d.show(at_once=true, fn() { text(s(), "processText") != "" || text(s(), "process") == "warm" }, fn(p) {
+    // warm process state and evict action on their own single line aligned under the runtime name
+    d.show(at_once=true, fn() { text(s(), "process") == "warm" }, fn(p) {
       wh_line_node(
         p,
         fn(_) {  },
@@ -231,13 +242,14 @@ fn wh_details_node(
             .min_width(Is(Some(0.0)))
             |> ignore
           })
-          w.show(at_once=true, fn() { text(s(), "process") == "warm" }, fn(e) {
+          w.box(fn(e) {
             e.row(Is(true)).lines_up(Is(Some(Middle))).shrink(Is(0.0)) |> ignore
             e.show(at_once=true, fn() { text(s(), "processText") != "" }, fn(sep) {
               @sf.words_node(sep, fn() { " · " }, fn() { wh_words }) |> ignore
             })
             wh_evict_node(e, src, station, key, tips)
           })
+          |> ignore
         },
         fn(_) {  },
       )

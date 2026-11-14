@@ -792,4 +792,34 @@ test("codex_exec_wrappers_and_multi_runtime_tools_are_unwrapped_and_labeled", ()
   assert.equal(multi.items[2].body.content.ends, "done");
   assert.equal(multi.items[3].body.content.failed, true);
   assert.equal(multi.items[3].body.content.ends, undefined);
+
+  // 6. <card-state> prompt tags are stripped from note, and [Quote] From ... / Attached files wrappers are cleaned in received messages
+  const withQuoteAndCard = presentHistory(
+    {
+      timeline: [
+        {
+          kind: "user",
+          text:
+            '<message via="web" connect="ember" thread="CHAT/1794537623.780000" from="Peng Xiao (pengxiao@cue.surf)" ts="1794646800.000000">\n' +
+            "[Quote] From your own earlier message 1794646762.896000 in this conversation:\n" +
+            "> 根因找到了。不是 Remotion 渲染慢，是 **Claude Code 的 Bash 工具把后台进程 stdout 管道握住了 12 分钟**。\n" +
+            ">\n" +
+            "> 时间线（东京站实测）：\n" +
+            "> - 16:46:40 启动\n\n" +
+            "那现在怎么修？\n\n" +
+            "Attached files:\n" +
+            "- /Users/admin/.stillfail/sessions/chat/c-1/workspace/uploads/shot.png (shot.png, 222389 bytes)\n" +
+            "</message>\n" +
+            '<card-state thread="CHAT/1794537623.780000" ts="1794646462.001000">Your card is no longer pending after this message. The message is not necessarily a decision; read what it says. No newer card is pending.</card-state>',
+        },
+      ],
+    },
+    cx([], [], []),
+  );
+  const rec = withQuoteAndCard.items[0].body.content;
+  assert.equal(rec.note, null, "<card-state> tag must not leak as a still.fail reminder note");
+  assert.equal(
+    rec.messages[0].text,
+    "> 根因找到了。不是 Remotion 渲染慢，是 **Claude Code 的 Bash 工具把后台进程 stdout 管道握住了 12 分钟**。 …\n\n那现在怎么修？\n[附件: shot.png]",
+  );
 });

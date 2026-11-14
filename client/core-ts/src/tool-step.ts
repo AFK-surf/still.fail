@@ -67,31 +67,37 @@ export function closeCut(json: string): string {
 
 /** A workspace path stripped of its session workspace root (`/Users/.../.stillfail/sessions/.../workspace/(stillfail/)?`). */
 export function cleanPath(p: string): string {
-  const ws = /^(?:\/Users\/[^/]+|\/home\/[^/]+|\/var\/[^/]+|~)?\/?\.(?:stillfail|ember)\/sessions\/[^/]+\/[^/]+\/workspace(?:\/stillfail)?(?:\/(.+))?$/.exec(p);
+  const rel = p.replace(/^(?:\.\.\/)+/, "/");
+  const c = rel !== p ? rel : p;
+  const ws = /^(?:\/Users\/[^/]+|\/home\/[^/]+|\/var\/[^/]+|~)?\/?\.(?:stillfail|ember)\/sessions\/[^/]+\/[^/]+\/workspace(?:\/stillfail)?(?:\/(.+))?$/.exec(c);
   if (ws) return ws[1] || ".";
-  const brain = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/brain\/[^/]+\/(?:\.system_generated\/)?(.+)$/.exec(p);
+  const brain = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/brain\/[^/]+\/(?:\.system_generated\/)?(.+)$/.exec(c);
   if (brain?.[1]) return brain[1];
-  const builtin = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/builtin\/(.+)$/.exec(p);
+  const builtin = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/builtin\/(.+)$/.exec(c);
   if (builtin?.[1]) return builtin[1];
-  const agent = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/agent\/(.+)$/.exec(p);
+  const agent = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/agent\/(.+)$/.exec(c);
   if (agent?.[1]) return agent[1];
-  const grokMem = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/grok\/memory[^/]*\/workspaces\/[^/]+\/(.+)$/.exec(p);
+  const grokMem = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/grok\/memory[^/]*\/workspaces\/[^/]+\/(.+)$/.exec(c);
   if (grokMem?.[1]) return `memory/${grokMem[1]}`;
-  const homeRuntime = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/([^/]+)\/(?:sessions\/[^/]+\/)?(.+)$/.exec(p);
+  const homeRuntime = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/([^/]+)\/(?:sessions\/[^/]+\/)?(.+)$/.exec(c);
   if (homeRuntime?.[1] && homeRuntime[2]) return `${homeRuntime[1]}/${homeRuntime[2]}`;
-  const shared = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/(?:repos|transcripts)\/(.+)$/.exec(p);
+  const shared = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/(?:repos|transcripts)\/(.+)$/.exec(c);
   if (shared?.[1]) return shared[1];
-  const overflow = /^(?:\/private)?\/var\/folders\/[^/]+\/[^/]+\/T\/devin-overflows-[^/]+\/(.+)$/.exec(p);
+  const overflow = /^(?:\/private)?\/var\/folders\/[^/]+\/[^/]+\/T\/devin-overflows-[^/]+\/(.+)$/.exec(c);
   if (overflow?.[1]) return `devin-overflow/${overflow[1]}`;
-  const userHome = /^(?:\/Users|\/home)\/[^/]+\/(.+)$/.exec(p);
+  const userHome = /^(?:\/Users|\/home)\/[^/]+\/(.+)$/.exec(c);
   if (userHome?.[1]) return `~/${userHome[1]}`;
   return p;
 }
 
-/** A command stripped of a leading `cd /absolute/workspace &&` prefix when present. */
+/** A command stripped of a leading `cd /absolute/workspace &&` prefix and embedded session workspace prefixes. */
 export function cleanCommand(cmd: string): string {
   const m = /^cd\s+(?:"[~/][^"]*"|'[~/][^']*'|[~/][^\s;&|]*)\s*(?:&&|;)\s*([\s\S]+)$/.exec(cmd);
-  return m && m[1] ? m[1] : cmd;
+  const body = m && m[1] ? m[1] : cmd;
+  return body.replace(
+    /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/sessions\/[^/\s"']+\/[^/\s"']+\/workspace(?:\/stillfail)?\//g,
+    "",
+  );
 }
 
 /** One-line summary of a shell command for collapsed step rows, skipping leading `export` / `cd` / comment lines. */
@@ -312,6 +318,10 @@ export function resolveDispatchTarget(
   a: Args,
   summary?: string,
 ): { target?: string; targetId?: string } {
+  const nonGenericType = (v: unknown): string | undefined => {
+    const s = str(v)?.trim();
+    return s && s.toLowerCase() !== "general-purpose" ? s : undefined;
+  };
   const rawId =
     str(a._targetId) ??
     str(a.to) ??
@@ -326,8 +336,8 @@ export function resolveDispatchTarget(
     str(a.recipient) ??
     str(a.Recipient) ??
     str(a.agent_id) ??
-    str(a.subagent_type) ??
-    str(a.TypeName) ??
+    nonGenericType(a.subagent_type) ??
+    nonGenericType(a.TypeName) ??
     str(a.task_name) ??
     str(a.chat) ??
     str(a.name);
@@ -344,8 +354,8 @@ export function resolveDispatchTarget(
     a._target,
     a.recipient_name,
     a.name,
-    a.subagent_type,
-    a.TypeName,
+    nonGenericType(a.subagent_type),
+    nonGenericType(a.TypeName),
     a.task_name,
     a.Role,
     a.role,
@@ -366,16 +376,25 @@ export function resolveDispatchTarget(
 }
 
 function isLongFieldText(key: string, value: string): boolean {
-  if (value.includes("\n") || value.length > 90) return true;
-  if (LONG_TEXT_KEYS.has(key) && value.length > 40) return true;
-  if (value.length > 40 && /[`*_#[\]]/.test(value)) return true;
+  if (value.includes("\n") || value.length >= 85) return true;
+  if (!PROSE_FIELD_KEYS.has(key) && LONG_TEXT_KEYS.has(key) && value.length > 50) return true;
   return false;
+}
+
+/** Keys already stated in a step's `told()` header when `said` is true. */
+function headerConsumedKeys(_name: string, a: Args): string[] {
+  const out = ["description", "toolSummary", "explanation"];
+  if (a.description === undefined && a.toolSummary === undefined && typeof a.summary === "string") {
+    out.push("summary");
+  }
+  return out;
 }
 
 /** Fields one to a row: short ones inline, long text as a full-width Markdown block, nested data as compact JSON. */
 function fields(a: Args, skip: string[], say: Say, resolvedTarget?: string): ToolPart {
-  const fieldSkip = skip.filter((k) => k !== "description" && k !== "summary");
-  const rows = Object.entries(a).filter(([k, v]) => !k.startsWith("_") && !fieldSkip.includes(k) && v !== null && v !== undefined && v !== "");
+  const visibleEntries = Object.entries(a).filter(([k, v]) => !k.startsWith("_") && v !== null && v !== undefined && v !== "");
+  const filtered = visibleEntries.filter(([k]) => !skip.includes(k));
+  const rows = filtered.length > 0 ? filtered : visibleEntries.filter(([k]) => k !== "toolSummary");
   if (!rows.length) return { kind: "none", text: say("web-main.tool.noArgs") };
   return {
     kind: "fields",
@@ -406,7 +425,10 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
     return call.trim() ? [code(call, name === "exec" ? "js" : undefined)] : [];
   }
   const a = parsed;
-  const skip = said ? ["description", "toolSummary", "explanation"] : ["toolSummary"];
+  const skip = said ? headerConsumedKeys(name, a) : ["toolSummary"];
+  if ((name === "ToolSearch" || name === "search_tool") && said && typeof a.query === "string" && a.query.startsWith("select:")) {
+    return [];
+  }
   const command = commandOf(a);
   const rawFile = str(a.file_path) ?? str(a.notebook_path) ?? str(a.target_file) ?? str(a.path) ?? str(a.Path);
   const file = rawFile !== undefined ? cleanPath(rawFile) : undefined;
@@ -425,14 +447,17 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
     const items = ((a.todos ?? a.plan) as unknown[]).filter(isArgs).map((t) => ({ text: str(t.content) ?? str(t.step) ?? "", status: str(t.status) ?? "" }));
     return [...(typeof a.explanation === "string" ? [{ kind: "markdown", text: a.explanation } as ToolPart] : []), { kind: "plan", items }];
   }
+  const isWebFetch = name === "WebFetch" || name === "web_fetch" || typeof a.url === "string";
   const dispatchBody =
-    str(a.prompt) ??
-    str(a.Prompt) ??
-    str(a.message) ??
-    str(a.Message) ??
-    str(a.brief) ??
-    str(a.task) ??
-    (DISPATCH_TOOLS.has(name) ? str(a.text) ?? str(a.content) : undefined);
+    !isWebFetch
+      ? str(a.prompt) ??
+        str(a.Prompt) ??
+        str(a.message) ??
+        str(a.Message) ??
+        str(a.brief) ??
+        str(a.task) ??
+        (DISPATCH_TOOLS.has(name) ? str(a.text) ?? str(a.content) : undefined)
+      : undefined;
   if (
     dispatchBody !== undefined &&
     (DISPATCH_TOOLS.has(name) ||
@@ -472,6 +497,10 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
       "Role",
       "role",
       "title",
+      "type",
+      "recipient_kind",
+      "pin",
+      "routing",
     ];
     return [
       ...facts(a, consumed),
@@ -480,7 +509,7 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
         text: dispatchBody,
         ...(target ? { target } : {}),
         ...(targetId && targetId !== target ? { targetId } : {}),
-        ...(summary ? { summary } : {}),
+        ...(!said && summary ? { summary } : {}),
       },
     ];
   }
@@ -505,9 +534,21 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
   const searchKey = ["pattern", "Pattern", "query", "Query", "url"].find((k) => typeof a[k] === "string");
   if (searchKey !== undefined) {
     const main = str(a[searchKey]) ?? "";
-    return [{ kind: "lead", text: main }, fields(a, [...skip, searchKey], say)];
+    const restFields = fields(a, [...skip, searchKey], say);
+    return restFields.kind === "none" ? [{ kind: "lead", text: main }] : [{ kind: "lead", text: main }, restFields];
   }
   return [fields(a, skip, say)];
+}
+
+/** Strips trailing shell cwd reset notices and collapses `\r` progress-bar overwrites on each line. */
+function cleanTerminalOutput(text: string): string {
+  const withoutReset = text.replace(/\n?Shell cwd was reset to [^\n]+\s*$/, "");
+  if (!withoutReset.includes("\r")) return withoutReset;
+  return withoutReset
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => (line.includes("\r") ? (line.split("\r").pop() ?? line) : line))
+    .join("\n");
 }
 
 /** Codex's or Antigravity's command output: how it ended in a header, then the output. */
@@ -516,18 +557,18 @@ function commandOutput(text: string, say: Say): { facts: string[]; output: strin
   if (agy && agy[3] !== undefined) {
     return {
       facts: [say("web-main.tool.exitCode", { code: agy[3] })],
-      output: text.slice(agy[0].length),
+      output: cleanTerminalOutput(text.slice(agy[0].length)),
     };
   }
   const m = /^(?:Chunk ID: .*\n)?(?:Wall time: (.*)\n)?(?:Process exited with code (-?\d+)\n)?(?:Original token count: .*\n)?Output:\n?/.exec(text);
   if (!m || (!m[1] && !m[2])) return null;
-  return { facts: [m[2] !== undefined ? say("web-main.tool.exitCode", { code: m[2] }) : "", m[1] ? say("web-main.tool.took", { time: m[1] }) : ""].filter(Boolean), output: text.slice(m[0].length) };
+  return { facts: [m[2] !== undefined ? say("web-main.tool.exitCode", { code: m[2] }) : "", m[1] ? say("web-main.tool.took", { time: m[1] }) : ""].filter(Boolean), output: cleanTerminalOutput(text.slice(m[0].length)) };
 }
 
 /** DeepSeek Harness's bash: its output, then how it ended where that was not well (`[exit code: 1]`). */
 function exitMarker(text: string, say: Say): { facts: string[]; output: string } | null {
   const m = /\n?\[exit code: (-?\d+)\]\s*$/.exec(text);
-  return m ? { facts: [say("web-main.tool.exitCode", { code: m[1] ?? "" })], output: text.slice(0, m.index) } : null;
+  return m ? { facts: [say("web-main.tool.exitCode", { code: m[1] ?? "" })], output: cleanTerminalOutput(text.slice(0, m.index)) } : null;
 }
 
 /** DeepSeek Harness's read and write: the file's path and kind, then what is in it (or what was done), in tags (the end
@@ -613,6 +654,14 @@ export function toolResult(name: string, call: string, result: string, failed: b
   }
   const rawBody = stripped.trim() !== "" ? stripped : result;
   const parsedRaw = failed ? undefined : parse(rawBody);
+  if (
+    !failed &&
+    (name === "ToolSearch" || name === "search_tool") &&
+    Array.isArray(parsedRaw) &&
+    parsedRaw.every((item) => isArgs(item) && item.type === "tool_reference")
+  ) {
+    return [];
+  }
   const unwrappedRaw =
     Array.isArray(parsedRaw) &&
     parsedRaw.length > 0 &&
@@ -622,6 +671,13 @@ export function toolResult(name: string, call: string, result: string, failed: b
   const unwrapped = unwrappedRaw
     .replace(/\n*agentId:\s*[A-Za-z0-9_-]+(?:\s*\([^)\n]*\))?\s*$/i, "")
     .replace(/\n*<usage>[\s\S]*?<\/usage>\s*$/i, "");
+  const isDispatch = DISPATCH_TOOLS.has(name) || (isArgs(args) && (args.prompt !== undefined || args.Prompt !== undefined));
+  if (!failed && isDispatch) {
+    const trimmedOut = unwrapped.trim();
+    if (trimmedOut === "" || /^(?:Async agent launched successfully|Message sent|Sent message)\b[^\n]*$/i.test(trimmedOut)) {
+      return [];
+    }
+  }
   const resolvedTarget = isArgs(args)
     ? resolveDispatchTarget(name, args, str(args.summary) ?? str(args.description) ?? str(args.Role) ?? str(args.title)).target
     : undefined;
@@ -629,5 +685,26 @@ export function toolResult(name: string, call: string, result: string, failed: b
   if (parsed !== undefined) {
     return [isArgs(parsed) ? fields(parsed, [], say, resolvedTarget) : { kind: "json", text: JSON.stringify(parsed, null, 2) }];
   }
-  return [output(unwrapped, failed)];
+  if (!failed && (name === "WebSearch" || name === "web_search" || name === "search_web") && unwrapped.includes("Links: [")) {
+    const formatted = unwrapped.replace(/Links:\s*(\[\s*\{[\s\S]*?\}\s*\])/, (full, jsonArr) => {
+      try {
+        const arr = JSON.parse(jsonArr);
+        if (Array.isArray(arr)) {
+          return arr
+            .filter(isArgs)
+            .map((item) => (typeof item.title === "string" && typeof item.url === "string" ? `- [${item.title}](${item.url})` : ""))
+            .filter(Boolean)
+            .join("\n");
+        }
+      } catch {
+        // leave as is
+      }
+      return full;
+    });
+    return [{ kind: "markdown", text: formatted.trim() }];
+  }
+  if (!failed && isDispatch && /[*_#`[\]]|\n/.test(unwrapped)) {
+    return [{ kind: "markdown", text: unwrapped.trim() }];
+  }
+  return [output(cleanTerminalOutput(unwrapped), failed)];
 }

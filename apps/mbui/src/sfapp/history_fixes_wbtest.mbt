@@ -7,49 +7,50 @@
 fn history_fixes_src(
   history : Json,
   attention? : Array[Json] = [],
+  process? : String = "warm",
+  process_text? : String = "",
 ) -> (Source, ChatRef) {
   let base = fixture("chat")
-  let base_chat = base.topic("chat", { "station": "ws1/st1", "session": "s-c1" }).get().value
-  let chat_with_active : Json? = match base_chat {
-    Some(Object(cm)) => {
-      let co = cm.copy()
-      co["agents"] = Json::array(
-        items(base_chat, "agents").mapi(fn(idx, a) {
-          if idx != 0 {
-            return a
-          }
-          match a {
-            Object(am) => {
-              let w = am.copy()
-              w["status"] = Json::string("running")
-              if !attention.is_empty() {
-                w["attention"] = Json::array(attention)
-              }
-              match field(Some(a), "session") {
-                Some(Object(sm)) => {
-                  let so = sm.copy()
-                  so["process"] = Json::string("warm")
-                  w["session"] = Json::object(so)
-                }
-                _ => ()
-              }
-              Json::object(w)
-            }
-            _ => a
-          }
-        }),
-      )
-      Some(Json::object(co))
-    }
-    _ => base_chat
-  }
   let src : Source = {
     ..base,
     topic_read: fn(name, params) {
       if name == "history" {
         { value: Some(history), error: None, version: 1 }
       } else if name == "chat" {
-        { value: chat_with_active, error: None, version: 1 }
+        let got = base.topic(name, params).get().snapshot()
+        guard got.value is Some(Object(cm)) else { return got }
+        let co = cm.copy()
+        co["agents"] = Json::array(
+          items(got.value, "agents").mapi(fn(idx, a) {
+            if idx != 0 {
+              return a
+            }
+            match a {
+              Object(am) => {
+                let w = am.copy()
+                w["status"] = Json::string("running")
+                if !attention.is_empty() {
+                  w["attention"] = Json::array(attention)
+                }
+                match field(Some(a), "session") {
+                  Some(Object(sm)) => {
+                    let so = sm.copy()
+                    so["process"] = Json::string(process)
+                    if process_text != "" {
+                      so["runtimeText"] = Json::string("Claude Code")
+                      so["processText"] = Json::string(process_text)
+                    }
+                    w["session"] = Json::object(so)
+                  }
+                  _ => ()
+                }
+                Json::object(w)
+              }
+              _ => a
+            }
+          }),
+        )
+        { ..got, value: Some(Json::object(co)) }
       } else {
         (base.topic_read)(name, params)
       }
@@ -509,4 +510,225 @@ test "an agent's history's 详情 unfolded: the head as it was till all the deta
     }
   }
   assert_eq(faults.length(), 0, msg="详情 unfolded: \{faults.length()} faults (HDETAIL lines)")
+}
+
+///|
+test "wide history details keeps non-warm runtime status on one line and renders expanded steps in surface cards" {
+  new_run()
+  let msg = "All 4 review findings are valid (`src/sf/markdown.mbt`):\n1. Reset core_parsed[text] when re-measuring;\n2. Copy Markdown table cells cleanly;\n3. Render full-width Markdown blocks;\n4. Keep delivery ack fields intact.\n5. Remove horizontal divider lines.\n6. Align inline prose fields.\n7. Gate full-screen reader button on long blocks.\n8. Keep target navigation link.\n9. Re-run native tests.\n10. Update screenshots.\nPlease fix all 4 and re-verify."
+  let sum = "派发 verifier 验证修复"
+  let call_send = "{\"to\":\"a036720bc24844903\",\"message\":\"All 4 review findings are valid\",\"summary\":\"派发 verifier 验证修复\"}"
+  let res_send = "{\"status\":\"delivered\",\"recipient\":\"verifier\"}"
+  let call_sec = "{\"item\":\"stripe_test_key\",\"about\":\"Stripe 测试环境 API 密钥，仅用于本地集成测试\",\"reason\":\"补充说明密钥用途与使用范围，方便后续 Agent 识别\"}"
+  let res_sec = "{\"status\":\"pending_approval\",\"request\":\"r_8f91c2a\"}"
+  let custom_hist : Json = {
+    "items": [
+      {
+        "key": "r-quote",
+        "entries": [1, 1],
+        "turn": { "time": "17:08", "text": "收到 1 条消息 · 共 2 步" },
+        "body": {
+          "kind": "received",
+          "content": {
+            "note": "",
+            "tasks": [],
+            "messages": [
+              {
+                "from": { "name": "左子健", "bound": true },
+                "place": { "name": "调整历史面板样式", "surface": "ember", "session": "s-c1" },
+                "text": "> 现在视觉上很难分清一个东西展开后是从哪到哪 …\n\n用户反馈这个太乱\n[附件: 29c16ffc6a050b200414b3d8d477ad2d.png]",
+                "md": [
+                  ["quote", [["p", ["现在视觉上很难分清一个东西展开后是从哪到哪 …"]]]],
+                  ["p", ["用户反馈这个太乱"]],
+                  ["p", ["[附件: 29c16ffc6a050b200414b3d8d477ad2d.png]"]],
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        "key": "g-tools",
+        "entries": [2, 5],
+        "work": true,
+        "body": {
+          "kind": "group",
+          "content": {
+            "summary": "执行 2 步操作 · 共 2 步",
+            "failures": 0,
+            "pending": 0,
+            "rows": [
+              {
+                "kind": "step",
+                "content": {
+                  "name": "secret_describe",
+                  "said": "更新密钥说明",
+                  "hint": "stripe_test_key",
+                  "meta": "",
+                  "call": Json::string(call_sec),
+                  "result": Json::string(res_sec),
+                  "failed": false,
+                },
+              },
+              {
+                "kind": "step",
+                "content": {
+                  "name": "SendMessage",
+                  "said": Json::string(sum),
+                  "hint": "",
+                  "meta": "",
+                  "call": Json::string(call_send),
+                  "result": Json::string(res_send),
+                  "failed": false,
+                },
+              },
+            ],
+          },
+        },
+      },
+      {
+        "key": "p-done",
+        "entries": [6, 6],
+        "body": {
+          "kind": "post",
+          "content": {
+            "text": "已将展开后的工具步骤、思考与后台任务统一包裹在圆角浅底容器内，并精简引用块与长消息的双重折叠。",
+            "md": [["p", ["已将展开后的工具步骤、思考与后台任务统一包裹在圆角浅底容器内，并精简引用块与长消息的双重折叠。"]]],
+            "place": { "name": "调整历史面板样式", "surface": "ember", "session": "s-c1" },
+            "ends": "done",
+            "block": false,
+            "failed": false,
+          },
+        },
+      },
+    ],
+    "live": [],
+    "usage": [
+      { "model": "claude-opus-4-6", "input": 48200, "cached": 41000, "output": 1850, "turns": 3 },
+    ],
+    "edge": "从 11/14 16:40 开始",
+    "empty": false,
+    "loaded": true,
+    "more": false,
+  }
+  let (base_src, r) = history_fixes_src(custom_hist, process="stopped", process_text="运行中")
+  let src : Source = {
+    ..base_src,
+    call: fn(name, params, done) {
+      if name == "history.tool" {
+        let tool_name = text(Some(params), "name")
+        if tool_name == "secret_describe" {
+          done(
+            Ok({
+              "call": [
+                {
+                  "kind": "fields",
+                  "rows": [
+                    { "key": "item", "value": "stripe_test_key", "form": "short" },
+                    { "key": "about", "value": "Stripe 测试环境 API 密钥，仅用于本地集成测试", "form": "short", "prose": true },
+                    { "key": "reason", "value": "补充说明密钥用途与使用范围，方便后续 Agent 识别", "form": "short", "prose": true },
+                  ],
+                },
+              ],
+              "result": [
+                {
+                  "kind": "fields",
+                  "rows": [
+                    { "key": "status", "value": "pending_approval", "form": "short" },
+                    { "key": "request", "value": "r_8f91c2a", "form": "short" },
+                  ],
+                },
+              ],
+            }),
+          )
+        } else {
+          done(
+            Ok({
+              "call": [
+                {
+                  "kind": "markdown",
+                  "target": "verifier",
+                  "targetId": "a036720bc24844903",
+                  "text": Json::string(msg),
+                  "md": [
+                    ["p", ["All 4 review findings are valid (", ["code", "src/sf/markdown.mbt"], "):"]],
+                    [
+                      "ol",
+                      [
+                        ["li", ["Reset core_parsed[text] when re-measuring;"]],
+                        ["li", ["Copy Markdown table cells cleanly;"]],
+                        ["li", ["Render full-width Markdown blocks;"]],
+                        ["li", ["Keep delivery ack fields intact;"]],
+                        ["li", ["Remove horizontal divider lines;"]],
+                        ["li", ["Align inline prose fields;"]],
+                        ["li", ["Gate full-screen reader button on long blocks;"]],
+                        ["li", ["Keep target navigation link;"]],
+                        ["li", ["Re-run native tests;"]],
+                        ["li", ["Update screenshots."]],
+                      ],
+                    ],
+                    ["p", ["Please fix all 4 and re-verify."]],
+                  ],
+                },
+              ],
+              "result": [
+                {
+                  "kind": "fields",
+                  "rows": [
+                    { "key": "status", "value": "delivered", "form": "short" },
+                    { "key": "recipient", "value": "verifier", "form": "short" },
+                  ],
+                },
+              ],
+            }),
+          )
+        }
+      } else {
+        (base_src.call)(name, params, done)
+      }
+    },
+  }
+  // 1. Wide desktop (1280x800)
+  open_chat(r)
+  let tw = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  tw.run_for(@ui.move_most_ms)
+  app.nav.push(History(r, "s-c1", None))
+  tw.frame()
+  tw.frame()
+  tw.run_for(@ui.move_most_ms)
+  assert_true(tw.rect_of("Claude Code · 运行中") is Some(_), msg="non-warm runtime and process status stay on one line")
+  if tw.rect_of("详情") is Some(det) {
+    tw.tap(det.0 + det.2 / 2.0, det.1 + det.3 / 2.0)
+    tw.run_for(@ui.move_most_ms)
+  }
+  let grp_w = tw.rect_of("执行 2 步操作 · 共 2 步").unwrap()
+  tw.tap(grp_w.0 + grp_w.2 / 2.0, grp_w.1 + grp_w.3 / 2.0)
+  tw.run_for(@ui.move_most_ms)
+  let sec_w = tw.rect_of("更新密钥说明").unwrap()
+  tw.tap(sec_w.0 + sec_w.2 / 2.0, sec_w.1 + sec_w.3 / 2.0)
+  tw.run_for(@ui.move_most_ms)
+  let send_w = tw.rect_of(sum).unwrap()
+  tw.tap(send_w.0 + send_w.2 / 2.0, send_w.1 + send_w.3 / 2.0)
+  tw.run_for(@ui.move_most_ms)
+  assert_eq(tw.corner_faults(), [])
+  assert_eq(tw.lit_all_faults(), [])
+
+  // 2. Narrow phone (390x844)
+  new_run()
+  open_chat(r)
+  let tp = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  tp.run_for(@ui.move_most_ms)
+  app.nav.push(History(r, "s-c1", None))
+  tp.run_for(@ui.move_most_ms)
+  let grp_p = tp.rect_of("执行 2 步操作 · 共 2 步").unwrap()
+  tp.tap(grp_p.0 + grp_p.2 / 2.0, grp_p.1 + grp_p.3 / 2.0)
+  tp.run_for(@ui.move_most_ms)
+  let sec_p = tp.rect_of("更新密钥说明").unwrap()
+  tp.tap(sec_p.0 + sec_p.2 / 2.0, sec_p.1 + sec_p.3 / 2.0)
+  tp.run_for(@ui.move_most_ms)
+  let send_p = tp.rect_of(sum).unwrap()
+  tp.tap(send_p.0 + send_p.2 / 2.0, send_p.1 + send_p.3 / 2.0)
+  tp.run_for(@ui.move_most_ms)
+  assert_eq(tp.corner_faults(), [])
+  assert_eq(tp.lit_all_faults(), [])
 }

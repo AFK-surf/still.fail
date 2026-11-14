@@ -131,7 +131,7 @@ test("a_client_asks_the_core_what_a_step_is", async () => {
   assert.equal(sendOk.call[0].kind, "markdown");
   assert.equal(sendOk.call[0].target, "verifier");
   assert.equal(sendOk.call[0].targetId, "a036720bc24844903");
-  assert.equal(sendOk.call[0].summary, "Tell verifier all 4 findings are valid, ask to fix all");
+  assert.equal(sendOk.call[0].summary, undefined, "summary is omitted when said is true so it does not duplicate the step header");
   assert.ok(Array.isArray(sendOk.call[0].md), "dispatch message parsed as Markdown");
   assert.deepEqual(sendOk.result, [
     {
@@ -159,6 +159,25 @@ test("a_client_asks_the_core_what_a_step_is", async () => {
   assert.equal(customOk.call[0].rows[1].prose, true);
   assert.equal(customOk.call[0].rows[2].form, "long");
   assert.ok(Array.isArray(customOk.call[0].rows[2].md), "long field row carries parsed Markdown tree");
+
+  const secretCall = JSON.stringify({
+    item: "stripe_test_key",
+    about: "Stripe 测试环境 API 密钥",
+    reason: "用于本地和 tokyo-mac-studio-0 跑支付回调回归测试，仅限测试环境 `sk_test_*` 使用。",
+    toolSummary: "Describe Stripe test key",
+  });
+  call(core, ui, 4, "history.tool", { name: "secret_describe", call: secretCall, result: null, said: true });
+  await host.settle();
+  const secretOk = (answers(host.takeEmitted(), 4) as J).ok;
+  assert.equal(secretOk.call[0].kind, "fields");
+  assert.deepEqual(
+    secretOk.call[0].rows.map((r: J) => [r.key, r.form, Boolean(r.prose)]),
+    [
+      ["item", "short", false],
+      ["about", "short", true],
+      ["reason", "short", true],
+    ],
+  );
 
   const agents = agentsOf([
     {

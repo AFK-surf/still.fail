@@ -266,16 +266,16 @@ test "history group thought hides duplicate first-line preview in summary when e
 }
 
 ///|
-test "history tool step renders dispatch card, full-width stacked long fields, and result section header" {
-  let msg = "All 4 review findings are valid (`src/sf/markdown.mbt`). Please fix all 4."
+test "history tool step renders borderless dispatch block, full-width stacked long fields, and result section header" {
+  let msg = "All 4 review findings are valid (`src/sf/markdown.mbt`):\n1. Reset core_parsed[text] when re-measuring;\n2. Copy Markdown table cells cleanly;\n3. Render full-width Markdown blocks;\n4. Suppress delivery ack noise.\n5. Remove horizontal divider lines.\n6. Align inline prose fields.\n7. Gate full-screen reader button on long blocks.\n8. Keep target navigation pill.\n9. Re-run native tests.\n10. Update screenshots.\nPlease fix all 4 and re-verify."
   let sum = "Tell verifier all 4 findings are valid, ask to fix all"
-  let call_json = "{\"to\":\"a036720bc24844903\",\"message\":\"All 4 review findings are valid (`src/sf/markdown.mbt`). Please fix all 4.\",\"summary\":\"Tell verifier all 4 findings are valid, ask to fix all\"}"
-  let res_json = "{\"type\":\"message_sent\",\"recipient\":\"a036720bc24844903\",\"recipient_kind\":\"agent\"}"
+  let call_json = "{\"to\":\"a036720bc24844903\",\"message\":\"All 4 review findings are valid\",\"summary\":\"Tell verifier all 4 findings are valid, ask to fix all\"}"
+  let res_json = "{\"status\":\"pending_approval\"}"
   let item : Json = {
     "body": {
       "kind": "group",
       "content": {
-        "summary": sum,
+        "summary": "读取 1 个文件 · 共 2 步",
         "failures": 0,
         "pending": 0,
         "rows": [
@@ -283,7 +283,7 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
             "kind": "step",
             "content": {
               "name": "SendMessage",
-              "said": "",
+              "said": Json::string(sum),
               "hint": "",
               "meta": "",
               "call": Json::string(call_json),
@@ -302,7 +302,7 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
     "name": Json::string("SendMessage"),
     "call": Json::string(call_json),
     "failed": Json::boolean(false),
-    "said": Json::boolean(false),
+    "said": Json::boolean(true),
     "result": Json::string(res_json),
   }
   let tk = "g-send/group/0\u{1}" + Json::object(ask).stringify()
@@ -312,7 +312,6 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
         "kind": "markdown",
         "target": "verifier",
         "targetId": "a036720bc24844903",
-        "summary": Json::string(sum),
         "text": Json::string(msg),
         "md": [["p", ["All 4 review findings are valid (", ["code", "src/sf/markdown.mbt"], "). Please fix all 4."]]],
       },
@@ -321,9 +320,7 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
       {
         "kind": "fields",
         "rows": [
-          { "key": "type", "value": "message_sent", "form": "short" },
-          { "key": "recipient", "value": "verifier", "form": "short" },
-          { "key": "recipient_kind", "value": "agent", "form": "short" },
+          { "key": "status", "value": "pending_approval", "form": "short" },
         ],
       },
     ],
@@ -353,10 +350,10 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
     )
     t.draw()
     assert_true(t.rect_of("代理") is Some(_), msg="SendMessage shows 代理 badge")
-    assert_true(t.rect_of("→ verifier") is Some(_), msg="dispatch card shows resolved target badge")
+    assert_true(t.rect_of("→ verifier") is Some(_), msg="dispatch block shows resolved target badge")
     assert_true(t.rect_of("返回") is Some(_), msg="result section header is shown")
-    assert_true(t.rect_of("message_sent") is Some(_), msg="result fields are shown")
-    assert_true(t.rect_of("recipient_kind") is Some(_), msg="recipient_kind is shown")
+    assert_true(t.rect_of("pending_approval") is Some(_), msg="result fields are shown")
+    assert_true(t.rect_of("展开 ·") is None, msg="10-line dispatch message is not redundantly folded inside an expanded step")
     assert_eq(t.corner_faults(), [])
     assert_eq(t.lit_all_faults(), [])
     t.tap_text("全屏查看")
@@ -366,5 +363,42 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
     assert_eq(t.lit_all_faults(), [])
   }
   @sf.presenters_reset()
+  steps_reset()
+}
+
+///|
+test "reused history rows strip i/ prefix when expanding groups and messages" {
+  steps_reset()
+  @sf.set_words(@sfbase.fill)
+  let src = @sffixture.fixture("history")
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
+    w=900.0,
+    h=700.0,
+    platform=0,
+    tree=fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      let tips = @sf.TipLayer::new(fn() { Some(root) })
+      history_steps_node(root, src, "ws1/st1", "s-c1", tips)
+    },
+  )
+  t.draw()
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  assert_eq(t.lit_all_faults(), [])
+  let group_summary = "读取 3 个文件 · 跑 1 条命令"
+  if t.rect_of(group_summary) is Some(_) {
+    t.tap_text(group_summary)
+    t.run_for(@ui.move_most_ms)
+    assert_true(steps_own.opened.length() > 0, msg="tapping group header in history_steps_node opens the group")
+    for k, _ in steps_own.opened {
+      assert_true(!k.has_prefix("i/"), msg="opened key must not retain i/ prefix: \{k}")
+    }
+    assert_eq(t.corner_faults(), [])
+    assert_eq(t.lit_all_faults(), [])
+  }
   steps_reset()
 }
