@@ -1316,8 +1316,8 @@ let menu_heading_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, 
 /// its longest and `w` at least (controls.css.ts menuList 180; a menu of choices chooserMenu, 220), `offset` on `side`
 /// of `trigger` (under it) lined up `along` it, or at `at`; what was chosen. The arrows, letters, Enter and Escape as a
 /// menu's; a press outside closes it. `check_end`: its choices' checks are drawn at their rows' ends (`row_end`:
-/// parts.tsx ChooserItem checkEnd), no column of them before their words. `on_pick`: what choosing an entry does, given
-/// its value, as it is chosen (@kit.dropdown_menu's).
+/// parts.tsx ChooserItem checkEnd), no column of them before their words. `show_exit` false yields at once to a panel
+/// replacing it. `on_pick`: what choosing an entry does, given its value, as it is chosen (@kit.dropdown_menu's).
 pub fn dropdown(
   c : @ui.Ctx,
   key : String,
@@ -1336,6 +1336,7 @@ pub fn dropdown(
   marks? : Map[String, (@ui.Ctx, Double) -> Unit] = {},
   notes? : Map[String, String] = {},
   check_end? : Bool = false,
+  show_exit? : Bool = true,
   on_pick? : (String) -> Unit,
 ) -> @kit.Menu {
   // (a column before every item's words where one has an icon or is one of a choice, its check there, so all their
@@ -1357,6 +1358,7 @@ pub fn dropdown(
     offset~,
     min_w=w,
     at?,
+    show_exit~,
     look=fn(c, w, body) { small_panel(c, min_w=w, body) |> ignore },
     item_look=fn(c, s) {
       menu_row(
