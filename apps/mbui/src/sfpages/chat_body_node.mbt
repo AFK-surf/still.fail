@@ -325,6 +325,25 @@ fn chat_body_node(
     false
   })
   let keys = @signals.computed(fn(_) { rows.get().keys }, same=fn(a, b) { a == b })
+  // (the keys the core's rows that took over what was sent from here go on by, given the chat's viewer, which names an
+  // occurrence of a picture by its row's key here and asks the core by the core's: told again as a row is taken over,
+  // which only adds one)
+  let taken_over = @signals.computed(fn(_) {
+    rows.get() |> ignore
+    kept.sent_as.length()
+  }, same=fn(a, b) { a == b })
+  let sent_as = fn() {
+    taken_over.get() |> ignore
+    kept.sent_as
+  }
+  let chat_key = here.station + "\u{1}" + here.session
+  @sfbase.rows_sent_as[chat_key] = sent_as
+  v.owns(fn() {
+    if @sfbase.rows_sent_as.get(chat_key) is Some(f) && physical_equal(f, sent_as) {
+      @sfbase.rows_sent_as.remove(chat_key)
+    }
+  })
+  |> ignore
   let width = here.width
   let side = fn() { row_side(width()) }
   // the page before asked of the core as the list nears its top (list_after's: once for each first entry it has, not
