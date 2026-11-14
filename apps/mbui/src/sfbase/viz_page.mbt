@@ -580,11 +580,25 @@ pub fn viz_file_of(
     Some(Ok((html, state))) => {
       let place = "chat/" + station + ":" + session + "/" + ts + "/" + a.path
       c.box(style=viz_file_box, fn() {
-        viz_frame(c, place, html, state, {
-          keep: Some(fn(s) { viz_keep(src, station, key, a.path, s) }),
-          failed: None,
-          follow_up: Some(viz_follow_up(station, session)),
-        })
+        match viz_mbui_parse(a.name, html) {
+          Some(widget) =>
+            viz_mbui_ctx(c, place, widget, state.unwrap_or(Json::null()), {
+              keep: Some(fn(s) { viz_keep(src, station, key, a.path, s) }),
+              failed: None,
+              follow_up: Some(viz_follow_up(station, session)),
+            })
+          None => {
+            if is_mbui_viz(a.name) {
+              failed()
+              return
+            }
+            viz_frame(c, place, html, state, {
+              keep: Some(fn(s) { viz_keep(src, station, key, a.path, s) }),
+              failed: None,
+              follow_up: Some(viz_follow_up(station, session)),
+            })
+          }
+        }
         // under the page, out of its way: the ways to open it on its own, icons in the chat's grey
         c.box(style=viz_ways, fn() {
           let full = c.id("viz/full/" + place)
@@ -714,19 +728,37 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
         c.box(style=viz_ground, fn() {
           c.box(style=@ui.style(w=Full, h=Fixed(under)), fn() {  }) |> ignore
           c.box(style=viz_full_page.then(@ui.style(pr=@sf.room_of(c.space(S3) + @sf.native_clear()))), fn() {
-            viz_frame(
-              c,
-              "full/" + v.station + "/" + v.key + "/" + v.path,
-              html,
-              state,
-              {
-                keep: Some(fn(s) { viz_keep(src, v.station, v.key, v.path, s) }),
-                failed: None,
-                follow_up: Some(viz_follow_up(v.station, v.session)),
-              },
-              fill=true,
-              ground=t.p.bg,
-            )
+            match viz_mbui_parse(v.name, html) {
+              Some(widget) =>
+                c.box(style=viz_full_mbui_box, fn() {
+                  viz_mbui_ctx(
+                    c,
+                    "full/" + v.station + "/" + v.key + "/" + v.path,
+                    widget,
+                    state.unwrap_or(Json::null()),
+                    {
+                      keep: Some(fn(s) { viz_keep(src, v.station, v.key, v.path, s) }),
+                      failed: None,
+                      follow_up: Some(viz_follow_up(v.station, v.session)),
+                    },
+                  )
+                })
+                |> ignore
+              None =>
+                viz_frame(
+                  c,
+                  "full/" + v.station + "/" + v.key + "/" + v.path,
+                  html,
+                  state,
+                  {
+                    keep: Some(fn(s) { viz_keep(src, v.station, v.key, v.path, s) }),
+                    failed: None,
+                    follow_up: Some(viz_follow_up(v.station, v.session)),
+                  },
+                  fill=true,
+                  ground=t.p.bg,
+                )
+            }
           })
           |> ignore
           c.box(style=@ui.style(w=Full, h=Fixed(foot)), fn() {  }) |> ignore
@@ -762,6 +794,10 @@ pub let viz_full_page : @ui.Style = @ui.style(w=Full, h=@sf.grow, px=S3)
 
 ///|
 // kept across runs: a value (no field of it changes)
+let viz_full_mbui_box : @ui.Style = @ui.style(w=Full, h=@sf.grow, py=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
 pub let viz_mermaid_box : @ui.Style = @ui.css("w=Full")
 
 ///|
@@ -771,6 +807,7 @@ pub fn viz_pages_reset() -> Unit {
   viz_extra_frames.clear()
   viz_left_chats.clear()
   viz_heights.clear()
+  viz_mbui_states_clear()
   viz_full.set(None)
   mermaid_charts.clear()
   followed_into.clear()

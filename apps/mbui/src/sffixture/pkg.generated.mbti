@@ -438,6 +438,8 @@ pub fn fixture_updates(ms? : Double) -> Unit
 
 pub let fixture_viz_html : String
 
+pub let fixture_viz_mbui : String
+
 pub fn fixture_with_tabs(Fixture, Map[String, Json], Json?) -> Json?
 
 pub fn found_item(String, String, String, String, String, Map[String, Json]) -> Json
@@ -491,6 +493,8 @@ pub fn long_screens_view() -> Json
 pub let long_reply : String
 
 pub fn made_chat(String) -> Json
+
+pub let mbui_viz_answer : String
 
 pub let md_answer : String
 
@@ -593,6 +597,8 @@ pub fn with_download_message(Json) -> Json
 pub fn with_file_links(Json) -> Json
 
 pub fn with_flag(Json, String) -> Json
+
+pub fn with_mbui_viz_message(Json) -> Json
 
 pub fn with_md_message(Json) -> Json
 

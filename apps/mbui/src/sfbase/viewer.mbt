@@ -113,6 +113,7 @@ pub fn preview_kind(name : String) -> (PKind?, String, String) {
     "env" => "dotenv"
     "gradle" => "groovy"
     "plist" | "svg" => "xml"
+    "mbui" => "json"
     e => e
   }
   if code_languages.contains(language) {

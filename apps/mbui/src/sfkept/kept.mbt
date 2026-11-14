@@ -122,6 +122,7 @@ let kept_answers : String =
   #|["markdown","截图在这里。",[["p",[[0,6]]]]]
   #|["markdown","打好的发布包在这里，下载下来装一下看看。",[["p",[[0,20]]]]]
   #|["markdown","打开就消失 083209 card:看一眼就行 083209|好 083209|不好 083209",[["p",[[0,49]]]]]
+  #|["markdown","把内联 HTML 预览换成了原生 mbui 组件，零 WebView 开销，首帧直接算好高度：\n\n[发布与性能看板](release.mbui)",[["p",[[0,47]]],["p",[["a",[[50,57]],{"href":"release.mbui"}]]]]]
   #|["markdown","按钮用什么颜色 083209",[["p",[[0,14]]]]]
   #|["markdown","按钮的点击在表单提交之前被 `preventDefault` 吞掉了，改成在 `onSubmit` 里处理：\n\n```ts\nform.onsubmit = (e) => {\n  e.preventDefault(); // 0O 1lI\n};\n```\n\nSafari 和 Chrome 都试过了。",[["p",[[0,14],["code",{"content":[15,29]}],[30,39],["code",{"content":[40,48]}],[49,54]]],["pre",{"code":[62,121],"lang":"ts","ink":"j4cj9c3jc9jci14c4b10c2"}],["p",[[127,148]]]]]
   #|["markdown","推送截图前要先登录 gh。",[["p",[[0,13]]]]]

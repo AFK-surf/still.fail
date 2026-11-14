@@ -330,7 +330,7 @@ pub fn viz_served(html : String, state : Json?, dark : Bool, ground : Int64, scr
 /// Whether a file is a visualization.
 pub fn is_viz(name : String) -> Bool {
   let n = name.to_lower()
-  n.has_suffix(".html") || n.has_suffix(".htm")
+  n.has_suffix(".mbui") || n.has_suffix(".html") || n.has_suffix(".htm")
 }
 
 // ── a visualization's file: fetched with what its widget kept ──────────

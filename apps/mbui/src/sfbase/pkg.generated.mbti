@@ -794,6 +794,8 @@ pub fn host_picture(String, String) -> String
 
 pub fn install_of(@json.Json?, String) -> Install?
 
+pub fn is_mbui_viz(String) -> Bool
+
 pub fn is_viz(String) -> Bool
 
 pub fn java_hash(String) -> Int32
@@ -1914,6 +1916,14 @@ pub fn viz_load(@ui.Ctx, Source, String, String, String, size? : Double) -> Resu
 pub let viz_loads : Map[String, VizLoad]
 
 pub let viz_max_state : Int32
+
+pub fn viz_mbui_ctx(@ui.Ctx, String, VizMbuiWidget, @json.Json, VizHears) -> Unit
+
+pub fn viz_mbui_node(@view.View, String, VizMbuiWidget, () -> @json.Json, VizHears) -> Unit
+
+pub fn viz_mbui_parse(String, String) -> VizMbuiWidget?
+
+pub fn viz_mbui_states_clear() -> Unit
 
 pub fn viz_mermaid_block(@ui.Ctx, Source, String, String, String, Int64) -> Unit
 
@@ -3834,6 +3844,10 @@ pub(all) struct VizLoad {
   state_read : @signals.Signal[Bool]
   failed : @signals.Signal[Bool]
   mut asked : Bool
+}
+
+pub struct VizMbuiWidget {
+  // private fields
 }
 
 pub struct WholeAsk {

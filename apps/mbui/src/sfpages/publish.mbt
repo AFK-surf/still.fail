@@ -801,7 +801,9 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
 fn publish_viz_drawn(seq : Double, taking : Bool, a : Attachment) -> Bool {
   let k = file_k(seq, a)
   k != "" &&
-  (if taking {
+  (if @sfbase.is_mbui_viz(a.name) {
+    !publishing.off.contains(k) && !publishing.off.contains(message_k(seq))
+  } else if taking {
     publishing.stills.contains(k)
   } else {
     @ui.platform() != 4 && !publishing.off.contains(k) && !publishing.off.contains(message_k(seq))
@@ -814,6 +816,59 @@ fn publish_viz_drawn(seq : Double, taking : Bool, a : Attachment) -> Bool {
 /// `card` when its file cannot be read.
 fn publish_viz(c : @ui.Ctx, src : Source, here : MessageHere, seq : Double, taking : Bool, a : Attachment, card : () -> Unit) -> Unit {
   let k = file_k(seq, a)
+  if @sfbase.is_mbui_viz(a.name) {
+    let loaded = @sfbase.viz_load(c, src, here.station, owner_of(here, a), a.path, size=a.size)
+    match loaded {
+      Some(Ok((html, state))) =>
+        match @sfbase.viz_mbui_parse(a.name, html) {
+          Some(widget) => {
+            let place = "publish/" + here.station + ":" + here.session + "/" + k
+            let draw_box = fn() {
+              c.box(style=@sfbase.viz_file_box, fn() {
+                c.box(style=publish_file_box, fn() {
+                  @sfbase.viz_mbui_ctx(c, place, widget, state.unwrap_or(Json::null()), { keep: None, failed: None, follow_up: None })
+                })
+                |> ignore
+              })
+              |> ignore
+            }
+            if taking {
+              draw_box()
+            } else {
+              publish_ticked(c, k, w=None, draw_box)
+            }
+            return
+          }
+          None => {
+            publishing.viz_failed[k] = true
+            return card()
+          }
+        }
+      Some(Err(_)) => {
+        publishing.viz_failed[k] = true
+        return card()
+      }
+      None => {
+        if taking {
+          return card()
+        }
+        publish_ticked(c, k, w=None, fn() {
+          c.box(style=@sfbase.viz_file_box, fn() {
+            c.box(style=publish_file_box, fn() {
+              c.box(style=@sfbase.viz_wait_under, fn() {
+                let i = c.box(style=@sfbase.viz_wait, fn() {  })
+                @sf.breathe(c, i)
+              })
+              |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        return
+      }
+    }
+  }
   if taking {
     match publishing.stills.get(k) {
       Some((image, w, h)) =>
