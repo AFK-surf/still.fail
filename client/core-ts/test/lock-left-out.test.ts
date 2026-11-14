@@ -44,7 +44,7 @@ type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
 /// web page. `waiting`: the station given no root's log. `older`: a station from before its refusal said `apps`.
 /// `carried`: s1 a member the chain names with X as an app of theirs, bound to no log, no log of theirs anywhere (the
 /// state carries them by the chain alone).
-async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean } = {}) {
+async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean; unread?: boolean } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const alice = new Log("r1"), bob = new Log("r2"), x = new Log("s1");
@@ -63,11 +63,13 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const moved = signed({ v: 1, ws: "ws", seq: 1, prev: stationHash(first), at: 1000, kind: "moved", body: { root: alice.genesis } }, alice.app.signer);
   const r = await rig(() => ({ ws: first as unknown as Entry }), (host) => {
     if (o.web) host.appKeys = false;
-  }, [A], [A], undefined, [], { role: "member" });
+  }, [A], [A], undefined, [], { role: "member", ...(o.unread ? { lock: null } : {}) });
   clock = () => r.host.nowMs();
   // (the cloud's copy of a person's own lock, for the devices from before: it keeps none of s1's)
-  stationReplies(r.host, (req) => (req.url.endsWith("/v1/me/personal-lock") ? (req.method === "GET" ? { entries: [] } : { ok: true }) : r.cloud.reply(req)));
-  r.cloud.chains.set("ws", [first, moved] as unknown as Entry[]);
+  // (`unread`: it keeps s1's, as it does for an app from before, read before any station answered)
+  stationReplies(r.host, (req) => (req.url.endsWith("/v1/me/personal-lock") ? (req.method === "GET" ? { entries: o.unread ? x.entries : [] } : { ok: true }) : r.cloud.reply(req)));
+  // (`unread`: the cloud's copy not moved yet either, so no read of it holds the chain as it moved)
+  r.cloud.chains.set("ws", (o.unread ? [first] : [first, moved]) as unknown as Entry[]);
   const inner = r.core.inner;
   inner.mesh = () => Effect.succeed({ deviceId: () => base.hex, sign: () => ({ publicKey: new Uint8Array(32), signature: new Uint8Array(64) }), link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
   inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
@@ -82,7 +84,7 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   for (const l of o.waiting ? [bob] : o.named && !o.noApp ? [alice, bob, x] : [alice, bob]) bring(l);
   const viewer = viewerOf("s1", { base }, "member", "ws");
   /// What the station does to each of its asks: `lie`, a device its refusals name to ask in place of those it would.
-  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0, personHeld: o.personHeld === true, personUntold: o.personHeld === true };
+  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0, personHeld: o.personHeld === true || o.unread === true, personUntold: o.personHeld === true, lockUnread: o.unread === true };
   /// The link's hello to A, as the station answers it: null where it lets this device in; else its refusal, told the
   /// core as the mesh wire tells it (station/mesh-wire.ts `refusedFor`).
   const hello = (): CoreError | null => {
@@ -117,6 +119,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
     if (ws !== "ws") return Effect.fail(httpError(404, { error: "no route" }));
     // (its person's own lock not read yet: not answered, until the test lets it be)
     if (st.personHeld && method === "GET" && path === "/lock/person") return Effect.fail(new CoreError("station_offline", "not reached"));
+    // (the workspace's lock not read of it yet: its links opened first)
+    if (st.lockUnread && method === "GET" && (path === "/lock" || path.startsWith("/lock?") || path === "/lock/logs" || path === "/lock/bodies")) return Effect.fail(new CoreError("station_offline", "not reached"));
     // (its link's hello first: a station that refused this device is not dialled again until told to, as the mesh does)
     const waits = hooks.lockWaiting?.(inner, ws, A) ?? null;
     if (waits !== null) return Effect.fail(waits);
@@ -159,8 +163,11 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
     return out;
   };
   const ask = (name: string, params: Record<string, unknown>) => run(Effect.tryPromise({ try: () => r.ask(name, params), catch: (e) => e as CoreError }));
-  await run(read(inner, "ws"));
-  assert.equal(held(inner, "ws")?.entries.at(-1)?.kind, "moved", "the chain held moved");
+  // (`unread`: the workspace's lock not read yet, as an app just signed in whose links opened first)
+  if (!o.unread) {
+    await run(read(inner, "ws"));
+    assert.equal(held(inner, "ws")?.entries.at(-1)?.kind, "moved", "the chain held moved");
+  }
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
   /// The page as it stands once what was set going settled.
   const page = async () => {
@@ -346,6 +353,28 @@ test("a member's own second app refused before its own lock was read, and after:
     assert.equal(asked.error, undefined, `${first} first: ${asked.error?.message}`);
     assert.deepEqual(w.dialled, [w.x.app.base.hex], `${first} first: X alone dialled, its own log's`);
   }
+});
+
+// 2026-11-14, main's side run at 00b417fd9b (build 9161), N: each station's first refusal came as its link first
+// opened, the workspace's lock not held here yet (no chain to say it moved), while its own lock had been read already
+// (a log of its person's it is not on, `outside`), and named an admin; 50 ms later, the lock read, the right words. The
+// real order: own lock read, then the refusal, the workspace's lock still unread. The refusal's own `left` says the
+// chain moved (a station gives it only there), and with it the person's log this device is not on says it joins that.
+test("a new app of a person with a log it is not on, its first refusal before the workspace's lock is held: says to join that log, no admin", async () => {
+  const w = await setUp({ named: true, unread: true });
+  const personal = w.inner.adb.personal();
+  await w.run(personal.refresh("s1"));
+  assert.equal(personal.standing("s1"), "outside", "its own lock read (the cloud's copy, no station reached yet): a log of its person's it is not on");
+  // (an app just signed in holds no lock of the workspace yet: the rig's core starts holding its genesis, let go here,
+  // so the refusal's tail has nothing to go on from, as on N, `heardTail`)
+  w.inner.data.put("lock", "ws", {});
+  assert.equal(held(w.inner, "ws"), null, "no lock of the workspace held yet (an app just signed in)");
+  assert.equal(w.st.refusals.length, 0, "no station reached yet: this is its first refusal");
+  const said = w.hello();
+  console.log(`first refusal, lock held ${JSON.stringify(held(w.inner, "ws")?.entries.map((e) => e.kind) ?? null)}, own lock read: ${said?.message}`);
+  assert.ok(said !== null, "refused");
+  assert.doesNotMatch(said!.message, /管理员|admin/i);
+  assert.match(said!.message, /发送批准请求|send/i);
 });
 
 test("a station that names a wrong device to ask: nothing let in, the page still able to ask", async () => {
