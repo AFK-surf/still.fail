@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.27 | 55.38 | 97.04 | 115.29 |
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
 | [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
 | [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.25 | 55.35 | 96.7 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 2 | 2.73 | 11.64 | 31.28 | 41.84 | 27.88 | 53.53 | 96.68 | 116.53 |
 | [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
-| [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 2 | 2.73 | 11.63 | 31.28 | 41.83 | 27.88 | 53.53 | 96.31 | 114.99 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
 | [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
 | [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.26 |
-| [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
