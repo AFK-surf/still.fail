@@ -2032,8 +2032,12 @@ impl Inner {
         }
         // A path's kind as stat (links followed) says it: "file", "dir" or "other"; null when it cannot be (none there,
         // no right): what the station's programs ask of the filesystem (station/mb src/locate), as Node's statSync does.
+        // With `lstat`, the path itself as lstat says it (a link "link", not followed).
         if op == "fs.stat" {
-            return Ok(match std::fs::metadata(str_of(a, "path")?) {
+            let path = str_of(a, "path")?;
+            let lstat = a.get("lstat").and_then(Value::as_bool).unwrap_or(false);
+            return Ok(match if lstat { std::fs::symlink_metadata(path) } else { std::fs::metadata(path) } {
+                Ok(m) if m.file_type().is_symlink() => json!("link"),
                 Ok(m) if m.is_file() => json!("file"),
                 Ok(m) if m.is_dir() => json!("dir"),
                 Ok(_) => json!("other"),
@@ -2122,7 +2126,7 @@ impl Inner {
             let modified = since.map(|d| d.as_millis() as u64);
             // `mtime`: as Node's statSync (no `bigint`) says `mtimeMs`, its fraction of a millisecond kept.
             let mtime = since.map(|d| d.as_secs() as f64 * 1e3 + d.subsec_nanos() as f64 / 1e6);
-            return Ok(json!({ "size": meta.len(), "mtimeMs": modified, "mtime": mtime }));
+            return Ok(json!({ "size": meta.len(), "mtimeMs": modified, "mtime": mtime, "dir": meta.is_dir() }));
         }
         // The end of a file, at most `bytes` of it (up to its size when opened), decoded as TextDecoder("utf-8") does
         // (what is not UTF-8 replaced, a leading byte order mark dropped); null when it does not open.
@@ -2161,6 +2165,43 @@ impl Inner {
                 bytes = zstd::decode_all(bytes.as_slice()).map_err(err)?;
             }
             return Ok(json!(hex::encode(bytes)));
+        }
+        // A program run to its end, as Node's execFileSync runs one (station/src/read/sessions.ts `inRepositories`: `git
+        // ls-files`): `command` with `args`, nothing on its stdin and its stderr let go, its stdout decoded as
+        // Buffer.toString("utf8") does; null where it did not end well: not started, ended by a signal or with a code
+        // not 0, still running after `timeoutMs` (killed then), or writing more than `maxBytes`.
+        if op == "proc.run" {
+            use std::io::Read;
+            use std::process::{Command, Stdio};
+            let args: Vec<String> = a.get("args").and_then(Value::as_array).map(|v| v.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+            let timeout = std::time::Duration::from_millis(a.get("timeoutMs").and_then(Value::as_u64).unwrap_or(5000));
+            let most = a.get("maxBytes").and_then(Value::as_u64).unwrap_or(1 << 20) as usize;
+            let Ok(mut child) = Command::new(str_of(a, "command")?).args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+                return Ok(Value::Null);
+            };
+            let mut stdout = child.stdout.take().expect("piped");
+            let reading = std::thread::spawn(move || {
+                let mut out = Vec::new();
+                let over = (&mut stdout).take(most as u64 + 1).read_to_end(&mut out).is_err() || out.len() > most;
+                (out, over)
+            });
+            let started = std::time::Instant::now();
+            let status = loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => break Some(status),
+                    Ok(None) if started.elapsed() < timeout => std::thread::sleep(std::time::Duration::from_millis(2)),
+                    _ => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break None;
+                    }
+                }
+            };
+            let (out, over) = reading.join().unwrap_or((Vec::new(), true));
+            return Ok(match status {
+                Some(s) if s.success() && !over => json!(String::from_utf8_lossy(&out)),
+                _ => Value::Null,
+            });
         }
         // What a link points to, as Node's readlinkSync gives it; null when the path is no link or cannot be read.
         if op == "fs.readlink" {
@@ -3197,6 +3238,19 @@ mod tests {
         assert!(sync("fs.bytes", json!({ "path": at("a/b/plain.txt"), "from": 1, "length": 1_000_000, "exact": true }))["error"].is_string());
         assert_eq!(sync("fs.bytes", json!({ "path": at("none") }))["value"], Value::Null);
         assert_eq!(sync("fs.hash", json!({ "path": at("none") }))["value"], Value::Null);
+        // a program's output, and one that fails, runs too long or writes too much; a link as lstat says it
+        #[cfg(unix)]
+        {
+            assert_eq!(sync("proc.run", json!({ "command": "printf", "args": ["a\\nb"] }))["value"], json!("a\nb"));
+            assert_eq!(sync("proc.run", json!({ "command": "false" }))["value"], Value::Null);
+            assert_eq!(sync("proc.run", json!({ "command": "sleep", "args": ["5"], "timeoutMs": 50 }))["value"], Value::Null);
+            assert_eq!(sync("proc.run", json!({ "command": "printf", "args": ["abcdef"], "maxBytes": 3 }))["value"], Value::Null);
+            assert_eq!(sync("proc.run", json!({ "command": "/no/such/program" }))["value"], Value::Null);
+            std::os::unix::fs::symlink(at("a/b/plain.txt"), at("a/link")).unwrap();
+            assert_eq!(sync("fs.stat", json!({ "path": at("a/link"), "lstat": true }))["value"], json!("link"));
+            assert_eq!(sync("fs.stat", json!({ "path": at("a/link") }))["value"], json!("file"));
+            std::fs::remove_file(at("a/link")).unwrap();
+        }
         // copied, renamed, a folder made, then let go with what it holds; nothing there is no failure
         assert_eq!(sync("fs.copy", json!({ "from": at("a/b/plain.txt"), "to": at("a/copy.txt") }))["value"], Value::Null);
         assert_eq!(sync("fs.rename", json!({ "from": at("a/copy.txt"), "to": at("a/moved.txt") }))["value"], Value::Null);
