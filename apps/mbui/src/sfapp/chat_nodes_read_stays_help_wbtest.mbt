@@ -140,8 +140,8 @@ fn rs_answer(k : RsCore) -> Unit {
 
 ///|
 /// The long chat opened on screen `s` with its page made as nodes, at its end and at rest, the core answering at once.
-/// Its list's rows on the device's pixels, but where a caller says not (`on_pixels`).
-fn rs_open(s : (String, Double, Double, Int), on_pixels? : Bool = true) -> (@ui.Tester, Source, RsCore) {
+/// Its list's rows on the device's pixels.
+fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
   let (_, w, h, platform) = s
   new_run()
   @sf.presenters_reset()
@@ -167,7 +167,7 @@ fn rs_open(s : (String, Double, Double, Int), on_pixels? : Bool = true) -> (@ui.
   // (a list's rows on the device's pixels, as every host lays them: what is held is where things are drawn, the scroll
   // moving by whole pixels; off them, as the Tester's own default, the list counts fractions that Scroll::drawn_by draws
   // put on the pixel, up to half a pixel apart and otherwise as the fraction changes, a mode no device runs)
-  t.set_rows_on_pixels(on_pixels)
+  t.set_rows_on_pixels(true)
   // (each frame looked at as it was drawn, before what the core answers by then is told: told after the look, it is
   // laid out at once, and the tree read then is between that answer and the frame that draws it, a frame no device
   // draws)

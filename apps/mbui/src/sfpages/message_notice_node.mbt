@@ -93,7 +93,11 @@ fn notice_body_node(
       })
     })
     |> ignore
-    across.show(open, fn(t) { message_time_node(t, here.tips, fn() { m().time }) })
+    // (its time under it while it is open: one against nothing said to leave, as a show said so would not (it holds
+    // its place unfaded, then lets it go at once): coming, its place opens and it is seen once that holds it whole;
+    // going, it fades where it is, its place closing after; no words of it cut (msg_part_leave_ms; the coordinator of
+    // the migration, 2026-11-14))
+    across.pick(open, leave=msg_part_leave_ms, fn(t, on) { if on { message_time_node(t, here.tips, fn() { m().time }) } })
   })
   |> ignore
 }
