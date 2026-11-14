@@ -1520,6 +1520,11 @@ export class Store {
     });
   }
 
+  /// A chat named by hand by another program (the MoonBit program serving devices, mesh/served.ts): as `setThreadTitle`.
+  retitled(thread: number): void {
+    this.#titleRevisions.set(thread, this.titleRevision(thread) + 1);
+  }
+
   /// Changes even when a person writes the same title again; a pending generation must respect that choice.
   titleRevision(thread: number): number {
     return this.#titleRevisions.get(thread) ?? 0;

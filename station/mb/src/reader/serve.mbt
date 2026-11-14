@@ -448,8 +448,13 @@ async fn Serving::answer(self : Serving, id : Json, conn : Json, who : Member, a
     return self.whole(headers, @utf8.encode("{\"answers\":[\{answers}]}"), level=9)
   }
   // A mark the member puts on a chat or a session (api/routes/marks.ts): written here, Node told what changed.
-  if asked.value("method") is Some(String("PUT" | "DELETE" as method)) {
-    return match self.mark(who, method, path, body, words) {
+  let marked = match (asked.value("method"), route_of_path(path)) {
+    (Some(String("PUT" | "DELETE" as method)), _) => Some(method)
+    (Some(String("POST")), ["sessions", _, "title"]) => Some("POST")
+    _ => None
+  }
+  if marked is Some(method) {
+    return match self.mark(who, method, path, body, words, lang) {
       Text(status, text) => self.whole(headers, @utf8.encode(text), status~)
       Give => self.fallback(conn, asked, body)
     }
@@ -1056,7 +1061,15 @@ async fn Serving::frames(self : Serving, id : Json, bytes : Bytes) -> Bool {
 /// the admin API answers them (a read-only member writes only the first three: admin.ts `OWN_MARKS`; one of another
 /// workspace is not there: api/seen.ts), written in a transaction that writes, and what changed told Node
 /// (`changes`, store.ts `#with`'s), which tells its followers as the store's own writes are told. Any other: Node's.
-fn Serving::mark(self : Serving, who : Member, method : String, path : String, body : Bytes, words : Json) -> Done raise {
+fn Serving::mark(
+  self : Serving,
+  who : Member,
+  method : String,
+  path : String,
+  body : Bytes,
+  words : Json,
+  lang : String,
+) -> Done raise {
   let error = (m : String) => ({ "error": Json::string(m) } : Json).stringify()
   let route = match path.find("?") {
     Some(at) => path[0:at].to_string()
@@ -1065,13 +1078,16 @@ fn Serving::mark(self : Serving, who : Member, method : String, path : String, b
   let parts : Array[String] = route.split("/").map(p => p.to_string()).collect()
   guard parts.length() >= 4 && parts[1] == "admin" && parts[2] == "api" else { return Give }
   let what = match (method, parts[3:]) {
-    ("PUT", ["threads", _, "read" | "hidden" | "muted" | "keep" as w]) => w.to_string()
+    ("PUT", ["threads", _, "read" | "hidden" | "muted" | "keep" | "title" | "dismissed" as w]) => w.to_string()
     ("DELETE", ["threads", _, "keep"]) => "unkeep"
     ("PUT" | "DELETE", ["sessions", _, "pin"]) => "pin"
+    ("POST", ["sessions", _, "title"]) => "named"
     _ => return Give
   }
   let viewer = who.viewer
-  if viewer.value("role") == Some(Json::string("viewer")) && (what == "keep" || what == "unkeep" || what == "pin") {
+  // (a read-only member's own marks only: admin.ts `OWN_MARKS`)
+  let own = what == "read" || what == "hidden" || what == "muted" || what == "dismissed"
+  if viewer.value("role") == Some(Json::string("viewer")) && not(own) {
     return Text(403, error("read-only members cannot change this station"))
   }
   if self.elsewhere(route, viewer) is Some(m) {
@@ -1093,6 +1109,36 @@ fn Serving::mark(self : Serving, who : Member, method : String, path : String, b
   let db = self.reader.db_now()
   let now = Json::number(self.now().to_double())
   let id = segment(parts[4])
+  let word = (w : String) => match words.value(w) {
+    Some(String(said)) => said
+    _ => ""
+  }
+  // A session named by hand, and its own chat with it (marks.ts POST /sessions/:key/title).
+  if what == "named" {
+    guard db.all("SELECT 1 AS x FROM sessions WHERE key = ?", [Json::string(id)]) is [_, ..] else {
+      return Text(404, error("unknown session \{id}"))
+    }
+    let name = title_of(input)
+    let home = self.writing(db, () => {
+      ignore(db.run("UPDATE sessions SET title = ?1 WHERE key = ?2", [name, Json::string(id)]))
+      match db.all("SELECT id FROM threads WHERE home = ? ORDER BY id LIMIT 1", [Json::string(id)]) {
+        [r, ..] => {
+          let home = r.get("id").unwrap_or(Json::null())
+          ignore(db.run("UPDATE threads SET title = ?1 WHERE id = ?2", [name, home]))
+          home
+        }
+        _ => Json::null()
+      }
+    })
+    let changes : Array[Json] = [{ "type": "session", "key": Json::string(id) }]
+    if home is Null {
+      self.changed(changes)
+    } else {
+      changes.push({ "type": "thread", "id": home, "entries": [] })
+      self.changed(changes, titled=[home])
+    }
+    return Text(200, ({ "ok": true } : Json).stringify())
+  }
   if what == "pin" {
     guard db.all("SELECT 1 AS x FROM sessions WHERE key = ?", [Json::string(id)]) is [_, ..] else {
       return Text(404, error("unknown session \{id}"))
@@ -1117,11 +1163,52 @@ fn Serving::mark(self : Serving, who : Member, method : String, path : String, b
   // (marks.ts `thread`: a number SQLite keeps, and a chat there)
   guard signed_digits(id) && signed_number(id).abs() <= 9007199254740991.0 else { return Text(404, error("unknown thread \{id}")) }
   let thread = Json::number(signed_number(id))
-  guard db.all("SELECT 1 AS x FROM threads WHERE id = ?", [thread]) is [_, ..] else {
+  guard db.all("SELECT surface FROM threads WHERE id = ?", [thread]) is [found, ..] else {
     return Text(404, error("unknown thread \{id}"))
   }
   let v = Json::string(email)
   match what {
+    // A chat named by hand; none names it by its first message again. Answered as the chat is read.
+    "title" => {
+      if found.get("surface") != Some(Json::string("ember")) {
+        return Text(400, error(word("renameOnlyStillfail")))
+      }
+      let name = title_of(input)
+      ignore(self.writing(db, () => {
+        ignore(db.run("UPDATE threads SET title = ?1 WHERE id = ?2", [name, thread]))
+        Json::null()
+      }))
+      self.changed([{ "type": "thread", "id": thread, "entries": [] }], titled=[thread])
+      self.read_path(who, lang, words, "/admin/api/threads/" + thread.stringify())
+    }
+    // A card (or a need) the member will not take up, by its post's entry `n`.
+    "dismissed" => {
+      let n = match input.get("n") {
+        Some(Number(n, ..)) if n >= 1.0 && n == n.floor() => Json::number(n)
+        _ => return Text(400, error(word("badN")))
+      }
+      // (marks.ts: a card, its own or options from before cards, or an agent's post: rows.ts `cardOfEntry`)
+      let asked = db.all("SELECT card, options, author_kind FROM entries WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n", [
+        thread, n, n,
+      ])
+      let waiting = match asked {
+        [e, ..] =>
+          e.get("author_kind") == Some(Json::string("agent")) ||
+          (match parsed_column(e.get("card")) {
+            Some(Null) | None => false
+            Some(_) => true
+          }) ||
+          parsed_column(e.get("options")) is Some(_)
+        _ => false
+      }
+      guard waiting else { return Text(404, error(word("nothingWaiting"))) }
+      ignore(self.writing(db, () => {
+        ignore(db.run("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", [v, thread, n, now]))
+        Json::null()
+      }))
+      self.changed([{ "type": "dismissed", "viewer": v, "card": { "thread": thread, "n": n } }])
+      Text(200, ({ "dismissed": { "thread": thread, "n": n } } : Json).stringify())
+    }
     "read" => {
       let n = match input.get("n") {
         Some(Number(n, ..)) if n >= 0.0 && n == n.floor() => Json::number(n)
@@ -1204,8 +1291,44 @@ fn Serving::writing(self : Serving, db : @sql.Db, write : () -> Json raise) -> J
 
 ///|
 /// What changed told Node, which tells its followers (store.ts `told`).
-fn Serving::changed(self : Serving, changes : Array[Json]) -> Unit {
-  self.host.say(({ "changes": Json::array(changes) } : Json).stringify())
+/// `titled`: the chats named by hand in it (the store's `titleRevision` raised, which a title being made waits on).
+fn Serving::changed(self : Serving, changes : Array[Json], titled? : Array[Json] = []) -> Unit {
+  let said : Map[String, Json] = { "changes": Json::array(changes) }
+  if titled.length() > 0 {
+    said["titled"] = Json::array(titled)
+  }
+  self.host.say(Json::object(said).stringify())
+}
+
+///|
+/// A name given by hand (marks.ts `title`): trimmed, at most 80 characters; none or empty is null.
+fn title_of(input : Map[String, Json]) -> Json {
+  let t = match input.get("title") {
+    Some(String(t)) => @jscase.trim(t)
+    _ => ""
+  }
+  if t == "" {
+    return Json::null()
+  }
+  let out = StringBuilder::new()
+  let mut count = 0
+  for c in t {
+    if count == 80 {
+      break
+    }
+    out.write_char(c)
+    count += 1
+  }
+  Json::string(out.to_string())
+}
+
+///|
+/// A column of JSON as rows.ts `parsed` reads it: None for none or what does not parse.
+fn parsed_column(v : Json?) -> Json? {
+  match v {
+    Some(String(text)) => try { Some(@json.parse(text)) } catch { _ => None }
+    _ => None
+  }
 }
 
 ///|
