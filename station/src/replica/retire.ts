@@ -54,6 +54,7 @@ import type { Ask } from "./peers.ts";
 import { type Outcome, moved, outcomeFile, readyFile, restoreDir } from "./restore.ts";
 import { mergeAgentHome } from "./agent-carry.ts";
 import { movedSaid } from "../jobs/jobs.ts";
+import { hold as holdUpdates } from "../updates/holds.ts";
 
 type Json = any;
 
@@ -203,7 +204,15 @@ export type RetireDeps = {
   drives?: (station: string, session: string) => boolean;
   /// Whether a session is one of `ws`'s chats here (it goes along as they move).
   ofWorkspace?: (session: string, ws: string) => boolean;
+  /// What keeps the station from updating itself while the hand-over goes on (updates/holds.ts `hold`, unless a test
+  /// says): its let-go.
+  hold?: () => () => void;
 };
+
+/// The steps of a take here that an update of this station would cut (what it was sent put in place, the worktrees
+/// made, the copy brought for its restart, that restart's own start): held from the take until it took them or could
+/// not. Its own restart to put them in is no update, and goes on.
+const TAKING_HELD: ReadonlySet<TakingStep> = new Set(["placing", "gits", "copy", "restart"]);
 
 const retiringFile = (data: string) => join(data, "replica", "retiring.json");
 const takingDir = (data: string) => join(data, "replica", "taking");
@@ -339,6 +348,13 @@ export class Retire {
   /// Since when the other station has not been reached, its chats stopped (none: it was, or they work): a hand-over not
   /// reached for QUIET_UNREACHED_MS falls back.
   #unreachedSince: number | null = null;
+  /// The holds on updating this station (`#holdsNow`): while its chats stop and are handed over, and each take here
+  /// under way, by its origin.
+  readonly #hold: () => () => void;
+  #retiringHeld: (() => void) | null = null;
+  readonly #takingHeld = new Map<string, () => void>();
+  /// Since when sending the files has failed in a row, each tried again by itself (null: it has not).
+  #sendingFailedSince: number | null = null;
   /// The writes of `retiring.json`, one after another.
   #writes: Promise<void> = Promise.resolve();
   /// What is owed to the driver being told (`#driverSoon`), and its retry.
@@ -372,6 +388,7 @@ export class Retire {
     this.#room = d.room ?? roomHere(d.data);
     this.#hasGit = d.hasGit ?? gitHere;
     this.#lackMost = d.lackMost ?? LACK_MOST;
+    this.#hold = d.hold ?? holdUpdates;
     this.#state = readJsonNow<State>(retiringFile(d.data));
     if (this.#state !== null) {
       const st = this.#state;
@@ -401,6 +418,8 @@ export class Retire {
     }
     const s = this.#state;
     if (s !== null && stopped(s.step)) void this.#quiet(s).catch((e) => log.warn("retire", "a retired station's chats not quiet yet", { error: (e as Error).message }));
+    // (held again as the process starts, before the updater can decide: a hold is this process's)
+    this.#holdsNow();
   }
 
   /// Begun (the mesh attached): where each side stood, gone on with.
@@ -441,11 +460,18 @@ export class Retire {
 
   async close(): Promise<void> {
     this.#closed = true;
+    // (let go first: the next process holds again, as it starts, for what is still under way)
+    this.#holdsNow();
     this.#again?.();
     this.#telling?.();
     this.#dropAgain?.();
     this.#driverAgain?.();
     for (const stop of [...this.#takeAgain.values(), ...this.#tellAgain.values()]) stop();
+    // (the run under way ended between files, its gathering ended, as a cancel ends it: a gathering of a million files
+    // goes on for minutes, and the process handing over to the next would wait for it. Each step is safe to run again,
+    // and the next process goes on from where it stands)
+    this.#stopping = true;
+    this.#abort?.abort();
     await this.#running?.catch(() => {});
     await this.#dropping?.catch(() => {});
     await this.#driving?.catch(() => {});
@@ -466,7 +492,38 @@ export class Retire {
     return new Set([...this.#taking.values()].filter((t) => t.step !== "took").map((t) => t.origin));
   }
 
+  /// The holds on updating this station as where each side stands says now, taken or let go of, each exactly once:
+  /// called wherever that changes (`#changed`), as the process starts, and as it closes (all let go). Retired: held
+  /// while sending, its chats stopping and handed over go on, until the other took them, it fell back to `sent`, it was
+  /// called off: the sending too (the lead, 2026-11-14: a real retirement's station updated itself three times in one
+  /// sending, each cut starting it again from gathering a million files, a beta every ten minutes). Not while it rests
+  /// or waits: at `sent`, failed, the other's disk full or it from before, nor while the other is not reached (nothing
+  /// goes on that an update would cut, and a hold must not outlast a station gone for good). Taking: each take while a
+  /// step of TAKING_HELD (what comes while the other sends is only files written by their hash).
+  #holdsNow(): void {
+    const s = this.#state;
+    const going = s !== null && (s.step === "sending" || s.step === "quiet" || s.step === "handing");
+    const rests = s !== null && (s.reason === "failed" || s.reason === "full" || s.reason === "old" || s.reason === "offline");
+    const retiring = !this.#closed && going && !rests;
+    if (retiring && this.#retiringHeld === null) this.#retiringHeld = this.#hold();
+    else if (!retiring && this.#retiringHeld !== null) {
+      const letGo = this.#retiringHeld;
+      this.#retiringHeld = null;
+      letGo();
+    }
+    for (const t of this.#taking.values()) {
+      if (!this.#closed && TAKING_HELD.has(t.step) && !this.#takingHeld.has(t.origin)) this.#takingHeld.set(t.origin, this.#hold());
+    }
+    for (const [origin, letGo] of [...this.#takingHeld]) {
+      const t = this.#taking.get(origin);
+      if (!this.#closed && t !== undefined && TAKING_HELD.has(t.step)) continue;
+      this.#takingHeld.delete(origin);
+      letGo();
+    }
+  }
+
   #changed(now: boolean): void {
+    this.#holdsNow();
     if (now) {
       this.#telling?.();
       this.#telling = null;
@@ -529,6 +586,7 @@ export class Retire {
       .then(() => {
         this.#tries = 0;
         this.#unreachedSince = null;
+        this.#sendingFailedSince = null;
       }, async (e) => {
         const s = this.#state;
         if (s === null || this.#stopping) return;
@@ -552,10 +610,23 @@ export class Retire {
           await this.#fallBack(s).catch((x) => log.warn("retire", "the chats not put back to work", { error: (x as Error).message }));
           return;
         }
-        // (what needs someone, while the chats still work: said once to who asked for it)
-        if (s.step === "sending" && s.reason !== "offline" && s.toldError !== message) {
-          s.toldError = message;
-          await this.#toDriver(s, `Retiring this station: sending the files to ${s.toName || "the other station"} failed (${s.reason}): ${message}. The chats still work here; the station tries again by itself, or call station_retire again after fixing it, or cancel.`);
+        // (what needs someone, while the chats still work, said once to who asked for it: at once what does not go on by
+        // itself; what is tried again by itself (`error`, `offline`: the other not reached, a stream cut by this
+        // station's own update) only once it has failed for RETRY_MOST_MS in a row, as most of it is gone past by the
+        // next try)
+        if (s.step !== "sending") this.#sendingFailedSince = null;
+        else {
+          const now = this.#d.fibers.now();
+          this.#sendingFailedSince ??= now;
+          const retried = s.reason === "error" || s.reason === "offline";
+          const failing = now - this.#sendingFailedSince;
+          const told = retried ? `retried since ${this.#sendingFailedSince}` : message;
+          if ((!retried || failing >= RETRY_MOST_MS) && s.toldError !== told) {
+            s.toldError = told;
+            await this.#toDriver(s, retried
+              ? `Retiring this station: sending the files to ${s.toName || "the other station"} has been failing for ${Math.round(failing / 60_000)} min (${s.reason}): ${message}. The chats still work here; the station goes on trying by itself. Look at what keeps it (station_retire status, station_task on that station), or cancel.`
+              : `Retiring this station: sending the files to ${s.toName || "the other station"} failed (${s.reason}): ${message}. The chats still work here; it is tried again by itself, but this needs someone: fix it (or call station_retire again after), or cancel.`);
+          }
         }
         const wait = Math.min(RETRY_MS * 2 ** this.#tries, RETRY_MOST_MS);
         this.#tries++;
@@ -598,6 +669,7 @@ export class Retire {
     if (s.step === "sent" && s.wait) return;
     s.error = null;
     s.reason = null;
+    this.#holdsNow();
     const ws = s.workspace;
     const home = this.#d.home() === ws;
     const db = join(this.#d.data, "stillfail.db");
@@ -761,8 +833,9 @@ export class Retire {
         if (answer?.took === true && s.step === "handing") {
           s.error = null;
           s.reason = null;
-          await this.#save();
         }
+        // (where it rests failed, nothing here goes on that an update would cut: let go)
+        await this.#save();
         return;
       }
     }
@@ -1021,8 +1094,8 @@ export class Retire {
       this.#jobsBack(s, s.jobs, `The move of this chat to station ${name} was called off, and it works here again`);
     }
     this.#state = null;
-    // (nothing written of it after it is gone)
-    await this.#driving?.catch(() => {});
+    // (nothing written of it after it is gone: what the driver's telling writes is of the state, none now; it is not
+    // waited for, as it may be waiting on another station)
     await this.#writes;
     await rm(retiringFile(this.#d.data), { force: true });
     await rm(scratchDir(this.#d.data), { recursive: true, force: true });
