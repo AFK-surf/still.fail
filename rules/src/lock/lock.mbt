@@ -14,6 +14,10 @@ pub(open) trait Crypto {
   valid_key_id(Self, String) -> Bool
   /// Whether base key `base` (hex) says `endpoint` is its own in workspace `ws` (`proof`, hex).
   endpoint_proof(Self, String, String, String, String) -> Bool
+  /// Whether `sig` (hex) is signing key `key`'s over the bytes `tag`, a NUL, then the 32 bytes of `digest` (hex): the
+  /// shape every form a device's signer signs besides a lock entry has (a vault's records, a rig's statements), each
+  /// under a tag of its own (`bind_tag`, state4.mbt).
+  tagged_sig_valid(Self, String, String, String, String) -> Bool
 }
 
 ///|
@@ -143,10 +147,16 @@ fn arr(v : Json?) -> Array[Json] {
 
 ///|
 fn is_hex32(s : String) -> Bool {
-  if s.length() != 64 {
+  is_hex_of(s, 64)
+}
+
+///|
+/// Whether `s` is `n` lowercase hex digits.
+fn is_hex_of(s : String, n : Int) -> Bool {
+  if s.length() != n {
     return false
   }
-  for i in 0..<64 {
+  for i in 0..<n {
     let c = s.code_unit_at(i).to_int()
     if !((c >= 0x30 && c <= 0x39) || (c >= 0x61 && c <= 0x66)) {
       return false

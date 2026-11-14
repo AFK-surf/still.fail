@@ -19,7 +19,7 @@
 // Faults: round three's, and bodies on their own (`holdBack`: one body never given to one keeper by anyone).
 import { createHash } from "node:crypto";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import { type Entry, type LockState, WEB_DEVICE_SECS, apply, canonical, fold, genesis as lockGenesis, sigValid, signer as lockSigner } from "../src/cloud/lock.ts";
+import { type Entry, type LockState, WEB_DEVICE_SECS, apply, canonical, fold, genesis as lockGenesis, sigValid, signatureOk, signer as lockSigner } from "../src/cloud/lock.ts";
 import { Keeper, type LogRules, type Variant, hashOf, isRemoval, signed, weight } from "./lock-fork-choice-model.ts";
 import {
   ACCOMPLICE, type Dev3, type Family, Holder, type Job3, type Make3, type PersonState, PersonRules, type Roster, type Step, V3, type V3v, World3, type World3Options,
@@ -82,9 +82,27 @@ export function bodyWhy(b: any): string | null {
     case "station.remove": return keys === "cancels,key,kind,salt,ws" && HEX32.test(b.key) && hexes(b.cancels) ? null : "a removal names whom and what it cancels";
     case "open": return keys === "cloud_keys,email,kind,origins,rp_id,salt,ws" && typeof b.email === "string" && Array.isArray(b.origins) && b.origins.every((o: unknown) => typeof o === "string") && typeof b.rp_id === "string" ? null : "open names the settings";
     case "off": return keys === "kind,salt,ws" ? null : "off says nothing more";
+    case "bind": return keys === "key,kind,salt,sig,ws" && typeof b.key === "string" && b.key !== "" && typeof b.sig === "string" && /^[0-9a-f]{128}$/.test(b.sig) ? null : "a binding names the signer that proves it and its signature";
     default: return "no such statement";
   }
 }
+
+// ── D6's binding (the lead's, 2026-11-14) ──────────────────────────────────────────────────────────────────────────
+
+/// What signs a binding: a tag no other form a device's signer signs shares (rules/src/lock/roster.mbt `bind_tag`).
+export const BIND_TAG = "stillfail-lock-bind/1";
+/// What a binding's signer signs after the tag and a NUL: the SHA-256 of this form's canonical text.
+export const bindForm = (ws: string, sub: string, log: string, moved: string) => ({ kind: "bind", log, moved, sub, ws });
+export const bindBytes = (ws: string, sub: string, log: string, moved: string): Buffer =>
+  Buffer.concat([Buffer.from(`${BIND_TAG}\0`), createHash("sha256").update(canonical(bindForm(ws, sub, log, moved))).digest()]);
+/// Whether `sig` (hex) is `key`'s proof that log `log` is `sub`'s in `ws` after the move `moved`.
+export const bindValid = (key: string, sig: string, ws: string, sub: string, log: string, moved: string): boolean => {
+  try {
+    return signatureOk(key, Buffer.from(sig, "hex"), bindBytes(ws, sub, log, moved));
+  } catch {
+    return false;
+  }
+};
 
 // ── a person log with D1's and D2's kinds ───────────────────────────────────────────────────────────────────────────
 
@@ -823,12 +841,13 @@ export class World4 extends World3 {
   /// of each station (`~<moved>/s/<key>`). A removal cancels the one of its subject, named or not (it may name them
   /// all by the `moved` entry's hash): so one said before the chain was read so takes out whom it took out then. (`~` sorts after every hex hash: an admit of the same role
   /// said in a log binds before the chain's.)
-  carriedStatements(c: { moved: string; s: LockState }, rootSub: string): Map<string, Entry> {
+  carriedStatements(c: { moved: string; s: LockState }, rootSub: string, binds: Map<string, string> = new Map()): Map<string, Entry> {
     const out = new Map<string, Entry>();
     const base = { v: 1, ws: `person:${rootSub}`, seq: 0, prev: null, at: 0, sig: { key: "", alg: "Ed25519", sig: "" } };
     for (const [sub, m] of [...c.s.members].sort(([a], [b]) => (a < b ? -1 : 1))) {
       if (sub === rootSub || !ROLES.has(m.role)) continue;
-      out.set(`~${c.moved}/m/${sub}`, { ...base, kind: "ws.member", body: { ws: WS, sub, email: m.email, lock: c.s.persons.get(sub) ?? "", role: m.role } } as unknown as Entry);
+      // (one it bound to no log, bound by their own `bind`: `bindsIn`)
+      out.set(`~${c.moved}/m/${sub}`, { ...base, kind: "ws.member", body: { ws: WS, sub, email: m.email, lock: c.s.persons.get(sub) ?? binds.get(sub) ?? "", role: m.role } } as unknown as Entry);
     }
     for (const key of [...c.s.stations.keys()].sort()) out.set(`~${c.moved}/s/${key}`, { ...base, kind: "ws.station", body: { ws: WS, key } } as unknown as Entry);
     return out;
@@ -873,7 +892,7 @@ export class World4 extends World3 {
     if ((this.x.o.cancels ?? "h") === "h") for (const x of f.stmts.keys()) byBody.set(this.entry(x).body.h, [...(byBody.get(this.entry(x).body.h) ?? []), x]);
     const c = this.carriedOf(h, ws);
     const rootSub = h.logs.get(root)?.rules.state(root).sub ?? "alice";
-    const carried = c === null ? new Map<string, Entry>() : this.carriedStatements(c, rootSub);
+    const carried = c === null ? new Map<string, Entry>() : this.carriedStatements(c, rootSub, this.bindsIn(h, c, rootSub, ws, f));
     const named = (cs: string[]) => cs.flatMap((x: string) => (c !== null && x === c.moved ? [...carried.keys()] : byBody.size > 0 ? (byBody.get(x) ?? []) : [x]));
     for (const [g, k] of h.logs) {
       logs.set(g, {
@@ -898,6 +917,25 @@ export class World4 extends World3 {
     const r = roster({ logs } as unknown as Holder, root, this.v.rule ?? "grounded");
     if (c !== null) for (const [sub, m] of r.members) for (const k of this.carriedDevices(h, c, sub, m.lock).apps) r.letIn.set(k, sub);
     return r;
+  }
+  /// D6's bindings in force at `h` (the lead's, 2026-11-14), by member: of each member the chain as it moved bound to no
+  /// log (not the root's person), the log of the smallest entry hash among their logs' `bind` statements in force that
+  /// the signer the chain names for an own, signing app device of theirs proves (`bindValid`).
+  bindsIn(h: Holder, c: { moved: string; s: LockState }, rootSub: string, ws: string, f: { stmts: Map<string, Body> }): Map<string, string> {
+    const best = new Map<string, [string, string]>();
+    for (const [g, k] of h.logs) {
+      const sub = k.rules.state(g).sub;
+      if (sub === rootSub || !c.s.members.has(sub) || c.s.persons.has(sub)) continue;
+      for (const x of k.active) {
+        const b = f.stmts.get(x);
+        if (b?.kind !== "bind") continue;
+        const named = [...c.s.devices.values()].some((d) => d.sub === sub && d.kind === "app" && d.own && d.sign_key === b.key);
+        if (!named || !bindValid(b.key, b.sig, ws, sub, g, c.moved)) continue;
+        const was = best.get(sub);
+        if (was === undefined || x < was[0]) best.set(sub, [x, g]);
+      }
+    }
+    return new Map([...best].map(([sub, [, g]]) => [sub, g]));
   }
   rosterOf(h: Holder, ws = WS, all = false): Roster {
     const root = this.pinsOf(h).get(ws);
@@ -1789,7 +1827,10 @@ export type M8Out = {
 /// device alice put in under a member who had one (not their own). alice's app signs `moved` and nothing else: no
 /// `open`, no admit, no web page said again, nobody waited for. Then the changes, each delivered between keepers in a
 /// drawn order (`away`: s2 cut off through them, back at the end). `carry: false`: the same with D6 off.
-export function m8(seed: number, o: { carry?: boolean; away?: boolean } = {}): M8Out {
+/// `self`: (a) binds themselves to their own log (`bind`, proved by their app's signer the chain names), after a
+/// binding no signer of theirs proves (a signature by a key the chain names as nobody's own of theirs), in place of
+/// alice's admit.
+export function m8(seed: number, o: { carry?: boolean; away?: boolean; self?: boolean } = {}): M8Out {
   const w = new World4(seed, VON, "free", { bare: true, carry: o.carry !== false });
   const r = new Rng(seed * 15485863 + 3);
   const app = (sub: string) => w.dev(`${sub}'s app`), phone = (sub: string) => w.dev(`${sub}'s phone`);
@@ -1929,9 +1970,15 @@ export function m8(seed: number, o: { carry?: boolean; away?: boolean } = {}): M
   w.sign(A, "ws.member.remove", { ws: WS, sub: b1, cancels });
   w.sign(A, "ws.member", { ws: WS, sub: b1, lock: w.home.get(b1), role: newRole, email: `${b1}@x` });
   deliver();
-  // bind: (a) admitted with their own log
+  // bind: (a) admitted with their own log, or (`self`) bound to it by their own app's proof
   const a = who("a");
-  w.sign(A, "ws.member", { ws: WS, sub: a, lock: w.home.get(a), role: m(expected, a)!.role, email: `${a}@x` });
+  if (o.self) {
+    const L = app(a).log;
+    // (a forger's: the right form, signed by a key the chain names as nobody's of (a)'s own: nothing)
+    w.sign(app(a), "ws.bind", { ws: WS, key: spec("alice's app").signer.id, sig: spec("alice's app").signer.sign(bindBytes(WS, a, L, hashOf(moved))) });
+    deliver();
+    w.sign(app(a), "ws.bind", { ws: WS, key: app(a).signer.id, sig: app(a).signer.sign(bindBytes(WS, a, L, hashOf(moved))) });
+  } else w.sign(A, "ws.member", { ws: WS, sub: a, lock: w.home.get(a), role: m(expected, a)!.role, email: `${a}@x` });
   deliver();
   // device: (b1)'s phone, carried, put on their log and taken off it
   const ph = phone(b1).signer.id;
@@ -1970,7 +2017,7 @@ export function m8(seed: number, o: { carry?: boolean; away?: boolean } = {}): M
     role: tally((d) => m(d, b1)?.role === newRole),
     // (bound by an admit to their log, their devices as the chain had them: those it put on by their signers there,
     // the others carried)
-    bind: tally((d) => m(d, a)?.lock === w.home.get(a) && m(d, a)!.apps.join() === m(expected, a)!.apps.join()),
+    bind: tally((d) => m(d, a)?.lock === app(a).log && m(d, a)!.apps.join() === m(expected, a)!.apps.join()),
     device: tally((d) => m(d, b1) !== undefined && !m(d, b1)!.apps.includes(ph) && m(d, b1)!.apps.includes(app(b1).signer.id)),
     ...(hadPage ? { web: tally((d) => m(d, b2) === undefined || !m(d, b2)!.webs.includes(page)) } : {}),
     out: tally((d, h) => !d.members.has(wo) && !d.members.has(b2) && !w.rosterOf(h).letIn.has(app(b2).signer.id)),
@@ -1998,7 +2045,7 @@ export type Job4 =
   | { t: "revoked"; kind: "web" | "off"; parent: "same" | "any"; n: number; offFinal: boolean; more?: W4Options }
   | { t: "m6"; n: number; offFinal: boolean }
   | { t: "m7"; n: number; away?: boolean; attack?: "same" | "any"; reading?: "A" | "B" }
-  | { t: "m8"; n: number; carry?: boolean; away?: boolean }
+  | { t: "m8"; n: number; carry?: boolean; away?: boolean; self?: boolean }
   | { t: "again"; steps: number }
   | { t: "lost"; order: Order }
   | { t: "skip"; order: Order }

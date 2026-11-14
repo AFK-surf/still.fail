@@ -179,7 +179,8 @@
   (admission, the vault, rigs, the roster); what reads the chain itself (its seq, head, genesis: `lock-sync.ts`, the
   cloud's copy in `presence.ts`, `lockHead`, pinning) reads `Cloud.chain`. Off is a state (`locked` null, nothing let
   go); without the root's log (`waiting`) nobody is let in and the chain's stations are answered only the lock's own
-  methods; without an `open` there, the chain's settings stand. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
+  methods; without an `open` there, the chain's settings stand. A member the chain bound to no log is bound to theirs
+  by their own `bind` (rules/AGENTS.md); this station says `bind` in its `serves`. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
   its workspace, by the list its bodies make, on or off (`Cloud.givenTo`): to a station or device it names
   (`lock.bodies.*`, `person-sync.ts`; `GET /lock/bodies`, with `lacking`: while off, only to a connection that proves
   itself a device the list names), and to one a removal took out, that removal and its `prev` chain alone (the rules'

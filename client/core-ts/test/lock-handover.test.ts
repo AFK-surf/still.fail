@@ -42,6 +42,8 @@ import { handOver, handOverState, held, inForceOf, lockView, pendingHeld, read }
 import { serveTrusted, tryOne } from "../src/views/pair.ts";
 import { grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
 import { signIn } from "./helpers.ts";
+import { jsonResponse } from "../src/testing.ts";
+import { stationLater } from "./station-fixture.ts";
 
 /// The device's clock as each test begins: thirty days past HAND_OVER_FROM, since when chains are handed over by
 /// themselves (a genesis of before counts its fourteen days from then, `mayHandOver`).
@@ -85,6 +87,9 @@ type Opts = {
   view?: { sub: string; email: string; role: string }[];
   /// Members whose log no station keeps (their app device never brought it).
   unbrought?: ("r2" | "r3")[];
+  /// s1 bound to no log on the chain (with `second`: s0, the first owner, moves it), with a phone on the chain not on
+  /// s1's log (`s1Phone`), so that this device binds nothing on the chain before the move (views/lock.ts `bindPerson`).
+  unbound?: boolean;
   /// So many more members (m0, m1, …), each with an app device and a log of their own bound and brought.
   crowd?: number;
   /// A third station of the workspace, C.
@@ -160,7 +165,9 @@ async function setUp(o: Opts = {}) {
     return s;
   };
   const made: Cloud[] = [];
-  after(o.mine === "otherKey" ? other : signer, "person", { sub: "s1", person: gMe });
+  if (o.unbound !== true) after(o.mine === "otherKey" ? other : signer, "person", { sub: "s1", person: gMe });
+  const s1Phone = dev();
+  if (o.unbound === true) after(signer, "device", { id: s1Phone.base.hex, sub: "s1", kind: "app", label: "s1's phone", sign_key: s1Phone.signer.id });
   after(bob.app.signer, "person", { sub: "r2", person: bob.genesis });
   after(xena.app.signer, "person", { sub: "r3", person: xena.genesis });
   if (o.mine === "second") after(first.app.signer, "person", { sub: "s0", person: first.genesis });
@@ -277,7 +284,7 @@ async function setUp(o: Opts = {}) {
   };
   /// An ask of the person's own lock's key for something else: grants signed (none: the ask alone).
   const askGrant = () => run(inner.adb.personal().signGrants("s1", [], "a grant"));
-  return { r, get inner() { return inner; }, restart, first, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, crowd, base, WEB, WEB5, A, B, C, D, viewer, firstApp, g, askGrant, now: () => now };
+  return { r, get inner() { return inner; }, s1Phone, restart, first, signer, chain, after, stations, st, asked, said, hand, run, d4Chain, gMe, bob, xena, r4, crowd, base, WEB, WEB5, A, B, C, D, viewer, firstApp, g, askGrant, now: () => now };
 }
 
 /// A second app device of `log`'s person (`d`) as the product puts it on their own log: a device entry signed by the
@@ -900,4 +907,57 @@ test("a carried app device of this device's person taken off after the move: one
     const p = admitted("s1", phone, "owner");
     assert.throws(() => inLock(c, p as never, "owner", p.viewer.device), `refused by ${n}`);
   }
+});
+
+// A member the chain bound to no log, this device theirs (the lead, 2026-11-14: a carried member with no log of their
+// own does for themselves what they did before the move): what they do on their own lock with one ask binds them to it in
+// that same ask (`bind`, proved by this device's signer the chain names, views/lock.ts `bindsFor`, personal-lock.ts
+// `#addBinds`), and so does a change of the list they make (`sayMoved`). s0 moves the chain; s1 is its second owner.
+async function unboundMoved(o: Opts = {}) {
+  const w = await setUp({ early: true, mine: "second", unbound: true, ...o });
+  const phone = w.s1Phone;
+  w.after(w.first.app.signer, "moved", { root: w.first.genesis });
+  for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[], null, true);
+  await w.run(read(w.inner, "ws"));
+  const f = inForceOf(w.inner, "ws").f;
+  assert.equal(f.persons.has("s1"), false, "s1 bound to no log");
+  assert.equal(f.devices.get(w.base.hex)?.by, "chain", "this device carried");
+  return { w, phone };
+}
+const boundAt = (w: Awaited<ReturnType<typeof setUp>>) => [inForceOf(w.inner, "ws").f.persons.get("s1"), ...Object.values(w.stations).map((c) => c.locked()!.state!.persons.get("s1"))];
+
+test("an unbound member takes off a carried phone of theirs: one ask, bound to their own log in it, the phone out here and at both stations", async () => {
+  const { w, phone } = await unboundMoved();
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.removeDevice", { workspace: "ws", device: phone.base.hex }), catch: (e) => e as CoreError }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.asked(), 1, "one ask");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(boundAt(w), [w.gMe, w.gMe, w.gMe], "bound to their log, here and at A and B");
+  assert.equal(inForceOf(w.inner, "ws").f.devices.has(phone.base.hex), false, "the phone out");
+  for (const c of Object.values(w.stations)) assert.equal(c.locked()!.state!.devices.has(phone.base.hex), false, "out at the stations");
+  assert.ok(inForceOf(w.inner, "ws").f.devices.has(w.base.hex), "this device still in");
+});
+
+test("an unbound member takes off their web page the chain carries: one ask, bound in it, the page out", async () => {
+  const { w } = await unboundMoved({ myWeb: true });
+  assert.equal(inForceOf(w.inner, "ws").f.devices.get(w.WEB.hex)?.by, "chain");
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.removeDevice", { workspace: "ws", device: w.WEB.hex }), catch: (e) => e as CoreError }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.asked(), 1, "one ask");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(boundAt(w), [w.gMe, w.gMe, w.gMe]);
+  assert.equal(inForceOf(w.inner, "ws").f.devices.has(w.WEB.hex), false, "the page out");
+});
+
+test("an unbound owner takes a member out: one ask, bound in it, the member out by their statement", async () => {
+  const { w } = await unboundMoved();
+  // (the cloud's part of the call, past the lock: it takes the removal)
+  stationLater(w.r.host, (req) => (req.method === "DELETE" && new URL(req.url).pathname === "/v1/workspaces/ws/members/r3" ? Promise.resolve(jsonResponse(200, {})) : undefined));
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("workspace.removeMember", { account: "s1", workspace: "ws", member: "r3" }), catch: (e) => e as CoreError }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.asked(), 1, "one ask");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(boundAt(w), [w.gMe, w.gMe, w.gMe]);
+  assert.equal(inForceOf(w.inner, "ws").f.members.has("r3"), false, "r3 out");
+  for (const c of Object.values(w.stations)) assert.equal(c.locked()!.state!.members.has("r3"), false, "out at the stations");
 });

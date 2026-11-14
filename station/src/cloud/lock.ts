@@ -175,7 +175,17 @@ export function endpointProof(ws: string, base: string, endpoint: string, proof:
 
 // The rules themselves (who may sign what, what each entry does) are rules/'s, in MoonBit: what they
 // hold for each state is theirs, given back to them for the next entry; the state here is a copy to read.
-const crypto = { sha256Hex: (s: string) => sha256(s).toString("hex"), sigValid, validKeyId, endpointProof };
+/// Whether `sig` (hex) is `key`'s over `tag`, a NUL and the 32 bytes of `digest` (hex): a form a device's signer signs
+/// under a tag of its own (a moved workspace's `bind`, rules/src/lock/roster.mbt `bind_tag`).
+export function taggedSigValid(key: string, sig: string, tag: string, digest: string): boolean {
+  try {
+    return /^[0-9a-f]{64}$/.test(digest) && /^ed25519:[0-9a-f]{64}$/.test(key) && signatureOk(key, Buffer.from(sig, "hex"), Buffer.concat([Buffer.from(`${tag}\0`), Buffer.from(digest, "hex")]));
+  } catch {
+    return false;
+  }
+}
+
+const crypto = { sha256Hex: (s: string) => sha256(s).toString("hex"), sigValid, validKeyId, endpointProof, taggedSigValid };
 const held = new WeakMap<LockState, unknown>();
 // A lock state is a snapshot: apply makes a new one. These groups are made as its maps are copied, not at a lookup.
 const people = new WeakMap<LockState, { emails: Map<string, Member[]>; devices: Map<string, string[]> }>();
@@ -338,7 +348,8 @@ export function state4(ws: string, root: string, chains: unknown[][], bodies: un
 /// names, with what the chain as it moved still says of those it named (rules/src/lock/state4.mbt `state4_moved`, the
 /// model's D6, 2026-11-14): its settings where the root's log says neither `open` nor `off`, its members until a
 /// removal names the `moved` entry's hash, their devices their logs have not said (each `by` "chain"). A chain that
-/// does not fold or did not move: `no root`.
+/// does not fold or did not move: `no root`. A member it bound to no log is bound by their own `bind`
+/// (rules/src/lock/roster.mbt `binds_of`).
 export function state4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState } {
   const out = rules.state4_moved_js(ws, chain, chains, bodies, now, crypto);
   return { on: out.on, state: taken(out) };

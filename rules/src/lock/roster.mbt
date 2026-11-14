@@ -257,14 +257,21 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   // (each by its subject, `m/<sub>` or `s/<key>`)
   let carried_ids : Map[String, String] = Map([])
   if carried is Some(cr) {
+    let binds = binds_of(ws, cr, root_sub, in_force, logs, c)
     let subs = cr.chain.members.keys().collect()
     subs.sort()
     for sub in subs {
       let m = cr.chain.members.get(sub).unwrap()
       guard sub != root_sub && is_role(Some(Json::string(m.role))) else { continue }
+      // (one the chain bound to no log, bound to the log their own `bind` names: `binds_of`)
+      let lock = match (cr.chain.persons.get(sub), binds.get(sub)) {
+        (Some(l), _) => l
+        (None, Some(g)) => g
+        (None, None) => ""
+      }
       let body : Map[String, Json] = Map([
         ("sub", Json::string(sub)), ("email", Json::string(m.email)), ("role", Json::string(m.role)),
-        ("lock", Json::string(cr.chain.persons.get(sub).unwrap_or(""))),
+        ("lock", Json::string(lock)),
       ])
       carried_ids["m/" + sub] = "~" + cr.moved + "/m/" + sub
       carried_stmts.push({ hash: "~" + cr.moved + "/m/" + sub, kind: "ws.member", body: Some(Json::object(body)), log: root, by: root_sub })
@@ -577,4 +584,56 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     },
     logs,
   )
+}
+
+///|
+/// What signs a binding (`bind`): its tag, which no other form a device's signer signs shares (a lock entry's
+/// `stillfail-lock/1 sig`, a vault's `stillfail-vault*/1`, a rig's `stillfail-rig-*/1`).
+pub let bind_tag : String = "stillfail-lock-bind/1"
+
+///|
+/// What a binding's signer signs, under `bind_tag`: the workspace, its member, the log they bind (its genesis's hash)
+/// and the `moved` entry's hash of the chain whose signer proves it. So a proof is for one workspace, one person, one
+/// log and one move: replayed for another of any of them it proves nothing.
+pub fn bind_form(ws : String, sub : String, log : String, moved : String) -> Json {
+  Json::object(Map([("kind", Json::string("bind")), ("log", Json::string(log)), ("moved", Json::string(moved)), ("sub", Json::string(sub)), ("ws", Json::string(ws))]))
+}
+
+///|
+/// The SHA-256 (hex) of `bind_form`'s canonical text: what is signed after `bind_tag` and a NUL.
+pub fn bind_digest(ws : String, sub : String, log : String, moved : String, c : &Crypto) -> String {
+  let text = @form.canonical(bind_form(ws, sub, log, moved)) catch { _ => return "" }
+  c.sha256_hex(text)
+}
+
+///|
+/// The bindings in force of members the chain as it moved bound to no log (the lead's, 2026-11-14: a carried member with
+/// no log of their own does for themselves what they did before the move): by member, the log whose `bind` statement
+/// (its genesis's person the member) is proved by the signer the chain names for an own, signing app device of theirs,
+/// over `bind_form` of this workspace, that member, that log and this move. It counts as the chain's own admit of them
+/// to that log (`~<moved>/m/<sub>`'s `lock`), so whatever takes back the chain's saying of them (a removal of them, which
+/// cancels it named or not) takes it back too, and a real admit of the same role binds before it as before the chain's;
+/// one where the chain bound them to a log, or of the root's person, is nothing. Two of one member: the one of the
+/// smaller entry hash, as of two admits of one role.
+fn binds_of(ws : String, cr : Carried, root_sub : String, in_force : Array[(String, String, Json, String)], logs : Map[String, (Person, Array[Json])], c : &Crypto) -> Map[String, String] {
+  let out : Map[String, (String, String)] = Map([])
+  for f in in_force {
+    let (x, _, b, g) = f
+    guard text_of(field(Some(b), "kind")) == Some("bind") else { continue }
+    guard logs.get(g) is Some((p, _)) else { continue }
+    let sub = p.sub
+    guard sub != root_sub && cr.chain.members.contains(sub) && !cr.chain.persons.contains(sub) else { continue }
+    guard text_of(field(Some(b), "key")) is Some(key) && text_of(field(Some(b), "sig")) is Some(sig) else { continue }
+    let named = cr.chain.devices.values().any(fn(d) { d.sub == sub && d.kind == "app" && d.own && d.sign_key == Some(key) })
+    guard named && c.tagged_sig_valid(key, sig, bind_tag, bind_digest(ws, sub, g, cr.moved, c)) else { continue }
+    match out.get(sub) {
+      Some((y, _)) if y <= x => ()
+      _ => out[sub] = (x, g)
+    }
+  }
+  let binds : Map[String, String] = Map([])
+  for sub, v in out {
+    binds[sub] = v.1
+  }
+  binds
 }

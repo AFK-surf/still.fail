@@ -34,3 +34,11 @@
   by an admit where the chain bound them to none) has what the chain carried of theirs again (the lead, 2026-11-14:
   re-admitting is an owner's or admin's own act). Every reader must make the same state, so the build that reads them
   is a move's floor (`MOVED_FROM_BUILD`, station/src/api/moved-from.ts) and a station says `carried` in its `serves`.
+- A member the chain bound to no log binds a log of their own to themselves (the lead, 2026-11-14): `bind {key, sig}`
+  in that log, `sig` the signer's (`key`, one the chain names for an own, signing app device of theirs) over
+  `bind_form` (the workspace, the member, the log, the `moved` entry's hash) under `bind_tag`, a tag no other form a
+  device's signer signs has (`Crypto.tagged_sig_valid`: the tag, a NUL, the form's SHA-256; a lock entry's is
+  `stillfail-lock/1 sig`, a vault's `stillfail-vault*/1`, a rig's `stillfail-rig-*/1`). It sets the chain's own admit
+  of them to that log (`roster.mbt` `binds_of`), so nothing new is labelled: a removal of them takes it back, a real
+  admit of their role binds before it, two of them settle by the smaller entry hash. A station says `bind` in its
+  `serves`.

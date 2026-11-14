@@ -51,7 +51,7 @@ import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { ownBuild } from "../station/oldest.ts";
-import { Lock, approvedHere, asked, baseOf, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, bindsHere, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -230,7 +230,9 @@ function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, p
   const personal = inner.adb.personal();
   const root = personal.root(account);
   const mine = force.f.devices.get(me);
-  if (root === null || personal.standing(account) !== "member" || force.f.persons.get(account) !== root) return null;
+  // (or a member the chain as it moved bound to no log, this device an own app of theirs it names: the approval binds
+  // them to this log first, in its one ask, views/lock.ts `bindNeeded`)
+  if (root === null || personal.standing(account) !== "member" || (force.f.persons.get(account) !== root && !bindsHere(inner, ws, account))) return null;
   // (this device on the log that binds them by its own key there, which signs what it approves: the state names a device
   // by the key it signs the workspace's things with, never by that one, rules/src/lock/state4.mbt)
   const key = personal.keyId();

@@ -11,7 +11,11 @@
  *   - a new device shows a code, which a device of the lock is given face to face (an authentic channel: `!Shown`)
  *     before it signs the new device in;
  *   - a device certifies its box key with its signing key; a device of the lock seals a vault's key only to a box key
- *     whose certificate a device of the lock signed.
+ *     whose certificate a device of the lock signed;
+ *   - once a chain moved, a member it bound to no log binds a log of their own to themselves by a proof their device's
+ *     signing key signs under a tag of its own (`bind`, 2026-11-14: rules/src/lock/roster.mbt `bind_tag`; the
+ *     workspace, the member and the move are fixed in what is signed there, one log here), and a station binds a log
+ *     only on such a proof by a key of its lock: no approval of a device is taken as one.
  * Each step is proved on its own (the lemmas below); the whole chain follows by induction on it, outside the tool,
  * which does not end searching the chain itself: the first key in a lock that is no device's own came by a step whose
  * signer is a device's own key, so (each_key_taken_as_its_signer_approved) that device approved it, which it does only
@@ -75,6 +79,19 @@ rule Seal:
   --[ Sealed(st, ~key, pk(d), boxPub) ]->
     [ Out(aenc(~key, boxPub)) ]
 
+// A device of the lock makes a log of its person's own and proves it theirs: its signing key over the log's key, under
+// the binding's tag (no other form it signs has it).
+rule Bind_Proof:
+    [ !Signer(~a), !InLock(st, pk(~a)), Fr(~l) ]
+  --[ BindSigned(st, pk(~a), pk(~l)) ]->
+    [ Out(<'bind', pk(~l), pk(~a), sign(<'bind', pk(~l)>, ~a)>) ]
+
+// A station binds a log on a proof by a key its lock has.
+rule Station_Binds:
+    [ !InLock(st, pk(signer)), In(<'bind', log, pk(signer), sign(<'bind', log>, signer)>) ]
+  --[ Binds(st, log, pk(signer)) ]->
+    [ ]
+
 // The adversary takes a device: its signing key and its box keys.
 rule Reveal_Signer:
     [ !Signer(~k) ] --[ Reveal(pk(~k)) ]-> [ Out(~k) ]
@@ -85,6 +102,9 @@ rule Reveal_Box:
 
 lemma a_device_can_be_approved_in: exists-trace
   "Ex st pk by #i. Admits(st, pk, by) @ i & not (Ex d #r. Reveal(d) @ r)"
+
+lemma a_log_can_be_bound: exists-trace
+  "Ex st log by #i. Binds(st, log, by) @ i & not (Ex d #r. Reveal(d) @ r)"
 
 lemma a_vault_key_can_be_sealed: exists-trace
   "Ex st key pk b #i. Sealed(st, key, pk, b) @ i & not (Ex d #r. Reveal(d) @ r)"
@@ -109,6 +129,12 @@ lemma approved_only_as_shown:
 lemma sealed_to_certified:
   "All st key pk b #i. Sealed(st, key, pk, b) @ i & (Ex #h. Honest(pk) @ h) ==>
       (Ex #j. Box(pk, b) @ j) | (Ex #r. Reveal(pk) @ r)"
+
+// A log bound by a station under a device's own key is one that device proved its person's, unless the adversary took
+// it: an approval it signed (or anything else it signs) is never taken as a binding.
+lemma bound_only_as_proved:
+  "All st log by #i. Binds(st, log, by) @ i & (Ex #h. Honest(by) @ h) ==>
+      (Ex st2 #j. BindSigned(st2, by, log) @ j & j < i) | (Ex #r. Reveal(by) @ r & r < i)"
 
 // A vault's key sealed to a device's own, not taken, is learned by no one else.
 lemma vault_key_secret:

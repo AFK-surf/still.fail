@@ -48,7 +48,9 @@ fn is_salt(v : Json?) -> Bool {
 /// statements that say the same are two bodies), `prev` the `h` of the statement of its workspace before it in its log
 /// (null for the first). By kind: `member {sub, email, lock, role}` (one of the four roles), `member.remove {sub,
 /// cancels}` (the bodies' hashes it takes back), `station {key}`, `station.remove {key, cancels}`, `open {origins,
-/// rp_id, cloud_keys, email}` (the settings, and the root's person's email), `off {}`; nothing more.
+/// rp_id, cloud_keys, email}` (the settings, and the root's person's email), `off {}`, `bind {key, sig}` (this log is
+/// its person's in the workspace, proved by the signer `key` the chain as it moved names for an own app device of theirs:
+/// `sig`, hex, over `bind_form`, state4.mbt); nothing more.
 pub fn body_why(b : Json) -> String? {
   let v = Some(b)
   let m = match b {
@@ -103,6 +105,13 @@ pub fn body_why(b : Json) -> String? {
       }
     }
     Some("off") => if only(["kind", "salt", "ws"]) { None } else { Some("off says nothing more") }
+    Some("bind") => {
+      let sig_ok = match field(v, "sig") {
+        Some(String(x)) => is_hex_of(x, 128)
+        _ => false
+      }
+      if only(["key", "kind", "salt", "sig", "ws"]) && named("key") && sig_ok { None } else { Some("a binding names the signer that proves it and its signature") }
+    }
     _ => Some("no such statement")
   }
 }

@@ -14,7 +14,9 @@
 // not said yet of someone it named (`roster.mbt` `Carried` for the list): where the root's log says neither `open` nor
 // `off`, its settings, on; and of a member it names, bound as it bound them (the log of their binding in the list is
 // the one the chain bound them to, none where it bound them to none), their devices the log has not said (`carry_of`).
-// So the handover signs `moved` alone, and nobody is waited for or asked.
+// So the handover signs `moved` alone, and nobody is waited for or asked. A member the chain bound to no log is bound
+// to one by their own `bind` (`roster.mbt` `binds_of`), proved by the signer the chain names for an own app device of
+// theirs.
 
 ///|
 /// How far ahead of a keeper's clock a web device's `at` may be and still count.
