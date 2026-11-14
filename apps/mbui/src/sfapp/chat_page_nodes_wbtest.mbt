@@ -194,7 +194,7 @@ test "大屏 with its inside nodes: an agent's message offers its ⋯ (named onc
 ///|
 test "大屏 with its inside nodes: an agent's picture opens its card under a pointer, closed once the pointer has left it" {
   let (t, _) = chat_nodes_calling(1280.0, 800.0, 0, [], fixture_mode="chat-working")
-  let card = "8 轮 · 共干了 1 小时 12 分"
+  let card = "共工作 1 小时 12 分"
   assert_true(t.find(card) is None)
   // (the picture of the last of the agent's messages: before its name, out in the margin)
   let names = t.all(Link).filter(fn(s) { s.label == "Claude" })

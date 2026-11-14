@@ -71,23 +71,23 @@ test "activity: the picture opens its agent's card under the pointer, and still 
   for (w, h) in [(390.0, 844.0), (900.0, 800.0), (1280.0, 800.0)] {
     let t = activity_card_tester(w, h, 0)
     let (x, y) = activity_picture(t)
-    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
+    assert_true(t.find("共工作 1 小时 12 分") is None)
     let (wx, wy, ww, wh) = t.rect_of(@sffixture.working_step).unwrap()
     t.move_to(wx + ww / 2.0, wy + wh / 2.0)
     t.run_for(@sfpages.hover_open_ms * 2.0)
-    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None, msg="the activity's words do not open the card")
+    assert_true(t.find("共工作 1 小时 12 分") is None, msg="the activity's words do not open the card")
     t.move_to(x, y)
     t.run_for(@sfpages.hover_open_ms * 2.0)
-    let card = t.rect_of("8 轮 · 共干了 1 小时 12 分")
+    let card = t.rect_of("共工作 1 小时 12 分")
     assert_true(card is Some(_), msg="the working agent's card appears over its picture")
     let (cx, cy, cw, ch) = card.unwrap()
     // The pointer can cross into the card and use it without it disappearing.
     t.move_to(cx + cw / 2.0, cy + ch / 2.0)
     t.run_for(@sfpages.hover_close_ms * 2.0)
-    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
+    assert_true(t.find("共工作 1 小时 12 分") is Some(_))
     t.move_to(1.0, 1.0)
     t.run_for(@sfpages.hover_close_ms * 2.0)
-    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
+    assert_true(t.find("共工作 1 小时 12 分") is None)
     t.tap(x, y)
     t.frame()
     let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
@@ -115,7 +115,7 @@ test "activity: a mouse used with a touch-native system opens the same card" {
   t.host_says_finger(Some(false))
   t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
+  assert_true(t.find("共工作 1 小时 12 分") is Some(_))
 }
 
 ///|

@@ -3183,7 +3183,7 @@ export const SHAPES: Record<string, Shape> = {
     ["quota", opt("Quota")],
   ], { doc: "A chat's agent's profile as its page reads it where it has no `account`: its name and what is left of it." }),
   AgentCardView: struct([
-    ["work", opt("String"), { doc: "Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分." }],
+    ["work", opt("String"), { doc: "How long the finished turns took: 共工作 1 小时 12 分." }],
     ["cost", opt("String"), { doc: "What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced)." }],
     ["tokens", opt("String"), { doc: "Its tokens in and out: 输入 1.2M · 输出 34K." }],
     ["cache", opt("AgentCardMeter"), { doc: "How much of what it sent was read from the cache." }],

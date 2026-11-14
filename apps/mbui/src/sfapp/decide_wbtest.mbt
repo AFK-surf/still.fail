@@ -122,8 +122,8 @@ test "the chat's own sheet: its agents, and on to the agent's card and its histo
   assert_true(t.find("Claude · Opus 5.5") is Some(_))
   t.tap_text("Claude · Opus 5.5")
   assert_true(t.find("费用估算") is Some(_))
-  assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
-  t.tap_text("8 轮 · 共干了 1 小时 12 分")
+  assert_true(t.find("共工作 1 小时 12 分") is Some(_))
+  t.tap_text("共工作 1 小时 12 分")
   t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     History(r, key, _) => {

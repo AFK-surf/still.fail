@@ -22,7 +22,7 @@ test "an agent's labels and values stay in columns in both languages, including 
         }
         let account = if lang == "zh" { "林的 Max · 自动" } else { "林的 Max · auto" }
         let (account_x, _, _, _) = t.rect_of(account).unwrap()
-        let (history_x, _, _, _) = t.rect_of("8 轮 · 共干了 1 小时 12 分").unwrap()
+        let (history_x, _, _, _) = t.rect_of("共工作 1 小时 12 分").unwrap()
         assert_true((account_x - history_x).abs() < 0.6, msg="\{lang} \{mode} \{scale}: the values")
       }
     }

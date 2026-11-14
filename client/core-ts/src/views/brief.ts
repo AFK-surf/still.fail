@@ -19,9 +19,9 @@ const get = (v: unknown, k: string): J => getU(v, k);
 
 const MINUTE = 60_000;
 
-/// Its turns, and how long the finished ones took together: 8 轮 · 共 1 小时 12 分. None before its first turn. As its
-/// summary (`session`) counts them where its station says so (`turns`, `workMs`; no work for a session with turns from
-/// before it was kept: 8 轮 alone): its detail lists no turns then. Else added up from the turns its detail lists (a station from before lists them all).
+/// How long the finished turns took together: 共工作 1 小时 12 分. None before a turn finishes or before its
+/// station kept the work. As its summary (`session`) says where available (`turns`, `workMs`); else added up from the
+/// turns its detail lists (a station from before lists them all).
 export function workText(turns: unknown, session?: unknown): string | null {
   const counted = get(session, "turns");
   const worked = get(session, "workMs");
@@ -29,8 +29,7 @@ export function workText(turns: unknown, session?: unknown): string | null {
   let ms = 0;
   if (typeof counted === "number" && (typeof worked === "number" || worked === null)) {
     n = counted;
-    // None for a session with turns from before its station kept the work: how many alone.
-    if (worked === null) return n === 0 ? null : t("core-views.agent.turns", { n });
+    if (worked === null) return null;
     ms = worked;
   } else {
     const all = arr(turns);
@@ -41,13 +40,13 @@ export function workText(turns: unknown, session?: unknown): string | null {
       if (typeof from === "number" && typeof to === "number" && to > from) ms += to - from;
     }
   }
-  if (n === 0) return null;
+  if (n === 0 || ms <= 0) return null;
   const minutes = Math.round(ms / MINUTE);
-  if (minutes < 1) return t("core-views.agent.turns", { n });
+  if (minutes < 1) return t("core-views.agent.workUnderMinute");
   const time = minutes < 60
     ? t("core-views.agent.minutes", { m: minutes })
     : t("core-views.agent.hours", { h: Math.trunc(minutes / 60), m: minutes % 60 });
-  return t("core-views.agent.work", { n, time });
+  return t("core-views.agent.work", { time });
 }
 
 /// Its jobs at work now, by what they are: 服务在线：web、api · 在盯着：CI · 1 个任务在跑. None when none is.
