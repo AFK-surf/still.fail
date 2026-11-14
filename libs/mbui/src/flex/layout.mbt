@@ -654,6 +654,7 @@ fn size_node(
       any_w = !bx.of_cb_w
       any_h = !bx.of_cb_h
     }
+    let leaf = node.children.length() == 0 && !node.room
     let mut k = 0
     while k < n {
       let same_cb = same(c[k + 4], cb_w) && same(c[k + 5], cb_h)
@@ -662,8 +663,7 @@ fn size_node(
           (
             (any_w || same(c[k + 4], cb_w)) &&
             (any_h || same(c[k + 5], cb_h)) &&
-            same(c[k], kw) &&
-            same(c[k + 1], kh)
+            (leaf || (same(c[k], kw) && same(c[k + 1], kh)))
           )
         ) &&
         reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
