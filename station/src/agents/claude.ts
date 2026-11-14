@@ -19,7 +19,7 @@ import { link, mkdir, readdir, realpath, stat, symlink } from "node:fs/promises"
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { REPO_RULES_COMMAND, hookCommand } from "./repo-rules.ts";
-import { SLACK_WRITES, SPEAKS, SPEAKS_WRITING } from "../tools/mcp.ts";
+import { SLACK_SPOKEN, SPEAKS, SPEAKS_WRITING } from "../tools/mcp.ts";
 import { RenewRefused } from "../accounts/console.ts";
 import { claudeToken as claudeFileToken } from "../accounts/oauth.ts";
 import { log } from "../ops/log.ts";
@@ -213,8 +213,8 @@ export const SUBAGENT_HOOK = fileURLToPath(new URL("./subagent-hook.mjs", import
 const SUBAGENT_HOOK_SECONDS = 10;
 /// A subagent never speaks in a chat (tools/mcp.ts `SPEAKS`), and Claude Code gives one every tool of its session: a
 /// PreToolUse hook on exactly those tools, as Claude Code names them, so that no other call starts a process for it,
-/// and on slack_api, whose writes it refuses and whose reads it lets through (the hook is told the methods that write:
-/// `SLACK_WRITES`, the list the threads rule goes by).
+/// and on slack_api, whose writes it refuses and whose reads it lets through (the hook is told the methods that
+/// speak: `SLACK_SPOKEN`, the list the threads rule goes by and a streamed message).
 /// On every session that has the station's tools, one continued from a terminal too: with the hook and without, a
 /// session's requests were the same (system prompt, tools, messages; 2.1.323, 2026-11-14), so its cache holds.
 /// `disableAllHooks: false` goes with it wherever it goes (`open`): --settings is read over the user's, the project's
@@ -230,7 +230,7 @@ export const SILENT_SUBAGENTS = {
   PreToolUse: [
     {
       matcher: TOOL_SERVERS.flatMap((server) => [...SPEAKS, SPEAKS_WRITING].map((tool) => `mcp__${server}__${tool}`)).join("|"),
-      hooks: [{ type: "command", command: hookCommand(SUBAGENT_HOOK, SLACK_WRITES.join(",")), timeout: SUBAGENT_HOOK_SECONDS }],
+      hooks: [{ type: "command", command: hookCommand(SUBAGENT_HOOK, SLACK_SPOKEN.join(",")), timeout: SUBAGENT_HOOK_SECONDS }],
     },
   ],
 };

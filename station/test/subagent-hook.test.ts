@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { SILENT_SUBAGENTS, SUBAGENT_HOOK } from "../src/agents/claude.ts";
 import { chatTools } from "../src/tools/chat.ts";
-import { SLACK_WRITES, SPEAKS, isSlackWrite } from "../src/tools/mcp.ts";
+import { SLACK_SPOKEN, SPEAKS, isSlackWrite, speaksInSlack } from "../src/tools/mcp.ts";
 
 const COMMAND = SILENT_SUBAGENTS.PreToolUse[0]!.hooks[0]!.command;
 
@@ -96,14 +96,17 @@ test("what the hook takes for a Slack write is what the station's threads rule t
   // Every entry of the list, as it is and as the start of a longer method; reads; near misses; and the method as the
   // tool reads it (src/tools/slack.ts trims it).
   const methods = [
-    ...SLACK_WRITES,
-    ...SLACK_WRITES.map((w) => `${w}More`),
-    ...SLACK_WRITES.map((w) => ` ${w}\n`),
+    ...SLACK_SPOKEN,
+    ...SLACK_SPOKEN.map((w) => `${w}More`),
+    ...SLACK_SPOKEN.map((w) => ` ${w}\n`),
     ...["conversations.history", "conversations.replies", "users.info", "files.info", "files.getUploadURLExternal", "reactions.get", "reactions.list", "pins.list", "chat.getPermalink"],
     ...["Chat.postMessage", "chat.post", "chat", "xchat.postMessage", "assistant.threads", "assistant.search.context", ""],
   ];
-  for (const method of methods) assert.equal(refused(method), isSlackWrite(method.trim()), JSON.stringify(method));
-  assert.ok(methods.some((m) => isSlackWrite(m.trim())) && methods.some((m) => !isSlackWrite(m.trim())));
+  for (const method of methods) assert.equal(refused(method), speaksInSlack(method.trim()), JSON.stringify(method));
+  assert.ok(methods.some((m) => speaksInSlack(m.trim())) && methods.some((m) => !speaksInSlack(m.trim())));
+  // Every write of the threads rule is among them, and a streamed message too, which that rule does not go by.
+  for (const method of ["chat.postMessage", "chat.update", "reactions.add"]) assert.ok(isSlackWrite(method) && refused(method), method);
+  for (const method of ["chat.startStream", "chat.appendStream", "chat.stopStream"]) assert.ok(!isSlackWrite(method) && refused(method), method);
   // No method, or one that is no text: none the station would call (it answers that it is no Slack method).
   for (const method of [undefined, null, 7, ["chat.postMessage"], { method: "chat.postMessage" }]) assert.equal(refused(method), false, JSON.stringify(method));
   assert.deepEqual(hook({ ...given("slack_api", SUB), tool_input: undefined }), silent);

@@ -72,6 +72,11 @@ export const SLACK_WRITES = [
   "assistant.threads.",
 ];
 export const isSlackWrite = (method: string) => SLACK_WRITES.some((w) => method.startsWith(w));
+/// What a subagent is kept from in Slack: the writes, and a streamed message, which puts words in a thread as a post
+/// does. Not among the writes: the threads rule finds a write's thread by the message it names, and a stream's later
+/// calls name only the stream's own message, which the station keeps no row of.
+export const SLACK_SPOKEN = [...SLACK_WRITES, "chat.startStream", "chat.appendStream", "chat.stopStream"];
+export const speaksInSlack = (method: string) => SLACK_SPOKEN.some((w) => method.startsWith(w));
 
 /// What a session's runtime needs of its list of tools; nothing said, the list is every tool as it is.
 export type Listing = {

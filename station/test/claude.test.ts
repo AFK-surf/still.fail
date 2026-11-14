@@ -14,7 +14,7 @@ import { ClaudeDriver, type ClaudeDriverOptions, SILENT_SUBAGENTS, SUBAGENT_HOOK
 import { RenewRefused } from "../src/accounts/console.ts";
 import { Said } from "../src/ops/i18n.ts";
 import { REPO_RULES_COMMAND, REPO_RULES_HOOK, hookCommand, hookNode } from "../src/agents/repo-rules.ts";
-import { SLACK_WRITES, SPEAKS } from "../src/tools/mcp.ts";
+import { SLACK_SPOKEN, SPEAKS } from "../src/tools/mcp.ts";
 import { claudeProject } from "../src/read/transcript.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import { modelLimitOf } from "../src/agents/runtime.ts";
@@ -234,9 +234,9 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(silent.matcher, "mcp__stillfail__chat_post|mcp__stillfail__chat_state|mcp__stillfail__session_send|mcp__stillfail__chat_create|mcp__stillfail__chat_leave|mcp__stillfail__chat_archive|mcp__stillfail__slack_api");
     // One command, the hook's file by the station's Node, told the Slack methods that write as one quoted word, and
     // given up on (the call let through) after seconds, not Claude Code's ten minutes.
-    assert.deepEqual(silent.hooks, [{ type: "command", command: hookCommand(SUBAGENT_HOOK, SLACK_WRITES.join(",")), timeout: 10 }]);
-    assert.equal(silent.hooks[0].command, `'${process.execPath}' '${SUBAGENT_HOOK}' '${SLACK_WRITES.join(",")}' 2>/dev/null || true`);
-    assert.match(silent.hooks[0].command, /' 'chat\.postMessage,chat\.postEphemeral,[A-Za-z.,]+,assistant\.threads\.' 2>/);
+    assert.deepEqual(silent.hooks, [{ type: "command", command: hookCommand(SUBAGENT_HOOK, SLACK_SPOKEN.join(",")), timeout: 10 }]);
+    assert.equal(silent.hooks[0].command, `'${process.execPath}' '${SUBAGENT_HOOK}' '${SLACK_SPOKEN.join(",")}' 2>/dev/null || true`);
+    assert.match(silent.hooks[0].command, /' 'chat\.postMessage,chat\.postEphemeral,[A-Za-z.,]+,assistant\.threads\.,chat\.startStream,chat\.appendStream,chat\.stopStream' 2>/);
     // No settings file of the machine, the project or the working directory turns the hook off (a subagent wrote one).
     assert.equal(settings.disableAllHooks, false);
     const [compacted] = settings.hooks.SessionStart;

@@ -9,7 +9,7 @@
 // --agent has it too.
 // The refusal is the hook's answer, not its failure: it stood with --dangerously-skip-permissions, the call never
 // reached the station, and the subagent's model was given the reason as the tool's error.
-// argv[2]: the Slack methods that write, as the station tells them (tools/mcp.ts `SLACK_WRITES`, joined by commas: a
+// argv[2]: the Slack methods that speak, as the station tells them (tools/mcp.ts `SLACK_SPOKEN`, joined by commas: a
 // method that starts with one is a write). This file is the release's and its command line the one a session's
 // process was started with, by an older release too: what an older one did not say is read as nothing said.
 import { readFileSync } from "node:fs";
