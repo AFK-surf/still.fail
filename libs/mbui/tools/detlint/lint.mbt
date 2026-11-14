@@ -246,8 +246,9 @@ fn lint_mbt(
     }
   }
   // a part of the app's component library made in a node it is given (its first parameter a @view.View it makes a box
-  // in) that takes no place of its caller's (`loc~ : SourceLoc`, its outside made as what was asked for there,
-  // `made_for=loc`): what is found in it is not traced back to the app's line that asked for it (view's source.mbt)
+  // in, or a headless component's node: `@headless.button(…, parent, …)`, a look over it) that takes no place of its
+  // caller's (`loc~ : SourceLoc`, its outside made as what was asked for there, `made_for=loc`): what is found in it is
+  // not traced back to the app's line that asked for it (view's source.mbt)
   if under(f.rel, cfg.library) && !f.test_file {
     for it in f.items {
       if it.kind != "fn" {
@@ -287,6 +288,32 @@ fn lint_mbt(
           toks[k + 3].text == "(" {
           boxed = true
           break
+        }
+        // (a headless component made in it: the node given one of the call's own arguments, not one of a function's
+        // written among them)
+        if toks[k].kind == "at" &&
+          toks[k].text == "@headless" &&
+          toks[k + 1].text == "." &&
+          toks[k + 3].text == "(" &&
+          toks[k + 3].end > 0 {
+          let mut a = k + 4
+          while a < toks[k + 3].end {
+            if toks[a].end > a {
+              a = toks[a].end + 1
+              continue
+            }
+            if toks[a].kind == "ident" &&
+              toks[a].text == name.text &&
+              (toks[a - 1].text == "(" || toks[a - 1].text == ",") &&
+              (toks[a + 1].text == "," || toks[a + 1].text == ")") {
+              boxed = true
+              break
+            }
+            a += 1
+          }
+          if boxed {
+            break
+          }
         }
       }
       if boxed && !placed {
@@ -496,6 +523,18 @@ fn lint_mbt(
       !in_t &&
       c.args.iter().any(fn(a) { a.0 == Some("at_once") && a.1.map(fn(i) { f.toks[i].text }).join("") == "true" }) {
       add("list-comes-off", c.at, f.line_text(c.at))
+    }
+    // a part of the app's component library that says it is a button itself (`@view.said(Button, …)`: with it a press
+    // and a focus of its own), where the headless one is (@headless.button): what is left of them, which only goes
+    if c.name == "said" &&
+      c.kind == "pkg" &&
+      c.qual == "@view" &&
+      !in_t &&
+      under(f.rel, cfg.library) &&
+      c.args.length() > 0 &&
+      c.args[0].0 is None &&
+      c.args[0].1.map(fn(i) { f.toks[i].text }).join("") == "Button" {
+      add("button-by-hand", c.at, f.line_text(c.at))
     }
     // an old view hosted in a node of the window's tree (`@ui.old(v, build)`): what of the old view is left inside
     // what is made once, waiting for its part as nodes, which only goes

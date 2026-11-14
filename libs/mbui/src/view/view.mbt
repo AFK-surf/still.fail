@@ -12581,6 +12581,16 @@ pub fn Tree::run_press(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
+/// It pressed now by what is no press delivered to it (a gesture of its own that ends in one, a moment, a reaction):
+/// taken as one delivered is (Tree::run_press_at), so none where the hand's would be none (let go or leaving, it or
+/// what holds it said to take none, left out of its row or in its bones, a modal layer over it that does not hold
+/// it), what it opens or shuts held where it is (press_stays.mbt), its on_press run outside any tracking as one change:
+/// in an event already, part of that one; else an event of now. Whether it was pressed.
+pub fn View::press(self : View) -> Bool {
+  self.tree.run_press(self.id())
+}
+
+///|
 /// Node `id` pressed as a screen reader asks it, at `at`: as one event of that moment, what had ended by then settled
 /// first, what it says worked out as of then, then asked whether it is read out so (it says what it is, nothing over it
 /// hides it: Tree::said_now), whether it takes a press now as a finger's would be taken (it lives, takes presses, is

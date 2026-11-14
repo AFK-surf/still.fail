@@ -58,9 +58,15 @@ pub fn Cursor::code(self : Cursor) -> Int {
 
 ///|
 /// The pointer's shape over it, as it changes (None: what it is shown by without being told, Tree::cursor_of): a still
-/// pointer over it shows it anew at that change (Tree::on_cursor), no frame asked for it.
-pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
+/// pointer over it shows it anew at that change (Tree::on_cursor), no frame asked for it. Said at `loc` (kept where the
+/// tree keeps that, as a property bound by View::bind is: source.mbt).
+#callsite(autofill(loc))
+pub fn View::cursor(self : View, shape : Live[Cursor?], loc~ : SourceLoc) -> View {
   guard self.live() is Some(n) else { return self }
+  match n.source {
+    Some(s) => s.said[Prop::Cursor.ord()] = (Prop::Cursor, loc)
+    None => ()
+  }
   match n.props.get(Prop::Cursor.ord()) {
     Some(stop) => {
       n.props.remove(Prop::Cursor.ord())
