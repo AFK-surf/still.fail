@@ -182,6 +182,9 @@ pub fn Ctx::held(
     if w.due < 0.0 {
       w.due = self.clock + dmax(ms - w.held, 1.0)
     }
+    if later {
+      clock_moment_said(w.due)
+    }
     if !later && self.wake_by is None {
       self.wake_by = Some(loc)
     }
