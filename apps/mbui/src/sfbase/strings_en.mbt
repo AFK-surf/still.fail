@@ -735,6 +735,7 @@ let en : Map[String, String] = {
   "common.report.lead": "Report only if you think the problem is in still.fail itself. Check problems with your network, proxy, account quota or model provider yourself first.",
   "common.report.sends": "This sends the error, why the turn failed, the agent and station versions, the names (not values) of the agents' environment variables, this chat's station log lines, and your name and email.",
   "common.report.title": "Report to the still.fail team?",
+  "common.reassignAccount": "Reassign account",
   "common.retry": "Retry",
   "common.save": "Save",
   "common.search": "Search",

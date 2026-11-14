@@ -5,6 +5,7 @@
   "common.save": "Save",
   "common.close": "Close",
   "common.delete": "Delete",
+  "common.reassignAccount": "Reassign account",
   "common.retry": "Retry",
   "common.copy": "Copy",
   "common.copied": "Copied",

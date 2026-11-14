@@ -1122,6 +1122,14 @@ export class Hub {
     await this.actor(row).retryFailed(thread, seq);
   }
 
+  /// Moves the session whose failed turn this particular notice is about to another account (its 重新分配账号), if it
+  /// is still the last.
+  async reassign(key: string, thread: number, seq: number) {
+    const row = this.store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    await this.actor(row).reassign(thread, seq);
+  }
+
   /// Compacts the session's context between turns, as `-compact` in a thread would (SessionActor.compact): why not,
   /// when it cannot now.
   async compact(key: string): Promise<string | null> {
@@ -1469,6 +1477,7 @@ export class Hub {
       spend: (key, ranOn, model) => this.accounts.spend(key, ranOn, model),
       refillsAt: (key) => this.accounts.refillsAt(key),
       recheck: (profile) => this.accounts.recheck(profile),
+      limitAfter: (profile, model) => this.accounts.limitAfter(profile, model),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       reposDir: () => this.reposDir(),
       siteInstructions: () => this.options.siteInstructions ?? "",

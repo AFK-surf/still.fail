@@ -163,6 +163,9 @@ export type SessionDeps = {
   refillsAt?(key: string): number;
   /// A runtime failed to sign in on `profile`: it is checked again (the pool passes over one whose login is over).
   recheck?(profile: string): Promise<void>;
+  /// A turn on `profile` failed with words that name no limit: what its allowance, asked again, says it ran into
+  /// (accounts.ts `limitAfter`: a model's own limit by its name, null the account's, undefined none).
+  limitAfter?(profile: string, model: string | null): Promise<string | null | undefined>;
   mcpUrl(): string;
   reposDir(): string;
   /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
@@ -640,6 +643,37 @@ export class SessionActor {
       if (!last || !retryable(last) || last.about?.thread !== thread || last.about?.seq !== seq) return;
       log.info("session", "trying again a failed turn, as asked", { session: this.key });
       await this.startTurn("resume", givenUp(last) ? GO_ON_AFTER_UNANSWERED : GO_ON_AFTER_FAILED);
+    });
+  }
+
+  /// 重新分配账号, pressed on the notice of a failure where the allowance asked again showed a limit (`LIMIT_SHOWN`):
+  /// only that notice's turn, while it is still the last and nothing runs or waits to be delivered. Its account, or
+  /// only its model there, is passed over as a spent one is, and it goes on on another; with none to take it (or kept
+  /// to its account), that is said with what to do, and it waits for the refill as a spent one does.
+  reassign(thread: number, seq: number): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.deps.held(this.key) || this.archived() || this.turn || this.codexUpdate || this.agent?.session.busy() || this.deps.store.hasPending(this.key)) return;
+      const store = this.deps.store;
+      const last = store.lastTurn(this.key);
+      const model = last?.outcome === "failed" ? shownLimitOf(last.detail) : undefined;
+      if (!last || model === undefined || last.about?.thread !== thread || last.about?.seq !== seq) return;
+      const row = store.getSession(this.key);
+      let moved: [string, string] | null = null;
+      try {
+        moved = this.deps.spend(this.key, this.profile ?? row?.profile ?? null, model);
+      } catch (error) {
+        log.warn("session", "could not move off a profile its allowance showed spent", { session: this.key, error: (error as Error).message });
+      }
+      if (moved) {
+        const agent = this.agent;
+        this.agent = null;
+        await this.endProcess(agent);
+        log.info("session", "its allowance showed a limit; going on on another profile, as asked", { session: this.key, from: moved[0], to: moved[1] });
+        this.refill = null;
+        return this.startTurn("resume", GO_ON_AFTER_SPENT);
+      }
+      await this.notice(`⚠️ ${t(row?.profilePinned ? "station.notice.reassignPinned" : "station.notice.reassignNone")}`, this.profile ?? row?.profile ?? null);
+      this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
     });
   }
 
@@ -1656,6 +1690,15 @@ export class SessionActor {
   private async onTurnEnded(generation: number, outcome: TurnOutcome) {
     if (!this.isCurrent(generation)) return;
     if (this.compacting && !this.turn) return this.compacted(outcome);
+    // Words that name no limit may still be one: the allowance asked again says so, whatever the runtime's words.
+    let limit: string | null | undefined;
+    if (outcome.kind === "failed" && outcome.reason === "model" && this.turn && this.profile !== null && !this.stopRequested && this.deps.limitAfter) {
+      limit = await this.deps.limitAfter(this.profile, this.deps.store.getSession(this.key)?.model ?? null).catch(() => undefined);
+      if (!this.isCurrent(generation)) return;
+      // Not moved by itself (左子健, 2026-11-14: 「查了额度不要自动切，提示的时候带个重新分配账号的按钮」): its notice
+      // says what the allowance shows and offers 重新分配账号 (`reassign`).
+      if (limit !== undefined) log.info("session", "a failure its words did not name is where the allowance shows a limit", { session: this.key, model: limit ?? "" });
+    }
     const store = this.deps.store;
     this.idleSince = this.now();
     const turn = this.turn;
@@ -1671,7 +1714,7 @@ export class SessionActor {
     if (!overloaded) this.overloads = 0;
     const ends = retry ?? (turn ? endedIn(turn.declared, outcome.kind) : null);
     if (turn) {
-      const detail = outcome.kind === "failed" ? `${outcome.reason}: ${outcome.message}` : null;
+      const detail = outcome.kind !== "failed" ? null : limit !== undefined ? `${LIMIT_SHOWN}${limit ?? ""}: ${outcome.message}` : `${outcome.reason}: ${outcome.message}`;
       store.endTurn(turn.id, outcome.kind, detail, ends?.kind ?? null, ends?.kind === "waiting" ? ends.seconds : null);
       if (retry) store.setWaitFor(turn.id, t("station.wait.overloaded"), false);
     }
@@ -1790,7 +1833,8 @@ export class SessionActor {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
       // notice points there.
-      const said = this.runtime === "codex" && turn?.codexRetried && codexTooOld(outcome.message)
+      const said = limit !== undefined ? limitShownNotice(limit, outcome.message)
+        : this.runtime === "codex" && turn?.codexRetried && codexTooOld(outcome.message)
         ? `⚠️ ${withSaid(t("station.notice.codexStillOld"), outcome.message)}` : failureNotice(outcome);
       await this.notice(said, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
     } else if (outcome.kind === "aborted") {
@@ -2127,6 +2171,25 @@ function failureNotice(outcome: TurnOutcome): string {
   const key = outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "other" ? "failed" : outcome.reason;
   const why = outcome.reason === "model" || outcome.reason === "other" ? firstLine(outcome.message) : "";
   return `⚠️ ${withSaid(why === "" ? t(`station.notice.${key}`) : t(`station.notice.${key}Why`, { why }), outcome.message)}`;
+}
+
+/// How a turn's detail begins where its failure's words named no limit and its allowance asked again showed one: the
+/// model's name whose own limit it is, or nothing for the account's, then ": " and what failed said. Its notice offers
+/// 重新分配账号 (`reassign`), not 重试: on the same account it would fail again.
+export const LIMIT_SHOWN = "limit:";
+
+/// What a turn's detail says its allowance showed (`LIMIT_SHOWN`): the model's own limit by its name, null the
+/// account's, undefined none.
+export function shownLimitOf(detail: string | null): string | null | undefined {
+  if (detail === null || !detail.startsWith(LIMIT_SHOWN)) return undefined;
+  const end = detail.indexOf(": ", LIMIT_SHOWN.length);
+  const name = detail.slice(LIMIT_SHOWN.length, end < 0 ? undefined : end);
+  return name === "" ? null : name;
+}
+
+/// The notice of such a failure: what the allowance shows, and the press that moves it (`reassign`).
+function limitShownNotice(model: string | null, said: string): string {
+  return `⚠️ ${withSaid(model === null ? t("station.notice.limitShownAccount") : t("station.notice.limitShown", { model }), said)}`;
 }
 
 /// The first line of what failed said, short enough for a notice's line and a push.

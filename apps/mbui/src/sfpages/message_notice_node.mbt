@@ -35,7 +35,7 @@ fn notice_said_node(
 }
 
 ///|
-/// A notice's pill, its 取消 after it and its time under it (system_notice's notice_across) in `v`: notice_said_node's.
+/// A notice's pill and its time under it (system_notice's notice_across) in `v`: notice_said_node's.
 fn notice_body_node(
   v : @view.View,
   src : Source,
@@ -46,51 +46,11 @@ fn notice_body_node(
   pill_made : (@view.View) -> Unit,
 ) -> Unit {
   let open = fn() { opened.get(m().ts).unwrap_or(false) }
-  let retry = fn() { notice_after(m()) is Some(_) }
-  // its 取消 or 重试, as it was last offered: what it stays while it goes along the row
-  // (a plain cell, no signal: what binds through `after` reads `m` and changes with it already)
-  let last = Ref(("", @sf.t("common.cancel"), "session.cancelRetry"))
-  let after = fn() {
-    match notice_after(m()) {
-      Some(a) => {
-        last.val = a
-        a
-      }
-      None => last.val
-    }
-  }
   v.box(fn(across) {
     @sf.style_node(across, fn() { notice_across })
     across.box(fn(beside) {
       @sf.style_node(beside, fn() { notice_with_action })
       notice_pill_node(beside, src, here, m, open, opened, copied, pill_made)
-      // (its way along the row the framework's: from nothing to as wide as it is as a retry begins, and back as it
-      // ends, the pill, centred in the chat, moved aside by half as much)
-      beside.show(retry, along_row=true, fn(a) {
-        @sf.style_node(a, fn() { notice_action_room }, in_row=true)
-        a.box(fn(inner) {
-          @sf.style_node(inner, fn() { notice_action_in })
-          let on = fn() { [("station", here.station), ("key", after().0)] }
-          @sf.button_node(
-            inner,
-            fn() { after().1 },
-            fn() {
-              let now = @signals.untracked(m)
-              let (session, label, call) = @signals.untracked(after)
-              act(src, label, "", call, {
-                "station": Json::string(here.station),
-                "key": Json::string(session),
-                "thread": Json::number(now.thread),
-                "seq": Json::number(now.seq),
-              })
-            },
-            busy=fn() { core_doing(src, [after().2], on()) },
-            disabled=fn() { !retry() || src.read_only || (here.view)().offline },
-          )
-          |> ignore
-        })
-        |> ignore
-      })
     })
     |> ignore
     // (its time under it while it is open: one against nothing said to leave, as a show said so would not (it holds
@@ -134,11 +94,12 @@ fn notice_words_of(m : Message, open : Bool) -> NoticeWords {
 }
 
 ///|
-/// What a notice's pill ends in (system_notice's): · 安装 where the station lacks the chat's runtime, else · 上报 where
-/// the failure is reportable, else nothing.
+/// What a notice's pill ends in (system_notice's): · 安装 where the station lacks the chat's runtime, else its 取消, 重试
+/// or 重新分配账号 while offered (notice_after), else · 上报 where the failure is reportable, else nothing.
 #derive(Eq)
 priv enum NoticeEnd {
   Install
+  Act
   Report
   NoEnd
 }
@@ -180,7 +141,14 @@ fn notice_pill_node(
         let now = m()
         match now.install {
           Some(i) if i.action != "" => Install
-          _ => if now.reportable { Report } else { NoEnd }
+          _ =>
+            if notice_after(now) is Some(_) {
+              Act
+            } else if now.reportable {
+              Report
+            } else {
+              NoEnd
+            }
         }
       }
       line.pick(end, fn(e, which) {
@@ -189,6 +157,32 @@ fn notice_pill_node(
             let i = fn() { m().install.unwrap_or(mine_installed) }
             notice_action_node(e, fn() { i().action }, ink, fn() { install_busy(src, here.station, i()) }, fn() {
               install_runtime(src, here.station, @signals.untracked(i))
+            })
+          }
+          Act => {
+            // (as it was last offered while it goes)
+            let last = Ref(("", "", ""))
+            let after = fn() {
+              match notice_after(m()) {
+                Some(a) => {
+                  last.val = a
+                  a
+                }
+                None => last.val
+              }
+            }
+            let on = fn() { [("station", here.station), ("key", after().0)] }
+            notice_action_node(e, fn() { after().1 }, ink, fn() { src.read_only || (here.view)().offline || core_doing(src, [after().2], on()) }, fn() {
+              let now = @signals.untracked(m)
+              let (session, label, call) = @signals.untracked(after)
+              if !src.read_only && !(here.view)().offline {
+                act(src, label, "", call, {
+                  "station": Json::string(here.station),
+                  "key": Json::string(session),
+                  "thread": Json::number(now.thread),
+                  "seq": Json::number(now.seq),
+                })
+              }
             })
           }
           Report => notice_report_node(e, src, here, m, ink)

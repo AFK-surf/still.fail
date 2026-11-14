@@ -3375,6 +3375,8 @@ export class Views implements Owner {
       const status = present.sessionStatus(session);
       const mark = outcome === "failed" && detail.startsWith("overloaded:") && present.waiting(session) !== null ? "retrySession"
         : outcome === "failed" && status === "failed" && AGAIN.some((reason) => detail.startsWith(`${reason}:`)) ? "againSession"
+        // Its allowance asked again showed a limit its words did not name: 重新分配账号 (actor.ts `LIMIT_SHOWN`).
+        : outcome === "failed" && status === "failed" && detail.startsWith("limit:") ? "reassignSession"
         : outcome === "completed" && status === "unexpected" ? "againSession" : null;
       if (mark === null) continue;
       const at = messages.findIndex((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
