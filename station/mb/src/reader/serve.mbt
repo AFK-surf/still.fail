@@ -153,7 +153,7 @@ fn Serving::told(self : Serving, line : String) -> Unit {
         Some(q) => ignore(q.try_offer(None))
         None => ()
       }
-    { "answered": Number(n, ..), .. } =>
+    { "claimed": Number(n, ..), .. } | { "answered": Number(n, ..), .. } =>
       match self.fallbacks.get(n.to_int()) {
         Some(d) => {
           self.fallbacks.remove(n.to_int())
@@ -452,6 +452,13 @@ async fn Serving::answer(self : Serving, id : Json, conn : Json, who : Member, a
     return match self.mark(who, method, path, body, words) {
       Text(status, text) => self.whole(headers, @utf8.encode(text), status~)
       Give => self.fallback(conn, asked, body)
+    }
+  }
+  // A person's message (routes/hub.ts POST /threads/:id/messages): in words alone, written here; any other, Node's.
+  if asked.value("method") == Some(Json::string("POST")) && route_of_path(path) is ["threads", id, "messages"] {
+    return match self.say(conn, who, id, path, headers, body, words, lang) {
+      Some(answer) => answer
+      None => self.fallback(conn, asked, body)
     }
   }
   let posted = if asked.value("method") == Some(Json::string("POST")) { Some((body, runtimes)) } else { None }
@@ -1199,4 +1206,215 @@ fn Serving::writing(self : Serving, db : @sql.Db, write : () -> Json raise) -> J
 /// What changed told Node, which tells its followers (store.ts `told`).
 fn Serving::changed(self : Serving, changes : Array[Json]) -> Unit {
   self.host.say(({ "changes": Json::array(changes) } : Json).stringify())
+}
+
+///|
+/// The segments of `path` after /admin/api, without its query.
+fn route_of_path(path : String) -> Array[String] {
+  let route = match path.find("?") {
+    Some(at) => path[0:at].to_string()
+    None => path
+  }
+  let parts : Array[String] = route.split("/").map(p => p.to_string()).collect()
+  if parts.length() >= 3 && parts[1] == "admin" && parts[2] == "api" {
+    parts[3:].to_array()
+  } else {
+    []
+  }
+}
+
+///|
+/// routes/hub.ts's POST /threads/:id/messages and sessions/lifecycle.ts `say`, for a message in words alone: refused
+/// as there; claimed of Node first (admin.ts `claimSay`: a keyed one's first answer given again, the hub's timestamp),
+/// written as store.ts `insertMessage` writes one, told Node (`said`), which tells the store's followers and delivers
+/// it to the chat's sessions. One with files, quotes, copies elsewhere, to a chat archived (or one the station
+/// archived, which a message brings back): None, Node's.
+async fn Serving::say(
+  self : Serving,
+  conn : Json,
+  who : Member,
+  raw : String,
+  path : String,
+  headers : Json,
+  body : Bytes,
+  words : Json,
+  lang : String,
+) -> (Json, Bytes)? raise {
+  let error = (status : Int, m : String) => Some(
+    (({ "status": Json::number(status.to_double()), "headers": { "content-type": "application/json" } } : Json), @utf8.encode(({ "error": Json::string(m) } : Json).stringify())),
+  )
+  let word = (k : String) => match words.value(k) {
+    Some(String(w)) => w
+    _ => ""
+  }
+  let viewer = who.viewer
+  if viewer.value("role") == Some(Json::string("viewer")) {
+    return error(403, "read-only members cannot change this station")
+  }
+  let route = "/admin/api/threads/\{raw}/messages"
+  if self.elsewhere(route, viewer) is Some(m) {
+    return error(404, m)
+  }
+  let db = self.reader.db_now()
+  let id = segment(raw)
+  guard signed_digits(id) && signed_number(id).abs() <= 9007199254740991.0 else { return error(404, "unknown thread \{id}") }
+  let thread = Json::number(signed_number(id))
+  let found = db.all("SELECT surface, hidden_at, home FROM threads WHERE id = ?", [thread])
+  guard found is [t, ..] else { return error(404, "unknown thread \{id}") }
+  if t.get("surface") != Some(Json::string("ember")) {
+    return error(400, word("postOnlyStillfail"))
+  }
+  if body.length() > 1000000 {
+    return error(413, "request too large")
+  }
+  let input : Map[String, Json] = if body.length() == 0 {
+    Map([])
+  } else {
+    match (try { Some(@json.parse(@utf8.decode_lossy(body))) } catch { _ => None }) {
+      Some(Object(m)) => m
+      Some(_) => Map([])
+      None => return error(400, "invalid JSON")
+    }
+  }
+  // (words alone: anything more is Node's)
+  let listed = (k : String) => match input.get(k) {
+    None | Some(Null) => false
+    Some(Array(a)) => a.length() > 0
+    Some(_) => true
+  }
+  if listed("attachments") || listed("quotes") || listed("cc") {
+    return None
+  }
+  let said = match input.get("text") {
+    None | Some(Null) => ""
+    Some(String(s)) => @jscase.trim_white(s)
+    Some(v) => @jscase.trim_white(v.stringify())
+  }
+  if said == "" {
+    return error(400, word("emptyMessage"))
+  }
+  // A chat out of lists (archived by hand, or by the station: a message brings that back): Node's (store.ts `#bringBack`).
+  let out = t.get("hidden_at") is Some(Number(_)) ||
+    db.all(
+      "SELECT 1 AS x FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_at IS NOT NULL LIMIT 1",
+      [thread],
+    ) is [_, ..]
+  if out {
+    return None
+  }
+  // Which app sent it, for its agent (control characters out, 80 at most).
+  let client = match input.get("client") {
+    Some(String(c)) => {
+      let kept = StringBuilder::new()
+      let mut count = 0
+      for ch in @jscase.trim_white(c) {
+        let code = ch.to_int()
+        if code < 0x20 || (code >= 0x7F && code < 0xA0) {
+          continue
+        }
+        if count >= 80 {
+          break
+        }
+        kept.write_char(ch)
+        count += 1
+      }
+      let k = kept.to_string()
+      if k == "" { Json::null() } else { Json::string(k) }
+    }
+    _ => Json::null()
+  }
+  // Claimed of Node: a keyed one's first answer, or the timestamp it is written at.
+  self.next += 1
+  let n = self.next
+  let d : @effect.Deferred[Json] = @effect.Deferred::new()
+  self.fallbacks[n] = d
+  self.host.say(
+    ({
+      "claim": Json::number(n.to_double()),
+      "conn": conn,
+      "path": Json::string("/threads/\{raw}/messages"),
+      "key": match header(headers, "idempotency-key") {
+        Some(k) => Json::string(k)
+        None => Json::null()
+      },
+      "lang": Json::string(lang),
+    } : Json).stringify(),
+  )
+  let claimed = d.wait()
+  let given = (k : String) => match claimed.value(k) {
+    Some(Object(a)) => {
+      let h = match a.get("headers") {
+        Some(Object(h)) => Json::object(h)
+        _ => Json::object(Map([]))
+      }
+      let text = match a.get("text") {
+        Some(String(t)) => t
+        _ => ""
+      }
+      Some((({ "status": a.get("status").unwrap_or(Json::number(500.0)), "headers": h } : Json), @utf8.encode(text)))
+    }
+    _ => None
+  }
+  if given("kept") is Some(answer) {
+    return Some(answer)
+  }
+  if given("refused") is Some(answer) {
+    return Some(answer)
+  }
+  guard claimed.value("ts") is Some(String(_) as ts) else { return error(500, "no timestamp") }
+  let email = viewer.value("email").unwrap_or(Json::null())
+  let at = Json::number(self.now().to_double())
+  let written = try {
+    Ok(
+      self.writing(db, () => {
+        let existing = db.all("SELECT n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", [thread, ts])
+        if existing is [_, ..] {
+          raise Failure("message timestamp already used; retry the write")
+        }
+        let last = match db.all("SELECT MAX(n) AS n FROM entries WHERE thread = ?", [thread]) {
+          [{ "n": Number(k, ..), .. }, ..] => k
+          _ =>
+            match self.set.value("lastKnown") {
+              Some(String(sql)) =>
+                match db.all(sql, [thread]) {
+                  [{ "n": Number(k, ..), .. }, ..] => k
+                  _ => 0.0
+                }
+              _ => 0.0
+            }
+        }
+        let k = Json::number(last + 1.0)
+        ignore(
+          db.run(
+            "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change) VALUES (?, ?, 'message', NULL, ?, 'person', ?, ?, NULL, NULL, NULL, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, NULL)",
+            [thread, k, ts, email, Json::string(said), client, at],
+          ),
+        )
+        match db.all("SELECT thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change FROM entries WHERE thread = ? AND n = ?", [thread, k]) {
+          [row, ..] => Json::object(row)
+          _ => raise Failure("the message was not written")
+        }
+      }),
+    )
+  } catch {
+    e => Err(e.to_string())
+  }
+  match written {
+    Ok(row) => {
+      let k = row.value("n").unwrap_or(Json::null())
+      let answer = ({ "n": k } : Json).stringify()
+      self.host.say(
+        ({
+          "said": { "thread": thread, "n": k, "text": Json::string(said), "row": row },
+          "of": Json::number(n.to_double()),
+          "answer": { "status": 200, "headers": { "content-type": "application/json" }, "text": Json::string(answer) },
+        } : Json).stringify(),
+      )
+      Some(self.whole(headers, @utf8.encode(answer)))
+    }
+    Err(m) => {
+      self.host.say(({ "said": Json::null(), "of": Json::number(n.to_double()) } : Json).stringify())
+      error(500, m)
+    }
+  }
 }
