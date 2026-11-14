@@ -1527,6 +1527,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let whole_now = fn() {
     @signals.untracked(fn() { whole_of(places(laid.get())) })
   }
+  // (the glide back to its foot it is on (ListPlace::to_end), while it is: gone on toward where its foot is as that
+  // moves, in its fill; none once another way is in its place (the hand, the wheel, another ask) or it is at rest)
+  let end_glide : Ref[Notch?] = Ref(None)
   // (what is asked of it at a cause: done as the column is laid out again, or at once where it glides there)
   match place {
     Some(p) => {
@@ -1610,7 +1613,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         match to {
           // (far from there, more than two of its heights: there at once, as an old view's list's glide far)
           Some(to) if (to - @signals.untracked(at)).abs() <= glide_most * vh => {
-            s.glide_to(self, self.cause_at(), dclamp(to, 0.0, most))
+            match (ask, end_glide.val, s.notch.untracked()) {
+              // (back to its foot again while it glides there: on from where it is, as fast as it goes)
+              (ToEnd, Some(g), Some(n)) if physical_equal(g, n) =>
+                s.glide_on(self, self.cause_at(), dclamp(to, 0.0, most), most)
+              _ => s.glide_to(self, self.cause_at(), dclamp(to, 0.0, most))
+            }
+            end_glide.val = match ask {
+              ToEnd => s.notch.untracked()
+              _ => None
+            }
             true
           }
           _ => false
@@ -2527,7 +2539,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // taking it anew, each going down with its foot till the block asked is where it was asked; taken for good by the
     // first not cut short, or cut only where the list ends (asked further than it ever goes: at its foot, done)
     let cut = match taken {
-      Some(ToEnd) | None => false
+      // (back to its foot, where it does not follow it: its foot where all of it ends, further than it is now, the next
+      // fill taking it anew as that way goes)
+      Some(ToEnd) =>
+        !@signals.untracked(follows) && dmax(0.0, whole_of(counted(laid.untracked())) - vh) > top + 0.5
+      None => false
       Some(_) => {
         let all = places(laid.untracked())
         if all.length() == 0 {
@@ -2782,6 +2798,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         s.held = false
         row_let_go(false)
         s.to_foot()
+      }
+      // (gliding back to its foot, its foot moved since the glide set out or went on (a block measured or come at its
+      // end, its pinned foot grown or shrunk, a way under it): on to where it is now, from where the glide has it and as
+      // fast; another way in its place let be, the hand's, the wheel's, another ask's)
+      match (end_glide.val, s.notch.untracked()) {
+        (Some(g), Some(n)) if physical_equal(g, n) && vh > 0.0 => {
+          let most = dmax(0.0, whole_now() - vh)
+          if (n.x0 + n.total - most).abs() > 1.0 / 128.0 {
+            s.glide_on(self, dmax(self.tree.drawn_said(), n.t0), most, most)
+            end_glide.val = s.notch.untracked()
+          }
+        }
+        (Some(_), _) => end_glide.val = None
+        _ => ()
       }
     }
   }
