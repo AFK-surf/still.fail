@@ -391,7 +391,7 @@ test "the vault's page's request where it is not this device's to answer, or dec
 /// The vault page's card of request r1 in ws1, from the vaults topic.
 fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
   let w : Workspace = { id: "ws1", name: "", emoji: "", icon: "", email: "" }
-  let asked : @settings.Asked = { name: "GitHub token", reason: "", timeout_kind: "", timeout_seconds: 0, approved_timeout_kind: "", approved_timeout_seconds: 0, mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, station: "", describe: false, new_name: "", new_about: "", was_about: "", remove: false }
+  let asked : @settings.Asked = { name: "GitHub token", reason: "", timeout_kind: "", timeout_seconds: 0, approved_timeout_kind: "", approved_timeout_seconds: 0, mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, oauth: "", station: "", describe: false, new_name: "", new_about: "", was_about: "", remove: false }
   c.box(w=Fill(1.0), fn() { @settings.vault_ask(c, settings_core(src, w), "ws1", "r1", asked, true) }) |> ignore
 }
 

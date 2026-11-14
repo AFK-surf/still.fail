@@ -273,6 +273,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     username: ask.username,
     filename: ask.filename,
     typed: ask.typed,
+    oauth: ask.oauth,
     station: ask.station,
     describe: ask.describe,
     new_name: ask.new_name,

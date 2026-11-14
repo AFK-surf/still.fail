@@ -22,6 +22,20 @@ pub fn settings_core(src : Source, w : Workspace) -> @settings.Core {
 pub let login_card_of : Ref[(@ui.Ctx, @settings.Core, String, String, Bool) -> Unit] = Ref(fn(_, _, _, _, _) {  })
 
 ///|
+/// A sign-in to a service as the person, its token kept in their vault (@settings.Core's vault_oauth: sfcore's
+/// vault_oauth): by workspace, vault, provider and request. Given as the app starts; with none given it says it failed.
+// kept across runs: what the app says once as it starts
+pub let vault_oauth_of : Ref[(String, String, String, String, (Result[String, String]) -> Unit) -> Unit] = Ref(fn(
+  _,
+  _,
+  _,
+  _,
+  done,
+) {
+  done(Err(""))
+})
+
+///|
 /// The card to share of the workspace's agents at work, as the pages open it (sfpages' share_card_open), given as the
 /// app starts.
 // kept across runs: what the app says once as it starts
@@ -102,6 +116,7 @@ fn settings_core_of(
         toast_later(@sf.t("android-misc.link.cantOpen"))
       }
     },
+    vault_oauth: fn(ws, vault, provider, request, done) { (vault_oauth_of.val)(ws, vault, provider, request, done) },
     open_screen: fn(station, screen) { open_page(Screen({ station, screen, title: "", until_gone: true })) },
     pick_picture: fn(done) {
       @ui.pick(@hostapi.PickKind::Photos, on_got=fn(files) { done(files.get(0).map(fn(f) { f.bytes })) }) is Some(_)

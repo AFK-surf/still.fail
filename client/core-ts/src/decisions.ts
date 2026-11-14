@@ -119,12 +119,14 @@ function vaultAsk(v: J): J | null {
     out.approvedTimeoutKind = get(approved, "kind");
     out.approvedTimeoutSeconds = get(approved, "seconds");
   }
-  // A request to keep a secret (secret_save): what kind, the account it is for, whether the person types it in.
+  // A request to keep a secret (secret_save): what kind, the account it is for, whether the person types it in (or
+  // signs in to a service for it: `oauth`).
   const kind = trimmed(get(get(v, "save"), "kind"));
   if (kind !== null) {
     const username = trimmed(get(get(v, "save"), "username"));
     const filename = trimmed(get(get(v, "save"), "filename"));
-    out.save = { kind, ...(username !== null ? { username } : {}), ...(filename !== null ? { filename } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
+    const oauth = trimmed(get(get(v, "save"), "oauth"));
+    out.save = { kind, ...(username !== null ? { username } : {}), ...(filename !== null ? { filename } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}), ...(oauth !== null ? { oauth } : {}) };
   } else if (isObject(get(v, "describe")) && typeof get(get(v, "describe"), "name") === "string") {
     // A request to rename the item or change its about (secret_describe): as they would be, and its about as it was.
     const d = get(v, "describe");

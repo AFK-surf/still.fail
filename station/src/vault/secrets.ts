@@ -105,6 +105,9 @@ const DESCRIBE_WORDS = {
   yes: { label: "确认修改", detail: "按以上内容修改名称与说明" },
   no: { label: "保持不变", detail: "不作修改，通知 agent" },
 };
+/// The services a person signs in to on a card for a token of their own (secret_save `oauth`), and the hosts it goes
+/// to: the core's providers (client/core-ts/src/vault/oauth.ts `PROVIDERS`), which do the signing in.
+const OAUTH: Record<string, { name: string; hosts: string[] }> = { slack: { name: "Slack", hosts: ["slack.com"] } };
 const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥", file: "文件", browser: "登录态" };
 const howWords = (mode: Mode, hosts: string[]): string =>
   mode === "proxy" ? `代理（限 ${hosts.join(", ")}）` : mode === "ssh" ? "ssh-agent（私钥不出 station）" : mode === "file" ? "文件（命令运行时临时写出，可读取内容）"
@@ -1553,6 +1556,8 @@ export class Secrets {
     a: {
       name: string; kind: string; reason: string; value?: string; command?: string; path?: string; username?: string; public_key?: string; filename?: string; modes?: string[]; hosts?: string[]; env?: string;
       cwd: string; station?: string; browser?: "chat" | "station"; person?: string;
+      /// A token the person signs in to this service for on the card (OAUTH), in place of typing one in.
+      oauth?: string;
       /// What it is and how it is used (its listing's `about`, the item's notes): shown to agents with its name.
       about?: string;
       /// Kept from a sign-in's card (signin.ts), the person having chosen there to keep it: no card of its own, its
@@ -1586,7 +1591,13 @@ export class Secrets {
     if (about.length > ABOUT_MOST) throw new Refused(`about is at most ${ABOUT_MOST} characters`);
     if (a.value !== undefined && command !== undefined) throw new Refused("Give the secret as value or as a command that prints it (command), not both; neither, and the card asks the person to type it in.");
     const typed = kind !== "browser" && a.value === undefined && command === undefined;
-    const hosts = [...new Set((a.hosts ?? []).map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
+    const oauth = a.oauth === undefined ? undefined : OAUTH[a.oauth];
+    if (a.oauth !== undefined) {
+      if (oauth === undefined) throw new Refused(`oauth is one of ${Object.keys(OAUTH).join(", ")}`);
+      if (kind !== "token" || !typed || a.station !== undefined) throw new Refused("oauth is a token the person signs in for on the card: kind token, and no value, command, path or station");
+      if (a.modes?.some((m) => m !== "proxy")) throw new Refused(`oauth's token is given through the proxy to ${oauth.hosts.join(", ")} alone`);
+    }
+    const hosts = oauth ? oauth.hosts : [...new Set((a.hosts ?? []).map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
     const modes = (a.modes?.length ? [...new Set(a.modes)] : kind === "ssh_key" ? ["ssh"] : kind === "file" ? ["file"] : kind === "browser" ? ["browser"] : hosts.length > 0 ? ["proxy"] : ["env"]) as Mode[];
     if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh, env, file or browser");
     if (modes.includes("ssh") !== (kind === "ssh_key")) throw new Refused("an SSH key is given by ssh (or env), and only an SSH key is");
@@ -1645,7 +1656,7 @@ export class Secrets {
     const id = `r_${ulid(requestedAt)}`;
     const save: Save = {
       kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}), ...(filename ? { filename } : {}),
-      ...(typed ? { typed: true as const } : {}), ...(about ? { about } : {}),
+      ...(typed ? { typed: true as const } : {}), ...(a.oauth !== undefined ? { oauth: a.oauth } : {}), ...(about ? { about } : {}),
     };
     const request: Request = {
       id, ws, vault: lock === null ? PLAIN : this.#vaultFor(lock, sub!), item, session, chat: "", mode: modes[0]!, reason: a.reason.trim(),
@@ -1681,7 +1692,7 @@ export class Secrets {
       this.#postingSaves.delete(id);
     }
     a.quiet?.(id);
-    this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${command}` : (command ?? ""), typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
+    this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${command}` : (command ?? ""), a.oauth ? `oauth ${a.oauth}` : typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
     this.#told(request);
     return this.#saidSave(request);
   }
@@ -1693,9 +1704,10 @@ export class Secrets {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const kind = `（${KIND_WORDS[s.kind]}${s.username ? ` · ${s.username}` : s.filename ? ` · ${s.filename}` : ""}）`;
     const text = [
-      s.typed ? `请填入「${s.name}」${kind}并存入密钥库：${r.reason}` : `申请将「${s.name}」存入密钥库${kind}：${r.reason}`,
+      s.oauth ? `请用 ${OAUTH[s.oauth]?.name ?? s.oauth} 授权，把「${s.name}」存入密钥库：${r.reason}`
+      : s.typed ? `请填入「${s.name}」${kind}并存入密钥库：${r.reason}` : `申请将「${s.name}」存入密钥库${kind}：${r.reason}`,
       ...(s.about ? [`说明：${s.about}`] : []),
-      ...(stillfail ? [] : [s.typed ? "请在 still.fail 客户端的「密钥」中填写并存入。" : "请在 still.fail 客户端的「密钥」中批准。"]),
+      ...(stillfail ? [] : [s.oauth ? "请在 still.fail 客户端的「密钥」中授权并存入。" : s.typed ? "请在 still.fail 客户端的「密钥」中填写并存入。" : "请在 still.fail 客户端的「密钥」中批准。"]),
     ].join("\n\n");
     const card = stillfail
       ? {
@@ -1707,7 +1719,7 @@ export class Secrets {
             request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: hosted(s.modes[0]!) ? s.hosts : [],
             ...(s.about ? { about: s.about } : {}),
             ...(r.runOn ? { station: r.runOn.name } : {}),
-            save: { kind: s.kind, ...(s.username ? { username: s.username } : {}), ...(s.filename ? { filename: s.filename } : {}), ...(s.typed ? { typed: true } : {}) },
+            save: { kind: s.kind, ...(s.username ? { username: s.username } : {}), ...(s.filename ? { filename: s.filename } : {}), ...(s.typed ? { typed: true } : {}), ...(s.oauth ? { oauth: s.oauth } : {}) },
           },
         }
       : null;
@@ -1728,7 +1740,9 @@ export class Secrets {
     if (r.status === "denied") return `${whose} chose not to keep 「${s.name}」 (request ${r.id}).`;
     if (r.status === "expired") return `The request to keep 「${s.name}」 (${r.id}) was let go.`;
     const off = r.vault === "" && !s.typed ? " Their vault is not turned on yet: the card lets them turn it on in the still.fail app, and then keep it." : "";
-    const asked = s.typed
+    const asked = s.oauth
+      ? `Asked ${whose} to sign in to ${OAUTH[s.oauth]?.name ?? s.oauth} for 「${s.name}」 (request ${r.id}): its card has them sign in on ${OAUTH[s.oauth]?.name ?? s.oauth}'s own page in the still.fail app, and their own token goes into their vault as they do, never to you.`
+      : s.typed
       ? `Asked ${whose} to type 「${s.name}」 in (request ${r.id}): its card has a field for it, and what they type goes into their vault as they approve it in the still.fail app (turning their vault on first where it is not), never to you.`
       : `Asked to keep 「${s.name}」 (request ${r.id}); the card is in your chat for ${whose}, who approves it in the still.fail app.${off}`;
     return `${asked} ${UNDECIDED} Only their approval in the app keeps it: a reply in the chat saying yes does not.`;

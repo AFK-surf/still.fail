@@ -274,6 +274,7 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
     username: text(save, "username"),
     filename: text(save, "filename"),
     typed: flag(save, "typed"),
+    oauth: text(save, "oauth"),
     station: "",
     describe: field(rv, "describe") is Some(_),
     new_name: text(field(rv, "describe"), "name"),

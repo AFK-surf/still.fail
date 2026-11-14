@@ -65,8 +65,9 @@ export type Request = {
   /// (`vault.approve`); it grants nothing.
   remove?: { name: string };
 };
-/// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true; about?: string };
+/// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed); with
+/// `oauth`, the token they sign in to that service for on the card (vault/oauth.ts) instead.
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true; oauth?: string; about?: string };
 export type Timeout = { kind: "idle" | "fixed"; seconds: number };
 export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; timeout?: Timeout; secret: string; at: number; sig: Sig };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };

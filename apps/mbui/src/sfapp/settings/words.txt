@@ -1624,6 +1624,8 @@ web-pages.vault.addKind.login
 web-pages.vault.addKind.loginDetail
 web-pages.vault.addKind.profile
 web-pages.vault.addKind.profileDetail
+web-pages.vault.addKind.slack
+web-pages.vault.addKind.slackDetail
 web-pages.vault.addKind.ssh_key
 web-pages.vault.addKind.ssh_keyDetail
 web-pages.vault.addKind.file
@@ -1939,3 +1941,10 @@ core-views.copies.andLast
 core-views.copies.taking.gits
 core-views.copies.taking.failed
 core-views.copies.why.error
+web-pages.vault.oauth.added
+web-pages.vault.oauth.failed
+web-pages.vault.oauth.signIn.slack
+web-pages.vault.oauth.card.title.slack
+web-pages.vault.oauth.card.read.slack
+web-pages.vault.oauth.card.write.slack
+web-pages.vault.oauth.card.kept.slack
