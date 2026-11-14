@@ -185,6 +185,16 @@ hbc_over() {
 hbc_no_key() {
   echo "core.hbc has no key, so HBC_CACHE is not used (the core is made here, and not kept): $1" >&2
 }
+# The PostHog project this build's core sends what people use to (client/core-ts/src/use-counts.ts, its
+# `__STILLFAIL_POSTHOG__`): {host, key} of the file STILLFAIL_POSTHOG names, as the hosts' own reports take it (a
+# release's, from POSTHOG_JSON); none, `undefined`, and the core sends nothing. Part of core.hbc's key and stamp.
+posthog_define() {
+  if [ -n "${STILLFAIL_POSTHOG:-}" ] && [ -f "$STILLFAIL_POSTHOG" ]; then
+    node -e 'const { host, key } = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(JSON.stringify({ host, key }))' "$STILLFAIL_POSTHOG"
+  else
+    echo undefined
+  fi
+}
 hbc_key() {
   [ -n "${HBC_CACHE:-}" ] || return 1
   local trees changed paths
@@ -203,6 +213,7 @@ hbc_key() {
     hbc_over "$ROOT/core" | while IFS= read -r f; do echo "${f##*/}"; $SHA < "$f"; done
     $SHA < "$D/core.sh"
     echo "${ENTRY#"$ROOT"/}"
+    echo "posthog $(posthog_define | $SHA)"
     $SHA < "$1"; } | $SHA | cut -c1-24
 }
 
@@ -324,7 +335,7 @@ hermes_kept() {
 
 hermes() {
   local t0=$(now)
-  local hc="$(hermesc)" key=
+  local hc="$(hermesc)" key= stamp=
   ENTRY=${ENTRY:-$ROOT/core/hermes.ts}
   if key=$(hbc_key "$hc") && [ -f "$HBC_CACHE/$key.hbc" ]; then
     cp -p "$HBC_CACHE/$key.hbc" $OUT/core.hbc && rm -f $OUT/core.hbc.stamp
@@ -334,7 +345,9 @@ hermes() {
   have_deps
   # With a clean Git tree the content key decides reuse; a missing key cannot fall back to an older timestamp stamp.
   # Without a content key, use the last build only when its checkout and inputs still match.
-  if [ -z "$key" ] && [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
+  local posthog
+  posthog=$(posthog_define) || { echo "hermes: STILLFAIL_POSTHOG ($STILLFAIL_POSTHOG) is no {host, key}"; return 1; }
+  if [ -z "$key" ] && [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null) posthog $(echo "$posthog" | $SHA)" = "$(cat $OUT/core.hbc.stamp)" ]; then
     echo "hermes: core.hbc as it was (its inputs unchanged)"
     return 0
   fi
@@ -344,6 +357,7 @@ hermes() {
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/hermes.ts} --bundle \
     --format=iife --platform=neutral --main-fields=module,main --conditions=hermes --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none \
     --alias:@core=$CORE_TS/src --alias:@stillfail=$SF_SRC --resolve-extensions=.ts,.js,.mjs \
+    "--define:__STILLFAIL_POSTHOG__=$posthog" \
     --outfile=$OUT/core-hermes.js --metafile=$OUT/core-hermes.meta.json --log-level=warning \
     || { echo "hermes: bundle failed"; return 1; }
   hbc_inputs "$key" || { rm -f $OUT/core-hermes.js; return 1; }
@@ -357,7 +371,7 @@ if (!out || !out.code) throw new Error('babel made nothing');
 writeFileSync(f, out.code);" $OUT/core-hermes.js) || { echo "hermes: class transform failed"; return 1; }
   "$hc" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
     || { echo "hermes: hermesc failed"; rm -f $OUT/core.hbc; return 1; }
-  hbc_stamp "$hc" > $OUT/core.hbc.stamp || rm -f $OUT/core.hbc.stamp
+  { stamp=$(hbc_stamp "$hc") && echo "$stamp posthog $(echo "$posthog" | $SHA)" > $OUT/core.hbc.stamp; } || rm -f $OUT/core.hbc.stamp
   echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode${key:+ (kept as $key)}"
   if [ -n "$key" ]; then
     mkdir -p "$HBC_CACHE" && cp -p $OUT/core.hbc "$HBC_CACHE/$key.hbc.tmp" && mv "$HBC_CACHE/$key.hbc.tmp" "$HBC_CACHE/$key.hbc"

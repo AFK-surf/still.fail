@@ -1,7 +1,7 @@
 import preact from "@preact/preset-vite";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { execFileSync } from "node:child_process";
-import { renameSync } from "node:fs";
+import { readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uiAlias } from "./ui/alias.ts";
@@ -16,6 +16,15 @@ function buildNumber(): string | null {
   } catch {
     return null;
   }
+}
+
+/** The PostHog project the core's worker sends what people use to (client/core-ts/src/use-counts.ts): {host, key} of the
+ *  file STILLFAIL_POSTHOG names (cloud/deploy.py gives it), else none and nothing is sent. */
+function posthog(): { host: string; key: string } | undefined {
+  const path = process.env.STILLFAIL_POSTHOG;
+  if (!path) return undefined;
+  const { host, key } = JSON.parse(readFileSync(path, "utf8")) as { host: string; key: string };
+  return { host, key };
 }
 
 // Two builds of one client. Default (or --mode cloud): still.fail cloud's web app at /, into dist/cloud-web, the static
@@ -63,6 +72,8 @@ export default defineConfig(({ mode }) => {
       __BUILD__: JSON.stringify(build),
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
       __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
+      // Where the core counts what people use to (client/core-ts/src/use-counts.ts).
+      __STILLFAIL_POSTHOG__: JSON.stringify(posthog()) ?? "undefined",
     },
     // The core's worker (src/core/worker.ts) is a module worker: the TypeScript core, SQLite's and iroh's wasm.
     worker: { format: "es" },

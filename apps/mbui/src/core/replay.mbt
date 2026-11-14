@@ -137,7 +137,7 @@ pub(all) enum Pace {
 /// nothing, none is required and one the run did not make is not where the two went apart; one made again with other
 /// params is the run's next of its name, not said to differ.
 let reports : Array[String] = [
-  "client.focus", "chat.place", "draft.put", "drive.place", "composer.text", "composer.comment",
+  "client.focus", "client.shown", "client.reports", "chat.place", "draft.put", "drive.place", "composer.text", "composer.comment",
   // (a chats' list's window raised as it is scrolled near its foot: as the frames scrolled it)
   "chats.window",
   // (how many of a chat's last messages it opens on, told before it is asked: a run from before it never told it, and

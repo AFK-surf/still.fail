@@ -38,6 +38,8 @@ export type Call =
   | { kind: "profileFlow"; topic: Topic; action: string; patch: unknown }
   | { kind: "slackTokens"; topic: Topic; action: string; patch: unknown }
   | { kind: "clientError"; source: string; message: string }
+  | { kind: "clientReports"; on: boolean }
+  | { kind: "clientShown"; page: string }
   | { kind: "wake"; away: number; network: boolean; retry: boolean }
   | { kind: "authBegin"; redirectUri: string; returnTo: string; deviceName: string | null }
   | { kind: "authComplete"; query: string }
@@ -464,6 +466,12 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       ]);
       return { kind: "clientError", source: p.source as string, message: p.message as string };
     }
+    // whether what people use is counted and sent from this device (use-counts.ts), as the app's settings say
+    case "client.reports":
+      return { kind: "clientReports", on: read(params, [["on", "bool", "req"]]).on as boolean };
+    // a page the app shows, by its kind alone (use-counts.ts)
+    case "client.shown":
+      return { kind: "clientShown", page: read(params, [["page", S, "req"]]).page as string };
     case "client.wake": {
       const p = read(params, [
         ["away", "f64", "default"],

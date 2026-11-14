@@ -117,17 +117,25 @@ fn settings_core_of(
         @sf.icon(c, place_icon(place), size=28.0, color~) |> ignore
       }
     },
-    reporting: fn() {
-      reporting_said.get() |> ignore
-      reporting_host.get().map(fn(h) { (h.get)() })
-    },
+    reporting: fn() { reporting_on(src) },
     set_reporting: fn(on) {
       match reporting_host.get() {
         Some(h) => {
           (h.set)(on)
           reporting_said.set(Some(on))
         }
-        None => ()
+        // (where the core sends what people use and the host keeps no switch: the prefs' `reports`)
+        None =>
+          @settings.set_pref_with(
+            fn(name, params, done) { (src.call)(name, params, done) },
+            fn(said) { toast_later(said) },
+            "reports",
+            if on {
+              ""
+            } else {
+              "off"
+            },
+          )
       }
     },
     login_card,
@@ -152,6 +160,42 @@ pub(all) struct ReportingHost {
 ///|
 /// The host's, set once as the app starts (src/stillfail main); None under a Tester (reset), unless its test sets one.
 pub let reporting_host : @signals.Signal[ReportingHost?] = @signals.signal(None)
+
+///|
+/// Whether this device's core sends what people use (client/core-ts/src/use-counts.ts: a build given still.fail's
+/// PostHog project, on still.fail's own cloud), as its `client.reports` answered (`sends`); false till then, and under
+/// a Tester, whose core says nothing of it.
+pub let core_sends : @signals.Signal[Bool] = @signals.signal(false)
+
+///|
+/// Whether usage statistics and error reports go out from this device: as the host's switch is, where it keeps one;
+/// else, where the core sends what people use, as the prefs' `reports` say (on unless `off`); None where nothing is
+/// sent (no settings row then).
+pub fn reporting_on(src : Source) -> Bool? {
+  reporting_said.get() |> ignore
+  match reporting_host.get() {
+    Some(h) => Some((h.get)())
+    None =>
+      if core_sends.get() {
+        Some(@settings.pref_from(src.topic("prefs", {}).get().value, "reports") != "off")
+      } else {
+        None
+      }
+  }
+}
+
+///|
+/// The core told whether to count what people use on this device (`client.reports`, use-counts.ts) as the settings
+/// say (reporting_on; where nothing says, on: the core sends nothing anyway unless it can), and as they change; its
+/// answer says whether it sends at all (core_sends). Said as the app starts, before what it counts.
+pub fn tell_reports(src : Source, on : Bool) -> Unit {
+  (src.call)("client.reports", { "on": Json::boolean(on) }, fn(r) {
+    match r {
+      Ok(Object(m)) => core_sends.set(m.get("sends") is Some(True))
+      _ => ()
+    }
+  })
+}
 
 ///|
 /// What this device was last set here to send them or not (None: not set here; what reads it reads the host again as

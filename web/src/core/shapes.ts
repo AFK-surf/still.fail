@@ -1711,6 +1711,11 @@ export interface PrefsView {
 	 */
 	sendKey?: string;
 	/**
+	 * Whether what people use is counted and sent from this device where its host keeps no switch of its own
+	 * (设置 → 关于 → 发送使用统计和错误报告: macOS, Windows, Linux, the web; use-counts.ts): `off`, or none for on.
+	 */
+	reports?: string;
+	/**
 	 * Which chat page this device makes (设置 → 外观 → 试用新对话页): `nodes`, the one made as nodes, tried while it
 	 * is being completed; or (none) the one of before.
 	 */

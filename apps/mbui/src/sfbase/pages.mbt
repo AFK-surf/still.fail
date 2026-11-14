@@ -1168,6 +1168,7 @@ pub fn reset() -> Unit {
   // what the settings' core keeps (settings_core.mbt, notices.mbt, faces.mbt, bars.mbt)
   reporting_host.set(None)
   reporting_said.set(None)
+  core_sends.set(false)
   notices_reset()
   faces_reset()
   bars_picked.set(None)
