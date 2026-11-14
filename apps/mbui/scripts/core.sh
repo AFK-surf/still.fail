@@ -238,12 +238,15 @@ def said(p):
 own = os.path.join(root, 'core')
 packages = os.path.join(checkout, 'client', 'core-ts', 'node_modules')
 keyed = [os.path.join(checkout, *t.split('/')) for t in trees]
-# (esbuild says them from where it ran, this module; what it left out of a package is no file)
+# (esbuild says them from where it ran, this module; what it left out of a package is no file, nor what a --define of
+# an object makes, `<define:NAME>`: its value is the key's and stamp's already, as hermes says it: posthog)
 files, lost = [], []
 for i in sorted(json.load(open(meta))['inputs']):
     p = os.path.realpath(os.path.join(root, i))
     if os.path.isfile(p):
         files.append(p)
+    elif re.fullmatch(r'<define:[A-Za-z0-9_$.]+>', i):
+        continue
     elif 'node_modules' not in re.split(r'[\\/]', i):
         lost.append(i)
 unheld = ", so the bundle cannot be held to core.hbc's key (hbc_inputs in apps/mbui/scripts/core.sh: where it reads the metafile's paths from)"
