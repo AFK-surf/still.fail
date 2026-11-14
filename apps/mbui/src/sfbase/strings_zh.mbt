@@ -2736,4 +2736,12 @@ let zh : Map[String, String] = {
   "web-pages.screen.debug.paneShow": "展开右栏",
   "desktop.update.update": "更新",
   "web-pages.stationUpdates.app": "当前客户端",
+  "web-pages.profiles.availableModels": "可用模型",
+  "web-pages.profiles.modelsNote": "勾选常用模型，在对话选模型时直接显示",
+  "web-pages.profiles.modelsNoteAdd": "勾选常用模型，或按名称添加自定义模型",
+  "web-pages.profiles.modelsNoteFusion": "勾选常用模型，或配置 Fusion 主副模型组合",
+  "web-pages.profiles.share.hereNote": "允许此 station 上的对话使用此共享账号",
+  "web-pages.profiles.share.whereNote": "将此账号迁移到其他 station",
+  "web-pages.profiles.share.switchNote": "允许其他 station 上的对话使用此账号",
+  "web-pages.profiles.share.stationsNote": "选择哪些 station 可以使用此账号",
 }

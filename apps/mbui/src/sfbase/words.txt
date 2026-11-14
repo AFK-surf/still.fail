@@ -2716,3 +2716,11 @@ web-pages.screen.debug.paneHide
 web-pages.screen.debug.paneShow
 desktop.update.update
 web-pages.stationUpdates.app
+web-pages.profiles.availableModels
+web-pages.profiles.modelsNote
+web-pages.profiles.modelsNoteAdd
+web-pages.profiles.modelsNoteFusion
+web-pages.profiles.share.hereNote
+web-pages.profiles.share.whereNote
+web-pages.profiles.share.switchNote
+web-pages.profiles.share.stationsNote
