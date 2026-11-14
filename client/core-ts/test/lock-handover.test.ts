@@ -26,13 +26,14 @@ import { inLock, inLockBringing, lockPartRoute, lockRoute, movedTooOld, refusalO
 import { deviceBuildsOf } from "../../../station/src/mesh/device-builds.ts";
 import { buildOf } from "../../../station/src/api/oldest.ts";
 import { HAND_OVER_FROM } from "../src/lock-handover.ts";
-import { MOVED_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
+import { LOGS_ANY_FROM_BUILD, LOGS_BEFORE, MOVED_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
 import { type Dev, type Key, Log, bring, dev, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
 import { d4Diff, d4Old } from "../../../station/test/lock-roster4-model.ts";
 import { key, signed as simSigned } from "../../../station/test/lock-world-sim.ts";
 import type { CoreError } from "../src/error.ts";
 import { type Entry, type Signer, canonical, entryHash, next } from "../src/lock.ts";
 import { bodyHash } from "../src/lock-moved.ts";
+import { crypto } from "../src/personal-lock.ts";
 import { Core } from "../src/core.ts";
 import { httpError } from "../src/station/requests.ts";
 import { HostWire } from "../src/station/wire.ts";
@@ -60,7 +61,7 @@ const seedOf = (n: number) => {
 };
 const SETTINGS = (keys: unknown) => ({ origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: keys });
 
-type Asked = { at: string; method: string; path: string; body: string };
+type Asked = { at: string; method: string; path: string; body: string; got?: number };
 type Opts = {
   /// More members of the chain: `ready: false` one with an app device and no log bound (r4); `web` one with only a web
   /// page (r5, an admin); `none` one with no device (r6, a member).
@@ -96,6 +97,11 @@ type Opts = {
   noLog?: boolean;
   /// So many more members (m0, m1, …), each with an app device and a log of their own bound and brought.
   crowd?: number;
+  /// Each of the crowd with a phone on their log alone (put on by their app device, never on the chain).
+  crowdPhones?: boolean;
+  /// Stations (by name) that serve what a moved chain is made of and do not say `heads` (GET /lock/heads, POST
+  /// /lock/given: the build before), read whole.
+  noHeads?: string[];
   /// A third station of the workspace, C.
   third?: boolean;
   /// Stations (by name) whose GET /lock does not say they serve `bodies`, `logs` and `builds`, nor their GET
@@ -125,6 +131,7 @@ async function setUp(o: Opts = {}) {
   const A = ed().hex, B = ed().hex, C = ed().hex, D = ed().hex, WEB = ed(), WEB5 = ed();
   const ours = o.third ? [A, B, C] : [A, B];
   const crowd = Array.from({ length: o.crowd ?? 0 }, (_, i) => new Log(`m${i}`));
+  if (o.crowdPhones) for (const l of crowd) onLog(l, dev(), `${l.sub}'s phone`);
   let mine: Signer | null = null;
   let now = 0;
   const other = ed();
@@ -201,17 +208,19 @@ async function setUp(o: Opts = {}) {
   };
   const stations: { A: Cloud; B: Cloud; C?: Cloud } = { A: station(A), B: station(B), ...(o.third ? { C: station(C) } : {}) };
   const nameOf = (id: string) => (id === A ? "A" : id === B ? "B" : id === C ? "C" : id === D ? "D" : null);
-  const st = { silent: false, down: new Set<string>(o.down ?? []), old: new Set<string>(o.old ?? []), noCarried: new Set<string>(o.noCarried ?? []), lockDown: new Set<string>(o.lockDown ?? []), dOld: o.dOld === true, dSince: Math.floor(clock() / 1000), asked: [] as Asked[], hook: null as null | (() => void) };
+  const st = { silent: false, down: new Set<string>(o.down ?? []), old: new Set<string>(o.old ?? []), noCarried: new Set<string>(o.noCarried ?? []), noHeads: new Set<string>(o.noHeads ?? []), lockDown: new Set<string>(o.lockDown ?? []), dOld: o.dOld === true, dSince: Math.floor(clock() / 1000), asked: [] as Asked[], hook: null as null | (() => void) };
   const viewer = viewerOf("s1", { base }, "owner", "ws");
   const route = (c: Cloud, method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
-    if (st.silent && method === "POST") return Effect.never;
     const [p, q] = path.split("?") as [string, string | undefined];
+    // (POST /lock/given is a read)
+    if (st.silent && method === "POST" && p !== "/lock/given") return Effect.never;
     const buf = Buffer.from(body === null || body === undefined ? "" : JSON.stringify(body));
     const [status, said] = p === "/lock" ? lockRoute(c, method, q ? [...new URLSearchParams(q)] : [], buf, viewer as never) : lockPartRoute(c, p.slice("/lock/".length), method, buf, viewer as never);
     // (a station from before: its rules know no `moved`, and it serves none of what a moved chain is made of)
     const from = Object.entries(stations).find(([, x]) => x === c)?.[0] ?? "";
-    const out = p === "/lock" && st.old.has(from) && status === 200 ? { ...(said as object), serves: ((said as { serves?: string[] }).serves ?? []).filter((x) => x !== "bodies" && x !== "logs" && x !== "builds" && x !== "carried") }
-      : p === "/lock" && st.noCarried.has(from) && status === 200 ? { ...(said as object), serves: ((said as { serves?: string[] }).serves ?? []).filter((x) => x !== "carried") }
+    const out = p === "/lock" && st.old.has(from) && status === 200 ? { ...(said as object), serves: ((said as { serves?: string[] }).serves ?? []).filter((x) => x !== "bodies" && x !== "logs" && x !== "builds" && x !== "carried" && x !== "heads") }
+      : p === "/lock" && st.noCarried.has(from) && status === 200 ? { ...(said as object), serves: ((said as { serves?: string[] }).serves ?? []).filter((x) => x !== "carried" && x !== "heads") }
+      : p === "/lock" && st.noHeads.has(from) && status === 200 ? { ...(said as object), serves: ((said as { serves?: string[] }).serves ?? []).filter((x) => x !== "heads") }
       : p === "/lock/person" && method === "GET" && (st.old.has(from) || st.noCarried.has(from)) ? { chains: (said as { chains: unknown }).chains, ...(st.old.has(from) ? {} : { serves: ["logs", "builds"] }) }
       : said;
     // (the first time statements were taken: what the test changes before the `moved`)
@@ -220,6 +229,8 @@ async function setUp(o: Opts = {}) {
       st.hook = null;
       h();
     }
+    const asked = st.asked.at(-1);
+    if (asked !== undefined && asked.path === path && asked.got === undefined) asked.got = Buffer.byteLength(JSON.stringify(out));
     return status === 200 ? Effect.succeed(out) : Effect.fail(httpError(status, out));
   };
   // (this device's mesh, and its requests to the workspace's stations, on a core as it starts: `restart`)
@@ -591,8 +602,7 @@ const DAY = 86400;
 // No app device but the one that moves the chain holds a handover back (the user, 2026-11-14: a phone of his own he no
 // longer used held his workspace for seven days, nothing saying why; 「用户要是有个设备离线不用了要等 7 天？」): one on a
 // build under MOVED_FROM_BUILD, or never seen, is told to update by a station of the moved workspace as it next asks
-// (station/src/mesh/serve.ts `movedTooOld`). Nor does a member with only a web page; for now more than 200 members
-// bound to a log still hold one back.
+// (station/src/mesh/serve.ts `movedTooOld`). Nor does a member with only a web page, nor how many members there are.
 /// A member's app device asking every station of `ws` with the build `build` (the station's own code: admitted by its
 /// lock, its build kept by its id there, serve.ts `sawBuild`).
 const asks = (w: Awaited<ReturnType<typeof setUp>>, sub: string, d: { base: Key }, role: string, build: string) => {
@@ -685,15 +695,169 @@ test("a station of another workspace of theirs that says nothing of builds: not 
   silent(w);
 });
 
-test("for now, 201 members bound to a log: not handed over by itself, no line, nothing said", async () => {
-  const w = await setUp({ crowd: 198 });
-  assert.deepEqual(handOverState(w.inner, "ws"), { held: ["members"] });
-  assert.equal(lockView(w.inner, "ws").upgrade, undefined, "no line");
+// A workspace of any size is upgraded (the owner, 2026-11-14: a moved workspace does for every person what an unmoved
+// one does): a device keeps every log its stations give (views/lock.ts `keepLogs`; of before at most 256, measured
+// 2026-11-15: of 300 members 42 listed with no device, the owner's `handOver` refused `lock_not_ready` for good), and a
+// chain binding more than LOGS_BEFORE logs is handed over once every station it names says `heads` (a core of before
+// keeps no more, and stations of this build tell it to update there, serve.ts `movedFloor`).
+/// The chain moved as an owner's device moves it (`moved` signed by this device's signer), taken by every station.
+const movedByStations = async (w: Awaited<ReturnType<typeof setUp>>) => {
+  w.after(w.signer, "moved", { root: w.gMe });
+  for (const c of Object.values(w.stations)) c.takeLock([...w.chain] as unknown as StationEntry[], null, true);
   await w.run(read(w.inner, "ws"));
-  assert.deepEqual(movedAt(w), [null, null]);
+  assert.equal(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved", "the chain held moved");
+};
+/// The devices station `c`'s state names that the state here does not (by id), and those here it does not.
+const devicesApart = (w: Awaited<ReturnType<typeof setUp>>, c: Cloud) => {
+  const here = inForceOf(w.inner, "ws").f.devices, there = c.locked(null)!.state!.devices;
+  return { missing: [...there.keys()].filter((id) => !here.has(id)).length, extra: [...here.keys()].filter((id) => !there.has(id)).length };
+};
+/// This device's build (`0.1.<n>`) while `f` runs.
+const onBuild = async <X>(n: number, f: () => Promise<X>): Promise<X> => {
+  const was = ownBuild();
+  setOwnBuild(`0.1.${n}`);
+  try {
+    return await f();
+  } finally {
+    setOwnBuild(was);
+  }
+};
+
+test("a moved workspace of 300 members, each bound to a log of their own with a phone on it alone: the state here is each station's, device for device", async () => {
+  const w = await setUp({ crowd: 297, crowdPhones: true, early: true });
+  assert.ok(new Set(w.stations.A.chain(null)!.state!.persons.values()).size > LOGS_BEFORE, "more logs bound than a device of before kept");
+  await movedByStations(w);
+  for (const c of [w.stations.A, w.stations.B]) assert.deepEqual(devicesApart(w, c), { missing: 0, extra: 0 }, "every device of the station's state here, and no other");
+  const now = Math.floor(w.r.host.nowMs() / 1000);
+  assert.deepEqual(d4Diff(d4Station(w.stations.A, w.gMe, now), d4Core(w.inner)), [], "the state here is A's (the model's D4)");
+  assert.equal(((w.inner.data.record("lockLogs", "ws") as { logs?: unknown[] } | null)?.logs ?? []).length, 299, "every member's log but this device's own person's kept");
+});
+
+test("an owner's device hands a chain binding 300 logs over by itself, on a build from LOGS_ANY_FROM_BUILD; under it (a release's): held, nothing said", async () => {
+  await onBuild(LOGS_ANY_FROM_BUILD - 1, async () => {
+    const w = await setUp({ crowd: 297 });
+    assert.deepEqual(handOverState(w.inner, "ws"), { held: ["own build"] }, "a release under LOGS_ANY_FROM_BUILD: held");
+    assert.deepEqual(movedAt(w), [null, null]);
+  });
+  await onBuild(LOGS_ANY_FROM_BUILD, async () => {
+    const w = await setUp({ crowd: 297 });
+    const before = w.d4Chain(w.chain);
+    await w.run(read(w.inner, "ws"));
+    await w.run(read(w.inner, "ws"));
+    assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved at A and B, nobody calling lock.handOver");
+    silent(w);
+    await asTheChain(w, before, []);
+  });
+});
+
+test("a chain binding 300 logs, one station not saying `heads`: waited for and named as one not serving `carried` is; it says it: moved", async () => {
+  await onBuild(LOGS_ANY_FROM_BUILD, async () => {
+    const w = await setUp({ crowd: 297, noHeads: ["B"] });
+    assert.deepEqual(handOverState(w.inner, "ws"), { stations: [w.B] });
+    const lines = texts(lockView(w.inner, "ws").upgrade);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0]!, /^等待 station studio 2：请将它更新到最新版本并保持在线/);
+    await w.run(read(w.inner, "ws"));
+    assert.deepEqual(movedAt(w), [null, null], "nothing moved");
+    assert.equal((await w.hand()).error?.code, "lock_stations_not_ready", "lock.handOver says so");
+    w.st.noHeads.clear();
+    await w.run(read(w.inner, "ws"));
+    await w.run(read(w.inner, "ws"));
+    assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved once B says it");
+    silent(w);
+  });
+});
+
+test("a chain of 20 members, one station not saying `heads`: handed over at once, nothing waited for", async () => {
+  const w = await setUp({ crowd: 17, noHeads: ["B"] });
+  assert.equal(handOverState(w.inner, "ws"), null, "nothing holds it back");
+  await w.run(read(w.inner, "ws"));
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved");
   silent(w);
 });
 
+// What a read of a moved workspace asks (the brief of 2026-11-15: each read asked each station for every log and every
+// body whole, 66 KB at 50 members, 1.3 MB at 1000, nothing changed): by their heads, then only what changed.
+/// The lock's reads of the logs and bodies asked since `from`, a line each: `<station> <method> <path> <body sent>`.
+const readsOf = (w: Awaited<ReturnType<typeof setUp>>, from: number) =>
+  w.st.asked.slice(from).filter((a) => /^\/lock\/(logs|bodies|heads|given)$/.test(a.path) && !(a.method === "POST" && a.path === "/lock/bodies")).map((a) => `${a.at.slice(-1)} ${a.method} ${a.path}${a.method === "POST" ? ` ${a.body}` : ""}`).sort();
+/// Requests and bytes answered of a read since `from` (every /lock route), printed.
+const weighed = (w: Awaited<ReturnType<typeof setUp>>, from: number, n: number, what: string) => {
+  const asked = w.st.asked.slice(from).filter((a) => a.path.startsWith("/lock"));
+  const by = new Map<string, { n: number; got: number }>();
+  for (const a of asked) {
+    const k = `${a.method} ${a.path.split("?")[0]}`;
+    const x = by.get(k) ?? { n: 0, got: 0 };
+    x.n++, x.got += a.got ?? 0;
+    by.set(k, x);
+  }
+  console.log(`READ N=${n} ${what}: ${asked.length} requests ${asked.reduce((t, a) => t + (a.got ?? 0), 0)} B [${[...by].map(([k, x]) => `${k} x${x.n} ${x.got} B`).join(", ")}]`);
+};
+for (const n of [50, 300]) {
+  test(`a moved workspace of ${n} members read: nothing changed, nothing asked; one log grown, that log alone of each station; a statement, its body and its signer's log; a station from before, whole`, async () => {
+    const w = await setUp({ crowd: n - 3, early: true, bobOwner: true });
+    await movedByStations(w);
+    await w.run(read(w.inner, "ws"));
+    // (each step weighed and checked, what was wrong said at the end: so a run on code of before weighs them all)
+    const wrong: string[] = [];
+    const check = (got: unknown, want: unknown, what: string) => {
+      if (JSON.stringify(got) !== JSON.stringify(want)) wrong.push(`${what}: ${JSON.stringify(got).slice(0, 400)}`);
+    };
+    let from = w.st.asked.length;
+    await w.run(read(w.inner, "ws"));
+    weighed(w, from, n, "nothing changed");
+    check(readsOf(w, from), ["A GET /lock/heads", "B GET /lock/heads"], "nothing changed: the heads alone");
+    // one member's log grows (a phone put on it), brought to A and B
+    const m = w.crowd[3]!;
+    onLog(m, dev(), `${m.sub}'s phone`);
+    takeChain(w, [m]);
+    from = w.st.asked.length;
+    await w.run(read(w.inner, "ws"));
+    weighed(w, from, n, "one log grown");
+    const asks = (logs: string[], bodies: string[]) => JSON.stringify({ logs, bodies });
+    check(readsOf(w, from), ["A GET /lock/heads", `A POST /lock/given ${asks([m.genesis], [])}`, "B GET /lock/heads", `B POST /lock/given ${asks([m.genesis], [])}`], "that log alone, of each");
+    check(devicesApart(w, w.stations.A).missing, 0, "the phone in force here");
+    // one statement: bob, an owner, takes xena out
+    const movedEntry = held(w.inner, "ws")!.entries.at(-1)!;
+    const said = w.bob.say("member.remove", { sub: "r3", cancels: [stationHash(movedEntry as unknown as StationEntry)] }, "ws");
+    for (const c of Object.values(w.stations)) bring(c, w.bob, true, "ws");
+    from = w.st.asked.length;
+    await w.run(read(w.inner, "ws"));
+    weighed(w, from, n, "one statement");
+    check(readsOf(w, from), ["A GET /lock/heads", `A POST /lock/given ${asks([w.bob.genesis], [said.h])}`, "B GET /lock/heads", `B POST /lock/given ${asks([w.bob.genesis], [said.h])}`], "its body and its signer's log");
+    check(inForceOf(w.inner, "ws").f.members.has("r3"), false, "xena out here");
+    // nothing changed again, a body held: a read hashes it once as kept here, the next hashes no body again (the
+    // rules' body_hash_js hashes a body's canonical text by the crypto it is given, `sha256Hex`: counted by what it
+    // hashes, a statement's body)
+    await w.run(read(w.inner, "ws"));
+    const hashed = { bodies: 0 };
+    const original = crypto.sha256Hex;
+    const sha = mock.method(crypto, "sha256Hex", (text: string) => {
+      try {
+        const v = JSON.parse(text);
+        if (v !== null && typeof v === "object" && "salt" in v && "kind" in v && !("sig" in v)) hashed.bodies++;
+      } catch {
+        // (not JSON: not a body)
+      }
+      return original(text);
+    });
+    from = w.st.asked.length;
+    await w.run(read(w.inner, "ws"));
+    sha.mock.restore();
+    weighed(w, from, n, "nothing changed, a body held");
+    check(readsOf(w, from), ["A GET /lock/heads", "B GET /lock/heads"], "nothing changed again: the heads alone");
+    console.log(`READ N=${n} bodies hashed in a read with nothing changed: ${hashed.bodies}`);
+    check(hashed.bodies, 0, "no body hashed again");
+    // B from before: read whole there
+    w.st.noHeads.add("B");
+    from = w.st.asked.length;
+    await w.run(read(w.inner, "ws"));
+    weighed(w, from, n, "B from before");
+    check(readsOf(w, from), ["A GET /lock/heads", "B GET /lock/bodies", "B GET /lock/logs"], "B whole");
+    assert.deepEqual(wrong, []);
+  });
+}
 // A member with only a web page holds nothing back (the owner, 2026-11-13: 「开了安全模式那就需要 app」, web pages not
 // waited for; 2026-11-14: 无感迁移): their page is carried by the chain as it moved until its `exp` (rules `carry_of`),
 // nothing said to anyone before or after, and nothing on the owner's page.

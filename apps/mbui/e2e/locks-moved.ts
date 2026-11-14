@@ -308,6 +308,27 @@ try {
   // (by itself: P, joining alice's own lock, is on her log and so in the state the move makes, though the chain never
   // named it; its line is held apart)
   let pLine = (_s: string) => false;
+  // (from here A's core reads the logs and bodies of the workspace's stations by their heads: GET /lock/heads, then
+  // POST /lock/given for what changed, never GET /lock/logs nor GET /lock/bodies; its requests as Device.answers saw them)
+  const movedFrom = Date.now();
+  const lockReadsOf = (x: Device) => {
+    const by = new Map<string, number>();
+    for (const a of x.answers) {
+      if (a.at < movedFrom || !both().includes(a.station)) continue;
+      const path = a.path.replace(/^\/admin\/api/, "").split("?")[0]!;
+      if (!/^\/lock\/(heads|given|logs|bodies)$/.test(path)) continue;
+      const k = `${a.method} ${path}`;
+      by.set(k, (by.get(k) ?? 0) + 1);
+    }
+    return by;
+  };
+  const byHeads = async (what: string) => {
+    for (const id of both()) await vDev.answered(id, "/lock/heads", movedFrom, 60_000);
+    const by = lockReadsOf(vDev);
+    log(`  A's reads of the logs and bodies at both since the move (${what}): ${[...by].map(([k, n]) => `${k} x${n}`).join(", ") || "none"}`);
+    const whole = (by.get("GET /lock/logs") ?? 0) + (by.get("GET /lock/bodies") ?? 0);
+    if (whole > 0) throw new Error(`A read the logs or bodies whole ${whole} times`);
+  };
   if (auto) await must("A hands the workspace's chain over by itself, nothing calls lock.handOver, as it approves P on alice's own lock face to face: A asked once, for P", async () => {
     const t1 = Date.now();
     await pDev.signIn();
@@ -346,6 +367,7 @@ try {
     }
     log(`  ${devicesIn(onChain).split("; ").length} devices, as on the chain: ${devicesIn(onChain).split("; ").map((x) => x.split(" ").slice(1).join(" ")).join(", ")}`);
   });
+  await check("A reads the moved workspace's logs and bodies by their heads at both stations, none whole", () => byHeads("after the move"));
   if (auto) {
     await check("P, on alice's own lock, let in by both of the workspace's stations, signing", async () => {
       for (const id of both()) await inThree(pDev, id, (s) => s.state === "online");
@@ -815,6 +837,7 @@ try {
     log(`  Q's lock.disable: ${r?.message.slice(0, 200) ?? "done"}`);
     if (r === null || !/lock_root_only/.test(r.message)) throw new Error("frank not answered lock_root_only");
   });
+  await check("A read the logs and bodies by their heads to the end, none whole", () => byHeads("at the end"));
   await check("nobody else asked anything in this round", async () => {
     for (const [x, n] of others) {
       if (x === qDev) log(`  Q (frank) asked in this round: ${x.askedWhat(n).join("; ") || "nothing"}`);

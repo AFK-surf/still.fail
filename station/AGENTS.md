@@ -265,6 +265,13 @@
   (`src/api/moved-from.ts`) asking in a workspace whose chain moved is told to update there (426 with `update`, as
   `coreTooOld`; `src/mesh/serve.ts` `movedTooOld`), which its app shows as the ordinary 请更新 (请刷新页面 on the web); one
   that says no build is answered as `coreTooOld` answers it. `test/device-builds.test.ts` holds it.
+- A device reads the logs and bodies by their heads (the lead, 2026-11-15; `serves` `heads`): GET /lock/heads gives
+  each log as `[genesis, head hash]`, each body by its hash and `lacking`, POST /lock/given `{logs, bodies}` the logs and
+  bodies named, each only to whom and where the whole reads give them (`givesDevice`, `Cloud.logsOf`; `logsGiven`), both
+  answered by Node as the other lock routes are; the whole reads stay for cores from before. A core under
+  `LOGS_ANY_FROM_BUILD` (`src/api/moved-from.ts`) kept at most `LOGS_BEFORE` logs, so it is told to update (`movedFloor`,
+  the highest floor that applies) only where the state in force is made of more (`Cloud.needs`). `test/lock-heads.test.ts`
+  holds it.
 - After a move the root's person is a member like any other (rules/AGENTS.md, `~root`; the lead, 2026-11-14): this
   station says `rootout` in its GET /lock `serves`, so a core says a removal of them naming the root's log only where
   every station reads it so, and a core under `ROOT_OUT_FROM_BUILD` (`src/api/moved-from.ts`) is told to update

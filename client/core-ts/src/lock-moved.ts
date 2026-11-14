@@ -85,9 +85,15 @@ export const CHAIN_MOST = 1024;
 
 /// A statement's body's hash (what its commitment carries as `h`); null where it has none.
 export function bodyHash(body: unknown): string | null {
-  const h: string = rules.body_hash_js(body, crypto);
-  return h.startsWith("!") ? null : h;
+  // (made once a body's object: a read hashes every body held, `lackedOf`; a value read or kept is never written)
+  const memo = typeof body === "object" && body !== null;
+  if (memo && bodyHashes.has(body)) return bodyHashes.get(body)!;
+  const said: string = rules.body_hash_js(body, crypto);
+  const h = said.startsWith("!") ? null : said;
+  if (memo) bodyHashes.set(body, h);
+  return h;
 }
+const bodyHashes = new WeakMap<object, string | null>();
 
 /// Workspace `ws`'s tag in the person log of genesis hash `genesis` (what its commitments there carry as `t`).
 export const wsTag = (ws: string, genesis: string): string => rules.ws_tag_js(ws, genesis, crypto);

@@ -49,7 +49,8 @@ import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bindBytes, bodiesOf, byHash, plan, prevOf, rootOf as rootNamed } from "../lock-statements.ts";
-import { HAND_OVER_FIRST_SECS, HAND_OVER_FROM, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { HAND_OVER_FIRST_SECS, HAND_OVER_FROM, type HandOverPlan, type Who, ableBuild, ableLarge, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { LOGS_BEFORE } from "../../../../station/src/api/moved-from.ts";
 import { buildOf, ownBuild } from "../station/oldest.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
@@ -379,10 +380,12 @@ export const view = (inner: Inner, ws: string): J => inner.data.shared({ topic: 
 /// (`lockLogs`, a record of its own in the workspace's, which a core from before never reads): each its chain gone by
 /// and what is aside, by the person logs' rules and their fork choice, as personal-lock.ts keeps the person's own
 /// (src/lock-keep.ts `keep`, `personRules`). The log of this device's own person is not kept here: it is the chain
-/// personal-lock.ts pins (`pinnedOf`), joined to these as the state is made (`inForceOf`). At most LOGS_MOST logs, each
-/// at most CHAIN_MOST entries: one past them is not taken.
+/// personal-lock.ts pins (`pinnedOf`), joined to these as the state is made (`inForceOf`). Each at most CHAIN_MOST
+/// entries, one longer not taken; of logs, every one the workspace's stations give (no bound by count: a device of
+/// before kept 256 and made a state that lacked the rest's devices, 2026-11-15). Nothing else decides what is kept: a
+/// station of the workspace is trusted to serve it what its state is made of (`Cloud.logsOf`, no more), and a device
+/// that lacks a log is filled by the other stations' reads and by the refusals that carry one (`heardOut`).
 type LogsHeld = { logs: { genesis: string; entries: Entry[]; aside?: Entry[] }[] };
-const LOGS_MOST = 256;
 const logsHeld = (inner: Inner, ws: string): LogsHeld["logs"] => {
   const r = inner.data.record("lockLogs", ws);
   return isObject(r) && Array.isArray(r.logs) ? (r.logs as LogsHeld["logs"]) : [];
@@ -413,6 +416,8 @@ function keepLogs(inner: Inner, ws: string, chains: readonly J[]): boolean {
   const sub = inner.workspaces.owner(ws);
   const own = sub === null ? null : inner.adb.personal().root(sub);
   const logs = [...logsHeld(inner, ws)];
+  // (found by their genesis: a list searched for each log given was N² at a workspace's size)
+  const index = new Map(logs.map((l, i) => [l.genesis, i]));
   let changed = false;
   for (const c of chains) {
     const genesis = get(c, "genesis"), entries = arr(get(c, "entries")) as Entry[];
@@ -420,8 +425,7 @@ function keepLogs(inner: Inner, ws: string, chains: readonly J[]): boolean {
     const first = entries[0]!;
     const who = get(first.body, "sub");
     if (first.kind !== "genesis" || typeof who !== "string" || hashOf(first) !== genesis) continue;
-    const at = logs.findIndex((l) => l.genesis === genesis);
-    if (at < 0 && logs.length >= LOGS_MOST) continue;
+    const at = index.get(genesis) ?? -1;
     const was = at < 0 ? { entries: [], aside: [] } : { entries: logs[at]!.entries, aside: logs[at]!.aside ?? [] };
     let t: ReturnType<typeof keep>;
     try {
@@ -431,7 +435,7 @@ function keepLogs(inner: Inner, ws: string, chains: readonly J[]): boolean {
     }
     if (!t.changed) continue;
     const l = { genesis, entries: t.kept.entries, ...(t.kept.aside.length > 0 ? { aside: t.kept.aside } : {}) };
-    if (at < 0) logs.push(l);
+    if (at < 0) index.set(genesis, logs.push(l) - 1);
     else logs[at] = l;
     changed = true;
   }
@@ -835,7 +839,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           else p.serving.delete(id);
           if (r._tag === "Success" && arr(get(r.success, "serves")).includes("forks")) p.forks.add(id);
           else p.forks.delete(id);
-          if (r._tag === "Success") keepServes(inner, ws, id, SERVES_MOVED.every((x) => arr(get(r.success, "serves")).includes(x)), arr(get(r.success, "serves")).includes("rootout"));
+          if (r._tag === "Success") keepServes(inner, ws, id, SERVES_MOVED.every((x) => arr(get(r.success, "serves")).includes(x)), arr(get(r.success, "serves")).includes("rootout"), arr(get(r.success, "serves")).includes("heads"));
           if (r._tag !== "Success" || !p.serving.has(id)) return null;
           const head = readHead(get(r.success, "head"));
           if (!p.heads.has(id) || !sameHead(p.heads.get(id)!, head)) headsMoved = true;
@@ -870,22 +874,11 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           // `moved`): the bodies first, the logs only where they hold any, so that a station with none is asked once.
           const serves = arr(get(r.success, "serves"));
           const moves = movedRoot(entries ?? was?.entries ?? []) !== null;
-          let bodies: J[] = [], lacking: string[] = [], logs: J[] = [];
-          if (serves.includes("bodies")) {
-            const b = yield* ask(id, "/lock/bodies");
-            if (b._tag === "Success") {
-              bodies = arr(get(b.success, "bodies"));
-              lacking = arr(get(b.success, "lacking")).filter((x): x is string => typeof x === "string");
-            }
-          }
           // (and, chains handed over by themselves, of an owner's chain: the logs it binds, which its plan reads as an ask
           // comes and before its `moved`, `movedBySelf`; read whoever's turn it is yet, since 14 days pass on the clock
           // alone, `mayHandOver`)
           const owns = handsOver(inner) && (entries ?? was?.entries ?? []).length > 0 && fold(entries ?? was!.entries).members.get(sub)?.role === "owner";
-          if (serves.includes("logs") && (moves || bodies.length > 0 || lacking.length > 0 || owns)) {
-            const l = yield* ask(id, "/lock/logs");
-            if (l._tag === "Success") logs = arr(get(l.success, "chains"));
-          }
+          const { bodies, lacking, logs } = yield* givenOf(inner, ws, id, { heads: serves.includes("heads"), bodies: serves.includes("bodies"), logs: serves.includes("logs"), always: moves || owns });
           return { id, head: named, entries: shown, parts, known, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [], bodies, lacking, logs };
         }),
       ),
@@ -977,6 +970,66 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     deliver(inner, ws);
     return true;
   });
+}
+
+/// What station `id` of `ws` gives of what a moved chain is made of: the statements' bodies and what it lacks of them
+/// (`bodies`: where it serves them), and the person logs where it serves them (`logs`) and `always`, or where it keeps a
+/// body or lacks one (the owner's device states the workspace before it signs `moved`). Where it says `heads`, read by
+/// their heads first (GET /lock/heads) and only what this device holds none of asked (POST /lock/given, `lackedOf`):
+/// nothing changed, nothing asked. Else each whole (GET /lock/bodies, GET /lock/logs), as a station from before gives
+/// them. Taken by the caller as any given are (`keepLogs`, then `keepBodies`). `answered`: its first read was.
+function givenOf(inner: Inner, ws: string, id: string, o: { heads: boolean; bodies: boolean; logs: boolean; always: boolean }): Effect.Effect<{ bodies: J[]; lacking: string[]; logs: J[]; answered: boolean }> {
+  return Effect.gen(function* () {
+    const at = new StationAddr(ws, id);
+    const ask = (method: "GET" | "POST", path: string, body: unknown = null) => Effect.result(inner.stations.requests.call(at, method, path, body, { quiet: true }));
+    const strings = (x: unknown) => arr(x).filter((y): y is string => typeof y === "string");
+    let bodies: J[] = [], lacking: string[] = [], logs: J[] = [];
+    if (o.heads) {
+      const h = yield* ask("GET", "/lock/heads");
+      if (h._tag !== "Success") return { bodies, lacking, logs, answered: false };
+      const hashes = strings(get(h.success, "bodies"));
+      lacking = strings(get(h.success, "lacking"));
+      const heads = arr(get(h.success, "logs")).flatMap((x): [string, string][] => (Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string" ? [[x[0], x[1]]] : []));
+      const want = lackedOf(inner, ws, o.always || hashes.length > 0 || lacking.length > 0 ? heads : [], o.bodies ? hashes : []);
+      if (want.logs.length === 0 && want.bodies.length === 0) return { bodies, lacking, logs, answered: true };
+      const g = yield* ask("POST", "/lock/given", want);
+      if (g._tag === "Success") {
+        bodies = arr(get(g.success, "bodies"));
+        logs = arr(get(g.success, "chains"));
+      }
+      return { bodies, lacking, logs, answered: true };
+    }
+    let answered = true;
+    if (o.bodies) {
+      const b = yield* ask("GET", "/lock/bodies");
+      if (b._tag === "Success") {
+        bodies = arr(get(b.success, "bodies"));
+        lacking = strings(get(b.success, "lacking"));
+      } else answered = false;
+    }
+    if (o.logs && (o.always || bodies.length > 0 || lacking.length > 0)) {
+      const l = yield* ask("GET", "/lock/logs");
+      if (l._tag === "Success") logs = arr(get(l.success, "chains"));
+      else if (!o.bodies) answered = false;
+    }
+    return { bodies, lacking, logs, answered };
+  });
+}
+
+/// Of the logs a station says it keeps (`[genesis, head]` each) and the bodies (by hash), those this device holds none
+/// of: a log whose head there is the hash of no entry held here of it (its chain or aside; its own person's is read of
+/// GET /lock/person, never here), a body of a hash no body held here is of.
+function lackedOf(inner: Inner, ws: string, heads: readonly [string, string][], hashes: readonly string[]): { logs: string[]; bodies: string[] } {
+  const sub = inner.workspaces.owner(ws);
+  const own = sub === null ? null : inner.adb.personal().root(sub);
+  const held = heads.length === 0 ? new Map<string, readonly Entry[]>() : logsOf(inner, ws, true);
+  const logs = heads.flatMap(([genesis, head]) => {
+    if (genesis === own) return [];
+    const es = held.get(genesis);
+    return es !== undefined && es.some((e) => hashOf(e) === head) ? [] : [genesis];
+  });
+  const have = hashes.length === 0 ? new Set<string>() : new Set(bodiesHeld(inner, ws).map((b) => bodyHash(b)));
+  return { logs: [...new Set(logs)], bodies: [...new Set(hashes.filter((h) => !have.has(h)))] };
 }
 
 /// The devices each station said came to it, as one list: each device once, as it was last seen.
@@ -3309,11 +3362,18 @@ const rootOutHeld = (inner: Inner, ws: string): string[] => {
   const r = inner.data.record(SERVES, ws);
   return isObject(r) && Array.isArray(r.rootout) ? (r.rootout as unknown[]).filter((x): x is string => typeof x === "string") : [];
 };
+/// Which of them said `heads` (station/src/mesh/serve.ts: the logs and bodies read by their heads, `givenOf`), kept
+/// beside them (`heads`): what a chain binding more than LOGS_BEFORE logs is handed over by (`stationsWaited`).
+const headsHeld = (inner: Inner, ws: string): string[] => {
+  const r = inner.data.record(SERVES, ws);
+  return isObject(r) && Array.isArray(r.heads) ? (r.heads as unknown[]).filter((x): x is string => typeof x === "string") : [];
+};
 /// What station `id` of `ws` said as it answered a read of the lock: kept, written only where it changed.
-function keepServes(inner: Inner, ws: string, id: string, serves: boolean, rootOut: boolean): void {
-  const was = servesHeld(inner, ws), out = rootOutHeld(inner, ws);
-  if (was.includes(id) === serves && out.includes(id) === rootOut) return;
-  inner.data.put(SERVES, ws, { ready: serves ? [...was.filter((x) => x !== id), id] : was.filter((x) => x !== id), rootout: rootOut ? [...out.filter((x) => x !== id), id] : out.filter((x) => x !== id) });
+function keepServes(inner: Inner, ws: string, id: string, serves: boolean, rootOut: boolean, heads: boolean): void {
+  const was = servesHeld(inner, ws), out = rootOutHeld(inner, ws), hs = headsHeld(inner, ws);
+  if (was.includes(id) === serves && out.includes(id) === rootOut && hs.includes(id) === heads) return;
+  const said = (list: string[], yes: boolean) => (yes ? [...list.filter((x) => x !== id), id] : list.filter((x) => x !== id));
+  inner.data.put(SERVES, ws, { ready: said(was, serves), rootout: said(out, rootOut), heads: said(hs, heads) });
 }
 /// Whether a removal of the root's person said here names the root's log (lock-statements.ts `cancelsOf`): only where
 /// every station the state in force names said `rootout` (a reader from before reads it as nothing, so one of them
@@ -3330,19 +3390,17 @@ function rootOutServed(inner: Inner, ws: string): boolean {
 /// for the tests): this device itself, by the build it says to the stations (`ownBuild`, `0.1.0` where it says none),
 /// not able (`ableBuild`: it moves the chain, and a station of a moved workspace tells a device under MOVED_FROM_BUILD to
 /// update, station/src/mesh/serve.ts `movedTooOld`; the lead, 2026-11-14: builds between this code's and
-/// MOVED_FROM_BUILD have it and must move nothing); and, for now (lifted by its own change, client/core-ts/AGENTS.md),
-/// more than HAND_OVER_MEMBERS_MOST members bound to a log (a moved state reads each one's log, `LOGS_MOST` a
-/// workspace). A member with only a web page holds nothing back (the owner, 2026-11-13: 「开了安全模式那就需要 app」, web
+/// MOVED_FROM_BUILD have it and must move nothing), and of a chain binding more than LOGS_BEFORE logs not from
+/// LOGS_ANY_FROM_BUILD (`ableLarge`: such a moved workspace's stations tell a core under it to update). How many members
+/// a chain binds holds nothing back (2026-11-15: a device keeps every log its stations give, `keepLogs`). A member with only a web page holds nothing back (the owner, 2026-11-13: 「开了安全模式那就需要 app」, web
 /// pages not waited for): the chain as it moved carries their page until its `exp`, after which it is one nobody can
 /// approve there and says to install an app (`needsAppIn`), their first app coming in as a newcomer's. The
 /// handover writes nothing in anyone's log (no `writer`, no bound on the root's log's length). No other app device is
 /// waited for (the user, 2026-11-14, of a phone of his own not used any more that held his workspace for seven days:
 /// 「用户要是有个设备离线不用了要等 7 天？」; his first word of it had been 「不要等设备全更新」): one on a build that does
 /// not take a moved chain is told to update by a station of the workspace as it next asks (`movedTooOld`), and is in
-/// again once it has, nothing approved anew. Those for now are not
-/// held to (`forNow` false) only where a host made for tests calls `lock.handOver` itself (`handOverByTests`), so what a
-/// move does with such a workspace stays run until they are lifted.
-function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entry[], forNow = true): string[] {
+/// again once it has, nothing approved anew.
+function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entry[]): string[] {
   if (entries.length === 0) return [];
   const at = now(inner);
   try {
@@ -3350,12 +3408,8 @@ function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entr
   } catch {
     return ["chain"];
   }
-  const f = fold(entries);
-  const out: string[] = [];
-  if (!ableBuild(buildOf(ownBuild() || "0.1.0") ?? -1)) out.push("own build");
-  if (!forNow) return out;
-  if (f.persons.size > HAND_OVER_MEMBERS_MOST) out.push("members");
-  return out;
+  const own = buildOf(ownBuild() || "0.1.0") ?? -1;
+  return !ableBuild(own) || (large(entries) && !ableLarge(own)) ? ["own build"] : [];
 }
 
 /// The stations the chain `entries` names that have not said to this device they serve `bodies`, `logs` and `builds`
@@ -3364,11 +3418,17 @@ function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entr
 /// `moved` refuses that entry and goes on letting people in by the chain of before (a member taken out after the move
 /// too, whose device is the one that talks to it): so `moved` is signed only once every station the chain names said
 /// so. No deadline: one gone for good is taken out of the workspace by an owner, and is then not named.
+/// Of a chain binding more than LOGS_BEFORE logs (`large`), each must have said `heads` too (`headsHeld`): a station from
+/// before it gives a core of before the logs, which keeps no more than LOGS_BEFORE, and tells it nothing (it holds no
+/// floor for it, station/src/mesh/serve.ts `movedFloor`). Waited for and shown as one not serving `carried` is.
 export function stationsWaited(inner: Inner, ws: string, entries: readonly Entry[]): string[] {
   if (entries.length === 0) return [];
   const ready = new Set(servesHeld(inner, ws));
-  return [...fold(entries).stations.keys()].filter((id) => !ready.has(id));
+  const heads = large(entries) ? new Set(headsHeld(inner, ws)) : null;
+  return [...fold(entries).stations.keys()].filter((id) => !ready.has(id) || (heads !== null && !heads.has(id)));
 }
+/// Whether the chain `entries` binds more than LOGS_BEFORE logs (station/src/api/moved-from.ts).
+const large = (entries: readonly Entry[]): boolean => new Set(fold(entries).persons.values()).size > LOGS_BEFORE;
 /// What `handOver` answers where its `moved` waits for stations (`stationsWaited`): the lines the owner's page shows of
 /// them (`waitedLines`), joined.
 export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[]): CoreError =>
@@ -3446,13 +3506,16 @@ const LACKING = "lock_handover_lacking";
 /// of a chain not moved gives those too: station/src/cloud/state.ts `logsOf`), kept as any logs given are (`keepLogs`):
 /// read by `handOver` before it works out its plan, and again before its `moved`, so that a member's app device that
 /// signs on the chain and is not on their log is waited for (src/lock-handover.ts `waits`), not dropped. One station
-/// that answers is enough, the others had OTHERS_MS more; what none gave is not held, and its member waits.
+/// that answers is enough, the others had OTHERS_MS more; what none gave is not held, and its member waits. Of one that
+/// said `heads`, only the logs this device lacks (`givenOf`).
 function readBound(inner: Inner, ws: string): Effect.Effect<void> {
   return Effect.gen(function* () {
     const stations = lockStations(inner, ws);
-    const ask = (id: string) => inner.stations.requests.call(new StationAddr(ws, id), "GET", "/lock/logs", null, { quiet: true });
+    const heads = new Set(headsHeld(inner, ws));
+    // (one that did not answer is no answer: the others are waited for as before)
+    const ask = (id: string) => Effect.flatMap(givenOf(inner, ws, id, { heads: heads.has(id), bodies: false, logs: true, always: true }), (g) => (g.answered ? Effect.succeed(g) : Effect.fail(null)));
     const answers = yield* answersOf(inner, stations.map(ask), () => OTHERS_MS, stations.map((id) => `${ws}/${id}`));
-    keepLogs(inner, ws, answers.flatMap((r) => (r._tag === "Success" ? arr(get(r.success, "chains")) : [])));
+    keepLogs(inner, ws, answers.flatMap((r) => (r._tag === "Success" ? r.success.logs : [])));
   });
 }
 
@@ -3478,7 +3541,6 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
     if (signer === null || own === null || key === null || personal.standing(sub) !== "member") return yield* Effect.fail(notAllowed());
     const base = yield* new Lock(inner, ws, sub, null).base();
     const who = { sub, genesis: own, key, base, signer: signer.id };
-    const byTests = inner.host.handOverByTests === true;
     const guard = (entries: readonly Entry[]): CoreError | null => {
       // (moved meanwhile by itself, `movedBySelf`: handed over, as asked, below)
       if (movedRoot(entries) !== null) return lockMoved();
@@ -3486,7 +3548,7 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
       if ("refused" in p) return p.differs === true ? heldNotReady() : notAllowed();
       const waited = stationsWaited(inner, ws, entries);
       if (waited.length > 0) return stationsNotReady(inner, ws, waited);
-      return heldBack(inner, ws, sub, entries, !byTests).length > 0 ? heldNotReady() : null;
+      return heldBack(inner, ws, sub, entries).length > 0 ? heldNotReady() : null;
     };
     for (let round = 0; round < HAND_OVER_ROUNDS; round++) {
       if (movedHere(inner, ws)) return null;
