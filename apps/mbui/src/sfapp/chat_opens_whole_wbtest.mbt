@@ -307,8 +307,12 @@ fn ow_watch(t : @ui.Tester, s : (String, Double, Double, Int), label : String, c
       }
       println("OPENS_WHOLE_WHY \{label} +\{c.0}: \{c.2}")
     }
-  } else if changes.length() == 1 && changes[0].1.iter().any(fn(w) { w.1 }) {
-    // (the one change moved what was drawn before it: rows of the chat drawn at the press, put again)
+  } else if changes.length() == 1 &&
+    changes[0].1.filter(fn(w) { w.1 }).length() * 2 >= changes[0].1.length() &&
+    changes[0].1.iter().any(fn(w) { w.1 }) {
+    // (the one change moved what was drawn before it: rows of the chat drawn at the press, put again. Not one where
+    // most of it came or went, the chat's messages in another's place: words both say, an agent's name, are one
+    // thing to this judge, seen as moved from where the other had them)
     let line = "\{label}: what was drawn moved at +\{changes[0].0} ms"
     said.push(line)
     println("OPENS_WHOLE \{line}")
@@ -332,13 +336,21 @@ fn ow_run(t : @ui.Tester, ms : Double) -> Unit {
 
 ///|
 /// The app over a core answering every topic subscribed from `armed` on `ms` late, at rest on chat `at`.
-fn ow_app(s : (String, Double, Double, Int), nodes : Bool, ms : Double, at : ChatRef) -> @ui.Tester {
+fn ow_app(
+  s : (String, Double, Double, Int),
+  nodes : Bool,
+  ms : Double,
+  at : ChatRef,
+  mode? : String = "chat",
+  heard? : (String) -> Unit = fn(_) {  },
+  core? : (Source) -> Source = fn(s) { s },
+) -> @ui.Tester {
   new_run()
   ow_begin()
   @sfbase.chat_page_nodes.set(nodes)
   let armed = Ref(false)
   let src = ow_source(
-    round_trip_again(fixture("chat"), 0.0, late=fn(_, _) { if armed.val { ms } else { 0.0 } }),
+    round_trip_again(core(fixture(mode)), 0.0, heard~, late=fn(_, _) { if armed.val { ms } else { 0.0 } }),
   )
   open_chat(at)
   let (_, w, h, platform) = s
@@ -385,8 +397,13 @@ fn ow_open_by_hand(t : @ui.Tester, s : (String, Double, Double, Int), r : ChatRe
 
 ///|
 /// Case 1: chat s-c1 opened from s-c2.
-fn ow_opened(s : (String, Double, Double, Int), nodes : Bool, ms : Double) -> Array[String] {
-  let t = ow_app(s, nodes, ms, ow_c2)
+fn ow_opened(
+  s : (String, Double, Double, Int),
+  nodes : Bool,
+  ms : Double,
+  core? : (Source) -> Source = fn(s) { s },
+) -> Array[String] {
+  let t = ow_app(s, nodes, ms, ow_c2, core~)
   ow_watch(t, s, "\{ow_name(nodes)} \{s.0} opened, core \{ms} ms", fn() {
     @ui.view_tree().unwrap().event(t.time(), fn() { open_chat(ow_c1) })
   }, ms * 2.0 + 1000.0)
@@ -394,8 +411,13 @@ fn ow_opened(s : (String, Double, Double, Int), nodes : Bool, ms : Double) -> Ar
 
 ///|
 /// Case 5: from s-c1 to s-c2 and back, each by its row.
-fn ow_switched(s : (String, Double, Double, Int), nodes : Bool, ms : Double) -> Array[String] raise {
-  let t = ow_app(s, nodes, ms, ow_c1)
+fn ow_switched(
+  s : (String, Double, Double, Int),
+  nodes : Bool,
+  ms : Double,
+  core? : (Source) -> Source = fn(s) { s },
+) -> Array[String] raise {
+  let t = ow_app(s, nodes, ms, ow_c1, core~)
   let small = s.3 == 2
   let out = []
   for r in [ow_c2, ow_c1] {
@@ -419,12 +441,28 @@ fn ow_switched(s : (String, Double, Double, Int), nodes : Bool, ms : Double) -> 
 }
 
 ///|
-fn ow_case(nodes : Bool) -> Unit raise {
+/// `base` with its login's `machineLogin` answered as the core answers one it cannot read soon (its station down, not
+/// in the list, or whose list it would not give: client/core-ts station/topics.ts `#logins`): an error, at once.
+fn ow_login_unread(base : Source) -> Source {
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "machineLogin" {
+        { value: None, error: Some({ "code": "offline", "message": "Willow 连不上" }), version: 1 }
+      } else {
+        (base.topic_read)(name, params)
+      }
+    },
+  }
+}
+
+///|
+fn ow_case(nodes : Bool, core? : (Source) -> Source = fn(s) { s }) -> Unit raise {
   let all = []
   for s in ow_screens {
     for ms in ow_lates {
-      all.push_iter(ow_opened(s, nodes, ms).iter())
-      all.push_iter(ow_switched(s, nodes, ms).iter())
+      all.push_iter(ow_opened(s, nodes, ms, core~).iter())
+      all.push_iter(ow_switched(s, nodes, ms, core~).iter())
     }
   }
   if all.length() > 0 {
@@ -440,4 +478,12 @@ test "a chat opens whole, old page: opened, and switched to and back, over a cor
 ///|
 test "a chat opens whole, new page: opened, and switched to and back, over a core at once and 400 ms late, on 大屏 and 小屏: drawn in two ways at most, nothing drawn moving" {
   ow_case(true)
+}
+
+///|
+/// The login's card of a station the core cannot read now (answered at once with why: an error): the chat's messages
+/// drawn one lateness after the chat's own answer, the card as one unanswered, and nothing moving as it is.
+test "a chat opens whole with a login's card the core says it cannot read now, on both pages, over a core at once and 400 ms late, on 大屏 and 小屏: drawn in two ways at most, nothing drawn moving" {
+  ow_case(false, core=ow_login_unread)
+  ow_case(true, core=ow_login_unread)
 }

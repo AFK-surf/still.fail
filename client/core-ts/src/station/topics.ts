@@ -58,7 +58,7 @@ export function placeKey(station: string, thread: number): string {
 }
 
 /// The station topics made from how its link is (up, down, why): made again as it changes.
-const LINKED = new Set(["link", "live", "screens", "screenCard", "drive", "presets", "memory", "linkPreview", "filePeek", "messagePeek"]);
+const LINKED = new Set(["link", "live", "screens", "screenCard", "drive", "presets", "memory", "linkPreview", "filePeek", "messagePeek", "job", "machineLogins", "machineLogin"]);
 
 export class StationTopics implements Owner {
   readonly #core: Inner;
@@ -231,7 +231,8 @@ export class StationTopics implements Owner {
   }
 
   compute(topic: Topic): Value | undefined {
-    const station = topicStation(topic)!;
+    // (a job's by its `station`: protocol.ts topicStation names none for it)
+    const station = topicStation(topic) ?? String(topic.station);
     try {
       StationAddr.parse(station);
     } catch (e) {
@@ -342,6 +343,19 @@ export class StationTopics implements Owner {
         if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
         return error ? { err: error } : undefined;
       }
+      case "job": {
+        // Held: what is held goes out (the store reads it). Nothing held: a station down or not in the list says so at
+        // once, and one up whose jobs' list was answered on this link has no such job (gone, or never its): an answer
+        // either way, so what waits for it (a card in a chat as it opens: the app's chat_opens) waits only while it can
+        // come soon; till that list is answered, nothing (it comes within a lateness). The station up again, its list
+        // answered, or the job told, makes it again.
+        if (error) return { err: error };
+        const name = this.#core.views.stationName(station);
+        if (!link) return { err: new CoreError("not_found", t("core-views.station.not_listed")) };
+        if (down(link.state)) return { err: new CoreError("offline", downWords(link.state, name)) };
+        if (link.jobsRead) return { err: new CoreError("not_found", t("core-views.station.job_gone", { name })) };
+        return undefined;
+      }
       default:
         // Held: what is held goes out (the store reads it); with nothing held, why not, once known.
         return error ? { err: error } : undefined;
@@ -361,6 +375,15 @@ export class StationTopics implements Owner {
       const id = String(get(l, "id"));
       return logins.loginShown(l, station, name, now, offset, this.#sync.relays.listening(station, id), this.#sync.relays.refused(station, id));
     };
+    // Never read (nothing kept of them): a station down, not in the list, or whose list could not be read says so at
+    // once, so what waits for them (a login's card in a chat as it opens: the app's chat_opens) waits only while they
+    // can come soon; read as the station is reached, they come then (made again as its link or its logins change).
+    if (held.supported === null) {
+      if (!link) return { err: new CoreError("not_found", t("core-views.station.not_listed")) };
+      if (down(link.state)) return { err: new CoreError("offline", downWords(link.state, name)) };
+      const failed = link.errors.get(logins.LIST_KEY);
+      if (failed) return { err: failed };
+    }
     if (topic.topic === "machineLogin") {
       const found = held.logins.find((l) => l.id === topic.id);
       if (found !== undefined) return { ok: shown(found) };

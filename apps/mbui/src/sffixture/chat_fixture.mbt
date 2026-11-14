@@ -478,7 +478,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
           } else if f.mode == "chat-table-images" {
             with_table_images(rich_chat(f.older))
           } else if f.mode == "chat-screens" || f.mode == "chat-screens-pc" {
-            with_message(rich_chat(f.older), screens_answer)
+            // (its tree with it, as a station sends it: what the chat opens on reads its links' cards of it)
+            with_message(rich_chat(f.older), screens_answer, md=@sf.kept_md(screens_answer))
           } else if f.mode == "chat-screens-cold" {
             with_cache_cold(with_message(rich_chat(f.older), screens_answer))
           } else if f.mode == "chat-archived" {
@@ -2208,7 +2209,7 @@ pub fn with_md_message(v : Json) -> Json {
 
 ///|
 /// The chat with an agent's answer of `words` at its end.
-pub fn with_message(v : Json, words : String) -> Json {
+pub fn with_message(v : Json, words : String, md? : Json? = None) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -2217,8 +2218,9 @@ pub fn with_message(v : Json, words : String) -> Json {
         _ => []
       }
       all.push(
-        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), words, "1 分钟前", {
-          "ending": "all_done",
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), words, "1 分钟前", match md {
+          Some(t) => { "ending": "all_done", "md": t }
+          None => { "ending": "all_done" }
         }),
       )
       o["messages"] = Json::array(all)

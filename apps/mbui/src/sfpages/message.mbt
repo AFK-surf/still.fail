@@ -520,20 +520,8 @@ fn link_peeks(
 /// What a link of message `m` is to, as the core says (each link's `to`): of a person's words' runs, or of an agent's
 /// Markdown (read as the row is, as its words are).
 fn link_to_in(m : Message) -> (String) -> @sf.LinkTo {
-  match m.words {
-    Some(Array(runs)) =>
-      fn(href) {
-        match runs.iter().find_first(fn(r) { text(Some(r), "link") == href }) {
-          Some(r) => @sf.link_to_of(field(Some(r), "to").unwrap_or(Json::null()))
-          None => @sf.no_link_to
-        }
-      }
-    _ if m.author_kind == "person" || m.mine => fn(_) { @sf.no_link_to }
-    _ => {
-      let links = @sf.md_links_to(m.text, m.md)
-      fn(href) { links.get(href).unwrap_or(@sf.no_link_to) }
-    }
-  }
+  let links = @sfbase.message_links_to(m)
+  fn(href) { links.get(href).unwrap_or(@sf.no_link_to) }
 }
 
 ///|

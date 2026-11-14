@@ -718,6 +718,10 @@ export class StationsSync {
       if (answer._tag === "Success") {
         link.errors.delete(key);
         this.#core.data.set(topic, answer.success.value, true, answer.success.changed);
+        if (topic.topic === "jobs" && !link.jobsRead) {
+          link.jobsRead = true;
+          this.onChange(address, "link");
+        }
         this.#retell(address, read);
         // (a list its station makes reads neither)
         if (topic.topic === "sessions" || topic.topic === "threads") this.#remake(address, {});
@@ -805,7 +809,10 @@ export class StationsSync {
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/machine-logins", null, { quiet: true, ctx }));
       if (answer._tag === "Success") logins.putList(link, answer.success);
       else if (answer.failure.status === 404) logins.unsupported(link);
+      // (the station's no: what its logins' topics answer while none is kept, till a read is answered)
+      else if (answer.failure.status !== undefined) link.errors.set(logins.LIST_KEY, answer.failure);
       else return;
+      if (answer._tag === "Success" || answer.failure.status === 404) link.errors.delete(logins.LIST_KEY);
       this.onChange(address, "logins");
     });
   }
