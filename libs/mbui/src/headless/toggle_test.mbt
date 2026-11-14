@@ -201,3 +201,31 @@ test "what a toggle's look reads: on as its caller says it; hovered under a mous
     (false, c_hovered, c_pressed, true, (c_focus, true), c_disabled, true),
   )
 }
+
+///|
+test "a toggle with hold_press: a press held past the hold time and let go on it turns it; let go off it, does not" {
+  let on = @signals.signal(false)
+  let t = window(pointing=Finger, fn(root) {
+    @headless.toggle(
+      root,
+      Switch,
+      fn() { "开关" },
+      fn() { on.get() },
+      fn(to) { on.set(to) },
+      hold_press=(@ui.touch_slop(), @ui.long_press_ms),
+      fn(v, _) {
+        v.width(Is(Some(80.0))).height(Is(Some(40.0))).ground(Is(c_rest)) |> ignore
+      },
+    )
+    |> ignore
+  })
+  t.press_at(40.0, 20.0)
+  t.run_for(held_ms)
+  t.release(40.0, 20.0)
+  let held_on = on.get()
+  t.press_at(40.0, 20.0)
+  t.run_for(held_ms)
+  t.move_to(200.0, 200.0)
+  t.release(200.0, 200.0)
+  assert_eq((held_on, on.get()), (true, true))
+}

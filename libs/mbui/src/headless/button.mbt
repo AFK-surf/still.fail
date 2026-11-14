@@ -10,6 +10,83 @@
 // an option's of a choice (choice.mbt). Each is a component of its own, not a parameter here.
 
 ///|
+/// A finger's long press beside a control's press, and what a press's look hears of the pointer (`down`, `tapped`):
+/// `slop` how far a finger may move while still a tap, `ms` how long a finger is held before `on_hold` runs (`finger`
+/// whether the hand now is a finger's). Under a finger, once `on_hold` has run the press is no tap: `on_lift` runs as
+/// the finger is let go, `on_cancel` if the hold is called off (`Off`). Under a mouse, a press let go on the node
+/// counts whether it moved past `slop` or was held past `ms`.
+pub(all) struct Hold {
+  slop : Double
+  ms : Double
+  finger : () -> Bool
+  on_hold : () -> Unit
+  on_lift : () -> Unit
+  on_cancel : () -> Unit
+  down : ((@view.Drag) -> Unit)?
+  tapped : ((@view.Drag) -> Unit)?
+}
+
+///|
+/// A `Hold` of `slop`, `ms` and `finger`, with what runs on the finger's hold, lift and cancel and what a press's
+/// look hears of the pointer (`down`, `tapped`).
+pub fn Hold::new(
+  slop : Double,
+  ms : Double,
+  finger : () -> Bool,
+  on_hold? : () -> Unit = fn() {  },
+  on_lift? : () -> Unit = fn() {  },
+  on_cancel? : () -> Unit = fn() {  },
+  down? : (@view.Drag) -> Unit,
+  tapped? : (@view.Drag) -> Unit,
+) -> Hold {
+  { slop, ms, finger, on_hold, on_lift, on_cancel, down, tapped }
+}
+
+///|
+/// Attach `hold` to `v`: its gesture ending in `v.press()` where a press counts, and calling `hold`'s callbacks.
+fn attach_hold(v : @view.View, hold : Hold) -> Unit {
+  let held = Ref(false)
+  let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
+  v.gesture(
+    hold.slop,
+    press?=hold.down,
+    tap=fn(d) {
+      if hold.tapped is Some(f) {
+        f(d)
+      }
+      if on_it(d) {
+        v.press() |> ignore
+      }
+    },
+    hold=(
+      hold.ms,
+      fn(_) {
+        held.val = true
+        if (hold.finger)() {
+          (hold.on_hold)()
+        }
+      },
+    ),
+    drag=fn(d) {
+      if !held.val {
+        if d.kind == Up && !(hold.finger)() && on_it(d) {
+          v.press() |> ignore
+        }
+      } else if d.kind == Up || d.kind == Off {
+        held.val = false
+        match d.kind {
+          Off => (hold.on_cancel)()
+          Up if (hold.finger)() => (hold.on_lift)()
+          Up if !(hold.finger)() && on_it(d) => v.press() |> ignore
+          _ => ()
+        }
+      }
+    },
+  )
+  |> ignore
+}
+
+///|
 /// A button as its look reads it: each a reading, followed where a binding reads it.
 pub struct Button {
   priv node : @view.View
@@ -67,12 +144,16 @@ pub fn button(
   press : (@view.View) -> Unit,
   look : (@view.View, Button) -> Unit,
   disabled? : () -> Bool = fn() { false },
+  hold? : Hold,
   made_for? : SourceLoc,
   loc~ : SourceLoc,
 ) -> @view.View {
   parent.box(loc~, made_for=made_for.unwrap_or(loc), fn(v) {
     let able = fn() { !disabled() }
     look(v, { node: v, off: disabled })
+    if hold is Some(h) {
+      attach_hold(v, h)
+    }
     // (its own words of the node, said after its look: what the look said of these four as it ran does not stand;
     // headless.mbt says what that does and does not hold. The keyboard's focus while it can be pressed, Enter and Space
     // pressing it)

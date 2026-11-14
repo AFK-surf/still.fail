@@ -462,3 +462,43 @@ test "a look that says, as it is made, that the node is something else and takes
   k.t.enter()
   assert_eq((k.t.query(Link, label="别的") is None, at, k.pressed.val), (true, "保存", 2))
 }
+
+///|
+test "a button given a hold: under a finger, a short tap presses it, a long hold tells on_hold then on_lift without pressing, and a hold called off tells on_cancel; under a mouse, both short and long presses press it" {
+  let pressed = Ref(0)
+  let events : Array[String] = []
+  let t = window(pointing=Finger, fn(root) {
+    @headless.button(
+      root,
+      fn() { "图标" },
+      fn(_) { pressed.val += 1 },
+      hold=@headless.Hold::new(
+        @ui.touch_slop(),
+        @ui.long_press_ms,
+        fn() { @ui.pointing() is Finger },
+        on_hold=fn() { events.push("hold") },
+        on_lift=fn() { events.push("lift") },
+        on_cancel=fn() { events.push("cancel") },
+      ),
+      fn(v, _) {
+        v.width(Is(Some(40.0))).height(Is(Some(40.0))).ground(Is(c_rest)) |> ignore
+      },
+    )
+    |> ignore
+  })
+  t.tap(20.0, 20.0)
+  let after_tap = (pressed.val, events.copy())
+  t.press_at(20.0, 20.0)
+  t.run_for(held_ms)
+  let mid_hold = (pressed.val, events.copy())
+  t.release(20.0, 20.0)
+  let after_hold = (pressed.val, events.copy())
+  t.host_says_finger(Some(false))
+  t.press_at(20.0, 20.0)
+  t.run_for(held_ms)
+  t.release(20.0, 20.0)
+  assert_eq(
+    (after_tap, mid_hold, after_hold, (pressed.val, events)),
+    ((1, []), (1, ["hold"]), (1, ["hold", "lift"]), (2, ["hold", "lift"])),
+  )
+}

@@ -1266,7 +1266,15 @@ pub fn switch_node(
       }
       turn(to)
     }
-    @headless.toggle(at, Switch, label, on, felt, disabled~, fn(room, sw) {
+    @headless.toggle(
+      at,
+      Switch,
+      label,
+      on,
+      felt,
+      disabled~,
+      hold_press=(@ui.touch_slop(), @ui.long_press_ms),
+      fn(room, sw) {
     let out = fn() { dmax(0.0, (theme().items.least - switch_size(small).0) / 2.0) }
     room.padding(By(fn() { (out(), 0.0, out(), 0.0) })).margin(By(fn() { (-out(), 0.0, -out(), 0.0) })) |> ignore
     room.box(fn(v) {
@@ -1275,21 +1283,10 @@ pub fn switch_node(
       let knob = EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
       let held = EdgeWay::new(0.0)
       v.reacts(on, fn(now) { knob.go(v, if now { 1.0 } else { 0.0 }, @kit.switch_ms) })
-      v.reacts(fn() { room.pressed() && @ui.pointing() is Finger }, fn(down) {
+      v.reacts(fn() { sw.pressed() && @ui.pointing() is Finger }, fn(down) {
         held.go_by(v, if down { 1.0 } else { 0.0 }, @motion.lift_spring)
       })
       v.alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } })) |> ignore
-      // (a press held however long and let go on it turns it too: the look takes the pointer for that and ends in the
-      // toggle's press, which the tree takes as a press delivered to it. When a press counts is the component's: a
-      // debt, as the icon button's, icon_button_node.mbt; the ring the keys' focus shows drawn round its track, below)
-      let on_it = fn(d : @view.Drag) { room.finger_target(d.wx, d.wy) }
-      room.gesture(
-        @ui.touch_slop(),
-        tap=fn(d) { if on_it(d) { sw.press() } },
-        hold=(@ui.long_press_ms, fn(_) {  }),
-        drag=fn(d) { if d.kind == Up && on_it(d) { sw.press() } },
-      )
-      |> ignore
       let size = fn() { switch_size(small) }
       v.box(fn(track) {
         track
@@ -1348,7 +1345,7 @@ pub fn switch_node(
           |> ignore
         })
         // (the keyboard's focus on it: a ring round it, its gap and width the theme's)
-        track.show(fn() { room.focus_shown() }, fn(ring) {
+        track.show(fn() { sw.focus_shown() }, fn(ring) {
           let out = fn() {
             let t = @ui.tree_theme()
             t.focus_gap + t.focus_w

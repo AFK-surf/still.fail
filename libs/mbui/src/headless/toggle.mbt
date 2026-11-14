@@ -80,12 +80,28 @@ pub fn toggle(
   turn : (Bool) -> Unit,
   look : (@view.View, Toggle) -> Unit,
   disabled? : () -> Bool = fn() { false },
+  hold? : Hold,
+  hold_press? : (Double, Double),
   made_for? : SourceLoc,
   loc~ : SourceLoc,
 ) -> @view.View {
   parent.box(loc~, made_for=made_for.unwrap_or(loc), fn(v) {
     let able = fn() { !disabled() }
     look(v, { node: v, now: on, off: disabled })
+    match hold {
+      Some(h) => attach_hold(v, h)
+      None =>
+        if hold_press is Some((slop, ms)) {
+          let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
+          v.gesture(
+            slop,
+            tap=fn(d) { if on_it(d) { v.press() |> ignore } },
+            hold=(ms, fn(_) {  }),
+            drag=fn(d) { if d.kind == Up && on_it(d) { v.press() |> ignore } },
+          )
+          |> ignore
+        }
+    }
     // (its own words of the node, said after its look, as the button's)
     v
     .presses(By(able))
