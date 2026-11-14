@@ -1673,7 +1673,6 @@ fn open_tool_reader(title : String, raw_copy : String, body : (@view.View) -> Un
     grows=true,
     hugs=true,
     foot=fn(fv, close) {
-      @sf.foot_spacer_node(fv)
       if raw_copy != "" {
         @sf.button_node(
           fv,
@@ -1940,9 +1939,12 @@ fn tool_part_node(
               )
             })
             if summary != "" {
-              steps_words(head, fn() { summary }, tool_dispatch_summary)
+              steps_box_node(head, tool_dispatch_summary_box, fn(sb) {
+                steps_words(sb, fn() { summary }, tool_dispatch_summary)
+              })
             }
           })
+          steps_box_node(card, tool_result_rule, fn(_) {  })
           steps_box_node(card, tool_dispatch_body, fn(body) {
             if is_long_block(words) {
               fold_node(body, fold_key + "/md", 8, md_line, fn(f) { render_md_or_words(f, words, md, small=true) })
@@ -2001,7 +2003,7 @@ fn tool_part_node(
                   steps_box_node(head, h_grow, fn(_) {  }, in_row=true)
                   if val.length() > 80 || val.contains("\n") {
                     tool_expand_btn_node(head, k, val, fn(rb) {
-                      steps_box_node(rb, tool_box, fn(b) { steps_run(b, fn() { val }, tool_mono, mono=true) })
+                      steps_run(rb, fn() { val }, tool_mono, mono=true)
                     })
                   }
                 })
@@ -2042,7 +2044,7 @@ fn tool_part_node(
             steps_words(bar, fn() { "输出" }, tool_key_words)
             steps_box_node(bar, h_grow, fn(_) {  }, in_row=true)
             tool_expand_btn_node(bar, "输出", out_text, fn(rb) {
-              steps_box_node(rb, box_look, fn(b) { steps_run(b, fn() { out_text }, text_look, mono=true) })
+              steps_run(rb, fn() { out_text }, text_look, mono=true)
             })
           })
           steps_box_node(stack, box_look, fn(b) {
@@ -2061,7 +2063,7 @@ fn tool_part_node(
             steps_words(bar, fn() { "JSON" }, tool_key_words)
             steps_box_node(bar, h_grow, fn(_) {  }, in_row=true)
             tool_expand_btn_node(bar, "JSON", json_text, fn(rb) {
-              steps_box_node(rb, tool_box, fn(b) { steps_run(b, fn() { json_text }, tool_mono, mono=true) })
+              steps_run(rb, fn() { json_text }, tool_mono, mono=true)
             })
           })
           steps_box_node(stack, tool_box, fn(b) {
@@ -2701,7 +2703,7 @@ let tool_reader_body : @ui.Style = @ui.css("w=Full py=S2 gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_expand_btn : @ui.Style = @ui.css("row py=S0_5 px=S1_5 gap=S1 align=ACenter radius=Base hovered{bg=Hover}")
+let tool_expand_btn : @ui.Style = @ui.css("row h=S5 px=S2 gap=S1 align=ACenter radius=Full hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2717,11 +2719,18 @@ let tool_block_bar : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S2 align=ACente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_dispatch_card : @ui.Style = @ui.css("w=Full radius=Xl border=B1 border_color=Line bg=Card clip")
+let tool_dispatch_card : @ui.Style = @ui.style(
+  w=Full,
+  radius=@sf.row_radius,
+  border=B1,
+  border_color=Line,
+  bg=Card,
+  clip=true,
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_dispatch_head : @ui.Style = @ui.style(w=Full, py=S2, px=S3, gap=S1, bg=@sf.faint_ground)
+let tool_dispatch_head : @ui.Style = @ui.css("w=Full p=S2 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2729,7 +2738,9 @@ let tool_dispatch_bar : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_dispatch_badge : @ui.Style = @ui.css("row py=S0_5 px=S1_5 gap=S1 align=ACenter radius=Base bg=Neutral hovered{bg=Hover} clip")
+let tool_dispatch_badge : @ui.Style = @ui.css(
+  "row h=S5 px=S2 gap=S1 align=ACenter radius=Full bg=Neutral hovered{bg=Hover} clip",
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2737,11 +2748,15 @@ let tool_dispatch_target_words : @ui.TextStyle = @ui.text_style(size=Caption, we
 
 ///|
 // kept across runs: a value (no field of it changes)
+let tool_dispatch_summary_box : @ui.Style = @ui.css("w=Full px=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
 let tool_dispatch_summary : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_dispatch_body : @ui.Style = @ui.css("w=Full py=S2 px=S3")
+let tool_dispatch_body : @ui.Style = @ui.css("w=Full py=S2_5 px=S3")
 
 ///|
 /// A box of words (box): 8 by 12 in, round 10, the ink at 4% over the canvas, 12 mono on 1.55; red's ground when it

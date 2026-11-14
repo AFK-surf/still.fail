@@ -327,19 +327,43 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
       },
     ],
   }
-  steps_own.opened["g-send/group"] = true
-  steps_own.opened["g-send/group/0"] = true
-  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, tree=fn(root) {
-    @ui.set_tree_theme(@sf.ui_theme_now)
-    let tips = @sf.TipLayer::new(fn() { Some(root) })
-    root.lines_up(Is(None)) |> ignore
-    root.box(fn(v) { item_node(v, src, "ws1/st1", "s-c1", "g-send", Some(item), false, tips) }) |> ignore
-  })
-  t.draw()
-  assert_true(t.rect_of("代理") is Some(_), msg="SendMessage shows 代理 badge")
-  assert_true(t.rect_of("→ a036720bc24844903") is Some(_), msg="dispatch card shows target badge")
-  assert_true(t.rect_of("返回") is Some(_), msg="result section header is shown")
-  assert_true(t.rect_of("message_sent") is Some(_), msg="result fields are shown")
-  assert_true(t.rect_of("recipient_kind") is Some(_), msg="recipient_kind is shown")
+  for case in [(390.0, 2), (900.0, 0)] {
+    let (w, platform) = case
+    @sf.presenters_reset()
+    steps_own.opened["g-send/group"] = true
+    steps_own.opened["g-send/group/0"] = true
+    let t = @ui.Tester::new(
+      fn(c) {
+        @sf.begin(c) |> ignore
+        c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+      },
+      w~,
+      h=600.0,
+      platform~,
+      tree=fn(root) {
+        @ui.set_tree_theme(@sf.ui_theme_now)
+        let tips = @sf.TipLayer::new(fn() { Some(root) })
+        root.lines_up(Is(None)) |> ignore
+        steps_box_node(root, steps_row_first, fn(v) {
+          item_node(v, src, "ws1/st1", "s-c1", "g-send", Some(item), false, tips)
+        })
+        @sf.presented_nodes(root)
+      },
+    )
+    t.draw()
+    assert_true(t.rect_of("代理") is Some(_), msg="SendMessage shows 代理 badge")
+    assert_true(t.rect_of("→ a036720bc24844903") is Some(_), msg="dispatch card shows target badge")
+    assert_true(t.rect_of("返回") is Some(_), msg="result section header is shown")
+    assert_true(t.rect_of("message_sent") is Some(_), msg="result fields are shown")
+    assert_true(t.rect_of("recipient_kind") is Some(_), msg="recipient_kind is shown")
+    assert_eq(t.corner_faults(), [])
+    assert_eq(t.lit_all_faults(), [])
+    t.tap_text("全屏查看")
+    t.run_for(@ui.move_most_ms * 2.0)
+    assert_true(t.rect_of("复制") is Some(_), msg="reader drawer shows 复制 button")
+    assert_eq(t.corner_faults(), [])
+    assert_eq(t.lit_all_faults(), [])
+  }
+  @sf.presenters_reset()
   steps_reset()
 }
