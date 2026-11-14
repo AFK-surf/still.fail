@@ -80,8 +80,17 @@ export class Rig {
     bus.on("rig.", async (peer, request, workspace) => this.#heard(peer, request, workspace ?? ""));
     bus.whenAttached(() => {
       this.#tellAll(true);
-      // A station new to the roster is told this rig is here; one gone is no longer tried.
-      this.#unlisten = cloud.listen(() => this.#tellAll(true, true));
+      // A station new to the roster is told this rig is here; one gone is no longer tried. Where the workspace's chain
+      // moved and this rig waited for what its state is made of (Cloud `waiting`: a station asked it nothing but the
+      // lock's own and what its person signed for it, mesh/peer.ts `heardWaiting`), every station is told once it has
+      // it, as it is told as it comes on the mesh: the one that took it in asked it how it is while it waited, and was
+      // refused (2026-11-14, the rigs' end to end run moved).
+      let waited = cloud.waiting(null);
+      this.#unlisten = cloud.listen(() => {
+        const was = waited;
+        waited = cloud.waiting(null);
+        this.#tellAll(true, !(was && !waited));
+      });
     });
   }
 

@@ -136,7 +136,11 @@
   signed (`client/core-ts/src/rig-form.ts`: a grant with its timeout, idle or fixed, as a vault's secret; a grant
   taken back; 免批准, which opens it to every chat of the workspace), and the machine checks the signature itself against
   the lock it pinned: the cloud or a station that says otherwise lets no chat in. In security mode a station takes it
-  only once that person signed for it (`src/rigs/adds.ts`), or the lock already lists it as a station.
+  only once that person signed for it (`src/rigs/adds.ts`), or the lock already lists it as a station. Where the
+  workspace's chain moved the rig pins it by its enrollment's hash as before and waits for its state: meanwhile it
+  answers a station what its person signed for it (`rig.added`, `rig.proof`; `src/mesh/peer.ts` `heardWaiting`), and a
+  station that took it gives it the logs and bodies as it gives a station its list names (`Cloud.givenTo`,
+  `src/mesh/person-sync.ts`), which it checks against the chain it pinned (2026-11-14, `test/rig-moved.test.ts`).
 - What a machine is changes only when two agree, neither alone: what was asked of the machine over a way the control
   plane has no part in (whole to tasks: a member's device that reached it, `POST /mode`, with their lock to pin, kept
   as theirs; tasks to whole: its person's signature, `rig.full`), kept there for an hour, and the control plane
