@@ -38,6 +38,11 @@
 //   stood.rx[2] = 100.0                   what the transport says came on connection 2 so far (`conn.stats`).
 //   stood.on_relay = false                the endpoint is on no relay yet (`iroh.relayStatus`): an opening's time
 //                                          is not counted until it is.
+//   stood.holding = "iroh.bind" … stood.bound()        an endpoint bound again is the test's to answer: the next
+//                                          handle. Unheld, a bind is answered at once. An endpoint closed
+//                                          (`stood.unbound`) takes no dial, and one under way on it fails. Its
+//                                          connections do not end with it here, as a shell's would: the mesh
+//                                          closes an endpoint only with none on it, or after closing each.
 //   let link = stood.opened(mesh, source.gives())      a link (`scope=`: in that scope), its hello answered by the
 //                                          script; `Source` gives "c1", "c2"… and keeps how each was asked
 //   stood.rt.advance(tick_ms)             time goes on: what is due meanwhile happens at its own time
@@ -78,6 +83,8 @@ priv struct Stood {
   /// The bytes that came on each connection so far, as the transport counts them (`conn.stats`): the test's to say
   /// (`stood.rx[2] = 100`); 0 of one it said nothing of.
   rx : Map[Int, Double]
+  /// The endpoints closed (`iroh.close`).
+  unbound : Map[Int, Unit]
   /// Whether the endpoint is on a relay (`iroh.relayStatus`: no relay at all while true, as a mesh made with none;
   /// one not connected while false).
   mut on_relay : Bool
@@ -107,6 +114,7 @@ fn Stood::new() -> Stood {
     cancels: true,
     peer: None,
     rx: Map([]),
+    unbound: Map([]),
     on_relay: true,
   }
   let answer = (id : Int64, json : Json) => stood.shell.val.unwrap().answer(id, json)
@@ -130,7 +138,21 @@ fn Stood::new() -> Stood {
             stood.last += 1
             answer(id, { "id": Json::number(stood.last.to_double()) })
           }
-        "istream.write" | "istream.finish" | "istream.reset" | "iroh.close" => answer(id, {})
+        "istream.write" | "istream.finish" | "istream.reset" | "iroh.networkChange" => answer(id, {})
+        "iroh.close" => {
+          stood.unbound[handle] = ()
+          // (a dial under way on it fails with it)
+          let held = stood.held.copy()
+          stood.held.clear()
+          for call in held {
+            if call.1 == "iroh.connect" && call.2 == handle {
+              stood.shell.val.unwrap().refuse(call.0, "the endpoint is closed")
+            } else {
+              stood.held.push(call)
+            }
+          }
+          answer(id, {})
+        }
         "conn.close" => {
           if !stood.ended.contains(handle) {
             stood.ended[handle] = { "kind": "local", "reason": "closed" }
@@ -140,7 +162,13 @@ fn Stood::new() -> Stood {
           }
           answer(id, {})
         }
-        "iroh.connect" | "istream.read" | "conn.closed" => stood.held.push((id, op, handle))
+        "iroh.connect" =>
+          if stood.unbound.contains(handle) {
+            stood.shell.val.unwrap().refuse(id, "the endpoint is closed")
+          } else {
+            stood.held.push((id, op, handle))
+          }
+        "istream.read" | "conn.closed" => stood.held.push((id, op, handle))
         _ => stood.shell.val.unwrap().refuse(id, "the stood-in shell has no \{op}")
       }
     },
@@ -228,6 +256,13 @@ fn Stood::refuse(self : Stood, op : String, why : String) -> Unit raise {
   let (id, _) = self.taken(op)
   self.shell.val.unwrap().refuse(id, why)
   ignore(self.rt.run_ready())
+}
+
+///|
+/// The bind held back is answered: an endpoint, the next handle; and the fibers it woke run.
+fn Stood::bound(self : Stood) -> Unit raise {
+  self.last += 1
+  self.give("iroh.bind", { "id": Json::number(self.last.to_double()) })
 }
 
 ///|
@@ -422,6 +457,7 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
   let gone = "connection closed"
   match op {
     "iroh.connect" => {
+      guard !stood.unbound.contains(handle) else { return false }
       self.dials.push(stood.rt.now())
       if self.away {
         // (held as a dial by hand is: given up by `fetch.cancel`, or answered by the test)

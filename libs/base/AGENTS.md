@@ -20,7 +20,8 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   body whole or a step at a time and told of, its reply whole or as it comes, or the stream open both ways after
   its head), the streams its peer opens, a link opened
   again, let go of by its program, its holder told as another takes its place; its pings measured, how its place
-  is by them told as it changes, and a link that stops answering raced against a new one (`health.mbt`).
+  is by them told as it changes, and a link that stops answering raced against a new one (`health.mbt`); what its
+  program's word that its connections are suspect does, and the endpoint bound anew where stuck (`wake.mbt`).
   `mesh.mbt`'s head says what of the TypeScript mesh (`client/core-ts/src/mesh.ts`) it leaves out.
 
 ## It knows no program
@@ -84,7 +85,14 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   on: `src/mesh/health_wbtest.mbt`; what a link carries
   beside the one whole request, and how each fails: a head with further fields, a body in steps, a reply read a
   piece a call, a duplex, the streams the peer opens, the peer stopping a stream, a head too long, a wait given
-  up, the link let go of, ended or the mesh closed under them: `src/mesh/requests_wbtest.mbt`), and how the page's
+  up, the link let go of, ended or the mesh closed under them: `src/mesh/requests_wbtest.mbt`; a wake: the shell
+  told, the links it races and those it does not, an opening's second dial winning, losing, both failing, both
+  answered at once, the place let go of or the mesh closed at each turn; and the endpoint bound anew: when it is
+  taken for stuck, never while anything is on it nor twice in 5 s; nothing dialled on one found stuck with no
+  connection open, which is bound as what is under way ends, two places asked for in turn for ten minutes;
+  whoever waits to dial told as its place is let go of, as the mesh closes, as an opening, a link's answer or a
+  race leaves the endpoint; three askers of one place and one dial; the mesh closed at each of its waits, and
+  what of the shell's answers it waits for: `src/mesh/wake_wbtest.mbt`), and how the page's
   shell turns its runtime. The peer has no network under it: when it answers is the test's to say, a connection
   is lost by the test saying so, and what the transport counted (`conn.stats`) and whether the endpoint is on a
   relay are the test's words too. That peer is the test's script, not a
@@ -132,7 +140,10 @@ left is another part's:
   process's life (`client/shell/src/lib.rs`: `Handle::Gone`, `Handle::Unbound`), and has no op that lets one go. The
   mesh says when it is done with a connection (`conn.close` with `forget`, `Mesh::open`), which a page's shell goes
   by; the Rust shell reads no such field. Letting them go there is that shell's to do, for the device base in
-  TypeScript too, which holds them the same.
+  TypeScript too, which holds them the same. An endpoint bound anew (`Mesh::rebind`) leaves one such entry each
+  time, and that is no rare time: every dial that runs out of time unconnected leaves the endpoint taken for
+  stuck, so a peer that does not answer, asked for again and again, binds it anew at each try (5 s apart at the
+  soonest), as in the device base in TypeScript.
 - A write given up lets go of its stream: that is the mesh's intent (`Out::write` resets it), and both shells' only
   once that write moves. `istream.write` holds the sending half while it writes, and `istream.reset` waits for it
   (`client/shell/src/lib.rs`, `client/iroh-wasm/src/lib.rs`): given up because the peer is not reading, the write
@@ -183,9 +194,10 @@ left is another part's:
   it is, where it is written.
 - `catch` does not catch a fiber's interruption: what must be undone then is in a `defer`. And a fiber interrupted
   before its first step runs nothing, no `defer` either. So what others wait for from a fiber of the mesh's scope
-  (an opening's end, a link's answer, its end) is not left to that fiber as the mesh closes: `Mesh::close` cuts them
-  all and then says it itself, of every opening in `links` and every link in `live`, or whoever waits on one cut
-  before it began waits for good. That holds only while an opening not ended is in `links`: one is taken out, or
+  (an opening's end, a link's answer, its end) is not left to that fiber as the mesh closes: `Mesh::close` says it
+  itself, of every opening in `links`, every link in `live` and whoever waits to dial (`held`), in the step it is
+  called in, and then cuts them all (a fiber not cut in time says nothing over what was said), or whoever waits on
+  one cut before it began waits for good. That holds only while an opening not ended is in `links`: one is taken out, or
   put over, only once it ended (`Mesh::drop_link` ends one being opened itself, telling whoever waits and cutting
   its fiber, before it takes it out; that fiber, were it not cut in time, says nothing over an opening ended), and
   what waited on anything before it takes one out looks again whether it is still the one there (`Mesh::steer`,
@@ -205,8 +217,33 @@ left is another part's:
   ended while its ping was out (its peer closed it) is neither raced nor dialled for: its end is told
   (`Link::closed`), and its program asks again or does not, as in that mesh, whose ways are its usable links. A `Deferred` a
   new fiber of the scope is to complete for others is kept where the close finds it. And the close is whole once
-  begun: what it waits on at the shell is where an interruption of its caller waits too
-  (`@effect.uninterruptible`), after the telling.
+  begun: its telling first, which needs nothing of the shell; then its fibers' ends, all at once but an endpoint
+  being bound anew, which waits for the shell's answer to `iroh.bind` (and to the close of the endpoint of
+  before); then what it asks of the shell itself, where an interruption of its caller waits too
+  (`@effect.uninterruptible`). What the close waits on at the shell only the close waits on, for as long as the
+  shell takes: that is the shell's to bound (a review found everyone it tells waiting there too, 2026-11-14).
+- The endpoint's handle changes as it is bound anew (`Mesh::rebind`, wake.mbt), so nothing may hold the one of
+  before across that. What is on an endpoint is counted in one place, `Mesh::idle`: a link whose connection has
+  not ended (`live`; a stream of its peer's waited for is on a link), an opening under way with the dial tried
+  beside it, a race; whatever comes to be on an endpoint otherwise is added there. It is bound anew only while that
+  says nothing is, and nothing comes to be meanwhile: every dial is a `link`'s, which waits to be told the bind
+  ended (`Mesh::hold`) and then looks at its place again (three askers of a place make one dial), or the mesh's
+  own for a link, of which there is none. The bind is a fiber of
+  the mesh's that nothing cuts short once begun (the shell binds whoever waits, and an endpoint bound for nobody
+  would stay): `Mesh::close` waits for it with the others, it looks again as the shell answers (the mesh closed:
+  the new endpoint is closed there and the close closes the one of before; else the new one is the mesh's from
+  that step, whoever waited goes on, and the one of before is closed there after), so each is closed once; cut
+  before its first step, it asked nothing and the close told whoever waited. What reads `endpoint` reads it as it
+  asks (`Mesh::on_a_relay`, a dial), never kept from before a wait. And an endpoint taken for stuck has to come
+  to have nothing on it, however it is asked: from the first `link` that finds it so with no connection open on
+  it, and 5 s gone since the last bind, nothing new is dialled on it (`Mesh::settling`: what is left on it ends
+  by itself, an opening in 10 s on a relay and 40 s on none), so it is bound as the last of that ends. Whoever
+  asks meanwhile waits in `held`, at no place in `links`: told to look again wherever something leaves the
+  endpoint (`Mesh::eased`: an opening ended, a link no more `live`, a race over, a bind ended; a place that
+  forgets to say it parks an asker for good), failed as closed where its place is let go of (`drop_link`) and
+  as the mesh closes. A review found the endpoint never bound while two places were asked for in turn, each
+  one's dial keeping it from the other's (2026-11-14). With a connection open on it, it is dialled on as it
+  is, as in that mesh.
 - What the mesh takes at a shell it lets go of there, for a page lives long: a stream by resetting it, or by
   reading it to its end and finishing it, which is when both shells let go of one (one whose read failed is reset:
   `Reply::take`; a request's is finished as it is sent, so reading its reply to its end is all it takes; one open
@@ -259,4 +296,29 @@ left is another part's:
   (a screen's frames read by the shell and said to the app itself; the Rust shell's `istream.tap`, no page's): a
   duplex's reply is read by its program. The page's shell answers `conn.acceptBi` and `istream.stopped` since
   this, in JavaScript no compiler reads; no test here, and no flow of the messenger's, runs either.
+- Where a wake and the endpoint bound anew are not that mesh's (`wake.mbt`; `#watch`, `#hedge`, `#rebind` there):
+  - **When an endpoint is bound anew.** There, twice: before a dial where a dial ran out of time unconnected and no
+    link is open, and by the second dial of an opening at a wake where no link is open; both while openings may be
+    under way on it (the one tried beside, too), whose dials end with the endpoint closed under them. Here only the
+    first, and only while nothing at all is on it: an opening's second dial is on the same endpoint (the shell told
+    of the network first), and an endpoint with another place's opening still under way waits for that to end,
+    nothing new dialled on it meanwhile. What a peer can see of it: after a wake with no link open, the second
+    dial comes from the same endpoint; and where that endpoint is in truth stuck a new one dials later than
+    there by what is left of the openings under way: up to 10 s with the endpoint on a relay, up to 40 s with
+    it on none (an opening waits 30 s to be on one before its 10 s count), and as long again from a wake that
+    tried one a second time meanwhile. There, as here, a link open keeps the endpoint; here one whose
+    connection is open and that is no more usable (its credential refused at a renewal) keeps it too, until it
+    ends.
+  - The second dial's link, come after the first's took the opening, is closed (there it is kept open by nobody);
+    one that fails before the first leaves the first to end (there the first is given up and dialled again).
+  - The second dial asks for its credential as the first did: a new one where the last was refused (there always
+    the one its source has).
+  - What the program says is that its connections are suspect, nothing more (`Mesh::wake()`): there a wake says how
+    long away, whether the network changed and whether a person asked, and the mesh acts on any of the three alike
+    but for speeds forgotten on a changed network, which are not kept here yet.
+  - A race begun at a wake goes by the two answers alone, as there.
+  - The page's shell answers `iroh.networkChange` since this, in JavaScript no compiler reads; no test here, and no
+    flow of the messenger's, runs it. An endpoint bound a second time in a page (`iroh.bind` again, then
+    `iroh.close` of the first) is run by no test here either, and is no rare path: any page that asks again for
+    a peer that did not answer takes it.
 - A compiler warning is an error or off (`moon.mod`'s `warnings`, mbui's line).

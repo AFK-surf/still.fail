@@ -81,6 +81,9 @@ priv struct Race {
   mut next : Link?
   /// Whether the old link's answer is still waited for: its probe goes on the line only while it is.
   mut probing : Bool
+  /// Begun for a ping missed (`Mesh::suspect`), not at its program's word (`Mesh::wake`): only then does something
+  /// having come on the old link meanwhile keep it.
+  missed : Bool
 }
 
 ///|
@@ -110,7 +113,13 @@ fn Mesh::suspect(self : Mesh, place : Place, opening : Opening, link : Link) -> 
   guard link.missed == 1 && link.answered_ms is Some(took) && took < ping_timeout_ms / 2 else { return }
   // (no other way up: with one link a place there is never another, `Mesh::ways`)
   guard !self.ways(place).iter().any(way => !physical_equal(way, link) && way.missed == 0) else { return }
-  let race : Race = { old: link, fiber: None, dial: None, next: None, probing: true }
+  self.begin_race(place, opening, link, true)
+}
+
+///|
+/// A race begun at `place`, whose link `link` is, of the opening `opening`; `missed`: for a ping it missed.
+fn Mesh::begin_race(self : Mesh, place : Place, opening : Opening, link : Link, missed : Bool) -> Unit {
+  let race : Race = { old: link, fiber: None, dial: None, next: None, probing: true, missed }
   // (in `racing` from this step: what lets go of the place before the race's fiber took its first finds it)
   self.racing[place] = race
   race.fiber = Some(self.scope.fork(name="mesh race", () => self.race(place, opening, race)))
@@ -123,6 +132,8 @@ fn Mesh::suspect(self : Mesh, place : Place, opening : Opening, link : Link) -> 
 /// takes the place (`Mesh::switch`); neither, the old one is let go and nothing dialled: the next `link` does. And
 /// where anything came on the old one meanwhile, the transport's own packets too, and it has not ended, it is there
 /// after all (the network only paused, and moving would cut what is open on it): it is kept, whichever came first.
+/// That last only of a race begun for a ping missed: one begun at its program's word (`Mesh::wake`) goes by the
+/// two answers alone, since packets still coming say nothing of a network its program says changed.
 ///
 /// The old link is asked the `Mesh::ping` way: its exchange is a fiber of the mesh's that nothing cuts short, in
 /// its turn on the control stream behind whatever exchange is out on it (the ping it missed), and what waits
@@ -182,7 +193,7 @@ async fn Mesh::race(self : Mesh, place : Place, opening : Opening, race : Race) 
     Dialled(None) => if probed.wait() { Old } else { Neither }
   }
   // Something came on the old one meanwhile, its probe answered or not: it is there after all.
-  let won : Won = if !(won is Old) && old.ended() is None && old.heard() > heard { Old } else { won }
+  let won : Won = if race.missed && !(won is Old) && old.ended() is None && old.heard() > heard { Old } else { won }
   // (ended from outside while this waited, this fiber was cut there and is not here: `Mesh::end_race`)
   race.probing = false
   self.racing.remove(place)
@@ -201,6 +212,7 @@ async fn Mesh::race(self : Mesh, place : Place, opening : Opening, race : Race) 
       self.switch(place, opening, old, next)
     }
   }
+  self.eased()
 }
 
 ///|
@@ -242,7 +254,8 @@ fn Mesh::switch(self : Mesh, place : Place, opening : Opening, old : Link, next 
     next.close()
     return
   }
-  let taken : Opening = { done: @effect.Deferred::new(), result: Some(Open(next)), fiber: None }
+  let taken = Opening::new(next.credentials, false)
+  taken.result = Some(Open(next))
   ignore(taken.done.succeed(next))
   self.links[place] = taken
   self.changed()
