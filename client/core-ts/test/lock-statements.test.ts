@@ -19,7 +19,7 @@ import { Core } from "../src/core.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, entryHash, next } from "../src/lock.ts";
 import { bodyHash, wsTag } from "../src/lock-moved.ts";
-import { held, inForceOf, read, roster } from "../src/views/lock.ts";
+import { held, inForceOf, movedHere, read, roster, safeMode } from "../src/views/lock.ts";
 import { joinable } from "../src/views/memberships.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { hex, utf8 } from "../src/util.ts";
@@ -106,13 +106,26 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const g0 = r.cloud.chains.get("ws")![0]!;
   const headOf = (c: Entry[]): Head => ({ seq: c.length - 1, hash: entryHash(c[c.length - 1]!), genesis: entryHash(c[0]!) });
   const moved = signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(root) }));
-  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob, xena].filter((l) => l !== root || o.root === "alice"), bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[] };
+  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob, xena].filter((l) => l !== root || o.root === "alice"), bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[], reset: false, opened: [] as Entry[][] };
   const g2 = o.two ? r.cloud.chains.get("w2")![0]! : null;
   const st2 = { chain: g2 === null ? [] : [g2, signer.sign(next("w2", headOf([g2]), 1001, "moved", { root: gOf(me) }))] as Entry[], logs: [] as Log[], bodies: bodies2, brought: [] as Brought[], silent: false };
   // (each workspace's stations its own chain, logs and bodies; s1's own log the same at all of them)
-  const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked"> = st): Effect.Effect<unknown, CoreError> => {
+  const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked" | "reset" | "opened"> = st): Effect.Effect<unknown, CoreError> => {
     st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
+    // (`reset`: every station of ws reset on its machine, `stillfail lock reset`: none kept, a genesis brought pinned, as
+    // station/src/mesh/serve.ts `lockRoute` pins one its owner's device brings where none is)
+    if (x === st && st.reset && path.startsWith("/lock") && !path.startsWith("/lock/person")) {
+      if (method === "GET" && (path === "/lock" || path.startsWith("/lock?"))) return Effect.succeed({ head: null, entries: [], ...serves });
+      if (method === "GET" && path === "/lock/logs") return Effect.succeed({ chains: [] });
+      if (method === "GET" && path === "/lock/bodies") return Effect.succeed({ bodies: [], lacking: [] });
+      if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
+      if (method === "POST" && path === "/lock") {
+        const es = ((body as { entries?: Entry[] })?.entries ?? []) as Entry[];
+        st.opened.push(es);
+        return Effect.succeed({ taken: es.length, head: headOf(es) });
+      }
+    }
     // (what the station keeps as a station does: the lock only where its list names it, a station the list does not
     // name keeping none, as one the chain never named (`keeps`); the logs and bodies given only to a device that list names)
     const logs = [st.own, ...x.logs.map((l) => l.chain as unknown as Entry[])];
@@ -591,4 +604,24 @@ test("a role lowered, then the app closed and s1's log moved off its statements 
   const rows = again.inner.adb.personal().pending("s1");
   assert.deepEqual(rows.map((x) => x.state), ["failed"], `told as not in effect: ${JSON.stringify(rows)}`);
   assert.match(rows[0]!.text, /^把 .+ 改为.+：没有生效/);
+});
+
+// 2026-11-14, the root's person gone (station/test/lock-root-gone-ways.test.ts holds the stations' side): what the way
+// out lock_root_only names does on this device, every station of the workspace reset on its machine. What is so, held as
+// found: nothing here is a design.
+test("the root's person gone: another owner told lock_root_only names `stillfail lock reset`; once every station the chain names keeps none, the moved chain is let go here and safe mode turned on anew is a new genesis brought to the stations", async () => {
+  const o = await setUp({ root: "alice" });
+  const refused = await o.run(Effect.tryPromise({ try: () => o.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal((refused.error as { code?: string } | undefined)?.code, "lock_root_only");
+  assert.match(String(refused.error?.message), /stillfail lock reset/, "the way out it names");
+  o.st.reset = true;
+  // (the view as a cloud of today has it once the chain moved: `locked` for good, whatever the root's log says)
+  o.inner.data.update({ topic: "workspace", workspace: "ws" }, (v: any) => ({ ...v, locked: true }));
+  await o.run(read(o.inner, "ws"));
+  assert.equal(held(o.inner, "ws")?.head ?? null, null, "the moved chain let go: every station the chain names keeps none");
+  assert.equal(movedHere(o.inner, "ws"), false);
+  assert.equal(safeMode(o.inner, "ws"), true, "still shown in safe mode, by the view's `locked` (none held on)");
+  const on = await o.run(Effect.tryPromise({ try: () => o.r.ask("lock.open", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(on.error, undefined, on.error?.message);
+  assert.deepEqual(o.st.opened.map((es) => es.map((e) => e.kind).join(",")), ["genesis", "genesis"], "a new genesis brought to A and C, as on a chain that never moved");
 });
