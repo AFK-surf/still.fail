@@ -1,4 +1,15 @@
 ///|
+test "a chat attachment uses its stored filename on Windows and Unix" {
+  let name = "2026-11-14T04-39-37-effdf0-报告.mp4"
+  for path in ["C:\\Users\\lin\\uploads\\" + name, "/Users/lin/uploads/" + name, name] {
+    assert_eq(stored_name(path), name)
+    assert_eq(@sfbase.base_name(path), name)
+    assert_eq(@sfbase.viz_base_name(path), name)
+  }
+  assert_eq(@sfbase.base_name("/Users/lin/a\\b.txt"), "a\\b.txt")
+}
+
+///|
 test "a staged file flies to its message after the station moves it" {
   let staged = "/station/uploads/2026-11-08-12-00-00-123abc-report.txt"
   let sent = "/station/session/uploads/2026-11-08-12-00-00-123abc-report.txt"

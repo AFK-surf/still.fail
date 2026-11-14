@@ -490,10 +490,7 @@ pub fn viz_keep(src : Source, station : String, key : String, path : String, sta
 ///|
 /// A path's last part (its file's name).
 pub fn viz_base_name(path : String) -> String {
-  match path.rev_find("/") {
-    Some(i) => path.exact_view(start=i + 1).to_owned()
-    None => path
-  }
+  base_name(path)
 }
 
 ///|
