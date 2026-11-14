@@ -11,6 +11,7 @@
 //   iroh.connect       `endpoint.connect(addr, alpn, [], givenUp)`; `fetch.cancel` of its call resolves `givenUp`,
 //                      which drops the handshake, and it is answered "cancelled" as natively
 //   iroh.endpointId, iroh.relayStatus, iroh.close      the endpoint's `id`, `relayStatus`, `close`
+//   iroh.networkChange the endpoint's `networkChange` (its relay connection looked at anew); of one closed, nothing
 //   conn.openBi, conn.close, conn.closed, conn.closeReason, conn.paths, conn.stats
 //                      the connection's `openBi`, `close(code, reason)`, `closedInfo`, `closeReason`, `paths` (each
 //                      path a relay's: no `ip`), `stats` (`{rxBytes, txBytes}` alone of what the Rust shell says,
@@ -119,6 +120,9 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|          dials.delete(id);
   #|        }
   #|      }
+  #|      case "iroh.networkChange":
+  #|        if (h?.endpoint !== undefined) await h.endpoint.networkChange();
+  #|        return [{}];
   #|      case "iroh.close":
   #|        if (h?.endpoint !== undefined) {
   #|          // let go of with all that was its: its connections, ended or not, and their streams

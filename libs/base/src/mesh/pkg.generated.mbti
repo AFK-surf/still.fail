@@ -23,6 +23,8 @@ pub let ping_timeout_ms : Int32
 
 pub let probe_ms : Int32
 
+pub let rebind_ms : Int32
+
 pub let renew_ms : Int32
 
 pub let retire_ms : Int32
@@ -97,6 +99,7 @@ pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented, scope? 
 pub async fn Mesh::make(@shell.Shell, Store, Options) -> Self
 pub async fn Mesh::replaced(Self, Link) -> Unit
 pub fn Mesh::standing(Self, String, scope? : String) -> Bool
+pub fn Mesh::wake(Self) -> Unit
 
 pub(all) struct Options {
   alpn : String
