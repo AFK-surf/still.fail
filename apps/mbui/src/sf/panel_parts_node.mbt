@@ -314,137 +314,145 @@ fn panel_row_by(
 ) -> Unit {
   let at = panel_in_of(parent)
   let foot = parent.lent(foot_rows_lent)
-  parent.box(made_for=loc, fn(r) {
-    let t = fn() { theme() }
-    // (at a dialog's foot, out to where it is concentric with its foot corners, its words on its line; out across the
-    // room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past its padding to
-    // where it is concentric with them: menu_item's)
-    let reach = fn() { menu_row_reach(t().rows.pick) }
-    // (a row of a list in a sheet, its words said where the sheet's are and no room to reach: its ground panel_card_in in
-    // from the sheet's sides, as a card the body lays out itself is (panel_card_out_node: `sides`), its words on the
-    // sheet's words' line; not a small panel's capsule at the list's edge)
-    let sheet_listed = at.listed && !at.small && at.words > 0.0 && (match panel_row_at(at) {
-      Some(p) => p.out == 0.0
-      None => false
-    })
-    let sheet_in = if sheet_listed { dmax(0.0, panel_card_in - at.sides) } else { 0.0 }
-    // (its reach alone the rows' rule's, panel_row_at: where that is none, a small panel's or a sheet's, a menu's row's
-    // capsule, menu_item's own, not a page row's padding; at a dialog's foot, out to its foot corners: foot_rows_lent)
-    let across = match panel_row_at(at) {
-      Some(p) => p.out
-      None => 0.0
-    }
-    let out = fn() {
-      match foot {
-        Some(f) => f()
-        None => if sheet_listed { -sheet_in } else if across > 0.0 { across } else { reach() }
-      }
-    }
-    let words_at = fn() {
-      match foot {
-        Some(f) => f()
-        None => if sheet_listed { at.words - sheet_in } else if across > 0.0 { across } else { text_in + reach() }
-      }
-    }
-    // (a sheet's list's: a sheet's row's corner, as a pick's rows are (pick_row_node), its words a row's padding in; a
-    // card's corner there made a capsule of it, its words in the curve of its ends)
-    let corner = if sheet_listed { row_corner } else if across > 0.0 { card_corner } else { small_panel_inner(r_menu) }
-    if foot is Some(_) {
-      style_node(r, fn() { menu_row_capsule })
-    } else {
-      r.radius(Is(corner)) |> ignore
-    }
-    r
-    .row(Is(true))
-    .min_height(By(fn() { Some(t().rows.pick) }))
-    .margin(By(fn() { (-out(), 0.0, -out(), 0.0) }))
-    |> ignore
-    // (`face`: a round one `size` across first, in a column of its own: stood in from the row's start as far as its
-    // top is from the row's (concentric in its corner, the corner less its radius), the column reaching on to where an
-    // icon's ends, so what follows it stands where it does after an icon)
-    let face_in = fn() {
-      match face {
-        // (a sheet's list's ground stands as a sheet's rows' do: the face concentric in its corner, though that is
-        // further in than its words would be)
-        // (the corner as drawn: no rounder than half the row's least height, a capsule's)
-        Some((size, _)) if sheet_listed => dmin(corner, t().rows.pick / 2.0) - size / 2.0
-        Some((size, _)) => dmin(words_at(), dmin(corner, t().rows.pick / 2.0) - size / 2.0)
-        None => words_at()
-      }
-    }
-    r
-    .padding(By(fn() { (face_in(), menu_row_over, words_at(), menu_row_over) }))
-    .gap(Is(if plain { menu_row_gap } else { panel_row_gap }))
-    .lines_up(Is(Some(Middle)))
-    // (the hand's ground, and the one the keys are at only where the hand rests (a pointer and keys): a finger moves no
-    // keys' row, and on it that ground stood under the reader's row at rest, a second beside the one pressed. Where the
-    // pointer moving onto a row takes the keys there (`point`), the pointer's own is that one: one ground, never two)
-    .ground(By(fn() {
-      let hand = if point is Some(_) { lit_node(r) && !hovered_node(r) } else { lit_node(r) }
-      if hand || (lit() && pointer_rests()) { t().p.hover } else { 0L }
-    }))
-    .says(By(fn() {
+  @headless.button(
+    made_for=loc,
+    parent,
+    fn() {
       let n = note()
-      Some(@view.said(Button, label=if n == "" { label() } else { label() + " " + n }))
-    }))
-    |> ignore
-    presses_node(r, fn() { press(r) })
-    // (the pointer's own moving onto it, never a list scrolled under a pointer at rest: what the keys move stays theirs)
-    if point is Some(p) {
-      r.on_pointer_moved(p) |> ignore
-    }
-    match face {
-      Some((face_size, fill)) =>
-        r.box(fn(col) {
-          style_node(
-            col,
-            fn() { panel_row_face.then(@ui.style(w=Fixed(dmax(face_size, panel_row_icon_w + words_at() - face_in())))) },
-            in_row=true,
-          )
-          fill(col)
+      if n == "" {
+        label()
+      } else {
+        label() + " " + n
+      }
+    },
+    press,
+    fn(r, _) {
+      let t = fn() { theme() }
+      // (at a dialog's foot, out to where it is concentric with its foot corners, its words on its line; out across the
+      // room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past its padding to
+      // where it is concentric with them: menu_item's)
+      let reach = fn() { menu_row_reach(t().rows.pick) }
+      // (a row of a list in a sheet, its words said where the sheet's are and no room to reach: its ground panel_card_in in
+      // from the sheet's sides, as a card the body lays out itself is (panel_card_out_node: `sides`), its words on the
+      // sheet's words' line; not a small panel's capsule at the list's edge)
+      let sheet_listed = at.listed && !at.small && at.words > 0.0 && (match panel_row_at(at) {
+        Some(p) => p.out == 0.0
+        None => false
+      })
+      let sheet_in = if sheet_listed { dmax(0.0, panel_card_in - at.sides) } else { 0.0 }
+      // (its reach alone the rows' rule's, panel_row_at: where that is none, a small panel's or a sheet's, a menu's row's
+      // capsule, menu_item's own, not a page row's padding; at a dialog's foot, out to its foot corners: foot_rows_lent)
+      let across = match panel_row_at(at) {
+        Some(p) => p.out
+        None => 0.0
+      }
+      let out = fn() {
+        match foot {
+          Some(f) => f()
+          None => if sheet_listed { -sheet_in } else if across > 0.0 { across } else { reach() }
+        }
+      }
+      let words_at = fn() {
+        match foot {
+          Some(f) => f()
+          None => if sheet_listed { at.words - sheet_in } else if across > 0.0 { across } else { text_in + reach() }
+        }
+      }
+      // (a sheet's list's: a sheet's row's corner, as a pick's rows are (pick_row_node), its words a row's padding in; a
+      // card's corner there made a capsule of it, its words in the curve of its ends)
+      let corner = if sheet_listed { row_corner } else if across > 0.0 { card_corner } else { small_panel_inner(r_menu) }
+      if foot is Some(_) {
+        style_node(r, fn() { menu_row_capsule })
+      } else {
+        r.radius(Is(corner)) |> ignore
+      }
+      r
+      .row(Is(true))
+      .min_height(By(fn() { Some(t().rows.pick) }))
+      .margin(By(fn() { (-out(), 0.0, -out(), 0.0) }))
+      |> ignore
+      // (`face`: a round one `size` across first, in a column of its own: stood in from the row's start as far as its
+      // top is from the row's (concentric in its corner, the corner less its radius), the column reaching on to where an
+      // icon's ends, so what follows it stands where it does after an icon)
+      let face_in = fn() {
+        match face {
+          // (a sheet's list's ground stands as a sheet's rows' do: the face concentric in its corner, though that is
+          // further in than its words would be)
+          // (the corner as drawn: no rounder than half the row's least height, a capsule's)
+          Some((size, _)) if sheet_listed => dmin(corner, t().rows.pick / 2.0) - size / 2.0
+          Some((size, _)) => dmin(words_at(), dmin(corner, t().rows.pick / 2.0) - size / 2.0)
+          None => words_at()
+        }
+      }
+      r
+      .padding(By(fn() { (face_in(), menu_row_over, words_at(), menu_row_over) }))
+      .gap(Is(if plain { menu_row_gap } else { panel_row_gap }))
+      .lines_up(Is(Some(Middle)))
+      // (the hand's ground, and the one the keys are at only where the hand rests (a pointer and keys): a finger moves no
+      // keys' row, and on it that ground stood under the reader's row at rest, a second beside the one pressed. Where the
+      // pointer moving onto a row takes the keys there (`point`), the pointer's own is that one: one ground, never two)
+      .ground(By(fn() {
+        let hand = if point is Some(_) { lit_node(r) && !hovered_node(r) } else { lit_node(r) }
+        if hand || (lit() && pointer_rests()) { t().p.hover } else { 0L }
+      }))
+      |> ignore
+      // (the pointer's own moving onto it, never a list scrolled under a pointer at rest: what the keys move stays theirs)
+      if point is Some(p) {
+        r.on_pointer_moved(p) |> ignore
+      }
+      match face {
+        Some((face_size, fill)) =>
+          r.box(fn(col) {
+            style_node(
+              col,
+              fn() { panel_row_face.then(@ui.style(w=Fixed(dmax(face_size, panel_row_icon_w + words_at() - face_in())))) },
+              in_row=true,
+            )
+            fill(col)
+          })
+          |> ignore
+        None => ()
+      }
+      r.show(fn() { icon() != "" }, fn(col) {
+        if plain {
+          // (a menu's row's: the icon alone, 16, in the red where `danger`)
+          icon_node(col, "", menu_item_icon, By(fn() { if danger { t().p.red } else { t().p.muted } }), name_now=icon)
+          |> ignore
+        } else {
+          style_node(col, fn() { panel_row_icon }, in_row=true)
+          icon_node(col, "", panel_icon, By(fn() { t().p.muted }), name_now=icon) |> ignore
+        }
+      })
+      // (its label as its words; not where what it is made of says them: `titled` false, a said row's, its label read
+      // out only)
+      if titled {
+        r.box(fn(w) {
+          w
+          .grow(Is(1.0))
+          .basis(Is(Some(0.0)))
+          .min_width(Is(Some(0.0)))
+          .words(By(label))
+          .words_look(By(fn() { { size: t().t.ui, weight: 400, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 } }))
+          .ink(By(fn() { if danger { t().p.red } else { t().p.text } }))
+          |> ignore
         })
         |> ignore
-      None => ()
-    }
-    r.show(fn() { icon() != "" }, fn(col) {
-      if plain {
-        // (a menu's row's: the icon alone, 16, in the red where `danger`)
-        icon_node(col, "", menu_item_icon, By(fn() { if danger { t().p.red } else { t().p.muted } }), name_now=icon)
-        |> ignore
-      } else {
-        style_node(col, fn() { panel_row_icon }, in_row=true)
-        icon_node(col, "", panel_icon, By(fn() { t().p.muted }), name_now=icon) |> ignore
       }
-    })
-    // (its label as its words; not where what it is made of says them: `titled` false, a said row's, its label read
-    // out only)
-    if titled {
-      r.box(fn(w) {
+      r.show(fn() { note() != "" }, fn(w) {
         w
-        .grow(Is(1.0))
-        .basis(Is(Some(0.0)))
-        .min_width(Is(Some(0.0)))
-        .words(By(label))
-        .words_look(By(fn() { { size: t().t.ui, weight: 400, line: panel_row_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 } }))
-        .ink(By(fn() { if danger { t().p.red } else { t().p.text } }))
+        .words(By(note))
+        .words_look(By(fn() {
+          { size: t().t.meta, weight: 400, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
+        }))
+        .ink(By(fn() { t().p.muted }))
         |> ignore
       })
-      |> ignore
-    }
-    r.show(fn() { note() != "" }, fn(w) {
-      w
-      .words(By(note))
-      .words_look(By(fn() {
-        { size: t().t.meta, weight: 400, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
-      }))
-      .ink(By(fn() { t().p.muted }))
-      |> ignore
-    })
-    if end != "" {
-      icon_node(r, end, panel_end_icon, By(fn() { t().p.subtle })) |> ignore
-    }
-    made(r)
-  })
+      if end != "" {
+        icon_node(r, end, panel_end_icon, By(fn() { t().p.subtle })) |> ignore
+      }
+      made(r)
+    },
+  )
   |> ignore
 }
 

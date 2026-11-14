@@ -17,14 +17,12 @@ pub fn float_button_node(
   shortcut? : String = "",
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(o) {
+  @headless.button(made_for=loc, parent, label, fn(_) { press() }, fn(o, _) {
     let room = float_button_reach
     o
     .padding(Is((room, room, room, room)))
     .min_width(Is(Some(float_button_side + 2.0 * room)))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
     |> ignore
-    presses_node(o, press)
     o.box(fn(b) {
       style_node(b, fn() { if lit_node(o) { float_button_lit } else { float_button_look } })
       icon_node(b, icon, float_button_icon, By(fn() { theme().p.text })) |> ignore

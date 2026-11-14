@@ -19,87 +19,85 @@ pub fn wide_button_node(
   danger? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(v) {
-    let on = fn() { enabled() && !busy() }
-    let ground = fn() {
-      let t = theme()
-      if !primary {
-        alpha(t.p.text, 0.08)
-      } else if danger {
-        if enabled() {
-          t.p.red
-        } else {
-          alpha(t.p.red, 0.4)
-        }
-      } else if !enabled() {
-        t.p.line
-      } else {
-        t.p.text
-      }
-    }
-    let ink = fn() {
-      if primary && danger {
-        0xFFFFFFFFL
-      } else if primary {
-        theme().p.bg
-      } else {
-        theme().p.text
-      }
-    }
-    style_node(v, fn() { wide_button_node_box })
-    v
-    .height(Is(Some(wide_button_node_h)))
-    .ground(By(ground))
-    .presses(By(on))
-    .focusable(By(on))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
-    .on_press(fn() {
-      if @signals.untracked(on) {
-        press()
-      }
-    })
-    |> ignore
-    // (one in no other's place, along a row: at once, as the old one's spinner came)
-    v.show(busy, at_once=true, fn(s) {
-      spinner_node(s, size=14.0, ring=fn() { alpha(ink(), 0.3) }, arc=ink) |> ignore
-    })
-    v.box(fn(w) {
-      w
-      .words(By(label))
-      .words_look(By(fn() { @ui.style_words(wide_button_node_words) }))
-      .ink(By(ink))
-      |> ignore
-      if @ui.style_cut(wide_button_node_words) {
-        w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
-      }
-    })
-    |> ignore
-    // (its ripple and sink while it may be pressed: Security.kt WideButton's clickable over its capsule)
-    let rippled = press_look(loc~, v, Is(wide_button_node_h / 2.0), fn() { true })
-    v.gesture(
-      @ui.touch_slop(),
-      press=fn(d) {
-        if @signals.untracked(on) {
-          (rippled.down)(d)
-        }
-      },
-      tap=fn(d) {
-        if @signals.untracked(on) {
-          (rippled.tapped)(d)
-          if v.finger_target(d.wx, d.wy) {
-            press()
+  @headless.button(
+    made_for=loc,
+    parent,
+    label,
+    fn(_) { press() },
+    disabled=fn() { !enabled() || busy() },
+    fn(v, b) {
+      let ground = fn() {
+        let t = theme()
+        if !primary {
+          alpha(t.p.text, 0.08)
+        } else if danger {
+          if enabled() {
+            t.p.red
+          } else {
+            alpha(t.p.red, 0.4)
           }
+        } else if !enabled() {
+          t.p.line
+        } else {
+          t.p.text
         }
-      },
-      drag=fn(d) {
-        // (a mouse's moved on it past the slop: still a press as it is let go on it, as a click is)
-        if d.kind == Up && @ui.pointing() is Mouse && v.finger_target(d.wx, d.wy) && @signals.untracked(on) {
-          press()
+      }
+      let ink = fn() {
+        if primary && danger {
+          0xFFFFFFFFL
+        } else if primary {
+          theme().p.bg
+        } else {
+          theme().p.text
         }
-      },
-    )
-    |> ignore
-  })
+      }
+      style_node(v, fn() { wide_button_node_box })
+      v
+      .height(Is(Some(wide_button_node_h)))
+      .ground(By(ground))
+      |> ignore
+      // (one in no other's place, along a row: at once, as the old one's spinner came)
+      v.show(busy, at_once=true, fn(s) {
+        spinner_node(s, size=14.0, ring=fn() { alpha(ink(), 0.3) }, arc=ink) |> ignore
+      })
+      v.box(fn(w) {
+        w
+        .words(By(label))
+        .words_look(By(fn() { @ui.style_words(wide_button_node_words) }))
+        .ink(By(ink))
+        |> ignore
+        if @ui.style_cut(wide_button_node_words) {
+          w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
+        }
+      })
+      |> ignore
+      // (its ripple and sink while it may be pressed: Security.kt WideButton's clickable over its capsule)
+      let rippled = press_look(loc~, v, Is(wide_button_node_h / 2.0), fn() { true })
+      v.gesture(
+        @ui.touch_slop(),
+        press=fn(d) {
+          if !b.disabled() {
+            (rippled.down)(d)
+          }
+        },
+        tap=fn(d) {
+          if !b.disabled() {
+            (rippled.tapped)(d)
+            if v.finger_target(d.wx, d.wy) {
+              b.press()
+            }
+          }
+        },
+        drag=fn(d) {
+          // (a mouse's moved on it past the slop: still a press as it is let go on it, as a click is)
+          if d.kind == Up && @ui.pointing() is Mouse && v.finger_target(d.wx, d.wy) {
+            b.press()
+          }
+        },
+      )
+      |> ignore
+    },
+  )
 }
 
 ///|
