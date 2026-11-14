@@ -36,7 +36,8 @@ fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
   }
   let (label, tip, busy) = update_said()
   let offered = now is Offered(_, ..)
-  @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy, coming~, offered~, on_press=fn() {
+  let restart = now is Ready(_, ..)
+  @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy, coming~, offered~, restart~, on_press=fn() {
     if coming is Some(_) {
       @sfbase.update_dialog(src)
     } else {

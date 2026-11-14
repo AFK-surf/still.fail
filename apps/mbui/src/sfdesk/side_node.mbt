@@ -253,6 +253,7 @@ fn lists_band_node(
             }
           },
           offered=fn() { update_now() is Offered(_, ..) },
+          restart=fn() { update_now() is Ready(_, ..) },
         )
       })
       // the filter: its menu (sfpages' filter_menu), a filter its list, 已归档 the archive's list

@@ -77,8 +77,9 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 
 ///|
 /// An update in a bar as a node (update_key's, the settings' sidebar's band): `side` across, round, the pointer's ground
-/// on it while it can be pressed; its mark `mark` across: offered (`offered()`), a download mark; ready, the update's
-/// arrow up in a ring; being put in place
+/// on it while it can be pressed; its mark `mark` across: offered (`offered()`), the download mark;
+/// ready to restart (`restart()`), only the update mark's outer ring
+/// turns green; being put in place
 /// (`busy()`), that arrow going up (updating_node); while it comes (`coming()`: Some of a known part or of None for an
 /// unknown one), its progress in the mark's place, the two marks faded between each other over a control's ease (dur_ms)
 /// without moving the key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it
@@ -95,65 +96,77 @@ pub fn update_key_node(
   coming : () -> Double??,
   press : () -> Unit,
   offered? : () -> Bool = fn() { false },
+  restart? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> Unit {
   // (its tip on what holds it: said while busy too, the key taking no press then, as the pointer rests on it)
   parent.box(made_for=loc, fn(o) {
-    @headless.button(o, label, fn(_) { press() }, disabled=busy, fn(k, b) {
-      let progress = EdgeWay::new(if @signals.untracked(coming) is Some(_) { 1.0 } else { 0.0 })
-      k.reacts(fn() { coming() is Some(_) }, fn(on) { progress.go(k, if on { 1.0 } else { 0.0 }, dur_ms) })
-      k
-      .width(Is(Some(side)))
-      .height(Is(Some(side)))
-      // (round as its ground is while there is one, as an old view's key's hovered{} look: at rest none, nothing
-      // standing in a corner)
-      .radius(By(fn() { if lit_node(k) && !b.disabled() { side / 2.0 } else { 0.0 } }))
-      // (its mark in its middle both ways, as update_key_box's: a box lays what it holds down from its top)
-      .lines_up(Is(Some(Middle)))
-      .lies_along(Is(Middle))
-      .ground(By(fn() { if lit_node(k) && !b.disabled() { @ui.tree_theme().color(Hover) } else { 0L } }))
-      |> ignore
-      // (pressed while it is not busy: a press's ripple on it, its press then; read out unable to be pressed while busy)
-      let rippled = press_look(k, Is(side / 2.0), fn() { false })
-      let on_it = fn(d : @view.Drag) { k.finger_target(d.wx, d.wy) }
-      k.gesture(
-        @ui.touch_slop(),
-        press=fn(d) { if !b.disabled() { (rippled.down)(d) } },
-        tap=fn(d) {
-          (rippled.tapped)(d)
-          if on_it(d) {
-            b.press()
-          }
+    let hand = tip_node(tips, o, why, within=true)
+    let progress = EdgeWay::new(if @signals.untracked(coming) is Some(_) { 1.0 } else { 0.0 })
+    o.reacts(fn() { coming() is Some(_) }, fn(on) { progress.go(o, if on { 1.0 } else { 0.0 }, dur_ms) })
+    let action = fn() { if restart() { "restart" } else if coming() is Some(_) { "progress" } else if offered() { "download" } else { "update" } }
+    // Each action is a button of its own: a press begun on download cannot end on restart after the state changes.
+    o.pick(action, fn(slot, was) {
+      let rippled : Ref[PressLook?] = Ref(None)
+      @headless.button(
+        slot,
+        label,
+        fn(_) { if @signals.untracked(action) == was { press() } },
+        disabled=busy,
+        hold=@headless.Hold::new(
+          @ui.touch_slop(),
+          @ui.long_press_ms,
+          fn() { @ui.pointing() is Finger },
+          on_hold=hand.hold,
+          on_lift=hand.lift,
+          on_cancel=hand.cancel,
+          down=fn(d) { if rippled.val is Some(r) { (r.down)(d) } },
+          tapped=fn(d) { if rippled.val is Some(r) { (r.tapped)(d) } },
+        ),
+        fn(k, b) {
+          k
+          .width(Is(Some(side)))
+          .height(Is(Some(side)))
+          .radius(By(fn() { if lit_node(k) && !b.disabled() { side / 2.0 } else { 0.0 } }))
+          .lines_up(Is(Some(Middle)))
+          .lies_along(Is(Middle))
+          .ground(By(fn() { if lit_node(k) && !b.disabled() { @ui.tree_theme().color(Hover) } else { 0L } }))
+          |> ignore
+          rippled.val = Some(press_look(k, Is(side / 2.0), fn() { false }))
+          k.box(fn(m) {
+            m.width(Is(Some(mark))).height(Is(Some(mark))) |> ignore
+            // The existing marks stay; only the update mark's ring changes colour when a press will restart.
+            m.box(fn(ready) {
+              ready.over(Is(true)).alpha(By(fn() { 1.0 - progress.shown(ready) })) |> ignore
+              ready.pick(busy, fn(r, b) {
+                if b {
+                  updating_node(r, mark, fn() { theme().p.text })
+                } else {
+                  r.pick(offered, fn(i, download) {
+                    if download {
+                      icon_node(i, "download", mark, By(fn() { theme().p.text })) |> ignore
+                    } else {
+                      icon_inks_node(i, "update", mark, fn(_) {
+                        let p = theme().p
+                        [([0], if restart() { p.green } else { p.text }), ([1, 2], p.text)]
+                      }).drawn_as(Is("/icon/update/")) |> ignore
+                    }
+                  })
+                }
+              })
+            })
+            |> ignore
+            // (coming: how far, in the mark's place, faded in as it starts)
+            m.show(fn() { coming() is Some(_) || progress.shown(m) > 0.0 }, fn(c) {
+              c.over(Is(true)).alpha(By(fn() { progress.shown(c) })) |> ignore
+              coming_node(c, fn() { coming().unwrap_or(Some(1.0)) }, mark, fn() { theme().p.text })
+            })
+          })
+          |> ignore
         },
-        drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { b.press() } },
       )
       |> ignore
-      k.box(fn(m) {
-        m.width(Is(Some(mark))).height(Is(Some(mark))) |> ignore
-        // (offered: a download mark; ready: its arrow in a ring; busy, that arrow going up)
-        m.box(fn(ready) {
-          ready.over(Is(true)).alpha(By(fn() { 1.0 - progress.shown(ready) })) |> ignore
-          ready.pick(busy, fn(r, b) {
-            if b {
-              updating_node(r, mark, fn() { theme().p.text })
-            } else {
-              r.pick(offered, fn(o, on) {
-                icon_node(o, if on { "download" } else { "update" }, mark, By(fn() { theme().p.text })) |> ignore
-              })
-            }
-          })
-        })
-        |> ignore
-        // (coming: how far, in the mark's place, faded in as it starts)
-        m.show(fn() { coming() is Some(_) || progress.shown(m) > 0.0 }, fn(c) {
-          c.over(Is(true)).alpha(By(fn() { progress.shown(c) })) |> ignore
-          coming_node(c, fn() { coming().unwrap_or(Some(1.0)) }, mark, fn() { theme().p.text })
-        })
-      })
-      |> ignore
     })
-    |> ignore
-    ignore(tip_node(tips, o, why, within=true))
   })
   |> ignore
 }

@@ -177,6 +177,49 @@ test "a build that failed is handed to the host again as the app is shown again 
 }
 
 ///|
+test "a download becoming ready while its check is in flight never turns that press into a restart" {
+  let t = updates_tester(release([]), [])
+  t.frame()
+  let asked : Array[(Result[Json, String]) -> Unit] = []
+  set_update_source(Some({ check: fn(_, _, done) { asked.push(done) }, url: fn(file) { file } }))
+  t.tells_update("{\"phase\":\"waiting\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  update_go(fixture("home"))
+  assert_eq(asked.length(), 1)
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":false}")
+  (asked[0])(Ok(release([])))
+  assert_false(t.update_asked().contains("apply"))
+  assert_eq(update_stands().ready, "0.1.1")
+}
+
+///|
+test "a restart check finding a newer build downloads it instead of restarting the older one" {
+  let t = updates_tester(release([]), [])
+  t.frame()
+  let asked : Array[(Result[Json, String]) -> Unit] = []
+  set_update_source(Some({ check: fn(_, _, done) { asked.push(done) }, url: fn(file) { file } }))
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":false}")
+  update_go(fixture("home"))
+  let newer : Json = { "versionCode": 3, "versionName": "0.1.2", "file": "android/stillfail-3.apk", "size": 1000 }
+  (asked[0])(Ok(newer))
+  assert_false(t.update_asked().contains("apply"))
+  assert_true(t.update_asked().contains("fetch stillfail-3.apk true"))
+  assert_eq(update_stands().label, "有新版本 0.1.2")
+}
+
+///|
+test "a restart check cannot apply a different release even if it reuses the same file name" {
+  let t = updates_tester(release([]), [])
+  t.frame()
+  let asked : Array[(Result[Json, String]) -> Unit] = []
+  set_update_source(Some({ check: fn(_, _, done) { asked.push(done) }, url: fn(file) { file } }))
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":false}")
+  update_go(fixture("home"))
+  let newer : Json = { "versionCode": 3, "versionName": "0.1.2", "file": "android/stillfail-2.apk", "sha256": "cd", "size": 1000 }
+  (asked[0])(Ok(newer))
+  assert_false(t.update_asked().contains("apply"))
+}
+
+///|
 test "none newer: the row offers to check, and asked now says 已是最新" {
   let asked = []
   let _ = updates_tester(Json::null(), asked)
@@ -236,10 +279,10 @@ test "an update's download answered otherwise: its status in Updates.kt's words"
 
 ///|
 /// The update key drawn at 34, its mark 20, `busy` or not: the names of the icons it draws.
-fn update_key_marks(busy : Bool) -> (@ui.Tester, Array[String]) {
+fn update_key_marks(busy : Bool, restart? : Bool = false, offered? : Bool = false) -> (@ui.Tester, Array[String]) {
   new_run()
   let t = @ui.Tester::new(
-    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "重启更新", "", busy) |> ignore },
+    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "重启更新", "", busy, restart~, offered~) |> ignore },
     w=120.0,
     h=80.0,
   )
@@ -248,10 +291,35 @@ fn update_key_marks(busy : Bool) -> (@ui.Tester, Array[String]) {
 }
 
 ///|
-test "the update key, a build here already waiting on its press: the update's mark (an arrow up in a ring), not download's" {
-  let (_, marks) = update_key_marks(false)
-  assert_true(marks.iter().any(fn(m) { m.contains("icon/update") }), msg="\{Repr(marks)}")
-  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{Repr(marks)}")
+test "the update key keeps its drawing and colours only the outer ring when ready to restart" {
+  let (_, marks) = update_key_marks(false, restart=true)
+  let p = @sf.theme().p
+  assert_eq(marks, ["sf/icon/update/[0]/20/\{p.green}", "sf/icon/update/[1, 2]/20/\{p.text}"])
+  let (_, ordinary) = update_key_marks(false)
+  assert_eq(ordinary, ["sf/icon/update/[0]/20/\{p.text}", "sf/icon/update/[1, 2]/20/\{p.text}"])
+  let (_, offered) = update_key_marks(false, offered=true)
+  assert_eq(offered, ["sf/icon/download/20/\{p.text}"])
+}
+
+///|
+test "the old-view update key does not turn a held download press into a restart" {
+  new_run()
+  let restart = @signals.signal(false, same=fn(a, b) { a == b })
+  let presses = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    @sf.update_key(c, "k", 34.0, 20.0, "更新", "", false, offered=!restart.get(), restart=restart.get(), on_press=fn() {
+      presses.val += 1
+    })
+  }, w=120.0, h=80.0)
+  t.frame()
+  let (x, y, w, h) = t.query(Button, label="更新").unwrap().rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  restart.set(true)
+  t.draw()
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  assert_eq(presses.val, 0)
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(presses.val, 1)
 }
 
 ///|

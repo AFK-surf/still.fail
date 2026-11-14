@@ -1104,6 +1104,11 @@ test "wide: the update's three stages in the sidebar, the same key in the same p
   let offered = t.query(Button, label="有新版本 0.1.9999")
   assert_true(offered is Some(_), msg="the offered update in the sidebar")
   let at = offered.unwrap().rect
+  let (x, y, w, h) = at
+  let mark_in_key = fn(name : String) {
+    t.locate("icon:" + name).iter().any(fn(p) { p.0 >= x && p.0 <= x + w && p.1 >= y && p.1 <= y + h })
+  }
+  assert_true(mark_in_key("download"), msg="original download mark")
   t.click(Button, label="有新版本 0.1.9999")
   assert_eq(t.update_asked().filter(fn(a) { a.has_suffix(" true") }).length(), 1)
   @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40)
@@ -1112,6 +1117,25 @@ test "wide: the update's three stages in the sidebar, the same key in the same p
   @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
   t.run_for(@ui.move_most_ms)
   assert_eq(t.query(Button, label="重启更新").unwrap().rect, at)
+  assert_true(mark_in_key("update"), msg="the same update mark when ready")
+  assert_eq(t.audit().filter(fn(f) { f.contains("side_rows_node") }), [])
+  update_reset()
+}
+
+///|
+test "wide: a download becoming ready under a held press does not restart" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.query(Button, label="有新版本 0.1.9999").unwrap().rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.draw()
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  assert_false(t.update_asked().contains("apply"), msg="the download press must not restart")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="重启更新")
+  assert_true(t.update_asked().contains("apply"), msg="the next press on restart works")
   update_reset()
 }
 

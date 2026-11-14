@@ -4510,7 +4510,8 @@ let sign_in_side_w : Double = 30.0
 
 ///|
 /// An update in a bar: while it comes, its progress in the mark's place (`coming`: Some of a known part or None for an
-/// unknown part); ready, the update's arrow up in a ring; being put in place (`busy`), that arrow going up. The two
+/// unknown part); ready to restart (`restart`), only the update mark's outer ring turns green; being put in place
+/// (`busy`), the update arrow going up. The two
 /// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. `on_press` on its
 /// press, not while it is busy.
 pub fn update_key(
@@ -4523,10 +4524,13 @@ pub fn update_key(
   busy : Bool,
   coming? : Double?? = None,
   offered? : Bool = false,
+  restart? : Bool = false,
   on_press? : () -> Unit,
 ) -> Unit {
   let t = theme()
-  let id = c.id(key)
+  // A press begun on one action must not end on another when the host changes the update's state underneath it.
+  let action = if restart { "/restart" } else if coming is Some(_) { "/progress" } else if offered { "/download" } else { "/update" }
+  let id = c.id(key + action)
   let hot = c.lit(id) && !busy
   // (told as it is built, read where it is painted: the ring built while it comes or is on its way back, up to its
   // declared end)
@@ -4542,8 +4546,11 @@ pub fn update_key(
         let ready = c.box(style=update_ring_at, fn() {
           if busy {
             updating_mark(c, mark, t.p.text) |> ignore
+          } else if offered {
+            icon(c, "download", size=mark, color=t.p.text) |> ignore
           } else {
-            icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
+            icon_parts(c, "update", [0], size=mark, color=if restart { t.p.green } else { t.p.text }) |> ignore
+            c.layer(fn() { icon_parts(c, "update", [1, 2], size=mark, color=t.p.text) |> ignore }) |> ignore
           }
         })
         c.look_by(ready, fn() { @ui.look(alpha=1.0 - progress.get(c)) })

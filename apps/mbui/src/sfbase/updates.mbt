@@ -404,18 +404,26 @@ pub fn update_wants_you() -> Bool {
 /// newest there is, not one heard of a while ago: 2026-10-02 the user, 「更新的不是最新而是当时检查出来的版本」), then a
 /// build offered, or one that failed, downloaded now (on any network); one ready put in place now (the app starts
 /// again as it; on Android, it ends, the newer build's notification opening it), the system's page for the leave to
-/// install apps first where it is wanted. A newer one found meanwhile is the one downloaded. Where it could not ask, what
-/// is known is gone on with.
+/// install apps first where it is wanted. A newer one found meanwhile is the one downloaded. A press for a download
+/// never becomes a restart while the check is in flight; a restart applies only the build that was ready at the press.
+/// Where it could not ask, what is known is gone on with.
 pub fn update_go(src : Source) -> Unit {
   if update.checking.get() {
+    return
+  }
+  let pressed = update_now()
+  if !(pressed is (Offered(_, ..) | Failed(_, _) | Ready(_, ..) | Allow(_))) {
     return
   }
   update.checking.set(true)
   update_check(src, true, done=fn(_) {
     update.checking.set(false)
-    match update_now() {
-      Offered(v, ..) | Failed(v, _) => update_fetch_found(v, true)
-      Ready(v, ..) | Allow(v) =>
+    match (pressed, update_now()) {
+      (_, Offered(v, ..) | Failed(v, _)) => update_fetch_found(v, true)
+      (Ready(was, ..), Ready(v, ..)) | (Allow(was), Allow(v)) if
+        update_file_name(was) == update_file_name(v) &&
+        number(Some(was), "versionCode") == number(Some(v), "versionCode") &&
+        text(Some(was), "sha256") == text(Some(v), "sha256") =>
         @ui.update_apply(
           @sf.t("android-misc.updates.updated", args=[("app", "still.fail"), ("version", text(Some(v), "versionName"))]),
         )
