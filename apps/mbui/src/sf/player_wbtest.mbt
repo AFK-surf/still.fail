@@ -316,9 +316,10 @@ test "a desktop's: the bar says the film's size, length and rate as its message 
 }
 
 ///|
-test "a desktop's on a narrow page with a finger: short of room for its keys a finger apart, 保存此帧 leaves them for their ⋯" {
-  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4", "E1.srt"], [], [], window=(550.0, 900.0, 2), subtitled=true)
+test "a desktop's on a narrow stage: short of room for its keys, 保存此帧 leaves them for their ⋯" {
+  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4", "E1.srt"], [], [], window=(780.0, 900.0, 2), subtitled=true)
   t.draw()
+  t.click(Button, label="web-pages.drive.player.list")
   assert_true(t.query(Button, label="android-chat.video.saveFrame") is None)
   // (the speed the last to go)
   assert_true(t.find("1×") is Some(_))

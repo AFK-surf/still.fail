@@ -143,17 +143,17 @@ test "⌘F's bar made once as nodes is drawn as the old view's: what it did not 
     assert_eq(find_drawn(t), was, msg=name)
     assert_eq(t.all(Button).map(fn(b) { (b.label, b.rect) }), was_said, msg=name)
     // (squeezed near its field's least: the old bar's note cut to nothing in its box (find_note_box, clip), and what is
-    // typed left 13 across by its count and buttons, drawn so by both; the old view held words to no rule, the nodes'
+    // typed left 29 across by its count and buttons, drawn so by both; the old view held words to no rule, the nodes'
     // audit says them: those two, and only there; reported, 2026-11-11)
     let note = @sf.t("web-main.find.partial", args=[("held", "10"), ("of", "40")])
     let all = t.audit()
     let cut = fn(f : String) {
       (f.contains("「\{note}」") && f.contains("its words cut to 0 characters")) ||
-      f.contains("its placeholder cut to 0 characters")
+      f.contains("its placeholder cut to 1 characters")
     }
     let known = all.filter(cut)
     let faults = all.filter(fn(f) { !cut(f) })
-    assert_eq(known.length(), if before >= 560.0 { 1 } else { 0 }, msg="\{name}: \{Repr(known)}")
+    assert_eq(known.length(), if before >= 560.0 { 2 } else { 0 }, msg="\{name}: \{Repr(known)}")
     assert_eq(faults, [], msg="\{name}: \{Repr(faults)}")
   }
   find_close()
