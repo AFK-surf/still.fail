@@ -2011,10 +2011,10 @@ fn fx_usage_summary() -> Json {
     obj([("title", str(title)), ("items", Json::array(rows.map(fn(r) { obj([(key, str(r.0)), ("value", str(r.1))]) })))])
   }
   obj([
-    ("title", str("星火工作室")),
+    ("title", str("")),
     (
       "figures",
-      Json::array([("累计 token", "18.3 亿"), ("归档的对话", "1,358"), ("跨设备任务", "312"), ("决策点击率", "48%"), ("一起干活的设备", "3")].map(fn(f) {
+      Json::array([("累计 token", "18.3 亿"), ("归档的对话", "1,358"), ("跨设备任务", "312")].map(fn(f) {
         obj([("label", str(f.0)), ("value", str(f.1))])
       })),
     ),
@@ -2023,7 +2023,7 @@ fn fx_usage_summary() -> Json {
       obj([
         ("title", str("Token 活跃度")),
         ("sub", str("近 12 个月")),
-        ("views", [str("按天"), str("按周"), str("累计")]),
+        ("views", [str("按天"), str("按周")]),
         ("weekdays", Json::array(["日", "一", "二", "三", "四", "五", "六"].map(str))),
         ("months", Json::array(months.map(fn(m) { obj([("week", Json::number(m.0.to_double())), ("label", str(m.1))]) }))),
         ("cells", Json::array(cells)),
@@ -2034,12 +2034,12 @@ fn fx_usage_summary() -> Json {
         ("runningTips", Json::array(running_tips)),
         ("less", str("少")),
         ("more", str("多")),
-        ("captions", [str(""), str("每列一周 · 最高 1.1 亿"), str("累计 · 共 18.3 亿")]),
+        ("captions", [str(""), str("每列一周 · 最高 1.1 亿")]),
       ]),
     ),
     ("stations", named("各设备的工作量", "name", [("Willow", "12.6 亿 token · 69%"), ("Maple", "4.1 亿 token · 22%"), ("Birch", "1.6 亿 token · 9%")])),
     ("places", named("对话来自", "name", [("still.fail", "1,212 个对话"), ("Slack", "184 个对话"), ("飞书", "34 个对话")])),
-    ("asOf", str("统计截至 10月2日")),
+    ("asOf", str("")),
   ])
 }
 
@@ -2078,15 +2078,25 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
     ])
   }
   let series = match split {
-    "models" => [("claude-opus-5-5", "Opus 5.5"), ("gpt-6", "GPT-6"), ("", "其他")]
-    "profiles" => [("Willow/cc", "公司 Claude"), ("Willow/codex", "Codex 团队"), ("", "其他")]
-    "chats" => [("Willow/1", "整理发布清单"), ("Willow/4", "给设置页加一个深色模式开关"), ("", "其他")]
-    _ => [("lin@example.com", "林"), ("ana@example.com", "Ana"), ("", "其他")]
+    "models" => [("claude-opus-5-5", "Opus 5.5", "$84"), ("gpt-6", "GPT-6", "$28"), ("", "其他", "$6.10")]
+    "profiles" => [("Willow/cc", "公司 Claude", "$84"), ("Willow/codex", "Codex 团队", "$34")]
+    "chats" => [("Willow/1", "整理发布清单", "$31"), ("Willow/4", "给设置页加一个深色模式开关", "$22"), ("", "其他", "$65")]
+    _ => [("lin@example.com", "林", "$80"), ("ana@example.com", "Ana", "$31"), ("", "其他", "$7.20")]
   }
   // The core ranks the filtered rows too: the selected split then contains only the chosen part.
   let series = if only != "" && series.iter().any(fn(s) { s.0 == only }) { series.filter(fn(s) { s.0 == only }) } else { series }
   let lists = [
-    ("people", "按人", [("lin@example.com", "林", "", "$80", 0.68), ("ana@example.com", "Ana", "", "$31", 0.26), ("wu@example.com", "吴", "", "$7.20", 0.06)]),
+    (
+      "people",
+      "按人",
+      [
+        ("lin@example.com", "林", "18 个对话 · 812 次调用 · 最多 Opus 5.5", "$80", 0.68),
+        ("ana@example.com", "Ana", "9 个对话 · 410 次调用 · 最多 GPT-6", "$31", 0.26),
+        ("wu@example.com", "吴", "4 个对话 · 118 次调用 · 最多 Sonnet 5", "$4.50", 0.04),
+        ("chen@example.com", "陈", "2 个对话 · 52 次调用 · 最多 Haiku 5", "$1.80", 0.015),
+        ("zhao@example.com", "赵", "1 个对话 · 24 次调用 · 最多 Haiku 5", "$0.90", 0.008),
+      ],
+    ),
     (
       "chats",
       "按对话",
@@ -2094,10 +2104,28 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         ("Willow/1", "整理发布清单", "林 · Opus 5.5 · Willow", "$31", 0.26),
         ("Willow/4", "给设置页加一个深色模式开关", "Ana · GPT-6 · Willow", "$22", 0.19),
         ("Maple/3", "夜里的构建又失败了", "林 · Opus 5.5 · Maple", "$15", 0.13),
+        ("Willow/8", "排查列表滚动卡顿", "林 · Opus 5.5 · Willow", "$12", 0.10),
+        ("Maple/6", "补充支付回调单元测试", "Ana · Sonnet 5 · Maple", "$9.40", 0.08),
+        ("deleted/all", "已删除的对话（14 个）", "共 312 次调用 · Opus 5.5、GPT-6", "$28.60", 0.24),
       ],
     ),
-    ("profiles", "按账号", [("Willow/cc", "公司 Claude", "Willow · 最多 Opus 5.5", "$84", 0.71), ("Willow/codex", "Codex 团队", "Willow · 最多 GPT-6", "$34", 0.29)]),
-    ("models", "按模型", [("claude-opus-5-5", "Opus 5.5", "", "$84", 0.71), ("gpt-6", "GPT-6", "", "$28", 0.24), ("claude-haiku-5", "Haiku 5", "", "$6.10", 0.05)]),
+    (
+      "profiles",
+      "按账号",
+      [
+        ("Willow/cc", "公司 Claude", "Willow · 订阅 (Max) · 最多 Opus 5.5", "$84", 0.71),
+        ("Willow/codex", "Codex 团队", "Willow · 订阅 (Pro) · 最多 GPT-6", "$34", 0.29),
+      ],
+    ),
+    (
+      "models",
+      "按模型",
+      [
+        ("claude-opus-5-5", "Opus 5.5", "1,620 万 token · 842 次调用", "$84", 0.71),
+        ("gpt-6", "GPT-6", "510 万 token · 390 次调用", "$28", 0.24),
+        ("claude-haiku-5", "Haiku 5", "223 万 token · 184 次调用", "$6.10", 0.05),
+      ],
+    ),
   ]
   // (the day's name as the core says it: 10/5 for 2026-10-05)
   let dd = if day.length() >= 10 { day[8:].to_owned() } else { "" }
@@ -2138,6 +2166,7 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         obj([
           ("label", str("输入 token")),
           ("value", str(if only != "" { "970 万" } else if days == 7 { "2,310 万" } else { "9,870 万" })),
+          ("sub", str("缓存命中 84%")),
           ("change", str(if days == 7 { "↑21%" } else { "↑2.5%" })),
         ]),
         obj([
@@ -2150,11 +2179,12 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
     ("versus", str("比前 " + days.to_string() + " 天")),
     ("period", str(if day != "" { day_name } else { "近 " + days.to_string() + " 天" })),
     ("summary", fx_usage_summary()),
-    ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1))]) }))),
+    ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1)), ("costText", str(x.2))]) }))),
     ("daily", Json::array(daily)),
     ("many", Json::boolean(days > 10)),
     // (the scale the core works out for it: views/usage.ts scale)
     ("top", Json::number(30.0)),
+    ("ticks", [obj([("value", Json::number(15.0)), ("label", str("$15"))]), obj([("value", Json::number(30.0)), ("label", str("$30"))])]),
     (
       "lists",
       Json::array(
@@ -2184,7 +2214,9 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
             "rows",
             [
               obj([("model", str("Opus 5.5")), ("rates", [obj([("label", str("输入")), ("value", str("$5"))]), obj([("label", str("输出")), ("value", str("$25"))]), obj([("label", str("缓存读")), ("value", str("$0.5"))])])]),
+              obj([("model", str("GPT-6")), ("rates", [obj([("label", str("输入")), ("value", str("$2.5"))]), obj([("label", str("输出")), ("value", str("$10"))]), obj([("label", str("缓存读")), ("value", str("$0.25"))])])]),
               obj([("model", str("Sonnet 5")), ("rates", [obj([("label", str("输入")), ("value", str("$3"))]), obj([("label", str("输出")), ("value", str("$15"))]), obj([("label", str("缓存读")), ("value", str("$0.3"))])])]),
+              obj([("model", str("Haiku 5")), ("rates", [obj([("label", str("输入")), ("value", str("$1"))]), obj([("label", str("输出")), ("value", str("$5"))]), obj([("label", str("缓存读")), ("value", str("$0.1"))])])]),
             ],
           ),
         ]),

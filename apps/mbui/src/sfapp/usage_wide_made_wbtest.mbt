@@ -9,7 +9,7 @@ test "用量 and 价目表 made once wide and on the tape: what each holds the t
     let at = "用量 at \{Repr(case)}"
     assert_true(app.nav.top() == Setting(@settings.Route::Usage), msg=at)
     let own = tree_words_drawn()
-    for word in ["$118", "最花钱的对话", "各设备的工作量", "7 天", "30 天"] {
+    for word in ["$118", "花费明细", "7 天", "30 天", "累计"] {
       assert_true(own.iter().any(fn(o) { o.contains(word) }), msg="\{word} not the tree's own at \{at}: \{Repr(own)}")
     }
     let share = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == @sf.t("web-main.stations.shareCard") && !s.hidden })
@@ -18,7 +18,7 @@ test "用量 and 价目表 made once wide and on the tape: what each holds the t
     assert_true((share[0].rect.1 + share[0].rect.3 / 2.0 - (dy + dh / 2.0)).abs() < 4.0, msg="share and days on one line at \{at}")
     let _ = large_about_tester(true, platform, w~, mode="settings-prices")
     let own = tree_words_drawn()
-    assert_true(own.iter().any(fn(o) { o.contains("Willow") }), msg="价目表's card the tree's own at \{Repr(case)}: \{Repr(own)}")
+    assert_true(own.iter().any(fn(o) { o.contains("模型折算单价") }), msg="价目表's card the tree's own at \{Repr(case)}: \{Repr(own)}")
   }
 }
 
