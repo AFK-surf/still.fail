@@ -369,3 +369,60 @@ test "asked at once (glide=false) at its end, not following its foot, in the cha
     assert_true(s.last_off != rc_none && s.last_off.abs() < 0.5, msg="\{what}: the key's foot \{s.last_off} off the pinned foot's top")
   }
 }
+
+///|
+/// Case `c` (its key lte_sent `sent_h` tall), read up; where `glide`, asked back to its foot at rc_at and the hand taking
+/// it on that glide's way, else the hand taking it at rest there: a finger down at rc_at + 60.5 and moved, before any
+/// other change, to its foot (`most`); then, the finger still down there and the list not laid out again, its page's
+/// limit said at the key that comes (ListPlace::follow_from) and that key come, a tall one; the finger let go: where
+/// it rests and whether it is at its foot then.
+fn lte_hand_to_foot(c : LteCase, rate : Double, glide : Bool, most : Double) -> (Double, Bool) raise {
+  let down_at = rc_at + 60.5
+  let events = if glide { [(rc_at, fn() { c.place.to_end() })] } else { [] }
+  rc_walk(c.tree, events, [down_at - 0.5], rate, from=lte_read_at, fn() { () }) |> ignore
+  let id = c.tree.claimer_of(c.tree.claimers_at(150.0, 150.0), 0.0, 20.0).unwrap()
+  c.tree.at(down_at)
+  c.tree.drag_at(id, Down, 150.0, 150.0, down_at) |> ignore
+  let mut y = 150.0 - (most - c.scroll.at(c.tree))
+  c.tree.at(down_at + 5.0)
+  c.tree.drag_at(id, Moved, 150.0, y, down_at + 5.0) |> ignore
+  // (what a finger's first move gives up before it takes the list: moved on by what is left)
+  y = y - (most - c.scroll.at(c.tree))
+  c.tree.at(down_at + 10.0)
+  c.tree.drag_at(id, Moved, 150.0, y, down_at + 10.0) |> ignore
+  assert_true((c.scroll.at(c.tree) - most).abs() < 0.01, msg="the hand not at its foot: at \{c.scroll.at(c.tree)}, its foot \{most}")
+  // (said while the finger is still down at its foot, before the list is laid out again)
+  c.tree.event(down_at + 12.0, fn() {
+    c.place.follow_from(Some(lte_sent))
+    c.comes(lte_sent)
+  })
+  c.tree.at(down_at + 400.0)
+  c.tree.drag_at(id, Up, 150.0, y, down_at + 400.0) |> ignore
+  let seen = rc_walk(
+    c.tree,
+    [],
+    [down_at + 410.0, down_at + 1400.0],
+    rate,
+    from=down_at + 400.0,
+    fn() { c.seen(lte_sent, 600.0) },
+  )
+  let last = seen[seen.length() - 1]
+  (last.x, last.at_foot)
+}
+
+///|
+test "asked back to its foot, the hand taking it on the way and bringing it to its foot before any other change: as one the hand brought to its foot from rest, a limit said there and a tall key come after" {
+  for rate in rc_rates {
+    let what = "at \{rate} a second"
+    let m = lte_case(600.0, 60.0)
+    rc_walk(m.tree, [(rc_at, fn() { m.place.to_end(glide=false) })], [rc_at + 50.0], rate, from=lte_read_at, fn() { () })
+    |> ignore
+    let most = m.scroll.at(m.tree)
+    let by_hand = lte_hand_to_foot(lte_case(600.0, 60.0), rate, false, most)
+    let on_glide = lte_hand_to_foot(lte_case(600.0, 60.0), rate, true, most)
+    assert_true(
+      (on_glide.0 - by_hand.0).abs() < 0.01 && on_glide.1 == by_hand.1,
+      msg="\{what}: the hand taking its glide to its foot rests at \{on_glide.0} (at its foot \{on_glide.1}), from rest at \{by_hand.0} (\{by_hand.1})",
+    )
+  }
+}

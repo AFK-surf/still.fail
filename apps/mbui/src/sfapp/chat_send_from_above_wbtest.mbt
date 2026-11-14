@@ -171,3 +171,31 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: the list h
   }
   fix_clock.val = None
 }
+
+///|
+/// The first words of a second tall answer, come after words sent took the list to its foot.
+let csa_second : String = "第二个回答从这里读起"
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the list held by a tall answer's top, words sent: at rest at its foot, then a tall answer comes: held by its top" {
+  for screen in rp_screens {
+    let name = screen.0
+    let (t, clock, _) = rp_answer(screen, long_reply + "\n\n" + rp_paras(30), "work")
+    rp_send(t, "收到，我先看")
+    fix_clock_set(clock, clock.val + fix_deliver_ms)
+    t.draw()
+    t.run_for(rp_rest_ms)
+    let rest = csa_list(t, name)
+    assert_true(rest.at_foot, msg="\{name}: not at its foot at rest after the send (at \{rest.at})")
+    // (at its foot by the glide the send asked: the answer followed no further than its top a margin under the bar)
+    let ys = rp_frames(t, clock, fn() { rp_said(190, csa_second + "\n\n" + long_reply + "\n\n" + rp_paras(30)) }, csa_second, rp_rest_ms)
+    let (wrong, at) = rp_never_over(name, ys)
+    if wrong is Some(w) {
+      fail("\{name}: \{w}")
+    }
+    assert_true((at - rp_held_at(name)).abs() < rp_half_px, msg="\{name}: its words rest at \{at}")
+    let held = csa_list(t, name)
+    assert_false(held.at_foot, msg="\{name}: at its foot, the answer's top not holding it (at \{held.at})")
+  }
+  fix_clock.val = None
+}

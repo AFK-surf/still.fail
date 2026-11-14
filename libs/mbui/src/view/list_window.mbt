@@ -1409,14 +1409,28 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   s.at_foot_said = Some(fn() { at_foot_now.get() })
   // (what its foot covers of what shows, for what is brought into sight: the room it keeps under its last block)
   s.foot_covered = fn() { foot_h.get() }
+  // (the glide back to its foot it is on (ListPlace::to_end), while it is: gone on toward where its foot is as that
+  // moves, in its fill; none once another way is in its place (the hand, the wheel, another ask) or it is at rest)
+  let end_glide : Ref[Notch?] = Ref(None)
+  // (come to its foot by that glide since its last fill: what the next fill finds the scroll moved by since then is
+  // the glide's, not the hand's, and lets go of nothing the hand would (a limit said at its foot from then stands))
+  let glided_foot = Ref(false)
   self.reacts(fn() { at_most.get() }, fn(foot) {
     if foot && @signals.untracked(follows) && !s.at_foot() && !ask_cut.val {
       // (back at its foot, having left it: followed again, whatever held it where it was, Scroll::holds_here, a
       // field in a row)
       s.held = false
+      // (brought here by its glide back to its foot: still on it, or gone because it ran out, the moment at or past
+      // where it ends (its notch kept as it was last said or gone on); gone before then, stopped: the hand's, the wheel's)
+      let glided = match (end_glide.val, s.notch.untracked()) {
+        (Some(g), Some(n)) => physical_equal(g, n)
+        (Some(g), None) => self.tree.logic_said() >= g.t0 + g.end - 0.001
+        _ => false
+      }
       // (the hand's: the scroll moved off where its last fill put it, before a fill has seen it)
-      row_let_go(anchor_x.val is Some(was) && (@signals.untracked(at) - was).abs() > 0.000001)
+      row_let_go(!glided && anchor_x.val is Some(was) && (@signals.untracked(at) - was).abs() > 0.000001)
       s.to_foot()
+      glided_foot.val = glided
     }
   })
   match near_foot {
@@ -1527,9 +1541,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let whole_now = fn() {
     @signals.untracked(fn() { whole_of(places(laid.get())) })
   }
-  // (the glide back to its foot it is on (ListPlace::to_end), while it is: gone on toward where its foot is as that
-  // moves, in its fill; none once another way is in its place (the hand, the wheel, another ask) or it is at rest)
-  let end_glide : Ref[Notch?] = Ref(None)
   // (what is asked of it at a cause: done as the column is laid out again, or at once where it glides there)
   match place {
     Some(p) => {
@@ -2150,10 +2161,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // this fill lays it out, the anchor moved with it; none where it is held by its top, or taken again below)
     let mut s0 = if anchor_x.val is Some(_) { held_start(places(laid.untracked())) } else { None }
     let mut read_moved = false
+    let glided = glided_foot.val
+    glided_foot.val = false
     // (moved by the hand, the wheel or a fling since: the anchor taken again where it is now, by what is counted now,
     // before what comes to show is measured; not moved, the one it had, whatever came or went over it)
     match anchor_x.val {
-      Some(was) if !held && (x - was).abs() > 0.000001 => {
+      Some(was) if !held && !glided && (x - was).abs() > 0.000001 => {
         // (moved by the hand: held where it was no more, nor by what was pressed; held by a field in a row, let go
         // of as the hand brings it back to its foot; an ask this list put back as it was cut short by its foot still
         // going down let go of, the list where the hand put it: not one its page gave anew)
