@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c3542cb9f](https://github.com/AFK-surf/monoid/commit/c3542cb9fc11c07c7a0d571f2b0da672b8d200ff) station: a skill kept apart is named for the stati | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.23 | 55.31 | 96.67 | 115.89 |
 | [ef0dc454b](https://github.com/AFK-surf/monoid/commit/ef0dc454b2b3e50c5a77208ae54f6d82f68eeab1) app tests: the third reckoned 1500 at the default  | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.23 | 55.31 | 96.67 | 115.89 |
 | [e8639dd39](https://github.com/AFK-surf/monoid/commit/e8639dd3919993a0acdfb2700f39da6b8a5a9834) feat(mbui/headless): add radio_group, split, Hold/ | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [91143174f](https://github.com/AFK-surf/monoid/commit/91143174f71fcfdd5d0599a6ca374a8cf9948dc2) mbui app: two tests of the chat hold what is seen, | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9ac50f734](https://github.com/AFK-surf/monoid/commit/9ac50f7340c057144d1f5e66bb27ebde471677b5) mbui: a CJK face's marks of ambiguous width are na | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
 | [1f334fe33](https://github.com/AFK-surf/monoid/commit/1f334fe33c9f4d61f764622d000753469ba76889) mbui: at a chat's end on the page made as nodes, t | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
 | [2f8293e39](https://github.com/AFK-surf/monoid/commit/2f8293e39835f8a614e2dd732bb0d1f7ec272697) mbui: the pointer's corner shapes (Cursor::ResizeN | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
-| [187988cb9](https://github.com/AFK-surf/monoid/commit/187988cb96817a92c31fb7fc9601253e1e52082b) station: sessions' summaries and the session list  | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 103.28 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c3542cb9f](https://github.com/AFK-surf/monoid/commit/c3542cb9fc11c07c7a0d571f2b0da672b8d200ff) station: a skill kept apart is named for the stati | 0.4 | 0.52 | 1.95 | 3.08 | 4.45 | 1.45 | 3.78 | 57.33 |
 | [ef0dc454b](https://github.com/AFK-surf/monoid/commit/ef0dc454b2b3e50c5a77208ae54f6d82f68eeab1) app tests: the third reckoned 1500 at the default  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.35 |
 | [e8639dd39](https://github.com/AFK-surf/monoid/commit/e8639dd3919993a0acdfb2700f39da6b8a5a9834) feat(mbui/headless): add radio_group, split, Hold/ | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.35 |
 | [91143174f](https://github.com/AFK-surf/monoid/commit/91143174f71fcfdd5d0599a6ca374a8cf9948dc2) mbui app: two tests of the chat hold what is seen, | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.35 |
