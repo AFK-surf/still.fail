@@ -648,6 +648,9 @@ export class Cloud {
     if (li === null || li.state === null || li.waiting === true) return new Set();
     const st = li.state;
     if (st.stations.has(key) || st.devices.has(key) || [...st.devices.values()].some((d) => d.sign_key === key)) return "all";
+    // A rig of the workspace its person signed for (`rigs`): before a move it pinned the whole chain, which says all
+    // the bodies say; after, it is given them as a station the list names is (person-sync.ts brings them).
+    if (this.state?.rig === undefined && this.rigs(this.idOf(ws)).some((r) => r.id === key)) return "all";
     const l = this.chain(ws) as KeptLock;
     const root = l.state?.moved;
     if (root === undefined) return new Set();
@@ -1224,6 +1227,12 @@ export class Cloud {
     this.reached = false;
     this.peersCurrent = current;
     this.tell();
+  }
+
+  /// A rig of a workspace signed for here (rigs/adds.ts `take`): what follows the rigs `rigs` gives told, as a roster's
+  /// change is (lock-sync.ts and person-sync.ts bring it the chain and, where it moved, the logs and bodies).
+  rigsChanged(): void {
+    if (this.listeners !== undefined) this.tell();
   }
 
   listen(f: (s: CloudState | null) => void): () => void {

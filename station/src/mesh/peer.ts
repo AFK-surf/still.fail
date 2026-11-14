@@ -36,6 +36,17 @@ export const RIG_TELLS: ReadonlySet<string> = new Set(["rig.hello", "rig.changed
 
 /// The workspace a peer is asked or heard in, if it is another station of it now; throws why not. Without one said,
 /// the first workspace of this station's (its home one first) the peer is in too.
+/// What a station is answered here while this machine waits for what a moved chain's state is made of (Cloud
+/// `waiting`): the lock's own methods, which bring it that; and on a rig (a station that only runs tasks) what its
+/// person signed for it (`rig.added`, kept as it checks against their own lock; `rig.proof`, shown), which is what a
+/// station takes it in by and only then brings it the logs and bodies (person-sync.ts): before a move it pinned the
+/// whole chain by the hash its enrollment named and needed nothing more (2026-11-14, the rigs' end to end run on a
+/// moved workspace: never taken, never told the state).
+export function heardWaiting(cloud: Cloud, method: unknown): boolean {
+  if (typeof method !== "string") return false;
+  return method.startsWith("lock.") || (cloud.state?.rig !== undefined && (method === "rig.added" || method === "rig.proof"));
+}
+
 export function member(cloud: Cloud, peer: string, workspace: string | null): string {
   if (!cloud.peersCurrent) throw new Error("workspace peer roster is not current; waiting for the control plane");
   const s = cloud.state;
@@ -383,7 +394,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
         // (a workspace whose chain moved, this station waiting for its root's log or `open`: its chain's stations are
         // answered only the lock's own, which bring it what it lacks: Cloud `rosterOf`)
         const w = envelope.workspace && envelope.workspace !== cloud.home() ? envelope.workspace : null;
-        if (cloud.waiting(w) && !(typeof method === "string" && method.startsWith("lock."))) throw new Error(NOT_GIVEN);
+        if (cloud.waiting(w) && !heardWaiting(cloud, method)) throw new Error(NOT_GIVEN);
         result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace, peer)
           // The workspace's ways (mesh/ways.ts), kept level between its stations.
           : typeof method === "string" && method.startsWith("ways.") ? answerWays(waysOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")
