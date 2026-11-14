@@ -21,7 +21,7 @@ pub fn agent_work_line(c : @ui.Ctx, card : Json?, id : Int, inset? : Bool = fals
 
 ///|
 /// The mark of agent `key`'s work past its turns (on `station`), at the end of its execution history's details' line
-/// of its turns (8 轮 · 共干了 1 小时 12 分 · 后台 4 · 2/6), in its words (`words`), after `lead` (its separator, 「 · 」),
+/// of its work (共工作 1 小时 12 分 · 后台 4 · 2/6), in its words (`words`), after `lead` (its separator, 「 · 」),
 /// what can be pressed in `hot` (a link's ink) under the pointer. It gives way first, a step at a time, before the line's own words
 /// are cut (Ctx::text `keep` on them): 后台 4 · 2/6 (the core's `workMark`), then its counts alone (`workMarkShort`:
 /// 4 · 2/6), then a mark with how many (`workMarkCount`: 4, or the checklist's 2/6), then nothing. Its words said a

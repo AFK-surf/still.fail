@@ -128,7 +128,7 @@ test "the history's details: its turns' line says its work after it, none withou
   let forms = fn() { word("后台 4 · 2/6") + word("4 · 2/6") + word("4") }
   // nothing in the background, no checklist: no mark; the line, the tabs, the head and what is under the line
   assert_eq(forms().length(), 0)
-  let turns = word("8 轮 · 共干了 1 小时 12 分")
+  let turns = word("共工作 1 小时 12 分")
   assert_eq(turns.length(), 1)
   let before = t.words().filter(fn(w) { w.5 > 0.5 && w.0 != " · " }).map(fn(w) { (w.0, w.1, w.2) })
   // told: the mark at the turns' line's end, on its line; the line's words whole; nothing else anywhere moved (the
@@ -139,7 +139,7 @@ test "the history's details: its turns' line says its work after it, none withou
   let mark = forms()
   assert_eq(mark.length(), 1)
   assert_true((mark[0].2 - turns[0].2).abs() < 2.0 && mark[0].1 > turns[0].1 + turns[0].3, msg="\{Repr((mark, turns))}")
-  assert_eq(word("8 轮 · 共干了 1 小时 12 分").length(), 1)
+  assert_eq(word("共工作 1 小时 12 分").length(), 1)
   let after = t.words().filter(fn(w) { w.5 > 0.5 && w.0 != " · " && w.0 != mark[0].0 }).map(fn(w) { (w.0, w.1, w.2) })
   assert_eq(after, before)
   assert_eq(word(work_line).length(), 0)
@@ -182,7 +182,7 @@ test "on a phone, its details' turns say its work after them, its head as it was
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  let turns = word("8 轮 · 共干了 1 小时 12 分")
+  let turns = word("共工作 1 小时 12 分")
   assert_eq(turns.length(), 1)
   let mark = word("后台 4 · 2/6") + word("4 · 2/6") + word("4")
   assert_eq(mark.length(), 1)

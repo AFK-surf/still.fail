@@ -134,15 +134,9 @@
   },
   "core-views.agent.services": "Services up: {names}",
   "core-views.agent.tokens": "{input} in · {output} out",
-  "core-views.agent.turns": {
-    "one": "1 turn",
-    "other": "{n} turns"
-  },
   "core-views.agent.watching": "Watching: {names}",
-  "core-views.agent.work": {
-    "one": "1 turn · {time} of work",
-    "other": "{n} turns · {time} of work"
-  },
+  "core-views.agent.work": "{time} of work",
+  "core-views.agent.workUnderMinute": "<1m of work",
   "core-views.archive.auto": "Auto-archived when idle",
   "core-views.archive.day_with_year": "{day}, {year}",
   "core-views.archive.empty": "No archived chats yet",

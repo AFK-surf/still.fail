@@ -2322,7 +2322,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   let cache = word("91%")
   let names_of = word("费用估算")
   let account = word("林的 Max")
-  let quiet = word("8 轮 · 共干了 1 小时 12 分")
+  let quiet = word("共工作 1 小时 12 分")
   assert_true(
     status.length() == 1 && lines.length() == 1 && cost.length() == 1 && cache.length() == 1 &&
     account.length() == 1 &&

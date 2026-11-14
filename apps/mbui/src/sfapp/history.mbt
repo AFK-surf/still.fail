@@ -136,7 +136,7 @@ fn history_details_node(v : @view.View, src : Source, r : ChatRef, key : String,
       // (and after it what it has going in the background and its checklist, a mark that opens them from the foot:
       // the first to give way)
       b.show(at_once=true, fn() { text(card(), "work") != "" }, fn(x) {
-        detail(x, fn() { tr("android-chat.agent.turns") }, fn(w) {
+        detail(x, fn() { tr("android-chat.agent.history") }, fn(w) {
           w.box(fn(t) {
             @sf.style_node(t, fn() { details_turns }, in_row=true)
             t.fits(Is(true)).min_width(Is(Some(0.0))) |> ignore

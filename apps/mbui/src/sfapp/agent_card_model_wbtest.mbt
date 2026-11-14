@@ -56,7 +56,7 @@ test "a phone's agent card: 6-char tiles ($1,911, 430.5K) and long history line 
           o["cost"] = Json::string("$1,911")
           o["cache"] = { "text": "99%" }
           o["context"] = { "percent": 0, "text": "430.5K", "unknown": true }
-          o["work"] = Json::string("1217 轮 · 共工作 22 小时 35 分")
+          o["work"] = Json::string("共工作 22 小时 35 分")
           { ..got, value: Some(Json::object(o)) }
         } else {
           got
@@ -72,16 +72,17 @@ test "a phone's agent card: 6-char tiles ($1,911, 430.5K) and long history line 
     for want in ["$1,911", "99%", "430.5K"] {
       assert_true(words.any(fn(w) { w.0 == want && w.5 > 0.5 }), msg="scale=\{scale}: missing \{want}")
     }
-    let hist_words = words.filter(fn(w) { w.5 > 0.5 && w.0.contains("1217") })
+    let hist_words = words.filter(fn(w) { w.5 > 0.5 && w.0.contains("共工作") })
     let combined = hist_words.map(fn(w) { w.0 }).join("")
-    assert_true(combined.contains("1217") && combined.contains("35") && !combined.contains("…"), msg="scale=\{scale}: truncated history \{combined}")
-    if scale == 1.0 {
+    assert_true(combined.contains("共工作") && combined.contains("35") && !combined.contains("…"), msg="scale=\{scale}: truncated history \{combined}")
+    if hist_words.length() > 0 {
       let hist_top = hist_words.iter().fold(init=1.0e9, fn(m, w) { dmin(m, w.2) })
       let hist_bot = hist_words.iter().fold(init=0.0, fn(m, w) { dmax(m, w.2 + w.4) })
-      let lbl = words.iter().find_first(fn(w) { w.0 == "历史" && w.5 > 0.5 })
-      guard lbl is Some(lw) else { fail("missing 历史 label") }
-      assert_true(hist_bot - hist_top > 30.0, msg="expected wrapped history text, got height \{hist_bot - hist_top}")
-      assert_true(lw.2 + lw.4 / 2.0 < (hist_top + hist_bot) / 2.0, msg="label centered across wrapped block instead of first line: lw=\{Repr(lw)} hist=\{Repr(hist_words)}")
+      if hist_bot - hist_top > 30.0 {
+        let lbl = words.iter().find_first(fn(w) { w.0 == "历史" && w.5 > 0.5 })
+        guard lbl is Some(lw) else { fail("missing 历史 label") }
+        assert_true(lw.2 + lw.4 / 2.0 < (hist_top + hist_bot) / 2.0, msg="label centered across wrapped block instead of first line: lw=\{Repr(lw)} hist=\{Repr(hist_words)}")
+      }
     }
   }
 }
