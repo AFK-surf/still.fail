@@ -14,3 +14,11 @@
 // known, which kept the builds that took the hold out, 9153 on, from moving anything until main reached it: a wait
 // nothing needed.) A build from 9144 to 9152 reads a moved chain whole and still holds its own back.
 export const MOVED_FROM_BUILD = 9144;
+
+// The first build that reads a removal of the root's person naming the root's log as taking them out (rules/AGENTS.md,
+// the lead's, 2026-11-14: after a move the root's person is a member like any other, `~root`). A core of a release
+// before it reads such a removal as nothing, so it would make another state: it is told to update (mesh/serve.ts
+// `movedTooOld`) only in a workspace whose state in force has the root's person out of `~root` (`Cloud.rootOut`), and
+// nowhere else is anyone told anything. 9285: main's build 9240 (152b19b514) as this change was made ready, and 45 more
+// for what merges before it: never below the build of the commit that brings it.
+export const ROOT_OUT_FROM_BUILD = 9285;

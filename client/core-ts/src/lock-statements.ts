@@ -59,32 +59,37 @@ export function prevOf(ws: string, log: readonly Entry[], kept: ReadonlyMap<stri
 }
 
 /// What a removal takes back (`cancels=h`): every body kept here that admits whom it removes in `ws` (each `member` of
-/// that sub, each `station` of that key), whoever signed it; sorted, each once.
-export function cancelsOf(ws: string, said: { kind: "member.remove"; sub: string } | { kind: "station.remove"; key: string }, kept: ReadonlyMap<string, J>): string[] {
+/// that sub, each `station` of that key), whoever signed it; sorted, each once. Of the root's person (`root`: their sub
+/// and the root's genesis hash, given where every station the list names reads it so), the root's genesis hash too:
+/// their being in the list by the root's log is an admit like any other (`~root`, rules/AGENTS.md).
+export function cancelsOf(ws: string, said: { kind: "member.remove"; sub: string } | { kind: "station.remove"; key: string }, kept: ReadonlyMap<string, J>, root?: Root): string[] {
   const out: string[] = [];
   for (const [h, b] of kept) {
     if (b?.ws !== ws) continue;
     if (said.kind === "member.remove" ? b.kind === "member" && b.sub === said.sub : b.kind === "station" && b.key === said.key) out.push(h);
   }
+  if (root !== undefined && said.kind === "member.remove" && said.sub === root.sub && !out.includes(root.genesis)) out.push(root.genesis);
   return out.sort();
 }
+/// The root's person and the root's genesis hash, where a removal of them names it (`cancelsOf`).
+export type Root = { sub: string; genesis: string };
 
 /// The body of `said` in `ws`, signed after `log` by this device, of what it keeps (`kept`, its own bodies among them),
 /// salted with `salt` (16 random bytes, hex).
-export function bodyOf(ws: string, said: Said, log: readonly Entry[], kept: ReadonlyMap<string, J>, salt: string | (() => string)): Body {
+export function bodyOf(ws: string, said: Said, log: readonly Entry[], kept: ReadonlyMap<string, J>, salt: string | (() => string), root?: Root): Body {
   const prev = prevOf(ws, log, kept);
   const more: Record<string, unknown> = { ...said };
-  if (said.kind === "member.remove" || said.kind === "station.remove") more.cancels = cancelsOf(ws, said, kept);
+  if (said.kind === "member.remove" || said.kind === "station.remove") more.cancels = cancelsOf(ws, said, kept, root);
   return { ...more, ws, kind: said.kind, prev, salt: typeof salt === "string" ? salt : salt() } as Body;
 }
 
 /// The bodies of `says`, signed one after another after `log` (each next one's `prev` the one before it, whose chain is
 /// whole here as the first's is), each salted by `salt()`.
-export function bodiesOf(ws: string, says: readonly Said[], log: readonly Entry[], kept: ReadonlyMap<string, J>, salt: () => string): Body[] {
+export function bodiesOf(ws: string, says: readonly Said[], log: readonly Entry[], kept: ReadonlyMap<string, J>, salt: () => string, root?: Root): Body[] {
   const have = new Map(kept);
   const out: Body[] = [];
   for (const s of says) {
-    const b = bodyOf(ws, s, log, have, salt);
+    const b = bodyOf(ws, s, log, have, salt, root);
     if (out.length > 0) b.prev = bodyHash(out[out.length - 1])!;
     have.set(bodyHash(b)!, b);
     out.push(b);
@@ -128,7 +133,10 @@ export const TAKE_OVER_ROUNDS = 4;
 /// by what was meant. `why` where that cannot be reached in TAKE_OVER_ROUNDS, or the act would change nothing of what
 /// it means (its signer no owner or admin, a role it may not give, a circle of removals), or the root's log is not
 /// held: then nothing is to be signed.
-export function plan(ws: string, root: string, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], own: { genesis: string; sub: string; key: string }, meant: readonly Said[], nowSecs: number, moved?: readonly Entry[]): { says: Said[] } | { why: string } {
+/// `rootOut`: a removal of the root's person names the root's log (`cancelsOf`), where every station the list names
+/// reads it so (views/lock.ts `rootOutServed`); else it names what it named before, and does nothing to them.
+export function plan(ws: string, root: string, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], own: { genesis: string; sub: string; key: string }, meant: readonly Said[], nowSecs: number, moved?: readonly Entry[], rootOut = false): { says: Said[] } | { why: string } {
+  const named = rootOut ? rootOf(root, chains) : undefined;
   const before = listed(ws, root, [...chains.values()], bodies, crypto, moved);
   if (before === null) return { why: "the workspace's root log is not held here" };
   const log = chains.get(own.genesis);
@@ -142,7 +150,7 @@ export function plan(ws: string, root: string, chains: ReadonlyMap<string, reado
     const chain = [...log];
     const newBodies: Body[] = [];
     for (const s of says) {
-      const b = bodyOf(ws, s, chain, kept, "0".repeat(32 - String(newBodies.length).length) + newBodies.length);
+      const b = bodyOf(ws, s, chain, kept, "0".repeat(32 - String(newBodies.length).length) + newBodies.length, named);
       const h = bodyHash(b)!;
       kept.set(h, b);
       newBodies.push(b);
@@ -174,6 +182,12 @@ export function plan(ws: string, root: string, chains: ReadonlyMap<string, reado
     if (!more) return { why: "what it would take out besides cannot be said again by this device" };
   }
   return { why: "what it would take out besides cannot be said again by this device" };
+}
+
+/// The root's person (the root log's genesis's `sub`) and the root, of the logs held; none where it is not held.
+export function rootOf(root: string, chains: ReadonlyMap<string, readonly Entry[]>): Root | undefined {
+  const sub = (chains.get(root)?.[0]?.body as J)?.sub;
+  return typeof sub === "string" ? { sub, genesis: root } : undefined;
 }
 
 const sameSubject = (a: Said, b: Said): boolean =>

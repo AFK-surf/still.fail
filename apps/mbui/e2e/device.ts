@@ -406,7 +406,7 @@ export class Device {
     }, ms);
     return this.until({ topic: "station", scope: workspace, station }, (v) => {
       if (!v?.link) return undefined;
-      const s: J = { station, state: v.link.state, message: v.link.message, ...(v.blocked ? { cause: "lock", blocked: v.blocked } : {}) };
+      const s: J = { station, state: v.link.state, message: v.link.message, ...(v.link.old ? { old: v.link.old } : {}), ...(v.blocked ? { cause: "lock", blocked: v.blocked } : {}) };
       return ok(s) ? s : undefined;
     }, ms);
   }

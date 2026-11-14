@@ -15,7 +15,7 @@ import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { type Entry, canonical, endpointProof, sigValid, taggedSigValid, validKeyId } from "../src/cloud/lock.ts";
 import { type Family, type Keeper, type Variant, World, drawSteps, hashOf, signed, variantName } from "./lock-fork-choice-model.ts";
 import { type Holder, V3, type V3v, drawSteps3, effect, spec, stationKeys3, v3Name } from "./lock-roster-model.ts";
-import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, tagOf, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, m8, revoked, unsigned } from "./lock-roster4-model.ts";
+import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, tagOf, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, m8, m9, revoked, unsigned } from "./lock-roster4-model.ts";
 import { Rng, WS } from "./lock-world-sim.ts";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../rules/js/rules.js";
@@ -375,7 +375,7 @@ function misshapen(o: Out, seed: number, r: Rng) {
   keepers4(o, w, `misshapen seed ${seed}`, r, bad);
 }
 
-/// The fourth round's scripted worlds (M2, M5, the revoked key's web device and off, M6, M7 with each of its rows),
+/// The fourth round's scripted worlds (M2, M5, the revoked key's web device and off, M6, M7 with each of its rows, M8, M9),
 /// `from` to `to` each, compared at every point they name.
 export function scriptedWorlds(from: number, to: number): Out {
   const o = fresh();
@@ -389,6 +389,7 @@ export function scriptedWorlds(from: number, to: number): Out {
       m6(seed);
       for (const m of [{}, { away: true }, { attack: "same" as const }, { attack: "any" as const }]) m7(seed, m);
       for (const m of [{}, { away: true }, { self: true }, ...(["removed", "circle", "honest", "self"] as const).map((rival) => ({ rival }))]) m8(seed, m);
+      m9(seed);
       misshapen(o, seed, r);
       // (one whose device says no signer: listed, signing nothing, its web page let in)
       const u = unsigned(seed);

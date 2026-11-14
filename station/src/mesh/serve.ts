@@ -8,7 +8,7 @@
 import type { Admin } from "../api/admin.ts";
 import { langOfCore, queryPairs } from "../api/request.ts";
 import { BUILD_HEADER, COUNTED_FROM, buildOf, coreTooOld } from "../api/oldest.ts";
-import { MOVED_FROM_BUILD } from "../api/moved-from.ts";
+import { MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD } from "../api/moved-from.ts";
 import { deviceBuildsOf } from "./device-builds.ts";
 import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -148,7 +148,7 @@ function leftOutFor(cloud: Cloud, hello: any, device: string, accepted?: Accepte
 /// and the last entries of the workspace's lock (`entries`), so one taken out of it hears so, with no cloud to read it of.
 export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted, sub: string | null = null): Record<string, unknown> {
   if (e instanceof LockRefusal) {
-    const chains = sub === null ? [] : personChainsOf(cloud).of(sub).map(([genesis, entries]) => ({ genesis, entries }));
+    const chains = sub === null ? [] : ownChainsOf(cloud, sub, joinedOf(cloud, claimed(hello))).map(([genesis, entries]) => ({ genesis, entries }));
     const person = chains.length > 0 && JSON.stringify(chains).length <= REFUSAL_PERSON_BYTES ? { person: chains } : {};
     const ws = joinedOf(cloud, claimed(hello));
     const tail: Entry[] = [];
@@ -320,9 +320,14 @@ export function sawBuild(cloud: Cloud, viewer: Admitted["viewer"], headers: Reco
 /// says none is answered as `coreTooOld` answers it (a web page from before builds were said, or not loaded again since:
 /// told to update, every request of it was refused and nothing on it said why, 2026-11-10), and one under COUNTED_FROM
 /// (a development build's, an iOS app's TestFlight number) cannot be told apart.
+/// So too one under ROOT_OUT_FROM_BUILD where the state in force has the root's person out of `~root` (`Cloud.rootOut`):
+/// its rules read the removal that took them out as nothing; anywhere else it reads the state as this station does.
 export function movedTooOld(cloud: Cloud, viewer: Admitted["viewer"], build: number | null): boolean {
-  if (build === null || build < COUNTED_FROM || build >= MOVED_FROM_BUILD) return false;
-  return typeof cloud.chain(joinedOf(cloud, viewer.workspace))?.state?.moved === "string";
+  if (build === null || build < COUNTED_FROM || build >= ROOT_OUT_FROM_BUILD) return false;
+  const ws = joinedOf(cloud, viewer.workspace);
+  if (typeof cloud.chain(ws)?.state?.moved !== "string") return false;
+  // (a Cloud made without the constructor, as tests make one, has none: read on every request, so optional)
+  return build < MOVED_FROM_BUILD || (typeof cloud.rootOut === "function" && cloud.rootOut(ws));
 }
 
 /// The ids of the devices workspace `ws`'s lock here names (null: the home one): its chain's, and where it moved the
@@ -382,7 +387,9 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     // lock let in, as admission let this one, and of a workspace with none, of nobody)
     // (`carried`: a moved chain read as it moved beside its people's logs, cloud/lock.ts `state4Moved`, 2026-11-14: every
     // reader must make the same state, so a core hands a chain over only once each of its stations says it)
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
+    // (`rootout`: a removal of the root's person naming the root's log takes them out, rules/AGENTS.md: a core says one
+    // only once each station the list names says it)
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried", "bind", "rootout"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -502,6 +509,25 @@ function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"],
   }
 }
 
+/// The chains of `sub`'s own lock this station keeps, as a device of theirs asking in workspace `ws` is told them (GET
+/// /lock/person, a refusal's `person`): every one, but the root's log of a workspace whose chain moved once the state in
+/// force there binds its person by another log of theirs (rules/AGENTS.md `~root`; the lead, 2026-11-14). Which log is
+/// theirs is the state's to say (what the logs and bodies signed), never the control plane's nor which came last. So,
+/// where the root's person began their lock anew (`restart`, a new genesis): while `~root` still binds them, and once
+/// they are taken out and bound by nothing, both logs are theirs here, as before this rule; once an owner's admit binds
+/// them by the new one, that one alone, so a device still on the root's log hears its person's lock was begun anew
+/// (its core's `replaced`) and the new app never takes the old log for theirs. The root's log is kept and given among
+/// the workspace's logs in every phase (`Cloud.logsOf`, person-sync.ts): the workspace is rooted in it for good.
+export function ownChainsOf(cloud: Cloud, sub: string, workspace: string | null | undefined): [string, unknown[]][] {
+  const all = personChainsOf(cloud).of(sub);
+  // (a Cloud made without the constructor, as tests make one, may have none of these: read on every request, so optional)
+  if (typeof cloud.home !== "function" || typeof cloud.chain !== "function" || typeof cloud.locked !== "function") return all;
+  const ws = workspace && workspace !== cloud.home() ? workspace : null;
+  const root = cloud.chain(ws)?.state?.moved;
+  const bound = root === undefined ? undefined : cloud.locked(ws)?.state?.persons.get(sub);
+  return bound === undefined || bound === root ? all : all.filter(([genesis]) => genesis !== root);
+}
+
 /// How far a person's chain gone by goes: its last entry's place and hash.
 const personHead = (chain: unknown[]) => ({ seq: chain.length - 1, hash: chain.length === 0 ? null : hashOf(chain.at(-1) as Entry) });
 
@@ -517,7 +543,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     const chains = personChainsOf(cloud);
     // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
     // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
-    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
+    if (method === "GET") return [200, { chains: ownChainsOf(cloud, viewer.sub, viewer.workspace).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind", "rootout"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
     if (method !== "POST") return [405, { error: "GET or POST" }];
     let said: any;
     try {

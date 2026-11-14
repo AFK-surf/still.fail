@@ -281,7 +281,12 @@ function pairsOf(root: string, admits: Stmt[]): Map<string, Role3> {
 /// the keeper holds `lock` and its genesis names `sub`. (c) A cancellation counts only from a step-1 owner or admin,
 /// naming a `ws.member` about the same `sub` whose role is not above the canceller's; the admit need not be in force.
 /// (d) Stations: admitted by an owner or admin in the list, cancelled by a step-1 owner or admin, no roles among them.
-export function roster(h: Holder, root: string, rule: "steps" | "grounded" = "grounded"): Roster {
+///
+/// `rootAdmit` (round four's, the lead's, 2026-11-14): the hash of an admit in force on the root's log of the root's
+/// person to it as owner, said by the root's pair (`~root`): whom the list binds them by while it is not out (in, or left
+/// undecided by a circle of removals), before any other admit of theirs; once a cancellation that counts took it out, they are bound by their real admits as anyone
+/// is, or not in the list. Without it, round three's reading: the root always bound by the root.
+export function roster(h: Holder, root: string, rule: "steps" | "grounded" = "grounded", rootAdmit?: string): Roster {
   const stmts: Stmt[] = [];
   for (const [g, k] of h.logs) {
     for (const x of k.active) {
@@ -292,7 +297,7 @@ export function roster(h: Holder, root: string, rule: "steps" | "grounded" = "gr
   const admits = stmts.filter((s) => s.e.kind === "ws.member"), removes = stmts.filter((s) => s.e.kind === "ws.member.remove");
   const out: Roster = { rooted: h.logs.has(root), members: new Map(), stations: new Set(), letIn: new Map(), step1: new Map(), cancelled: new Set(), pairs: new Map(), admits, removes, rule, labels: new Map(), undecided: new Set() };
   if (!out.rooted) return out;
-  if (rule === "grounded") return grounded(h, root, stmts, out);
+  if (rule === "grounded") return grounded(h, root, stmts, out, rootAdmit);
   // 1. candidates, cancellations aside
   out.step1 = pairsOf(root, admits);
   // 2. cancellations by step-1 owners and admins, each counting even where its signer is cancelled in this same step
@@ -352,7 +357,7 @@ export function roster(h: Holder, root: string, rule: "steps" | "grounded" = "gr
 /// owner to give owner, admin to give admin or member; owner to cancel an owner's admit, admin to cancel the others
 /// (the canceller's role "not below" the admit's). Choices (a), (b) and the admit naming the same sub stay as in steps
 /// 1-3; stations: admitted by an IN owner or admin, cancelled by one.
-function grounded(h: Holder, root: string, stmts: Stmt[], out: Roster): Roster {
+function grounded(h: Holder, root: string, stmts: Stmt[], out: Roster, rootAdmit?: string): Roster {
   const rootPair = `alice|${root}`;
   const { admits, removes } = out;
   out.step1 = pairsOf(root, admits);
@@ -415,9 +420,12 @@ function grounded(h: Holder, root: string, stmts: Stmt[], out: Roster): Roster {
   }
   out.pairs.set(rootPair, "owner");
   for (const k of out.pairs.keys()) out.undecided.delete(k);
-  const best = new Map<string, Member>([["alice", { lock: root, role: "owner", admit: "" }]]);
+  // (round four's `~root`: while it is not out (in, or undecided: a removal by one standing in a circle of removals drops
+  // nobody, the lead's, 2026-11-14), it binds the root's person before anything; once out, their admits as anyone's)
+  const rootIn = rootAdmit === undefined || label.get(`a:${rootAdmit}`) !== "out";
+  const best = new Map<string, Member>(rootIn ? [["alice", { lock: root, role: "owner", admit: "" }]] : []);
   for (const a of admits) {
-    if (label.get(`a:${a.h}`) !== "in" || a.body.sub === "alice") continue;
+    if (label.get(`a:${a.h}`) !== "in" || (rootIn && a.body.sub === "alice") || a.h === rootAdmit) continue;
     const was = best.get(a.body.sub);
     // (round four's D6: an admit said in a log binds before the chain's as it moved, `~<moved>/m/<sub>`, of the same role)
     const before = (x: string, y: string) => (x.startsWith("~") === y.startsWith("~") ? x < y : !x.startsWith("~"));

@@ -48,7 +48,7 @@ import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
-import { type Said, bindBytes, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
+import { type Said, bindBytes, bodiesOf, byHash, plan, prevOf, rootOf as rootNamed } from "../lock-statements.ts";
 import { HAND_OVER_FIRST_SECS, HAND_OVER_FROM, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, handOverPlan, mayHandOver } from "../lock-handover.ts";
 import { buildOf, ownBuild } from "../station/oldest.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
@@ -835,7 +835,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           else p.serving.delete(id);
           if (r._tag === "Success" && arr(get(r.success, "serves")).includes("forks")) p.forks.add(id);
           else p.forks.delete(id);
-          if (r._tag === "Success") keepServes(inner, ws, id, SERVES_MOVED.every((x) => arr(get(r.success, "serves")).includes(x)));
+          if (r._tag === "Success") keepServes(inner, ws, id, SERVES_MOVED.every((x) => arr(get(r.success, "serves")).includes(x)), arr(get(r.success, "serves")).includes("rootout"));
           if (r._tag !== "Success" || !p.serving.has(id)) return null;
           const head = readHead(get(r.success, "head"));
           if (!p.heads.has(id) || !sameHead(p.heads.get(id)!, head)) headsMoved = true;
@@ -3170,7 +3170,7 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     const notAllowed = () => new CoreError("forbidden", t("core-misc.lock.notAllowed"));
     if (own === null || key === null || root === null || personal.standing(sub) !== "member") return yield* Effect.fail(notTrustedHere());
     // (on and off are said in the root's log alone: the rules count them nowhere else)
-    if (meant.some((m) => m.kind === "open" || m.kind === "off") && own !== root) return yield* Effect.fail(rootOnly(inner, ws));
+    if (meant.some((m) => m.kind === "open" || m.kind === "off") && !saysOnOff(inner, ws, own)) return yield* Effect.fail(rootOnly(inner, ws));
     // (one the chain as it moved bound to no log binds themselves to theirs first, in the same ask: `bindSaid`, said as
     // the seed is in hand, personal-lock.ts `#addBinds`; worked out with it, as its statement lands before this one)
     const bind = yield* bindSaid(inner, ws, sub);
@@ -3178,8 +3178,10 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     const worked = (after: readonly Entry[], binding: boolean) => {
       const chains = new Map(logsOf(inner, ws, false));
       chains.set(own, after);
-      return plan(ws, root, chains, bodiesHeld(inner, ws), { genesis: own, sub, key }, binding && bind !== null ? [bind, ...meant] : meant, now(inner), moved);
+      return plan(ws, root, chains, bodiesHeld(inner, ws), { genesis: own, sub, key }, binding && bind !== null ? [bind, ...meant] : meant, now(inner), moved, rootOut);
     };
+    const rootOut = rootOutServed(inner, ws);
+    const named = rootOut ? rootNamed(root, logsOf(inner, ws, false)) : undefined;
     const first = worked(personal.entries(sub), true);
     if ("why" in first) return yield* Effect.fail(notAllowed());
     const salt = () => saltHex(inner);
@@ -3187,7 +3189,7 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
       // (the binding said already, as the seed came in hand: not said again; else said here first)
       const p = worked(after, bindNeeded(inner, ws, sub) !== null);
       if ("why" in p) return notAllowed();
-      const bodies = bodiesOf(ws, p.says, after, byHash(bodiesHeld(inner, ws)), salt);
+      const bodies = bodiesOf(ws, p.says, after, byHash(bodiesHeld(inner, ws)), salt, named);
       return { bodies, shown: p.says.map((_, i) => (i === p.says.length - 1 ? shown : { act: null, name: shown.name })) };
     }, reason);
     touch(inner, ws);
@@ -3220,7 +3222,7 @@ export function movedWorks(inner: Inner, ws: string, sub: string, meant: Said[])
   // proof is not made here, nobody asked: the plan's crypto takes this device's own statements as signed)
   const need = bindNeeded(inner, ws, sub);
   const all: Said[] = need === null ? meant : [{ kind: "bind", key: need.key, sig: "0".repeat(128) }, ...meant];
-  return !("why" in plan(ws, root, chains, bodiesHeld(inner, ws), { genesis: own, sub, key }, all, now(inner), held(inner, ws)?.entries ?? []));
+  return !("why" in plan(ws, root, chains, bodiesHeld(inner, ws), { genesis: own, sub, key }, all, now(inner), held(inner, ws)?.entries ?? [], rootOutServed(inner, ws)));
 }
 
 /// Where this device binds `sub` to their own log in moved workspace `ws` with a `bind` (rules/src/lock/roster.mbt
@@ -3318,11 +3320,26 @@ const servesHeld = (inner: Inner, ws: string): string[] => {
   const r = inner.data.record(SERVES, ws);
   return isObject(r) && Array.isArray(r.ready) ? (r.ready as unknown[]).filter((x): x is string => typeof x === "string") : [];
 };
+/// Which of them said `rootout` (a removal of the root's person naming the root's log takes them out, rules/AGENTS.md;
+/// the lead, 2026-11-14), kept beside them (`rootout`).
+const rootOutHeld = (inner: Inner, ws: string): string[] => {
+  const r = inner.data.record(SERVES, ws);
+  return isObject(r) && Array.isArray(r.rootout) ? (r.rootout as unknown[]).filter((x): x is string => typeof x === "string") : [];
+};
 /// What station `id` of `ws` said as it answered a read of the lock: kept, written only where it changed.
-function keepServes(inner: Inner, ws: string, id: string, serves: boolean): void {
-  const was = servesHeld(inner, ws);
-  if (was.includes(id) === serves) return;
-  inner.data.put(SERVES, ws, { ready: serves ? [...was, id] : was.filter((x) => x !== id) });
+function keepServes(inner: Inner, ws: string, id: string, serves: boolean, rootOut: boolean): void {
+  const was = servesHeld(inner, ws), out = rootOutHeld(inner, ws);
+  if (was.includes(id) === serves && out.includes(id) === rootOut) return;
+  inner.data.put(SERVES, ws, { ready: serves ? [...was.filter((x) => x !== id), id] : was.filter((x) => x !== id), rootout: rootOut ? [...out.filter((x) => x !== id), id] : out.filter((x) => x !== id) });
+}
+/// Whether a removal of the root's person said here names the root's log (lock-statements.ts `cancelsOf`): only where
+/// every station the state in force names said `rootout` (a reader from before reads it as nothing, so one of them
+/// would make another state); else it names what it named before, the act as it was (refused: it would not do what
+/// it means).
+function rootOutServed(inner: Inner, ws: string): boolean {
+  const said = new Set(rootOutHeld(inner, ws));
+  const stations = [...stateOf(inner, ws).stations.keys()];
+  return stations.length > 0 && stations.every((id) => said.has(id));
 }
 
 /// What holds back the handover of `ws`'s chain `entries` by `sub`'s device besides the stations (`stationsWaited`),
@@ -3659,8 +3676,19 @@ function offAllowed(inner: Inner, sub: string, ws: string): Effect.Effect<void, 
   return Effect.suspend(() => {
     if (!saysHere(inner, sub)) return Effect.fail(notTrustedHere());
     const own = inner.adb.personal().root(sub);
-    return own !== null && own === inForceOf(inner, ws).root ? Effect.void : Effect.fail(rootOnly(inner, ws));
+    return own !== null && saysOnOff(inner, ws, own) ? Effect.void : Effect.fail(rootOnly(inner, ws));
   });
+}
+
+/// Whether a device on log `own` says `open` and `off` of moved workspace `ws` (the rules count them there): on the
+/// root's log, or on the one the list binds the root's person by now (a real admit once `~root` is out: they follow
+/// the person, rules/src/lock/roster.mbt; the lead, 2026-11-14), whose word stands once it says any.
+function saysOnOff(inner: Inner, ws: string, own: string): boolean {
+  const root = inForceOf(inner, ws).root;
+  if (root === null) return false;
+  if (own === root) return true;
+  const named = rootNamed(root, logsOf(inner, ws, false));
+  return named !== undefined && stateOf(inner, ws).persons.get(named.sub) === own;
 }
 
 /// Whether this device can say a statement of a moved workspace: on its person's own lock, pinned here. Else nothing

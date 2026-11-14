@@ -71,7 +71,7 @@ import { Rigs } from "./rigs.ts";
 import { Devices } from "./devices.ts";
 import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { answersOf, asked, bindPerson, enrolled, inForceOf, keepToPerson, lockSeen, movedBySelf, movedHere, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, takeOffBound, tellStations, tookOrRefused, withBound } from "./views/lock.ts";
+import { answersOf, asked, bindPerson, enrolled, inForceOf, keepToPerson, lockSeen, movedBySelf, movedHere, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerKnown, signerOf, signsAs, takeOffBound, tellStations, tookOrRefused, withBound } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -335,6 +335,10 @@ export class Core {
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
           signKey: () => signerOf(inner),
+          makeSignKey: () => (inner.host.appKeys ? Effect.map(Effect.orElseSucceed(Signer.make(inner.host), () => null), (signer) => {
+            if (signer) signerKnown(inner, signer.id);
+            return signer?.id ?? null;
+          }) : Effect.succeed(null)),
           ...ownLockEnv(inner),
           changed: () => {
             inner.adb.touched();

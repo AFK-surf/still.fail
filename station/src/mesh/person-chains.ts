@@ -208,9 +208,12 @@ export class PersonChains {
       this.#kept.set(genesis, kept.entries);
       if (kept.aside.length > 0) this.#aside.set(genesis, kept.aside);
       else this.#aside.delete(genesis);
-      // A person's oldest chains go past the few kept (the latest is the one kept last).
+      // A person's oldest chains go past the few kept (the latest is the one kept last), but a log a workspace's state
+      // is made of where it was heard (its root's for good, one it binds someone by: `needs`), which it would wait for
+      // again (the root's person whose lock was begun anew keeps their old log as the workspace's root).
       const sub = subOf(kept.entries);
-      const theirs = [...this.#kept.keys()].filter((g) => subOf(this.#kept.get(g)!) === sub);
+      const needed = (g: string) => [...(this.#heard.get(g) ?? [])].some((w) => this.needs(w).has(g));
+      const theirs = [...this.#kept.keys()].filter((g) => subOf(this.#kept.get(g)!) === sub && !needed(g));
       for (const g of theirs.slice(0, Math.max(0, theirs.length - CHAINS_A_PERSON))) {
         this.#kept.delete(g);
         this.#aside.delete(g);

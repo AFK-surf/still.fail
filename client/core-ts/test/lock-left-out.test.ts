@@ -15,17 +15,17 @@ import { join } from "node:path";
 import { mock, test } from "node:test";
 import { Effect } from "effect";
 import { type Entry as StationEntry, LockRefusal, entryHash as stationHash } from "../../../station/src/cloud/lock.ts";
-import { Cloud, writeState } from "../../../station/src/cloud/state.ts";
+import { Cloud, personChainsOf, writeState } from "../../../station/src/cloud/state.ts";
 import { wall } from "../../../station/src/ops/fibers.ts";
 import { inLockBringing, lockPartRoute, lockRoute, refusalOf } from "../../../station/src/mesh/serve.ts";
 import { Log, bring as brought, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
 import { hooks } from "../src/core/execute.ts";
 import { CoreError } from "../src/error.ts";
-import type { Entry } from "../src/lock.ts";
+import { type Entry, Signer } from "../src/lock.ts";
 import { pairSession, pakeKeys, pakeStart } from "../src/pair.ts";
 import { httpError } from "../src/station/requests.ts";
 import { hex } from "../src/util.ts";
-import { held, read } from "../src/views/lock.ts";
+import { held, read, signerKnown } from "../src/views/lock.ts";
 import { dialer } from "../src/views/pair.ts";
 import { grant, pipe, rig } from "./lock-rig.ts";
 import { stationReplies } from "./station-fixture.ts";
@@ -44,26 +44,30 @@ type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
 /// web page. `waiting`: the station given no root's log. `older`: a station from before its refusal said `apps`.
 /// `carried`: s1 a member the chain names with X as an app of theirs, bound to no log, no log of theirs anywhere (the
 /// state carries them by the chain alone).
-async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean; unread?: boolean } = {}) {
+/// `rootLost`: s1 the root's person, its log (x's) the root, every device of it lost; r1 an owner by its admit; this
+/// core s1's new app.
+async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean; unread?: boolean; rootLost?: boolean } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const alice = new Log("r1"), bob = new Log("r2"), x = new Log("s1");
   const A = ed().hex, base = ed();
-  alice.say("open", { ...settings, email: "r1@x.com" }, "ws");
-  alice.say("member", { sub: "r2", email: "r2@x.com", lock: bob.genesis, role: "admin" }, "ws");
-  alice.say("station", { key: A }, "ws");
+  const root = o.rootLost ? x : alice;
+  root.say("open", { ...settings, email: `${root.sub}@x.com` }, "ws");
+  if (o.rootLost) x.say("member", { sub: "r1", email: "r1@x.com", lock: alice.genesis, role: "owner" }, "ws");
+  root.say("member", { sub: "r2", email: "r2@x.com", lock: bob.genesis, role: "admin" }, "ws");
+  root.say("station", { key: A }, "ws");
   if (o.named) alice.say("member", { sub: "s1", email: "s1@x.com", lock: x.genesis, role: "member" }, "ws");
   const app = (l: Log) => ({ id: l.app.base.hex, sub: l.sub, kind: "app", label: `${l.sub}'s app`, sign_key: l.app.signer.id });
   const body = {
-    owner: "r1", ...settings, passkeys: [], stations: [{ key: A, name: "a" }], gateways: [],
-    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named || o.carried ? [{ sub: "s1", email: "s1@x.com", role: "member" }] : [])],
-    devices: [app(alice), app(bob), ...(o.named || o.carried ? [app(x)] : [])],
+    owner: root.sub, ...settings, passkeys: [], stations: [{ key: A, name: "a" }], gateways: [],
+    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named || o.carried || o.rootLost ? [{ sub: "s1", email: "s1@x.com", role: o.rootLost ? "owner" : "member" }] : [])],
+    devices: [app(alice), app(bob), ...(o.named || o.carried || o.rootLost ? [app(x)] : [])],
   };
-  const first = signed({ v: 1, ws: "ws", seq: 0, prev: null, at: 1000, kind: "genesis", body }, alice.app.signer);
-  const moved = signed({ v: 1, ws: "ws", seq: 1, prev: stationHash(first), at: 1000, kind: "moved", body: { root: alice.genesis } }, alice.app.signer);
+  const first = signed({ v: 1, ws: "ws", seq: 0, prev: null, at: 1000, kind: "genesis", body }, root.app.signer);
+  const moved = signed({ v: 1, ws: "ws", seq: 1, prev: stationHash(first), at: 1000, kind: "moved", body: { root: root.genesis } }, root.app.signer);
   const r = await rig(() => ({ ws: first as unknown as Entry }), (host) => {
     if (o.web) host.appKeys = false;
-  }, [A], [A], undefined, [], { role: "member", ...(o.unread ? { lock: null } : {}) });
+  }, [A], [A], undefined, [], { role: o.rootLost ? "owner" : "member", ...(o.unread ? { lock: null } : {}) });
   clock = () => r.host.nowMs();
   // (the cloud's copy of a person's own lock, for the devices from before: it keeps none of s1's)
   // (`unread`: it keeps s1's, as it does for an app from before, read before any station answered)
@@ -71,6 +75,12 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   // (`unread`: the cloud's copy not moved yet either, so no read of it holds the chain as it moved)
   r.cloud.chains.set("ws", (o.unread ? [first] : [first, moved]) as unknown as Entry[]);
   const inner = r.core.inner;
+  // (`rootLost`: an app new on this machine, with no signer yet until it asks to be let in, as a newcomer's)
+  if (o.rootLost) {
+    await Effect.runPromise(Effect.ignore(inner.host.secureDelete?.(Signer.KEY) ?? Effect.void));
+    await Effect.runPromise(Effect.ignore(inner.host.storageDelete(Signer.KEY)));
+    signerKnown(inner, null);
+  }
   inner.mesh = () => Effect.succeed({ deviceId: () => base.hex, sign: () => ({ publicKey: new Uint8Array(32), signature: new Uint8Array(64) }), link: () => Effect.fail(CoreError.plainly("mesh", "no station link here")) } as never);
   inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   // Station A: the station's own code, the chain pinned and moved, the logs and bodies its members' devices gave it.
@@ -81,10 +91,12 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   c.takeLock([first, moved], null, true);
   // (as each member's app device brings them, POST /lock/person)
   const bring = (l: Log) => void brought(c, l, true, "ws");
-  for (const l of o.waiting ? [bob] : o.named && !o.noApp ? [alice, bob, x] : [alice, bob]) bring(l);
-  const viewer = viewerOf("s1", { base }, "member", "ws");
+  for (const l of o.waiting ? [bob] : (o.named && !o.noApp) || o.rootLost ? [alice, bob, x] : [alice, bob]) bring(l);
+  const viewer = viewerOf("s1", { base }, o.rootLost ? "owner" : "member", "ws");
   /// What the station does to each of its asks: `lie`, a device its refusals name to ask in place of those it would.
-  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0, personHeld: o.personHeld === true || o.unread === true, personUntold: o.personHeld === true, lockUnread: o.unread === true };
+  /// `down`: (`rootLost`) its link refused and not dialled again yet: asks fail as a link waiting does, no hello made,
+  /// until it is dialled again (`hello()` of the test, or as it comes online).
+  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0, asked: [] as string[], down: false, personHeld: o.personHeld === true || o.unread === true, personUntold: o.personHeld === true, lockUnread: o.unread === true };
   /// The link's hello to A, as the station answers it: null where it lets this device in; else its refusal, told the
   /// core as the mesh wire tells it (station/mesh-wire.ts `refusedFor`).
   const hello = (): CoreError | null => {
@@ -100,9 +112,11 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
       // (its own lock not heard of here yet: the refusals before the test's own say nothing of it)
       if (st.personUntold) delete refusal.person;
       st.refusals.push(refusal);
+      st.down = o.rootLost === true;
       return hooks.lockRefused?.(inner, "ws", A, refusal.lock, refusal) ?? new CoreError("lock_unconfirmed", e.message);
     }
     st.admitted++;
+    st.down = false;
     return null;
   };
   // A station tried again (views/lock.ts `refusedAgain`): its link dials it, and once let in the lock is read as a link
@@ -113,9 +127,9 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
     if (address === `ws/${A}` && hello() === null) inner.runner.fork(Effect.ignore(read(inner, "ws")));
   };
   const original = inner.stations.requests.call.bind(inner.stations.requests);
-  inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+  const answer = (addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]): Effect.Effect<unknown, CoreError> => {
     const [ws, id] = addr.toString().split("/");
-    if (id !== A || !path.startsWith("/lock")) return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
+    if (id !== A || !path.startsWith("/lock")) return (original as (...x: unknown[]) => Effect.Effect<unknown, CoreError>)(addr, method, path, body, ...rest);
     if (ws !== "ws") return Effect.fail(httpError(404, { error: "no route" }));
     // (its person's own lock not read yet: not answered, until the test lets it be)
     if (st.personHeld && method === "GET" && path === "/lock/person") return Effect.fail(new CoreError("station_offline", "not reached"));
@@ -124,13 +138,17 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
     // (its link's hello first: a station that refused this device is not dialled again until told to, as the mesh does)
     const waits = hooks.lockWaiting?.(inner, ws, A) ?? null;
     if (waits !== null) return Effect.fail(waits);
+    // (`rootLost`: a link refused is down until dialled again, as the mesh's is: its asks fail meanwhile, no hello made)
+    if (st.down) return Effect.fail(new CoreError("station_offline", "its link refused, not dialled again yet"));
+    st.asked.push(`${method} ${path}`);
     const no = hello();
     if (no !== null) return Effect.fail(no);
     const [p, q] = path.split("?") as [string, string | undefined];
     const buf = Buffer.from(body === null || body === undefined ? "" : JSON.stringify(body));
     const [status, out] = p === "/lock" ? lockRoute(c, method, q ? [...new URLSearchParams(q)] : [], buf, viewer as never) : lockPartRoute(c, p.slice("/lock/".length), method, buf, viewer as never);
     return status === 200 ? Effect.succeed(out) : Effect.fail(httpError(status, out));
-  }) as typeof inner.stations.requests.call;
+  };
+  inner.stations.requests.call = answer as typeof inner.stations.requests.call;
   // The trusted devices it dials: each it knows answers as a device on the lock does (a code, the exchange, what it
   // signs, then `approved`); any other, that it approves nothing here.
   const approvers = new Map<string, Approver>();
@@ -179,6 +197,9 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const why = () => `refused ${st.refusals.length}, last left ${JSON.stringify(st.refusals.at(-1)?.left)?.slice(0, 30)} error ${String(st.refusals.at(-1)?.error).slice(0, 80)}; admitted ${st.admitted}; standing ${inner.adb.personal().standing("s1")}`;
   return { why, r, inner, c, st, alice, bob, x, base, A, approvers, dialled, run, ask, page, bring, now, hello, moved };
 }
+
+/// Asks counted by what they are, in the order first made.
+const summary = (asked: string[]) => [...asked.reduce((m, a) => m.set(a, (m.get(a) ?? 0) + 1), new Map<string, number>())].map(([a, n]) => `${a} ×${n}`).join(", ");
 
 /// Whom the page lists: each member's sub.
 const subs = (v: J) => (v.members as J[]).map((m) => m.sub).sort().join(",");
@@ -488,4 +509,56 @@ test("a carried member taken out and added again: their new app, told the list n
   const log = w.inner.adb.personal().root("s1");
   assert.ok(log !== null, "its own log begun");
   assert.equal(w.c.locked()!.state!.persons.get("s1"), log, "bound at the station by that admit");
+});
+
+// The root's person, every device lost (apps/mbui/e2e/locks-moved.ts round 24; the lead, 2026-11-14: after a move they
+// are a member like any other): their new app begins their log anew (`restart`), an owner takes them out naming the
+// root's log, adds them again by the new log and approves the app face to face. The station keeps both logs: the root's
+// (the workspace is rooted in it for good) and the new one (theirs, bound by that admit). The app is in, signing, and
+// brings its log to the station only for a reason that changed since it last did: never at each read.
+test("the root's person's app begun anew, taken out and let in again by an owner: never `replaced`, in, signing, and its log not brought again at each read", async () => {
+  const w = await setUp({ rootLost: true });
+  await w.page();
+  assert.ok(w.st.refusals.length > 0, `refused: the root's log does not name this app (${w.why()})`);
+  const pl = w.inner.adb.personal();
+  const atRestart = w.st.asked.length;
+  const restarted = await w.ask("adb.personalRestart", { sub: "s1" });
+  assert.equal(restarted.error, undefined, restarted.error?.message);
+  const log = w.inner.adb.personal().root("s1");
+  assert.ok(log !== null && log !== w.x.genesis, "its own log begun anew");
+  assert.equal(pl.standing("s1"), "member", "on its own log begun anew, never `replaced` (it began it)");
+  w.alice.say("member.remove", { sub: "s1", cancels: [w.x.genesis] }, "ws");
+  w.bring(w.alice);
+  w.hello();
+  assert.equal(w.c.locked()!.state!.members.has("s1"), false, "out of the station's list");
+  w.approvers.set(w.alice.app.base.hex, {
+    where: (hello) => (Array.isArray(hello.log) && hello.log.length > 0 ? ["ws"] : []),
+    approve: (hello) => {
+      w.alice.say("member", { sub: "s1", email: "s1@x.com", lock: stationHash(hello.log[0]), role: "owner" }, "ws");
+      w.bring(w.alice);
+      return { t: "approved", workspaces: ["ws"], failed: [] };
+    },
+  });
+  await w.page();
+  const paired = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(paired.error, undefined, `${paired.error?.message}: dialled ${w.dialled.map((d) => d.slice(0, 8))}, r1's ${w.alice.app.base.hex.slice(0, 8)} (${w.why()})`);
+  const done = await w.ask("lock.pairCode", { workspace: "ws", code: CODE });
+  assert.equal(done.error, undefined, done.error?.message);
+  const after = await w.page();
+  assert.equal(after.me.confirmed, true, `in (${w.why()})`);
+  assert.equal(w.c.locked()!.state!.persons.get("s1"), log, "bound at the station by its new log");
+  const kept = new Set(personChainsOf(w.c).of("s1").map(([g]) => g));
+  assert.ok(kept.has(w.x.genesis) && kept.has(log!), "the station keeps both: the root's log and the new one");
+  // Then what it asks of the station while nothing changes: reads, and no log brought.
+  console.log(`asked from the restart to the approval's end: ${summary(w.st.asked.slice(atRestart))}`);
+  const from = w.st.asked.length;
+  await w.r.host.time.pass(60_000);
+  const asked = w.st.asked.slice(from);
+  const posts = asked.filter((a) => a === "POST /lock/person").length;
+  const reads = asked.filter((a) => a === "GET /lock/person").length;
+  console.log(`a minute at rest: ${posts} POST /lock/person, ${reads} GET /lock/person, ${asked.length} asks in all: ${summary(asked)}`);
+  assert.equal(posts, 0, `its log brought ${posts} times in a minute at rest (${reads} reads)`);
+  assert.equal(pl.standing("s1"), "member", "never `replaced`");
+  const page = await w.page();
+  assert.equal(page.me.unsigned, undefined, "it signs: its log says its signer, nobody asked more than a newcomer is");
 });

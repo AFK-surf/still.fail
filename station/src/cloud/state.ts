@@ -172,6 +172,9 @@ type InForce = {
   out: { state: LockState; waiting?: true };
   needs: Set<string>;
   word: string;
+  /// Whether the root's person is bound by `~root` (rules/src/lock/state4.mbt `root_in`): not where a removal that named
+  /// the root's log took it out, which a core from before `ROOT_OUT_FROM_BUILD` reads as nothing.
+  rootIn: boolean;
 };
 
 /// A pinned lock as kept: its active chain (`entries`, from its genesis), the entries the rules take that are off it
@@ -621,6 +624,17 @@ export class Cloud {
     return t;
   }
 
+  /// Whether `ws`'s chain moved and its state in force has the root's person out of `~root` (taken out by a removal
+  /// that named the root's log; rules/AGENTS.md): what a core from before `ROOT_OUT_FROM_BUILD` reads otherwise
+  /// (mesh/serve.ts `movedTooOld`). False while waiting (the state names nobody) and where the chain did not move.
+  rootOut(ws: string | null): boolean {
+    const l = this.lockOf(ws);
+    const root = l?.state?.disabled ? undefined : l?.state?.moved;
+    if (l === null || root === undefined) return false;
+    const f = this.forceOf(ws, l, root);
+    return (f.on === "on" || f.on === "off") && !f.rootIn;
+  }
+
   /// The person logs `ws`'s state is made of where its chain moved (the root's, each a statement binds a member by,
   /// each holding an entry of its tag): none where it did not.
   needs(ws: string | null): ReadonlySet<string> {
@@ -827,7 +841,7 @@ export class Cloud {
       if (d.exp <= now) from = Math.max(from, d.exp);
       else until = Math.min(until, d.exp);
     }
-    const f: InForce = { lock: l, ver, from, until, on: s.on, out, needs, word };
+    const f: InForce = { lock: l, ver, from, until, on: s.on, out, needs, word, rootIn: s.rootIn };
     forces.set(id, f);
     return f;
   }

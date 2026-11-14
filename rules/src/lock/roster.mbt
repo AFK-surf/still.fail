@@ -6,8 +6,10 @@
 // along its `prev` chain back to the first (`order=whole` is how signers choose `prev`; a keeper's rule is only this).
 // The entries of the tag whose body is not kept are `lacking`: what a keeper asks for. A removal names the bodies it
 // takes back (`cancels=h`): it cancels every statement in force of those bodies. The workspace is rooted in one person
-// log (its genesis pinned, or named by the old chain's `moved`): that person is its owner by it, always; its settings
-// and whether it is on are said only there (`open`, `off`: the newest in force; nothing is ever let go by an entry).
+// log (its genesis pinned, or named by the old chain's `moved`): what its pair says always counts, as an owner's; its
+// settings and whether it is on are said only there (`open`, `off`: the newest in force; nothing is ever let go by an
+// entry). That its person is in the list, bound by it, is an admit like any other (`~root`, below; the lead's,
+// 2026-11-14): an owner's removal of them that names the root's genesis hash takes it out.
 //
 // The statements are a Dung argumentation framework, labelled by its grounded semantics (its least fixed point):
 // - arguments: each admit (`a:<hash>`, "this admit holds"); for every (person, log) pair that signs an admit or a
@@ -21,7 +23,8 @@
 // - IN: every attacker OUT; OUT: some attacker IN; the rest UNDECIDED, taken as out.
 // Choices kept from the model: the statements of a log are its genesis's person's; every admitted (person, log) counts
 // as theirs for what they sign; the one a person is bound by (whose devices are let in) is the admit in force giving the
-// highest role, then the smallest hash; the root's binding never moves. A station is admitted by a pair that stands as
+// highest role, then the smallest hash; the root's person by `~root` while it is in (the root's pair is no less an
+// owner for what it signs where it is out). A station is admitted by a pair that stands as
 // owner or admin, and cancelled by one. Hashes named in the list (`a:`, `c:`, `admit`, `cancelled`) are the entries'.
 
 ///|
@@ -97,10 +100,15 @@ pub(all) struct Roster {
   /// D6: the keys of the app devices the chain as it moved still says (`carry_of`'s `apps`, by the key each signs
   /// with), and whose they are; none where no chain is carried.
   carried_keys : Array[(String, String)]
-  /// The newest of `open` and `off` in force on the root's active chain (its kind), and the newest `open`'s body.
+  /// The newest of `open` and `off` in force on the root's active chain (its kind), and the newest `open`'s body; once
+  /// the root's person is bound by a real admit, those of the log that binds them where it says any.
   newest : String?
   settings : Json?
 }
+
+///|
+/// The root's person's implicit admit (`~root`), by the hash it is named by in the list's labels.
+pub let root_admit : String = "~root"
 
 ///|
 fn rank_of(role : String) -> Int {
@@ -222,21 +230,26 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   let in_force = if without.length() == 0 { in_force } else { in_force.filter(fn(f) { !without.contains(f.1) }) }
   let forced = in_force.map(fn(f) { (f.0, f.1) })
   forced.sort_by(fn(a, b) { a.compare(b) })
-  // On or off, and the settings: the root's alone.
-  let mut newest : String? = None
-  let mut settings : Json? = None
-  for f in in_force {
-    if f.3 == root {
-      match text_of(field(Some(f.2), "kind")) {
-        Some("open") => {
-          newest = Some("open")
-          settings = Some(f.2)
+  // On or off, and the settings: the root's (and, once the list binds the root's person by a real admit, the log that
+  // binds them where it says any: below).
+  let open_off = fn(g : String) -> (String?, Json?) {
+    let mut newest : String? = None
+    let mut settings : Json? = None
+    for f in in_force {
+      if f.3 == g {
+        match text_of(field(Some(f.2), "kind")) {
+          Some("open") => {
+            newest = Some("open")
+            settings = Some(f.2)
+          }
+          Some("off") => newest = Some("off")
+          _ => ()
         }
-        Some("off") => newest = Some("off")
-        _ => ()
       }
     }
+    (newest, settings)
   }
+  let (newest, settings) = open_off(root)
   let empty : Roster = {
     rooted: false, members: [], stations: [], pairs: [], undecided: [], cancelled: [], statements: [], labels: [], refused,
     in_force: forced, lacking, newest, settings, carried_keys: [],
@@ -289,6 +302,18 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     }
     by_body[cr.moved] = carried_stmts.map(fn(s) { s.hash })
   }
+  // That the root's person is in the list, bound by the root's log, is an admit like any other (`~root`, the lead's,
+  // 2026-11-14): of them, to the root, as owner, by the root's pair, in force, never lacking; a removal of them cancels
+  // it only where its `cancels` names the root's genesis hash (never named or not, as the chain's: a removal of the
+  // root's person said before this rule did nothing, and does nothing for every reader still).
+  by_body[root] = [root_admit]
+  let root_stmt : Stmt = {
+    hash: root_admit,
+    kind: "ws.member",
+    body: Some(Json::object(Map([("sub", Json::string(root_sub)), ("lock", Json::string(root)), ("role", Json::string("owner"))]))),
+    log: root,
+    by: root_sub,
+  }
 
   let stmts : Array[Stmt] = []
   for f in in_force {
@@ -329,6 +354,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     stmts.push({ hash: x, kind: "ws." + kind, body: Some(body), log: g, by: logs.get(g).unwrap().0.sub })
   }
   stmts.append(carried_stmts)
+  stmts.push(root_stmt)
   let txt = fn(s : Stmt, k : String) { text_of(field(s.body, k)).unwrap_or("") }
   let pair_of = fn(s : Stmt) { s.by + "|" + s.log }
   let admits = stmts.filter(fn(s) { s.kind == "ws.member" })
@@ -434,8 +460,9 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     undecided.remove(k)
   }
   let role_of_pair = fn(s : Stmt) { pairs.get(pair_of(s)).map(fn(p) { p.2 }) }
-  // Whom the list binds by which log: the root by its own; anyone else by the admit in force of the highest role,
-  // then one said in a log before the chain's (`Carried`: `~<moved>/m/<sub>`), then the smallest hash.
+  // Whom the list binds by which log: the root's person by the root while `~root` is not out, before any other admit of
+  // theirs; anyone else, and they once it is out, by the admit in force of the highest role, then one said in a log
+  // before the chain's (`Carried`: `~<moved>/m/<sub>`), then the smallest hash. No admit of theirs in, not in the list.
   let before = fn(a : String, b : String) {
     match (a.has_prefix("~"), b.has_prefix("~")) {
       (false, true) => true
@@ -443,9 +470,13 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
       _ => a < b
     }
   }
-  let best : Map[String, (String, String, String?)] = Map([(root_sub, ("owner", root, None))])
+  // (out only where a cancellation of it counts, never where one is undecided, the lead's, 2026-11-14: a removal by an
+  // owner standing in a circle of removals would else drop the root's person on the word of one whose standing nobody
+  // can tell, and theirs is the one word that settles that circle)
+  let root_in = label.get("a:" + root_admit) != Some("out")
+  let best : Map[String, (String, String, String?)] = if root_in { Map([(root_sub, ("owner", root, None))]) } else { Map([]) }
   for a in admits {
-    if label.get("a:" + a.hash) != Some("in") || txt(a, "sub") == root_sub {
+    if label.get("a:" + a.hash) != Some("in") || a.hash == root_admit || (root_in && txt(a, "sub") == root_sub) {
       continue
     }
     let role = txt(a, "role")
@@ -462,6 +493,18 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     if takes {
       best[txt(a, "sub")] = (role, txt(a, "lock"), Some(a.hash))
     }
+  }
+  // `open` and `off` follow the root's person (the lead, 2026-11-14): bound by a real admit (`~root` out) to a log of
+  // theirs, the newest of them in force there counts where it says any, and its newest `open`'s settings where it said
+  // one; else the root's. So they turn safe mode off and on again from the devices that are theirs now, nobody else.
+  let (newest, settings) = match best.get(root_sub) {
+    Some((_, lock, Some(_))) if lock != root =>
+      match open_off(lock) {
+        (None, _) => (newest, settings)
+        (n, None) => (n, settings)
+        said => said
+      }
+    _ => (newest, settings)
   }
   // Stations: admitted by a pair that stands as owner or admin, unless one such cancelled them.
   let st_cancelled : Map[String, String] = Map([])
@@ -566,7 +609,9 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   }
   let carried_keys : Array[(String, String)] = []
   if carried is Some(cr) {
+    // (none of the root's person bound by a real admit: what the chain says of their devices is of the root's log)
     for m in members {
+      guard !(m.sub == root_sub && m.admit is Some(_)) else { continue }
       for d in carry_of(cr, m.sub, m.lock, logs, 0.0, offs.get(m.sub).unwrap_or(Map([]))).apps {
         carried_keys.push((d.sign_key.unwrap_or(""), m.sub))
       }

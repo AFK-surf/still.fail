@@ -254,6 +254,15 @@
   (`src/api/moved-from.ts`) asking in a workspace whose chain moved is told to update there (426 with `update`, as
   `coreTooOld`; `src/mesh/serve.ts` `movedTooOld`), which its app shows as the ordinary 请更新 (请刷新页面 on the web); one
   that says no build is answered as `coreTooOld` answers it. `test/device-builds.test.ts` holds it.
+- After a move the root's person is a member like any other (rules/AGENTS.md, `~root`; the lead, 2026-11-14): this
+  station says `rootout` in its GET /lock `serves`, so a core says a removal of them naming the root's log only where
+  every station reads it so, and a core under `ROOT_OUT_FROM_BUILD` (`src/api/moved-from.ts`) is told to update
+  (`movedTooOld`) only where the state in force has them out of `~root` (`Cloud.rootOut`, the rules' `root_in`):
+  nowhere else is anyone told anything. Which of their logs is theirs is the state's to say (`src/mesh/serve.ts`
+  `ownChainsOf`): GET /lock/person and a refusal's `person` give the root's log as theirs no more once an admit binds
+  them by another, so their new app never reads its lock replaced and a device of the root's log hears that it was;
+  the root's log stays among the workspace's logs and is never let go as a person's oldest (`CHAINS_A_PERSON`,
+  `src/mesh/person-chains.ts`). `test/lock-root-out.test.ts` holds it.
 
 ## Screens
 
