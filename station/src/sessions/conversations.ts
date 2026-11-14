@@ -8,6 +8,7 @@ import { PlaceRefused } from "../ops/places.ts";
 import { wall } from "../ops/fibers.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
+import { isSlackWrite } from "../tools/mcp.ts";
 import { LegacyEditsUnavailable, makeStore as makeReadStore, statePendingCard as readStatePendingCard, stateQuestion as readStateQuestion } from "../read/store.ts";
 import { iso } from "../read/transcript.ts";
 import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
@@ -17,7 +18,6 @@ import {
   type Args,
   MAX_WAIT_SECONDS,
   MIN_WAIT_SECONDS,
-  WRITES,
   aboutTs,
   cardArg,
   cardSaid,
@@ -816,7 +816,7 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
   const channel = textOf("channel") ?? textOf("channel_id");
   const surface = hub.surface(connect);
   // A write lands in a thread: the one named, the one its message is in, or (a new message) the one it starts.
-  const write = WRITES.some((w) => method.startsWith(w));
+  const write = isSlackWrite(method);
   const named = textOf("thread_ts");
   const about = textOf("ts") ?? textOf("timestamp");
   let threadTs: string | null = null;

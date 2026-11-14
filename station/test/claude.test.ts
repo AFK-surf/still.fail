@@ -7,14 +7,14 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { basename, delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ClaudeDriver, type ClaudeDriverOptions, SUBAGENT_HOOK, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
+import { ClaudeDriver, type ClaudeDriverOptions, SILENT_SUBAGENTS, SUBAGENT_HOOK, type Turn, backgroundOf, classifyResult, hooksOf, onFrame } from "../src/agents/claude.ts";
 import { RenewRefused } from "../src/accounts/console.ts";
 import { Said } from "../src/ops/i18n.ts";
-import { REPO_RULES_HOOK } from "../src/agents/repo-rules.ts";
-import { SPEAKS } from "../src/tools/mcp.ts";
+import { REPO_RULES_COMMAND, REPO_RULES_HOOK, hookCommand, hookNode } from "../src/agents/repo-rules.ts";
+import { SLACK_WRITES, SPEAKS } from "../src/tools/mcp.ts";
 import { claudeProject } from "../src/read/transcript.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import { modelLimitOf } from "../src/agents/runtime.ts";
@@ -182,8 +182,10 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.ok(args.includes("--no-session-persistence"));
     assert.ok(!args.includes("--dangerously-skip-permissions"));
     assert.deepEqual(JSON.parse(args[args.indexOf("--mcp-config") + 1]!), { mcpServers: {} });
-    // With none of the station's tools, nothing to keep a subagent from.
-    assert.equal(JSON.parse(args[args.indexOf("--settings") + 1]!).hooks.PreToolUse, undefined);
+    // With none of the station's tools, nothing to keep a subagent from, and nothing said of hooks.
+    const settings = JSON.parse(args[args.indexOf("--settings") + 1]!);
+    assert.equal(settings.hooks.PreToolUse, undefined);
+    assert.equal("disableAllHooks" in settings, false);
     await session.dispose();
   });
 
@@ -222,15 +224,21 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const [rules] = settings.hooks.PostToolUse;
     assert.match(rules.matcher, /^Bash\|Read\|/);
     assert.ok(rules.hooks[0].command.includes(REPO_RULES_HOOK), rules.hooks[0].command);
-    // A subagent kept from the tools a session speaks by (test/subagent-hook.test.ts): those tools and no other, as
-    // Claude Code names them.
+    // A subagent kept from the tools a session speaks by (test/subagent-hook.test.ts): those tools, slack_api for its
+    // writes, and no other, as Claude Code names them.
     assert.deepEqual(Object.keys(settings.hooks).sort(), ["PostToolUse", "PreToolUse", "SessionStart"]);
+    assert.deepEqual(settings.hooks.PreToolUse, SILENT_SUBAGENTS.PreToolUse);
     const [silent] = settings.hooks.PreToolUse;
     assert.equal(settings.hooks.PreToolUse.length, 1);
-    assert.equal(silent.matcher, SPEAKS.map((tool) => `mcp__stillfail__${tool}`).join("|"));
-    assert.equal(silent.matcher, "mcp__stillfail__chat_post|mcp__stillfail__chat_state|mcp__stillfail__session_send|mcp__stillfail__chat_create|mcp__stillfail__chat_leave|mcp__stillfail__chat_archive");
-    assert.deepEqual(silent.hooks.map((h: any) => h.type), ["command"]);
-    assert.ok(silent.hooks[0].command.includes(SUBAGENT_HOOK) && silent.hooks[0].command.includes(process.execPath), silent.hooks[0].command);
+    assert.equal(silent.matcher, [...SPEAKS, "slack_api"].map((tool) => `mcp__stillfail__${tool}`).join("|"));
+    assert.equal(silent.matcher, "mcp__stillfail__chat_post|mcp__stillfail__chat_state|mcp__stillfail__session_send|mcp__stillfail__chat_create|mcp__stillfail__chat_leave|mcp__stillfail__chat_archive|mcp__stillfail__slack_api");
+    // One command, the hook's file by the station's Node, told the Slack methods that write as one quoted word, and
+    // given up on (the call let through) after seconds, not Claude Code's ten minutes.
+    assert.deepEqual(silent.hooks, [{ type: "command", command: hookCommand(SUBAGENT_HOOK, SLACK_WRITES.join(",")), timeout: 10 }]);
+    assert.equal(silent.hooks[0].command, `'${process.execPath}' '${SUBAGENT_HOOK}' '${SLACK_WRITES.join(",")}' 2>/dev/null || true`);
+    assert.match(silent.hooks[0].command, /' 'chat\.postMessage,chat\.postEphemeral,[A-Za-z.,]+,assistant\.threads\.' 2>/);
+    // No settings file of the machine, the project or the working directory turns the hook off (a subagent wrote one).
+    assert.equal(settings.disableAllHooks, false);
     const [compacted] = settings.hooks.SessionStart;
     assert.equal(compacted.matcher, "compact");
     assert.ok(compacted.hooks[0].command.includes(REPO_RULES_HOOK), compacted.hooks[0].command);
@@ -267,10 +275,40 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
     assert.ok(!started.argv.includes("--append-system-prompt") && !started.argv.includes("--disallowedTools"));
     const settings = JSON.parse(started.argv[started.argv.indexOf("--settings") + 1]);
-    assert.deepEqual(Object.keys(settings), ["hooks"]);
-    assert.deepEqual(Object.keys(settings.hooks), ["PreToolUse"]);
-    assert.ok(settings.hooks.PreToolUse[0].hooks[0].command.includes(SUBAGENT_HOOK));
+    assert.deepEqual(Object.keys(settings), ["disableAllHooks", "hooks"]);
+    assert.equal(settings.disableAllHooks, false);
+    assert.deepEqual(settings.hooks, SILENT_SUBAGENTS);
     await session.dispose();
+  });
+
+  test("the hooks' files are the ones named, the build ships them, and they are run by a Node that outlives an update", () => {
+    // The files by name: a constant pointed at another file would pass every test that only compares it with itself.
+    assert.equal(basename(SUBAGENT_HOOK), "subagent-hook.mjs");
+    assert.equal(basename(REPO_RULES_HOOK), "repo-rules-hook.mjs");
+    for (const file of [SUBAGENT_HOOK, REPO_RULES_HOOK]) assert.ok(existsSync(file), file);
+    // A release has them beside its bundle: the build copies each there, or a session's command names a file that is not.
+    const build: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).scripts.build;
+    const copied = build.split("&&").map((step) => step.trim().split(/\s+/)).find((words) => words[0] === "cp" && words.at(-1) === "dist/" && words[1] !== "-R") ?? [];
+    for (const file of ["src/agents/subagent-hook.mjs", "src/agents/repo-rules-hook.mjs"]) assert.ok(copied.includes(file), `${file} is not copied to dist/ by the build: ${copied.join(" ")}`);
+    // In a release (<app>/station/<hook>, <app>/node the release's Node) the command names that Node, which the next
+    // release's takes the place of; the Node the station runs on is a version's own directory, pruned after an update.
+    const own = join("/app", "node", process.platform === "win32" ? "node.exe" : join("bin", "node"));
+    const seen: string[] = [];
+    assert.equal(hookNode(join("/app", "station", "subagent-hook.mjs"), (path) => (seen.push(path), true)), own);
+    assert.deepEqual(seen, [own]);
+    // A checkout, these tests: no Node beside it, its own.
+    assert.equal(hookNode(join("/app", "station", "subagent-hook.mjs"), () => false), process.execPath);
+    assert.equal(hookNode(SUBAGENT_HOOK), process.execPath);
+    assert.equal(REPO_RULES_COMMAND, `'${process.execPath}' '${REPO_RULES_HOOK}' 2>/dev/null || true`);
+    // Every word quoted for the shell that runs it, a quote in one too.
+    assert.equal(hookCommand("/a b/it's.mjs", "x y", "$(z)"), `'${process.execPath}' '/a b/it'\\''s.mjs' 'x y' '$(z)' 2>/dev/null || true`);
+  });
+
+  test("sets of hooks are joined event by event, none replacing another's", () => {
+    const a = { PreToolUse: [{ matcher: "A" }], PostToolUse: [{ matcher: "B" }] };
+    assert.deepEqual(hooksOf(a, SILENT_SUBAGENTS), { PreToolUse: [{ matcher: "A" }, ...SILENT_SUBAGENTS.PreToolUse], PostToolUse: [{ matcher: "B" }] });
+    assert.deepEqual(hooksOf({}, SILENT_SUBAGENTS), SILENT_SUBAGENTS);
+    assert.deepEqual(a, { PreToolUse: [{ matcher: "A" }], PostToolUse: [{ matcher: "B" }] }, "what it is given is left as it was");
   });
 
   test("a session kept to less context starts Claude Code compacting at it", async () => {

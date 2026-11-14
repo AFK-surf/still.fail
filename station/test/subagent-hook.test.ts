@@ -1,15 +1,17 @@
 // The hook a Claude Code session runs before a tool it speaks by (src/agents/subagent-hook.mjs; agents/claude.ts gives
 // it those tools alone, test/claude.test.ts): a subagent's call is refused with what to do instead, the session's own
-// agent's is let through, and so is whatever the hook cannot read.
+// agent's is let through, and so is whatever the hook cannot read. Of slack_api a subagent's writes are refused and
+// its reads let through, a write being what the station's threads rule takes for one.
+// Run as a session runs it: the command its settings carry (`SILENT_SUBAGENTS`), by a shell, so that the file, the
+// Node, the words it is told and their quoting are the ones a session gets.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { SILENT_SUBAGENTS, SUBAGENT_HOOK } from "../src/agents/claude.ts";
 import { chatTools } from "../src/tools/chat.ts";
-import { SPEAKS } from "../src/tools/mcp.ts";
+import { SLACK_WRITES, SPEAKS, isSlackWrite } from "../src/tools/mcp.ts";
 
-// (the file agents/claude.ts names as SUBAGENT_HOOK: test/claude.test.ts holds that it is the one started)
-const SUBAGENT_HOOK = fileURLToPath(new URL("../src/agents/subagent-hook.mjs", import.meta.url));
+const COMMAND = SILENT_SUBAGENTS.PreToolUse[0]!.hooks[0]!.command;
 
 /// What Claude Code 2.1.323 gave a PreToolUse hook for a call of `tool`, run as the station runs it (2026-11-14): the
 /// session's own agent's, and with `agent` the same call made inside a subagent.
@@ -22,14 +24,14 @@ const given = (tool: string, agent?: { agent_id: string; agent_type: string }) =
   ...agent,
   hook_event_name: "PreToolUse",
   tool_name: `mcp__stillfail__${tool}`,
-  tool_input: { text: "done" },
+  tool_input: { text: "done" } as Record<string, unknown>,
   tool_use_id: "toolu_01",
   mcp_server: { name: "stillfail", source: "dynamic" },
 });
 
 /// What the hook says of `input` (a text given as it is): its exit status and its output, as Claude Code reads them.
 function hook(input: unknown) {
-  const ran = spawnSync(process.execPath, [SUBAGENT_HOOK], { input: typeof input === "string" ? input : JSON.stringify(input) });
+  const ran = spawnSync("sh", ["-c", COMMAND], { input: typeof input === "string" ? input : JSON.stringify(input) });
   return { status: ran.status, out: ran.stdout.toString(), err: ran.stderr.toString() };
 }
 const silent = { status: 0, out: "", err: "" };
@@ -62,6 +64,57 @@ test("a subagent's call is refused, of whatever kind it is, and told to hand its
 
 test("what the hook cannot read is let through: a session that cannot speak is worse than a subagent that can", () => {
   for (const input of ["", "not json", "{", "null", "[]", "42", JSON.stringify({ agent_id: "" }), JSON.stringify({ agent_id: null })]) assert.deepEqual(hook(input), silent, JSON.stringify(input));
+});
+
+const SUB = { agent_id: "a9f69f7989c7a17a7", agent_type: "general-purpose" };
+/// A call of slack_api with `method`, the session's own agent's or (with `agent`) a subagent's.
+const slack = (method: unknown, agent?: typeof SUB) => ({ ...given("slack_api", agent), tool_input: { method, params: { channel: "C1", text: "hi" } } });
+
+test("of slack_api a subagent's writes are refused and its reads let through; the session's own agent's all go through", () => {
+  for (const method of ["chat.postMessage", "chat.update", "chat.delete", "reactions.add", "files.completeUploadExternal", "assistant.threads.setStatus", "conversations.history", "users.info"]) {
+    assert.deepEqual(hook(slack(method)), silent, method);
+  }
+  for (const method of ["conversations.history", "conversations.replies", "conversations.open", "users.info", "files.info", "reactions.get", "chat.getPermalink", "auth.test"]) {
+    assert.deepEqual(hook(slack(method, SUB)), silent, method);
+  }
+  const said = hook(slack("chat.postMessage", SUB));
+  assert.deepEqual([said.status, said.err], [0, ""]);
+  const answer = JSON.parse(said.out).hookSpecificOutput;
+  assert.deepEqual([answer.hookEventName, answer.permissionDecision], ["PreToolUse", "deny"]);
+  // The method refused, that reading is fine, that nothing was done, and what to do instead.
+  assert.match(answer.permissionDecisionReason, /^Refused: you are a subagent, and writing to Slack \(chat\.postMessage\) is only for the agent that started you\. Reading Slack with slack_api is fine \(conversations\.history, /);
+  assert.match(answer.permissionDecisionReason, /Nothing was sent or changed\./);
+  assert.match(answer.permissionDecisionReason, /give what you did or found as your final answer/);
+});
+
+test("what the hook takes for a Slack write is what the station's threads rule takes for one", () => {
+  const refused = (method: unknown) => {
+    const said = hook(slack(method, SUB));
+    assert.deepEqual([said.status, said.err], [0, ""], JSON.stringify(method));
+    return said.out !== "" && JSON.parse(said.out).hookSpecificOutput.permissionDecision === "deny";
+  };
+  // Every entry of the list, as it is and as the start of a longer method; reads; near misses; and the method as the
+  // tool reads it (src/tools/slack.ts trims it).
+  const methods = [
+    ...SLACK_WRITES,
+    ...SLACK_WRITES.map((w) => `${w}More`),
+    ...SLACK_WRITES.map((w) => ` ${w}\n`),
+    ...["conversations.history", "conversations.replies", "users.info", "files.info", "files.getUploadURLExternal", "reactions.get", "reactions.list", "pins.list", "chat.getPermalink"],
+    ...["Chat.postMessage", "chat.post", "chat", "xchat.postMessage", "assistant.threads", "assistant.search.context", ""],
+  ];
+  for (const method of methods) assert.equal(refused(method), isSlackWrite(method.trim()), JSON.stringify(method));
+  assert.ok(methods.some((m) => isSlackWrite(m.trim())) && methods.some((m) => !isSlackWrite(m.trim())));
+  // No method, or one that is no text: none the station would call (it answers that it is no Slack method).
+  for (const method of [undefined, null, 7, ["chat.postMessage"], { method: "chat.postMessage" }]) assert.equal(refused(method), false, JSON.stringify(method));
+  assert.deepEqual(hook({ ...given("slack_api", SUB), tool_input: undefined }), silent);
+});
+
+test("a command line from before it was told Slack's writes still refuses what it did, and takes no Slack call for a write", () => {
+  // A session's process keeps the command it was started with while the file becomes the next release's.
+  const older = (input: unknown) => spawnSync(process.execPath, [SUBAGENT_HOOK], { input: JSON.stringify(input) }).stdout.toString();
+  assert.equal(JSON.parse(older(given("chat_post", SUB))).hookSpecificOutput.permissionDecision, "deny");
+  assert.equal(older(given("chat_post")), "");
+  assert.equal(older(slack("chat.postMessage", SUB)), "");
 });
 
 test("the tools a session speaks by are tools the station has", () => {

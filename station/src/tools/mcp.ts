@@ -48,7 +48,30 @@ export const EVERY_TURN = ["chat_post", "chat_state"];
 /// that: a subagent's call comes with its session's token, as its parent's does, so each runtime's driver keeps its
 /// subagents from these (agents/claude.ts `SILENT_SUBAGENTS`). Not OUTWARD, which is where a call lands whoever makes
 /// it: a subagent starts a job or a task as its parent would, and chat_state lands nowhere outside the station.
+/// A new tool is sorted into these or out of them in test/speaks.test.ts.
 export const SPEAKS = ["chat_post", "chat_state", "session_send", "chat_create", "chat_leave", "chat_archive"];
+/// The one that speaks only where its method writes (a post, an edit, a reaction, a direct message, as the session's
+/// Slack bot): its own agent's alone as those above are, while a subagent reads Slack as its parent does, so a driver
+/// keeps its subagents from the writes and lets the rest through.
+export const SPEAKS_WRITING = "slack_api";
+/// The Slack methods that write, each a method or the start of some: they land in a thread, so the threads rule
+/// applies to them (sessions/conversations.ts `slackApi`), and they are what a subagent is kept from. One list for
+/// both: what is added here for the one holds for the other.
+export const SLACK_WRITES = [
+  "chat.postMessage",
+  "chat.postEphemeral",
+  "chat.scheduleMessage",
+  "chat.update",
+  "chat.delete",
+  "chat.meMessage",
+  "reactions.add",
+  "reactions.remove",
+  "pins.add",
+  "pins.remove",
+  "files.completeUploadExternal",
+  "assistant.threads.",
+];
+export const isSlackWrite = (method: string) => SLACK_WRITES.some((w) => method.startsWith(w));
 
 /// What a session's runtime needs of its list of tools; nothing said, the list is every tool as it is.
 export type Listing = {
