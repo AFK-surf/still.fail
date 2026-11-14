@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 2 | 2.73 | 11.64 | 31.28 | 41.84 | 27.88 | 53.53 | 96.68 | 116.53 |
 | [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 | [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 2 | 2.73 | 11.63 | 31.28 | 41.83 | 27.88 | 53.53 | 96.31 | 114.99 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [ab6f4880d](https://github.com/AFK-surf/monoid/commit/ab6f4880dd477b8290a50b1b392e3a3984426186) fix(mbui): a station's 设置 whole as it comes; what  | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.23 | 96.78 | 108.75 |
 | [41b38a6ec](https://github.com/AFK-surf/monoid/commit/41b38a6ecdc8183b81d040100fb94b96cef1755c) core: a workspace's chain handed over by itself, b | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.21 | 96.58 | 113.48 |
 | [d32206ba1](https://github.com/AFK-surf/monoid/commit/d32206ba19b7943c81adb9d5a561918ae1d668eb) mbui app: a chat's page made as nodes, its compose | 1.98 | 2.71 | 11.53 | 31.13 | 41.48 | 27.75 | 53.21 | 96.75 | 104.52 |
-| [3c1dde380](https://github.com/AFK-surf/monoid/commit/3c1dde38007643b1ddd306a846b566392dd70bd2) fix(mbui): an agent's history's 详情 unfolds whole,  | 1.98 | 2.7 | 11.52 | 31.12 | 41.46 | 27.74 | 53.19 | 96.91 | 107.21 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.26 |
 | [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
