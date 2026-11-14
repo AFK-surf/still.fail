@@ -66,6 +66,19 @@ test("a station gives a rig its person signed for every body, as a station its l
   assert.ok(t.s0.bodies(null).all().size > 0);
 });
 
+test("turned off, a key the control plane names a rig is given no body unless its person signed for it", () => {
+  const t = setUp();
+  t.w.alice.say("off", {});
+  bring(t.s0, t.w.alice);
+  assert.equal(t.s0.locked(), null, "off");
+  t.s0.rigVouched = () => false;
+  const none = bodiesGiven(t.s0, WS, t.rig.hex).size;
+  console.log(`off, not signed for: ${none} of ${t.s0.bodies(null).all().size}`);
+  assert.equal(none, 0, "not signed for: none");
+  t.s0.rigVouched = () => true;
+  assert.equal(bodiesGiven(t.s0, WS, t.rig.hex).size, t.s0.bodies(null).all().size, "signed for: all, off too");
+});
+
 test("the rig brought level by the station: the logs and bodies taken against the chain it pinned, its state in force made, no longer waiting", async () => {
   const t = setUp();
   t.s0.rigVouched = () => true;

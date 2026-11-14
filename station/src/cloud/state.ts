@@ -648,9 +648,12 @@ export class Cloud {
     if (li === null || li.state === null || li.waiting === true) return new Set();
     const st = li.state;
     if (st.stations.has(key) || st.devices.has(key) || [...st.devices.values()].some((d) => d.sign_key === key)) return "all";
-    // A rig of the workspace its person signed for (`rigs`): before a move it pinned the whole chain, which says all
-    // the bodies say; after, it is given them as a station the list names is (person-sync.ts brings them).
-    if (this.state?.rig === undefined && this.rigs(this.idOf(ws)).some((r) => r.id === key)) return "all";
+    // A rig of the workspace its person signed for: before a move it pinned the whole chain, which says all the
+    // bodies say; after, it is given them as a station the list names is (person-sync.ts brings them). Signed for,
+    // on or off (`rigVouched` itself, never `rigs`, which while off is the control plane's word alone: a key the plane
+    // names a rig would be given every body of a workspace turned off).
+    const wsId = this.idOf(ws);
+    if (this.state?.rig === undefined && this.rigsNamed(wsId).some((r) => r.id === key && this.rigVouched?.(wsId, r) === true)) return "all";
     const l = this.chain(ws) as KeptLock;
     const root = l.state?.moved;
     if (root === undefined) return new Set();
