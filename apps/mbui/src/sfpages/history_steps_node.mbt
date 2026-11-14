@@ -1966,7 +1966,6 @@ fn tool_body_node(v : @view.View, src : Source, station : String, key : String, 
       if result_parts.length() > 0 {
         steps_box_node(b, tool_result_box, fn(s) {
           if call_parts.length() > 0 || failed {
-            steps_box_node(s, tool_result_rule, fn(_) {  })
             steps_box_node(s, tool_result_head, fn(h) {
               steps_words(
                 h,
@@ -2080,6 +2079,39 @@ fn render_md_or_words(v : @view.View, words : String, md : Json?, small? : Bool 
   } else {
     steps_words(v, fn() { words }, if small { tool_long_words } else { h_words })
   }
+}
+
+///|
+/// Renders a short prose value inline, turning `code` spans into monospace runs instead of showing raw backticks.
+fn steps_prose_inline(parent : @view.View, words : String, style : @ui.TextStyle) -> Unit {
+  if !words.contains("`") {
+    steps_words(parent, fn() { words }, style)
+    return
+  }
+  parent.box(fn(w) {
+    w
+    .words_runs(By(fn() {
+      let runs = []
+      let parts = words.split("`").to_array()
+      for i, part in parts {
+        let s = part.to_owned()
+        if s != "" {
+          if i % 2 == 1 && i + 1 < parts.length() {
+            runs.push(@ui.span(s, mono=true, color=@sf.theme().p.text))
+          } else {
+            runs.push(@ui.span(s))
+          }
+        }
+      }
+      if runs.is_empty() { [@ui.span(words)] } else { runs }
+    }))
+    .words_look(By(fn() { @ui.style_words(style) }))
+    .ink(By(fn() { @ui.style_ink(style) }))
+    .shrink(Is(1.0))
+    .min_width(Is(Some(0.0)))
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
@@ -2342,55 +2374,39 @@ fn tool_part_node(
       let target_id = text(part, "targetId")
       let nav_target = if target_id != "" { target_id } else { target }
       let summary = text(part, "summary")
-      if target != "" || summary != "" {
-        steps_box_node(v, tool_dispatch_card, fn(card) {
-          card.edge(By(fn() { (1.0, @ui.tree_theme().color(Line)) })) |> ignore
-          steps_box_node(card, tool_dispatch_head, fn(head) {
-            steps_box_node(head, tool_dispatch_bar, fn(bar) {
-              if target != "" {
-                bar.box(fn(badge) {
-                  @sf.style_node(badge, fn() { tool_dispatch_badge })
-                  steps_pressed(
-                    badge,
-                    fn() { jump_to_dispatch_target(src, station, key, rk, nav_target) },
-                    label=fn() { "→ " + target },
-                  )
-                  @sf.icon_node(badge, "agent", 12.0, By(fn() { @sf.theme().p.accent })) |> ignore
-                  steps_words(badge, fn() { "→ " + target }, tool_dispatch_target_words)
-                })
-                |> ignore
-              }
-              steps_box_node(bar, h_grow, fn(_) {  }, in_row=true)
+      let long = is_long_block(words)
+      if target != "" || long {
+        steps_box_node(v, tool_field_stack, fn(stack) {
+          steps_box_node(stack, tool_block_bar, fn(bar) {
+            if target != "" {
+              bar.box(fn(badge) {
+                @sf.style_node(badge, fn() { tool_dispatch_badge })
+                steps_pressed(
+                  badge,
+                  fn() { jump_to_dispatch_target(src, station, key, rk, nav_target) },
+                  label=fn() { "→ " + target },
+                )
+                @sf.icon_node(badge, "agent", 12.0, By(fn() { @sf.theme().p.accent })) |> ignore
+                steps_words(badge, fn() { "→ " + target }, tool_dispatch_target_words)
+              })
+              |> ignore
+            }
+            steps_box_node(bar, h_grow, fn(_) {  }, in_row=true)
+            if long {
               tool_expand_btn_node(
                 bar,
-                if summary != "" { summary } else if target != "" { "→ " + target } else { "指令详情" },
+                if summary != "" { summary } else if target != "" { "→ " + target } else { "查看内容" },
                 words,
                 fn(rb) { render_md_or_words(rb, words, md, small=false) },
               )
-            })
-            if summary != "" {
-              steps_box_node(head, tool_dispatch_summary_box, fn(sb) {
-                steps_words(sb, fn() { summary }, tool_dispatch_summary)
-              })
             }
-          })
-          steps_box_node(card, tool_result_rule, fn(_) {  })
-          steps_box_node(card, tool_dispatch_body, fn(body) {
-            if is_long_block(words) {
-              fold_node(body, fold_key + "/md", 8, md_line, fn(f) { render_md_or_words(f, words, md, small=true) })
-            } else {
-              render_md_or_words(body, words, md, small=true)
-            }
-          })
-        })
-      } else if is_long_block(words) {
-        steps_box_node(v, tool_field_stack, fn(stack) {
-          steps_box_node(stack, tool_block_bar, fn(bar) {
-            steps_box_node(bar, h_grow, fn(_) {  }, in_row=true)
-            tool_expand_btn_node(bar, "查看内容", words, fn(rb) { render_md_or_words(rb, words, md, small=false) })
           })
           steps_box_node(stack, tool_box, fn(b) {
-            fold_node(b, fold_key + "/md", 8, md_line, fn(f) { render_md_or_words(f, words, md, small=true) })
+            if long {
+              fold_node(b, fold_key + "/md", 8, md_line, fn(f) { render_md_or_words(f, words, md, small=true) })
+            } else {
+              render_md_or_words(b, words, md, small=true)
+            }
           })
         })
       } else {
@@ -2407,17 +2423,20 @@ fn tool_part_node(
           let form = text(rv, "form")
           let prose = flag(rv, "prose") || is_prose_key(k)
           match form {
-            "long" =>
+            "long" => {
+              let long = is_long_block(val)
               steps_box_node(fs, tool_field_stack, fn(f) {
                 steps_box_node(f, tool_field_head, fn(head) {
                   steps_words(head, fn() { k }, tool_key_words)
                   steps_box_node(head, h_grow, fn(_) {  }, in_row=true)
-                  tool_expand_btn_node(head, k, val, fn(rb) {
-                    render_md_or_words(rb, val, field(rv, "md"), small=false)
-                  })
+                  if long {
+                    tool_expand_btn_node(head, k, val, fn(rb) {
+                      render_md_or_words(rb, val, field(rv, "md"), small=false)
+                    })
+                  }
                 })
                 steps_box_node(f, tool_box, fn(b) {
-                  if is_long_block(val) {
+                  if long {
                     fold_node(b, fold_key + "/f/" + idx.to_string(), 8, md_line, fn(inner) {
                       render_md_or_words(inner, val, field(rv, "md"), small=true)
                     })
@@ -2426,19 +2445,21 @@ fn tool_part_node(
                   }
                 })
               })
-            "json" =>
+            }
+            "json" => {
+              let long = is_long_block(val)
               steps_box_node(fs, tool_field_stack, fn(f) {
                 steps_box_node(f, tool_field_head, fn(head) {
                   steps_words(head, fn() { k }, tool_key_words)
                   steps_box_node(head, h_grow, fn(_) {  }, in_row=true)
-                  if val.length() > 80 || val.contains("\n") {
+                  if long {
                     tool_expand_btn_node(head, k, val, fn(rb) {
                       steps_run(rb, fn() { val }, tool_mono, mono=true)
                     })
                   }
                 })
                 steps_box_node(f, tool_box, fn(b) {
-                  if is_long_block(val) {
+                  if long {
                     fold_node(b, fold_key + "/f/" + idx.to_string(), 8, words_line, fn(inner) {
                       steps_run(inner, fn() { val }, tool_mono, mono=true)
                     })
@@ -2447,12 +2468,13 @@ fn tool_part_node(
                   }
                 })
               })
+            }
             _ =>
               steps_box_node(fs, tool_field, fn(f) {
                 steps_box_node(f, tool_field_key, fn(kb) { steps_words(kb, fn() { k }, tool_key_words) })
                 steps_box_node(f, h_grow, fn(g) {
                   if prose {
-                    steps_words(g, fn() { val }, tool_value)
+                    steps_prose_inline(g, val, tool_value)
                   } else {
                     steps_run(g, fn() { val }, tool_value, mono=true)
                   }
@@ -3100,15 +3122,11 @@ let tool_section : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_result_box : @ui.Style = @ui.css("w=Full pt=S0_5 gap=S1")
+let tool_result_box : @ui.Style = @ui.css("w=Full pt=S1 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_result_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_result_head : @ui.Style = @ui.css("row w=Full pt=S0_5 px=S0_5 gap=S1_5 align=ACenter")
+let tool_result_head : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3140,25 +3158,6 @@ let tool_block_bar : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S2 align=ACente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_dispatch_card : @ui.Style = @ui.style(
-  w=Full,
-  radius=@sf.row_radius,
-  border=B1,
-  border_color=Line,
-  bg=Card,
-  clip=true,
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_dispatch_head : @ui.Style = @ui.css("w=Full p=S2 gap=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_dispatch_bar : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
 let tool_dispatch_badge : @ui.Style = @ui.css(
   "row h=S5 px=S2 gap=S1 align=ACenter radius=Full bg=Neutral hovered{bg=Hover} clip",
 )
@@ -3166,18 +3165,6 @@ let tool_dispatch_badge : @ui.Style = @ui.css(
 ///|
 // kept across runs: a value (no field of it changes)
 let tool_dispatch_target_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Accent, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_dispatch_summary_box : @ui.Style = @ui.css("w=Full px=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_dispatch_summary : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_dispatch_body : @ui.Style = @ui.css("w=Full py=S2_5 px=S3")
 
 ///|
 /// A box of words (box): 8 by 12 in, round 10, the ink at 4% over the canvas, 12 mono on 1.55; red's ground when it
