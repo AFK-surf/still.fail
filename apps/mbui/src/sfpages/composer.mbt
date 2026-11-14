@@ -853,7 +853,7 @@ fn composer_text(
       let menu = ref_menu(c, src, spec, w, cap, res.focused)
       match res.submitted {
         // (they stay in the field until they go)
-        Some(words) => {
+        Some(words) => if !w.starting.get() && !(spec.draft.has_prefix("new:") && @sfbase.fresh.starting.get()) {
           if words != w.text.get() {
             writing_text(src, w, words)
           }

@@ -832,24 +832,47 @@ export class Choose implements Owner {
 
   /// `newChat.create`: what a new chat on `station` is asked to be made with, as picked there.
   create(station: string): J {
+    const scope = ofAddress(station);
+    const sid = stationId(station);
+    const overview = this.#env.store.get({ topic: "overview", station });
     const [, r] = this.#onStation(station);
-    if (r.entry === null || r.runtime === null) throw CoreError.invalid(t("core-logic.choose.error.enable_models"));
-    const ask: J = { runtime: r.runtime, model: r.entry.model ?? null };
-    if (r.effort !== null) ask.effort = r.effort;
-    if (r.profile !== null) ask.profile = r.profile;
-    else if (r.profiles !== null && r.profiles.length > 1) ask.profiles = r.profiles;
-    if (r.fast !== null) ask.fast = r.fast;
-    if (r.context !== null) ask.context = r.context;
+    let runtime = r.runtime;
+    let chosenModel: string | null = r.entry?.model ?? null;
+    let effort = r.effort;
+    let profile = r.profile;
+    let profiles = r.profiles;
+    let fast = r.fast;
+    let context = r.context;
+    if ((r.entry === null || runtime === null) && overview === undefined) {
+      const bound = this.#bound(scope);
+      const saved: J = (bound !== undefined && bound.model !== null ? bound.model : undefined)
+        ?? this.#choice(scope, sid)
+        ?? arr(this.#record(`ws:${scope}:frequent`))[0];
+      runtime = text(get(saved, "runtime")) ?? "claude";
+      chosenModel = text(get(saved, "model"));
+      effort = text(get(saved, "effort"));
+      profile = text(get(saved, "profile"));
+      profiles = Array.isArray(get(saved, "profiles")) ? arr(get(saved, "profiles")).filter((x: unknown): x is string => typeof x === "string") : null;
+      fast = typeof get(saved, "fast") === "boolean" ? Boolean(get(saved, "fast")) : null;
+      context = typeof get(saved, "context") === "number" ? Number(get(saved, "context")) : null;
+    } else if (r.entry === null || runtime === null) {
+      throw CoreError.invalid(t("core-logic.choose.error.enable_models"));
+    }
+    const ask: J = { runtime, model: chosenModel };
+    if (effort !== null) ask.effort = effort;
+    if (profile !== null) ask.profile = profile;
+    else if (profiles !== null && profiles.length > 1) ask.profiles = profiles;
+    if (fast !== null) ask.fast = fast;
+    if (context !== null) ask.context = context;
     // The preset picked: all of it as the device holds it (`presetCopy`: each folder of this station's as it is, another
     // station's said to be there by its name), with what it binds for the station to hold the chat to, so the chat is
     // opened with the newest whether or not this station was brought it yet; by its id only on a station from before
     // that lists it (as before: one from before `presetCopy` opens the chat with none).
-    const scope = ofAddress(station);
     const bound = this.#bound(scope);
-    if (bound !== undefined && bound.stations !== null && !bound.stations.includes(stationId(station))) {
+    if (bound !== undefined && bound.stations !== null && !bound.stations.includes(sid)) {
       throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
     }
-    if (bound !== undefined && bound.model !== null && !this.#runsBound(station, bound.model)) {
+    if (overview !== undefined && bound !== undefined && bound.model !== null && !this.#runsBound(station, bound.model)) {
       throw CoreError.invalid(t("core-logic.choose.error.preset_model_station", { name: bound.name, model: model.name(String(bound.model.model)) }));
     }
     const online = this.#listed(scope);

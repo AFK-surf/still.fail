@@ -2009,6 +2009,7 @@ pub fn Field::selection(self : Field) -> (Int, Int) {
 /// words let go of the person's edits kept to undo.
 pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   let st = self.st
+  st.submitted = None
   let at = match caret {
     Some(k) => imin(imax(k, 0), text.length())
     None => text.length()

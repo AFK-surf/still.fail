@@ -716,7 +716,7 @@ fn new_composer_place(
         note: [],
         tail: None,
         roomy: wide,
-        locked: held || text(v, "runtime") == "" || field(v, "model") is None,
+        locked: held || (!flag(v, "waiting") && (text(v, "runtime") == "" || field(v, "model") is None)),
         offline: false,
         warm_agent: false,
       }

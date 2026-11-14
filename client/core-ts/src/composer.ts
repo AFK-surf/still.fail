@@ -875,7 +875,7 @@ export class Composers {
     const was = this.#state(to);
     const next = { ...empty(was.db), joined: was.joined, text: s.text, rev: was.rev + 1, quotes: s.quotes, files: s.files, version: was.version, id: s.id };
     this.#all.set(to, next);
-    this.#all.set(from, { ...empty(s.db), joined: s.joined, rev: s.rev + 1, version: s.version });
+    this.#all.set(from, { ...empty(s.db), joined: s.joined, rev: s.rev + 1, version: s.version, taken: s.taken });
     this.#changed(from, this.#all.get(from)!);
     return this.#changed(to, next);
   }
