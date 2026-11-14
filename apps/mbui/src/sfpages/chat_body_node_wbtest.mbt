@@ -286,7 +286,7 @@ fn body_src(mode : String) -> Source {
 /// The nodes' key of each of chat view `v`'s entries `read` (chat_body_rows'; its Foot "foot", the list's room under
 /// its rows and no row of the nodes').
 fn body_keys(v : ChatView, read : Array[Entry]) -> Array[String] {
-  let keys = chat_body_rows({ sent: {}, sent_as: {} }, v, read, []).keys
+  let keys = chat_body_rows({ sent: {}, sent_as: {}, here: {} }, v, read, []).keys
   let out : Array[String] = []
   let mut j = 0
   for e in read {
@@ -463,7 +463,7 @@ fn body_both(mode : String, s : (String, Double, Double, Int), at : String, scal
 /// What each row of chat view `v`'s entries `read` is, by its key (chat_body_rows').
 fn body_entries(v : ChatView, read : Array[Entry]) -> Map[String, Entry] {
   let entries : Map[String, Entry] = Map([])
-  for k, r in chat_body_rows({ sent: {}, sent_as: {} }, v, read, []).rows {
+  for k, r in chat_body_rows({ sent: {}, sent_as: {}, here: {} }, v, read, []).rows {
     entries[k] = r.entry
   }
   entries
