@@ -176,14 +176,18 @@ test "不用预设 from a held control lets go of the preset" {
 }
 
 ///|
-test "with no presets at all, the capsule opens a new one's dialog, not a menu of 不用预设 alone" {
+test "with none of one's own, the capsule opens 新预设 and 其他成员的预设, not a menu of 不用预设 alone" {
   new_run()
   @sffixture.new_fix.presets.clear()
   let t = preset_mode("newchat")
   press(t, "预设")
   t.run_for(@ui.move_most_ms)
   assert_false(shows(t, "不用预设"), msg=runs(t))
-  assert_true(shows(t, "新预设") && shows(t, "名字") && shows(t, "添加目录"), msg=runs(t))
+  assert_true(shows(t, "新预设") && shows(t, "其他成员的预设"), msg=runs(t))
+  // (新预设: the new one's dialog)
+  t.tap_text("新预设")
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "名字") && shows(t, "添加目录"), msg=runs(t))
 }
 
 ///|

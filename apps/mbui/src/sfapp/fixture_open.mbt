@@ -537,6 +537,10 @@ pub fn open_mode(mode : String) -> Unit {
   if mode == "settings-connect-borrow" {
     @sffixture.new_fix.borrow = true
   }
+  // (someone else's preset picked: so before its page asks its new chat)
+  if mode == "newchat-preset-theirs" {
+    @sffixture.new_fix.preset = "p-ops"
+  }
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
     if mode.has_prefix("newchat-crowded") || mode.has_prefix("newchat-providers") || mode == "newchat-tall-model" {
@@ -607,6 +611,14 @@ pub fn open_mode(mode : String) -> Unit {
         @sfpages.new_chat_ask("preset-new-clones")
       }
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
+      // (the other members' presets, a level further in from the menu; none of them yet; the menu with someone
+      // else's picked, whose it is after its name and 复制为我的预设 in place of 编辑)
+      "newchat-preset-others" => @sfpages.new_chat_ask("preset-others")
+      "newchat-preset-others-none" => {
+        @sffixture.new_fix.others.clear()
+        @sfpages.new_chat_ask("preset-others")
+      }
+      "newchat-preset-theirs" => @sfpages.new_chat_ask("preset")
       // (its preset names a model Maple does not run: the stations offered; on Maple, said so)
       "newchat-preset-model-station" => {
         @sffixture.new_fix.preset = "p-sf"

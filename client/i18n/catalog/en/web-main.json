@@ -1154,7 +1154,7 @@
   "web-main.preset.cloneFailed": "Clone failed: {why}",
   "web-main.preset.choose": "Choose “{name}”",
   "web-main.preset.others": "Other members' presets",
-  "web-main.preset.othersNone": "No presets from other members yet",
+  "web-main.preset.othersNone": "None from other members yet",
   "web-main.preset.copyMine": "Copy to my presets",
   "web-main.preset.copyFailed": "Could not copy it to your presets: {error}. Press Copy to my presets again to try once more",
   "web-main.feedback.open": "View",
