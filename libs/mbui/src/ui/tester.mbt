@@ -414,6 +414,7 @@ pub fn Tester::new(
     generation_asks: 0,
     generation_on_face_add: Ref(false),
     tabular: 0.0,
+    cjk_marks: false,
     glyph_box: (6.0, 10.0),
     faces_wider: {},
     latin: None,
@@ -3009,6 +3010,13 @@ pub fn Tester::glyphs_moved_on(self : Tester) -> Unit {
 /// shapes ignore it otherwise).
 pub fn Tester::tabular_wider(self : Tester, em : Double) -> Unit {
   self.fake.tabular = em
+}
+
+///|
+/// Punctuation (U+2010 to U+206F: ‘ ’ “ ” … —) set a whole em wide unless set proportional
+/// (@hostapi.style_proportional), from now on: as a Chinese face (思源黑体) draws it, its pwid asked or not.
+pub fn Tester::cjk_face_marks(self : Tester) -> Unit {
+  self.fake.cjk_marks = true
 }
 
 ///|

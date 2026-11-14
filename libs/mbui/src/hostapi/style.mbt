@@ -30,6 +30,13 @@ pub let style_words : Int = 16
 pub let style_tabular : Int = 32
 
 ///|
+/// The narrow (proportional) forms of what a Chinese, Japanese or Korean face draws a whole em wide by default (the
+/// marks of East Asian Ambiguous width: ‘ ’ “ ” … · —), asked by ui for words among Latin letters (@text.width_runs):
+/// the font's OpenType pwid (Core Text's and DirectWrite's feature, Android's font feature settings "'pwid' 1",
+/// Pango's "pwid=1", a web face loaded with it). A face without pwid is the same.
+pub let style_proportional : Int = 64
+
+///|
 /// The faces a host is given (face_add) for the app's three places: its own words (every font a style says nothing
 /// else of), what people wrote (style_words), code (style_mono). Faces 4 to 15 are drawn only where a style names them
 /// (style_face). A place with no face registered is in the system's.

@@ -2014,11 +2014,38 @@
     if (style & 4) return 0;
     return faces.has(1) ? 1 : 0;
   };
-  // style: 1 slanted, 2 the code face
+  // style: 1 slanted, 2 the code face; 64 a CJK face's marks narrow among Latin letters (style.mbt
+  // style_proportional): the face loaded again with pwid (a canvas has no font-feature-settings), once asked for
   const font = (size, weight, style) => {
     const own = style & 2 ? MONO : style & 4 ? SERIF : FAMILY;
     const f = faceOf(style);
-    return `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${f ? `"mbface${f}", ${own}` : own}`;
+    const narrow = f && style & 64 && narrowFace(f) ? `"mbface${f}n", ` : '';
+    return `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${f ? `${narrow}"mbface${f}", ${own}` : own}`;
+  };
+  // each face's files as given (a URL or bytes, its weight), and which faces are loaded with pwid (true) or being
+  const faceFiles = new Map();
+  const narrowFaces = new Map();
+  const narrowFace = (face) => {
+    const had = narrowFaces.get(face);
+    if (had !== undefined) return had;
+    narrowFaces.set(face, false);
+    const files = faceFiles.get(face) || [];
+    Promise.all(files.map(([src, weight]) => {
+      const d = faceDescriptors(face, weight);
+      d.featureSettings = d.featureSettings ? `${d.featureSettings}, "pwid" 1` : '"pwid" 1';
+      const ff = new FontFace(`mbface${face}n`, src, d);
+      return ff.load().then(() => document.fonts.add(ff));
+    })).then(() => {
+      if (narrowFaces.get(face) !== false) return;
+      narrowFaces.set(face, true);
+      textChanged();
+      H.requestFrame();
+    }, () => {});
+    return false;
+  };
+  const faceFile = (face, src, weight) => {
+    if (!faceFiles.has(face)) faceFiles.set(face, []);
+    faceFiles.get(face).push([src, weight]);
   };
   // what was shaped and drawn before a face or the scale changed, forgotten (MoonBit drops its glyphs as the
   // generation moves on)
@@ -2037,6 +2064,7 @@
   H.faceAdd = (face, url, weight) => {
     if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
     const ff = new FontFace(`mbface${face}`, `url(${JSON.stringify(url)})`, faceDescriptors(face, weight));
+    faceFile(face, `url(${JSON.stringify(url)})`, weight);
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
@@ -2049,6 +2077,7 @@
   H.faceAddBytes = (face, data, weight) => {
     if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
     const ff = new FontFace(`mbface${face}`, data, faceDescriptors(face, weight));
+    faceFile(face, data, weight);
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
@@ -2058,8 +2087,13 @@
     return true;
   };
   H.faceClear = (face) => {
+    faceFiles.delete(face);
+    narrowFaces.delete(face);
     if (!faces.delete(face)) return;
-    for (const ff of [...document.fonts]) if (ff.family === `mbface${face}` || ff.family === `"mbface${face}"`) document.fonts.delete(ff);
+    for (const ff of [...document.fonts]) {
+      const fam = ff.family.replace(/"/g, '');
+      if (fam === `mbface${face}` || fam === `mbface${face}n`) document.fonts.delete(ff);
+    }
     textChanged();
   };
 
