@@ -565,9 +565,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // itself, and only ever raised from where it set out (the room alone, take_room's), so where nothing is given back it
   // is as ever. Not where a key the page lets go is gone at or under L (that change is as ever). Two or more come
   // there in one change take what it gives back in their order, each up to its own height, and stay the one way they
-  // were said in. `one_move_key`: L, the keys come after it, the change's moment, till the fill that measures them;
+  // were said in. Keys that stay under those come are no matter: the stretch is from L's top to the column's end all the
+  // same, what stays under them as tall as it is (the coordinator of the migration, 2026-11-14). `one_move_key`: L, the
+  // keys come after it, those that stay under them, the change's moment, till the fill that measures them;
   // `came_row`: their rows, noted only while they are named)
-  let one_move_key : Ref[(K, Array[K], Double)?] = Ref(None)
+  let one_move_key : Ref[(K, Array[K], Array[K], Double)?] = Ref(None)
   // (a bridge while an old view is hosted in its foot (the chat's composer, laid out only as the old frame is built):
   // the builds of the old views begun as `one_move_key` was armed, and whether what waited for one done is let go;
   // a set-out is worked out from what that change gives back only once an old view under its foot is built since
@@ -826,26 +828,65 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // (one come at its end by this change: noted for the fill that measures it)
       came_row.clear()
       one_move_key.val = None
-      if ks.length() > 0 && came_by_data.val.contains(ks[ks.length() - 1]) {
-        let mut j = was.length() - 1
-        let mut let_go = false
-        while j >= 0 && !laid_at.contains(was[j]) {
-          if !@signals.untracked(fn() { leaves_room(was[j]) }) {
-            let_go = true
-          }
-          j = j - 1
+      // (a key come before keys that stay under it is at the foot for the one reading (the coordinator of the
+      // migration, 2026-11-14): the last run of keys come by this change, every key after it among them before and
+      // staying, as many as floor_tail at most; L the last that stays before that run, walked back in `was` past the
+      // staying keys under it and those gone, none of those gone a key the page lets go unmarked (`let_go`): the run's
+      // bounds in `ks`, L's place in `was`, whether one is let go. Keys come elsewhere in the change are as ever)
+      let came_at_foot : (Int, Int, Int, Bool)? = if ks.length() > 0 {
+        let mut e = ks.length()
+        while e > 0 && ks.length() - e < floor_tail && !came_by_data.val.contains(ks[e - 1]) {
+          e = e - 1
         }
-        if !let_go && j >= 0 {
-          // (the keys come after L, in their order: the run of those come by data at the end)
-          let mut c = ks.length()
+        if e > 0 && came_by_data.val.contains(ks[e - 1]) {
+          let mut c = e - 1
           while c > 0 && came_by_data.val.contains(ks[c - 1]) {
             c = c - 1
           }
-          one_move_key.val = Some((was[j], ks[c:].to_owned(), self.tree.cause_now()))
+          let mut j = was.length() - 1
+          let mut t = ks.length() - 1
+          let mut let_go = false
+          let mut ok = true
+          while j >= 0 {
+            let k = was[j]
+            if !laid_at.contains(k) {
+              if !@signals.untracked(fn() { leaves_room(k) }) {
+                let_go = true
+              }
+              j = j - 1
+            } else if t >= e {
+              // (the staying keys under the run, in their order)
+              if k == ks[t] {
+                t = t - 1
+                j = j - 1
+              } else {
+                ok = false
+                break
+              }
+            } else {
+              break
+            }
+          }
+          if ok && t < e && j >= 0 {
+            Some((c, e, j, let_go))
+          } else {
+            None
+          }
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+      match came_at_foot {
+        Some((c, e, j, false)) => {
+          // (the keys come after L, in their order, and those that stay under them)
+          one_move_key.val = Some((was[j], ks[c:e].to_owned(), ks[e:].to_owned(), self.tree.cause_now()))
           one_move_builds.val = self.tree.old_builds_begun
           one_move_free.val = false
           one_move_e0.val = None
         }
+        _ => ()
       }
       if @signals.untracked(fn() { s.at_foot() }) {
         let mut j = was.length() - 1
@@ -856,13 +897,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           }
           j = j - 1
         }
-        if let_go {
-          (floor_end.val)()
-        } else if j >= 0 && ks.length() > 0 && came_by_data.val.contains(ks[ks.length() - 1]) {
-          match tail_tops.search_by(fn(t) { t.0 == j }) {
-            Some(i) => (floor_arm.val)(was[j], laid_whole.val - tail_tops[i].1)
-            None => ()
-          }
+        // (an unmarked key gone at the foot ends it, as ever; one gone under L, among the keys that stay under the run,
+        // too)
+        match came_at_foot {
+          _ if let_go => (floor_end.val)()
+          Some((_, _, _, true)) => (floor_end.val)()
+          Some((_, _, l, false)) =>
+            match tail_tops.search_by(fn(t) { t.0 == l }) {
+              Some(i) => (floor_arm.val)(was[l], laid_whole.val - tail_tops[i].1)
+              None => ()
+            }
+          None => ()
         }
       }
       for k in heights_changed {
@@ -885,14 +930,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let ways : Array[(View, K, K?)] = []
   let ways_off : Ref[() -> Unit] = Ref(fn() {  })
   // (the blocks of keys said to come whole (`comes_whole`) on their way at its foot, by their nodes: drawn as at rest,
-  // not cut to their room, over the rest of the list (Tree::raise_in_list, the paint's), the latest come the one drawn
-  // so; none once their ways end)
+  // not cut to their room, over the rest of the list (Tree::raise_in_list, the paint's), every one on its way, in the
+  // list's order (the coordinator of the migration, 2026-11-14: two sent close together, the first still goes); none
+  // once their ways end)
   let whole_rows : Array[View] = []
   let whole_raised = fn() {
     let alive = whole_rows.filter(fn(r) { r.alive() && ways.iter().any(fn(w) { w.0.at == r.at && w.0.id() == r.id() }) })
     whole_rows.clear()
     whole_rows.append(alive)
-    self.tree.raise_in_list(self.at, whole_rows.last().map(fn(r) { r.id() }))
+    self.tree.raise_in_list(self.at, whole_rows.map(fn(r) { r.id() }))
   }
   // Where its blocks are now (Places): as they are counted, less what the ways over each have still to open, at the
   // moment each way is laid out at as the column is laid out (its room's, the one flex lays it out at), else at the
@@ -2510,7 +2556,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (keys come at its end, in the fill that has them measured (noted till then, room or none): from as tall as all
     // that change gave back under L's top, taken in their order, each never taller than itself, only ever raised)
     match one_move_key.val {
-      Some((lk, kks, cause)) => {
+      Some((lk, kks, under, cause)) => {
         let rows = kks.map(fn(k) { (came_row.get(k), heights.get(k)) })
         // (its foot holding an old view not built since the cause: noted for the fill after it is, or before the
         // frame is painted, whichever is first: one_move_builds)
@@ -2551,7 +2597,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 }
                 None => e0
               }
-              let mut given = e0 - all.h(i) - room_under() - s.tuck_room.untracked()
+              // (less what stays under the keys come, as tall as it is now: it keeps its place against the column's end)
+              let mut stays = 0.0
+              for u in under {
+                match laid_at.get(u) {
+                  Some(ui) if ui < all.length() => stays = stays + all.h(ui)
+                  _ => ()
+                }
+              }
+              let mut given = e0 - all.h(i) - stays - room_under() - s.tuck_room.untracked()
               let tree = self.tree
               let groups : Array[@flex.ComeGroup] = []
               for r in rows {
@@ -2883,7 +2937,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       floor_raise()
       foot_room.set(foot_room.untracked() + slot_tall(g))
     }
-    if one_move_key.val is Some((_, kks, _)) && kks.contains(k) {
+    if one_move_key.val is Some((_, kks, _, _)) && kks.contains(k) {
       came_row[k] = row
     }
     let r = foot_room.untracked()
@@ -3031,9 +3085,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       coming &&
       @signals.untracked(fn() { comes_whole(k) && s.at_foot() && follows() }) &&
       !@signals.untracked(self.tree.motion_reduced) {
+      let alive = whole_rows.filter(fn(r) { r.alive() && r.at != row.at })
+      whole_rows.clear()
+      whole_rows.append(alive)
       whole_rows.push(row)
       self.tree.nodes[row.at].come_uncut = true
-      self.tree.raise_in_list(self.at, Some(row.id()))
+      self.tree.raise_in_list(self.at, whole_rows.map(fn(r) { r.id() }))
     }
     if ok {
       let left = ways.filter(fn(w) { w.0.at != row.at })

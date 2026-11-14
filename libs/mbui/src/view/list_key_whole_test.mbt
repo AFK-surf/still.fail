@@ -279,3 +279,38 @@ test "a key said to come whole, not at the foot, said at once, or with motion re
     }
   }
 }
+
+///|
+test "two keys said to come whole, put over a line that stays under them 100 ms apart, the first still on its way as the second comes: both raised while both go, each drawn whole at full ink at every look" {
+  for rate in [0.0, 60.0, 120.0, 24.0, 7.0] {
+    let at = "at \{rate} a second"
+    let (tree, keys, _) = wk_case(true, under=true)
+    let events : Array[(Double, () -> Unit)] = [
+      (wk_at, fn() { keys.set(Array::makei(10, fn(i) { i }) + [72, 50]) }),
+      (wk_at + 100.0, fn() { keys.set(Array::makei(10, fn(i) { i }) + [72, 73, 50]) }),
+    ]
+    let looks = []
+    let mut t = wk_at + 110.0
+    while t <= wk_at + wk_after_ms {
+      looks.push(t)
+      t = t + rc_look_ms
+    }
+    let seen = rc_walk(tree, events, looks, rate, fn() { (wk_read(tree, "行72"), wk_read(tree, "行73")) })
+    let mut both = 0
+    for i, s in seen {
+      let (a, b) = s
+      for w in [a, b] {
+        assert_true(w.wy != rc_none && (w.wa - 1.0).abs() < 0.001 && (w.wh - 24.0).abs() < 0.01, msg="\{at}, look \{i}: drawn \{w.wh} at \{w.wa}")
+        match w.cut {
+          Some(c) => fail("\{at}, look \{i}: \{c}")
+          None => ()
+        }
+      }
+      if a.raised == 2 {
+        both += 1
+      }
+    }
+    assert_true(both > 0 || rate == 0.0, msg="\{at}: never both raised")
+    assert_eq(seen[seen.length() - 1].0.raised, 0, msg="\{at}: raised at rest")
+  }
+}

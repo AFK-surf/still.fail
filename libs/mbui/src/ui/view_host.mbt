@@ -1424,8 +1424,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // it is; what holds it drawn as gone through, none of it kept or drawn whole as one meanwhile. None on a list with none:
   // one look at an empty array. Not where the walk finds what is pressed: paint's alone)
   let raised = if dr.mode == mode_hits { [] } else { tree.raised_blocks() }
-  // (the one being gone through: its list, it, where its instances begin and end)
-  let lifting : Ref[(@view.NodeId, @view.NodeId, Int, Int)?] = Ref(None)
+  // (the list being gone through: it, where the instances of each raised block of it gone through begin and end, in
+  // the walk's order, and the one being gone through now with where its instances begin. Every block of it on its way
+  // whole is moved, in that order, once the walk leaves the list (the coordinator of the migration, 2026-11-14: two
+  // sent close together, the first still on its way))
+  let lifting : Ref[(@view.NodeId, Array[(Int, Int)], (@view.NodeId, Int)?)?] = Ref(None)
   let raise_holds = fn(id : @view.NodeId) {
     !raised.is_empty() && raised.iter().any(fn(r) { r.1 == id || tree.holds_in_order(id, r.1) })
   }
@@ -1437,21 +1440,29 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
     }
     match lifting.val {
-      Some((list, b, k0, k1)) => {
-        let k1 = if k1 < 0 && !held_by(b) { self.ninst } else { k1 }
-        if k1 >= 0 && !held_by(list) {
-          if k1 > k0 && self.ninst > k1 {
-            self.raise_ranges([(k0, k1)])
+      Some((list, ranges, open)) => {
+        let open = match open {
+          Some((b, k0)) if !held_by(b) => {
+            if self.ninst > k0 {
+              ranges.push((k0, self.ninst))
+            }
+            None
+          }
+          o => o
+        }
+        if open is None && !held_by(list) {
+          if ranges.length() > 1 || (ranges.length() == 1 && self.ninst > ranges[0].1) {
+            self.raise_ranges(ranges)
           }
           lifting.val = None
         } else {
-          lifting.val = Some((list, b, k0, k1))
+          lifting.val = Some((list, ranges, open))
         }
       }
       None => ()
     }
-    match (lifting.val, next) {
-      (None, Some(n)) if !raised.is_empty() =>
+    match next {
+      Some(n) if !raised.is_empty() && !(lifting.val is Some((_, _, Some(_)))) =>
         match raised.iter().find_first(fn(r) { r.1 == n || tree.holds_in_order(r.1, n) }) {
           Some((list, b)) => {
             ride_spoil()
@@ -1459,7 +1470,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
               Some(l) => l.spoiled = true
               None => ()
             }
-            lifting.val = Some((list, b, self.ninst, -1))
+            match lifting.val {
+              Some((l, ranges, None)) if l == list => lifting.val = Some((l, ranges, Some((b, self.ninst))))
+              None => lifting.val = Some((list, [], Some((b, self.ninst))))
+              _ => ()
+            }
           }
           None => ()
         }
