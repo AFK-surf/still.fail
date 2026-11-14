@@ -4,7 +4,7 @@
 // for. A change with no key is of all of its kind on that station.
 import { Marks } from "../reactive.ts";
 
-export type Kind = "link" | "live" | "host" | "log" | "screens" | "logins" | "loginScreen";
+export type Kind = "link" | "live" | "host" | "log" | "screens" | "terminals" | "logins" | "loginScreen";
 
 export class Seen {
   readonly #kinds = new Map<Kind, Marks>();
