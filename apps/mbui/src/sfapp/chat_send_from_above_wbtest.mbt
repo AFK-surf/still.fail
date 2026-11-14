@@ -142,3 +142,32 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏, read above
     csa_sent_lands(t, name, fn() { tap_send(t) })
   }
 }
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the list held by a tall answer's top (ListPlace::follow_from standing), words sent: down only to its foot, at rest there, the next message followed" {
+  for screen in rp_screens {
+    let name = screen.0
+    let (t, clock, _) = rp_answer(screen, long_reply + "\n\n" + rp_paras(30), "work")
+    let held = csa_list(t, name)
+    assert_false(held.at_foot, msg="\{name}: at its foot, the answer's top not holding it")
+    let seen : Array[CsaList] = []
+    t.each_frame(Some(fn() { seen.push(csa_list(t, name)) }))
+    rp_send(t, "收到，我先看")
+    t.run_shown(rp_rest_ms)
+    t.each_frame(None)
+    let mut was = held.at
+    for i, s in seen {
+      assert_true(s.at >= was - 0.01, msg="\{name}, frame \{i}: up again, \{was} to \{s.at}")
+      was = s.at
+    }
+    let rest = csa_list(t, name)
+    assert_true(rest.at_foot, msg="\{name}: not at its foot at rest (at \{rest.at})")
+    let gap = csa_gap(t, name)
+    assert_true(gap.abs() <= csa_half_px(), msg="\{name}: its last row's foot \{gap} over the pinned foot's top at rest")
+    // (the limit gone: the next message followed at its foot)
+    let _ = rp_frames(t, clock, fn() { rp_said(171, rp_next) }, rp_next, rp_rest_ms)
+    let after = csa_list(t, name)
+    assert_true(after.at_foot && t.drawn_of(rp_next) is Some(_), msg="\{name}: the next message not followed (at \{after.at})")
+  }
+  fix_clock.val = None
+}
