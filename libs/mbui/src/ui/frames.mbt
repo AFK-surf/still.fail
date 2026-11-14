@@ -31,10 +31,54 @@ pub fn Tester::drawn_text(self : Tester) -> String {
 }
 
 ///|
+/// The last frame's instances alone, as drawn_text says them (its `inst` lines, without the nodes' dump before them):
+/// what a test that compares only what was drawn reads, without the dump it would throw away.
+pub fn Tester::drawn_instances_text(self : Tester) -> String {
+  self.reads_own()
+  ignore(self)
+  let sb = StringBuilder()
+  drawn_insts_into(sb, g())
+  sb.to_string()
+}
+
+///|
 fn drawn_text() -> String {
   let c = g()
   let sb = StringBuilder()
   dump_node(sb, 0, 0)
+  drawn_insts_into(sb, c)
+  sb.to_string()
+}
+
+///|
+/// `v` in decimal digits, as `\{v}` says it, with no string made for it (drawn_text writes some 20 a line for
+/// thousands of lines a frame: their strings were most of what kept_rows_kinds' comparisons cost, 2026-11-14).
+fn write_i64(sb : StringBuilder, v : Int64) -> Unit {
+  if v == 0L {
+    sb.write_char('0')
+    return
+  }
+  if v < 0L {
+    sb.write_char('-')
+  }
+  // (digits from the last; a negative's by its own sign, so the least Int64 is said too)
+  let digits = FixedArray::make(20, 0)
+  let mut n = 0
+  let mut x = v
+  while x != 0L {
+    let d = (x % 10L).to_int()
+    digits[n] = if d < 0 { -d } else { d }
+    x = x / 10L
+    n = n + 1
+  }
+  for i = n - 1; i >= 0; i = i - 1 {
+    sb.write_char((48 + digits[i]).unsafe_to_char())
+  }
+}
+
+///|
+/// The frame's instances' lines, as drawn_text says them.
+fn drawn_insts_into(sb : StringBuilder, c : Ctx) -> Unit {
   let named = image_numbers(c)
   let keys = glyph_keys()
   for k in 0..<c.ninst {
@@ -49,7 +93,8 @@ fn drawn_text() -> String {
       } else {
         inst_named(c, named, keys, k, j)
       }
-      sb.write_string(" \{(v * 64.0).round().to_int64()}")
+      sb.write_char(' ')
+      write_i64(sb, (v * 64.0).round().to_int64())
     }
     if c.inst[k * inst_size + 5] == 4.0 {
       let s = stream_drawn(c.inst[k * inst_size + 20].to_int())
@@ -59,7 +104,6 @@ fn drawn_text() -> String {
     }
     sb.write_char('\n')
   }
-  sb.to_string()
 }
 
 ///|
