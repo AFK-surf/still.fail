@@ -28,34 +28,6 @@ test "a 14-point box turning once in 800 ms: its corners 78 points a second, 2 a
 }
 
 ///|
-test "a cycle asking for 60 Hz keeps that floor while shown, then the other cycle can slow again" {
-  let shown = @signals.signal(true)
-  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, tree=fn(root) {
-    root.box(fn(v) {
-      v.width(Is(Some(14.0))).height(Is(Some(14.0))).ground(Is(0x3366CCFFL))
-      .turn(By(fn() { v.cycle(6000.0) * 2.0 * 3.141592653589793 }), drawn=true) |> ignore
-    }) |> ignore
-    root.show(at_once=true, fn() { shown.get() }, fn(v) {
-      v.width(Is(Some(14.0))).height(Is(Some(14.0))).ground(Is(0xCC6633FFL))
-      .turn(By(fn() { v.cycle(6000.0, at_least_60=true) * 2.0 * 3.141592653589793 }), drawn=true) |> ignore
-    })
-  })
-  t.draw()
-  let at = t.time()
-  for i in 1..=20 {
-    t.frame_at(at + i.to_double() * 1000.0 / 120.0)
-    let rate = t.frames_paced()
-    assert_true(rate == 0.0 || rate >= 60.0, msg="frame \{i}: \{rate} Hz")
-  }
-  shown.set(false)
-  let after = t.time()
-  for i in 1..=10 {
-    t.frame_at(after + i.to_double() * 1000.0 / 120.0)
-  }
-  assert_eq(t.frames_paced(), 15.0, msg="the remaining ordinary cycle can be paced lower")
-}
-
-///|
 test "a slow fade, none to whole in 6 s: 1/255 of it in 24 ms, 3 a frame at 15 Hz" {
   let rates = paced_by(n=7, fn(v) { v.alpha(By(fn() { v.cycle(6000.0) })) |> ignore })
   assert_eq(rates, [60.0, 40.0, 30.0, 20.0, 15.0, 15.0, 15.0])

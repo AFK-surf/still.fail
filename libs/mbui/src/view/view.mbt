@@ -704,11 +704,6 @@ pub struct Tree {
   mut frame_ms : Double
   /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
   beat : @signals.Signal[Double]
-  /// a token followed by bindings of cycles that ask for at least 60 frames a second (never written): its readers tell
-  /// when no binding asks for that rate
-  beat_60 : @signals.Signal[Bool]
-  /// the nodes that read the token, each with its making and the moment it last read
-  beat_60_readers : Map[Int, (Int, Double)]
   /// the same moment on the resident clock's steps (resident_step_ms): for an endless decoration drawn by it
   /// (View::cycle_resident), told only as a step is passed
   resident : @signals.Signal[Double]
@@ -1296,8 +1291,6 @@ pub fn Tree::new(
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     frame_ms: start,
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
-    beat_60: @signals.signal(false),
-    beat_60_readers: {},
     resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
     resident_readers: {},
     resident_said: (-1, -1, -1.0, -1, false),
@@ -2081,15 +2074,10 @@ pub fn View::drawn_while(self : View, goes : (Double) -> Bool) -> Double {
 ///|
 /// Where a cycle of `period` ms is as what is drawn is drawn (0 to 1, from moment 0 on), followed: for a wait drawn by
 /// it as long as it shows (a spinner's turn, a band of progress not known), which never ends and is no motion
-/// (Tree::cycle_read); as Ctx::cycle is an old view's. `at_least_60` asks the host for at least 60 frames a second
-/// while this cycle is read, or its display's rate if lower; other cycles keep the frame pace worked out from their motion.
-pub fn View::cycle(self : View, period : Double, at_least_60? : Bool = false) -> Double {
+/// (Tree::cycle_read); as Ctx::cycle is an old view's.
+pub fn View::cycle(self : View, period : Double) -> Double {
   self.tree.clock_read_in_binding("cycle")
   let t = self.tree.beat.get()
-  if at_least_60 && period > 0.0 {
-    self.tree.beat_60.get() |> ignore
-    self.tree.beat_60_readers[self.at] = (self.gen, t)
-  }
   if period <= 0.0 {
     return 0.0
   }
@@ -2157,26 +2145,27 @@ pub fn Tree::resident_read(self : Tree) -> Bool {
     rr == self.resident_rev {
     return said
   }
-  let said = self.cycle_readers_drawn(self.resident_readers, now)
+  let said = self.resident_found(now)
   self.resident_said = (self.draws_rev, self.hits, now, self.resident_rev, said)
   said
 }
 
 ///|
-/// Whether a cycle's readers have read `now` where they are drawn (Tree::resident_read, Tree::cycle_wants_60).
-fn Tree::cycle_readers_drawn(self : Tree, readers : Map[Int, (Int, Double)], now : Double) -> Bool {
+/// Whether an endless decoration reads the resident clock's step `now` where it is drawn now (Tree::resident_read),
+/// found.
+fn Tree::resident_found(self : Tree, now : Double) -> Bool {
   // (those let go, or no longer reading it (the step they last read not this one: a mark that stopped), dropped)
   let gone = []
-  for at, r in readers {
+  for at, r in self.resident_readers {
     let (gen, read) = r
     if !self.alive_id(({ at, gen } : NodeId)) || read != now {
       gone.push(at)
     }
   }
   for at in gone {
-    readers.remove(at)
+    self.resident_readers.remove(at)
   }
-  if readers.is_empty() {
+  if self.resident_readers.is_empty() {
     return false
   }
   // (each reader drawn where something of what it is, or holds, is drawn as the order goes (Tree::each_drawn_in_order):
@@ -2184,14 +2173,14 @@ fn Tree::cycle_readers_drawn(self : Tree, readers : Map[Int, (Int, Double)], now
   // is in the order, nothing else of the tree gone through. A reader not in the order itself (a slot's) found the long
   // way, as each drawn is found)
   let mut plain = true
-  for at, _ in readers {
+  for at, _ in self.resident_readers {
     if at >= self.order_of.length() || self.order_of[at] < 0 {
       plain = false
     }
   }
   if plain {
     let len = self.order.length()
-    for at, _ in readers {
+    for at, _ in self.resident_readers {
       let p = self.order_of[at]
       if p >= len || self.order[p] != at {
         plain = false
@@ -2233,7 +2222,7 @@ fn Tree::cycle_readers_drawn(self : Tree, readers : Map[Int, (Int, Double)], now
   self.each_drawn_scaled(fn(c, _, _, _, _) {
     let mut i = c.id.at
     while !seen && i >= 0 && !clear[i] {
-      if readers.contains(i) {
+      if self.resident_readers.contains(i) {
         seen = true
       }
       i = self.nodes[i].parent
@@ -2260,12 +2249,6 @@ pub fn Tree::resident_next(self : Tree) -> Double {
 /// cycle has them drawn, a wait, not a motion (Tree::clock_read).
 pub fn Tree::cycle_read(self : Tree) -> Bool {
   self.beat.watched()
-}
-
-///|
-/// Whether a cycle that asks for at least 60 frames a second is read (View::cycle's `at_least_60`).
-pub fn Tree::cycle_wants_60(self : Tree) -> Bool {
-  self.beat_60.watched() && self.cycle_readers_drawn(self.beat_60_readers, self.beat.untracked())
 }
 
 ///|

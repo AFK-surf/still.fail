@@ -6,7 +6,6 @@
 // a slow fade or what reads the clock and draws nothing new needs fewer frames than the display shows, and the host
 // draws only those, telling the display it may refresh as slowly (@hostapi.frames_paced: ProMotion's
 // preferredFrameRateRange, Android's Surface.setFrameRate), as mygo's Painter.AnimationFrameRate asks of it by hand.
-// A cycle that says it needs at least 60 frames a second (View::cycle) keeps that floor while it is shown.
 //
 // It is how often the host draws, never what: a frame at a moment is that moment's whatever came before it, so the
 // picture and the state at any moment are the same at any rate (mbui/AGENTS.md, Time in a test is declared). What else
@@ -79,11 +78,7 @@ fn pace_by_clock(t : Double) -> Double {
   pace.at = t
   pace.rung = rung
   if rung >= 0 {
-    let floor = match view_tree() {
-      Some(tree) if tree.cycle_wants_60() => 60.0
-      _ => 0.0
-    }
-    dmax(floor, pace_rates[rung])
+    pace_rates[rung]
   } else {
     0.0
   }

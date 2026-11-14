@@ -4,7 +4,7 @@
 /// sync_key as a node in `parent`: the list catching up on what changed while away, `side` across, while `syncing()`
 /// says what it is (its tip and what it is read out as; None once all is here). Only once it has gone on later_ms, from
 /// the moment it began (a moment's catching up shows nothing): the refresh mark (`mark` across, in the grey of what
-/// says nothing of it) turning, a turn each sync_turn_ms, slow at its ends, by the clock as each frame is drawn. Once
+/// says nothing of it) turning evenly, a turn each sync_turn_ms, by the clock as each frame is drawn. Once
 /// all is here, from that moment: the mark goes on from where it is and as fast as it turns, slowing to rest where it
 /// looks as upright (sync_rest), its arrows drawn back along their strokes, then the tick drawn as a hand ticks; there
 /// sync_done_ms, then it fades (sync_out_ms). Faded in over @kit.presence_in_ms as it comes; laid nowhere, nothing of it
@@ -138,7 +138,7 @@ pub fn sync_key_node(
         .tint(By(fn() { theme().p.muted }))
         .turn(By(fn() {
           match rest.get() {
-            None => sync_turned(a.cycle(sync_turn_ms, at_least_60=true))
+            None => sync_turned(a.cycle(sync_turn_ms))
             Some((r, _)) => {
               let s = resting.shown(a)
               if s < 1.0 {
