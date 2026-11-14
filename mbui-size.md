@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [37844aadc](https://github.com/AFK-surf/monoid/commit/37844aadcfab0680ab733f3b370088a1fbb0128b) station: names given by hand and a card let go wri | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
 | [976d6ce9e](https://github.com/AFK-surf/monoid/commit/976d6ce9edb988762fcdbf80ac23576cc4d07c11) mbui: the iOS build says which step failed (#6338) | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
 | [0b107ce1f](https://github.com/AFK-surf/monoid/commit/0b107ce1fbefd762befd5ca2a9a71d2a492af9f5) mbui: View::flies_in; the chat's page made as node | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
 | [234892c88](https://github.com/AFK-surf/monoid/commit/234892c8818ad533d014f4e8fa52e2010021327a) station: a member's own marks written by the MoonB | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
 | [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
 | [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.25 | 55.35 | 96.7 | 115.89 |
-| [17bb4448d](https://github.com/AFK-surf/monoid/commit/17bb4448d7bcd188429bbc30fb98d23e894606b8) lock: a moved chain's floor is the build after the | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.25 | 55.35 | 96.7 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [37844aadc](https://github.com/AFK-surf/monoid/commit/37844aadcfab0680ab733f3b370088a1fbb0128b) station: names given by hand and a card let go wri | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [976d6ce9e](https://github.com/AFK-surf/monoid/commit/976d6ce9edb988762fcdbf80ac23576cc4d07c11) mbui: the iOS build says which step failed (#6338) | 0.4 | 0.52 | 1.96 | 3.08 | 4.52 | 1.45 | 3.8 | 57.33 |
 | [0b107ce1f](https://github.com/AFK-surf/monoid/commit/0b107ce1fbefd762befd5ca2a9a71d2a492af9f5) mbui: View::flies_in; the chat's page made as node | 0.4 | 0.52 | 1.96 | 3.08 | 4.52 | 1.45 | 3.8 | 57.48 |
 | [234892c88](https://github.com/AFK-surf/monoid/commit/234892c8818ad533d014f4e8fa52e2010021327a) station: a member's own marks written by the MoonB | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.39 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
 | [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
 | [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
-| [17bb4448d](https://github.com/AFK-surf/monoid/commit/17bb4448d7bcd188429bbc30fb98d23e894606b8) lock: a moved chain's floor is the build after the | 0.4 | 0.52 | 1.95 | 3.08 | 4.45 | 1.45 | 3.78 | 57.33 |
