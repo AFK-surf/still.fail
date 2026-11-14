@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
 | [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.25 | 55.35 | 96.7 | 115.89 |
 | [17bb4448d](https://github.com/AFK-surf/monoid/commit/17bb4448d7bcd188429bbc30fb98d23e894606b8) lock: a moved chain's floor is the build after the | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.25 | 55.35 | 96.7 | 115.89 |
 | [c3542cb9f](https://github.com/AFK-surf/monoid/commit/c3542cb9fc11c07c7a0d571f2b0da672b8d200ff) station: a skill kept apart is named for the stati | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.23 | 55.31 | 96.67 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 | [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 2 | 2.73 | 11.63 | 31.28 | 41.83 | 27.88 | 53.53 | 96.31 | 114.99 |
 | [65d5916fc](https://github.com/AFK-surf/monoid/commit/65d5916fc200358be03efb7245cfea4926eb7177) mbui: converge 6-platform build/size/idlemem scrip | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.42 | 112.94 |
-| [9ac50f734](https://github.com/AFK-surf/monoid/commit/9ac50f7340c057144d1f5e66bb27ebde471677b5) mbui: a CJK face's marks of ambiguous width are na | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
 | [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
 | [17bb4448d](https://github.com/AFK-surf/monoid/commit/17bb4448d7bcd188429bbc30fb98d23e894606b8) lock: a moved chain's floor is the build after the | 0.4 | 0.52 | 1.95 | 3.08 | 4.45 | 1.45 | 3.78 | 57.33 |
 | [c3542cb9f](https://github.com/AFK-surf/monoid/commit/c3542cb9fc11c07c7a0d571f2b0da672b8d200ff) station: a skill kept apart is named for the stati | 0.4 | 0.52 | 1.95 | 3.08 | 4.45 | 1.45 | 3.78 | 57.33 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.26 |
 | [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
 | [65d5916fc](https://github.com/AFK-surf/monoid/commit/65d5916fc200358be03efb7245cfea4926eb7177) mbui: converge 6-platform build/size/idlemem scrip | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
-| [9ac50f734](https://github.com/AFK-surf/monoid/commit/9ac50f7340c057144d1f5e66bb27ebde471677b5) mbui: a CJK face's marks of ambiguous width are na | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
