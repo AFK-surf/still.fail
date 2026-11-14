@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2e2e276ec](https://github.com/AFK-surf/monoid/commit/2e2e276ec0c12392982102d8791a5ebb67853d4d) mbui: main's switches check green: 用量's breakdown  | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [a45d412ed](https://github.com/AFK-surf/monoid/commit/a45d412ed392045339548bcb107b4ec086d75a63) mbui, core: a chat opens with its cards answered,  | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [fe8ed4ae2](https://github.com/AFK-surf/monoid/commit/fe8ed4ae2ec03b714b2e8bf0bf819a09875f07c5) mbui: the window's tree's nodes put among the fram | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [3e0ee8e1e](https://github.com/AFK-surf/monoid/commit/3e0ee8e1e87a03d245e66661a9c2e77a60f7bd2d) station: presets and starred models kept as record | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [68c30ffb0](https://github.com/AFK-surf/monoid/commit/68c30ffb04cbc742b79143474d3b381e5eaddb73) mbui: the said sweep stretches what a mode puts up | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.68 | 111.51 |
 | [46264c4bd](https://github.com/AFK-surf/monoid/commit/46264c4bd112fcc4e9205ec2d379e58ede045047) Fix chat attachment download names on Windows (#61 | 1.99 | 2.72 | 11.59 | 31.21 | 41.66 | 27.83 | 53.38 | 96.8 | 108.04 |
 | [aa42b5526](https://github.com/AFK-surf/monoid/commit/aa42b552681f71171a0850116f1ff34b5c5349c0) app: one's own message's states under it leave on  | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.78 | 109.45 |
-| [36f402305](https://github.com/AFK-surf/monoid/commit/36f402305c526312a39418485154718de78cf114) Letters go by their chat's name in an agent's prom | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.5 | 109.04 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2e2e276ec](https://github.com/AFK-surf/monoid/commit/2e2e276ec0c12392982102d8791a5ebb67853d4d) mbui: main's switches check green: 用量's breakdown  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
 | [a45d412ed](https://github.com/AFK-surf/monoid/commit/a45d412ed392045339548bcb107b4ec086d75a63) mbui, core: a chat opens with its cards answered,  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.13 |
 | [fe8ed4ae2](https://github.com/AFK-surf/monoid/commit/fe8ed4ae2ec03b714b2e8bf0bf819a09875f07c5) mbui: the window's tree's nodes put among the fram | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.13 |
 | [3e0ee8e1e](https://github.com/AFK-surf/monoid/commit/3e0ee8e1e87a03d245e66661a9c2e77a60f7bd2d) station: presets and starred models kept as record | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
