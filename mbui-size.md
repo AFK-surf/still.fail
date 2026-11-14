@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b3989e2e3](https://github.com/AFK-surf/monoid/commit/b3989e2e32459dcb986de39468ead32d11209231) mbui: a tooltip takes no system back (Ctx::overlay | 2.01 | 2.76 | 11.87 | 31.75 | 44.2 | 28.37 | 55.56 | 97.86 | 111.44 |
 | [65634809d](https://github.com/AFK-surf/monoid/commit/65634809d7674e09c00688fce64457b56ce96dcd) mbui: the spacing rules hold pages made as nodes t | 2.01 | 2.76 | 11.87 | 31.75 | 44.2 | 28.37 | 55.56 | 97.86 | 111.44 |
 | [b5fbfdea6](https://github.com/AFK-surf/monoid/commit/b5fbfdea62362f0ee8c7a2fd64820662a6ed9a4b) test(mbui): an icon beside several lines sits on t | 2.01 | 2.76 | 11.87 | 31.75 | 44.2 | 28.37 | 55.56 | 97.86 | 111.44 |
 | [9333b64b5](https://github.com/AFK-surf/monoid/commit/9333b64b5dea63237604a04fc80dcf697f9af34f) Count what people use on every app, for PostHog (# | 2.01 | 2.76 | 11.86 | 31.75 | 44.19 | 28.37 | 55.56 | 98.03 | 110.99 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a88b08ed6](https://github.com/AFK-surf/monoid/commit/a88b08ed6483d22ae55c4259cce0cf5e1d309fd6) Let a station give its chats Farview in place of C | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [1244072f0](https://github.com/AFK-surf/monoid/commit/1244072f0067363efa1def5997104aabe69b78ea) fix(mbui): the web page keeps a file as the browse | 2 | 2.74 | 11.79 | 31.58 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [651e76ec7](https://github.com/AFK-surf/monoid/commit/651e76ec73ecd3d02c5af5612e85873efa927681) mbui: a Tester reads in view of a page's list the  | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
-| [2e2e276ec](https://github.com/AFK-surf/monoid/commit/2e2e276ec0c12392982102d8791a5ebb67853d4d) mbui: main's switches check green: 用量's breakdown  | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b3989e2e3](https://github.com/AFK-surf/monoid/commit/b3989e2e32459dcb986de39468ead32d11209231) mbui: a tooltip takes no system back (Ctx::overlay | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.18 |
 | [65634809d](https://github.com/AFK-surf/monoid/commit/65634809d7674e09c00688fce64457b56ce96dcd) mbui: the spacing rules hold pages made as nodes t | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.18 |
 | [b5fbfdea6](https://github.com/AFK-surf/monoid/commit/b5fbfdea62362f0ee8c7a2fd64820662a6ed9a4b) test(mbui): an icon beside several lines sits on t | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.33 |
 | [9333b64b5](https://github.com/AFK-surf/monoid/commit/9333b64b5dea63237604a04fc80dcf697f9af34f) Count what people use on every app, for PostHog (# | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.33 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a88b08ed6](https://github.com/AFK-surf/monoid/commit/a88b08ed6483d22ae55c4259cce0cf5e1d309fd6) Let a station give its chats Farview in place of C | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
 | [1244072f0](https://github.com/AFK-surf/monoid/commit/1244072f0067363efa1def5997104aabe69b78ea) fix(mbui): the web page keeps a file as the browse | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
 | [651e76ec7](https://github.com/AFK-surf/monoid/commit/651e76ec73ecd3d02c5af5612e85873efa927681) mbui: a Tester reads in view of a page's list the  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
-| [2e2e276ec](https://github.com/AFK-surf/monoid/commit/2e2e276ec0c12392982102d8791a5ebb67853d4d) mbui: main's switches check green: 用量's breakdown  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
