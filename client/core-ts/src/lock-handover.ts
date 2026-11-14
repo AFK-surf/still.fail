@@ -12,7 +12,7 @@ import { fold, movedRoot } from "./lock-moved.ts";
 import { checkChain, crypto } from "./personal-lock.ts";
 import { type Checked, checkLock, signerIn } from "./vault/lock-check.ts";
 import { COUNTED_FROM } from "./station/oldest.ts";
-import { MOVED_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
+import { LOGS_ANY_FROM_BUILD, MOVED_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -63,15 +63,15 @@ export const HAND_OVER_FROM: number | null = 1794614400;
 /// owner, 2026-11-14): from `HAND_OVER_FROM` or the genesis, whichever is later.
 export const HAND_OVER_FIRST_SECS = 14 * 86400;
 
-/// For now, a chain whose members bound to a log are more than this is not handed over: a workspace said in its people's
-/// logs is bounded (`LOGS_MOST`, 256 logs a workspace) and one past it is a dead end.
-export const HAND_OVER_MEMBERS_MOST = 200;
 
 /// Whether a device that said `build` (its highest, as a station saw it ask: -1, none said) takes a moved workspace: a
 /// release's (COUNTED_FROM on) from MOVED_FROM_BUILD on; one under COUNTED_FROM, a development build's or an iOS app's
 /// (its TestFlight number, libs/mbui/scripts/ios.sh), cannot be told apart and is taken as able (the tests' devices say
 /// such builds; the iOS app updates by TestFlight); none said is not.
 export const ableBuild = (build: number): boolean => build >= 0 && (build < COUNTED_FROM || build >= MOVED_FROM_BUILD);
+/// The same of a chain binding more than LOGS_BEFORE logs (station/src/api/moved-from.ts): from LOGS_ANY_FROM_BUILD on,
+/// under which a station of such a moved workspace tells a core to update.
+export const ableLarge = (build: number): boolean => build >= 0 && (build < COUNTED_FROM || build >= LOGS_ANY_FROM_BUILD);
 
 /// Who turned safe mode on: the person of the device the genesis names with the key that signed it (its body's
 /// `owner` where it names none so).

@@ -183,12 +183,18 @@ another; the accounts' list's merge across stations and its refills.
   its people's logs and the statements' bodies its stations gave, read with the chain as it moved (`src/lock-moved.ts`,
   rules `state4_moved`, 2026-11-14: what the logs have not said yet of those the chain named, it still says, each such
   device `by` "chain"; kept beside the lock, `lockLogs`
-  and `lockBodies`, the person's own log the one personal-lock.ts pins), by this device's clock, each app device by the
+  and `lockBodies`, the person's own log the one personal-lock.ts pins; every log the stations give, no bound by count:
+  of before 256, past which a state lacked the rest's devices, 2026-11-15), by this device's clock, each app device by the
   signer its log says (`sign_key`; its key on the log signs that log alone, so this device is on a moved workspace by
   that key on its log, views/pair.ts `movedPlace`): every reader of who and
   what is in the lock reads `src/views/lock.ts` `stateOf`, what reads the chain itself (its own `disable`, its stations
   keeping it, `chosen`, `carry`) reads `fold`. Without the root's log it waits (nobody listed, nothing asked of the
-  device); without an `open` there, the chain's settings stand. It is made once and kept in memory while what it is made of stands (`inForceOf`). Nothing is
+  device); without an `open` there, the chain's settings stand. It is made once and kept in memory while what it is made of stands (`inForceOf`).
+  A station that says `heads` is read by them (views/lock.ts `givenOf`: GET /lock/heads, then POST /lock/given for the
+  logs whose head is no entry held here and the bodies of hashes none held is of), so a read with nothing changed asks
+  no log and no body; one from before is read whole. Known and taken (the lead, 2026-11-15): a workspace already moved
+  that grows past `LOGS_BEFORE` logs while one of its stations is from before this is read wrong at that station by a
+  core from before (no floor there); nothing is built for it, no workspace of that size having moved. Nothing is
   signed on a moved chain itself: `Lock.append` answers `lock_moved`, the background writers do nothing, and what was
   pending as the chain moved is told as not taken effect. A change a person asks for there from a device on no log
   of theirs answers `lock_moved` in the words of one not trusted (`core-misc.lock.notSigner`, views/lock.ts
@@ -288,8 +294,10 @@ another; the accounts' list's merge across stations and its refills.
   one on a build under `MOVED_FROM_BUILD` is told to update by a station of the workspace as it next asks
   (station/src/mesh/serve.ts `movedTooOld`: 请更新, 请刷新页面 on the web) and is in again once it has, nothing approved
   anew. Do not bring a wait for people's devices back. `lock.handOver` answers
-  `lock_not_ready` in the upgrade's title). For now, lifted by its own change: more than `HAND_OVER_MEMBERS_MOST` members
-  bound to a log (`LOGS_MOST` a workspace); a host made for tests that calls `lock.handOver` itself is not held to it. A
+  `lock_not_ready` in the upgrade's title). A workspace of any size is handed over (the lead, 2026-11-15; the hold of
+  200 members went): a chain binding more than `LOGS_BEFORE` logs (station/src/api/moved-from.ts; a core of before kept
+  no more) waits besides for every station it names to say `heads`, shown as one not serving `carried` is, and for this
+  device's own build from `LOGS_ANY_FROM_BUILD` (`ableLarge`); a chain of fewer waits for neither. A
   member with only a web page holds nothing back and is told nothing before it (the owner, 2026-11-13: 「开了安全模式那就需要
   app」; 2026-11-15): their page is carried until its `exp`, then is one nobody can approve there (`needsAppIn`, drawn in
   the app's place of the workspace and on 安全), and their first app comes in as a newcomer's. The owner's (the user,

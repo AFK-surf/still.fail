@@ -24,3 +24,16 @@ export const MOVED_FROM_BUILD = 9144;
 // it every core, those that read the rule too, would have been told to update in such a workspace with no release to
 // update to. As MOVED_FROM_BUILD above: only ever the build every reader needs, known once the commit is on main.)
 export const ROOT_OUT_FROM_BUILD = 9244;
+
+// How many person logs a device of a release before LOGS_ANY_FROM_BUILD keeps of a workspace at most (its
+// client/core-ts views/lock.ts `keepLogs` had a bound of its own): one past it was skipped and said nothing, so such a core makes a state of a moved workspace
+// whose state in force is made of more logs that lacks their devices (measured 2026-11-15: of 300 members, 42 listed
+// with none). Read by the station (`movedFloor`, mesh/serve.ts) and by the core (a chain binding more logs is handed over
+// only where every station it names says `heads`, the floor below with it).
+export const LOGS_BEFORE = 256;
+
+// The first build that keeps every log a workspace's stations give and reads them by their heads (GET /lock/heads,
+// POST /lock/given): a core of a release under it is told to update (mesh/serve.ts `movedTooOld`) only in a workspace
+// whose state in force is made of more than LOGS_BEFORE logs (`Cloud.needs`), and nowhere else. 9999999 until the
+// commit that brings it is on main: the lead sets it to that commit's build then, never below it.
+export const LOGS_ANY_FROM_BUILD = 9999999;
