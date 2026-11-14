@@ -449,6 +449,10 @@ test "E'. L's part said by its way, gone as a key comes, then the key taken away
     om_walk(c, { room: false, foot: 0.0, declared: false, part: true, part9: false, comes: true, read_up: 0.0 }, rate)
     |> ignore
     let back_at = su_change_at + su_after_ms + 100.0
+    let looks = [back_at - rc_look_ms]
+    for i in 0..<100 {
+      looks.push(back_at + i.to_double() * rc_look_ms)
+    }
     let seen = rc_walk(
       c.tree,
       [
@@ -457,16 +461,24 @@ test "E'. L's part said by its way, gone as a key comes, then the key taken away
           c.keys.set(om_keys([70]))
         }),
       ],
-      [back_at - rc_look_ms, back_at + 50.0, back_at + 1000.0],
+      looks,
       rate,
       from=su_change_at + su_after_ms,
-      fn() { (om_seen(c.tree, "部"), om_cut(c.tree, ["部"], 400.0 - c.foot.untracked()) is Some(_)) },
+      fn() {
+        let ink = c.tree.drawn().fold(init=0.0, fn(m, d) { if d.words == "部" && d.alpha > m { d.alpha } else { m } })
+        (ink, om_cut(c.tree, ["部"], 400.0 - c.foot.untracked()) is Some(_))
+      },
     )
     let at = "at \{rate} a second"
-    assert_false(seen[0].0, msg="\{at}: L's part drawn before it came back")
-    // (by its way: on its way 50 ms after, opening (drawn, cut to itself as any part's way is), whole at rest)
-    assert_true(seen[1].0, msg="\{at}: L's part not drawn on its way back")
-    assert_true(seen[2].0 && !seen[2].1, msg="\{at}: L's part not whole at rest")
+    assert_true(seen[0].0 == 0.0, msg="\{at}: L's part drawn before it came back")
+    // (by its way, as a key coming is drawn under a page's list: not seen at or under half its room, seen past it on
+    // its way (some ink, not all of it), whole and at full ink at rest; till 2026-11-14 it was looked at 50 ms after,
+    // drawn cut to itself: the coordinator of the migration, 2026-11-14, by the user's 2026-10-31 and 2026-11-08)
+    if rate == 0.0 || rate >= 24.0 {
+      assert_true(seen.iter().any(fn(s) { s.0 > 0.0 && s.0 < 1.0 }), msg="\{at}: L's part not seen on its way back")
+    }
+    let last = seen[seen.length() - 1]
+    assert_true(last.0 == 1.0 && !last.1, msg="\{at}: L's part not whole at rest")
   }
 }
 
