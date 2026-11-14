@@ -12,7 +12,7 @@
 // made (by their email) is theirs, shown, and taken into the device's records once they change it here; what the device
 // holds of an id wins over what it lists. So that its agents and apps from before do not go stale, a change of one it
 // lists is written to it the old way too (PUT, DELETE /presets/:id), and one made with it as the page's station is made
-// on it as before (POST /presets) and taken in as theirs. All of that goes once the floor (OLDEST_STATION) rises past
+// on it as before (POST /presets). All of that goes once the floor (OLDEST_STATION) rises past
 // the stations that serve /presets/kept.
 //
 // People see their own presets by default; others' after a press (the user, 2026-11-14: 「用户默认只能看到自己的预设，
@@ -124,11 +124,8 @@ export function carry(inner: Inner, address: string): Effect.Effect<void, CoreEr
     if (who === null) return;
     const said = yield* Effect.result(ask(inner, address, "GET", "/presets/kept"));
     if (said._tag === "Failure") {
-      if (fromBeforeRoute(said.failure)) {
-        markBefore(inner, ws, stationId(address), true);
-        // (its list read as before: what it lists of theirs is shown)
-        inner.stations.presetsShown(address);
-      }
+      // (its list read as before, as a page shows it: what it lists of theirs is shown)
+      if (fromBeforeRoute(said.failure)) markBefore(inner, ws, stationId(address), true);
       return;
     }
     markBefore(inner, ws, stationId(address), false);
@@ -332,7 +329,7 @@ export class PresetViews implements Owner {
     const r = own?.r ?? this.othersFound(ws, id) ?? (isObject(picked) && picked.id === id ? (picked as unknown as PresetRecord) : undefined);
     if (r === undefined) {
       if ((this.#others.get(ws)?.reading.size ?? 0) > 0) return undefined;
-      return { err: new CoreError("http_404", t("core-misc.presets.none")) };
+      return { err: new CoreError("http_404", t("core-misc.presets.none"), 404) };
     }
     const names = new Map(stationsOf(inner, ws).map((s) => [s.address, s.name]));
     const nameOf = (address: string) => names.get(address) ?? stationId(address);
@@ -416,7 +413,7 @@ function writeBefore(inner: Inner, ws: string, held: Held, r: KeptRecord): void 
           ...(r.station ? { stations: [r.station] } : r.stations ? { stations: r.stations } : {}),
           ...(r.model ? { model: r.model } : {}),
         });
-    if (op !== null) inner.runner.fork(Effect.ignore(inner.stations.perform(op, null)), { log: "Unhandled", message: "a preset's change written to a station from before" });
+    if (op !== null) inner.runner.fork(Effect.ignore(inner.stations.perform(op, null), { log: "Unhandled", message: "a preset's change written to a station from before" }));
   }
 }
 
@@ -440,14 +437,12 @@ function run(inner: Inner, views: PresetViews, c: Of, progress: Parameters<Handl
     };
     switch (c.name) {
       case "add": {
-        // (on a station from before as the page's: made there as before, and taken in as theirs)
+        // (on a station from before as the page's: made there as before; it lists it as theirs, taken into the
+        // device's records once they change it)
         if (held.before.includes(stationId(address))) {
           const op = ops.request("preset.add", p);
           if (op === null) return yield* Effect.fail(CoreError.invalid("preset.add"));
-          const said = yield* handlers.op!(inner, { kind: "op", op }, progress, at, ctx);
-          const r = fromBefore(said, address);
-          if (r !== null) keep({ ...r, owner: who.sub });
-          return said;
+          return yield* handlers.op!(inner, { kind: "op", op }, progress, at, ctx);
         }
         const r = made({ id: presetId(), createdBy: who.email, createdAt: now, updatedAt: now, owner: who.sub, rev: 1, home: stationId(address) }, p, dirsGiven(inner, address, p.dirs, null));
         keep(r);
@@ -456,7 +451,7 @@ function run(inner: Inner, views: PresetViews, c: Of, progress: Parameters<Handl
       case "put": {
         const id = typeof p.id === "string" ? p.id : "";
         const own = ownRecord(inner, ws, id, who, held, address);
-        if (own === null) return yield* Effect.fail(views.othersFound(ws, id) !== undefined ? new CoreError("http_403", t("core-misc.presets.notYours")) : new CoreError("http_404", t("core-misc.presets.none")));
+        if (own === null) return yield* Effect.fail(views.othersFound(ws, id) !== undefined ? new CoreError("http_403", t("core-misc.presets.notYours"), 403) : new CoreError("http_404", t("core-misc.presets.none"), 404));
         const base = adopted(own.r, who) as PresetRecord;
         const r = made({ ...base, updatedAt: now, owner: who.sub, rev: own.r.rev + 1 }, p, dirsGiven(inner, address, p.dirs, own.r));
         keep(r);
@@ -466,7 +461,7 @@ function run(inner: Inner, views: PresetViews, c: Of, progress: Parameters<Handl
       case "delete": {
         const id = typeof p.id === "string" ? p.id : "";
         const own = ownRecord(inner, ws, id, who, held, address);
-        if (own === null) return yield* Effect.fail(views.othersFound(ws, id) !== undefined ? new CoreError("http_403", t("core-misc.presets.notYours")) : new CoreError("http_404", t("core-misc.presets.none")));
+        if (own === null) return yield* Effect.fail(views.othersFound(ws, id) !== undefined ? new CoreError("http_403", t("core-misc.presets.notYours"), 403) : new CoreError("http_404", t("core-misc.presets.none"), 404));
         const gone: KeptRecord = { id, owner: who.sub, rev: own.r.rev + 1, gone: true, updatedAt: now };
         keep(gone);
         writeBefore(inner, ws, held, gone);
@@ -476,7 +471,7 @@ function run(inner: Inner, views: PresetViews, c: Of, progress: Parameters<Handl
         const id = typeof p.id === "string" ? p.id : "";
         const picked = get(inner.data.record("choice", `ws:${ws}:preset`), "record");
         const from = ownRecord(inner, ws, id, who, held)?.r ?? views.othersFound(ws, id) ?? (isObject(picked) && picked.id === id ? (picked as unknown as PresetRecord) : undefined);
-        if (from === undefined) return yield* Effect.fail(new CoreError("http_404", t("core-misc.presets.none")));
+        if (from === undefined) return yield* Effect.fail(new CoreError("http_404", t("core-misc.presets.none"), 404));
         const name = typeof p.name === "string" && p.name.trim() !== "" ? p.name : from.name;
         const r = made(
           { ...from, id: presetId(), createdBy: who.email, createdAt: now, updatedAt: now, owner: who.sub, rev: 1, home: stationId(address) },

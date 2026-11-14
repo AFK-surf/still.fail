@@ -1,0 +1,375 @@
+// A person's presets and starred models carried between a workspace's stations by their own devices
+// (src/views/presets.ts, src/presets-kept.ts), on the stations' own code (station/src/api/routes/presets.ts, stars.ts,
+// station/src/sessions/presets.ts): two stations that never talk and devices that each reach some of them come to the
+// same records by the devices alone; a deletion is not brought back; what was changed with a station away reaches it
+// as its link opens; a station from before is read and written the old way and shows nothing twice; someone else's
+// preset is read at a press, picked, kept with its station away and copied; a chat opens with what the device holds;
+// starred models' union, unstarring and the defaults of a device that never starred.
+import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { Effect } from "effect";
+import type { Route } from "../../../station/src/api/admin.ts";
+import { routes as presetRoutes } from "../../../station/src/api/routes/presets.ts";
+import { routes as starRoutes } from "../../../station/src/api/routes/stars.ts";
+import type { Viewer } from "../../../station/src/mesh/credential.ts";
+import { Presets } from "../../../station/src/sessions/presets.ts";
+import { Choose } from "../src/choose.ts";
+import type { Inner } from "../src/core.ts";
+import { handlers } from "../src/core/execute.ts";
+import { CoreError } from "../src/error.ts";
+import { type KeptRecord, type PresetRecord, canonical, isGone } from "../src/preset-records.ts";
+import { TABLE, heldOf, starredKeys, starsHeld } from "../src/presets-kept.ts";
+import { PresetViews, carryAll, install, likedKey, whoIn } from "../src/views/presets.ts";
+import { overview } from "./station-fixture.ts";
+
+const WS = "ws";
+const ME = { sub: "s1", email: "a@x.com", name: "阿一" };
+const YOU = { sub: "s2", email: "b@x.com", name: "Bo" };
+const clock = { now: 1_000 };
+
+type Ask = (method: string, path: string, body: unknown) => Effect.Effect<unknown, CoreError>;
+type Rig = { id: string; address: string; presets: Presets; answer: (viewer: Viewer) => Ask; told: string[] };
+
+/// What the station's routes answer `r`, as the mesh would: its JSON, or its refusal as the core's requests make one.
+function served(routes: Route[], viewer: Viewer): Ask {
+  return (method, path, body) =>
+    Effect.flatMap(
+      Effect.promise(async () => {
+        for (const route of routes) {
+          const m = route.method === method ? route.pattern.exec(path) : null;
+          if (m === null) continue;
+          const req = { method, path, query: [], headers: {}, body: Buffer.from(body === null || body === undefined ? "" : JSON.stringify(body)), viewer, lang: "en" };
+          return await route.handle(req as never, m.slice(1) as never);
+        }
+        return { status: 404, headers: {}, body: Buffer.from(JSON.stringify({ error: `no route ${method} ${path}` })) };
+      }),
+      (a) => {
+        const text = Buffer.from(a.body as Uint8Array).toString("utf8");
+        return a.status >= 400 ? Effect.fail(new CoreError(`http_${a.status}`, (JSON.parse(text) as { error: string }).error, a.status)) : Effect.succeed(JSON.parse(text) as unknown);
+      },
+    );
+}
+
+/// A station of today, on its own code: its presets in a folder of its own, its stars in memory.
+function station(id: string): Rig {
+  const home = mkdtempSync(join(tmpdir(), "prc-home-"));
+  const repos = mkdtempSync(join(tmpdir(), "prc-repos-"));
+  const presets = new Presets(() => home, () => clock.now, { station: () => id, workspace: () => WS, stationName: (s) => s });
+  const stars = new Map<string, string>();
+  const told: string[] = [];
+  const routes = [
+    ...presetRoutes({ presets, reposDir: () => repos, changed: () => told.push("presets") }),
+    ...starRoutes({ kept: { modelStars: (w, s) => stars.get(`${w}/${s}`) ?? null, putModelStars: (w, s, t) => void stars.set(`${w}/${s}`, t) }, told: () => told.push("stars") }),
+  ];
+  return { id, address: `${WS}/${id}`, presets, told, answer: (viewer) => served(routes, viewer) };
+}
+
+/// A station from before: GET /presets lists every preset of the workspace (none of `owner`, `rev`, `home`), POST,
+/// PUT and DELETE /presets change one; nothing else (`no route`).
+function before(id: string): Rig {
+  const home = mkdtempSync(join(tmpdir(), "prc-old-"));
+  const presets = new Presets(() => home, () => clock.now, { station: () => id, workspace: () => WS });
+  const asked: string[] = [];
+  const old = (p: Record<string, unknown>) => {
+    const { owner: _o, rev: _r, home: _h, ...rest } = p;
+    return rest;
+  };
+  const routes: Route[] = [
+    { method: "GET", pattern: /^\/presets$/, handle: async () => ({ status: 200, headers: {}, body: Buffer.from(JSON.stringify({ presets: presets.list(null).map((p) => old(p as never)), candidates: [], clones: [] })) }) },
+    ...presetRoutes({ presets, reposDir: () => home }).filter((r) => r.method !== "GET" && !String(r.pattern).includes("kept") && !String(r.pattern).includes("clone")),
+  ];
+  return {
+    id,
+    address: `${WS}/${id}`,
+    presets,
+    told: asked,
+    answer: (viewer) => {
+      const ask = served(routes, viewer);
+      return (method, path, body) => {
+        asked.push(`${method} ${path}`);
+        return ask(method, path, body);
+      };
+    },
+  };
+}
+
+/// One device of `who`'s, reaching `stations` (those `up`): its kept records, a scheduler and forks run by `settle`.
+function device(who: { sub: string; email: string; name: string }, stations: Rig[]) {
+  const records = new Map<string, unknown>();
+  const up = new Set(stations.map((s) => s.address));
+  const queue: Effect.Effect<unknown, unknown>[] = [];
+  const lists = new Map<string, unknown>();
+  const byAddress = new Map(stations.map((s) => [s.address, s]));
+  const viewer = { sub: who.sub, email: who.email, name: who.name, role: "member", workspace: WS, device: "d" } as Viewer;
+  const call = (address: string, method: string, path: string, body: unknown) => byAddress.get(address)!.answer(viewer)(method, path, body);
+  const inner = {
+    provider: { kind: "stillfail" },
+    data: {
+      record: (table: string, key: string) => records.get(`${table}:${key}`),
+      put: (table: string, key: string, value: unknown) => void records.set(`${table}:${key}`, value),
+      shared: (topic: { workspace?: string }) =>
+        topic.workspace === WS ? { name: "W", stations: stations.map((s) => ({ id: s.id, name: s.id.toUpperCase() })), members: [ME, YOU].map((m) => ({ ...m, role: "member" })) } : undefined,
+    },
+    stations: {
+      also: [] as { read: (a: string) => Effect.Effect<void, CoreError>; event: (a: string, n: string, d: unknown) => void }[],
+      link: (address: string) => (byAddress.has(address) ? { addr: { toString: () => address } } : undefined),
+      reachable: (address: string) => up.has(address),
+      requests: { call: (addr: { toString(): string }, method: string, path: string, body: unknown) => call(addr.toString(), method, path, body) },
+      presetsShown: (address: string) =>
+        void queue.push(Effect.tap(call(address, "GET", "/presets", null), (v) => Effect.sync(() => lists.set(address, v)))),
+      perform: (op: { target: { station: string }; method: string; path: string; body: unknown }) => call(op.target.station, op.method, op.path, op.body),
+    },
+    store: {
+      get: (t: { topic: string; station?: string }) => (t.topic === "presets" ? lists.get(t.station!) : undefined),
+      value: (t: { topic: string; scope?: string }) =>
+        t.topic === "stations" ? { ok: stations.map((s) => ({ id: s.id, name: s.id.toUpperCase(), station: s.address, online: up.has(s.address) })) } : t.topic === "overview" ? { ok: lists.get(`overview`) } : undefined,
+      inUse: () => false,
+    },
+    scheduler: { enqueue: (_l: string, _k: string, _p: number, e: Effect.Effect<unknown, unknown>) => void queue.push(e) },
+    runner: { fork: (e: Effect.Effect<unknown, unknown>) => void queue.push(e) },
+    workspaces: { owner: () => who.sub },
+    accounts: { list: () => [who] },
+    host: { nowMs: () => clock.now },
+    router: { owners: [] as unknown[] },
+  } as unknown as Inner;
+  const views: PresetViews = install(inner);
+  const settle = async () => {
+    while (queue.length > 0) await Effect.runPromise(Effect.ignore(queue.shift()!));
+  };
+  const also = () => (inner.stations as unknown as { also: { read: (a: string) => Effect.Effect<void, CoreError>; event: (a: string, n: string, d: unknown) => void }[] }).also;
+  return {
+    inner,
+    views,
+    records,
+    up,
+    lists,
+    settle,
+    /// Its link to `s` opened: what the sync reads of a station then.
+    open: async (s: Rig) => {
+      up.add(s.address);
+      for (const part of also()) await Effect.runPromise(Effect.ignore(part.read(s.address)));
+      await settle();
+    },
+    away: (s: Rig) => void up.delete(s.address),
+    tell: async (s: Rig, name: string, data: unknown = {}) => {
+      for (const part of also()) part.event(s.address, name, data);
+      await settle();
+    },
+    call: async (name: "add" | "put" | "delete" | "copy", station: string, params: Record<string, unknown>) => {
+      const done = await Effect.runPromise(Effect.result(handlers.presets!(inner, { kind: "presets", name, station, params: { station, ...params } }, (() => {}) as never, ["c", 1] as never, null as never)));
+      await settle();
+      return done;
+    },
+    held: () => heldOf(inner.data, WS),
+    live: () => Object.values(heldOf(inner.data, WS).records).filter((r): r is PresetRecord => !isGone(r)),
+  };
+}
+
+const ok = <A>(r: { _tag: string; success?: A; failure?: unknown }): A => {
+  assert.equal(r._tag, "Success", JSON.stringify(r.failure));
+  return r.success as A;
+};
+const canon = (rs: KeptRecord[]) => rs.map(canonical).sort().join("\n");
+const stationRecords = (s: Rig, who = ME) => s.presets.kept(null, who);
+
+test("two stations that never talk come to the same records by one device; a deletion stays deleted; what changed with one away reaches it as its link opens", async () => {
+  const a = station("a");
+  const b = station("b");
+  const d = device(ME, [a, b]);
+  await d.open(a);
+  await d.open(b);
+  const made = ok(await d.call("add", a.address, { name: "App", dirs: ["/src/app", { path: "/src/lib", station: b.address }], instructions: "test first" })) as { id: string; home: string; rev: number };
+  assert.equal(made.home, "a", "made on the page's station");
+  assert.equal(made.rev, 1);
+  assert.deepEqual(d.live().map((r) => r.id), [made.id], "kept on the device at once");
+  assert.equal(canon(stationRecords(a)), canon(d.live()), "carried to a");
+  assert.equal(canon(stationRecords(b)), canon(d.live()), "and to b, which never heard of a");
+
+  // Changed with b away: kept here and on a; b brought it as its link opens again.
+  d.away(b);
+  ok(await d.call("put", a.address, { id: made.id, name: "App 2", dirs: ["/src/app"] }));
+  assert.equal(stationRecords(a)[0]!.rev, 2);
+  assert.equal(stationRecords(b)[0]!.rev, 1, "b away: not reached");
+  await d.open(b);
+  assert.equal(canon(stationRecords(b)), canon(stationRecords(a)), "b brought it as its link opened");
+
+  // Deleted: a deletion is a record, and a station that held it live does not bring it back.
+  d.away(b);
+  ok(await d.call("delete", a.address, { id: made.id }));
+  assert.equal(d.live().length, 0);
+  const stale = stationRecords(b)[0]!;
+  assert.ok(!isGone(stale), "b still holds it live");
+  await d.open(b);
+  assert.ok(isGone(stationRecords(b)[0]!), "b took the deletion");
+  assert.equal(d.live().length, 0, "not brought back");
+
+  // No loop: told again with nothing changed, nothing is brought.
+  const putsBefore = a.told.length;
+  await d.tell(a, "presets");
+  assert.equal(a.told.length, putsBefore, "nothing brought a station that holds it all");
+});
+
+test("two devices of one person meet through a station; one of theirs from before is said again as theirs", async () => {
+  const a = station("a");
+  const phone = device(ME, [a]);
+  const laptop = device(ME, [a]);
+  await phone.open(a);
+  const made = ok(await phone.call("add", a.address, { name: "Infra", dirs: [] })) as { id: string };
+  await laptop.open(a);
+  assert.deepEqual(laptop.live().map((r) => r.id), [made.id], "the laptop took it of the station");
+  ok(await laptop.call("put", a.address, { id: made.id, name: "Infra v2", dirs: [] }));
+  await phone.tell(a, "presets");
+  assert.equal(phone.live()[0]!.name, "Infra v2");
+
+  // A preset made by an app from before on a station of today (no owner): theirs by their email, said again with
+  // their owner and one change more, so that every station comes to hold it as theirs.
+  const old = a.presets.add(null, { name: "Old", dirs: [] }, ME.email);
+  assert.equal(old.owner, "");
+  await phone.tell(a, "presets");
+  const taken = phone.held().records[old.id]!;
+  assert.deepEqual([taken.owner, taken.rev], [ME.sub, 2]);
+  assert.equal(stationRecords(a).find((r) => r.id === old.id)!.owner, ME.sub, "the station holds it as theirs now");
+  // Someone else's is not taken.
+  a.presets.add(null, { name: "Bo's", dirs: [] }, YOU.email, YOU.sub);
+  await phone.tell(a, "presets");
+  assert.equal(phone.live().some((r) => r.name === "Bo's"), false);
+});
+
+test("a station from before is read and written the old way, never PUT to, and shows nothing twice", async () => {
+  const a = station("a");
+  const o = before("o");
+  const old = o.presets.add(null, { name: "Legacy", dirs: [] }, ME.email);
+  o.presets.add(null, { name: "Theirs", dirs: [] }, YOU.email);
+  const d = device(ME, [a, o]);
+  await d.open(a);
+  await d.open(o);
+  // (its list read as the new chat's page shows it)
+  const shown = async () => {
+    d.inner.stations.presetsShown(o.address);
+    await d.settle();
+  };
+  await shown();
+  assert.deepEqual(d.held().before, ["o"], "said to be from before");
+  assert.ok(!o.told.some((x) => x.startsWith("PUT /presets/kept")), "never PUT to");
+  assert.deepEqual(d.live(), [], "nothing taken in before it is changed here");
+
+  // The new chat's page lists it once, as theirs; someone else's on it only at a press.
+  const choose = new Choose({ store: d.inner.store, data: d.inner.data, now: () => clock.now, agent: () => null, who: (s) => whoIn(d.inner, s) });
+  const listed = () => (choose as unknown as { compute(t: unknown): { ok: { presets: { id: string; name: string; station: string }[] } } }).compute({ topic: "newChat", scope: WS }).ok.presets;
+  assert.deepEqual(listed().map((p) => [p.name, p.station]), [["Legacy", o.address]]);
+
+  // Changed here: taken into the device's records (theirs, one change more), carried to a, and written to o the old way.
+  ok(await d.call("put", o.address, { id: old.id, name: "Legacy 2", dirs: [] }));
+  assert.deepEqual([d.held().records[old.id]!.rev, d.held().records[old.id]!.owner], [2, ME.sub]);
+  assert.equal(stationRecords(a).find((r) => r.id === old.id)?.rev, 2, "carried to the station of today");
+  assert.ok(o.told.includes(`PUT /presets/${old.id}`), "written to the one from before as before");
+  assert.equal(o.presets.get(null, old.id)?.name, "Legacy 2");
+  await d.open(o);
+  await shown();
+  assert.deepEqual(listed().map((p) => p.name), ["Legacy 2"], "shown once: the device's");
+  assert.ok(!o.told.some((x) => x.startsWith("PUT /presets/kept")));
+
+  // Deleted here: gone on the device and on the old one; not listed again.
+  ok(await d.call("delete", o.address, { id: old.id }));
+  assert.ok(o.told.includes(`DELETE /presets/${old.id}`));
+  await d.open(o);
+  await shown();
+  assert.deepEqual(listed(), []);
+});
+
+test("others' presets are read at a press; someone else's picked survives its station going away, is copied as one's own, and is not changed from here", async () => {
+  const a = station("a");
+  const b = station("b");
+  const bo = device(YOU, [a]);
+  await bo.open(a);
+  const theirs = ok(await bo.call("add", a.address, { name: "Bo's review", dirs: ["/src/app"], instructions: "be kind" })) as { id: string };
+  const d = device(ME, [a, b]);
+  await d.open(a);
+  await d.open(b);
+  assert.deepEqual(d.live(), [], "not one's own: not kept");
+  const others = () => (d.views.compute({ topic: "otherPresets", scope: WS }) as { ok: { reading: boolean; presets: { id: string; whose: string; station: string }[] } }).ok;
+  assert.deepEqual(others().presets, [], "nothing read before the press");
+  d.views.start({ topic: "otherPresets", scope: WS });
+  await d.settle();
+  assert.deepEqual(others(), { reading: false, presets: [{ id: theirs.id, name: "Bo's review", whose: "Bo", station: a.address, stationName: "A" }] });
+
+  // Picked for the new chat's page: kept with its content, so that it and what opens a chat hold with a away.
+  const choose = new Choose({ store: d.inner.store, data: d.inner.data, now: () => clock.now, agent: () => null, who: (s) => whoIn(d.inner, s), othersFound: (s, id) => d.views.othersFound(s, id) });
+  choose.pickNew(WS, { preset: theirs.id, presetStation: a.address });
+  d.away(a);
+  const fresh = new PresetViews(d.inner);
+  const one = fresh.compute({ topic: "preset", scope: WS, id: theirs.id }) as { ok: { name: string; mine: boolean; whose: string } };
+  assert.deepEqual([one.ok.name, one.ok.mine, one.ok.whose], ["Bo's review", false, "Bo"], "a core started anew finds it kept with the pick");
+
+  // Not changed from here; copied into one's own: a new id, theirs, one change.
+  const refused = await d.call("put", b.address, { id: theirs.id, name: "mine now", dirs: [] });
+  assert.equal(refused._tag, "Failure");
+  assert.equal((refused as { failure: CoreError }).failure.status, 403, (refused as { failure: CoreError }).failure.message);
+  const copy = ok(await d.call("copy", b.address, { id: theirs.id })) as { id: string; owner: string; rev: number; createdBy: string; home: string };
+  assert.notEqual(copy.id, theirs.id);
+  assert.deepEqual([copy.owner, copy.rev, copy.createdBy, copy.home], [ME.sub, 1, ME.email, "b"]);
+  assert.equal(stationRecords(b).find((r) => r.id === copy.id)?.rev, 1, "carried");
+});
+
+test("a chat is opened with the preset as the device holds it, whether or not its station was brought it", async () => {
+  const a = station("a");
+  const b = station("b");
+  const d = device(ME, [a, b]);
+  await d.open(a);
+  d.away(b);
+  const made = ok(await d.call("add", a.address, { name: "Both", dirs: ["/src/app", { path: "/src/web", repo: "github.com/acme/web", station: b.address }], instructions: "hi" })) as { id: string };
+  const profile = { id: "p1", name: "p1", runtime: "claude", runtimes: ["claude"], access: { kind: "subscription", key: "" }, home: "/h", homeExists: true, model: null, models: ["claude-opus-5-5"], env: [], usedBy: [], loginCommand: "", check: { state: "ok", detail: "", checkedAt: 1 }, quota: { state: "ok", windows: [], detail: null, checkedAt: 1 } };
+  const store = { ...(d.inner.store as object), get: (t: { topic: string; station?: string }) => (t.topic === "overview" ? { ...overview, profiles: [profile] } : (d.inner.store as unknown as { get: (t: unknown) => unknown }).get(t)) };
+  const choose = new Choose({ store: store as never, data: d.inner.data, now: () => clock.now, agent: () => null, who: (s) => whoIn(d.inner, s) });
+  choose.pickNew(WS, { preset: made.id, presetStation: a.address });
+  const ask = choose.create(b.address);
+  assert.equal(stationRecords(b).length, 0, "b was never brought it");
+  assert.equal(ask.preset, undefined, "never by its id: a station of today takes its copy");
+  assert.deepEqual(ask.presetCopy, { id: made.id, name: "Both", dirs: [{ path: "/src/app", repo: null, elsewhere: "A" }, { path: "/src/web", repo: "github.com/acme/web" }], instructions: "hi" });
+  // A picked one from before (`{id, station}` of before this core) keeps picking the same.
+  d.records.set(`choice:ws:${WS}:preset`, { id: made.id, station: "ws/a" });
+  assert.equal(choose.create(a.address).presetCopy.id, made.id);
+});
+
+test("starred models: two devices' stars from before meet as their union, an unstarring is carried, and a device that never starred shows the defaults until it stars", async () => {
+  const a = station("a");
+  const phone = device(ME, [a]);
+  const laptop = device(ME, [a]);
+  phone.records.set(`choice:${likedKey(WS)}`, ["claude-opus-5-5", "gpt-6"]);
+  laptop.records.set(`choice:${likedKey(WS)}`, ["gpt-6", "gemini-4"]);
+  await phone.open(a);
+  await laptop.open(a);
+  await phone.tell(a, "stars", { workspace: WS });
+  const keys = (d: ReturnType<typeof device>) => starredKeys(starsHeld(d.records.get(`choice:${likedKey(WS)}`))!).sort();
+  assert.deepEqual(keys(phone), ["claude-opus-5-5", "gemini-4", "gpt-6"], "the union, key by key");
+  assert.deepEqual(keys(laptop), keys(phone));
+
+  // Unstarred on the laptop: carried, and the phone unstars it as it is told.
+  const profile = { id: "p1", runtime: "claude", named: [] };
+  const store = { ...(laptop.inner.store as object), get: (t: { topic: string }) => (t.topic === "overview" ? { ...overview, profiles: [profile] } : undefined) };
+  const carried: string[] = [];
+  const choose = new Choose({ store: store as never, data: laptop.inner.data, now: () => clock.now, agent: () => null, starsChanged: (s) => carried.push(s) });
+  clock.now += 1000;
+  choose.like(a.address, "gpt-6", false);
+  assert.deepEqual(carried, [WS], "carried as it is unstarred");
+  carryAll(laptop.inner, WS, "stars");
+  await laptop.settle();
+  await phone.tell(a, "stars", { workspace: WS });
+  assert.deepEqual(keys(phone), ["claude-opus-5-5", "gemini-4"]);
+  await phone.tell(a, "stars", { workspace: "other" });
+
+  // A device that never starred, the station holding none: nothing kept, the defaults shown; once it stars, kept.
+  const b = station("b");
+  const fresh = device(ME, [b]);
+  await fresh.open(b);
+  assert.equal(fresh.records.get(`choice:${likedKey(WS)}`), undefined, "nothing kept: the defaults shown");
+  const named = { id: "p1", runtime: "claude", named: ["claude-opus-5-5"] };
+  const freshStore = { ...(fresh.inner.store as object), get: (t: { topic: string }) => (t.topic === "overview" ? { ...overview, profiles: [named] } : undefined) };
+  const c2 = new Choose({ store: freshStore as never, data: fresh.inner.data, now: () => clock.now, agent: () => null });
+  c2.like(b.address, "gpt-6", true);
+  assert.deepEqual(starredKeys(starsHeld(fresh.records.get(`choice:${likedKey(WS)}`))!), ["claude-opus-5-5", "gpt-6"], "the defaults kept, then the one starred");
+  assert.equal(TABLE, "presetRecords");
+});
