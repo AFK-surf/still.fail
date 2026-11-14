@@ -2,8 +2,9 @@
 // (@sf.hover_card_node): what it shows and how, the same as that; what it reads the same (the chat's agent as the
 // chat's view has it, the core's `agentCard` view of it). What is pressed in it opens beside the card (`from`: its
 // card, Node(card)), and says whether what it opened is presented now (the card kept open meanwhile: the hover card's
-// `held`). Where they differ: its latest lines come and go as anything in a column does (View::each), not run on as a
-// ticker; what can be done to its context opens beside its figure (usage_tiles_node's), not at the card's right.
+// `held`). Where they differ: its latest lines run on as they change by one way of their box (agent_card_lines_run),
+// not each line on a way of its own; what can be done to its context opens beside its figure (usage_tiles_node's),
+// not at the card's right.
 
 ///|
 /// Agent `key` of chat `r` in `v` (agent_card's): what it runs as (its mark, its label, the account it runs on and what
@@ -48,14 +49,16 @@ pub fn agent_card_node(
     @sf.style_node(b, fn() { if across { agent_card_across } else { agent_card_box } })
     agent_card_head_node(b, a, s, tips, runs)
     agent_card_stands_node(b, src, station, key, a, s, tips)
-    // its latest lines, what it does now in the words' colour
+    // its latest lines, what it does now in the words' colour, running on as they change (agent_card_lines_run)
     b.show(fn() { items(card(), "latest").length() > 0 }, fn(x) {
       x.box(fn(l) {
         @sf.style_node(l, fn() { agent_card_lines })
-        l.each(fn() { items(card(), "latest") }, fn(line) { text(Some(line), "key") }, fn(row, line) {
+        let run = agent_card_lines_run(l, fn() { items(card(), "latest") })
+        l.each(at_once=true, fn() { items(card(), "latest") }, fn(line) { text(Some(line), "key") }, fn(row, line) {
           let k = text(Some(line.untracked()), "key")
           row.box(fn(n) {
             @sf.style_node(n, fn() { agent_card_line_box })
+            run.line(n, k)
             @sf.presses_node(n, fn() { history(line_entry(k)) })
             n.says(By(fn() { Some(@view.said(Button, label=text(Some(line.get()), "text"))) })) |> ignore
             @sf.words_node(n, fn() { text(Some(line.get()), "text") }, fn() {
@@ -69,6 +72,7 @@ pub fn agent_card_node(
           })
           |> ignore
         })
+        run.gone(l)
       })
       |> ignore
     })
@@ -472,3 +476,200 @@ fn agent_card_link_node(
   })
   |> ignore
 }
+
+///|
+/// How an agent's card's latest lines run on as they change while it shows (as nodes: its lines' box, made once, the
+/// lines its each's, there at once, each drawn off where it is laid by one way of the box): those that stay go from
+/// where they were drawn to where they are laid, carrying on from wherever they had got to, a new one coming with them
+/// from beyond the last and fading in, one gone leaving with them as a copy over the box, fading out, the box cutting
+/// what runs past its edges; with none staying, new and gone fade in place. Nothing resized: the box is as tall as its
+/// lines, the copies over it taking no room. Its cause the lines' keys changed from some to others; as the box is made
+/// (the card opened, or come into sight) or its first lines come, they are as they are, nothing moving.
+priv struct LinesRun {
+  /// (how far the lines still have to run, as a share of `steps`: 1 as they set out, 0 at rest)
+  way : @motion.Way
+  /// (how many lines they run on by, from where they were drawn as the way set out)
+  steps : @signals.Signal[Double]
+  /// (the lines come by a change, each fading in by its way; those that stay keep theirs)
+  fades : @signals.Signal[Map[String, @motion.Way]]
+  /// (the copies of those gone, leaving)
+  gone : @signals.Signal[Array[LinesGone]]
+}
+
+///|
+/// A line gone, leaving as a copy over its box: its key, words and whether it was what the agent does now; where it is
+/// drawn at rest of the run (in lines from the box's top: `base` plus how far the run still has to go); its fading.
+priv struct LinesGone {
+  key : String
+  words : String
+  now : Bool
+  base : Double
+  fade : @motion.Way
+}
+
+///|
+/// The run of the lines `latest` gives in their box `l`, set off by each change of their keys at its moment.
+fn agent_card_lines_run(l : @view.View, latest : () -> Array[Json]) -> LinesRun {
+  let run : LinesRun = {
+    way: @motion.Way::new(0.0),
+    steps: @signals.signal(0.0),
+    fades: @signals.signal(Map([]), same=fn(_, _) { false }),
+    gone: @signals.signal([], same=fn(_, _) { false }),
+  }
+  // (the lines as they were last: their keys, words and whether each is what it does now)
+  let was : Ref[Array[(String, String, Bool)]] = Ref([])
+  let said = fn() {
+    latest().map(fn(x) { (text(Some(x), "key"), text(Some(x), "text"), flag(Some(x), "now")) })
+  }
+  l.reacts(fn() { said().map(fn(s) { s.0 }) }, fn(keys) {
+    let before = was.val
+    was.val = @signals.untracked(said)
+    let old = before.map(fn(s) { s.0 })
+    // (as the box is made, its first lines come, or with the same lines: as they are)
+    if old.length() == 0 || old == keys {
+      return
+    }
+    let at = l.cause_at()
+    let ix = fn(ks : Array[String], k : String) -> Int { ks.search(k).unwrap_or(-1) }
+    // (how far they run on: as far as the first that stays moved; and how far they still had to go)
+    let shift = match keys.iter().find_first(fn(k) { ix(old, k) >= 0 }) {
+      Some(k) => (ix(old, k) - ix(keys, k)).to_double()
+      None => 0.0
+    }
+    let still = run.way.value_at(at) * run.steps.untracked()
+    let spec = @motion.tween(lines_ms, ease=lines_ease)
+    let fades : Map[String, @motion.Way] = Map([])
+    for k in keys {
+      match (ix(old, k), run.fades.untracked().get(k)) {
+        (j, Some(f)) if j >= 0 => fades[k] = f
+        (j, _) if j >= 0 => ()
+        _ => {
+          let f = @motion.Way::new(0.0)
+          f.go(1.0, spec, at~)
+          fades[k] = f
+        }
+      }
+    }
+    // (the copies still leaving go on from where they are drawn; one more for each gone now, where it was drawn)
+    let gone = run.gone
+      .untracked()
+      .filter(fn(g) { ix(keys, g.key) < 0 })
+      .map(fn(g) { { ..g, base: g.base - shift } })
+    for j, s in before {
+      if ix(keys, s.0) < 0 && !gone.iter().any(fn(g) { g.key == s.0 }) {
+        let fade = @motion.Way::new(1.0)
+        fade.go(0.0, spec, at~)
+        gone.push({ key: s.0, words: s.1, now: s.2, base: j.to_double() - shift, fade })
+      }
+    }
+    run.steps.set(shift + still)
+    run.way.put(1.0)
+    run.way.go(0.0, spec, at~)
+    run.fades.set(fades)
+    run.gone.set(gone)
+    // (the copies let go as they have faded)
+    l.at_moment(run.way.end(), fn() {
+      let now = l.logic_at()
+      run.gone.set(run.gone.untracked().filter(fn(g) { g.fade.goes_at(now) }))
+    })
+    |> ignore
+  })
+  run
+}
+
+///|
+/// Line `k`'s node `n` drawn off where it is laid by how far the lines still have to run (a line apart: its height and
+/// the gap), as faint as its fading has it.
+fn LinesRun::line(self : LinesRun, n : @view.View, k : String) -> Unit {
+  let gap = agent_card_lines_gap.px()
+  n.moved_by(
+    fn(_, h, t) {
+      self.way.said()
+      (0.0, self.way.value_at(t) * self.steps.get() * (h + gap))
+    },
+    fn(_, _) {
+      self.way.said()
+      self.way.end()
+    },
+  )
+  |> ignore
+  n.alpha(By(fn() {
+    match self.fades.get().get(k) {
+      Some(f) => {
+        f.said()
+        f.value_at(n.drawn_while(fn(t) { f.goes_at(t) }))
+      }
+      None => 1.0
+    }
+  }))
+  |> ignore
+}
+
+///|
+/// The copies of the lines gone, over their box `l` (none taking room or a press), each drawn where it was and leaving
+/// with the others as far as they run, fading out.
+fn LinesRun::gone(self : LinesRun, l : @view.View) -> Unit {
+  let gap = agent_card_lines_gap.px()
+  l.box(fn(o) {
+    o.over(Is(true)).presses(Is(false)) |> ignore
+    @sf.style_node(o, fn() { agent_card_gone_lines })
+    o.each(at_once=true, fn() { self.gone.get().map(fn(g) { g.key }) }, fn(k) { k }, fn(row, key) {
+      let k = key.untracked()
+      let copy = fn() { self.gone.get().iter().find_first(fn(g) { g.key == k }) }
+      row.box(fn(n) {
+        @sf.style_node(n, fn() { agent_card_line_box })
+        // (laid in its turn among the copies; drawn where its run has it)
+        n.moved_by(
+          fn(_, h, t) {
+            self.way.said()
+            let gs = self.gone.get()
+            let m = gs.search_by(fn(g) { g.key == k }).unwrap_or(0).to_double()
+            let base = match copy() {
+              Some(g) => g.base
+              None => m
+            }
+            (0.0, (base + self.way.value_at(t) * self.steps.get() - m) * (h + gap))
+          },
+          fn(_, _) {
+            self.way.said()
+            self.way.end()
+          },
+        )
+        |> ignore
+        n.alpha(By(fn() {
+          match copy() {
+            Some(g) => {
+              g.fade.said()
+              g.fade.value_at(n.drawn_while(fn(t) { g.fade.goes_at(t) }))
+            }
+            None => 0.0
+          }
+        }))
+        |> ignore
+        @sf.words_node(
+          n,
+          fn() {
+            match copy() {
+              Some(g) => g.words
+              None => ""
+            }
+          },
+          fn() {
+            match copy() {
+              Some(g) if g.now => agent_card_now
+              _ => agent_card_line
+            }
+          },
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+/// The copies' box over the lines': as their box lays them out, from its inside (agent_card_lines' padding and gap).
+// kept across runs: a value (no field of it changes)
+let agent_card_gone_lines : @ui.Style = @ui.style(w=Full, pl=S3_5, gap=agent_card_lines_gap)
