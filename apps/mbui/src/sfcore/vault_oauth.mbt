@@ -5,7 +5,7 @@
 
 ///|
 /// The browser login waiting for a vault's sign-in to come back, and who to tell.
-let oauth_login : Ref[(@hostapi.BrowserLogin, (String) -> Unit)?] = Ref(None)
+let oauth_login : Ref[(@hostapi.BrowserLogin, (String) -> Unit, (Result[String, String]) -> Unit)?] = Ref(None)
 
 ///|
 /// A sign-in to `provider` as the person, into `vault` (its id, or "plain") of workspace `ws`, or for an agent's
@@ -72,14 +72,17 @@ pub fn vault_oauth(
   let finished = if cloud == "" { "" } else { cloud + "/vault/oauth?done=1" }
   match @hostapi.browser_login(path="/vault/oauth/back", done=finished) {
     Some(l) => {
-      if oauth_login.val is Some((was, _)) {
+      // (one begun before and not come back: given up, as this one takes its place)
+      if oauth_login.val is Some((was, _, told)) {
+        oauth_login.val = None
         was.end()
+        told(Err("cancelled"))
       }
       begin(l.redirect, fn(url) {
         if !l.open(url) {
           @hostapi.log("No browser opened: open " + url)
         }
-        oauth_login.val = Some((l, complete))
+        oauth_login.val = Some((l, complete, done))
       }, fn() { l.end() })
     }
     // (the web: its own page finishes it, in the tab the service's page was opened in)
@@ -97,7 +100,7 @@ pub fn vault_oauth(
 ///|
 /// Each frame: a vault's sign-in come back to the browser login, finished with what it brought.
 fn oauth_back() -> Unit {
-  guard oauth_login.val is Some((l, complete)) else { return }
+  guard oauth_login.val is Some((l, complete, _)) else { return }
   guard l.back() is Some(back) else { return }
   oauth_login.val = None
   l.end()

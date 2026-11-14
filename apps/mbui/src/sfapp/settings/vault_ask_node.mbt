@@ -171,7 +171,8 @@ pub fn vault_foot_node(
     })
   }
   // (存入 by signing in to the service: its page in the browser, the request approved with the token as it comes back,
-  // the card saying so then; given up, the buttons again)
+  // the card saying so then. Its buttons stay as they were meanwhile: a browser's page given up says nothing to the app
+  // on every host (the web's tab, a loopback's), so it may be pressed again or turned down)
   let sign_in = fn() {
     @signals.untracked(fn() {
       if core.read_only != "" {
@@ -179,12 +180,10 @@ pub fn vault_foot_node(
         return
       }
       let r = request()
-      vault_pending[r] = true
       (core.vault_oauth)(ws(), "", signs_in(), r, fn(res) {
         match res {
           Ok(_) => ()
           Err(why) => {
-            vault_pending.remove(r)
             if why != "cancelled" {
               (core.say)(fill("android-misc.act.failed", [("what", tr("android-settings.vault.act.saveWhat")), ("error", if why == "" { tr("web-pages.vault.oauth.failed") } else { why })]))
             }

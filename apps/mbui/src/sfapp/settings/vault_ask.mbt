@@ -801,18 +801,16 @@ pub fn vault_foot(
         let yes = if signs_in != "" { "web-pages.vault.oauth.signIn." + signs_in } else if remove { "android-settings.vault.act.remove" } else if describe { "android-settings.vault.act.change" } else if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
         let approve = fn() {
           // (存入 by signing in to the service: its page in the browser, the request approved with the token as it
-          // comes back; given up, the buttons again)
+          // comes back; its buttons as they were meanwhile, as vault_ask_node's sign_in says)
           if signs_in != "" {
             if core.read_only != "" {
               (core.say)(core.read_only)
               return
             }
-            vault_pending[request] = true
             (core.vault_oauth)(ws, "", signs_in, request, fn(res) {
               match res {
                 Ok(_) => ()
                 Err(why) => {
-                  vault_pending.remove(request)
                   if why != "cancelled" {
                     (core.say)(fill("android-misc.act.failed", [("what", tr("android-settings.vault.act.saveWhat")), ("error", if why == "" { tr("web-pages.vault.oauth.failed") } else { why })]))
                   }

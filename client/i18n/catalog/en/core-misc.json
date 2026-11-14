@@ -314,6 +314,7 @@
   "core-misc.vault.unknown": "No such vault, or not one of yours",
   "core-misc.vault.oauth.unknown": "This service can't be added by signing in yet: use Add › Token and paste it instead",
   "core-misc.vault.oauth.denied": "You didn't allow it on the sign-in page, so nothing was kept; press Add again to add it",
+  "core-misc.vault.oauth.expires": " (this token expires in about {hours} hours; sign in to {service} again then)",
   "core-misc.vault.oauth.stale": "This sign-in has expired, or was started on another device: press Add again on this device",
   "core-misc.vault.oauth.failed": "The sign-in didn't finish ({why}): press Add to try again",
   "core-misc.vault.oauth.about": "{who}'s own token in {service} \"{team}\", added by signing in. Agents use it to call {service}'s API as {who} (sent to {hosts} in an Authorization: Bearer header). Removing the app's access in {service} ends it",

@@ -6,8 +6,10 @@
 // OAuth 2 with PKCE as a public client (RFC 7636; Slack's since 2026-03): no client secret anywhere, the code changed
 // for the token here, on the device that began it, which alone holds the verifier. Nothing passes through still.fail
 // cloud or a station: the browser comes back to the web's page `/vault/oauth` (an https address, so the service gives a
-// token that does not expire: Slack gives one that rotates to an app's own scheme or a loopback address), which only
-// hands the query on to where the sign-in began (`back` in its state):
+// token that does not expire: Slack gives one that rotates to an app's own scheme or a loopback address; one that comes
+// with an expiry anyway is kept saying so), which only hands the query on to where the sign-in began (`back` in its
+// state). The page's address carries the code to the web's static host, which keeps nothing of it, and the code is of
+// no use without the verifier only the device holds:
 //   web                                 this page itself: its core completes it (the web's tabs share one database)
 //   <scheme>                            the app's browser session (ASWebAuthenticationSession, a Custom Tab), at
 //                                       `<scheme>://auth/vault?<query>`
@@ -87,8 +89,12 @@ export const providerOf = (id: string): Provider | undefined => PROVIDERS.find((
 export function backOk(back: string): boolean {
   if (back === "web") return true;
   if (/^http:\/\/127\.0\.0\.1:\d{1,5}\/[\w/.-]*$/.test(back)) return true;
-  return /^[a-z][a-z0-9.+-]*$/.test(back) && !["http", "https", "javascript", "data", "file", "blob", "about"].includes(back);
+  return APP_SCHEME.test(back);
 }
+
+/// The apps' own schemes (their builds': stillfail, stillfail-beta, monoid, monoid-beta; Android's, its package's), the
+/// only ones a code is handed on to, so a state made elsewhere hands none to another app that took a scheme.
+export const APP_SCHEME = /^(stillfail(-[a-z]+)?|monoid(-[a-z]+)?|fail\.still\.[a-z0-9.]+|build\.monoid\.[a-z0-9.]+)$/;
 
 export function stateText(nonce: string, ws: string, back: string): string {
   return base64url(utf8(JSON.stringify({ n: nonce, w: ws, b: back })));
@@ -204,26 +210,30 @@ export function complete(
       yield* approve(began.request, got.token);
       return { name };
     }
-    const about = t("core-misc.vault.oauth.about", { service: p.name, team: got.team, who: who ?? got.user, hosts: p.hosts.join(", ") });
+    const lasts = got.expires > 0 ? t("core-misc.vault.oauth.expires", { hours: String(Math.max(1, Math.round(got.expires / 3600))), service: p.name }) : "";
+    const about = t("core-misc.vault.oauth.about", { service: p.name, team: got.team, who: who ?? got.user, hosts: p.hosts.join(", ") }) + lasts;
     yield* write(began.vault, { kind: "token", name, fields: { value: got.token }, notes: about }, { name, about, kind: "token", modes: ["proxy"], hosts: p.hosts });
     return { name };
   });
 }
 
 /// Slack's `oauth.v2.access` answer: the person's token, their id and their Slack workspace's name; else why not.
-export function slackAnswer(v: unknown): { token: string; user: string; team: string } | string {
+export function slackAnswer(v: unknown): { token: string; user: string; team: string; expires: number } | string {
   if (!isObject(v)) return "not JSON";
   if (v.ok !== true) return typeof v.error === "string" ? v.error : "not ok";
   const user = isObject(v.authed_user) ? v.authed_user : null;
   const token = user && typeof user.access_token === "string" ? user.access_token : "";
   if (token === "") return "no user token";
   const team = isObject(v.team) && typeof v.team.name === "string" ? v.team.name : "";
-  return { token, user: user && typeof user.id === "string" ? user.id : "", team };
+  // (a token that rotates says how long it lasts; none does where the app turned rotation off)
+  const expires = user && typeof user.expires_in === "number" ? user.expires_in : 0;
+  return { token, user: user && typeof user.id === "string" ? user.id : "", team, expires };
 }
 
-/// Who the token is of, as Slack names them (`auth.test`'s `user`).
+/// Who the token is of, as Slack names them (`auth.test`'s `user`). The token goes as a form's field, not a header: a
+/// browser asks Slack first before sending an Authorization header, which Slack's answer does not allow.
 function slackWho(inner: Inner, token: string): Effect.Effect<string | null, unknown> {
-  return Effect.map(inner.host.fetch({ method: "POST", url: "https://slack.com/api/auth.test", headers: [["authorization", `Bearer ${token}`]], body: null }), (res) => {
+  return Effect.map(inner.host.fetch({ method: "POST", url: "https://slack.com/api/auth.test", headers: [["content-type", "application/x-www-form-urlencoded"]], body: utf8(form({ token })) }), (res) => {
     const v: unknown = JSON.parse(fromUtf8(res.body));
     return isObject(v) && v.ok === true && typeof v.user === "string" ? v.user : null;
   });

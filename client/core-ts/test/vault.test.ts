@@ -505,6 +505,8 @@ test("a Slack account signed in to: the code changed for the person's token here
   const v = r.st.vaults.get(setup.made)!;
   // Where it would come back to only as the app, a loopback or the web's own page.
   await fails(r.ask("vault.oauthBegin", { vault: v.id, provider: "slack", back: "https" }), "invalid_params");
+  // (an app's own scheme only: none another app may have taken)
+  await fails(r.ask("vault.oauthBegin", { vault: v.id, provider: "slack", back: "evil" }), "invalid_params");
   await fails(r.ask("vault.oauthBegin", { vault: v.id, provider: "nobody", back: "web" }), "vault_oauth_unknown");
   const begun = await r.ask("vault.oauthBegin", { vault: v.id, provider: "slack", back: "fail.still.android" });
   const url = new URL(begun.url);
@@ -528,7 +530,7 @@ test("a Slack account signed in to: the code changed for the person's token here
       const ok = form.code === "c1" && base64url(sha256(utf8(form.code_verifier ?? ""))) === url.searchParams.get("code_challenge") && !("client_secret" in form);
       return Promise.resolve(jsonResponse(200, ok ? { ok: true, authed_user: { id: "U1", access_token: "xoxp-1", token_type: "user" }, team: { id: "T1", name: "Acme" } } : { ok: false, error: "invalid_code" }));
     }
-    if (req.url === "https://slack.com/api/auth.test") return Promise.resolve(jsonResponse(200, req.headers.some(([k, x]) => k === "authorization" && x === "Bearer xoxp-1") ? { ok: true, user: "zz" } : { ok: false }));
+    if (req.url === "https://slack.com/api/auth.test") return Promise.resolve(jsonResponse(200, new TextDecoder().decode(req.body!) === "token=xoxp-1" && !req.headers.some(([k]) => k === "authorization") ? { ok: true, user: "zz" } : { ok: false }));
     return undefined;
   });
   const done = await r.ask("vault.oauthComplete", { query: `code=c1&state=${state}` });

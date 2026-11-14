@@ -29,10 +29,10 @@ function stateOf(state: string): { w: string; b: string } | null {
   }
 }
 
-/** Where the query goes on to (vault/oauth.ts `handedTo`, the same rule): null for this page's own. */
+/** Where the query goes on to (vault/oauth.ts `handedTo` and `APP_SCHEME`, the same rule): null for this page's own. */
 function handedTo(back: string, query: string): string | null {
   if (/^http:\/\/127\.0\.0\.1:\d{1,5}\/[\w/.-]*$/.test(back)) return `${back}?${query}`;
-  if (back !== "web" && /^[a-z][a-z0-9.+-]*$/.test(back) && !["http", "https", "javascript", "data", "file", "blob", "about"].includes(back)) return `${back}://auth/vault?${query}`;
+  if (/^(stillfail(-[a-z]+)?|monoid(-[a-z]+)?|fail\.still\.[a-z0-9.]+|build\.monoid\.[a-z0-9.]+)$/.test(back)) return `${back}://auth/vault?${query}`;
   return null;
 }
 
