@@ -371,8 +371,9 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   @sfpages.open_search_mode(mode)
   // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
   // waiting page in the chats' place), lock-security (its security page), lock-upgrade (in the lock without its key:
-  // the code typed on its security page)
-  if mode == "lock-security" || mode == "lock-upgrade" {
+  // the code typed on its security page); lock-needs-app (a web page nobody can approve: its waiting page saying so),
+  // lock-needs-app-security (its security page)
+  if mode == "lock-security" || mode == "lock-upgrade" || mode == "lock-needs-app-security" {
     open_setting(@settings.fixture_page("settings-security"))
   }
   // ⌘/'s shortcuts at a glance

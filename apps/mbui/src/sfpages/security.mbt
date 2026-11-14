@@ -41,9 +41,12 @@ pub fn security_node(
         Some(_) if flag(l, "locked") => {
           let me = field(l, "me")
           out.push("on")
-          // not confirmed yet, or in the lock without signing (let in before it kept a key): asked for here too
+          // not confirmed yet, or in the lock without signing (let in before it kept a key): asked for here too; a web
+          // page nobody can approve here says so in its place (`needsAppText`)
           if flag(me, "waiting") || flag(me, "unsigned") {
             out.push("pair")
+          } else if text(me, "needsAppText") != "" {
+            out.push("needs-app")
           }
           // (what the upgrade of safe mode waits for, on the owner's device that is to finish it: first after the state,
           // where one looking for 安全模式 looks first)
@@ -90,6 +93,7 @@ pub fn security_node(
         "signing" => signing_node(b)
         "on" => lock_on_node(b, lock)
         "pair" => pair_node(b, core, ws, lock)
+        "needs-app" => needs_app_node(b, lock)
         "upgrade" => @sf.section_heading_node(b, fn() { text(field(lock(), "upgrade"), "titleText") })
         k if k.has_prefix(upgrade_key) =>
           upgrade_line_node(b, core, lock, @string.parse_int(k[upgrade_key.length():]) catch { _ => 0 })
@@ -281,6 +285,16 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
     })
     .margin(Is((-pad, 0.0, -pad, -pad)))
     |> ignore
+  })
+}
+
+///|
+/// A web page left out that nobody can approve here (the core's `me.needsAppText`): in the pair's place, 请先安装客户端
+/// and the core's words, with no button that asks (nobody could answer it).
+fn needs_app_node(parent : @view.View, lock : () -> Json?) -> Unit {
+  sec_lead_node(parent, fn(k) {
+    @sf.words_node(k, fn() { @sf.t("web-pages.security.needsAppTitle") }, fn() { sec_state_lines }) |> ignore
+    @sf.words_node(k, fn() { text(field(lock(), "me"), "needsAppText") }, fn() { sec_said }) |> ignore
   })
 }
 

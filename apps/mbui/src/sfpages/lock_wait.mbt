@@ -4,17 +4,20 @@
 // asked by itself (the person who will compare the codes asks: 发送批准请求, the core's `lock.pair`); the core finds the
 // person's trusted devices, one of them shows a code, it is typed here into six boxes (`lock.pairCode`), and how that
 // goes is the lock's `me.pair` (finding, code, checking, wrong, none, failed, done). The shell puts it in the page's
-// place while the lock's `me.waiting` says so (@settings.lock_waiting).
+// place while the lock's `me.waiting` says so, or its `me.needsAppText` (a web page nobody can approve there, which
+// says only that: @settings.lock_waiting).
 
 ///|
 /// The page, in the box it is given (the library's waiting page): the shield, 等待批准, what it waits for, then the
 /// steps (pair_steps).
 pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : @settings.Here) -> Unit {
+  // (a web page nobody can approve here: 请先安装客户端 and the core's words alone, lock_wait_node's)
+  let needs = @settings.lock_needs_app(core, here.workspace)
   @sf.waiting_page(
     c,
     "shield-check",
-    @sf.t("web-pages.security.waitingTitle"),
-    @sf.t("web-pages.security.waitingLead", args=[("name", here.name)]),
+    @sf.t(if needs != "" { "web-pages.security.needsAppTitle" } else { "web-pages.security.waitingTitle" }),
+    if needs != "" { needs } else { @sf.t("web-pages.security.waitingLead", args=[("name", here.name)]) },
     fn() { pair_steps(c, core, here.workspace) },
   )
 }
@@ -41,6 +44,11 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
       c.text(words, style=lock_note_words) |> ignore
     })
     |> ignore
+  }
+  // a web page nobody can approve here (the core's `me.needsAppText`, the page's lead): nothing to ask (no one could
+  // answer)
+  if text(me, "needsAppText") != "" {
+    return
   }
   // the devices it dials (the core's rows: 2026-11-05, 「到底是哪个设备会弹出来呀？」) on a quiet card under the step's
   // action, a device to a row, its mark (a phone, a computer) and which machine (the user, #4213, 2026-11-10: fewer

@@ -670,8 +670,9 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
       if (inner.host.appKeys === true && personal.standing(sub) !== "none" && personal.standing(sub) !== "member") continue;
       workspaces.push(ws);
       const left = force.said === "waiting" ? leftIn(inner, ws) : null;
-      // (a web page nobody could approve there asks nobody, views/lock.ts `needsAppIn`)
-      if (left !== null && needsAppIn(inner, ws)) {
+      // (a web page nobody could approve there asks nobody, views/lock.ts `needsAppIn`: left out from the start, or after
+      // the chain carried it until its `exp`, the state it was given then naming it no more)
+      if (needsAppIn(inner, ws)) {
         workspaces.pop();
         needsApp.push(ws);
         continue;

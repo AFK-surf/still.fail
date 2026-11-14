@@ -248,4 +248,15 @@ test("a workspace that moved under build 9040's rules, everything said in its pe
   assert.deepEqual([...paged.state.devices.keys()].sort(), [...old.state.devices.keys(), page.id].sort());
   assert.equal(paged.state.devices.get(page.id)?.by, "chain");
   assert.equal(state4Moved(WS, [g, moved], chains, bodies, NOW + 86400).state.devices.has(page.id), false, "out at its exp");
+  // and a member the chain names with only a web page (no app, no log of theirs: nothing holds a move back for them, the
+  // owner's 2026-11-14): in by the chain, their page too until its exp, then still a member with no device
+  const dora = { id: ed().hex, sub: "dora", kind: "web", label: "dora's browser", exp: NOW + 86400 };
+  const gd = signed({ ...w.first, body: { ...w.first.body, members: [...(w.first.body as any).members, { sub: "dora", email: "dora@x", role: "member" }], devices: [...(w.first.body as any).devices, dora] } } as any, w.alice.app.signer);
+  const movedD = signed({ v: 1, ws: WS, seq: 1, prev: entryHash(gd), at: 1000, kind: "moved", body: { root: w.alice.genesis } }, w.alice.app.signer);
+  const doraIn = state4Moved(WS, [gd, movedD], chains, bodies, NOW).state;
+  assert.equal(doraIn.members.get("dora")?.role, "member", "the web-only member in by the chain");
+  assert.equal(doraIn.devices.get(dora.id)?.by, "chain", "their page carried");
+  const doraLater = state4Moved(WS, [gd, movedD], chains, bodies, NOW + 86400).state;
+  assert.equal(doraLater.devices.has(dora.id), false, "their page out at its exp");
+  assert.equal(doraLater.members.has("dora"), true, "still a member, with no device in");
 });

@@ -1465,6 +1465,7 @@ let en : Map[String, String] = {
   "web-pages.security.joined": "{name} is protected",
   "web-pages.security.lead": "Who can access this workspace's stations and run commands on them",
   "web-pages.security.members": "Members",
+  "web-pages.security.needsAppTitle": "Install the app first",
   "web-pages.security.newDeviceOf": "{name}'s new device",
   "web-pages.security.newDevices": "New devices need approval",
   "web-pages.security.newDevicesHow": "Approved by verifying a security code, from another of the person's trusted devices or by an admin",

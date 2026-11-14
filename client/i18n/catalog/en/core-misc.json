@@ -229,8 +229,6 @@
   "core-misc.lock.rootOnlyPage": "Security mode was turned on by {name}, and only they can turn it off or on again. If they cannot, run stillfail lock reset on the computer a station runs on",
   "core-misc.lock.rootOnly": "Only {name} can turn security mode off or on again. If they cannot, run stillfail lock reset on the computer a station runs on",
   "core-misc.lock.out": "{name} took you out of this workspace's security mode on {time}. To keep using it, ask {name} or another admin to add you again",
-  "core-misc.lock.appSoon": "Security mode will soon require every member to have at least one app. Install the desktop or mobile app and sign in, or this web page will no longer reach this workspace",
-  "core-misc.lock.webOnly": "Uses the web page only: needs to install an app",
   "core-misc.lock.needsApp": "This workspace's security mode requires every member to have at least one app. Install the desktop or mobile app and sign in, have an admin approve it, then approve this web page with the app",
   "core-misc.lock.unconfirmed": "This device isn't approved for “{name}” yet: on a trusted device of yours in “{name}”, or as one of its admins, open Settings › Security and verify security code {code}",
   "core-misc.lock.unconfirmedNoCode": "This device isn't approved for “{name}” yet: on a trusted device of yours in “{name}”, or as one of its admins, open Settings › Security and approve it",

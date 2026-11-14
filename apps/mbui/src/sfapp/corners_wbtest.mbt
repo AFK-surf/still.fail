@@ -58,7 +58,9 @@ let corner_modes : Array[String] = {
     "newchat-preset-theirs-long", "player-audio", "player-ended",
     "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
     "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
-    "lock-none", "lock-security", "lock-upgrade", "lock-waiting", "lock-wrong", "screen-agent-driving",
+    "lock-none", "lock-security", "lock-upgrade", "lock-waiting", "lock-wrong",
+    // (a web page left out of an upgraded workspace that nobody can approve there: its waiting page, its 安全)
+    "lock-needs-app", "lock-needs-app-security", "screen-agent-driving",
     "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
     "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
     "screen-full-tools", "screen-gone", "screen-keys", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-pages", "screen-read-only",

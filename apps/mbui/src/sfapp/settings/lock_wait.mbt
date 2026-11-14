@@ -2,10 +2,19 @@
 // it shows while it waits is sfpages' lock_wait.mbt.
 
 ///|
-/// Whether this device waits to be confirmed in the workspace's lock (the lock's `me.waiting`).
+/// Whether this device waits to be let in to the workspace's lock: to be confirmed (the lock's `me.waiting`), or, a web
+/// page nobody can approve there, for its person's first app to approve it (`me.needsAppText`): either way the
+/// workspace's place is the waiting page (sfpages' lock_wait.mbt), which says which.
 pub fn lock_waiting(core : Core, ws : String) -> Bool {
-  let lock = (core.topic)("lock", { "workspace": str(ws) }).get().value
-  flag(field(lock, "me"), "waiting")
+  let me = field((core.topic)("lock", { "workspace": str(ws) }).get().value, "me")
+  flag(me, "waiting") || text(me, "needsAppText") != ""
+}
+
+///|
+/// What a web page nobody can approve in the workspace's lock says, the core's words (the lock's `me.needsAppText`):
+/// "" where it is not one.
+pub fn lock_needs_app(core : Core, ws : String) -> String {
+  text(field((core.topic)("lock", { "workspace": str(ws) }).get().value, "me"), "needsAppText")
 }
 
 ///|

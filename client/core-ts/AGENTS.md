@@ -288,10 +288,11 @@ another; the accounts' list's merge across stations and its refills.
   one on a build under `MOVED_FROM_BUILD` is told to update by a station of the workspace as it next asks
   (station/src/mesh/serve.ts `movedTooOld`: 请更新, 请刷新页面 on the web) and is in again once it has, nothing approved
   anew. Do not bring a wait for people's devices back. `lock.handOver` answers
-  `lock_not_ready` in the upgrade's title). For now, each lifted by its own change: a chain with a web page whose person
-  has no app on it (`webOnlyIn`: carried until its `exp`, then nobody can approve it again there, and the page telling
-  them to install an app is not drawn yet), and more than `HAND_OVER_MEMBERS_MOST` members bound to a log (`LOGS_MOST` a
-  workspace); a host made for tests that calls `lock.handOver` itself is not held to these. The owner's (the user,
+  `lock_not_ready` in the upgrade's title). For now, lifted by its own change: more than `HAND_OVER_MEMBERS_MOST` members
+  bound to a log (`LOGS_MOST` a workspace); a host made for tests that calls `lock.handOver` itself is not held to it. A
+  member with only a web page holds nothing back and is told nothing before it (the owner, 2026-11-13: 「开了安全模式那就需要
+  app」; 2026-11-15): their page is carried until its `exp`, then is one nobody can approve there (`needsAppIn`, drawn in
+  the app's place of the workspace and on 安全), and their first app comes in as a newcomer's. The owner's (the user,
   2026-11-14, 「都按推荐」): the person who turned safe mode on (`genesisPerson`) hands over; another owner's device only
   once that person has not in 14 days from the later of `HAND_OVER_FROM` and the genesis, or is no owner on the chain any
   more (`mayHandOver`); after the move only that person turns safe mode off or on again (`lock_root_only`). To people it
