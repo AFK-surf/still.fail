@@ -42,7 +42,7 @@ import type { SpanContext } from "../trace.ts";
 import { get, hex, isObject, sha256, utf8 } from "../util.ts";
 import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
 import { AGAIN_MOST, againOf, hashOf, keep, links } from "../lock-keep.ts";
-import { tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
+import { levelVaults, levelVaultsOf, tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
@@ -2833,6 +2833,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // 设置 › 安全 did nothing that lasted).
         const own = onOwnLock(inner, c.workspace, param("device"));
         if (own !== null) {
+          // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+          yield* levelVaultsOf(inner, own.sub);
           const off = yield* withBound(inner, own.sub, Effect.tap(inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove")), () => takeOffBound(inner, own.sub, param("device"))));
           // (pending on their own lock, or, taken there by a station of another workspace of theirs, in this one's:
           // said so either way, as this workspace's page shows it)
@@ -3479,7 +3481,8 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
     const n = as("member", { sub: what.member });
     // (what this person noted as they added them goes with them: `unnote`)
     if ("gone" in what) unnote(inner, ws, what.member, m?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email")));
-    if ("gone" in what) return m === undefined ? Effect.succeed(null) : sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n }));
+    // (the vaults read first, while the member is still in: views/vault.ts `levelVaults`)
+    if ("gone" in what) return m === undefined ? Effect.succeed(null) : Effect.andThen(levelVaults(inner, ws), sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n })));
     if (m?.role === what.role) return Effect.succeed(null);
     // (someone added whose first device has not come: nothing in the lock to change, the cloud's part alone; the role
     // chosen here now is what their admission here says, `note`, an owner's only by an owner)
