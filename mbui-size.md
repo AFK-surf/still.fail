@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [cf48243e5](https://github.com/AFK-surf/monoid/commit/cf48243e57cd199702aaac9a10fc9084a8013055) app tests: place-stations' 设置 changes once now (#6 | 2.01 | 2.76 | 11.87 | 31.72 | 43.86 | 28.34 | 55.51 | 96.9 | 116.08 |
 | [8183d3377](https://github.com/AFK-surf/monoid/commit/8183d33773f7fb12825960e5575fe11e177185e7) station: a Farview tab's clipboard both ways for t | 2.01 | 2.76 | 11.87 | 31.71 | 43.86 | 28.32 | 55.51 | 96.86 | 109.12 |
 | [192ae506c](https://github.com/AFK-surf/monoid/commit/192ae506c9422cdb9d1ff33cab286f6dbf83c95b) mbui: one height for what is pressed side by side  | 2.01 | 2.76 | 11.86 | 31.71 | 43.84 | 28.32 | 55.5 | 97.04 | 107.48 |
 | [0b847198b](https://github.com/AFK-surf/monoid/commit/0b847198b1655bd4c22ca1b1ad3986f623fd274d) Simplify station pages, open login links as a shee | 2.01 | 2.76 | 11.86 | 31.71 | 43.84 | 28.32 | 55.5 | 97.04 | 107.48 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0ad0b4e91](https://github.com/AFK-surf/monoid/commit/0ad0b4e9125680fe2355b738580d3b645205f6dd) mbui: skip clean root layout and resting spare bin | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.6 | 107.15 |
 | [98dcf55f5](https://github.com/AFK-surf/monoid/commit/98dcf55f5aefba7f861612b673777fb5e6d865d1) mbui: a pick said to leave holds its place for wha | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.6 | 107.15 |
 | [65eb7a7e2](https://github.com/AFK-surf/monoid/commit/65eb7a7e2016b7784cde553da3ae9d4152824814) mbui: an agent's history opens in the side panel o | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.6 | 107.15 |
-| [f5ac0ecd1](https://github.com/AFK-surf/monoid/commit/f5ac0ecd163b57f1f293fbd83220ce40a748084e) station: the usage page and a Comma connect's usag | 2 | 2.74 | 11.66 | 31.29 | 41.91 | 27.9 | 53.59 | 96.6 | 107.15 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [cf48243e5](https://github.com/AFK-surf/monoid/commit/cf48243e57cd199702aaac9a10fc9084a8013055) app tests: place-stations' 设置 changes once now (#6 | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.46 |
 | [8183d3377](https://github.com/AFK-surf/monoid/commit/8183d33773f7fb12825960e5575fe11e177185e7) station: a Farview tab's clipboard both ways for t | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.46 |
 | [192ae506c](https://github.com/AFK-surf/monoid/commit/192ae506c9422cdb9d1ff33cab286f6dbf83c95b) mbui: one height for what is pressed side by side  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.46 |
 | [0b847198b](https://github.com/AFK-surf/monoid/commit/0b847198b1655bd4c22ca1b1ad3986f623fd274d) Simplify station pages, open login links as a shee | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.39 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0ad0b4e91](https://github.com/AFK-surf/monoid/commit/0ad0b4e9125680fe2355b738580d3b645205f6dd) mbui: skip clean root layout and resting spare bin | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
 | [98dcf55f5](https://github.com/AFK-surf/monoid/commit/98dcf55f5aefba7f861612b673777fb5e6d865d1) mbui: a pick said to leave holds its place for wha | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.16 |
 | [65eb7a7e2](https://github.com/AFK-surf/monoid/commit/65eb7a7e2016b7784cde553da3ae9d4152824814) mbui: an agent's history opens in the side panel o | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.39 |
-| [f5ac0ecd1](https://github.com/AFK-surf/monoid/commit/f5ac0ecd163b57f1f293fbd83220ce40a748084e) station: the usage page and a Comma connect's usag | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.39 |
