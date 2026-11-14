@@ -12,13 +12,14 @@ import { readOnly } from "../mesh/credential.ts";
 import { error, json } from "../api/request.ts";
 import type { Request } from "../api/request.ts";
 import { log } from "../ops/log.ts";
+import { platform } from "../platform/index.ts";
 import { Events, Parts, Paths, Store } from "../services.ts";
 import { TerminalLink, runnerWire } from "./link.ts";
 import { type TerminalMeta, Terminals } from "./terminals.ts";
 
 /// The shell a terminal opens: the person's login shell, as a terminal app starts it.
 function shell(): { program: string; args: string[] } {
-  if (process.platform === "win32") return { program: "powershell.exe", args: ["-NoLogo"] };
+  if (platform.os === "windows") return { program: "powershell.exe", args: ["-NoLogo"] };
   return { program: process.env.SHELL || "/bin/sh", args: ["-l"] };
 }
 
