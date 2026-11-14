@@ -767,10 +767,10 @@ let emit_glyph_rise : Double = 6.0
 
 ///|
 /// The head's sliding out (ms); how long it all takes at most.
-let emit_head_ms : Double = 260.0
+pub let emit_head_ms : Double = 260.0
 
 ///|
-let emit_out_ms_most : Double = emit_screen_ms + emit_line_ms + emit_glyph_jitter / 2.0 + emit_glyph_ms
+pub let emit_out_ms_most : Double = emit_screen_ms + emit_line_ms + emit_glyph_jitter / 2.0 + emit_glyph_ms
 
 ///|
 /// How far a message's head slides out of the avatar (points).
