@@ -4,7 +4,9 @@
 //
 // Behaviour pinned against dsh 0.2:
 // - `open` makes the session (dsh names it) or resumes a persisted one; the station's tools are dsh's mcp-client in the
-//   patch, the session's token read from the environment;
+//   patch, the session's token read from the environment. dsh starts that client beside the driver, not before it: the
+//   driver answers `open` only once the client registered the station's tools, and refuses it where the client could
+//   not (the station unreachable), so the first prompt's request to the model carries them (dsh-bridge.mjs `mounted`);
 // - `prompt` queues a message for the next turn (one starts at once when none runs); `steer` puts one in the running
 //   turn, read after the step it is in (a tool call ends first); `cancel` stops the turn, which ends aborted;
 // - the turn's bounds and tool calls come as the session's events (turn/start, turn/end with its reason, tool/call,
@@ -42,6 +44,8 @@ const DEEPSEEK_MODEL = "deepseek-v4-flash";
 /// copies it).
 export const BRIDGE = fileURLToPath(new URL("./dsh-bridge.mjs", import.meta.url));
 
+/// The patch's entry for the station's tools (dsh's MCP client).
+const TOOLS = "stillfail-tools";
 /// The id of the request that opens the session; the others carry their own.
 const OPEN = "open";
 /// Where the patch's header for the station's tools reads the session's token.
@@ -89,7 +93,8 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
   const tools = { transport: "streamable-http", serverName: "stillfail", url: mcpUrl, headers: { Authorization: TOKEN_HEADER }, failOnStartupError: true };
   const patch: Json[] = [
     { id: "acp", disabled: true },
-    { insert: [{ id: "stillfail-bridge", name: bridge }, { id: "stillfail-tools", name: "@deepseek-ai/dsh-mcp-client", config: tools }] },
+    // The driver is told which entry the station's tools are: it opens no session before that one is up.
+    { insert: [{ id: "stillfail-bridge", name: bridge, config: { tools: TOOLS } }, { id: TOOLS, name: "@deepseek-ai/dsh-mcp-client", config: tools }] },
   ];
   let chosen: { provider: string; model: string } | undefined;
   let chosenEffort: string | undefined;
@@ -237,7 +242,7 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
         ...(options.resume !== undefined ? { resume: options.resume } : {}),
         ...(setup.provider !== undefined ? { provider: setup.provider, model: setup.model } : {}),
         ...(setup.effort !== undefined ? { effort: setup.effort } : {}),
-      }, "dsh did not open the session (its driver plugin did not load?)");
+      }, "dsh did not open the session (its driver plugin did not load, or the station's tools never answered its MCP client?)");
       if (typeof opened?.session !== "string" || opened.session === "") throw new Error("dsh named no session");
       session.named(opened.session);
     } catch (error) {

@@ -114,9 +114,10 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     const byId = Object.fromEntries(run.patch.map((p: { id: string }) => [p.id, p]));
     // dsh's ACP server off, the station's driver in, by its path.
     assert.deepEqual(byId.acp, { id: "acp", disabled: true });
-    // The station's tools by dsh's own MCP client, the session's token read from the environment (not in the file).
+    // The station's tools by dsh's own MCP client, the session's token read from the environment (not in the file); the
+    // driver told which entry they are (it opens no session before that one is up: test/dsh-bridge.test.ts).
     assert.deepEqual(run.patch.find((p: { insert?: unknown }) => p.insert).insert, [
-      { id: "stillfail-bridge", name: BRIDGE },
+      { id: "stillfail-bridge", name: BRIDGE, config: { tools: "stillfail-tools" } },
       {
         id: "stillfail-tools", name: "@deepseek-ai/dsh-mcp-client",
         config: { transport: "streamable-http", serverName: "stillfail", url: o.mcpUrl, headers: { Authorization: "!!js 'Bearer ' + process.env.STILLFAIL_MCP_TOKEN" }, failOnStartupError: true },
@@ -297,7 +298,10 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
       };
       const agent = { session: { id: "s1" }, ...(process.env.FAKE_OLD ? {} : { model }) };
       const handle = (op, options) => (said({ [op]: options.agentOptions ?? null }), { agent, dispose: async () => {} });
-      apply({ on() {}, agents: { resume: async (o) => handle("resume", o), create: async (o) => handle("create", o) } });
+      // The station's tools up already (what the plugin does until they are: test/dsh-bridge.test.ts).
+      const up = { state: 2, await: async () => up };
+      const loader = { await: async () => {}, entries: () => [{ options: { id: "stillfail-tools" }, fiber: up }] };
+      apply({ on() {}, loader, agents: { resume: async (o) => handle("resume", o), create: async (o) => handle("create", o) } }, { tools: "stillfail-tools" });
       process.stdout.on("data", (d) => said({ answer: JSON.parse(String(d)) }));
     `;
     const run = (open: Record<string, unknown>, env: Record<string, string> = {}) => {
