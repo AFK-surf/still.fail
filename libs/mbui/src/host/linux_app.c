@@ -315,6 +315,8 @@ static void canvas_init(Canvas *c) { c->texs = g_ptr_array_new(); }
 
 static void device_tell(mb_outside_fn tell);  // linux_device.h: the clipboard's reads done
 static void pick_tell(mb_outside_fn tell);    // the files picked
+static void drop_start(void);                 // what is let go on the window taken
+static int drop_drive(const char *text);      // a scripted run's drop
 static void update_tell(mb_outside_fn tell);  // linux_update.h: how an update goes
 void mb_host_set_cursor(int32_t kind);
 
@@ -919,6 +921,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   g_signal_connect(focus, "enter", G_CALLBACK(on_focus_in), NULL);
   g_signal_connect(focus, "leave", G_CALLBACK(on_focus_out), NULL);
   gtk_widget_add_controller(area, focus);
+  drop_start();
 
   // the native views under the canvas (linux_views.c): the overlay's child, the canvas over it, as big as the canvas
   under = gtk_fixed_new();
@@ -1224,8 +1227,8 @@ static gboolean context_again(gpointer data) {
 
 // Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), a notification clicked
 // (6) or looked for (7) by its words (linux_life.h), the window resized to "<w>x<h>" points (8), the runner's directory
-// watched (9), the canvas's context made anew (10), and whether it has been since (11); the rest is sent to the app
-// itself.
+// watched (9), the canvas's context made anew (10), and whether it has been since (11), files let go on the window
+// (13: drop_drive); the rest is sent to the app itself.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   if (kind == 9) return mb_done_watch(text);
   if (kind == 10) {
@@ -1239,6 +1242,8 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   int done = 0;
   if (kind == 6 || kind == 7) {
     done = notice_drive(kind == 6, u);
+  } else if (kind == 13) {
+    done = drop_drive(u);
   } else if (kind == 4) {
     int ok = mb_render_snapshot(u);
     fprintf(stdout, "SHOT %s %s\n", u, ok ? "ok" : "failed");
@@ -1383,11 +1388,13 @@ typedef struct {
   int told;
   GPtrArray *names;  // char *
   GPtrArray *bytes;  // GBytes *
+  GPtrArray *dropped;  // GFile *: a drop's (drop_pick), read only once the app asks how it goes (mb_host_pick_state)
 } pick;
 static pick *picks;
 static int npicks = 1;  // ids from 1
 
 static pick *pick_of(int32_t id) { return id > 0 && id < npicks ? &picks[id] : NULL; }
+static void drop_read_start(int32_t id, GPtrArray *files);  // a drop's files read (below)
 
 // The picks answered since the app was last told, told now, between frames (pick_tell): what was picked taken into
 // what reads it as it comes (ui's outside_take), a frame asked for only where something reads it.
@@ -1476,7 +1483,10 @@ static void pick_tell(mb_outside_fn tell) {
 
 int32_t mb_host_pick_state(int32_t id) {
   pick *k = pick_of(id);
-  return k ? k->state : -1;
+  if (!k) return -1;
+  // (a drop's files, asked for: read from now, drop_pick)
+  if (k->dropped) drop_read_start(id, g_steal_pointer(&k->dropped));
+  return k->state;
 }
 int32_t mb_host_pick_count(int32_t id) {
   pick *k = pick_of(id);
@@ -1503,10 +1513,222 @@ moonbit_string_t mb_host_pick_info(int32_t id, int32_t i) {
 void mb_host_pick_end(int32_t id) {
   pick *k = pick_of(id);
   if (!k) return;
+  g_clear_pointer(&k->dropped, g_ptr_array_unref);
   g_ptr_array_set_size(k->names, 0);
   g_ptr_array_set_size(k->bytes, 0);
   k->state = -1;
   k->told = 1;
+}
+
+// ---- let go on the window ----
+
+// Files dragged in from outside (a file manager) and let go on the window (ui/drop.mbt), as macOS's MBView takes them:
+// where they are held, posted on `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, with
+// where each is and the pick their reading is, read once the app takes them as files ({"type":"drop","x","y","pick",
+// "paths":[{"path","dir","size"}]}: a field, or a chat as this station's files, takes them by their paths, unread).
+// Only files of this machine's are taken (a browser's link comes as a list of files too, of its own scheme: none of
+// them, so nothing let go, as macOS takes file URLs alone). Words dragged in (another app's text) are said only as
+// they are let go, with what they say ({"type":"words","x","y","text"}). Either let go here, the window comes to the
+// front with the keys, as a click on it would give them. GTK's drop target on the canvas, in its coordinates (points);
+// a scripted run's drop (MBUI_DRIVE `drop`: mb_host_drive 13) goes the same way from the files it names.
+
+static void drop_post(const char *json, size_t n) { mb_post("mbui.drop", json, n, NULL, 0); }
+
+// A drop's files read (a thread's, walked into where they were let go: a folder's by their way down from it, "照片/2026/a.jpg",
+// each folder itself named with a "/" at its end and no bytes), then given to its pick on the main loop.
+typedef struct {
+  int id;
+  GPtrArray *files;  // GFile *
+  GPtrArray *names, *bytes;
+} drop_read;
+
+static void drop_read_one(drop_read *r, GFile *f, const char *name, int top, int depth) {
+  GFileInfo *info = g_file_query_info(f, G_FILE_ATTRIBUTE_STANDARD_TYPE "," G_FILE_ATTRIBUTE_STANDARD_SIZE,
+                                      top ? G_FILE_QUERY_INFO_NONE : G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, NULL);
+  if (!info) return;
+  GFileType type = g_file_info_get_file_type(info);
+  if (type == G_FILE_TYPE_SYMBOLIC_LINK) {
+    // (a link in a folder: the file it names read, a folder it names not walked into)
+    g_object_unref(info);
+    info = g_file_query_info(f, G_FILE_ATTRIBUTE_STANDARD_TYPE "," G_FILE_ATTRIBUTE_STANDARD_SIZE,
+                             G_FILE_QUERY_INFO_NONE, NULL, NULL);
+    if (!info) return;
+    type = g_file_info_get_file_type(info);
+    if (type == G_FILE_TYPE_DIRECTORY) type = G_FILE_TYPE_UNKNOWN;
+  }
+  goffset size = g_file_info_get_size(info);
+  g_object_unref(info);
+  if (type == G_FILE_TYPE_DIRECTORY) {
+    g_ptr_array_add(r->names, g_strconcat(name, "/", NULL));
+    g_ptr_array_add(r->bytes, g_bytes_new(NULL, 0));
+    GFileEnumerator *e = depth < 64 ? g_file_enumerate_children(f, G_FILE_ATTRIBUTE_STANDARD_NAME,
+                                                                G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, NULL)
+                                    : NULL;
+    GFileInfo *c;
+    while (e && (c = g_file_enumerator_next_file(e, NULL, NULL))) {
+      GFile *child = g_file_get_child(f, g_file_info_get_name(c));
+      char *child_name = g_strconcat(name, "/", g_file_info_get_name(c), NULL);
+      drop_read_one(r, child, child_name, 0, depth + 1);
+      g_free(child_name);
+      g_object_unref(child);
+      g_object_unref(c);
+    }
+    if (e) g_object_unref(e);
+    return;
+  }
+  if (type != G_FILE_TYPE_REGULAR || size > ((goffset)1 << 30)) return;
+  char *data = NULL;
+  gsize n = 0;
+  if (!g_file_load_contents(f, NULL, &data, &n, NULL, NULL)) return;
+  g_ptr_array_add(r->names, g_strdup(name));
+  g_ptr_array_add(r->bytes, g_bytes_new_take(data, n));
+}
+
+static gboolean drop_read_done(gpointer data) {
+  drop_read *r = data;
+  pick *k = pick_of(r->id);
+  // (a pick let go meanwhile, mb_host_pick_end: what was read let go too)
+  if (k && k->state == 0) {
+    g_ptr_array_extend_and_steal(k->names, g_steal_pointer(&r->names));
+    g_ptr_array_extend_and_steal(k->bytes, g_steal_pointer(&r->bytes));
+    k->state = k->names->len > 0 ? 1 : -1;
+    picks_wake();
+  }
+  if (r->names) g_ptr_array_unref(r->names);
+  if (r->bytes) g_ptr_array_unref(r->bytes);
+  g_ptr_array_unref(r->files);
+  g_free(r);
+  return G_SOURCE_REMOVE;
+}
+
+static gpointer drop_read_run(gpointer data) {
+  drop_read *r = data;
+  for (guint i = 0; i < r->files->len; i++) {
+    GFile *f = g_ptr_array_index(r->files, i);
+    char *name = g_file_get_basename(f);
+    drop_read_one(r, f, name ? name : "file", 1, 0);
+    g_free(name);
+  }
+  g_idle_add_full(G_PRIORITY_HIGH_IDLE, drop_read_done, r, NULL);
+  return NULL;
+}
+
+static void drop_read_start(int32_t id, GPtrArray *files) {
+  drop_read *r = g_new0(drop_read, 1);
+  r->id = id;
+  r->files = files;
+  r->names = g_ptr_array_new_with_free_func(g_free);
+  r->bytes = g_ptr_array_new_with_free_func((GDestroyNotify)g_bytes_unref);
+  g_thread_unref(g_thread_new("mbui-drop", drop_read_run, r));
+}
+
+// A pick of the files let go (GFile *, its own refs), read once the app asks how it goes
+static int32_t drop_pick(GPtrArray *files) {
+  picks = realloc(picks, sizeof(pick) * (size_t)(npicks + 1));
+  int id = npicks++;
+  picks[id] = (pick){0, 0, g_ptr_array_new_with_free_func(g_free),
+                     g_ptr_array_new_with_free_func((GDestroyNotify)g_bytes_unref), files};
+  return id;
+}
+
+// files let go at (x, y) of the canvas: where each is said, their pick made, the window brought to the front
+static void drop_files_at(GPtrArray *files, double x, double y) {
+  if (!files->len) {
+    g_ptr_array_unref(files);
+    drop_post("{\"type\":\"left\"}", 16);
+    return;
+  }
+  GString *paths = g_string_new("");
+  for (guint i = 0; i < files->len; i++) {
+    GFile *f = g_ptr_array_index(files, i);
+    char *path = g_file_get_path(f);
+    if (!path) continue;
+    GFileInfo *info = g_file_query_info(f, G_FILE_ATTRIBUTE_STANDARD_TYPE "," G_FILE_ATTRIBUTE_STANDARD_SIZE,
+                                        G_FILE_QUERY_INFO_NONE, NULL, NULL);
+    int dir = info && g_file_info_get_file_type(info) == G_FILE_TYPE_DIRECTORY;
+    goffset size = info && !dir ? g_file_info_get_size(info) : 0;
+    if (info) g_object_unref(info);
+    g_string_append(paths, paths->len ? ",{\"path\":\"" : "{\"path\":\"");
+    json_put(paths, path);
+    g_string_append_printf(paths, "\",\"dir\":%s,\"size\":%" G_GINT64_FORMAT "}", dir ? "true" : "false", (gint64)size);
+    g_free(path);
+  }
+  int id = drop_pick(files);
+  GString *m = g_string_new("");
+  g_string_printf(m, "{\"type\":\"drop\",\"x\":%.1f,\"y\":%.1f,\"pick\":%d,\"paths\":[%s]}", x, y, id, paths->str);
+  drop_post(m->str, m->len);
+  g_string_free(m, TRUE);
+  g_string_free(paths, TRUE);
+  gtk_window_present(GTK_WINDOW(win));
+  gtk_widget_grab_focus(area);
+}
+
+static int drag_has_files(GtkDropTarget *t) {
+  GdkDrop *d = gtk_drop_target_get_current_drop(t);
+  return d && gdk_content_formats_contain_gtype(gdk_drop_get_formats(d), GDK_TYPE_FILE_LIST);
+}
+
+static GdkDragAction on_drag_over(GtkDropTarget *t, double x, double y, gpointer data) {
+  (void)data;
+  // (words: nothing said till they are let go, no files held over the window)
+  if (!drag_has_files(t)) return GDK_ACTION_COPY;
+  char b[96];
+  int n = snprintf(b, sizeof b, "{\"type\":\"over\",\"x\":%.1f,\"y\":%.1f}", x, y);
+  drop_post(b, (size_t)n);
+  return GDK_ACTION_COPY;
+}
+
+static void on_drag_left(GtkDropTarget *t, gpointer data) {
+  (void)data;
+  if (drag_has_files(t)) drop_post("{\"type\":\"left\"}", 16);
+}
+
+static gboolean on_dropped(GtkDropTarget *t, const GValue *v, double x, double y, gpointer data) {
+  (void)t, (void)data;
+  if (G_VALUE_HOLDS(v, GDK_TYPE_FILE_LIST)) {
+    GPtrArray *files = g_ptr_array_new_with_free_func(g_object_unref);
+    for (GSList *l = gdk_file_list_get_files(g_value_get_boxed(v)); l; l = l->next)
+      if (g_file_is_native(l->data)) g_ptr_array_add(files, g_object_ref(l->data));
+    drop_files_at(files, x, y);
+    return TRUE;
+  }
+  const char *words = G_VALUE_HOLDS_STRING(v) ? g_value_get_string(v) : NULL;
+  if (!words || !*words) return FALSE;
+  GString *m = g_string_new("");
+  g_string_printf(m, "{\"type\":\"words\",\"x\":%.1f,\"y\":%.1f,\"text\":\"", x, y);
+  json_put(m, words);
+  g_string_append(m, "\"}");
+  drop_post(m->str, m->len);
+  g_string_free(m, TRUE);
+  gtk_window_present(GTK_WINDOW(win));
+  gtk_widget_grab_focus(area);
+  return TRUE;
+}
+
+// the canvas takes what is let go on it: files first, else words
+static void drop_start(void) {
+  GtkDropTarget *t = gtk_drop_target_new(G_TYPE_INVALID, GDK_ACTION_COPY);
+  GType types[2] = {GDK_TYPE_FILE_LIST, G_TYPE_STRING};
+  gtk_drop_target_set_gtypes(t, types, 2);
+  g_signal_connect(t, "enter", G_CALLBACK(on_drag_over), NULL);
+  g_signal_connect(t, "motion", G_CALLBACK(on_drag_over), NULL);
+  g_signal_connect(t, "leave", G_CALLBACK(on_drag_left), NULL);
+  g_signal_connect(t, "drop", G_CALLBACK(on_dropped), NULL);
+  gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(t));
+}
+
+// A scripted run's drop (mb_host_drive 13): "<x> <y> <path>|<path>…", the files let go there as a file manager's are.
+static int drop_drive(const char *text) {
+  double x = 0, y = 0;
+  int at = 0;
+  if (sscanf(text, "%lf %lf %n", &x, &y, &at) != 2 || !at) return 0;
+  GPtrArray *files = g_ptr_array_new_with_free_func(g_object_unref);
+  char **paths = g_strsplit(text + at, "|", -1);
+  for (int i = 0; paths[i]; i++)
+    if (*paths[i]) g_ptr_array_add(files, g_file_new_for_path(paths[i]));
+  g_strfreev(paths);
+  drop_files_at(files, x, y);
+  return 1;
 }
 
 // The gallery (gallery.mbt): none on this host; no photo of it picked.

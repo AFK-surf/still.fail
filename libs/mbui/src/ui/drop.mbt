@@ -1,5 +1,6 @@
-// Files dragged in from outside the app (Finder, Explorer) and let go on its window: the host says where they are held
-// as they move and, once let go, the pick their reading is (macOS's MBView, Windows' drop target in win_files.h: their
+// Files dragged in from outside the app (Finder, Explorer, a file manager) and let go on its window: the host says where
+// they are held as they move and, once let go, the pick their reading is (macOS's MBView, Windows' drop target in
+// win_files.h, Linux's GTK drop target in linux_app.c: their
 // `mbui.drop` messages, {"type":"over","x","y"},
 // {"type":"left"}, {"type":"drop","x","y","pick"}). A box follows them as the host says them, outside any build
 // (Ctx::on_files): told where they are held over it, and taking them as they are let go on it, their files read as a
@@ -7,12 +8,13 @@
 // Tester: Tester::hold_files, Tester::drop_files.
 //
 // Words dragged in from outside (another app's text, a browser page's) are said only as they are let go, with what they
-// say ({"type":"words","x","y","text"}: macOS's MBView): on a field (what a press there reaches) they go into it where
+// say ({"type":"words","x","y","text"}: macOS's MBView, Linux's): on a field (what a press there reaches) they go into it where
 // they were let go, as a paste's words do, the field taking the focus; let go beside one on a box that is its field's
 // (a composer's capsule), the view puts them in that field (Ctx::words_into); elsewhere nothing takes them. Under a
 // Tester: Tester::drop_words.
 //
-// Files from the Finder (a host that knows where they are says so: {"type":"drop",…,"paths":[{"path","dir","size"}]})
+// Files from the Finder or a file manager (a host that knows where they are says so, macOS's and Linux's:
+// {"type":"drop",…,"paths":[{"path","dir","size"}]})
 // may be taken as where they are instead of read: by a box that takes them so (Ctx::paths_into: a chat's composer,
 // naming them by the station they are on); let go on a field no such box holds, as their paths, a line each, as a
 // Mac's text fields take files from the Finder (on a box that takes words for its field, Ctx::words_into, into that
@@ -21,11 +23,11 @@
 // ends (drops_frame_end).
 
 ///|
-/// Whether files can be dragged in from outside and let go on the window here: the hosts that say so (macOS's and
-/// Windows': `mbui.drop`), what a setting of how they are taken is shown for.
+/// Whether files can be dragged in from outside and let go on the window here: the hosts that say so (macOS's,
+/// Windows' and Linux's: `mbui.drop`), what a setting of how they are taken is shown for.
 pub fn takes_drops() -> Bool {
   let p = platform()
-  p == 0 || p == 3
+  p == 0 || p == 3 || p == 5
 }
 
 ///|

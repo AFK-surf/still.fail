@@ -64,6 +64,8 @@
 //   noticed TEXT                one of the app's notifications (the system's, @hostapi.notice_show) holds TEXT in its
 //                               title or words, within the timeout       nonotice TEXT   none does
 //   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
+//   drop X Y PATH|PATH…         those files let go at (X, Y) of the window as a file manager lets them go (the host's
+//                               own drop, @hostapi.drive 13: Linux's)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
 //   picks NAME:SIZE …           what the system's pickers give from then on, under a Tester (film): files so named, of
 //                               so many bytes each (none: called off); a host's own pickers are not stood in for
@@ -1640,6 +1642,14 @@ fn drive_steps(c : Ctx) -> Unit {
         h_log("DRIVE LOG " + arg)
         next()
       }
+      "drop" =>
+        // files let go on the window as the host's own drop takes them (@hostapi.drive 13)
+        if h_drive(13, arg) {
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          acted()
+        } else {
+          drive_fail(c, d, "this host lets no script drop files")
+        }
       "picks" => {
         // (the pickers' answers a host says as it is told: a Tester's; else its own pickers answer)
         let failed = @hostapi.script_step(cmd, arg)

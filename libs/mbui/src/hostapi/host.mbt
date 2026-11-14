@@ -2440,7 +2440,8 @@ pub fn install_package(name : String, data : Bytes) -> Unit {
 /// file come there posted on channel "runner" (done_watch.h: macOS, Android, Windows); 10 the canvas's GL context made
 /// anew, as one lost (Linux and the browser: the images' contract, scripts/host_contract.sh), 11 whether it has been since;
 /// 12 input to the screen measured by the host, `text` "MODE X Y" (macOS's mac_latency.h, Android's Latency.java: its
-/// own events from then on, the process ending with what it measured). False where
+/// own events from then on, the process ending with what it measured); 13 files let go on the window, `text` "X Y
+/// PATH|PATH…", as the system's drop of them (Linux's linux_app.c drop_drive). False where
 /// the host has no such path (the caller sends it to the app itself).
 pub fn drive(kind : Int, text : String) -> Bool {
   current.val.drive(kind, text)

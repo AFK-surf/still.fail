@@ -6,6 +6,9 @@
 #pragma once
 #include <dlfcn.h>
 #include <glib-object.h>
+#include <stdio.h>
+#include <string.h>
+#include "linux.h"
 
 // ---- its enums' values (gst/gstelement.h, gstformat.h, gstevent.h, gstelementfactory.h, gstpad.h, app/gstappsrc.h,
 // playback's GstPlayFlags) ----
@@ -64,6 +67,7 @@ typedef struct {
   X(int, gst_pad_link, (void *, void *))                                                                             \
   X(void *, gst_pad_get_current_caps, (void *))                                                                      \
   X(const char *, gst_structure_get_name, (void *))                                                                  \
+  X(const char *, gst_structure_get_string, (void *, const char *))                                                  \
   X(void *, gst_sample_get_segment, (void *))                                                                        \
   X(guint64, gst_segment_to_stream_time, (void *, int, guint64))                                                    \
   X(void *, gst_caps_from_string, (const char *))                                                                    \
@@ -98,5 +102,66 @@ static int gs_here(void) {
     return 0;
   }
   gs_state = 1;
+  return 1;
+}
+
+// What a decoded video's appsink is asked for: its frames as the decoder made them where it can (NV12 or I420, a
+// videoconvert before it passing them through), their colours worked out on the GPU (linux_render.c's mb_yuv_draw).
+#define GS_YUV_CAPS "video/x-raw,format=(string){NV12,I420}"
+
+static int gs_round_up(int n, int to) { return (n + to - 1) / to * to; }
+
+// A sample's frame (GS_YUV_CAPS: laid out as GStreamer lays it out by default, an appsink offering no video meta) copied
+// out as an mb_yuv, its colours as its caps' colorimetry says (GStreamer's default where it says none: 601 under 720
+// lines, else 709; 16-235); 0 where it has none or is not one of those.
+static int gs_sample_yuv(void *sample, mb_yuv *out) {
+  memset(out, 0, sizeof *out);
+  void *buf = gs.gst_sample_get_buffer(sample), *caps = gs.gst_sample_get_caps(sample);
+  void *st = caps ? gs.gst_caps_get_structure(caps, 0) : NULL;
+  if (!buf || !st) return 0;
+  int w = 0, h = 0;
+  gs.gst_structure_get_int(st, "width", &w);
+  gs.gst_structure_get_int(st, "height", &h);
+  const char *format = gs.gst_structure_get_string(st, "format");
+  if (w <= 0 || h <= 0 || !format) return 0;
+  int nv12 = strcmp(format, "NV12") == 0;
+  if (!nv12 && strcmp(format, "I420") != 0) return 0;
+  // (gst-video's default layout: video-info.c's fill_planes)
+  int s0 = gs_round_up(w, 4), h2 = gs_round_up(h, 2);
+  size_t size;
+  out->stride[0] = s0;
+  out->off[0] = 0;
+  out->off[1] = (size_t)s0 * h2;
+  if (nv12) {
+    out->stride[1] = s0;
+    size = out->off[1] + (size_t)s0 * (h2 / 2);
+  } else {
+    int s1 = gs_round_up(gs_round_up(w, 2) / 2, 4);
+    out->stride[1] = out->stride[2] = s1;
+    out->off[2] = out->off[1] + (size_t)s1 * (h2 / 2);
+    size = out->off[2] + (size_t)s1 * (h2 / 2);
+  }
+  if (gs.gst_buffer_get_size(buf) < size) return 0;
+  // its colours: "bt709", "bt601", "bt2020"…, or GstVideoColorimetry's numbers ("range:matrix:transfer:primaries":
+  // range 1 full, 2 16-235; matrix 3 709, 4 601, 6 2020)
+  const char *cm = gs.gst_structure_get_string(st, "colorimetry");
+  out->matrix = h < 720 ? 601 : 709;
+  out->full = 0;
+  if (cm && *cm >= '0' && *cm <= '9') {
+    int range = 0, matrix = 0;
+    sscanf(cm, "%d:%d", &range, &matrix);
+    out->full = range == 1;
+    if (matrix == 3) out->matrix = 709;
+    else if (matrix == 4) out->matrix = 601;
+    else if (matrix == 6) out->matrix = 2020;
+  } else if (cm) {
+    if (strstr(cm, "2020") || strstr(cm, "2100")) out->matrix = 2020;
+    else if (strstr(cm, "709") || strstr(cm, "240")) out->matrix = 709;
+    else if (strstr(cm, "601")) out->matrix = 601;
+    else if (strcmp(cm, "sRGB") == 0) out->matrix = 709, out->full = 1;
+  }
+  out->w = w, out->h = h, out->nv12 = nv12, out->size = size;
+  out->data = g_malloc(size);
+  gs.gst_buffer_extract(buf, 0, out->data, size);
   return 1;
 }

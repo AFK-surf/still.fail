@@ -44,6 +44,8 @@ fn main {
   let picked = @ui.env("MBUI_PICKCHECK") == "1"
   // MBUI_OPCHECK=ran|missing: how a run of `op` ended told between frames, said on the log (opcheck.mbt)
   let op_case = @ui.env("MBUI_OPCHECK")
+  // MBUI_DROPCHECK=1: files let go on the window taken and read, said on the log (dropcheck.mbt)
+  let dropped = @ui.env("MBUI_DROPCHECK") == "1"
   if imaged != "" {
     @gallery.image_check_follow()
   }
@@ -58,6 +60,8 @@ fn main {
       @gallery.post_check_run(c)
     } else if picked {
       @gallery.pick_check_run(c)
+    } else if dropped {
+      @gallery.drop_check_run(c)
     } else if op_case != "" {
       @gallery.op_check_run(c, op_case)
     } else if updated != "" {
