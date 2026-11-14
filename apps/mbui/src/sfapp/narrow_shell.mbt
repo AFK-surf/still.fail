@@ -361,6 +361,7 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     match kind {
       ShareSheet => share_in_sheet(c, src, w)
       InviteLink => invite_sheet(c, src)
+      LoginLink => login_sheet(c, src, w)
       NoSheet => ()
     }
   })

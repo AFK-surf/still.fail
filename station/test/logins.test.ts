@@ -16,6 +16,7 @@ import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainTex
 import { COLS, QUIET_MS, STALL_MS, TIMEOUT_MS } from "../src/logins/run.ts";
 import { routes } from "../src/api/routes/logins.ts";
 import { act, endedNotice, loginTools, promptNotice, screenFor } from "../src/logins/tool.ts";
+import { pageOrigin } from "../src/sessions/page.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
 import { approval, fakeBrowser, script, temp, upon } from "./accounts-fakes.ts";
 import type { LoginPages } from "../src/logins/pages.ts";
@@ -320,9 +321,12 @@ read ok < '${approved.path}'
     assert.match(ready, /The person's browser step is ready: chat_post with card \{"type": "login", "login": "/);
     assert.ok(ready.includes("<code>") && ready.includes("<link>"), ready);
     assert.ok(!ready.includes("1A2B-C3D4") && !ready.includes("github.com/login/device"), "neither the code nor the page");
-    // the card with a sentence, never the login's link beside it (it only shows its raw address); in Slack the link alone
-    // with the card (it shows the page and the code there), in Feishu the link alone
-    assert.match(ready, /why, without the link \(the card opens the page\); end need_human\. In Slack, post the link https:\/\/still\.fail\/w\/w1\/s\/st\/login\/\S+ alone with that same card: it shows the page and the code; in Feishu, post the link alone\./);
+    // the card with a sentence, never the login's link beside it (it only shows its raw address); in Slack and Feishu
+    // the link with the card (the chat and Home keep the card, Slack shows its button when it can)
+    assert.match(ready, /why, without the link in still\.fail chats \(the card opens the page\); in Slack or Feishu, include the link https:\/\/still\.fail\/w\/w1\/s\/st\/login\/\S+ in the text with that same card; end need_human\./);
+    assert.equal(pageOrigin("https://app.still.fail", "beta"), "https://app.youdid.wtf");
+    assert.equal(pageOrigin("https://app.still.fail", "stable"), "https://app.still.fail");
+    assert.equal(pageOrigin("https://app.monoid.build", "beta"), "https://app.monoid.zone");
     assert.equal(m.logins.get(id)!.chatTitle, "部署");
     await approved.approve();
     await m.until(id, (l) => l.state === "done", "done");

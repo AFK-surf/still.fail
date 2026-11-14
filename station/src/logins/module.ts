@@ -27,15 +27,15 @@ export const LoginsLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const bus = yield* Peers;
     const cloud = plane.state;
-    const { hub, place, accounts } = yield* Agents;
+    const { hub, place, pages: pageBase, accounts } = yield* Agents;
     const browser = yield* Browser;
     const screens = yield* ScreenRegistry;
     const pages = new LoginPages(browser.station, (changed) => screens.watch(() => changed()));
     const logins = yield* Effect.acquireRelease(Effect.sync(() => new Logins({ data, clock: hub.clock, pages })), (l) => Effect.promise(() => l.close()));
     accounts.logins.attach(pages);
     const loginLink = (session: string | null, id: string) => {
-      const s = place();
-      if (!s || !plane.spec().pages) return null;
+      const s = pageBase();
+      if (!s) return null;
       const ws = (session ? store.sessionWs(session) : null) ?? s.workspace;
       return `${s.origin}/w/${ws}/s/${s.station}/login/${encodeURIComponent(id)}`;
     };

@@ -38,10 +38,10 @@ N=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)}
 case "${MBUI_VARIANT:-preview}" in
   preview) ID=fail.still.mbui NAME="still.fail preview" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
   stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail) ZIP_NAME=stillfail ;;
-  beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta) ZIP_NAME=stillfail-beta ;;
+  beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta stillfail) ZIP_NAME=stillfail-beta ;;
   # monoid's: the same app on monoid's cloud (MONOID below), its own ids, name and links
   monoid) ID=build.monoid.desktop NAME=monoid FEED=mac OWN=1 BETA= SCHEMES=(monoid) ZIP_NAME=monoid ;;
-  monoid-beta) ID=build.monoid.desktop.beta NAME=monoid.zone FEED=mac OWN=1 BETA=1 SCHEMES=(monoid-beta) ZIP_NAME=monoid-beta ;;
+  monoid-beta) ID=build.monoid.desktop.beta NAME=monoid.zone FEED=mac OWN=1 BETA=1 SCHEMES=(monoid-beta monoid) ZIP_NAME=monoid-beta ;;
   *) echo "mac-app.sh: MBUI_VARIANT is preview, stable, beta, monoid or monoid-beta, not $MBUI_VARIANT" >&2; exit 1 ;;
 esac
 OUT=$A/out/mac

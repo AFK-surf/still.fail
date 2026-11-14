@@ -77,45 +77,64 @@ pub fn device_said(d : Json?) -> String {
 /// may (`can_add`: any member on a whole station, its person on one that only runs tasks).
 pub fn station_devices_node(b : @view.View, core : Core, here : () -> Here, station : String, rig : Bool, can_add : () -> Bool) -> Unit {
   let mine = fn() { devices_listed(core, here()).filter(fn(d) { text(Some(d), "station") == station && text(Some(d), "via") != "phone" }) }
-  let note = if rig { "web-pages.devices.rigNote" } else { "web-pages.devices.stationNote" }
-  @sf.section_node(b, fn() { @sf.t("web-pages.devices.title") }, note=fn() { @sf.t(note) }, fn(s) {
-    @sf.group_node(s, fn(g) {
-      g.each(mine, fn(d) { "d/" + text(Some(d), "id") }, fn(row, d) {
-        let dv = fn() { Some(d.get()) }
-        row.box(fn(holder) {
-          @sf.link_row_node(
-            holder,
-            fn() { text(dv(), "name") },
-            fn() {
-              let (x, y, w, h) = holder.placed_window_now()
-              open_device(core, @signals.untracked(here), station, text(@signals.untracked(dv), "id"), @sf.Beside::At(x, y, w, h).anchor())
-            },
-            note=fn() { join([device_kind_words(dv()), text(dv(), "target"), device_whose(dv())], " · ") },
-            lead=LeadLine(fn(l) { @sf.icon_node(l, @signals.untracked(fn() { device_icon(dv()) }), devices_row_glyph, By(fn() { @sf.theme().p.muted })) |> ignore }),
-          )
+  let note = fn() { if rig { @sf.t("web-pages.devices.rigNote") } else { "" } }
+  let count = fn() { mine().length() }
+  @sf.section_node(
+    b,
+    fn() { @sf.t("web-pages.devices.title") },
+    note~,
+    title_after=fn(l) {
+      l.show(fn() { count() > 0 }, fn(n) {
+        @sf.words_node(n, fn() { count().to_string() }, fn() { @ui.text_style(size=Meta, leading=L7, weight=Medium, color=Subtle, wrap=false) }) |> ignore
+      })
+    },
+    ends=fn(e) {
+      e.show(fn() { can_add() && mine().length() > 0 }, fn(a) {
+        @sf.action_node(a, fn() { @sf.t("web-pages.devices.add") }, fn() {
+          let (x, y, w, h) = a.placed_window_now()
+          add_device(core, @signals.untracked(here), station, rig, At(x, y, w, h))
+        }, icon="plus")
+      })
+    },
+    fn(s) {
+      @sf.group_node(s, fn(g) {
+        g.each(mine, fn(d) { "d/" + text(Some(d), "id") }, fn(row, d) {
+          let dv = fn() { Some(d.get()) }
+          row.box(fn(holder) {
+            @sf.link_row_node(
+              holder,
+              fn() { text(dv(), "name") },
+              fn() {
+                let (x, y, w, h) = holder.placed_window_now()
+                open_device(core, @signals.untracked(here), station, text(@signals.untracked(dv), "id"), @sf.Beside::At(x, y, w, h).anchor())
+              },
+              note=fn() { join([device_kind_words(dv()), text(dv(), "target"), device_whose(dv())], " · ") },
+              lead=LeadLine(fn(l) { @sf.icon_node(l, @signals.untracked(fn() { device_icon(dv()) }), devices_row_glyph, By(fn() { @sf.theme().p.muted })) |> ignore }),
+            )
+          })
+          |> ignore
         })
-        |> ignore
-      })
-      g.show(fn() { mine().length() == 0 && !can_add() }, fn(o) {
-        @sf.link_row_node(o, fn() { @sf.t("web-pages.devices.none") }, fn() {  }, goes=false, chevron=false, lacks=true)
-      })
-      g.show(can_add, fn(o) {
-        o.box(fn(holder) {
-          @sf.link_row_node(
-            holder,
-            fn() { @sf.t("web-pages.devices.add") },
-            fn() {
-              let (x, y, w, h) = holder.placed_window_now()
-              add_device(core, @signals.untracked(here), station, rig, At(x, y, w, h))
-            },
-            note=fn() { @sf.t("web-pages.devices.addNote") },
-            lead=LeadLine(fn(l) { @sf.icon_node(l, "plus", devices_row_glyph, By(fn() { @sf.theme().p.muted })) |> ignore }),
-          )
+        g.show(fn() { mine().length() == 0 && !can_add() }, fn(o) {
+          @sf.link_row_node(o, fn() { @sf.t("web-pages.devices.none") }, fn() {  }, goes=false, chevron=false, lacks=true)
         })
-        |> ignore
+        g.show(fn() { can_add() && mine().length() == 0 }, fn(o) {
+          o.box(fn(holder) {
+            @sf.link_row_node(
+              holder,
+              fn() { @sf.t("web-pages.devices.add") },
+              fn() {
+                let (x, y, w, h) = holder.placed_window_now()
+                add_device(core, @signals.untracked(here), station, rig, At(x, y, w, h))
+              },
+              note=fn() { @sf.t("web-pages.devices.addNote") },
+              lead=LeadLine(fn(l) { @sf.icon_node(l, "plus", devices_row_glyph, By(fn() { @sf.theme().p.muted })) |> ignore }),
+            )
+          })
+          |> ignore
+        })
       })
-    })
-  })
+    },
+  )
 }
 
 ///|

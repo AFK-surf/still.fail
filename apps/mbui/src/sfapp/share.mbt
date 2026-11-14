@@ -839,7 +839,7 @@ fn share_opened(
   if share_over.get() {
     if @ui.platform() == 4 {
       let link = if session == "" { "" } else { chat_link(station, session) }
-      @ui.open_url(if link == "" { cloud_origin() } else { link }) |> ignore
+      @ui.open_url(if link == "" { @sfbase.link_origin() } else { link }) |> ignore
       return
     }
     home()

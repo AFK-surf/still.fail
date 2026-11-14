@@ -1884,14 +1884,15 @@ test("a login card in Slack: only for a login here waiting for its page's code; 
     l3: { url: "https://github.com/login/device", domain: "github.com", code: "ABCD-1234", paste: false },
   };
   r.hub.logins = { page: (id) => pages[id] ?? null, answer: (id, code, by) => void answered.push([id, code, by]) };
-  // A login at no such step (a loopback one): no card here.
-  assert.match(await r.refused(key, "chat_post", { to, text: "登录", card: { type: "login", login: "l2" } }), /gives a device code, or waits for a code/);
+  // A login at no such step (a loopback one): kept in the chat, omitted on the platform.
+  await r.call(key, "chat_post", { to, text: "登录 https://app.still.fail/w/ws/s/st/login/l2", card: { type: "login", login: "l2" } });
+  assert.deepEqual(r.chat.carried.slice(-1), [undefined]);
   await r.call(key, "chat_post", { to, text: "登录 gh", card: { type: "login", login: "l3" } });
   await r.call(key, "chat_post", { to, text: "登录 gcloud", card: { type: "login", login: "l1" } });
   // The platform is given the page; the chat keeps the card without it.
   assert.deepEqual(r.chat.carried.slice(-2), [{ type: "login", login: "l3", page: pages.l3 }, { type: "login", login: "l1", page: pages.l1 }]);
   const thread = r.store.threadAt(r.hub.surface("cl"), "C1", m.threadTs)!;
-  assert.deepEqual(r.store.messagesBefore(thread.id, null, 2).map((x) => r.store.cardAt(thread.id, x.ts)), [{ type: "login", login: "l3" }, { type: "login", login: "l1" }]);
+  assert.deepEqual(r.store.messagesBefore(thread.id, null, 3).map((x) => r.store.cardAt(thread.id, x.ts)), [{ type: "login", login: "l2" }, { type: "login", login: "l3" }, { type: "login", login: "l1" }]);
   const posted = r.store.messagesBefore(thread.id, null, 1)[0]!.ts;
   // Pressed on any other message: refused, nothing handed over.
   await assert.rejects(r.hub.receive("cl", { type: "loginCode", channel: "C1", threadTs: m.threadTs, ts: m.ts, user: "U1", code: "c0" }), /no login card/);

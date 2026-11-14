@@ -469,7 +469,7 @@ pub fn refs_pick(
         "station": Json::string(station),
         "id": Json::string(id),
         "title": Json::string(title),
-        "base": Json::string(cloud_origin()),
+        "base": Json::string(link_origin()),
         "into": Json::string(into),
       },
       fn(res) {
@@ -520,7 +520,7 @@ pub fn refs_still_at(input : @ui.Field, at : (Int, String)?, before : String, af
 fn refs_pasted(src : Source, key : String, input : @ui.Field, here : String, pasted : String, at : Int, put : String) -> Unit {
   (src.call)("ref.pasted", { "text": Json::string(put), "here": Json::string(here) }, fn(r) {
     guard r is Ok(v) else { return }
-    let base = cloud_origin()
+    let base = link_origin()
     for x in items(Some(v), "refs") {
       let o = Some(x)
       let a = number(o, "start").to_int()

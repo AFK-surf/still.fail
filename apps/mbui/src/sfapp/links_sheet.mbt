@@ -333,6 +333,62 @@ fn accept_invite(src : Source, token : String, sub : String, name : String) -> U
 }
 
 ///|
+/// A station login's link (/w/<ws>/s/<station>/login/<id>) opened in the app: its station and login id, and whether it
+/// was seen active while this sheet was up (so it closes by itself once finished or cancelled).
+priv struct LoginLinkState {
+  target : @signals.Signal[(String, String)?]
+  mut seen_active : Bool
+}
+
+///|
+let login_link : LoginLinkState = {
+  target: @signals.signal(None),
+  seen_active: false,
+}
+
+///|
+fn login_link_reset() -> Unit {
+  login_link.target.set(None)
+  login_link.seen_active = false
+}
+
+///|
+/// A station login's link opened in the app: its dialog or sheet over the page in view.
+fn open_login(station : String, id : String) -> Unit {
+  login_link.target.set(Some((station, id)))
+  login_link.seen_active = false
+  raise_sheet(LoginLink, title=tr("web-main.logins.title"))
+}
+
+///|
+/// The login sheet's body, over the pages in view.
+fn login_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let (station, id) = match login_link.target.get() {
+    Some(pair) => pair
+    None => return
+  }
+  let core = settings_core(src, w)
+  let topic = src.topic("machineLogin", { "station": Json::string(station), "id": Json::string(id) }).get()
+  match topic.value {
+    None =>
+      match topic.error {
+        Some(e) => c.text(error_words(e), style=invite_error) |> ignore
+        None => @sf.wait_line(c, tr("common.reading"), key="login-link")
+      }
+    Some(Object(_)) as l => {
+      let active = flag(l, "active")
+      if active {
+        login_link.seen_active = true
+      } else if login_link.seen_active && (text(l, "state") == "done" || text(l, "state") == "cancelled") {
+        c.after_build("login-sheet-done", fn() { lower_sheet() })
+      }
+      @sfpages.login_card(c, core, station, id, place="sheet")
+    }
+    Some(_) => c.text(tr("web-main.logins.ended"), style=invite_lead) |> ignore
+  }
+}
+
+///|
 /// What is over the pages put down, as a page opens from a link or a notification (AppState: sheet, menu null): the
 /// sheets and the menus, a file open over the window (viewer.mbt) and a chat being shared as a picture (publish.mbt),
 /// which would otherwise stay over the page that opened under them.

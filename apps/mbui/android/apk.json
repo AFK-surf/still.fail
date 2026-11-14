@@ -32,7 +32,7 @@
       "applicationId": "fail.still.android.beta",
       "minify": true,
       "res": ["app/src/beta/res"],
-      "placeholders": {"appHost": "app.still.fail", "appLabel": "youdid.wtf", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_BETA=1;MBUI_OWN=1"}
+      "placeholders": {"appHost": "app.youdid.wtf", "appLabel": "youdid.wtf", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_BETA=1;MBUI_OWN=1"}
     },
     "monoid": {
       "applicationId": "build.monoid.android",
@@ -44,7 +44,7 @@
       "applicationId": "build.monoid.android.beta",
       "minify": true,
       "res": ["app/src/beta/res", "app/src/monoid/res"],
-      "placeholders": {"appHost": "app.monoid.build", "appLabel": "monoid.zone", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_BETA=1;MBUI_OWN=1;MBUI_CLOUD=https://app.monoid.build;MBUI_PRODUCT=monoid"}
+      "placeholders": {"appHost": "app.monoid.zone", "appLabel": "monoid.zone", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_BETA=1;MBUI_OWN=1;MBUI_CLOUD=https://app.monoid.build;MBUI_PRODUCT=monoid"}
     },
     "debug": {
       "applicationId": "fail.still.android.dev",

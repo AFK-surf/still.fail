@@ -177,6 +177,7 @@ fn station_view_node(
     match key {
       "parts" => station_parts_node(b, chosen, press)
       "resources" => station_resources_node(b, core, here, s, fn() { press("processes") })
+      "allScreens" => station_all_screens_node(b, core, here, s)
       "userPages" => station_user_pages_node(b, core, here, s)
       "agentPages" => station_agent_pages_node(b, core, here, s)
       "screens" => station_screens_node(b, core, here, s)
@@ -194,6 +195,7 @@ fn station_view_node(
       "more" => station_more_node(b, core, address)
       "processes" => station_processes_node(b, core, here, s)
       "offline" => @sf.group_node(b, fn(g) { said_row_node(g, fn() { @sf.t("web-pages.stations.settingsOffline") }) })
+      "system" => station_system_node(b, core, address, s, manager)
       "logins" => station_logins_node(b, core, address, fn() { flag(s(), "online") })
       "permissions" => station_permissions_node(b, core, address, fn() { field(field(s(), "overview"), "permissions") })
       "env" => station_env_node(b, core, address, fn() { field(field(s(), "overview"), "agentEnv") }, manager)
@@ -259,23 +261,12 @@ fn station_overview_keys_by(s : Json?, screens : Json?) -> Array[String] {
   match screens {
     Some(Object(_)) as v => {
       let all = items(v, "screens")
-      if all.iter().any(fn(sc) { is_user_screen(Some(sc)) }) || (flag(v, "browser") && flag(v, "control")) {
-        out.push("userPages")
-      }
-      if all.iter().any(fn(sc) { is_agent_screen(Some(sc)) }) {
-        out.push("agentPages")
-      }
-      if all.iter().any(fn(sc) { !is_browser_screen(Some(sc)) }) || (all.is_empty() && text(v, "note") != "") {
-        out.push("screens")
+      let can_open = flag(v, "browser") && flag(v, "control")
+      if !all.is_empty() || can_open || text(v, "note") != "" {
+        out.push("allScreens")
       }
     }
     _ => ()
-  }
-  if items(s, "profileGroups").length() > 0 {
-    out.push("profiles")
-  }
-  if items(o, "connects").length() > 0 {
-    out.push("connects")
   }
   if field(o, "drive") is Some(Object(_)) {
     out.push("drive")
@@ -284,7 +275,6 @@ fn station_overview_keys_by(s : Json?, screens : Json?) -> Array[String] {
   if flag(s, "online") {
     out.push("devices")
   }
-  out.push("more")
   out
 }
 
@@ -294,33 +284,21 @@ fn station_overview_keys_by(s : Json?, screens : Json?) -> Array[String] {
 fn station_settings_keys(s : Json?, manager : Bool) -> Array[String] {
   let o = field(s, "overview")
   if !flag(s, "online") {
-    return if manager { ["offline", "logins", "workspaces"] } else { ["offline", "logins"] }
+    return ["offline"]
   }
-  let out = []
+  let out = ["software"]
   if field(o, "permissions") is Some(Object(_)) {
     out.push("permissions")
   }
-  out.push("logins")
-  if field(o, "agentEnv") is Some(Array(_)) {
-    out.push("env")
+  let env = items(o, "agentEnv")
+  let has_env = field(o, "agentEnv") is Some(Array(_)) && (manager || env.length() > 0)
+  let search = field(o, "search")
+  let has_search = search is Some(Object(_)) && text(search, "files") == "spotlight"
+  if has_env || has_search || field(o, "diagnostics") is Some(Object(_)) || field(o, "elevation") is Some(Object(_)) {
+    out.push("system")
   }
-  match field(o, "search") {
-    Some(Object(_)) as search if text(search, "files") == "spotlight" => out.push("search")
-    _ => ()
-  }
-  for k in ["context", "diagnostics", "elevation"] {
-    if field(o, k) is Some(Object(_)) {
-      out.push(k)
-    }
-  }
-  if manager {
-    out.push("workspaces")
-  }
-  if field(o, "copies") is Some(Object(_)) {
+  if items(field(o, "copies"), "offers").length() > 0 {
     out.push("copies")
-  }
-  if field(o, "network") is Some(Object(_)) {
-    out.push("network")
   }
   out
 }
@@ -372,9 +350,15 @@ fn station_env_form_ask(address : String, form : String) -> (String, Map[String,
 fn station_block_asks(core : Core, here : Here, address : String, s : Json?, manager : Bool, key : String) -> Array[(String, Map[String, Json])] {
   match key {
     "resources" => [station_net_ask(address), resources_ask(here, address)]
-    "userPages" | "agentPages" | "screens" => [station_screens_ask(address)]
+    "allScreens" | "userPages" | "agentPages" | "screens" => [station_screens_ask(address)]
     "devices" => if (core.devices_on)() { [@settings.devices_ask(here)] } else { [] }
     "processes" => if flag(s, "online") { [resources_ask(here, address)] } else { [] }
+    "system" =>
+      if manager && station_env_open.get(address).unwrap_or(false) {
+        [station_env_form_ask(address, station_env_form(core, address))]
+      } else {
+        []
+      }
     "logins" => [logins_ask(address)]
     "env" => if manager { [station_env_form_ask(address, station_env_form(core, address))] } else { [] }
     // (up, it is the part's last, under its variables' editor: made only as it is scrolled to, which asks it then; away,
@@ -409,28 +393,18 @@ fn station_part_asks(core : Core, here : Here, address : String, s : Json?, mana
 }
 
 ///|
-/// What part `part` of station `address`'s page (`s` whole, as it is now) reads as it is first drawn once what the press
-/// asked is answered (switch_answered's `then`): in its 设置, the card of each login under way (`machineLogin`), whose
-/// ids only its logins' answer says, read by what its 登录 shows them by (station_logins_shown).
-fn station_part_then(address : String, s : Json?, part : String) -> (((String, Map[String, Json])) -> Json?) -> Array[(String, Map[String, Json])] {
-  fn(read) {
-    if part == "settings" {
-      station_logins_shown(read(logins_ask(address)), flag(s, "online")).map(fn(id) { login_ask(address, id) })
-    } else {
-      []
-    }
+fn station_logins_shown(view : Json?, online : Bool) -> Array[String] {
+  if !online || !flag(view, "supported") {
+    return []
   }
+  items(view, "logins").filter(fn(l) { flag(Some(l), "active") }).map(fn(l) { text(Some(l), "id") })
 }
 
 ///|
-/// The logins under way its 登录 shows a card of (`view` its logins as the core says them): their ids; none while it
-/// is away (it can be neither done nor cancelled until it is back).
-fn station_logins_shown(view : Json?, online : Bool) -> Array[String] {
-  if online {
-    items(view, "logins").filter(fn(l) { flag(Some(l), "active") }).map(fn(l) { text(Some(l), "id") })
-  } else {
-    []
-  }
+/// What part `part` of station `address`'s page (`s` whole, as it is now) reads as it is first drawn once what the press
+/// asked is answered (switch_answered's `then`).
+fn station_part_then(_address : String, _s : Json?, _part : String) -> (((String, Map[String, Json])) -> Json?) -> Array[(String, Map[String, Json])] {
+  fn(_read) { [] }
 }
 
 ///|
@@ -508,12 +482,7 @@ fn station_head_node(
     rename?=if manager { Some(fn() { station_rename(core, @signals.untracked(here), @signals.untracked(s)) }) } else { None },
     rename_label=fn() { @sf.t("web-pages.settings.stations.rename") },
     lines=fn() {
-      let facts = [text(field(s(), "host"), "identity")]
-      if text(s(), "version") != "" {
-        facts.push("Station " + text(s(), "version"))
-      }
-      facts.push(joined_text(s()))
-      [join(facts, " · ")]
+      [station_head_facts(s())]
     },
     // its dot before what it says of how it is (reconnecting …; this machine's, how it stands here: 已停止, 正在更新),
     // else before what the machine is
@@ -648,11 +617,11 @@ fn station_resources_node(b : @view.View, core : Core, here : () -> Here, s : ()
           let uses = fn() { items(station_part_read(core, address, resources_ask(here(), address)).value, "stations").get(0) }
           station_dials_node(r, fn() { field(s(), "host") })
           r.show(fn() { net() is Some(Object(_)) }, fn(x) { station_net_node(x, net) })
-          r.show(fn() { items(field(s(), "overview"), "processes").length() > 0 }, fn(x) {
-            @sf.words_node(x, fn() { text(field(s(), "overview"), "processesText") }, fn() { st_memory }) |> ignore
-          })
           // (what still.fail itself uses of the machine, opening its 进程: read while shown)
           r.show(fn() { uses() is Some(_) }, fn(x) { station_uses_node(x, uses, processes) })
+          r.show(fn() { uses() is None && items(field(s(), "overview"), "processes").length() > 0 }, fn(x) {
+            @sf.words_node(x, fn() { text(field(s(), "overview"), "processesText") }, fn() { st_memory }) |> ignore
+          })
         })
         |> ignore
       })
@@ -684,6 +653,63 @@ fn screen_row_icon(sv : Json?) -> String {
   } else {
     "monitor"
   }
+}
+
+///|
+/// Unified "屏幕与浏览器" section: physical/simulator screens, agent-opened browser tabs, and station browser entry.
+fn station_all_screens_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?) -> Unit {
+  let address = text(@signals.untracked(s), "station")
+  let v = fn() { (core.topic)("screens", { "station": str(address) }).get().value }
+  let screens = fn() { items(v(), "screens").filter(fn(sc) { !is_browser_screen(Some(sc)) }) }
+  let agent_tabs = fn() { items(v(), "screens").filter(fn(sc) { is_agent_screen(Some(sc)) }) }
+  let user_tabs = fn() { items(v(), "screens").filter(fn(sc) { is_user_screen(Some(sc)) }) }
+  let can_open = fn() { flag(v(), "browser") && flag(v(), "control") }
+  st_section_node(b, fn() { "屏幕与浏览器" }, count=fn() { screens().length() + agent_tabs().length() }, fn(sec) {
+    @sf.group_node(sec, fn(g) {
+      g.each(screens, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
+        let sv = fn() { Some(sc.get()) }
+        let id = text(@signals.untracked(sv), "id")
+        let lacks = fn() {
+          let access = field(sv(), "access")
+          access is Some(Object(_)) && (!flag(access, "capture") || !flag(access, "control"))
+        }
+        row.pick(fn() { (own_screen(address, id), lacks()) }, fn(p, k) {
+          let (own, lacks) = k
+          @sf.group_rows_node(p, fn(r) {
+            @sf.link_row_node(
+              r,
+              fn() { text(sv(), "title") },
+              fn() {
+                if !own {
+                  @sfbase.open_page(Screen({ station: address, screen: id, title: text(@signals.untracked(sv), "title"), until_gone: false }))
+                }
+              },
+              note=fn() { if own { @sf.t("android-misc.screen.here") } else { text(sv(), "line") } },
+              lacks=!own && lacks,
+              goes=!own,
+              lead=LeadLine(fn(l) { st_mark_node(l, fn() { screen_row_icon(sv()) }) }),
+            )
+            screen_views_node(r, core, here, address, sv)
+          })
+        })
+      })
+      g.each(agent_tabs, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
+        station_browser_row_node(row, core, here, address, fn() { Some(sc.get()) })
+      })
+      g.show(fn() { !user_tabs().is_empty() || can_open() }, fn(n) {
+        @sf.link_row_node(
+          n,
+          fn() { @sf.t("web-pages.screen.openBrowserRow") },
+          fn() { @settings.open_station_browser(core, address) },
+          note=fn() { browser_tabs_note(user_tabs().length()) },
+          lead=LeadLine(fn(l) { st_mark_node(l, fn() { "web" }) }),
+        )
+      })
+      g.show(fn() { screens().length() == 0 && agent_tabs().length() == 0 && items(v(), "screens").is_empty() && text(v(), "note") != "" }, fn(n) {
+        said_row_node(n, fn() { text(v(), "note") }, lead=LeadLine(fn(l) { st_mark_node(l, fn() { "monitor" }) }))
+      })
+    })
+  })
 }
 
 ///|
@@ -999,6 +1025,92 @@ fn station_processes_node(b : @view.View, core : Core, here : () -> Here, s : ()
 }
 
 // ── Settings ────────────────────────────────────────────────────────────
+
+///|
+/// Unified "运行设置" section: collapsible Agent 环境变量, Spotlight personal search switch, Windows admin elevation switch, and diagnostic logs switch.
+fn station_system_node(b : @view.View, core : Core, address : String, s : () -> Json?, manager : Bool) -> Unit {
+  let env_list = fn() { items(field(s(), "overview"), "agentEnv") }
+  let has_env = fn() { field(field(s(), "overview"), "agentEnv") is Some(Array(_)) && (manager || env_list().length() > 0) }
+  let env_open = @signals.signal(station_env_open.get(address).unwrap_or(false))
+  let search = fn() { field(field(s(), "overview"), "search") }
+  let diagnostics = fn() { field(field(s(), "overview"), "diagnostics") }
+  let elevation = fn() { field(field(s(), "overview"), "elevation") }
+  let has_search = fn() { search() is Some(Object(_)) && text(search(), "files") == "spotlight" }
+  st_section_node(b, fn() { "运行设置" }, fn(sec) {
+    @sf.group_node(sec, fn(g) {
+      g.show(has_env, fn(ev) {
+        @sf.group_rows_node(ev, fn(gr) {
+          @sf.link_row_node(
+            gr,
+            fn() { @sf.t("web-pages.stations.agentEnv") },
+            fn() {
+              let now = !env_open.untracked()
+              station_env_open[address] = now
+              env_open.set(now)
+            },
+            note=fn() { station_env_summary(env_list()) },
+            folds=fn() { env_open.get() },
+          )
+          gr.show(fn() { env_open.get() }, fn(ed) {
+            if manager {
+              station_env_editor_node(ed, core, address, @ui.Field::new())
+            } else {
+              ed.each(fn() { env_list().mapi(fn(i, e) { (i, e) }) }, fn(x) { x.0 }, fn(row, x) {
+                said_row_node(row, fn() { text(Some(x.get().1), "key") }, note=fn() { text(Some(x.get().1), "value") })
+              })
+            }
+          })
+        })
+      })
+      g.show(has_search, fn(sr) {
+        st_switch_node(
+          sr,
+          core,
+          address,
+          fn() { @sf.t("web-pages.stations.search.personal") },
+          fn() { flag(search(), "personal") },
+          fn() { @sf.t("web-pages.stations.search.personalLine") },
+          "search.setPersonal",
+          "personal",
+          fn() { @sf.t("web-pages.stations.search.what") },
+          fn() { manager },
+        )
+      })
+      g.show(fn() { elevation() is Some(Object(_)) }, fn(el) {
+        st_switch_node(
+          el,
+          core,
+          address,
+          fn() { @sf.t("web-pages.stations.elevation.admin") },
+          fn() { flag(elevation(), "on") },
+          fn() { text(elevation(), "line") },
+          "elevation.set",
+          "on",
+          fn() { @sf.t("web-pages.stations.elevation.what") },
+          fn() { flag(elevation(), "canChange") },
+          busy=fn() { flag(elevation(), "busy") },
+        )
+      })
+      g.show(fn() { diagnostics() is Some(Object(_)) }, fn(dg) {
+        st_switch_node(
+          dg,
+          core,
+          address,
+          fn() { @sf.t("web-pages.stations.diagnostics.logs") },
+          fn() { flag(diagnostics(), "logs") },
+          fn() { @sf.t("web-pages.stations.diagnostics.logsLine") },
+          "diagnostics.setLogs",
+          "logs",
+          fn() { @sf.t("web-pages.stations.diagnostics.what") },
+          fn() { manager },
+        )
+      })
+    })
+    sec.show(fn() { text(elevation(), "failed") != "" }, fn(f) {
+      @sf.words_node(f, fn() { text(elevation(), "failed") }, fn() { st_problem_bad }) |> ignore
+    })
+  })
+}
 
 ///|
 /// Its 登录 (station_logins'): only the logins done there through still.fail; one under way its card (as in its chat), those ended a row per program naming it, who last logged in to it, from
@@ -1706,7 +1818,7 @@ fn software_row_node(
   let call = fn(name : String, params : Array[(String, Json)]) { software_call(core, station, name, params) }
   @sf.item_row_node(row, fn(r) {
     r.box(fn(m) {
-      @sf.style_node(m, fn() { sw_mark })
+      @sf.style_node(m, fn() { sw_mark }, in_row=true)
       if own {
         m.pick(fn() { @sf.theme().dark }, fn(k, dark) {
           @sf.drawable_node(k, if dark { "stillfail_mark_dark" } else { "stillfail_mark" }, sw_glyph) |> ignore

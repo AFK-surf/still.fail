@@ -89,6 +89,7 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
       match field(net, "rtt") {
         Some(Object(_)) as f =>
           c.box(style=nt_line, fn() {
+            c.text("·", style=nt_words) |> ignore
             let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
             let parts = words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
             c.text(parts.get(0).unwrap_or(""), style=nt_words) |> ignore
@@ -101,13 +102,10 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
     })
     |> ignore
     c.box(style=nt_rates, fn() {
-      for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
+      for way in [("↑", "up"), ("↓", "down")] {
         c.box(style=nt_rate, fn() {
           c.text(way.0, style=nt_words) |> ignore
-          c.box(style=nt_speed, fn() { c.text(text(net, way.1), style=nt_figure) |> ignore }) |> ignore
-          let total = text(net, way.2)
-          c.text(if total == "" { "" } else { @sf.t("web-pages.stations.total", args=[("total", total)]) }, style=nt_words)
-          |> ignore
+          c.text(text(net, way.1), style=nt_figure) |> ignore
         })
         |> ignore
       }
@@ -119,7 +117,7 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
 
 ///|
 /// This device's connection to it (station_net's, as nodes), as `net` says it now: how it goes and packets lost, its
-/// round trip; beside them ↑ over ↓ (under them where the line has not the room).
+/// round trip; beside them ↑ and ↓ (under them where the line has not the room).
 fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
   let has = fn(key : String) { field(net(), key) is Some(Object(_)) }
   p.box(fn(r) {
@@ -128,14 +126,15 @@ fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
     r.box(fn(part) {
       @sf.style_node(part, fn() { nt_part }, in_row=true)
       part.box(fn(l) {
-        @sf.style_node(l, fn() { nt_line })
+        @sf.style_node(l, fn() { nt_line }, in_row=true)
         @sf.words_node(l, fn() { text(net(), "path") }, fn() { nt_words_cut }) |> ignore
         l.show(fn() { has("loss") }, fn(f) { figure_node(f, fn() { field(net(), "loss") }) })
       })
       |> ignore
       part.show(fn() { has("rtt") }, fn(x) {
         x.box(fn(l) {
-          @sf.style_node(l, fn() { nt_line })
+          @sf.style_node(l, fn() { nt_line }, in_row=true)
+          @sf.words_node(l, fn() { "·" }, fn() { nt_words }) |> ignore
           let parts = fn() {
             let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
             words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
@@ -150,26 +149,11 @@ fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
     |> ignore
     r.box(fn(rates) {
       @sf.style_node(rates, fn() { nt_rates }, in_row=true)
-      for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
+      for way in [("↑", "up"), ("↓", "down")] {
         rates.box(fn(l) {
-          @sf.style_node(l, fn() { nt_rate })
+          @sf.style_node(l, fn() { nt_rate }, in_row=true)
           @sf.words_node(l, fn() { way.0 }, fn() { nt_words }) |> ignore
-          l.box(fn(sp) {
-            @sf.style_node(sp, fn() { nt_speed }, in_row=true)
-            @sf.words_node(sp, fn() { text(net(), way.1) }, fn() { nt_figure }) |> ignore
-          })
-          |> ignore
-          @sf.words_node(
-            l,
-            fn() {
-              match text(net(), way.2) {
-                "" => ""
-                total => @sf.t("web-pages.stations.total", args=[("total", total)])
-              }
-            },
-            fn() { nt_words },
-          )
-          |> ignore
+          @sf.words_node(l, fn() { text(net(), way.1) }, fn() { nt_figure }) |> ignore
         })
         |> ignore
       }
@@ -438,87 +422,6 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
 }
 
 ///|
-/// A station page's 登录 (LoginsSection): only the logins done there through still.fail; one under way its card (as in
-/// its chat), those ended a row per program (用户定 2026-10-31: a row per try buried the page in 已取消; the core's
-/// `tools`) naming it (devin, not its command line), who last logged in to it, from which chat, and how many tries,
-/// pressed open to them. Nothing when there are none. Away (`online` false), no card of one under way: it can be
-/// neither done nor cancelled until it is back.
-fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = true) -> Unit {
-  let view = (core.topic)("machineLogins", { "station": str(station) }).get().value
-  let logins = items(view, "logins")
-  let active = if online { logins.filter(fn(l) { flag(Some(l), "active") }) } else { [] }
-  let tools = items(view, "tools")
-  if !flag(view, "supported") || active.length() + tools.length() == 0 {
-    return
-  }
-  st_section(c, @sf.t("web-main.logins.title"), description=@sf.t("web-main.logins.lead"), fn() {
-    if active.length() > 0 {
-      c.box(style=lg_cards, fn() {
-        for l in active {
-          login_card(c, core, station, text(Some(l), "id"), place="station")
-        }
-      })
-      |> ignore
-    }
-    if tools.length() > 0 {
-      @sf.group(c, fn() {
-        for tool in tools {
-          let tv = Some(tool)
-          let name = text(tv, "name")
-          let open = st_logins_open.get(station) == Some(name)
-          let chat = match text(tv, "chatTitle") {
-            "" => ""
-            title => "「" + title + "」"
-          }
-          let said = join([text(tv, "summaryText"), chat].filter(fn(w) { w != "" }), " · ")
-          // (none went through and the latest failed: said in red)
-          let failed = flag(tv, "failed")
-          @sf.link_row(
-            c,
-            "login-tool/" + station + "/" + name,
-            name,
-            note=if failed { "" } else { said },
-            trouble=if failed { said } else { "" },
-            folds=open,
-            // (its maker's mark, bare, in its colours; else a terminal's: one key for all told them apart by nothing)
-            lead=fn() {
-              c.box(style=lg_mark, fn() { @sf.tool_mark(c, text(tv, "mark"), 20.0) })
-              |> ignore
-            },
-            // (how many tries at its end, not as what it says: its name, a station's words, keeps the line)
-            tail=fn() { c.text(text(tv, "countText"), style=lg_count) |> ignore },
-            on_press=fn() {
-              st_logins_open[station] = if open { "" } else { name }
-            },
-          ) |> ignore
-          if open {
-            for l in items(tv, "tries") {
-              let lv = Some(l)
-              // who ended it says how it ended (张三 取消), else the status does (已取消)
-              let by = text(lv, "doneByText")
-              @sf.link_row(
-                c,
-                "",
-                text(lv, "whenText"),
-                value=if by == "" { text(lv, "statusText") } else { by },
-                value_bad=text(lv, "state") == "failed",
-                note=match text(lv, "chatTitle") {
-                  "" => ""
-                  title => "「" + title + "」"
-                },
-                goes=false,
-                lead=fn() { c.box(style=lg_no_mark, fn() {  }) |> ignore },
-              )
-              |> ignore
-            }
-          }
-        }
-      })
-    }
-  })
-}
-
-///|
 /// Which program's tries are open on a station's page, by station ("" none: closed again).
 // kept across runs: said as a program's row is pressed; login_cards_reset empties it
 let st_logins_open : @sf.LiveMap[String, String] = @sf.LiveMap::new()
@@ -529,14 +432,14 @@ let st_logins_open : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 /// The connection (net: 14 apart, 8 between its lines where the speeds go under, the ui's 13 muted, its figures bold
 /// in the words' ink).
 // kept across runs: a value (no field of it changes)
-let nt_row : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
+let nt_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter justify=JBetween")
 
 ///|
 let nt_lines : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_part : @ui.Style = @ui.css("w=Cut gap=S0_5")
+let nt_part : @ui.Style = @ui.css("row w=Cut gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -556,17 +459,13 @@ let nt_words_cut : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=M
 let nt_figure : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// ↑ over ↓ (netRates: the speed 9.5 characters wide at least, so the totals line up; its total after it).
+/// ↑ and ↓ side by side.
 // kept across runs: a value (no field of it changes)
-let nt_rates : @ui.Style = @ui.css("gap=S0_5")
+let nt_rates : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_rate : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let nt_speed : @ui.Style = @ui.css("min_w=S20")
+let nt_rate : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 /// The rest of a machine (hostDetails: its labels beside each, 14 apart, rows 8 apart, the meta's 12 muted).

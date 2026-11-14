@@ -232,7 +232,7 @@ fn init {
 /// to that app, which this one takes as it is built in its place: scripts/mac-app.sh) as the same page's on the
 /// cloud; any other as it is.
 pub fn app_link(url : String) -> String {
-  for scheme in ["stillfail://", "stillfail-beta://"] {
+  for scheme in ["stillfail://", "stillfail-beta://", "monoid://", "monoid-beta://"] {
     if url.has_prefix(scheme) {
       return "\{cloud_origin()}/\{url.exact_view(start=scheme.length())}"
     }
