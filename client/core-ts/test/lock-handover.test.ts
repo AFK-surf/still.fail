@@ -534,6 +534,20 @@ test("without the host's flag, the device's clock before HAND_OVER_FROM: lock.ha
   assert.equal(on.stations.A.chain(null)?.state?.moved, on.gMe, "with it: handed over");
 });
 
+// Held for now (src/lock-handover.ts `HAND_OVER_HELD`, 2026-11-14): an app's host, which says neither `handOverByTests`
+// nor `handOverAuto`, hands nothing over by itself whatever its clock says, and is offered no `lock.handOver`.
+test("held: on a host not made for tests, past HAND_OVER_FROM, whatever is asked nothing is said, nothing moved, nothing shown, lock.handOver is no call", async () => {
+  const w = await setUp({ flag: false });
+  assert.equal(handOverState(w.inner, "ws"), null, "not handed over by itself here");
+  assert.equal((await w.askGrant()).error, undefined);
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(w.said(), [], "nothing said");
+  assert.deepEqual(movedAt(w), [null, null]);
+  assert.equal(lockView(w.inner, "ws").upgrade, undefined, "nothing shown");
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.handOver", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(out.error?.code, "unknown_call", out.error?.message);
+});
+
 test("the one with only a web page, not said at the move: their first app device after it asks, this owner's device shows the code, and they come in with the chain's role, the note used once; their old web page stays out", async () => {
   const view = [{ sub: "s1", email: "a@x.com", role: "owner" }, { sub: "r2", email: "b@x.com", role: "admin" }, { sub: "r3", email: "c@x.com", role: "member" }, { sub: "r5", email: "e@x.com", role: "admin" }];
   const w = await setUp({ more: ["web"], view });
@@ -1118,7 +1132,9 @@ test("words: more than six waited for, six lines and how many more", async () =>
 
 test("words: only an ask lacking, the button; lock.handOver answered where chains are handed over by themselves, asked in the page's words; none once moved, none with the switch off", async () => {
   assert.equal(lockView((await setUp({ early: true })).inner, "ws").upgrade, undefined, "the switch off: nothing shown");
-  const w = await setUp({ flag: false });
+  // (handed over by themselves by the host's `handOverAuto`: while they are held, src/lock-handover.ts `HAND_OVER_HELD`,
+  // the device's clock hands nothing over on a host that is not the tests', the test above)
+  const w = await setUp({ flag: false, auto: true });
   assert.deepEqual(lockView(w.inner, "ws").upgrade, { titleText: TITLE, lines: [], askText: "验证并完成升级" });
   const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.handOver", { workspace: "ws" }), catch: (e) => e as CoreError }));
   assert.equal(out.error, undefined, out.error?.message);

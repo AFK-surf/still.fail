@@ -49,7 +49,7 @@ import { ofAddress } from "../workspace.ts";
 import { type ChainWeb, type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
-import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_LOG_MOST, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_HELD, HAND_OVER_LOG_MOST, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -1780,6 +1780,8 @@ export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouche
 export function websIn(inner: Inner, sub: string, genesis: string): ChainWeb[] {
   const out = new Map<string, ChainWeb>();
   const at = now(inner);
+  // (while chains are held from moving, src/lock-handover.ts `HAND_OVER_HELD`, only where one of theirs moved already)
+  if (!handsOver(inner) && !inner.workspaces.owned().some(([ws, owner]) => owner === sub && movedHere(inner, ws))) return [];
   if (!mayWriteNew(inner, sub)) return [];
   for (const [ws, owner] of inner.workspaces.owned()) {
     const h = held(inner, ws);
@@ -3184,7 +3186,8 @@ export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[
 /// on every build from it, each workspace once what uses it takes a moved one, `heldBack`), or on a host made for tests
 /// that says so before it (`Host.handOverAuto`).
 export function handsOver(inner: Inner): boolean {
-  return inner.host.handOverAuto === true || (HAND_OVER_FROM !== null && now(inner) >= HAND_OVER_FROM);
+  // (held for now on every host but one made for tests, src/lock-handover.ts `HAND_OVER_HELD`)
+  return inner.host.handOverAuto === true || ((!HAND_OVER_HELD || inner.host.handOverByTests === true) && HAND_OVER_FROM !== null && now(inner) >= HAND_OVER_FROM);
 }
 
 /// How many times one call of `handOver` works its statements out at most: each time again, the chain changed between
