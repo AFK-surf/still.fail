@@ -5,7 +5,7 @@
 /// The skills the station brings, rewritten at every start (memory.ts BUILTIN).
 let builtin_skills : Array[String] = [
   "stillfail-chats", "stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault",
-  "stillfail-cron", "stillfail-github-ci", "stillfail-feedback",
+  "stillfail-cron", "stillfail-github-ci", "stillfail-retire", "stillfail-feedback",
 ]
 
 ///|

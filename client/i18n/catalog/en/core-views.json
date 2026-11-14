@@ -794,6 +794,8 @@
   "core-views.copies.retire.step.accounts": "Move the accounts",
   "core-views.copies.retire.step.connects": "Move the connects",
   "core-views.copies.retire.sent": "{done} of {total}",
+  "core-views.copies.retire.waiting": "Waiting for confirmation",
+  "core-views.copies.retire.resumed": "{why}; the chats are working again",
   "core-views.copies.retire.left": {"one": "1 account wasn't moved", "other": "{n} accounts weren't moved"},
   "core-views.copies.retire.leftNote": "{names}: add them again on {name}",
   "core-views.copies.taking.coming": "Receiving the chats",

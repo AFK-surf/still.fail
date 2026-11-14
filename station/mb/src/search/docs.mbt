@@ -956,7 +956,7 @@ fn compare_bytes(a : String, b : String) -> Int {
 ///|
 let builtin_skills : Array[String] = [
   "stillfail-chats", "stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault",
-  "stillfail-cron", "stillfail-github-ci", "stillfail-feedback",
+  "stillfail-cron", "stillfail-github-ci", "stillfail-retire", "stillfail-feedback",
 ]
 
 ///|

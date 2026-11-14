@@ -256,6 +256,14 @@ export function named(job: Pick<JobRow, "id" | "name" | "port">): string {
   return job.port !== null ? `Service "${job.name}" (${job.id}, port ${job.port})` : `Job "${job.name}" (${job.id})`;
 }
 
+/// What a job a chat had running on a station retired is told as, started again (or not) as the chat moved here, or
+/// back on that station as its move did not go through (replica/retire.ts): the words of a restart's (`relaunch`), the
+/// move in place of the restart. `job` is its record here once it was started, else what it was named by there.
+export function movedSaid(why: string, job: Pick<JobRow, "name" | "port"> & { id?: string | null }, error: string | null): string {
+  const what = typeof job.id === "string" && job.id !== "" ? named({ id: job.id, name: job.name, port: job.port }) : job.port !== null ? `Service "${job.name}" (port ${job.port})` : `Job "${job.name}"`;
+  return error === null ? `${why}; ${what} was started again.` : `${why}; ${what} could not be started again: ${error}`;
+}
+
 /// How long a service that ended waits before it starts again: none after a steady run, else 1 s doubling with each
 /// quick end, 60 s at most.
 export function restartPause(restarts: number, ranMs: number): number {
@@ -369,6 +377,16 @@ export class Jobs {
       this.notify(job.sessionKey, text);
     } catch (error) {
       log.warn("jobs", "job notice not given", { session: job.sessionKey, error: (error as Error).message });
+    }
+  }
+
+  /// A word of the jobs' for a session's agent from outside them (its chat moved here with jobs started again,
+  /// replica/retire.ts `movedSaid`): told as a job's end is, which wakes it.
+  say(session: string, text: string): void {
+    try {
+      this.notify(session, text);
+    } catch (error) {
+      log.warn("jobs", "job notice not given", { session, error: (error as Error).message });
     }
   }
 

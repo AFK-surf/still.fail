@@ -143,7 +143,7 @@ export type AgentsParts = {
   connectKinds: Map<string, ConnectKind>;
   /// This station's connects of a workspace, and each moved to another station of it, as the workspace's connects say
   /// (connects/workspace.ts), for a station retired from it (replica/retire.ts).
-  retireConnects: { of(ws: string): string[]; named(ws: string): { id: string; name: string; kind: string }[]; move(ws: string, to: string): Promise<void> } | null;
+  retireConnects: { of(ws: string): string[]; named(ws: string): { id: string; name: string; kind: string }[]; move(ws: string, to: string): Promise<void>; takeHeld(ws: string): Promise<void> } | null;
   /// What a part does as the station takes its sessions up and as its workspaces change (`Along`).
   along(a: Along): void;
   /// Whether the sessions are taken up (the process before is gone), and whether the station is in its workspace.

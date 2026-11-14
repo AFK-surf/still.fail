@@ -4,7 +4,11 @@
 // connects named as they are there, its accounts moved there first. Each side started again at each step goes on; one
 // that failed is said, not tried again by itself; a cancel calls it off where it can, at once. What goes in one message
 // or a worker's answer never grows with the files. On the test's mesh and clock, as replica-stations.test.ts, its buses
-// sending a request naming a station that another took the place of to that one, as module.ts has them.
+// sending a request naming a station that another took the place of to that one, as module.ts has them. Its jobs started
+// again on the station the chats went to, once; a hand-over that fails puts the chats back to work and rests at `sent`;
+// one an agent asked for (station_retire) waits there for a person's confirmation, which counts only as an owner's or
+// an admin's in the app; who asked is told each step, after the chats moved on the station they went to; the agent
+// home goes along, merged into the other's.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, readlinkSync, writeFileSync } from "node:fs";
@@ -21,7 +25,15 @@ import { Copies } from "../src/replica/copies.ts";
 import { Exporter, genDir, nothingTold, ownDir } from "../src/replica/export.ts";
 import { keepers } from "../src/replica/peers.ts";
 import { build, takeBack, takeBackSoon } from "../src/replica/restore.ts";
-import { Retire, connectsThere, rebuildGits } from "../src/replica/retire.ts";
+import { QUIET_UNREACHED_MS, RETRY_MOST_MS, RETRY_MS, Retire, connectsThere, rebuildGits } from "../src/replica/retire.ts";
+import { RetireAsks, chatCards, confirmLabel, declineLabel } from "../src/replica/retire-asks.ts";
+import { stationLang, tr } from "../src/ops/i18n.ts";
+import { memoryMark } from "../src/replica/agent-carry.ts";
+import type { CarriedJob } from "../src/replica/carry-worker.ts";
+import { Admin } from "../src/api/admin.ts";
+import type { Request } from "../src/api/request.ts";
+import { StationParts } from "../src/parts.ts";
+import { newMessage } from "../src/store/store.ts";
 import { InlineRunner } from "../src/replica/runner.ts";
 import { Retiring, sessionKey } from "../src/sessions/hub.ts";
 import { WorkspaceConnects } from "../src/connects/workspace.ts";
@@ -68,6 +80,11 @@ type Node = {
   /// What went in the messages and the workers' answers: the most entries in one, the largest answer.
   most: number; answer: number;
   homeIs: string;
+  /// The jobs of its chats up now (what `quiet` stops), those started (by `jobs.start`), those whose start fails (why),
+  /// and what its agents were told: by the jobs (`said`), by the station (`told`).
+  up: CarriedJob[]; started: (CarriedJob & { id: string })[]; startFails: Map<string, string>; said: [string, string][]; told: [string, string][];
+  /// Its agent home, station_retire there, the cards it posted and whether the last still waits, and its retire.puts.
+  agent: string; asks: RetireAsks; cards: { session: string; text: string; card: Json }[]; cardState: "same" | "other" | "none"; puts: number;
 };
 
 /// The most hashes a message of the test's stations asks of (the stations' own is LACK_MOST).
@@ -82,7 +99,10 @@ class Mesh {
     const data = made?.data ?? dataDir(nid.slice(0, 4));
     const store = made?.store ?? Store.open(join(data, "stillfail.db"), join(data, "archive"));
     const bus = new PeerBus({ sleep: async () => {} });
-    const node = { id: nid, data, store, bus, quieted: [], unquieted: [], retired: [], moved: [], connects: [], bindings: {}, took: [], down: false, free: 1e15, git: true, placeFails: 0, gathers: 0, restores: 0, gathered: null, hang: false, accounts: [], unmovable: new Set(), events: [], most: 0, answer: 0, homeIs: HOME } as unknown as Node;
+    const node = {
+      id: nid, data, store, bus, quieted: [], unquieted: [], retired: [], moved: [], connects: [], bindings: {}, took: [], down: false, free: 1e15, git: true, placeFails: 0, gathers: 0, restores: 0, gathered: null, hang: false, accounts: [], unmovable: new Set(), events: [], most: 0, answer: 0, homeIs: HOME,
+      up: [{ session: "chat:a", name: "dev", command: "npm run dev" }], started: [], startFails: new Map(), said: [], told: [], agent: join(data, "agent"), cards: [], cardState: "same", puts: 0,
+    } as unknown as Node;
     const count = (v: Json) => {
       for (const k of ["hashes", "lacking"]) if (Array.isArray(v?.[k])) node.most = Math.max(node.most, v[k].length);
     };
@@ -90,6 +110,7 @@ class Mesh {
       const there = this.nodes.get(to);
       if (there === undefined || there.down || node.down) throw new Error("station unreachable");
       count(request);
+      if (request?.method === "retire.put") node.puts++;
       const answer = across(await there.bus.handle(ws ?? "", nid, across(request)));
       count(answer);
       return answer;
@@ -129,7 +150,6 @@ class Mesh {
       taking: () => node.retire.takingNow(),
     });
     const answered = <T>(v: T): T => ((node.answer = Math.max(node.answer, JSON.stringify(v).length)), v);
-    const jobs = [{ session: "chat:a", name: "dev", command: "npm run dev" }];
     node.retire = new Retire({
       data,
       here: () => nid,
@@ -140,8 +160,23 @@ class Mesh {
       fibers: node.fibers,
       changed: () => {},
       copies: node.copies,
-      quiet: async (ws) => (node.quieted.push(ws), jobs),
-      jobsIn: () => jobs,
+      quiet: async (ws) => (node.quieted.push(ws), node.up),
+      jobsIn: () => node.up,
+      tell: (session, text) => void node.told.push([session, text]),
+      jobs: {
+        start: (session, j) => {
+          const why = node.startFails.get(j.name);
+          if (why !== undefined) throw new Error(why);
+          const made = { session, ...j, id: `job_${node.id.slice(0, 2)}${node.started.length}` };
+          node.started.push(made);
+          return { id: made.id, name: j.name, port: j.port };
+        },
+        running: (session, name, command) => node.started.some((j) => j.session === session && j.name === name && j.command === command),
+        say: (session, text) => void node.said.push([session, text]),
+      },
+      agentHome: () => node.agent,
+      drives: (station, session) => node.asks.drives(station, session),
+      ofWorkspace: () => true,
       unquiet: (ws) => void node.unquieted.push(ws),
       retired: (ws) => void node.retired.push(ws),
       accounts: {
@@ -164,11 +199,11 @@ class Mesh {
       git: gitAsync,
       lackMost: BATCH,
       work: {
-        gather: async (dataDir, db, ws, home, scratch, signal) => {
+        gather: async (dataDir, db, ws, home, scratch, signal, agent) => {
           if (node.hang) {
             return new Promise<Gathered>((_, reject) => signal?.addEventListener("abort", () => reject(new Error("called off"))));
           }
-          const g = answered(gather(dataDir, db, ws, home, scratch));
+          const g = answered(gather(dataDir, db, ws, home, scratch, agent ?? null));
           node.gathers++;
           node.gathered?.(g, node.gathers);
           return g;
@@ -182,6 +217,15 @@ class Mesh {
         },
         preview: async (...a) => preview(...a),
       },
+    });
+    node.asks = new RetireAsks({
+      data, here: () => nid, roster, wsOf: () => HOME, retire: node.retire, ask: (s, r) => bus.ask(s, r),
+      cards: {
+        post: async (session, text, card) => (node.cards.push({ session, text, card }), { thread: 1, ts: String(node.cards.length) }),
+        state: () => node.cardState,
+      },
+      notify: (session, text) => void node.told.push([session, text]),
+      now: () => this.clock.currentTimeMillisUnsafe(),
     });
     bus.on("replica.", node.copies.answers());
     bus.on("retire.", node.retire.answers((peer) => this.roster.includes(peer)));
@@ -214,6 +258,7 @@ class Mesh {
   async settle(): Promise<void> {
     for (let i = 0; i < 4; i++) {
       for (const n of this.nodes.values()) {
+        await n.asks.settle();
         await n.retire.settle();
         await n.copies.settle();
       }
@@ -430,7 +475,7 @@ test("each side started again where it stopped goes on: the station retired at q
   assert.equal(step(a), "done");
 });
 
-test("a copy B could not put in is not put in again by itself: said to A, which can cancel, its chats going on there", async () => {
+test("a copy B could not put in is not put in again by itself: said to A, whose chats work again, which can cancel", async () => {
   const { mesh, B, a, b, bData } = await setup();
   await a.retire.retire(HOME, B, "p@x");
   await mesh.settle();
@@ -445,6 +490,9 @@ test("a copy B could not put in is not put in again by itself: said to A, which 
   assert.equal(r.reason, "failed");
   assert.equal(r.retriable, true);
   assert.equal(r.cancellable, true);
+  // (its chats work again here meanwhile: the hand-over fell back to `sent`)
+  assert.equal(r.step, "sent");
+  assert.deepEqual(a.unquieted, [HOME]);
   // started again, neither tries it again by itself
   const restores = b.restores;
   await mesh.restart(B);
@@ -881,4 +929,326 @@ test("a copy put in beside a station's own chats: its threads given ids there, a
     y.close();
   }
   made.store.close();
+});
+
+/// The test's clock moved on (what waits on it, run).
+const advance = (mesh: Mesh, ms: number) => Effect.runPromise((mesh.clock as unknown as { adjust(d: string): Effect.Effect<void> }).adjust(`${ms} millis`));
+/// Where a node's last card is, as its fake chat posted it.
+const lastAt = (n: Node) => ({ thread: 1, n: n.cards.length, ts: String(n.cards.length) });
+const OWNERS_ONLY = () => tr(stationLang(), "station.retire.ownersOnly");
+const toldTo = (n: Node, session: string) => n.told.filter(([s]) => s === session).map(([, t]) => t);
+
+test("the jobs a moved chat had running are started again on the station it went to, in its directory there, once; one in a directory that stayed is not; its agent told at once", async () => {
+  const { mesh, B, a, b, ws, there } = await setup();
+  const project = dataDir("proj");
+  a.up = [
+    { session: "chat:a", name: "dev", command: "npm run dev", cwd: ws, port: 5173, watch: false },
+    { session: "chat:a", name: "watch", command: "tail -f log", cwd: join(ws, "sub"), port: null, watch: true },
+    { session: "chat:a", name: "theirs", command: "make serve", cwd: project, port: null, watch: false },
+  ];
+  await a.retire.retire(HOME, B, "p@x");
+  await mesh.settle();
+  assert.equal(step(a), "handing");
+  // (A not reached as B puts them in and starts again after: B goes on, and starts no job twice)
+  a.down = true;
+  await mesh.restart(B, true);
+  await mesh.settle();
+  await mesh.restart(B);
+  await mesh.settle();
+  a.down = false;
+  await mesh.restart(B);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  assert.deepEqual(b.started.map((j) => [j.session, j.name, j.cwd, j.port, j.watch]), [["chat:a", "dev", there, 5173, false], ["chat:a", "watch", join(there, "sub"), null, true]], "started once each, under B's data directory");
+  assert.equal(b.took.length, 1);
+  const note = b.took[0]!.notes.find((n) => n.session === "chat:a")!.text;
+  for (const part of ["were started again here", "dev", "watch", "theirs", "not the retired station's own"]) assert.ok(note.includes(part), part);
+  assert.ok(!note.includes("did not move and are not running"));
+  const said = b.said.filter(([s]) => s === "chat:a").map(([, t]) => t);
+  assert.equal(said.length, 1, "told once, at once");
+  assert.match(said[0]!, /This chat moved here from station .*; Service "dev" \(job_.*, port 5173\) was started again\./);
+  assert.match(said[0]!, /Job "theirs" could not be started again: it ran in .* which was not the retired station's own/);
+  // A heard what came of them
+  assert.deepEqual(a.retire.overview(HOME).retiring && (await a.retire.agentAsk(HOME, { op: "status" })).status.retiring.jobsThere.map((j: Json) => [j.name, j.started]), [["dev", true], ["watch", true], ["theirs", false]]);
+  assert.deepEqual((await b.retire.agentAsk(HOME, { op: "status" })).status.taken[0].jobs.map((j: Json) => j.name), ["dev", "watch", "theirs"], "B's status says it too");
+});
+
+test("a station from before jobs moved (its jobs only named): none started there, its agents told they did not move", async () => {
+  const { mesh, B, a, b } = await setup();
+  await a.retire.retire(HOME, B, "p@x");
+  await mesh.settle();
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  assert.deepEqual(b.started, []);
+  assert.deepEqual(b.said, []);
+  assert.match(b.took[0]!.notes.find((n) => n.session === "chat:a")!.text, /dev \(`npm run dev`\)\. Start again those still needed/);
+});
+
+test("a hand-over whose station is not reached for a minute after the chats stopped puts them back to work, their jobs too, and rests at sent; asked again, it sends only what changed and goes on", async () => {
+  const { mesh, B, a, ws, there } = await setup();
+  a.up = [{ session: "chat:a", name: "dev", command: "npm run dev", cwd: ws, port: null, watch: false }];
+  for (let i = 0; i < 20; i++) writeFileSync(join(ws, `f${i}.txt`), `file ${i}\n`);
+  const b = mesh.nodes.get(B)!;
+  let lists = 0;
+  a.gathered = (g, n) => {
+    lists = indexOf(g).sessions.length;
+    if (n === 2) b.down = true;
+  };
+  await a.retire.retire(HOME, B, "p@x");
+  await mesh.settle();
+  assert.equal(step(a), "quiet");
+  assert.equal(a.retire.overview(HOME).retiring!.reason, "offline");
+  const first = a.puts;
+  // (tried again as the backoff gives it, still stopped, until a minute has gone by unreached)
+  let waited = 0;
+  for (const wait of [RETRY_MS, 2 * RETRY_MS]) {
+    await advance(mesh, wait);
+    waited += wait;
+    await mesh.settle();
+    assert.equal(step(a), "quiet", `still stopped after ${waited} ms`);
+  }
+  assert.ok(waited < QUIET_UNREACHED_MS);
+  await advance(mesh, 4 * RETRY_MS);
+  await mesh.settle();
+  const r = a.retire.overview(HOME).retiring!;
+  assert.equal(r.step, "sent");
+  assert.equal(r.reason, "offline");
+  assert.match(r.error ?? "", /unreachable/);
+  assert.equal(r.retriable, true);
+  assert.equal(r.cancellable, true);
+  assert.deepEqual(a.unquieted, [HOME], "its chats work again");
+  assert.deepEqual(a.started.map((j) => [j.name, j.cwd]), [["dev", ws]], "and their jobs");
+  assert.match(a.said.find(([s]) => s === "chat:a")![1], /did not go through.*was started again/);
+  // nothing goes on by itself, started again either
+  const gathers = a.gathers;
+  await mesh.restart(a.id);
+  await advance(mesh, RETRY_MOST_MS);
+  await mesh.settle();
+  assert.equal(step(a), "sent");
+  assert.equal(a.gathers, gathers);
+  // asked again in the app: only what changed goes
+  b.down = false;
+  writeFileSync(join(ws, "notes.md"), "changed while the chats worked again");
+  const before = a.puts;
+  await a.retire.again(HOME);
+  await mesh.settle();
+  assert.equal(step(a), "handing");
+  assert.ok(first > 20, `the first sending sent the files (${first})`);
+  // (the file that changed, the sessions' lists, which go only once the chats stop, and the index)
+  assert.ok(a.puts - before <= 1 + lists + 1, `the second sent what changed, the lists and the index (${a.puts - before} of ${first})`);
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  assert.equal(readFileSync(join(there, "notes.md"), "utf8"), "changed while the chats worked again");
+});
+
+test("a hand-over B could not put in puts A's chats back to work at sent, B putting in nothing by itself; asked again, only what changed is sent and it goes in", async () => {
+  const { mesh, B, a, b, bData, ws, there } = await setup();
+  await a.retire.retire(HOME, B, "p@x");
+  await mesh.settle();
+  const copy = join(bData, "restore", "copy");
+  for (const gen of readdirSync(copy)) if (gen !== "files") rmSync(join(copy, gen, "log"), { recursive: true, force: true });
+  await mesh.restart(B, true);
+  await mesh.settle();
+  const r = a.retire.overview(HOME).retiring!;
+  assert.equal(r.step, "sent");
+  assert.equal(r.reason, "failed");
+  assert.deepEqual(a.unquieted, [HOME]);
+  assert.equal(takingStep(b), "failed");
+  assert.equal(existsSync(join(bData, "restore", "ready.json")), false);
+  const restores = b.restores;
+  writeFileSync(join(ws, "notes.md"), "changed after it fell back");
+  const before = a.puts;
+  await a.retire.again(HOME);
+  await mesh.settle();
+  assert.equal(step(a), "handing");
+  assert.equal(b.restores, restores + 1, "put in again, as asked");
+  assert.ok(a.puts - before <= 4, `only what changed sent again (${a.puts - before})`);
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  assert.equal(readFileSync(join(there, "notes.md"), "utf8"), "changed after it fell back");
+});
+
+test("a retirement an agent asked for starts only as its card is confirmed, waits at sent for the hand-over's, and the agent on a third station is told each step", async () => {
+  const { mesh, A, B, C, a } = await setup();
+  const c = mesh.nodes.get(C)!;
+  a.unmovable.add("kept");
+  const asked = { action: "start", station: A.slice(0, 4), to: B.slice(0, 4) };
+  assert.equal((await c.asks.tool("chat:c1", asked)).card, "posted");
+  const one = c.cards.at(-1)!;
+  assert.equal(one.card.retire.kind, "start");
+  assert.deepEqual(one.card.options.map((o: Json) => [o.label, o.action]), [[confirmLabel("start"), "close"], [declineLabel("start"), "close"]]);
+  assert.match(one.text, /会搬过去：2 个对话/);
+  assert.equal(a.retire.overview(HOME).retiring, null, "nothing until a person confirms");
+  // asked again while its card waits: not posted twice
+  assert.equal((await c.asks.tool("chat:c1", asked)).card, "waiting");
+  assert.equal(c.cards.length, 1);
+  c.asks.chosen({ email: "o@x" } as Json, one.card, confirmLabel("start"), lastAt(c));
+  c.asks.chosen({ email: "o@x" } as Json, one.card, confirmLabel("start"), lastAt(c));
+  await mesh.settle();
+  const r = a.retire.overview(HOME).retiring!;
+  assert.equal(r.step, "sent");
+  assert.equal(r.by, "o@x");
+  assert.deepEqual(a.quieted, [], "the chats still work");
+  const told = () => toldTo(c, "chat:c1");
+  assert.ok(told().some((t) => t.includes("o@x confirmed it in the app")));
+  assert.ok(told().some((t) => /everything that goes along is on .* files/.test(t)), told().join("\n"));
+  // `again` never hands over; started again it waits there still
+  await assert.rejects(c.asks.tool("chat:c1", { action: "again", station: A.slice(0, 4) }), /hand_over/);
+  await mesh.restart(a.id);
+  await mesh.settle();
+  assert.equal(step(a), "sent");
+  assert.deepEqual(a.quieted, []);
+  assert.equal((await c.asks.tool("chat:c1", { action: "hand_over", station: A.slice(0, 4) })).card, "posted");
+  const two = c.cards.at(-1)!;
+  assert.equal(two.card.retire.kind, "hand_over");
+  assert.match(two.text, /个文件/);
+  c.asks.chosen({ email: "o@x" } as Json, two.card, confirmLabel("hand_over"), lastAt(c));
+  await mesh.settle();
+  assert.equal(step(a), "handing");
+  assert.ok(a.quieted.length > 0);
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  for (const said of ["took its chats", "these accounts did not move", "Kept", "is done", "a person's own step in the app"]) assert.ok(told().some((t) => t.includes(said)), said);
+  // (asked of the retired station, a request goes to the one that took its place, which says so)
+  const status = (await c.asks.tool("chat:c1", { action: "status", station: A.slice(0, 4) })).say;
+  assert.match(status, /took the chats of station .* and is that station too now; jobs: dev not started/);
+  assert.ok(status.includes("移出工作区"), status);
+});
+
+test("the agent that asked being one of the chats moved: told on the station they went to that they were taken there with its jobs, then what is left", async () => {
+  const { mesh, B, a, b, ws } = await setup();
+  a.unmovable.add("kept");
+  a.up = [{ session: "chat:a", name: "dev", command: "npm run dev", cwd: ws, port: null, watch: false }];
+  await a.asks.tool("chat:a", { action: "start", to: B.slice(0, 4) });
+  a.asks.chosen({ email: "o@x" } as Json, a.cards.at(-1)!.card, confirmLabel("start"), lastAt(a));
+  await mesh.settle();
+  assert.equal(step(a), "sent");
+  assert.ok(toldTo(a, "chat:a").some((t) => t.includes("everything that goes along")), "told here before it moved");
+  await a.asks.tool("chat:a", { action: "hand_over" });
+  a.asks.chosen({ email: "o@x" } as Json, a.cards.at(-1)!.card, confirmLabel("hand_over"), lastAt(a));
+  await mesh.settle();
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  const there = toldTo(b, "chat:a");
+  assert.match(there[0]!, /its chats were taken here, this chat with them.*Jobs started again there: dev/);
+  assert.ok(there.some((t) => t.includes("these accounts did not move")), there.join("\n"));
+  assert.ok(there.some((t) => t.includes("is done")));
+  assert.ok(!toldTo(a, "chat:a").some((t) => t.includes("took its chats") || t.includes("is done")), "not told on the station it left");
+});
+
+test("retired from its home workspace, its agent home goes along: its memory added under where it came from, presets by id (the other's win), a skill put where none of its name is, the station's own skills not", async () => {
+  const { mesh, A, B, a, b } = await setup();
+  const write = (path: string, text: string) => (mkdirSync(join(path, ".."), { recursive: true }), writeFileSync(path, text));
+  write(join(a.agent, "MEMORY.md"), "- remember A's things\n");
+  write(join(a.agent, "presets.json"), JSON.stringify({ presets: [{ id: "p1", name: "A's p1" }, { id: "p2", name: "A's p2" }] }));
+  write(join(a.agent, "skills", "mine", "SKILL.md"), "---\nname: mine\n---\n");
+  write(join(a.agent, "skills", "mine", "scripts", "run.sh"), "echo mine\n");
+  write(join(a.agent, "skills", "both", "SKILL.md"), "A's\n");
+  write(join(a.agent, "skills", "stillfail-jobs", "SKILL.md"), "the station's own\n");
+  write(join(a.agent, "skills", ".system", "x", "SKILL.md"), "a runtime's\n");
+  write(join(a.agent, "skills", "synced", "s", "SKILL.md"), "a sync's\n");
+  write(join(b.agent, "MEMORY.md"), "- B's own memory\n");
+  write(join(b.agent, "presets.json"), JSON.stringify({ presets: [{ id: "p1", name: "B's p1" }] }));
+  write(join(b.agent, "skills", "both", "SKILL.md"), "B's\n");
+  await a.retire.retire(HOME, B, "p@x");
+  await mesh.settle();
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  const memory = readFileSync(join(b.agent, "MEMORY.md"), "utf8");
+  assert.ok(memory.startsWith("- B's own memory\n"), memory);
+  assert.match(memory, new RegExp(`## From station ${A.slice(0, 4)} \\(retired into this one on \\d{4}-\\d\\d-\\d\\d\\)`));
+  assert.ok(memory.includes(memoryMark(A)) && memory.trimEnd().endsWith("- remember A's things"));
+  assert.deepEqual(JSON.parse(readFileSync(join(b.agent, "presets.json"), "utf8")).presets.map((p: Json) => [p.id, p.name]), [["p1", "B's p1"], ["p2", "A's p2"]]);
+  assert.equal(readFileSync(join(b.agent, "skills", "mine", "scripts", "run.sh"), "utf8"), "echo mine\n");
+  assert.equal(readFileSync(join(b.agent, "skills", "both", "SKILL.md"), "utf8"), "B's\n", "one of the same name stays as it is");
+  for (const not of ["stillfail-jobs", ".system", "synced"]) assert.equal(existsSync(join(b.agent, "skills", not)), false, not);
+  // (started again after: nothing put in twice)
+  await mesh.restart(B);
+  await mesh.settle();
+  assert.equal(readFileSync(join(b.agent, "MEMORY.md"), "utf8").split(memoryMark(A)).length, 2);
+});
+
+test("a station_retire card counts only as an owner or admin of its workspace chooses it in the app: not a member's, not another workspace's admin's, not a message saying yes, not a Slack chat's, not twice; its agent is told", async () => {
+  const store = Store.open(":memory:", null);
+  store.insertSession({ key: "s1", connect: "chat", runtime: "claude", profile: "cc", workspace: "/w/s1", token: "t1", createdAt: 1, lastActiveAt: 1 });
+  store.insertSession({ key: "s2", connect: "bot", runtime: "claude", profile: "cc", workspace: "/w/s2", token: "t2", createdAt: 1, lastActiveAt: 1 });
+  const chatThread = store.openThread("ember", "CHAT", "1.1", null, "o@x");
+  store.joinThread(chatThread.id, "s1", "chat");
+  store.insertMessage(newMessage(chatThread.id, "1.2", "person", "o@x", "retire this station, please"));
+  const slack = store.openThread("slack", "C1", "2.2", null, null);
+  store.joinThread(slack.id, "s2", "bot");
+  store.insertMessage(newMessage(slack.id, "2.3", "person", "o@x", "retire it"));
+  let posted = 0;
+  const hub = { store, chat: () => ({ post: async () => `9.${++posted}` }), shared: () => {} };
+  const calls: Json[] = [];
+  const told: string[] = [];
+  const retire = {
+    agentAsk: async (_ws: string, r: Json) => {
+      calls.push(r);
+      return r.op === "preview"
+        ? { station: { name: "aaaa" }, preview: { chats: 2, archived: 0, outside: 0, connects: [], accounts: [], accountsStay: [], jobs: [] }, status: { retiring: null }, to: { reached: true, git: true, free: 1e12, name: "bbbb" } }
+        : { status: { retiring: null } };
+    },
+  } as unknown as Retire;
+  const asks = new RetireAsks({
+    data: dataDir("asks"), here: () => id("a"), roster: () => [{ id: id("a"), name: "aaaa" }, { id: id("b"), name: "bbbb" }], wsOf: () => HOME, retire,
+    ask: async () => { throw new Error("no other station here"); }, cards: chatCards(hub as Json), notify: (_s, t) => void told.push(t), now: () => 1,
+  });
+  const parts = new StationParts();
+  parts.cardChoice("retire", { may: (v, c, at) => asks.may(v, c, at), chosen: (v, c, o, at) => asks.chosen(v, c, o, at) });
+  const admin = new Admin({ names: new Map(), read: async () => "{}" } as Json, { store, parts });
+  const cardN = () => store.entriesBetween(chatThread.id, 1, 1_000_000).filter((e) => e.card != null).at(-1)!.n;
+  const close = async (role: string, workspace: string, email = "o@x", n = cardN()) => {
+    const r = { method: "PUT", path: `/threads/${chatThread.id}/closed-card`, query: [], headers: {}, body: Buffer.from(JSON.stringify({ n, option: confirmLabel("start") })), viewer: { sub: email, email, name: email, role, workspace, device: "d" }, lang: "zh" } as unknown as Request;
+    const a = await admin.handle(r);
+    await asks.settle();
+    return [a.status, JSON.parse(String(a.body))] as const;
+  };
+  const starts = () => calls.filter((c) => c.op === "start");
+  // (a Slack chat's agent is posted no card: the app is where it is confirmed)
+  await assert.rejects(asks.tool("s2", { action: "start", to: "bbbb" }), /still\.fail app/);
+  assert.equal(posted, 0);
+  assert.equal((await asks.tool("s1", { action: "start", to: "bbbb" })).card, "posted");
+  assert.deepEqual(await close("member", HOME), [403, { error: OWNERS_ONLY() }]);
+  assert.deepEqual(await close("admin", OTHER), [403, { error: OWNERS_ONLY() }]);
+  assert.notEqual(store.pendingCardHeader(chatThread.id), null, "the card still waits");
+  assert.deepEqual(starts(), []);
+  // a message saying yes ends the card and decides nothing
+  store.insertMessage(newMessage(chatThread.id, "1.9", "person", "o@x", `yes, ${confirmLabel("start")}`));
+  assert.equal((await close("owner", HOME))[0], 409);
+  assert.deepEqual(starts(), []);
+  // asked again: a card anew, for the same ask
+  assert.equal((await asks.tool("s1", { action: "start", to: "bbbb" })).card, "posted");
+  assert.equal(posted, 2);
+  assert.equal((await close("admin", HOME, "ad@x"))[0], 200);
+  assert.deepEqual(starts(), [{ op: "start", to: id("b"), by: "ad@x", driver: { station: id("a"), session: "s1" } }]);
+  assert.ok(told.at(-1)!.startsWith("ad@x confirmed it in the app"));
+  assert.equal(store.untoldCardChoices("s1").length, 1, "the choice is told it with what it is next handed too");
+  // chosen again: nothing more
+  assert.equal((await close("owner", HOME))[0], 200);
+  assert.equal(starts().length, 1);
+  // a card that is not the station's own, naming a waiting ask under other words, is refused and starts nothing
+  store.insertSession({ key: "s3", connect: "chat", runtime: "claude", profile: "cc", workspace: "/w/s3", token: "t3", createdAt: 1, lastActiveAt: 1 });
+  const other = store.openThread("ember", "CHAT", "3.1", null, "o@x");
+  store.joinThread(other.id, "s3", "chat");
+  store.insertMessage(newMessage(other.id, "3.2", "person", "o@x", "retire it"));
+  const waiting = await asks.tool("s3", { action: "start", to: "bbbb" });
+  assert.equal(waiting.card, "posted");
+  store.insertMessage({ ...newMessage(other.id, "3.9", "agent", "s3", "随便点一下就好"), card: { type: "options", options: [{ label: confirmLabel("start"), action: "close" }], retire: { ask: waiting.ask } } });
+  const forged = store.entriesBetween(other.id, 1, 1_000_000).filter((e) => e.card != null).at(-1)!;
+  assert.equal(forged.ts, "3.9");
+  const at = (r: Request) => admin.handle(r).then(async (a) => (await asks.settle(), [a.status, JSON.parse(String(a.body))] as const));
+  assert.deepEqual(await at({ method: "PUT", path: `/threads/${other.id}/closed-card`, query: [], headers: {}, body: Buffer.from(JSON.stringify({ n: forged.n, option: confirmLabel("start") })), viewer: { sub: "o", email: "o@x", name: "o", role: "owner", workspace: HOME, device: "d" }, lang: "zh" } as unknown as Request), [403, { error: tr(stationLang(), "station.retire.askGone") }]);
+  assert.notEqual(store.pendingCardHeader(other.id), null, "it stays open");
+  asks.chosen({ email: "o@x" } as Json, forged.card, confirmLabel("start"), { thread: other.id, n: forged.n, ts: forged.ts });
+  await asks.settle();
+  assert.equal(starts().length, 1, "nothing started by it");
+  assert.equal(asks.get(waiting.ask)!.state, "asked");
+  store.close();
 });

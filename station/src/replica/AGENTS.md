@@ -64,6 +64,19 @@ below, sends them along).
   `.take`, `.took`, `.failed`, `.drop`), no polling; a copy the other could not put in, or whose restore never said how
   it went after two starts, is tried again only as a person asks; a cancel answers at once, is refused once the other
   took the chats, and one made while the other is not reached before it was asked to take them is told it once it is
-  up. Build output, and the browser's sign-ins stay behind; jobs and services too, their agents told which.
+  up. Build output, and the browser's sign-ins stay behind. The jobs the chats had running are started again on the
+  other once it took them, each once, as after a restart (`#startJobs`; one whose directory was not the station's own
+  is not), their agents told at once; the agent home's own files (memory, presets, people's skills) go along and are
+  merged there, nothing of the other's overwritten (`agent-carry.ts`).
+- A hand-over that fails after the chats stopped (the other could not put them in; or was not reached for a minute
+  after they stopped, `QUIET_UNREACHED_MS`, before it was asked to take them) puts them back to work by itself and rests at `sent`
+  (the lead, 2026-11-14): the other keeps what it was sent and puts in nothing by itself (`retire.drop` `keep`), so
+  the next hand-over sends only what changed. Never once the other said it took them, nor once it was asked to (it may
+  be taking them: as a cancel, they wait for it).
+- An agent assists (`station_retire`, `retire-asks.ts`; the user, 2026-11-14: 「人应该只需要在关键节点点卡片来确认就行」):
+  a person confirms its start and its hand-over, each a card counted only as chosen in the app by an owner or admin of
+  the workspace (parts.ts `cardChoice`, checked by the route that closes it, never by the agent); it waits at `sent`
+  for the second. The asking session is told each step (`#toDriver`), on the station the chats went to once its own
+  moved. The panel in the app goes on from `sent` by itself, as before.
 - Not here, by the owner's decision (2026-11-09): reading a chat from a copy while its station is away, going on with a
   chat on another station while both are up, signed heads, a lock entry for a replacement.
