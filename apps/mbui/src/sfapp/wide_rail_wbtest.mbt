@@ -204,8 +204,13 @@ test "wide: the sidebar's edge is pressed and shows its ↔ 6 either side of its
       t.drag(x + 30.0, y, x, y)
       assert_eq(@sfdesk.wide.side_w.get(), 240.0)
     }
-    // (over a row and over none alike: the strip its line is in the middle of, no room grown round it)
-    assert_eq(shown, [-6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 5.0], msg="at \{y}")
+    // (over a row and over none alike: the strip its line is in the middle of, no room grown round it; where the
+    // lists' thumb is shown over its inner half, that half the thumb's (pane_edge): the lists scroll, their search
+    // tucked over the first row)
+    assert_true(
+      shown == [-6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 5.0] || shown == [0.0, 2.0, 4.0, 5.0],
+      msg="at \{y}: \{Repr(shown)}",
+    )
   }
 }
 

@@ -14,7 +14,7 @@ Four things decide how the app looks and answers:
 - **原生操控** (the native input, `@sf.native_input()`): touch or keyboard and mouse, as the app was started, the same
   the whole run. It decides the size words, icons and rows are drawn at (not the room a press gets, which is 44×44 at
   least on every input, overlapping none), what shows only under a pointer and touch's way to the same, Enter, scroll
-  bars, the search field or ⌘K.
+  bars, ⌘K (the search field at a list's top is every input's: asked 2026-11-14).
 - **当前操控** (the current input, `@ui.pointing()`): touch or keyboard and mouse at the moment; it may change. How a
   thing answers the hand alone, never what is shown, where or how big.
 - **页面宽窄** (a page's width, `@sf.look()`): 窄排法 / 宽排法, by the width of the box a page is drawn in.

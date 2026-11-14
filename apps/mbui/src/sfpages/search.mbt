@@ -1,6 +1,6 @@
-// The search at the top of the chats' lists with a finger (still.fail web/src/mobile/Home.tsx SearchField, SearchPage;
-// apps/android chat/screens/Search.kt), in every tier (with a mouse ⌘K's panel has it: a finger has no keys to press):
-// a field at a list's top; tapped, the lists go up and away with their bar, the field comes up from where it was to
+// The search at the top of the chats' lists (still.fail web/src/mobile/Home.tsx SearchField, SearchPage;
+// apps/android chat/screens/Search.kt), in every tier, with a finger or a mouse (⌘K's panel too where there are keys):
+// a field at a list's top, out of view till the list is pulled down past its first row; tapped, the lists go up and away with their bar, the field comes up from where it was to
 // the top of the lists' box (narrowing as 取消 comes in beside it), and under it what the words find (the finder,
 // switcher.mbt: the same as ⌘K's). Back goes from one kind to all of them first; 取消 (or back) puts the field back
 // in the list. A row opened goes where the shell has it, the search left open in the lists' box.

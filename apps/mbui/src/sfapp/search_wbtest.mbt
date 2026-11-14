@@ -366,3 +366,32 @@ test "a chat the search found, pressed: rippled (Search.kt: ChatRowBody's clicka
   t.release(x, y)
   assert_eq(app.nav.depth(), 2)
 }
+
+///|
+test "with a mouse too, the sidebar's list starts past its search; scrolled up it shows, clicked it opens" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.draw()
+  // out of view at first: under the band over the list, the first row at its foot
+  let (_, first) = t.find("整理发布清单").unwrap()
+  match t.rect_of("搜索全部内容") {
+    Some((_, y, _, h)) => assert_true(y + h <= first, msg="the field over the first row")
+    None => ()
+  }
+  // the wheel up past the first row: there
+  list_up_to_top(t)
+  t.draw()
+  let (_, field) = t.find("搜索全部内容").unwrap()
+  let (_, first_now) = t.find("整理发布清单").unwrap()
+  assert_true(field < first_now)
+  t.tap_text("搜索全部内容")
+  assert_true(@sfpages.search_opened())
+  t.run_for(@ui.move_most_ms)
+  t.type_text("签名")
+  assert_true(t.find("签名证书续期") is Some(_))
+  t.tap_text("取消")
+  t.run_for(@ui.move_most_ms)
+  t.draw()
+  assert_true(!@sfpages.search_opened())
+  assert_eq(t.audit().filter(fn(f) { f.contains("sfpages/search.mbt") }), [])
+}
