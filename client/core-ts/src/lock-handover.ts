@@ -69,6 +69,13 @@ export type HandOverPlan =
 /// build that takes one (`devicesWaited`), the writer's own log the same (views/lock.ts `mayWriteNew`). It is only
 /// where `mayHandOver`'s fourteen days count from for a chain begun before it.
 export const HAND_OVER_FROM: number | null = 1794614400;
+/// Held for now (2026-11-14): no app hands a chain over by itself. The locks' rounds on real stations, run for the first
+/// time on workspaces that had moved (the main branch's side run after #6102), showed what a moved workspace still
+/// does wrong: a device approved after the move is let in and never given the vault, a new member's first device is
+/// asked once more, a device asking from the page that waits is not let in. A move cannot be undone, so none is made
+/// until those are mended; a host made for tests (`handOverByTests`, `handOverAuto`) goes on handing over, so what a
+/// moved workspace does stays run. Taken out, by the change that mends the last of them.
+export const HAND_OVER_HELD = true;
 /// How long the person who turned safe mode on has to hand the chain over before another owner's device does (the
 /// owner, 2026-11-14): from `HAND_OVER_FROM` or the genesis, whichever is later.
 export const HAND_OVER_FIRST_SECS = 14 * 86400;
