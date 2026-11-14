@@ -45,6 +45,6 @@ for c in "$moon_home"/lib/runtime/*.c; do
   "${cc[@]}" "${flags[@]}" -c "$c" -o "$work/runtime/$(basename "$c" .c).o" 2> /dev/null || true
 done
 "${ar[@]}" rcs "$work/libruntime.a" "$work"/runtime/*.o
-"${cc[@]}" "${flags[@]}" -o "$out" "$D/_build/native/release/build/station/reader/reader.c" "$D/src/host/host.c" \
+"${cc[@]}" "${flags[@]}" -o "$out" "$D/_build/native/release/build/station/reader/reader.c" "$D/src/host/host.c" "$D/src/sql/sql.c" \
   "$work/libruntime.a" "$shell_lib" "${libs[@]}"
 echo "$out"

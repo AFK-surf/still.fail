@@ -1,4 +1,10 @@
 import {
   "station/host",
   "station/wire",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/string",
 }
+
+options(
+  "native-stub": ["sql.c"],
+)
