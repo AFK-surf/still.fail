@@ -376,6 +376,13 @@ pub fn admit_one_js(s : @lock.LockState, who : JsValue, now : Double, crypto : J
 }
 
 ///|
+/// How many map entries the rules copied since they loaded (`@lock.copied`): what a test counts the work of reading a
+/// chain by.
+pub fn copied_js() -> Int {
+  @lock.copied.val
+}
+
+///|
 /// A whole chain folded (station/src/cloud/lock.ts `fold`), as `genesis_js` and `apply_js` give it: `{state, rules}`
 /// or `{error}`; the state made into JS once, at the end.
 pub fn fold_held_js(entries : JsValue, now : JsValue, crypto : JsCrypto) -> JsValue {

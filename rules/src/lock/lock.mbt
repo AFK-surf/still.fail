@@ -382,11 +382,17 @@ fn sig_of(e : Json) -> Json {
 // ── the chain ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 ///|
+/// How many map entries the rules copied since this module loaded: the work of making a state of another, which a
+/// whole chain's reading must not repeat for each entry (station/test/rules-fold.test.ts counts it).
+pub let copied : Ref[Int] = { val: 0 }
+
+///|
 fn[K : Hash + Eq, V] copy(m : Map[K, V]) -> Map[K, V] {
   let out : Map[K, V] = Map([])
   for k, v in m {
     out[k] = v
   }
+  copied.val += m.length()
   out
 }
 
