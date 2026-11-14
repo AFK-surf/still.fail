@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [76d5976b2](https://github.com/AFK-surf/monoid/commit/76d5976b26223d234e8a38ae985146807aece46a) app: a chat's page made as nodes lets go with the  | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 97.03 | 108.8 |
 | [2d8076f76](https://github.com/AFK-surf/monoid/commit/2d8076f7619bd042d184db62c7b65aa4f8ab23a3) mbui app: the search field tucked over the chats'  | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.27 | 55.38 | 97.04 | 115.29 |
 | [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.27 | 55.38 | 97.04 | 115.29 |
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a6a55e699](https://github.com/AFK-surf/monoid/commit/a6a55e6998f1a6c834830956ac055b6e232d8816) app: a chat opens on its login cards' answers too, | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.6 | 112.55 |
 | [f48bb1220](https://github.com/AFK-surf/monoid/commit/f48bb12201bb9ee671a7f489cb0dfcc86742f45f) base: a link's pings are measured and say how its  | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.89 | 53.58 | 96.63 | 110.68 |
 | [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 2 | 2.73 | 11.64 | 31.28 | 41.84 | 27.88 | 53.53 | 96.68 | 116.53 |
-| [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [76d5976b2](https://github.com/AFK-surf/monoid/commit/76d5976b26223d234e8a38ae985146807aece46a) app: a chat's page made as nodes lets go with the  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.12 |
 | [2d8076f76](https://github.com/AFK-surf/monoid/commit/2d8076f7619bd042d184db62c7b65aa4f8ab23a3) mbui app: the search field tucked over the chats'  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.12 |
 | [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a6a55e699](https://github.com/AFK-surf/monoid/commit/a6a55e6998f1a6c834830956ac055b6e232d8816) app: a chat opens on its login cards' answers too, | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [f48bb1220](https://github.com/AFK-surf/monoid/commit/f48bb12201bb9ee671a7f489cb0dfcc86742f45f) base: a link's pings are measured and say how its  | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [a74a301d3](https://github.com/AFK-surf/monoid/commit/a74a301d32424fce802152e6d321548fcfecbbf4) mbui, app: a hang report names the line that sent  | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
-| [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
