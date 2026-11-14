@@ -54,10 +54,11 @@ pub fn Closed::words(Self) -> String
 
 pub struct Link {
   peer : String
+  scope : String
   // private fields
 }
 pub async fn Link::admitted(Self) -> @json.Json
-pub fn Link::close(Self) -> Unit
+pub fn Link::close(Self, reason? : String) -> Unit
 pub async fn Link::closed(Self) -> Closed
 pub fn Link::ended(Self) -> Closed?
 pub async fn Link::exchange(Self, String) -> @json.Json
@@ -71,9 +72,12 @@ pub struct Mesh {
   // private fields
 }
 pub async fn Mesh::close(Self) -> Unit
+pub fn Mesh::current(Self, String, scope? : String) -> Link?
 pub fn Mesh::device_id(Self) -> String
-pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented) -> Link
+pub fn Mesh::drop_link(Self, String, scope? : String, reason? : String) -> Unit
+pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented, scope? : String) -> Link
 pub async fn Mesh::make(@shell.Shell, Store, Options) -> Self
+pub async fn Mesh::replaced(Self, Link) -> Unit
 
 pub(all) struct Options {
   alpn : String

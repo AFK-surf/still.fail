@@ -19,7 +19,8 @@
 //   far.holds = true … far.release()      answers are kept back until the test gives them.
 //   far.away = true                       a dial is not answered (given up by the mesh when its time runs out).
 //   far.end(2, "bye")                     the peer ends connection 2 with that reason (`kind`: "timeout"…).
-//   let link = stood.opened(mesh, source.gives())      a link, its hello answered by the script
+//   let link = stood.opened(mesh, source.gives())      a link (`scope=`: in that scope), its hello answered by the
+//                                          script; `Source` gives "c1", "c2"… and keeps how each was asked
 //   stood.rt.advance(tick_ms)             time goes on: what is due meanwhile happens at its own time
 //   far.heard, far.asked, far.dials, far.closes        what it saw: each control line (`<ms> <connection> <line>`),
 //                                          each request, when each dial came, what the device closed with.
@@ -202,9 +203,13 @@ fn Stood::dialled(self : Stood) -> Unit raise {
 }
 
 ///|
-/// The same, and nothing runs yet.
+/// The same, and nothing runs yet. (Where a peer answers by itself, the connection is that peer's: a dial it left
+/// unanswered, `away`, and the test answers after.)
 fn Stood::dial_answered(self : Stood) -> Unit raise {
   self.last += 1
+  if self.peer is Some(far) {
+    far.conns[self.last] = []
+  }
   self.answered("iroh.connect", { "id": Json::number(self.last.to_double()) })
 }
 
@@ -530,15 +535,17 @@ fn Peer::end(self : Peer, conn : Int, reason : String, kind? : String = "applica
 }
 
 ///|
-/// A credential's source for a test: "c1", "c2"… one more each time it is asked, and how each was asked kept:
-/// "kept" (the one it has will do), "fresh" (a new one: the last was refused).
+/// A credential's source for a test: "c1", "c2"… one more each time it is asked ("a1"… for a source said to be
+/// `of` "a": one a scope, told apart), and how each was asked kept: "kept" (the one it has will do), "fresh" (a new
+/// one: the last was refused).
 priv struct Source {
+  of : String
   asked : Array[String]
 }
 
 ///|
-fn Source::new() -> Source {
-  { asked: [] }
+fn Source::new(of? : String = "c") -> Source {
+  { of, asked: [] }
 }
 
 ///|
@@ -546,15 +553,20 @@ fn Source::new() -> Source {
 fn Source::gives(self : Source, also? : Map[String, Json]) -> async (String, Bool) -> Presented {
   (_, fresh) => {
     self.asked.push(if fresh { "fresh" } else { "kept" })
-    { credential: "c\{self.asked.length()}", also }
+    { credential: "\{self.of}\{self.asked.length()}", also }
   }
 }
 
 ///|
-/// A link to `peer` on a shell whose peer answers, asked for and run as far as it goes: handed out, its hello
-/// answered by the peer's script (unless that is kept back).
-fn Stood::opened(self : Stood, mesh : Mesh, credentials : async (String, Bool) -> Presented) -> Link raise {
-  let opening = self.go(() => mesh.link(peer, credentials))
+/// A link to `peer` (in `scope`, where one is said) on a shell whose peer answers, asked for and run as far as it
+/// goes: handed out, its hello answered by the peer's script (unless that is kept back).
+fn Stood::opened(
+  self : Stood,
+  mesh : Mesh,
+  credentials : async (String, Bool) -> Presented,
+  scope? : String = "",
+) -> Link raise {
+  let opening = self.go(() => mesh.link(peer, credentials, scope~))
   guard opening.poll() is Some(Succeeded(link)) else {
     fail("the link did not open (\{ended_as(opening)}): \{self.said.join(", ")}")
   }

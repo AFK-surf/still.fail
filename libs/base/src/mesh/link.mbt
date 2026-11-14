@@ -151,6 +151,8 @@ pub fn Closed::words(self : Closed) -> String {
 pub struct Link {
   /// The peer's endpoint id.
   peer : String
+  /// The scope its program asked for it in (`Mesh::link`); "" where it said none.
+  scope : String
   priv shell : @shell.Shell
   priv conn : Json
   priv control : Control
@@ -379,9 +381,9 @@ pub async fn Link::closed(self : Link) -> Closed {
 }
 
 ///|
-/// Closes it.
-pub fn Link::close(self : Link) -> Unit {
-  self.shell.tell("conn.close", { "id": self.conn, "code": 0, "reason": "closed" })
+/// Closes it; `reason`: what the peer is told it was closed for ("closed" unless said).
+pub fn Link::close(self : Link, reason? : String = "closed") -> Unit {
+  self.shell.tell("conn.close", { "id": self.conn, "code": 0, "reason": Json::string(reason) })
 }
 
 ///|
