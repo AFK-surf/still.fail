@@ -34,6 +34,8 @@ priv struct Serving {
   builds : Map[String, Json]
   /// Requests given Node, by their number.
   fallbacks : Map[Int, @effect.Deferred[Json]]
+  /// What Node says of an answer it makes as it comes (`chunk`, then `done`: None), by the request's number.
+  streams : Map[Int, @effect.Queue[String?]]
   mut next : Int
   /// The wall's time when Node last said it, and this clock's then.
   mut wall : Int64
@@ -74,6 +76,7 @@ pub async fn serve_reads(host : @host.Host, reader : Reader, socket : String) ->
     names: Map([]),
     builds: Map([]),
     fallbacks: Map([]),
+    streams: Map([]),
     next: 0,
     wall: 0L,
     at: 0L,
@@ -132,6 +135,16 @@ fn Serving::told(self : Serving, line : String) -> Unit {
         if p is Array([String(email), String(name)]) {
           self.names[email] = name
         }
+      }
+    { "chunk": Number(n, ..), "text": String(t), .. } =>
+      match self.streams.get(n.to_int()) {
+        Some(q) => ignore(q.try_offer(Some(t)))
+        None => ()
+      }
+    { "done": Number(n, ..), .. } =>
+      match self.streams.get(n.to_int()) {
+        Some(q) => ignore(q.try_offer(None))
+        None => ()
       }
     { "answered": Number(n, ..), .. } =>
       match self.fallbacks.get(n.to_int()) {
@@ -255,13 +268,17 @@ async fn Serving::answer_stream(self : Serving, id : Json) -> Unit {
     guard d.wait() else { return }
   }
   guard self.members.get(key) is Some(who) else { return }
-  let answer = self.answer(conn, who, asked, rest) catch {
+  let answer = self.answer(id, conn, who, asked, rest) catch {
     e => {
       @host.note("serve: a request failed: \{e}")
       ({ "status": 500, "headers": { "content-type": "application/json" } }, @utf8.encode("{\"error\":\"read failed\"}"))
     }
   }
   let (said, bytes) = answer
+  // (an answer that went as it came: written there)
+  if said is { "relayed": true, .. } {
+    return
+  }
   let out = @buffer.new()
   let line = @utf8.encode(said.stringify() + "\n")
   out.write_bytes(be32(line.length()))
@@ -321,7 +338,7 @@ fn int_of(v : Json?) -> Int {
 
 ///|
 /// The answer to one request of `who`'s: its head line (`{status, headers}`) and body.
-async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json, body : Bytes) -> (Json, Bytes) raise {
+async fn Serving::answer(self : Serving, id : Json, conn : Json, who : Member, asked : Json, body : Bytes) -> (Json, Bytes) raise {
   let headers = asked.value("headers").unwrap_or(Json::object(Map([])))
   let lang = match header(headers, "stillfail-lang") {
     Some(l) if l.has_prefix("en") => "en"
@@ -354,6 +371,11 @@ async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json
   if self.builds.get(key) != Some(b) {
     self.builds[key] = b
     self.host.say(({ "build": { "conn": conn, "build": b } } : Json).stringify())
+  }
+  // The event stream (GET /events): Node's to make, written here as it comes, compressed here (relay).
+  if asked.value("path") is Some(String(p)) && (p == "/admin/api/events" || p.has_prefix("/admin/api/events?")) {
+    self.relay(id, conn, asked, body)
+    return ({ "relayed": true }, b"")
   }
   // Only a core that takes every runtime (api/runtime-compat.ts): another's answer is Node's to make.
   let runtimes = match header(headers, "stillfail-runtimes") {
@@ -913,5 +935,97 @@ fn Reader::db_now(self : Reader) -> @sql.Db raise {
       self.reading = Some(db)
       db
     }
+  }
+}
+
+///|
+/// An answer Node makes as it comes (GET /events: serve.ts gives it the request, its head first, then each piece as it
+/// is made, then that it ended), written on stream socket `id` as it comes: compressed where the core asks so (mesh/
+/// compress.ts `compressedStream`: zstd, each piece flushed, a megabyte's window). Node is told to stop once the stream
+/// is gone (a write to it fails).
+async fn Serving::relay(self : Serving, id : Json, conn : Json, asked : Json, body : Bytes) -> Unit raise {
+  self.next += 1
+  let n = self.next
+  let d : @effect.Deferred[Json] = @effect.Deferred::new()
+  let pieces : @effect.Queue[String?] = @effect.Queue::unbounded()
+  self.fallbacks[n] = d
+  self.streams[n] = pieces
+  defer self.streams.remove(n)
+  self.host.say(
+    ({
+      "fallback": Json::number(n.to_double()),
+      "conn": conn,
+      "head": asked,
+      "body": Json::string(@utf8.decode_lossy(body)),
+      "stream": true,
+    } : Json).stringify(),
+  )
+  let said = d.wait()
+  let status = said.value("status").unwrap_or(Json::number(500.0))
+  let headers = match said.value("headers") {
+    Some(Object(h)) => h
+    _ => Map([])
+  }
+  let zstd = match header(asked.value("headers").unwrap_or(Json::null()), "accept-encoding") {
+    Some(s) => s.split(",").any(e => @jscase.trim_white(e.to_string()) == "zstd")
+    None => false
+  }
+  let typed = match headers.get("content-type") {
+    Some(String(t)) => t.has_prefix("application/json") || t.has_prefix("text/")
+    _ => false
+  }
+  let mut z : Json? = None
+  if zstd && typed && !headers.contains("content-encoding") {
+    let (made, _) = self.host.shell("zstd.stream", { "level": 3, "window": 20 })
+    if made is { "id": zid, .. } {
+      z = Some(zid)
+      headers.remove("content-length")
+      headers["content-encoding"] = "zstd"
+    }
+  }
+  let head : Json = { "status": status, "headers": Json::object(headers) }
+  let mut open = self.frames(id, @utf8.encode(head.stringify() + "\n"))
+  while open {
+    guard pieces.take() is Some(text) else { break }
+    let raw = @utf8.encode(text)
+    let bytes = match z {
+      Some(zid) => self.host.shell("zstd.push", { "id": zid }, bytes=raw).1.unwrap_or(b"")
+      None => raw
+    }
+    if bytes.length() > 0 {
+      open = self.frames(id, bytes)
+    }
+  }
+  if z is Some(zid) {
+    ignore(self.host.shell("zstd.close", { "id": zid })) catch {
+      _ => ()
+    }
+  }
+  if open {
+    ignore(self.host.shell("tcp.write", { "id": id }, bytes=be32(PIPE_END))) catch {
+      _ => ()
+    }
+  } else {
+    // (gone: what makes it is let go of)
+    self.host.say(({ "stop": Json::number(n.to_double()) } : Json).stringify())
+  }
+}
+
+///|
+/// `bytes` written to stream socket `id` as `pipe`'s frames; false once it cannot be (the stream is gone).
+async fn Serving::frames(self : Serving, id : Json, bytes : Bytes) -> Bool {
+  let out = @buffer.new()
+  let mut at = 0
+  while at < bytes.length() {
+    let k = if bytes.length() - at > PIPE_MOST { PIPE_MOST } else { bytes.length() - at }
+    out.write_bytes(be32(k))
+    out.write_bytes(bytes[at:at + k].to_bytes())
+    at += k
+  }
+  try {
+    ignore(self.host.shell("tcp.write", { "id": id }, bytes=out.to_bytes()))
+    true
+  } catch {
+    _ => false
   }
 }

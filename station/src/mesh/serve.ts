@@ -1037,11 +1037,17 @@ async function handledOf(m: Members, method: string, path: string, head: any, bo
   return { handled, headers, rest };
 }
 
-/// A request the MoonBit program gave back (served.ts `fallback`), answered as one on a stream is once its body is in.
-export async function handledGiven(m: Members, viewer: Admitted["viewer"], head: any, body: Buffer): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
+/// A request the MoonBit program gave back (served.ts `fallback`), answered as one on a stream is once its body is in:
+/// its body as it comes where it comes so (GET /events), not compressed.
+export async function answerGiven(m: Members, viewer: Admitted["viewer"], head: any, body: Buffer, signal?: AbortSignal): Promise<Answer> {
   const method: string = typeof head?.method === "string" ? head.method.toUpperCase() : "GET";
   const path: string = typeof head?.path === "string" ? head.path : "";
-  const { handled } = await handledOf(m, method, path, head, body, viewer);
+  return (await handledOf(m, method, path, head, body, viewer, signal)).handled;
+}
+
+/// A request the MoonBit program gave back (served.ts `fallback`), answered as one on a stream is once its body is in.
+export async function handledGiven(m: Members, viewer: Admitted["viewer"], head: any, body: Buffer): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
+  const handled = await answerGiven(m, viewer, head, body);
   const parts: Buffer[] = [];
   if (Buffer.isBuffer(handled.body)) parts.push(handled.body);
   else for await (const chunk of handled.body) parts.push(Buffer.from(chunk));
