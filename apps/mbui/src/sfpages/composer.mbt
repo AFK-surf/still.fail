@@ -3164,9 +3164,7 @@ let chat_foot_top : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
 /// `carried` (words sent from it hold it or let go of it; gone to another page), nor as it is emptied (words sent
 /// from it, at the press: the list takes that as its foot giving back room in the change its sent key comes,
 /// composer_sent_nodes_wbtest), whose foot is at once as before; kept through another build at this same moment, said
-/// anew at the next. Nor yet for its first card (its extras opening): its ground's way is declared longer than the
-/// ground is drawn on it, so the foot would come up before the ground does (chat_nodes_read_stays_composer_file_wbtest);
-/// the foot at once there, as before.
+/// anew at the next.
 fn composer_foot_told(
   c : @ui.Ctx,
   draft : String,
@@ -3176,13 +3174,15 @@ fn composer_foot_told(
   carried : Bool,
 ) -> Unit {
   composing.shaped = Some((holds, shape))
-  let cards = w.files.get().length() + w.quotes.get().length()
-  let opens_extras = composer_cards_n.val == 0 && cards > 0
-  composer_cards_n.val = cards
-  let emptied = cards == 0 && w.field.text() == ""
-  if holds != "" && holds != composer_shaped_by.val && !carried && !emptied && !opens_extras {
-    @sfbase.composer_set_out.val = Some((draft, shape, c.moment(), fn() { @motion.reshape_way(c, "composer/box") }))
-  } else if @sfbase.composer_set_out.val is Some((_, _, at, _)) && at != c.moment() {
+  let emptied = w.files.get().is_empty() && w.quotes.get().is_empty() && w.field.text() == ""
+  if holds != "" && holds != composer_shaped_by.val && !carried && !emptied {
+    @sfbase.composer_set_out.val = Some((draft, c.moment(), fn() {
+      match (@motion.reshape_way(c, "composer/box"), @motion.reshape_share(c, "composer/box")) {
+        (Some((start, dur)), Some(share)) => Some((start, dur, share))
+        _ => None
+      }
+    }))
+  } else if @sfbase.composer_set_out.val is Some((_, at, _)) && at != c.moment() {
     @sfbase.composer_set_out.val = None
   }
   composer_shaped_by.val = holds
@@ -3193,9 +3193,3 @@ fn composer_foot_told(
 /// setting out (composer_foot_told).
 // kept across runs: said again by each build of the composer
 let composer_shaped_by : Ref[String] = Ref("")
-
-///|
-/// How many cards (files, quotes) the composer held as it was last built: its first come is its extras opening
-/// (composer_foot_told).
-// kept across runs: said again by each build of the composer
-let composer_cards_n : Ref[Int] = Ref(0)

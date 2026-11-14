@@ -22,9 +22,9 @@ pub fn View::resizes(self : View, spec? : (Double, (Double) -> Double), foot? : 
   let st = n.flex.style
   // (as tall as it was laid out last: where a way it is on has it now, View::comes takes that)
   let from = n.flex.height
-  guard self.comes(self, from, 1.0) else { return self }
-  st.come_spec = spec
-  st.come_foot = foot
+  // (its way and its foot said with it: told outside a change, what comes is measured and its end fixed in
+  // View::comes itself)
+  guard self.comes(self, from, 1.0, spec?, foot~) else { return self }
   let at = st.come_at
   // (once the change is told whole and laid out (View::comes' wait, which measures it, and its column's group then):
   // come out as tall as it was, from rest, nothing of it goes)

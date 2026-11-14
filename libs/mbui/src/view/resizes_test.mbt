@@ -245,6 +245,26 @@ test "resizes: alone with a spec of 250 ms: at rest at the cause and 250, along 
 }
 
 ///|
+test "resizes: told outside any change, after its height changed, with a spec of 400 ms (longer than a Move by how far): along its curve and at rest at 400, not cut at a Move's end, the same at every rate" {
+  let curve = fn(x : Double) { x * x }
+  let looks = rc_looks(rc_at + 600.0)
+  for rate in rc_rates {
+    let c = rz_case(40.0)
+    c.tree.at(rc_at)
+    c.tree.frame(390.0, 844.0) |> ignore
+    // (as an old view's height told its node as the frame is laid out: no handler's change round it)
+    c.h.set(100.0)
+    c.node().resizes(spec=(400.0, curve)) |> ignore
+    let got = rc_walk(c.tree, [], looks, rate, fn() { rz_under(c.tree) }, from=rc_at)
+    for i, at in looks {
+      let gone = at - rc_at
+      let want = if gone >= 400.0 { 100.0 } else { 40.0 + 60.0 * curve(gone / 400.0) }
+      assert_true((got[i] - want).abs() < 1.0e-6, msg="at \{rate} a second, at \{at}: \{got[i]} not \{want}")
+    }
+  }
+}
+
+///|
 test "resizes: declared again mid-way the other way: its place and speed going on, no step, as a column's show turned back, the same at every rate" {
   let looks = rc_looks(rc_at + 700.0)
   for rate in rc_rates {

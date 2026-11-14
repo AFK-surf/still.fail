@@ -8864,7 +8864,9 @@ fn View::come_back(self : View, v : View) -> Unit {
 /// come_*: its room, how far it can go and the blocks a list makes in it as at rest all the way); a page or a pane,
 /// grown to what the column leaves it, is not laid out in its turn (Tree::in_column), and comes at once. `stays`: closing to nothing, it stays there once its way
 /// ends (a pick's case that made nothing), at rest. `fill`: on from the way of one before it in its place that was from
-/// nothing or to it (Style's come_fill).
+/// nothing or to it (Style's come_fill). `spec`, `foot`: a height change declared (View::resizes), its way and what it
+/// holds kept to: said with the rest of it, before anything here lays it out (said outside a change, its end is fixed
+/// as it is measured here, below: said after, its curve was run to a Move's end by how far, not its own).
 fn View::comes(
   self : View,
   v : View,
@@ -8872,6 +8874,8 @@ fn View::comes(
   to : Double,
   stays? : Bool = false,
   fill? : Bool = false,
+  spec? : (Double, (Double) -> Double),
+  foot? : Bool = false,
 ) -> Bool {
   let tree = self.tree
   // (what is shared by an id flies to its place instead: View::shared)
@@ -8908,9 +8912,9 @@ fn View::comes(
   // (from nothing or to nothing, or turned back on such a way: what a box taking no room holding nothing opens or
   // closes its padding by (flex's come_fill, Style's gone_empty); not one in another's place, from as tall as that was)
   st.come_fill = to <= 0.0 || from <= 0.0 || (n.coming && st.come_fill) || fill
-  // (a structure's way a Move, whatever a height change declared said before: View::resizes says its own after)
-  st.come_spec = None
-  st.come_foot = false
+  // (a structure's way a Move, whatever a height change declared said before; a height change declared its own)
+  st.come_spec = spec
+  st.come_foot = foot
   st.come_from = from
   st.come_v = speed
   st.come_to = to
