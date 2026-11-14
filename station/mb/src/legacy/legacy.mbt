@@ -214,6 +214,12 @@ fn uses_legacy_edits(db : @sql.Db) -> Bool raise {
 /// A single merged message can be read: the scan done and at most one batch of changed keys left
 /// (`legacyMergedReadReady`), as the merged view now reads.
 fn edits_ready(db : @sql.Db) -> Bool raise {
+  // (asked for each message a read merges: thousands in the shared chat list, which took half its time)
+  db.known("legacy.edits_ready", () => Json::boolean(edits_ready_now(db))) == Json::boolean(true)
+}
+
+///|
+fn edits_ready_now(db : @sql.Db) -> Bool raise {
   let view = sql_of(db, "view", "merged").unwrap_or("")
   let legacy = view.contains("legacy_edit_meta")
   let old_index = legacy && view.contains("INDEXED BY entries_target")

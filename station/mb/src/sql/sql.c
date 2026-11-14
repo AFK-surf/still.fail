@@ -13,6 +13,8 @@ int sqlite3_exec(sqlite3 *db, const char *sql, void *callback, void *arg, char *
 const char *sqlite3_errmsg(sqlite3 *db);
 const char *sqlite3_errstr(int rc);
 int sqlite3_changes(sqlite3 *db);
+int sqlite3_get_autocommit(sqlite3 *db);
+int sqlite3_stmt_readonly(sqlite3_stmt *stmt);
 int sqlite3_prepare_v2(sqlite3 *db, const char *sql, int bytes, sqlite3_stmt **stmt, const char **tail);
 int sqlite3_finalize(sqlite3_stmt *stmt);
 int sqlite3_reset(sqlite3_stmt *stmt);
@@ -59,6 +61,7 @@ moonbit_bytes_t sfq_errstr(int32_t rc) { return text_of(sqlite3_errstr(rc)); }
 moonbit_bytes_t sfq_errmsg(int64_t db) { return text_of(sqlite3_errmsg((sqlite3 *)(intptr_t)db)); }
 void sfq_close(int64_t db) { sqlite3_close_v2((sqlite3 *)(intptr_t)db); }
 int32_t sfq_changes(int64_t db) { return sqlite3_changes((sqlite3 *)(intptr_t)db); }
+int32_t sfq_autocommit(int64_t db) { return sqlite3_get_autocommit((sqlite3 *)(intptr_t)db); }
 int32_t sfq_exec(int64_t db, moonbit_bytes_t sql) { return sqlite3_exec((sqlite3 *)(intptr_t)db, (const char *)sql, NULL, NULL, NULL); }
 
 /// `sql` (its first `n` bytes) prepared on `db`; 0 where it failed (sqlite3_errmsg says why).
@@ -71,6 +74,7 @@ int64_t sfq_prepare(int64_t db, moonbit_bytes_t sql, int32_t n) {
 #define S(s) ((sqlite3_stmt *)(intptr_t)(s))
 void sfq_finalize(int64_t s) { sqlite3_finalize(S(s)); }
 void sfq_reset(int64_t s) { sqlite3_reset(S(s)); sqlite3_clear_bindings(S(s)); }
+int32_t sfq_readonly(int64_t s) { return sqlite3_stmt_readonly(S(s)); }
 int32_t sfq_params(int64_t s) { return sqlite3_bind_parameter_count(S(s)); }
 int32_t sfq_bind_null(int64_t s, int32_t i) { return sqlite3_bind_null(S(s), i); }
 int32_t sfq_bind_int(int64_t s, int32_t i, int64_t v) { return sqlite3_bind_int64(S(s), i, v); }

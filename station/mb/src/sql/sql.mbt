@@ -21,6 +21,12 @@ extern "C" fn close_ffi(db : Int64) = "sfq_close"
 extern "C" fn changes_ffi(db : Int64) -> Int = "sfq_changes"
 
 ///|
+extern "C" fn autocommit_ffi(db : Int64) -> Int = "sfq_autocommit"
+
+///|
+extern "C" fn readonly_ffi(s : Int64) -> Int = "sfq_readonly"
+
+///|
 #borrow(sql)
 extern "C" fn exec_ffi(db : Int64, sql : Bytes) -> Int = "sfq_exec"
 
@@ -102,16 +108,22 @@ const OPEN_NO_MUTEX : Int = 0x8000
 const KEPT_MOST : Int = 256
 
 ///|
-/// A statement kept prepared: its handle and its columns' names.
+/// A statement kept prepared: its handle, its columns' names and whether it writes nothing.
 priv struct Kept {
   handle : Int64
   names : Array[String]
+  reads_only : Bool
 }
 
 ///|
 pub struct Db {
   priv handle : Int64
   priv kept : Map[String, Kept]
+  /// Counts what may have changed what this connection sees: each statement that may write (exec's, BEGIN and COMMIT
+  /// too; run's; a query's that is not read-only).
+  priv mut changed : Int
+  /// What `known` found, each with `changed` as it was when it was found.
+  priv found : Map[String, (Int, Json)]
 }
 
 ///|
@@ -130,7 +142,7 @@ fn open(path : String, flags : Int, wait : Int) -> Db raise @wire.ShellError {
   if handle <= 0L {
     raise @wire.ShellError(@utf8.decode_lossy(errstr_ffi((-handle).to_int())))
   }
-  let db = { handle, kept: Map([]) }
+  let db = { handle, kept: Map([]), changed: 0, found: Map([]) }
   db.exec("PRAGMA synchronous = NORMAL;")
   db
 }
@@ -168,6 +180,7 @@ fn Db::failed(self : Db) -> @wire.ShellError {
 ///|
 /// Statements with no rows (BEGIN, COMMIT, PRAGMA …).
 pub fn Db::exec(self : Db, sql : String) -> Unit raise @wire.ShellError {
+  self.changed += 1
   if exec_ffi(self.handle, cstr(sql)) != 0 {
     raise self.failed()
   }
@@ -192,7 +205,7 @@ fn Db::prepared(self : Db, sql : String, params : Array[Json]) -> Kept raise @wi
         }
         self.kept.clear()
       }
-      let k = { handle, names }
+      let k = { handle, names, reads_only: readonly_ffi(handle) != 0 }
       self.kept[sql] = k
       k
     }
@@ -256,6 +269,7 @@ fn bind_number(handle : Int64, at : Int, n : Double, repr : String?) -> Int {
 ///|
 /// A statement with `params`; how many rows it changed.
 pub fn Db::run(self : Db, sql : String, params : Array[Json]) -> Int raise @wire.ShellError {
+  self.changed += 1
   let kept = self.prepared(sql, params)
   let rc = step_ffi(kept.handle)
   reset_ffi(kept.handle)
@@ -307,6 +321,9 @@ fn value(handle : Int64, i : Int) -> Json {
 /// A statement's rows, each by its columns' names.
 pub fn Db::all(self : Db, sql : String, params : Array[Json]) -> Array[Map[String, Json]] raise @wire.ShellError {
   let kept = self.prepared(sql, params)
+  if !kept.reads_only {
+    self.changed += 1
+  }
   let rows = []
   while true {
     let rc = step_ffi(kept.handle)
@@ -326,6 +343,25 @@ pub fn Db::all(self : Db, sql : String, params : Array[Json]) -> Array[Map[Strin
   }
   reset_ffi(kept.handle)
   rows
+}
+
+///|
+/// What `find` says of the database (a fact of its schema, a row of its state), found once in a transaction for as long
+/// as this connection writes nothing: its snapshot holds still till then. Outside a transaction (each statement a
+/// snapshot of its own) it is found every time. `key` names what `find` finds.
+pub fn Db::known(self : Db, key : String, find : () -> Json raise) -> Json raise {
+  if autocommit_ffi(self.handle) != 0 {
+    return find()
+  }
+  if self.found.get(key) is Some((at, v)) && at == self.changed {
+    return v
+  }
+  let at = self.changed
+  let v = find()
+  if at == self.changed {
+    self.found[key] = (at, v)
+  }
+  v
 }
 
 ///|
