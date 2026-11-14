@@ -36,6 +36,10 @@ pub let unicode_version : String
 
 pub fn visual_order(ArrayView[Int32]) -> Array[Int32]
 
+pub fn width_mark(String, Int32) -> Bool
+
+pub fn width_runs(String) -> Array[(Int32, Int32, Bool)]
+
 // Errors
 
 // Types and methods

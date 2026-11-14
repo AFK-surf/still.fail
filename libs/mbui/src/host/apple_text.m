@@ -88,9 +88,18 @@ static NSDictionary *tabular_figures(void) {
   };
 }
 
+// A CJK face's marks narrow among Latin letters (style.mbt style_proportional): its pwid, kern said with it (DirectWrite
+// sets what has pwid unkerned otherwise; said here too, to be sure of it).
+static NSArray *proportional_widths(void) {
+  return @[
+    @{(__bridge id)kCTFontOpenTypeFeatureTag : @"pwid", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
+    @{(__bridge id)kCTFontOpenTypeFeatureTag : @"kern", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
+  ];
+}
+
 // Face `face` at this size and weight: its file for the nearest weight, a variable one at the weight itself; its digits
-// all one width where `tabular`.
-static CTFontRef face_font(int face, double size, int weight, bool tabular) {
+// all one width where `tabular`, its marks narrow where `proportional`.
+static CTFontRef face_font(int face, double size, int weight, bool tabular, bool proportional) {
   NSArray<NSNumber *> *ws = face_weights[face];
   NSUInteger best = 0;
   int bestd = INT_MAX;
@@ -117,6 +126,7 @@ static CTFontRef face_font(int face, double size, int weight, bool tabular) {
     [fs addObject:@{(__bridge id)kCTFontOpenTypeFeatureTag : @"ss01", (__bridge id)kCTFontOpenTypeFeatureValue : @1}];
   }
   if (tabular) [fs addObject:tabular_figures()];
+  if (proportional) [fs addObjectsFromArray:proportional_widths()];
   if (fs.count) {
     feat = CTFontDescriptorCreateCopyWithAttributes(at ? at : d,
                                                     (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : fs});
@@ -253,13 +263,16 @@ static CTFontRef font_for(double size, int weight, int style) {
   id f = fonts[k];
   if (!f) {
     int face = face_id(style);
-    CTFontRef base = face ? face_font(face, size, weight, (style & 32) != 0) : NULL;
+    CTFontRef base = face ? face_font(face, size, weight, (style & 32) != 0, (style & 64) != 0) : NULL;
     if (!base) {
       base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
-      if (style & 32) {
-        // digits all one width (style.mbt style_tabular)
+      if (style & (32 | 64)) {
+        // digits all one width (style.mbt style_tabular); marks narrow (style_proportional)
+        NSMutableArray *fs = [NSMutableArray new];
+        if (style & 32) [fs addObject:tabular_figures()];
+        if (style & 64) [fs addObjectsFromArray:proportional_widths()];
         CTFontDescriptorRef d = CTFontDescriptorCreateWithAttributes(
-            (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : @[ tabular_figures() ]});
+            (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : fs});
         CTFontRef t = CTFontCreateCopyWithAttributes(base, 0.0, NULL, d);
         CFRelease(d);
         if (t) {
