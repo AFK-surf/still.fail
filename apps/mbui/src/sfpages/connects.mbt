@@ -36,11 +36,53 @@ pub fn connects_node(
   }
   // (all of them or the viewer's: as the page left it while it is on the stack, a signal of that input)
   let mine : @signals.Signal[Bool] = @signals.signal(connects_mine.val, same=fn(a, b) { a == b })
-  let set_mine = fn(m : Bool) {
-    connects_mine.val = m
-    mine.set(m)
+  let shown_at = connects_shown_at(only)
+  // (each read as it reads it, saying so where the filter pressed handed it what it asked: sfbase's shown_read)
+  let topic = fn() {
+    let ask = connects_ask(here(), mine.get())
+    let r = (core.topic)(ask.0, ask.1).get()
+    @sfbase.shown_read(shown_at)
+    r
   }
-  let topic = fn() { (core.topic)("connects", { "scope": str(here().workspace), "mine": Json::boolean(mine.get()) }).get() }
+  // The filter pressed: what the page reads for the other is asked of `src` and the page stays as it is, the filter
+  // naming what was pressed (`pressed`); once answered (at once where it is already) what it reads is switched whole,
+  // told as what the answer tells (sfbase's switch_answered). Pressed back, or the page left, the wait is given up.
+  let pressed : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
+  let waiting : Ref[@sfbase.PressWait?] = Ref(None)
+  let set_mine = fn(m : Bool) {
+    @signals.untracked(fn() {
+      match waiting.val {
+        Some(w) => {
+          waiting.val = None
+          w.give_up()
+        }
+        None => ()
+      }
+      if m == mine.get() {
+        pressed.set(None)
+        return
+      }
+      pressed.set(Some(m))
+      let w = @sfbase.switch_answered(
+        src,
+        [connects_ask(here(), m)],
+        shown_at,
+        fn() {
+          connects_mine.val = m
+          mine.set(m)
+          pressed.set(None)
+        },
+        let_go=fn() {
+          if pressed.untracked() == Some(m) {
+            pressed.set(None)
+          }
+        },
+      )
+      if w.waiting() {
+        waiting.val = Some(w)
+      }
+    })
+  }
   let stations = fn() {
     match @settings.stations_of(core, here()).value {
       Some(Array(a)) => if only == "" { a } else { a.filter(fn(x) { text(Some(x), "station") == only }) }
@@ -155,7 +197,7 @@ pub fn connects_node(
         "filter" =>
           b.box(fn(f) {
             @sf.style_node(f, fn() { if wide { cn_filter_room } else { cn_filter_room_narrow } })
-            mine_filter_node(f, "connects-filter", "connects", fn() { mine.get() }, set_mine)
+            mine_filter_node(f, "connects-filter", "connects", fn() { pressed.get().unwrap_or(mine.get()) }, set_mine)
           })
           |> ignore
         "waiting" => {
@@ -212,6 +254,20 @@ pub fn connects_node(
     width?,
     tips~,
   )
+}
+
+///|
+/// What 连接 reads of its list for its filter (`mine`: the viewer's alone), as it reads it and as its filter pressed
+/// asks it ahead (connects_node).
+fn connects_ask(here : Here, mine : Bool) -> (String, Map[String, Json]) {
+  ("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
+}
+
+///|
+/// What connects_node's list (of station `only`, "" every station's) says it has read anew by, what its filter pressed
+/// asked handed to it (sfbase's switch_answered, shown_read).
+fn connects_shown_at(only : String) -> String {
+  "connects\n" + only
 }
 
 ///|
