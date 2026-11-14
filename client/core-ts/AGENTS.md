@@ -195,7 +195,10 @@ another; the accounts' list's merge across stations and its refills.
   view's, shows no code; its prompt says the role approving gives (`roleText`). So someone added as an admin on one device and approved from another comes in a member, and an
   owner makes them an admin by changing their role. Adding a member is the cloud's part alone there (`added`: nothing
   signed, the role noted), and so is changing the role of one not let in yet (`rosterMoved`: the note the new role, an
-  owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`). The vaults
+  owner's only by an owner). A removal said there reads no box key (it calls no views/vault.ts `tookOut`); one of the
+  person's own devices taken off their log on this device does, as before a move (views/lock.ts `takeOffBound`,
+  vault.ts `tookOutMoved`): a vault left waiting is shown to no device begun anew, so their next device would see none
+  of it (2026-11-14). The vaults
   go by the state in force (vault.ts `lockOf`: `inForceOf`'s `checked`, as a station's do; waiting, one naming nobody):
   a vault keyed for someone a statement, or their own log, took out waits, read by what of the state took its version
   (kept beside the vaults, `vaultTook`, as the vaults held change and as the state is made anew, never as a topic is

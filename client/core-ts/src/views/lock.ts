@@ -42,7 +42,7 @@ import type { SpanContext } from "../trace.ts";
 import { get, hex, isObject, sha256, utf8 } from "../util.ts";
 import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
 import { AGAIN_MOST, againOf, hashOf, keep, links } from "../lock-keep.ts";
-import { tookOut, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
+import { tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
@@ -1519,6 +1519,15 @@ export function takeOffBound(inner: Inner, sub: string, id: string): Effect.Effe
   return Effect.gen(function* () {
     const within = asked(inner);
     for (const [ws, owner] of inner.workspaces.owned()) {
+      // Where the chain moved, their own log is all there is to take it off: the vaults of theirs that held a key for
+      // it are keyed anew as part of what the person asked, the box key read once if it must be, as a removal did
+      // before a move (`Lock.append`'s `tookOut`). Left for the key's next unsealing, a device of theirs approved or
+      // begun anew after it was not shown the vault at all, nor given its key (2026-11-14, the locks' end to end after
+      // #6102: a vault never opened again stayed hidden on every new device, and setting one up made an empty 个人).
+      if (owner === sub && movedHere(inner, ws)) {
+        tookOutMoved(inner, ws, id);
+        continue;
+      }
       const at = owner === sub ? signsBound(inner, ws) : null;
       const d = at === null ? undefined : live(fold(at.h.entries).devices.get(id), now(inner));
       if (at === null || d === undefined || d.sub !== sub || d.kind !== "app" || id === at.base) continue;
