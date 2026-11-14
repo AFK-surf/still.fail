@@ -812,3 +812,44 @@ pub fn over(under : Int64, top : Int64) -> Int64 {
   }
   ch(24) | ch(16) | ch(8) | 0xFFL
 }
+
+///|
+/// The colour of OKLCH lightness `l` (0 … 1), chroma `c` and hue `h` (degrees), at `alpha` (0 … 1, 1 by default), as
+/// 0xRRGGBBAA: at that lightness and hue, as saturated as sRGB has it up to `c` (less by 0.005 at a time till it does).
+pub fn oklch(l : Double, c : Double, h : Double, alpha? : Double = 1.0) -> Int64 {
+  let rad = h * 3.141592653589793 / 180.0
+  let mut c = c
+  while c > 0.0 {
+    let (r, g, b) = oklab_linear(l, c * @dmath.cos(rad), c * @dmath.sin(rad))
+    if r >= -0.0001 && r <= 1.0001 && g >= -0.0001 && g <= 1.0001 && b >= -0.0001 && b <= 1.0001 {
+      break
+    }
+    c = c - 0.005
+  }
+  let c = if c < 0.0 { 0.0 } else { c }
+  let (r, g, b) = oklab_linear(l, c * @dmath.cos(rad), c * @dmath.sin(rad))
+  let a = (dclamp(alpha, 0.0, 1.0) * 255.0).round().to_int64()
+  (srgb_byte(r) << 24) | (srgb_byte(g) << 16) | (srgb_byte(b) << 8) | a
+}
+
+///|
+/// OKLab to linear sRGB (Björn Ottosson's matrices).
+fn oklab_linear(l : Double, a : Double, b : Double) -> (Double, Double, Double) {
+  let l_ = l + 0.3963377774 * a + 0.2158037573 * b
+  let m_ = l - 0.1055613458 * a - 0.0638541728 * b
+  let s_ = l - 0.0894841775 * a - 1.2914855480 * b
+  let (l3, m3, s3) = (l_ * l_ * l_, m_ * m_ * m_, s_ * s_ * s_)
+  (
+    4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3,
+    -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3,
+    -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3,
+  )
+}
+
+///|
+/// A linear sRGB channel as its byte (clamped, the sRGB curve).
+fn srgb_byte(v : Double) -> Int64 {
+  let v = if v < 0.0 { 0.0 } else if v > 1.0 { 1.0 } else { v }
+  let e = if v <= 0.0031308 { 12.92 * v } else { 1.055 * @dmath.pow(v, 1.0 / 2.4) - 0.055 }
+  (e * 255.0).round().to_int64()
+}

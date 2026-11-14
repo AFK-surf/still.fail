@@ -169,7 +169,7 @@ pub fn toggle_chip_node(
   chevron? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(b) {
+  @headless.toggle(made_for=loc, parent, Button, label, active, fn(_) { press() }, fn(b, _) {
     let hand = EdgeWay::new(0.0)
     b.reacts(fn() { lit_node(b) }, fn(on) { hand.go(b, if on { 1.0 } else { 0.0 }, dur_ms) })
     let ink = fn() {
@@ -192,8 +192,6 @@ pub fn toggle_chip_node(
     .shrink(Is(0.0))
     .bone_whole(Is(true))
     |> ignore
-    presses_node(b, press)
-    b.says(By(fn() { Some(@view.said(Button, label=label(), pressed=active())) })) |> ignore
     if icon != "" {
       icon_node(b, icon, toggle_chip_icon, By(ink)) |> ignore
     }

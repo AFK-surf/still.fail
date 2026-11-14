@@ -25,10 +25,20 @@ pub fn select_node(
       None => ""
     }
   }
-  let live = fn() { !disabled() }
   let opener = Opener::new()
-  parent.box(made_for=loc, fn(b) {
-    let press = fn() {
+  @headless.disclosure(
+    made_for=loc,
+    parent,
+    fn() {
+      let l = label()
+      if l == "" {
+        words()
+      } else {
+        l + ": " + words()
+      }
+    },
+    fn() { opener.open() },
+    fn(b) {
       let (x, y, w, h) = b.placed_window_now()
       let now = @signals.untracked(value)
       pick(
@@ -39,37 +49,35 @@ pub fn select_node(
         from=At(x, y, w, h),
       )
       opener.mark()
-    }
-    presses_node(b, press, on=live)
-    b
-    .row(Is(true))
-    .gap(Is(select_gap))
-    .padding(Is((select_x, select_y, select_x, select_y)))
-    .min_height(By(fn() { Some(theme().control_h) }))
-    .radius(Is(1.0e6))
-    .lines_up(Is(Some(Middle)))
-    .ground(By(fn() { @ui.tree_theme().color(Surface) }))
-    .edge(By(fn() { (1.0, @ui.tree_theme().color(if live() && lit_node(b) { FieldHover } else { Border })) }))
-    .alpha(By(fn() { if disabled() { select_disabled_alpha } else { 1.0 } }))
-    .says(By(fn() {
-      let l = label()
-      Some(@view.said(Button, label=if l == "" { words() } else { l + ": " + words() }, expanded=opener.open()))
-    }))
-    |> ignore
-    if !whole {
-      b.max_width(Is(Some(select_w))) |> ignore
-    }
-    // (its words taking what the chevron leaves, the chevron at its end: select_box's JBetween)
-    b.box(fn(w) {
-      w.grow(Is(1.0)) |> ignore
+    },
+    disabled~,
+    fn(b, d) {
+      b
+      .row(Is(true))
+      .gap(Is(select_gap))
+      .padding(Is((select_x, select_y, select_x, select_y)))
+      .min_height(By(fn() { Some(theme().control_h) }))
+      .radius(Is(1.0e6))
+      .lines_up(Is(Some(Middle)))
+      .ground(By(fn() { @ui.tree_theme().color(Surface) }))
+      .edge(By(fn() { (1.0, @ui.tree_theme().color(if !d.disabled() && lit_node(b) { FieldHover } else { Border })) }))
+      .alpha(By(fn() { if d.disabled() { select_disabled_alpha } else { 1.0 } }))
+      |> ignore
       if !whole {
-        w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        b.max_width(Is(Some(select_w))) |> ignore
       }
-      words_node(w, words, fn() { select_words }) |> ignore
-    })
-    |> ignore
-    icon_node(b, "chevron-down", select_chevron, By(fn() { theme().p.muted })) |> ignore
-  })
+      // (its words taking what the chevron leaves, the chevron at its end: select_box's JBetween)
+      b.box(fn(w) {
+        w.grow(Is(1.0)) |> ignore
+        if !whole {
+          w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        }
+        words_node(w, words, fn() { select_words }) |> ignore
+      })
+      |> ignore
+      icon_node(b, "chevron-down", select_chevron, By(fn() { theme().p.muted })) |> ignore
+    },
+  )
   |> ignore
 }
 

@@ -87,25 +87,13 @@ pub fn presses_held_node(
   |> ignore
 }
 
-///|
-/// `v` pressed as an old view's box with an id is (Ctx::on_press: a tap, a mouse's click, Enter or Space with the focus,
-/// a screen reader's press): `press` done then; its ripple and sink as `corner` rounds it (press_look); read out as
-/// `role` named `label`.
 #callsite(autofill(loc))
-fn pressed_node(
+fn rippled_look(
   v : @view.View,
-  press : () -> Unit,
   corner : @view.Live[Double],
-  role : @view.Role,
-  label : () -> String,
+  press : () -> Unit,
   loc~ : SourceLoc,
 ) -> Unit {
-  v
-  .presses(Is(true))
-  .focusable(Is(true))
-  .says(By(fn() { Some(@view.said(role, label=label())) }))
-  .on_press(press)
-  |> ignore
   let rippled = press_look(loc~, v, corner, fn() { false })
   let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
   v.gesture(
@@ -125,6 +113,28 @@ fn pressed_node(
     },
   )
   |> ignore
+}
+
+///|
+/// `v` pressed as an old view's box with an id is (Ctx::on_press: a tap, a mouse's click, Enter or Space with the focus,
+/// a screen reader's press): `press` done then; its ripple and sink as `corner` rounds it (press_look); read out as
+/// `role` named `label`.
+#callsite(autofill(loc))
+fn pressed_node(
+  v : @view.View,
+  press : () -> Unit,
+  corner : @view.Live[Double],
+  role : @view.Role,
+  label : () -> String,
+  loc~ : SourceLoc,
+) -> Unit {
+  v
+  .presses(Is(true))
+  .focusable(Is(true))
+  .says(By(fn() { Some(@view.said(role, label=label())) }))
+  .on_press(press)
+  |> ignore
+  rippled_look(loc~, v, corner, press)
 }
 
 ///|
@@ -1780,7 +1790,7 @@ pub fn round_key_node(
   opener? : Opener,
   loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(made_for=loc, fn(k) {
+  let look = fn(k : @view.View, go : () -> Unit) {
     k
     .width(Is(Some(side)))
     .height(Is(Some(side)))
@@ -1788,14 +1798,21 @@ pub fn round_key_node(
     .lines_up(Is(Some(Middle)))
     .lies_along(Is(Middle))
     |> ignore
-    pressed_node(k, press, Is(side / 2.0), Button, label)
-    // (what opens a menu says it is open while that is drawn)
-    if opener is Some(o) {
-      k.says(By(fn() { Some(@view.said(Button, label=label(), expanded=o.open())) })) |> ignore
-    }
+    rippled_look(loc~, k, Is(side / 2.0), go)
     icon_node(k, icon, icon_size, By(ink)) |> ignore
-  })
-  |> ignore
+  }
+  match opener {
+    Some(o) =>
+      @headless.disclosure(made_for=loc, parent, label, fn() { o.open() }, fn(_) { press() }, fn(k, d) {
+        look(k, fn() { d.press() })
+      })
+      |> ignore
+    None =>
+      @headless.button(made_for=loc, parent, label, fn(_) { press() }, fn(k, b) {
+        look(k, fn() { b.press() })
+      })
+      |> ignore
+  }
 }
 
 ///|
