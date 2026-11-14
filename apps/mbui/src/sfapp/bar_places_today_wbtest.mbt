@@ -274,7 +274,7 @@ test "bar places today: each switch's nodes made and let go, the stack's entry, 
   // (what each switch made and let go of the tree: the first visit of a place made as nodes makes it, a place come back
   // to makes and lets go of nothing but a node of Home's (made while it was away, let go as it is back), an old view's
   // place its few)
-  let works = [(124, 0), (0, 1), (649, 262), (0, 0), (0, 0), (0, 1), (7, 0), (0, 6), (6, 0), (0, 6), (0, 1)]
+  let works = [(124, 0), (0, 1), (653, 264), (0, 0), (0, 0), (0, 1), (7, 0), (0, 6), (6, 0), (0, 6), (0, 1)]
   let mut from_place = "chats"
   for k, place in walk {
     let i = today_bar.search(place).unwrap()

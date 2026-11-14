@@ -145,7 +145,10 @@ fn usage_ranks_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
       })
       |> ignore
       // (out across its room to @sf.corner_inset from its edges, their words in line with its title: ug_rows)
-      k.box(fn(rows) {
+      // (a breakdown in another's place, as a tab's: one pick by the breakdown, its rows going as one with it, never
+      // each row of one going as the other's come, which a press saw change twice: switches_still's settings-usage)
+      k.pick(fn() { usage_pick.rank.get() }, fn(ranked, rk) {
+        ranked.box(fn(rows) {
         let out = @sf.corner_inset - @sf.card_pad
         rows.margin(Is((out, 0.0, out, 0.0))) |> ignore
         rows.each(
@@ -153,8 +156,8 @@ fn usage_ranks_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
             let all = all_items()
             if usage_pick.all.get() { all } else { all.iter().take(ug_first).collect() }
           },
-          fn(it) { usage_pick.rank.get() + "/" + text(Some(it), "key") },
-          fn(row, it) { usage_rank_row_node(row, core, fn() { usage_pick.rank.get() }, fn() { Some(it.get()) }) },
+          fn(it) { rk + "/" + text(Some(it), "key") },
+          fn(row, it) { usage_rank_row_node(row, core, fn() { rk }, fn() { Some(it.get()) }) },
         )
         rows.show(fn() { all_items().length() > ug_first }, fn(m) {
           m.box(fn(b) {
@@ -176,8 +179,9 @@ fn usage_ranks_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
           })
           |> ignore
         })
+        })
+        |> ignore
       })
-      |> ignore
     })
   })
 }
