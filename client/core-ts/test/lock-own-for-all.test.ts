@@ -520,7 +520,8 @@ test("the person's stations answered: not while one seen within 31 days has not;
     // (`owner`: none, so `ownLockFor`, asked again as the last station answers, does nothing on this stand-in)
     workspaces: { owned: () => [["ws", SUB]], owner: () => null },
     provider: { kind: "stillfail" },
-    data: { shared: () => ({ stations: [{ id: S1, last_seen: at - 60 }, { id: S3, last_seen: at - 86400 }, { id: OLD, last_seen: at - 40 * 86400 }] }) },
+    // (`record`, `put`: what a station said of the builds is kept as it answers, views/lock.ts `keepBuilds`; none here)
+    data: { shared: () => ({ stations: [{ id: S1, last_seen: at - 60 }, { id: S3, last_seen: at - 86400 }, { id: OLD, last_seen: at - 40 * 86400 }] }), record: () => null, put: () => undefined },
     stations: {
       requests: {
         call: (to: StationAddr) => {
