@@ -2688,7 +2688,7 @@ export const SHAPES: Record<string, Shape> = {
   WorkspaceWaysView: struct([
     ["ways", vec("WayRow")],
     ["off", "u32", { doc: "How many are turned off." }],
-    ["offLabel", "String", { doc: "全部开启, 已关闭 2 项: the workspace page's 连接方式 row says it." }],
+    ["offLabel", "String", { doc: "全部开启, 已关闭 2 项: the workspace page's 中继 row says it." }],
   ], { doc: "How a workspace's members' devices reach its stations (the `workspaceWays` view, views/ways.ts): still.fail's relays,\nthe workspace's own, the ways straight to a station; each on or turned off. As its stations keep them\n(views/ways-stations.ts), else from `/v1/me`; kept on the device." }),
   WayRow: struct([
     ["id", "String", { doc: "A relay's URL, or the kind (lan, tailnet, direct): what `workspace.setWay` is given." }],
