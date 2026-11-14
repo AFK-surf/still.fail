@@ -62,6 +62,9 @@ const USAGE_EVERY_MS = 60_000;
 const TOLD = { told: true };
 /// A stream's answer when it was told first what came after `since` (the client then reads nothing again).
 export const RESUMED = "stillfail-resumed";
+/// With RESUMED: where the log was as the stream joined (`<run>.<n>`). What it tells up to it is told again, what came
+/// while the client was not here; after it, as it happens (the client's app moves only what happens as it is watched).
+export const HEAD = "stillfail-head";
 /// A stream's answer when it was asked `running=1` and is told what every session at work its viewer sees does, as it
 /// does it, without asking for any (`live` events, from where each stood as it was opened; nothing of before): the
 /// client then follows no session by name, and reads what it lacks of a transcript as it reads anything it lacks.
@@ -544,6 +547,7 @@ export class Events {
     this.lingering = null;
     // In the same turn as it joins: what was told since is told again, and what is told from now comes as to the rest.
     if (resumes) for (const told of this.log.after(since!)) if (this.reaches(client, told.to)) client.raw(told.text);
+    const head = resumes ? this.log.at() : null;
     // Coming back: their overview as it is now, against what their streams were told of it last.
     if (resumes) this.overviewChanged();
     if (this.clients.length === 1) {
@@ -578,7 +582,7 @@ export class Events {
     };
     return {
       status: 200,
-      headers: { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no", ...(resumes ? { [RESUMED]: "1" } : {}), ...(follows ? { [FOLLOWS]: "running" } : {}) },
+      headers: { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no", ...(head !== null ? { [RESUMED]: "1", [HEAD]: head } : {}), ...(follows ? { [FOLLOWS]: "running" } : {}) },
       body,
     };
   }

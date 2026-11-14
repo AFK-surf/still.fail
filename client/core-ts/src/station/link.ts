@@ -17,9 +17,9 @@ import { laterSleep, type Scoped } from "../runtime.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { StationAddr } from "./addr.ts";
-import { Cursor } from "./cursor.ts";
+import { Cursor, upTo } from "./cursor.ts";
 import { type Keeper, Memory } from "./memory.ts";
-import { RESUMED, type Requests } from "./requests.ts";
+import { HEAD, RESUMED, type Requests } from "./requests.ts";
 import { SseParser } from "../sse.ts";
 import { replyHeader } from "./wire.ts";
 
@@ -225,8 +225,9 @@ export type Told = {
   /// A stream opened going on from where the device was. `away`: it came back after the one before it went, as against
   /// taking over from one still heard; `restored`: where the device was is as a core before this one wrote it down.
   goesOn(address: string, how: { away: boolean; restored: boolean }): void;
-  /// An event of a stream.
-  event(address: string, name: string, raw: string): void;
+  /// An event of a stream. `again`: told again as the stream resumed (what came while the device was not on it), not
+  /// as it happened.
+  event(address: string, name: string, raw: string, again: boolean): void;
   /// What a stream that went on was told first is in (the station tells what was missed as it joins, in the same turn).
   toldMissed(address: string): void;
   /// How a station's link is, or its host figures as last kept, changed.
@@ -625,6 +626,9 @@ export class Links {
             // its connecting; unless this stream took over from one still open (a station from before resuming says
             // `missed` when it cannot tell all it missed).
             const resumed = since !== null && replyHeader(opened.success, RESUMED) === "1";
+            // Where the station's log was as it joined: what it tells up to it is told again (a station from before
+            // says none, and what it tells is taken as it comes).
+            const head = resumed ? (replyHeader(opened.success, HEAD) ?? null) : null;
             span.set("stillfail.resumed", resumed);
             if (link.cursor.restored) span.set("stillfail.restored", true);
             span.end();
@@ -699,7 +703,7 @@ export class Links {
                 if (name === "missed") {
                   if (!snapshotted) self.#told.afresh(address, null);
                   snapshotted = true;
-                } else self.#told.event(address, name, data);
+                } else self.#told.event(address, name, data, head !== null && id !== undefined && upTo(id, head));
                 if (id !== undefined) link.cursor.heard(id);
               }
               if (!snapshotted && link.catching?.tallied === false) self.#told.toldMissed(address);

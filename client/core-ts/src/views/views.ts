@@ -3455,6 +3455,7 @@ export class Views implements Owner {
       at: page.at ?? null,
       atOffset: page.atOffset ?? null,
       caught: page.caught ?? null,
+      told: Array.isArray(page.told) ? page.told : null,
       outbox,
       link: this.link(station),
       offline: this.offline(station),
