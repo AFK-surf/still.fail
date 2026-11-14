@@ -430,52 +430,19 @@ fn steps_main_node(v : @view.View, body : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
-/// Zero-width side rail in the existing 16px panel left margin (`@sf.outset_start(8.0)`), connecting events in a turn
-/// without adding horizontal indentation.
-fn rail_node(parent : @view.View, on : Bool) -> Unit {
-  if on {
-    parent.box(fn(r) {
-      r.over(Is(true)) |> ignore
-      @sf.style_node(r, fn() { h_rail })
-      steps_box_node(r, h_rail_line, fn(_) {  })
-    })
-    |> ignore
-  }
-}
-
-///|
-fn rail_live_node(parent : @view.View, on : () -> Bool) -> Unit {
-  parent.show(on, fn(r) {
-    r.over(Is(true)) |> ignore
-    @sf.style_node(r, fn() { h_rail })
-    steps_box_node(r, h_rail_line, fn(_) {  })
-  })
-}
-
-///|
-fn group_rail_node(parent : @view.View, rail : () -> Bool, open : () -> Bool) -> Unit {
-  parent.show(fn() { rail() || open() }, fn(r) {
-    r.over(Is(true)) |> ignore
-    @sf.style_node(r, fn() { if rail() { h_rail } else { h_rail_end } })
-    steps_box_node(r, h_rail_line, fn(_) {  })
-  })
-}
-
-///|
-/// Zero-width left accent bar inside an expanded step card's existing 12px left padding (`pl=S1 py=S2`), marking the
-/// exact vertical span of the expanded item without taking horizontal content space.
-fn step_side_bar_node(parent : @view.View, failed : Bool, in_card? : Bool = true) -> Unit {
+/// Vertical side line inside an expanded group or step container, marking the exact start-to-end scope of the
+/// subordinate content below its parent header without a full-icon-column indent or wrapper card.
+fn sub_line_node(parent : @view.View, look : @ui.Style, failed? : Bool = false) -> Unit {
   parent.box(fn(r) {
     r.over(Is(true)) |> ignore
-    @sf.style_node(r, fn() { if in_card { step_bar_in_card } else { step_bar_out } })
+    @sf.style_node(r, fn() { look })
     steps_box_node(r, if failed { step_bar_line_red } else { step_bar_line }, fn(_) {  })
   })
   |> ignore
 }
 
 ///|
-/// One event in `v`: its mark in the gutter and what `body` makes beside it; the turn's rail in the outer margin
-/// (`rail`: to the next event's; `rail_last`: on to the next item).
+/// One event in `v`: its mark in the gutter and what `body` makes beside it.
 fn ev_node(
   v : @view.View,
   icon : String,
@@ -498,8 +465,9 @@ fn ev_node(
     }
   }
   steps_box_node(v, h_ev, fn(e) {
+    ignore(rail)
+    ignore(rail_last)
     ignore(row)
-    rail_node(e, rail || rail_last)
     e.box(fn(i) {
       @sf.style_node(i, fn() { h_icon })
       if icon == "pulse" {
@@ -637,7 +605,6 @@ fn item_node(
       let ends = text(content, "ends")
       let failed = flag(content, "failed")
       steps_box_node(v, h_ev_stack, fn(ev) {
-        rail_node(ev, ends != "" || rail)
         ev_node(ev, "send", "", if failed { "red" } else { "accent" }, fn(b) {
           steps_box_node(b, h_label, fn(l) {
             label_wraps(l)
@@ -791,8 +758,8 @@ fn one_line_node(
   |> ignore
   // (opening and closing across its full width with a soft bottom cut)
   steps_reveal_node(v, open, fn(b) {
-    steps_box_node(b, h_one_card, fn(c) {
-      step_side_bar_node(c, tone == "red")
+    steps_box_node(b, h_one_sub, fn(c) {
+      sub_line_node(c, h_step_line, failed=tone == "red")
       whole(c)
     })
   })
@@ -930,10 +897,11 @@ fn received_node(
   rail_last : Bool,
   tips : @sf.TipLayer,
 ) -> Unit {
+  ignore(rail)
+  ignore(rail_last)
   let notice = text(m, "notice")
   let job = notice == "job"
   steps_box_node(v, h_ev_stack, fn(ev) {
-    rail_node(ev, rail || rail_last)
     ev_node(ev, "received", "", "", fn(b) {
       steps_box_node(b, h_label, fn(l) {
         label_wraps(l)
@@ -1154,9 +1122,8 @@ fn task_node(v : @view.View, key : String, task : Json?, rail : Bool, rail_last 
             |> ignore
           }
         } else {
-          let use_card = !answer.contains("```")
-          steps_box_node(p, if use_card { h_one_card } else { h_one_body }, fn(w) {
-            step_side_bar_node(w, failed, in_card=use_card)
+          steps_box_node(p, h_one_sub, fn(w) {
+            sub_line_node(w, h_step_line, failed~)
             if agent {
               md_node(w, answer, field(task, "md"), small=true)
             } else {
@@ -1277,7 +1244,7 @@ fn ended_node(v : @view.View, ends : String, words : String, rail : Bool) -> Uni
 
 ///|
 /// A group of calls and thoughts in `v`: its line, all of it opening the group (its title its tip, in
-/// `tips`); opened, a line each beside the turn's rail.
+/// `tips`); opened, a line each beside the group's side line.
 fn group_node(
   v : @view.View,
   src : Source,
@@ -1288,6 +1255,7 @@ fn group_node(
   rail : Bool,
   tips : @sf.TipLayer,
 ) -> Unit {
+  ignore(rail)
   let gk = ik + "/group"
   let open = fn() { steps_own.opened.contains(gk) }
   let failures = number(g, "failures").to_int()
@@ -1295,7 +1263,6 @@ fn group_node(
   let rows = items(g, "rows")
   let calls = rows.iter().any(fn(r) { text(Some(r), "kind") == "step" })
   steps_box_node(v, h_group, fn(gv) {
-    group_rail_node(gv, fn() { rail }, open)
     gv.box(fn(h) {
       @sf.style_node(h, fn() { h_group_head })
       let hot = fn() { @sf.lit_node(h) }
@@ -1354,6 +1321,7 @@ fn group_rows_node(
   calls : Bool,
 ) -> Unit {
   steps_box_node(s, h_steps, fn(list) {
+    sub_line_node(list, h_group_line)
     for i, row in rows {
       let rv = Some(row)
       let content = field(rv, "content")
@@ -1361,16 +1329,14 @@ fn group_rows_node(
       if text(rv, "kind") == "thought" {
         if calls {
           let thought_words = text(content, "text")
-          let in_card = !thought_words.contains("```")
-          let thought_look = if in_card { h_step_card } else { h_step_body }
           opened_node(list, src, station, key, rk, content, fn(sum) {
             steps_words(sum, fn() { @sf.t("web-main.history.thinking") }, h_step_name)
             steps_box_node(sum, h_grow_clip, fn(c) {
               steps_words(c, fn() { if steps_own.opened.contains(rk) { "" } else { text(content, "first") } }, h_step_hint_line)
             }, in_row=true)
           }, fn(body) {
-            steps_box_node(body, thought_look, fn(t) {
-              step_side_bar_node(t, false, in_card~)
+            steps_box_node(body, h_step_body, fn(t) {
+              sub_line_node(t, h_step_line)
               md_node(t, thought_words, field(content, "md"), small=true)
             })
           })
@@ -1489,7 +1455,6 @@ fn ev_live_node(
   v : @view.View,
   icon : String,
   tone : () -> String,
-  rail_last : () -> Bool,
   body : (@view.View) -> Unit,
 ) -> Unit {
   let ink = fn() {
@@ -1501,7 +1466,6 @@ fn ev_live_node(
     }
   }
   steps_box_node(v, h_ev, fn(e) {
-    rail_live_node(e, rail_last)
     e.box(fn(i) {
       @sf.style_node(i, fn() { h_icon })
       @sf.icon_node(i, icon, 14.0, By(ink)) |> ignore
@@ -1540,12 +1504,6 @@ fn steps_reused_row_node(
           match picked.get().row {
             Some(Item(item, _)) => Some(item)
             _ => None
-          }
-        }
-        let has_rail = fn() {
-          match picked.get().row {
-            Some(Item(_, rail)) => rail
-            _ => false
           }
         }
         let item_key = fn() {
@@ -1592,7 +1550,6 @@ fn steps_reused_row_node(
                   let gk = fn() { item_key() + "/group" }
                   let open = fn() { steps_own.opened.contains(gk()) }
                   steps_box_node(m, h_group, fn(gv) {
-                    group_rail_node(gv, has_rail, open)
                     gv.box(fn(h) {
                       @sf.style_node(h, fn() { h_group_head })
                       let hot = fn() { @sf.lit_node(h) }
@@ -1650,14 +1607,14 @@ fn steps_reused_row_node(
                   })
                 }
                 4 =>
-                  ev_live_node(m, "said", fn() { "" }, has_rail, fn(eb) {
+                  ev_live_node(m, "said", fn() { "" }, fn(eb) {
                     steps_box_node(eb, h_one, fn(o) { steps_words(o, fn() { text(content(), "line") }, h_one_words) })
                   })
                 5 | 6 => {
                   let agent = base == 5
                   let task = fn() { items(content(), "tasks").get(0) }
                   let failed = fn() { flag(task(), "failed") }
-                  ev_live_node(m, if agent { "agent" } else { "command" }, fn() { if failed() { "red" } else { "" } }, has_rail, fn(eb) {
+                  ev_live_node(m, if agent { "agent" } else { "command" }, fn() { if failed() { "red" } else { "" } }, fn(eb) {
                     steps_box_node(eb, h_one_wrap, fn(o) {
                       @sf.words_node(o, fn() { text(task(), "text") }, fn() {
                         if failed() {
@@ -1675,8 +1632,7 @@ fn steps_reused_row_node(
                   let msg_kind = (base - 7) % 3
                   let msg = fn() { items(content(), "messages").get(0) }
                   steps_box_node(m, h_ev_stack, fn(ev) {
-                    rail_live_node(ev, has_rail)
-                    ev_live_node(ev, "received", fn() { "" }, fn() { false }, fn(eb) {
+                    ev_live_node(ev, "received", fn() { "" }, fn(eb) {
                       steps_box_node(eb, h_label, fn(l) {
                         label_wraps(l)
                         steps_words(l, fn() { @sf.t("web-main.history.message.before") }, h_label_words)
@@ -1715,8 +1671,7 @@ fn steps_reused_row_node(
                 16 | 17 => {
                   let link = base == 16
                   steps_box_node(m, h_ev_stack, fn(ev) {
-                    rail_live_node(ev, has_rail)
-                    ev_live_node(ev, "send", fn() { "accent" }, fn() { false }, fn(eb) {
+                    ev_live_node(ev, "send", fn() { "accent" }, fn(eb) {
                       steps_box_node(eb, h_label, fn(l) {
                         label_wraps(l)
                         steps_words(l, fn() { @sf.t("web-main.history.sentTo") }, h_label_words)
@@ -2027,96 +1982,32 @@ fn tool_body_node(v : @view.View, src : Source, station : String, key : String, 
         true
       }
     })
-    let call_has_code_or_diff = call_parts.iter().any(fn(pt) {
-      let k = text(Some(pt), "kind")
-      k == "code" || k == "diff"
-    })
-    let res_has_code_or_diff = result_parts.iter().any(fn(pt) {
-      let k = text(Some(pt), "kind")
-      k == "code" || k == "diff"
-    })
-    if !call_has_code_or_diff && !res_has_code_or_diff {
-      steps_box_node(
-        p,
-        if failed && call_parts.is_empty() { tool_body_card_red } else { tool_body_card },
-        fn(b) {
-          step_side_bar_node(b, failed)
-          if call_parts.length() > 0 {
-            steps_box_node(b, tool_section, fn(s) {
-              for idx, part in call_parts {
-                tool_part_node(s, Some(part), rk=rk + "/c" + idx.to_string(), src~, station~, key~, in_card=true)
-              }
+    steps_box_node(p, tool_body_box, fn(b) {
+      sub_line_node(b, h_step_line, failed~)
+      if call_parts.length() > 0 {
+        steps_box_node(b, tool_section, fn(s) {
+          for idx, part in call_parts {
+            tool_part_node(s, Some(part), rk=rk + "/c" + idx.to_string(), src~, station~, key~)
+          }
+        })
+      }
+      if result_parts.length() > 0 {
+        steps_box_node(b, if call_parts.length() > 0 { tool_result_box } else { tool_section }, fn(s) {
+          if call_parts.length() > 0 || failed {
+            steps_box_node(s, tool_result_head, fn(h) {
+              steps_words(
+                h,
+                fn() { if failed { "返回 · 失败" } else { "返回" } },
+                if failed { tool_result_head_red } else { tool_result_head_words },
+              )
             })
           }
-          if result_parts.length() > 0 {
-            steps_box_node(b, if call_parts.length() > 0 { tool_result_box } else { tool_section }, fn(s) {
-              if call_parts.length() > 0 || failed {
-                steps_box_node(s, tool_result_head, fn(h) {
-                  steps_words(
-                    h,
-                    fn() { if failed { "返回 · 失败" } else { "返回" } },
-                    if failed { tool_result_head_red } else { tool_result_head_words },
-                  )
-                })
-              }
-              for idx, part in result_parts {
-                tool_part_node(s, Some(part), rk=rk + "/r" + idx.to_string(), src~, station~, key~, in_card=true)
-              }
-            })
+          for idx, part in result_parts {
+            tool_part_node(s, Some(part), rk=rk + "/r" + idx.to_string(), src~, station~, key~)
           }
-        },
-      )
-    } else {
-      steps_box_node(p, tool_body_box, fn(b) {
-        step_side_bar_node(b, failed, in_card=false)
-        if call_parts.length() > 0 {
-          steps_box_node(b, if call_has_code_or_diff { tool_section } else { tool_section_card }, fn(s) {
-            for idx, part in call_parts {
-              tool_part_node(
-                s,
-                Some(part),
-                rk=rk + "/c" + idx.to_string(),
-                src~,
-                station~,
-                key~,
-                in_card=!call_has_code_or_diff,
-              )
-            }
-          })
-        }
-        if result_parts.length() > 0 {
-          let res_look = if res_has_code_or_diff {
-            tool_result_box
-          } else if failed {
-            tool_result_card_red
-          } else {
-            tool_result_card
-          }
-          steps_box_node(b, res_look, fn(s) {
-            if call_parts.length() > 0 || failed {
-              steps_box_node(s, tool_result_head, fn(h) {
-                steps_words(
-                  h,
-                  fn() { if failed { "返回 · 失败" } else { "返回" } },
-                  if failed { tool_result_head_red } else { tool_result_head_words },
-                )
-              })
-            }
-            for idx, part in result_parts {
-              tool_part_node(
-                s,
-                Some(part),
-                rk=rk + "/r" + idx.to_string(),
-                src~,
-                station~,
-                key~,
-                in_card=!res_has_code_or_diff,
-              )
-            }
-          })
-        }
-      })
-    }
+        })
+      }
+    })
   })
 }
 
@@ -2416,15 +2307,7 @@ fn tool_part_node(
   src? : Source = @sfbase.sample_source,
   station? : String = "",
   key? : String = "",
-  in_card? : Bool = false,
 ) -> Unit {
-  let mono_box = fn(look : @ui.Style, words : String, style : @ui.TextStyle) {
-    if in_card {
-      steps_run(v, fn() { words }, style, mono=true)
-    } else {
-      steps_box_node(v, look, fn(b) { steps_run(b, fn() { words }, style, mono=true) })
-    }
-  }
   let fold_key = if rk != "" { rk } else { "tool-part" }
   match text(part, "kind") {
     "code" => {
@@ -2558,16 +2441,10 @@ fn tool_part_node(
               )
             }
           })
-          if in_card {
-            render_md_body(stack)
-          } else {
-            steps_box_node(stack, tool_box, render_md_body)
-          }
+          render_md_body(stack)
         })
-      } else if in_card {
-        render_md_or_words(v, words, md, small=true)
       } else {
-        steps_box_node(v, tool_box, fn(b) { render_md_or_words(b, words, md, small=true) })
+        render_md_body(v)
       }
     }
     "plan" => plan_node(v, fn() { items(part, "items") })
@@ -2601,11 +2478,7 @@ fn tool_part_node(
                     })
                   }
                 })
-                if in_card {
-                  render_long_val(f)
-                } else {
-                  steps_box_node(f, tool_box, render_long_val)
-                }
+                render_long_val(f)
               })
             }
             "json" => {
@@ -2629,11 +2502,7 @@ fn tool_part_node(
                     })
                   }
                 })
-                if in_card {
-                  render_json_val(f)
-                } else {
-                  steps_box_node(f, tool_box, render_json_val)
-                }
+                steps_box_node(f, tool_box, render_json_val)
               })
             }
             _ =>
@@ -2650,7 +2519,7 @@ fn tool_part_node(
           }
         }
       })
-    "lead" => mono_box(tool_lead, text(part, "text"), tool_lead_words)
+    "lead" => steps_box_node(v, tool_lead, fn(b) { steps_run(b, fn() { text(part, "text") }, tool_lead_words, mono=true) })
     "none" => steps_box_node(v, tool_lead, fn(b) { steps_words(b, fn() { text(part, "text") }, tool_none) })
     "output" => {
       let out_text = text(part, "text")
@@ -2666,20 +2535,14 @@ fn tool_part_node(
               steps_run(rb, fn() { out_text }, text_look, mono=true)
             })
           })
-          if in_card {
-            fold_node(stack, fold_key + "/out", 16, words_line, fn(f) {
+          steps_box_node(stack, box_look, fn(b) {
+            fold_node(b, fold_key + "/out", 16, words_line, fn(f) {
               steps_run(f, fn() { out_text }, text_look, mono=true)
             })
-          } else {
-            steps_box_node(stack, box_look, fn(b) {
-              fold_node(b, fold_key + "/out", 16, words_line, fn(f) {
-                steps_run(f, fn() { out_text }, text_look, mono=true)
-              })
-            })
-          }
+          })
         })
       } else {
-        mono_box(box_look, out_text, text_look)
+        steps_box_node(v, box_look, fn(b) { steps_run(b, fn() { out_text }, text_look, mono=true) })
       }
     }
     "json" => {
@@ -2693,20 +2556,14 @@ fn tool_part_node(
               steps_run(rb, fn() { json_text }, tool_mono, mono=true)
             })
           })
-          if in_card {
-            fold_node(stack, fold_key + "/json", 16, words_line, fn(f) {
+          steps_box_node(stack, tool_box, fn(b) {
+            fold_node(b, fold_key + "/json", 16, words_line, fn(f) {
               steps_run(f, fn() { json_text }, tool_mono, mono=true)
             })
-          } else {
-            steps_box_node(stack, tool_box, fn(b) {
-              fold_node(b, fold_key + "/json", 16, words_line, fn(f) {
-                steps_run(f, fn() { json_text }, tool_mono, mono=true)
-              })
-            })
-          }
+          })
         })
       } else {
-        mono_box(tool_box, json_text, tool_mono)
+        steps_box_node(v, tool_box, fn(b) { steps_run(b, fn() { json_text }, tool_mono, mono=true) })
       }
     }
     _ => ()
@@ -3016,26 +2873,13 @@ let h_ev : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 let h_ev_stack : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
-/// Outer turn/group side line in the existing 16px panel left margin (`x = 8px`), taking 0px of horizontal content space.
+/// Vertical side line under an expanded group's chevron (`pl=S1_25` = `5px`), and under an expanded step's label (`pl=S0_5` = `2px`).
 // kept across runs: a value (no field of it changes)
-let h_rail : @ui.Style = @ui.css("w=Full h=Full pt=S1").then(@sf.outset_start(8.0)).then(@sf.outset_bottom(14.0))
+let h_group_line : @ui.Style = @ui.css("w=Full h=Full pl=S1_25 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_rail_end : @ui.Style = @ui.css("w=Full h=Full pt=S1 pb=S1").then(@sf.outset_start(8.0))
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_rail_line : @ui.Style = @ui.css("w=SPx h=Full radius=Full bg=Border")
-
-///|
-/// Inner expanded-step side bar inside the card's existing left padding (`x = 20px`), taking 0px of extra layout space.
-// kept across runs: a value (no field of it changes)
-let step_bar_in_card : @ui.Style = @ui.css("w=Full h=Full pl=S1 py=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let step_bar_out : @ui.Style = @ui.css("w=Full h=Full pt=S1 pb=S2").then(@sf.outset_start(4.0))
+let h_step_line : @ui.Style = @ui.css("w=Full h=Full pl=S0_5 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3203,7 +3047,7 @@ let h_one_body : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1, py=S2, pl=S3_5, pr=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+let h_one_sub : @ui.Style = @ui.css("w=Full pl=S3 pt=S1 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3263,18 +3107,18 @@ let h_group_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 let h_group_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// Its calls, opened (hSteps): full width aligned with the left edge, 2 apart, 2 under its line.
+/// Its calls, opened (hSteps): compact 12px left offset beside the group's side line (`x = 5px`), 2 apart, 2 under its line.
 // kept across runs: a value (no field of it changes)
-let h_steps : @ui.Style = @ui.css("w=Full pt=S0_5 gap=SPx")
+let h_steps : @ui.Style = @ui.css("w=Full pl=S3 pt=S0_5 gap=SPx")
 
 ///|
-/// A call's line (hStep summary): 4 by 6 in, round 8, 8 apart, 12; the pointer's ground on it.
+/// A call's line (hStep summary): 4 by 4 in, round 8, 8 apart, 12; the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let h_step : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}").then(@sf.outset(6.0))
+let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1 px=S1 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}").then(@sf.outset(4.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3297,13 +3141,9 @@ let h_step_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=f
 let h_step_meta_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A step's or thought's words (hStepBody: 4 over, 8 under, 12); a thought alone (hThinking: 2 over, 6 under, muted).
+/// A step's or thought's words (hStepBody: 12px left offset beside the step's side line, 4 over, 8 under, 12); a thought alone (hThinking: 2 over, 6 under, muted).
 // kept across runs: a value (no field of it changes)
-let h_step_body : @ui.Style = @ui.css("w=Full pt=S1 pb=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_step_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, pl=S3_5, pr=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+let h_step_body : @ui.Style = @ui.css("w=Full pl=S3 pt=S1 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3332,18 +3172,10 @@ let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false
 let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
-/// A call opened: 2 over, 6 under, the call and what came back 6 apart; each a section, its
+/// A call opened: 12px left offset beside the step's side line, 2 over, 6 under, the call and what came back 6 apart; each a section, its
 /// parts 6 apart (what came back 4).
 // kept across runs: a value (no field of it changes)
-let tool_body_box : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5 gap=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_body_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, pl=S3_5, pr=S3, gap=S1_5, radius=@sf.custom_field_r, bg=@sf.faint_ground)
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_body_card_red : @ui.Style = tool_body_card.then(@ui.css("bg=DangerBg"))
+let tool_body_box : @ui.Style = @ui.css("w=Full pl=S3 pt=S0_5 pb=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3351,19 +3183,7 @@ let tool_section : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_section_card : @ui.Style = @ui.style(w=Full, py=S2, px=S3, gap=S1_5, radius=@sf.custom_field_r, bg=@sf.faint_ground)
-
-///|
-// kept across runs: a value (no field of it changes)
 let tool_result_box : @ui.Style = @ui.css("w=Full pt=S1 gap=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_result_card : @ui.Style = @ui.style(w=Full, py=S2, px=S3, gap=S1, radius=@sf.custom_field_r, bg=@sf.faint_ground)
-
-///|
-// kept across runs: a value (no field of it changes)
-let tool_result_card_red : @ui.Style = tool_result_card.then(@ui.css("bg=DangerBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
