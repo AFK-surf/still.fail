@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c3432a641](https://github.com/AFK-surf/monoid/commit/c3432a641c2f7c96a0e1b7ac423f3dc2f0679620) vault: agents ask to delete an item (secret_delete | 1.99 | 2.71 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.6 | 110.87 |
 | [90eae7989](https://github.com/AFK-surf/monoid/commit/90eae798919e13ce9ea8b8586b4f26a109ea58f9) core: the base says words of its own, of no progra | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.55 | 111.28 |
 | [49206681f](https://github.com/AFK-surf/monoid/commit/49206681fd5da4fb4db2afee4dd45c325658b6b4) station, core, app: retire a station (its chats, f | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.96 | 112.67 |
 | [c52e9bd2e](https://github.com/AFK-surf/monoid/commit/c52e9bd2edee63163cd6774f9e516fb81604716e) app: a chat archived from its row says so where th | 1.98 | 2.71 | 11.55 | 31.15 | 41.53 | 27.77 | 53.26 | 96.86 | 114.75 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [3b7c1fa43](https://github.com/AFK-surf/monoid/commit/3b7c1fa4361d9cd8e89f804c608588ded9a2799f) mbui: a key coming at a page's list's end is one m | 1.97 | 2.68 | 11.4 | 30.95 | 40.88 | 27.6 | 52.75 | 96.01 | 109.79 |
 | [e99808c93](https://github.com/AFK-surf/monoid/commit/e99808c9330741e71d5bc58380e44eb6e2a287dc) fix(mbui): align connects cards, lead icons, and r | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.01 | 109.79 |
 | [ffa55870f](https://github.com/AFK-surf/monoid/commit/ffa55870f01816f0b3661d6bf6d80ff9b0c72f39) fix(mbui): show the floating outline button on wid | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.01 | 109.79 |
-| [6311979f9](https://github.com/AFK-surf/monoid/commit/6311979f9e1985bcf38250026136912de3ee9c73) cloud: a self-hosted cloud on workerd, its names,  | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 109.79 |
