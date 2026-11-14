@@ -162,10 +162,15 @@ pub(all) struct ReportingHost {
 pub let reporting_host : @signals.Signal[ReportingHost?] = @signals.signal(None)
 
 ///|
-/// Whether this device's core sends what people use (client/core-ts/src/use-counts.ts: a build given still.fail's
-/// PostHog project, on still.fail's own cloud), as its `client.reports` answered (`sends`); false till then, and under
-/// a Tester, whose core says nothing of it.
-pub let core_sends : @signals.Signal[Bool] = @signals.signal(false)
+/// Whether this device's core sends what people use (the prefs' `counted`, client/core-ts/src/use-counts.ts: a build
+/// given still.fail's PostHog project, on still.fail's own cloud); not so under a Tester or a replay, whose core says
+/// nothing of it, so the app tells it nothing of it there either.
+pub fn core_counts(src : Source) -> Bool {
+  match src.topic("prefs", {}).get().value {
+    Some(Object(m)) => m.get("counted") is Some(True)
+    _ => false
+  }
+}
 
 ///|
 /// Whether usage statistics and error reports go out from this device: as the host's switch is, where it keeps one;
@@ -176,7 +181,7 @@ pub fn reporting_on(src : Source) -> Bool? {
   match reporting_host.get() {
     Some(h) => Some((h.get)())
     None =>
-      if core_sends.get() {
+      if core_counts(src) {
         Some(@settings.pref_from(src.topic("prefs", {}).get().value, "reports") != "off")
       } else {
         None
@@ -185,16 +190,14 @@ pub fn reporting_on(src : Source) -> Bool? {
 }
 
 ///|
-/// The core told whether to count what people use on this device (`client.reports`, use-counts.ts) as the settings
-/// say (reporting_on; where nothing says, on: the core sends nothing anyway unless it can), and as they change; its
-/// answer says whether it sends at all (core_sends). Said as the app starts, before what it counts.
-pub fn tell_reports(src : Source, on : Bool) -> Unit {
-  (src.call)("client.reports", { "on": Json::boolean(on) }, fn(r) {
-    match r {
-      Ok(Object(m)) => core_sends.set(m.get("sends") is Some(True))
-      _ => ()
-    }
-  })
+/// What the app tells a core that counts what people use (core_counts; use-counts.ts): whether to, as the settings say
+/// (reporting_on), and, while it does, what it shows by its kind alone; None while nothing is to be told.
+pub fn counts_told(src : Source, shown : String) -> (Bool, String)? {
+  if !core_counts(src) {
+    return None
+  }
+  let on = reporting_on(src).unwrap_or(true)
+  Some((on, if on { shown } else { "" }))
 }
 
 ///|

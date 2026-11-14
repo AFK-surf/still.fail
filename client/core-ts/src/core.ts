@@ -208,6 +208,7 @@ export class Core {
         os: service.os,
         build: ownBuild(),
       }));
+      prefs.setCounted(inner.useCounts.sends);
       spentClock(() => inner.host.monotonicMs());
       // A failure let go of is a span of its own: Cloud Trace has it though nothing waited on it.
       inner.runner.onIgnored = (what, error) => {

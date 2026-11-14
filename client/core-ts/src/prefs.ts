@@ -124,12 +124,19 @@ function listFiltersOf(v: unknown): Map_ {
   return isObject(v) ? Object.fromEntries(Object.entries(v).filter(([, f]) => LIST_FILTERS.includes(f as string))) : {};
 }
 
+/// Whether this core sends what people use (use-counts.ts `sends`: a build given still.fail's project, on its own
+/// cloud), said with the prefs as `counted`: the app then tells it whether to (`client.reports`) and what it shows.
+let counted = false;
+export function setCounted(on: boolean): void {
+  counted = on;
+}
+
 /// The prefs as they go out: the current product name, the reader's settings whole, the bottom bars (each workspace's
 /// too), the faces, and the keymap and the rail.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, productName: brand.name(), product: brand.current().name, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
+  return { ...v, productName: brand.name(), product: brand.current().name, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v), ...(counted ? { counted: true } : {}) };
 }
 
 /// What is kept, as kept (no defaults filled in).

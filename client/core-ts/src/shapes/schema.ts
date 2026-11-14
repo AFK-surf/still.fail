@@ -2583,6 +2583,7 @@ export const SHAPES: Record<string, Shape> = {
     ["fillOff", opt("bool"), { default: true, doc: "Files opened and let go before all of them came are not brought whole after everything else on this\ndevice (fill.ts); none: they are." }],
     ["fillMax", opt("i64"), { default: true, client: "I54", doc: "The most a file opened and let go is brought whole by itself on this device, in bytes: 0 any; none: 1 GB." }],
     ["device", "DeviceView", { default: true }],
+    ["counted", opt("bool"), { doc: "Whether this device's core sends what people use (use-counts.ts: a build given still.fail's project, on\nits own cloud); none: it sends nothing, and the app tells it nothing of it." }],
     ["productName", opt("String"), { doc: "The product's name on this app's channel: still.fail or youdid.wtf (monoid or monoid.zone on monoid's cloud)." }],
     ["product", opt("String"), { doc: "The product the core's cloud is, whatever the channel: still.fail, or monoid (client/i18n/brand.ts): the name\nthe app's words say for still.fail's." }],
     ["reader", "ReaderPrefs", { default: true, doc: "How the drive's reader lays text out (always whole: the core fills in what is not kept)." }],
