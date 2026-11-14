@@ -93,6 +93,20 @@ const SAYING = [
   "Role",
   "Recipient",
   "Message",
+  "summary",
+  "message",
+  "recipient",
+  "subagent_type",
+  "TypeName",
+  "agent_id",
+  "brief",
+  "task",
+  "text",
+  "reason",
+  "about",
+  "Action",
+  "TaskId",
+  "skill",
 ];
 /// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
 const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);
@@ -152,7 +166,11 @@ export function brief(e: TimelineEntry): TimelineEntry {
       const v = JSON.parse(e.text);
       if (isObj(v) && typeof v.ok === "boolean") text = JSON.stringify(isStr(v.ts) ? { ok: v.ok, ts: v.ts } : { ok: v.ok });
     } catch {
-      // Not Slack's answer: nothing of it.
+      // Not Slack's answer: keep a spawned sub-agent's id if present so later SendMessage calls can name it.
+    }
+    if (text === "") {
+      const aid = /\b(?:agentId|agent_id|conversationId)["'\s:=]+["']?([A-Za-z0-9_-]{6,})/.exec(e.text);
+      if (aid?.[1]) text = `agentId: ${aid[1]}`;
     }
     return { ...e, text, brief: true };
   }
