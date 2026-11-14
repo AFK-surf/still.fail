@@ -1105,7 +1105,7 @@ let float_button : @ui.Style = @ui.css((
 
 ///|
 // kept across runs: a value (no field of it changes)
-let float_button_hot : @ui.Style = float_button.then(@ui.css("bg=Hover"))
+let float_button_hot : @ui.Style = float_button.then(@ui.css("bg=Over(Surface, Hover)"))
 
 ///|
 // kept across runs: a value (no field of it changes)
