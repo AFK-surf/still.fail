@@ -54,10 +54,13 @@ SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 BT=$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1 || true)
 build_number() { git -C "$REPO" rev-list --count HEAD; }
 # What the app is made of: its code, what it is built with (mbui, its Android host's Java and resources among it:
-# apps/mbui/android/apk.json; the core, the client's packages, media's, vendor's crates), not their tests, docs, the
-# scripts or CI (a push of those alone is no new package: 2026-10-21)
+# apps/mbui/android/apk.json; the core and what else of the checkout its bundle takes, scripts/core.sh HBC_TREES; the
+# client's packages, media's, vendor's crates), not their tests, docs, the scripts or CI (a push of those alone is no
+# new package: 2026-10-21). Not the four config files HBC_TREES ends with, on purpose (it says why): a change to one
+# alone is no new package, and goes out with the next, its core made anew.
 APP_SRC=(apps/mbui/src apps/mbui/core apps/mbui/android apps/mbui/ios apps/mbui/windows apps/mbui/engine
   libs/mbui/src libs/mbui/android libs/mbui/moon.mod apps/mbui/moon.mod apps/mbui/moon.work client media vendor
+  rules/js station/src/updates/keys.ts station/src/api/moved-from.ts web/public/avatars/index.json
   ':(exclude,glob)**/test/**' ':(exclude,glob)**/tests/**' ':(exclude,glob)**/*_test.mbt' ':(exclude,glob)**/*_wbtest.mbt' ':(exclude,glob)**/*.test.*'
   ':(exclude,glob)**/*.md')
 # the commit PART's feed names now (versionCode n is main's nth commit); nothing when it has none

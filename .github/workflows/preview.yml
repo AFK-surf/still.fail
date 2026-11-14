@@ -23,6 +23,10 @@ on:
       - "apps/mbui/**"
       - "libs/mbui/**"
       - "client/**"
+      - "rules/js/**"
+      - "web/public/avatars/index.json"
+      - "station/src/api/moved-from.ts"
+      # (not the four config files apps/mbui/scripts/core.sh HBC_TREES ends with, on purpose: it says why)
       - "vendor/**"
       - "scripts/native.ts"
       - "scripts/release-put.sh"
