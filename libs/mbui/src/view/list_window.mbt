@@ -503,6 +503,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   comes? : (K) -> Bool = fn(_) { true },
   goes? : (K) -> Bool = fn(_) { true },
   leaves_room? : (K) -> Bool = fn(_) { false },
+  comes_whole? : (K) -> Bool = fn(_) { false },
   at_once? : Bool = false,
   place? : ListPlace[K],
   near_foot? : (Double, () -> Bool, () -> Unit),
@@ -567,6 +568,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // were said in. `one_move_key`: L, the keys come after it, the change's moment, till the fill that measures them;
   // `came_row`: their rows, noted only while they are named)
   let one_move_key : Ref[(K, Array[K], Double)?] = Ref(None)
+  // (a bridge while an old view is hosted in its foot (the chat's composer, laid out only as the old frame is built):
+  // the builds of the old views begun as `one_move_key` was armed, and whether what waited for one done is let go;
+  // a set-out is worked out from what that change gives back only once an old view under its foot is built since
+  // its cause, at the cause's moment still, never from that foot's size before it: one motion, the composer's closing
+  // the list's rise. It goes once no old view is hosted in a list's foot (the composer made as nodes; the
+  // coordinator of the migration, 2026-11-14))
+  let one_move_builds = Ref(0)
+  let one_move_free = Ref(false)
   let came_row : Map[K, View] = Map([])
   let floor_raise = fn() {
     if floor.val is Some((k, e)) {
@@ -830,6 +839,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             c = c - 1
           }
           one_move_key.val = Some((was[j], ks[c:].to_owned(), self.tree.cause_now()))
+          one_move_builds.val = self.tree.old_builds_begun
+          one_move_free.val = false
         }
       }
       if @signals.untracked(fn() { s.at_foot() }) {
@@ -869,6 +880,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // declares (ways_due, below); and what ends that wait)
   let ways : Array[(View, K, K?)] = []
   let ways_off : Ref[() -> Unit] = Ref(fn() {  })
+  // (the blocks of keys said to come whole (`comes_whole`) on their way at its foot, by their nodes: drawn as at rest,
+  // not cut to their room, over the rest of the list (Tree::raise_in_list, the paint's), the latest come the one drawn
+  // so; none once their ways end)
+  let whole_rows : Array[View] = []
+  let whole_raised = fn() {
+    let alive = whole_rows.filter(fn(r) { r.alive() && ways.iter().any(fn(w) { w.0.at == r.at && w.0.id() == r.id() }) })
+    whole_rows.clear()
+    whole_rows.append(alive)
+    self.tree.raise_in_list(self.at, whole_rows.last().map(fn(r) { r.id() }))
+  }
   // Where its blocks are now (Places): as they are counted, less what the ways over each have still to open, at the
   // moment each way is laid out at as the column is laid out (its room's, the one flex lays it out at), else at the
   // logic's moment (an input, a change). With none on its way, the column as it is counted.
@@ -2487,9 +2508,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     match one_move_key.val {
       Some((lk, kks, cause)) => {
         let rows = kks.map(fn(k) { (came_row.get(k), heights.get(k)) })
+        // (its foot holding an old view not built since the cause: noted for the fill after it is, or before the
+        // frame is painted, whichever is first: one_move_builds)
+        let foot_waits = !one_move_free.val &&
+          self.tree.old_builds <= one_move_builds.val &&
+          (match foot_v.val {
+            Some(fv) => fv.alive() && self.tree.holds_hosted(fv.at)
+            None => false
+          })
         if rows.iter().any(fn(r) { r.0 is Some(row) && row.alive() && r.1 is None }) {
           // (a row made, not measured yet: noted for the fill that measures it)
           ()
+        } else if foot_waits {
+          self.tree.old_built_waits.push(fn() {
+            one_move_free.val = true
+            laid_again()
+          })
         } else {
           one_move_key.val = None
           came_row.clear()
@@ -2739,6 +2773,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       i == v.at
     }).map(fn(b) { b.0 })
     seen_on_way[v.at] = (v, held)
+    // (one said to come whole: drawn as at rest all its way)
+    if whole_rows.iter().any(fn(r) { r.at == v.at && r.alive() && r.id() == v.id() }) {
+      return
+    }
     v.alpha(By(fn() { row_held_at(shown_share(v)).0 })) |> ignore
     for b in held {
       b.scale(By(fn() { row_held_at(shown_share(v)).1 }), about=DrawnSide(0.0)) |> ignore
@@ -2781,6 +2819,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       ways.clear()
       ways.append(left)
       laid_again()
+    }
+    if !whole_rows.is_empty() {
+      whole_raised()
     }
     (ways_off.val)()
     ways_off.val = fn() {  }
@@ -2964,6 +3005,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (come at its foot with no way: it takes the room all the same, there at once)
     if coming && !ok && @signals.untracked(fn() { s.at_foot() }) {
       take_room(k, row) |> ignore
+    }
+    if ok &&
+      coming &&
+      @signals.untracked(fn() { comes_whole(k) && s.at_foot() && follows() }) &&
+      !@signals.untracked(self.tree.motion_reduced) {
+      whole_rows.push(row)
+      self.tree.nodes[row.at].come_uncut = true
+      self.tree.raise_in_list(self.at, Some(row.id()))
     }
     if ok {
       let left = ways.filter(fn(w) { w.0.at != row.at })

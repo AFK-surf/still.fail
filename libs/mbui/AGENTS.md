@@ -72,15 +72,26 @@ yet and you can add one, add it.
   its room left under the last block: what comes at its foot takes that room first, what is over it up only by what it
   needs past it, and the room goes only as the hand scrolls it off (the user, 2026-11-12: a turn that ends with no
   answer must not carry what is read up and let it fall back; the coordinator of the migration, 2026-11-13;
-  `src/view/list_foot_room_test.mbt`); what is sent takes it up only: at its foot, in a change by which a key comes at
+  `src/view/list_foot_room_test.mbt`); a key its page says `comes_whole` (one's own words sent, where no flight
+  carries them), coming by data while the list is at its foot and follows it, makes its way as any key does, all else
+  where it would be, but what its block holds is drawn as at rest all the way: at full ink and its size from the
+  block's top, not cut to its room, over the rest of its list (its keys under it, its pinned foot: the paint's alone,
+  `Tree::raised_blocks`, ui's `view_paint` moving what it draws after its list's, cut as where it is; found by a press
+  and read out where it is laid); not at its foot, `at_once` or with motion reduced, as any key
+  (`src/view/list_key_whole_test.mbt`, `src/ui/list_key_whole_wbtest.mbt`; the coordinator of the migration,
+  2026-11-14); what is sent takes it up only: at its foot, in a change by which a key comes at
   its foot, the stretch from the top of the last key that stays to the column's end is never shorter than it was then
   while that change's ways go and rests as long as it came to, so what is over the key goes up only by what it needs
   past all that change gives back under that key's top (the room there, the pinned foot's shrink, a part closing in
   it, a marked key), never down; and the key coming there sets out from as tall as all that gives back, never taller
   than itself, two or more in their order each up to its own height, in the one way they were said in, so what it
-  holds is at its resting place against that key from the first frame (`src/view/list_send_one_move_test.mbt`); a key
-  the page lets go, not marked, gone at or under that key (by its way or at once) is no such giving back, and that
-  change is as ever (the coordinator of the migration, 2026-11-13;
+  holds is at its resting place against that key from the first frame (`src/view/list_send_one_move_test.mbt`); where
+  an old view is hosted in its pinned foot (laid out only as the old frame is built), that set-out is worked out in the
+  first fill after the old view is built since the cause, at the cause's moment still (`Tree::old_views_built`,
+  `src/ui/list_foot_old_view_wbtest.mbt`, a bridge going with the composer made as nodes; the coordinator of the
+  migration, 2026-11-14: one motion, the composer's closing is the list's rise); a key the page lets go, not marked,
+  gone at or under that key (by its way or at once) is no such giving back, and that change is as ever (the
+  coordinator of the migration, 2026-11-13;
   `src/view/list_sent_up_test.mbt`); what a block holds makes its way in the list's one way, its held column's
   group, with what comes or goes down the list then (Tree::come_group_join); every list said `at_once` (keys there and
   gone at once, its blocks' insides each their own way) is a debt of 方案 A, counted (detlint's `list-comes-off`) and

@@ -1030,6 +1030,12 @@ fn old_drawn(tree : @view.Tree) -> Array[(@view.Content, Double, Double, Double,
 /// places an old view otherwise than this pass built it for, the frame built again for that before it is drawn (drawn
 /// so, an old view built for the room it had would be drawn in the room it has now, till the next frame).
 fn view_told_as_built(c : Ctx) -> Unit {
+  // (the old views built: told the tree first, what waited for that (a list's set-out under an old view in its foot:
+  // Tree::old_views_built) taken as it is brought now)
+  match view_app.val {
+    Some(tree) => tree.old_views_built()
+    None => ()
+  }
   match view_app.val {
     Some(tree) if view_owes(tree) => {
       let was = view_island_said()
@@ -1039,6 +1045,16 @@ fn view_told_as_built(c : Ctx) -> Unit {
       }
     }
     _ => ()
+  }
+}
+
+///|
+/// A build of the old frame begun (a pass of it): told the window's tree (Tree::old_views_building), what it hosts
+/// built from here.
+fn view_old_building() -> Unit {
+  match view_app.val {
+    Some(tree) => tree.old_views_building()
+    None => ()
   }
 }
 
@@ -1256,6 +1272,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // what the frame took is what it paints)
   view_due.get() |> ignore
   view_due_at.val = ""
+  // (what waited for the old views to be built done by now, whatever this frame built: Tree::old_views_settled)
+  tree.old_views_settled()
   if view_owes(tree) {
     view_brought(tree, told=false)
   }
@@ -1400,6 +1418,53 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // `grouping` till then. Else drawn where the column has it, its column's offset moving it painted anew
   // (offsets_flat).)
   offsets_flat.clear()
+  // (a page's list's block on its way whole (View::scrolls_window's `comes_whole`, Tree::raised_blocks): what it draws
+  // moved, as the walk leaves its list, to after all the list draws (its keys under it, its pinned foot), cut as where
+  // it is; what holds it drawn as gone through, none of it kept or drawn whole as one meanwhile. None on a list with none:
+  // one look at an empty array. Not where the walk finds what is pressed: paint's alone)
+  let raised = if dr.mode == mode_hits { [] } else { tree.raised_blocks() }
+  // (the one being gone through: its list, it, where its instances begin and end)
+  let lifting : Ref[(@view.NodeId, @view.NodeId, Int, Int)?] = Ref(None)
+  let raise_holds = fn(id : @view.NodeId) {
+    !raised.is_empty() && raised.iter().any(fn(r) { r.1 == id || tree.holds_in_order(id, r.1) })
+  }
+  let lift_to = fn(next : @view.NodeId?) {
+    let held_by = fn(outer : @view.NodeId) {
+      match next {
+        Some(n) => tree.holds_in_order(outer, n)
+        None => false
+      }
+    }
+    match lifting.val {
+      Some((list, b, k0, k1)) => {
+        let k1 = if k1 < 0 && !held_by(b) { self.ninst } else { k1 }
+        if k1 >= 0 && !held_by(list) {
+          if k1 > k0 && self.ninst > k1 {
+            self.raise_ranges([(k0, k1)])
+          }
+          lifting.val = None
+        } else {
+          lifting.val = Some((list, b, k0, k1))
+        }
+      }
+      None => ()
+    }
+    match (lifting.val, next) {
+      (None, Some(n)) if !raised.is_empty() =>
+        match raised.iter().find_first(fn(r) { r.1 == n || tree.holds_in_order(r.1, n) }) {
+          Some((list, b)) => {
+            ride_spoil()
+            match list_riding.val {
+              Some(l) => l.spoiled = true
+              None => ()
+            }
+            lifting.val = Some((list, b, self.ninst, -1))
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
   let grouping : Ref[@view.NodeId?] = Ref(None)
   let offsets = fn(c : @view.Content) -> Bool {
     let k = clip_top()
@@ -1416,6 +1481,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       fading.length() == 0 &&
       stretching.length() == 0 &&
       raising.val is None &&
+      !raise_holds(c.id) &&
       dr.mode == 0 &&
       !shooting.val &&
       groups_on() &&
@@ -1481,6 +1547,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     close_to(Some(c.id))
     raise_close(Some(c.id))
+    if !raised.is_empty() {
+      lift_to(Some(c.id))
+    }
     while fading.length() > 0 && !tree.holds_in_order(fading[fading.length() - 1].0, c.id) {
       fading.pop() |> ignore
     }
@@ -1528,7 +1597,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // all it holds passed over; else drawn, and kept as it ends where it can be drawn so again. So too what else holds
     // others, gone through again and again with nothing of it changed (ride_holder), in a row or in none, not in a list
     // drawn whole as one but in its rows; one found holding a row or an old view let be, never begun again)
-    if fading.length() == 0 && stretching.length() == 0 {
+    if fading.length() == 0 && stretching.length() == 0 && !raise_holds(c.id) {
       let row = ridings_rows.val == 0 &&
         ((ride_may(c, x, y) && tree.rides_scroll(c.id)) || island_rides(c))
       if row {
@@ -1775,6 +1844,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   }
   close_to(None)
   raise_close(None)
+  if !raised.is_empty() {
+    lift_to(None)
+  }
   if revealing is Some(_) {
     pop_clip()
   }
