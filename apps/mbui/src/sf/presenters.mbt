@@ -2972,7 +2972,7 @@ fn step_head(
     }
     // 
     c.box(style=dialog_title_line, fn() {
-      c.text(title, style=words) |> ignore
+      c.text(title_plain(title), style=words) |> ignore
       if count != "" {
         c.text(count, style=dialog_step) |> ignore
       }
@@ -3014,7 +3014,15 @@ fn wh_of(c : @ui.Ctx) -> Double {
 ///|
 /// A sheet's title: 17 bold, on its words' line (sheet_panel_sides in), 4 over and 10 under.
 fn sheet_title(c : @ui.Ctx, title : String) -> Unit {
-  c.box(style=sheet_title_row, fn() { c.text(title, style=sheet_title_words) |> ignore }) |> ignore
+  c.box(style=sheet_title_row, fn() {
+    if title_marked(title) {
+      // (a part of it in the accent: title_accent.mbt)
+      c.rich(title_runs(title, theme().p.accent_text), style=sheet_title_words) |> ignore
+    } else {
+      c.text(title, style=sheet_title_words) |> ignore
+    }
+  })
+  |> ignore
 }
 
 ///|

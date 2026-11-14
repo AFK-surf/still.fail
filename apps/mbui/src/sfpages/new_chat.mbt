@@ -409,7 +409,7 @@ fn new_controls(
     // (a preset that names its model: shown as the preset's, not opened; changed by editing the preset or picking none)
     model_triple(c, src, address, "new", face=p, small=true, floating~, bound=flag(v, "presetModel"), on_bound=fn(from) {
       if !going {
-        preset_fixed_menu(src, w, address, v, @sf.t("web-main.preset.fixedModel", args=[("name", text(v, "presetName"))]), from)
+        preset_fixed_menu(src, w, address, v, @sf.t("web-main.preset.fixedModel", args=[("name", @sf.title_accented(text(v, "presetName")))]), from)
       }
     })
   }
@@ -457,7 +457,7 @@ fn new_station_control(
         ()
       } else if fixed {
         // (held by the preset: said so, with the ways to change it)
-        preset_fixed_menu(src, w, text(station, "station"), v, @sf.t("web-main.preset.fixedStation", args=[("name", text(v, "presetName"))]), Of(from))
+        preset_fixed_menu(src, w, text(station, "station"), v, @sf.t("web-main.preset.fixedStation", args=[("name", @sf.title_accented(text(v, "presetName")))]), Of(from))
       } else {
         open()
       }

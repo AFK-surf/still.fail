@@ -144,7 +144,7 @@ test "a phone's new chat shows its preset's control, the composer a capsule as t
 test "a preset that names its model and its station shows them as its own, a press saying the preset holds it and the ways to change it" {
   // (the same page with a preset that names neither: each opens its pick)
   for bound in [false, true] {
-    for (words, held) in [("Opus 5.5", "模型由预设"), ("Willow", "Station 由预设")] {
+    for (words, held) in [("Opus 5.5", "模型已被 "), ("Willow", "Station 已被 ")] {
       new_run()
       let t = preset_mode(if bound { "newchat-preset-bound" } else { "newchat-preset-picked" })
       guard t.find(words) is Some((x, y)) else { fail("no \{words}: \{runs(t)}") }

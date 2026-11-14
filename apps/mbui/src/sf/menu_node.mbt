@@ -276,7 +276,7 @@ pub fn menu_node(
         .clips(Is(true))
         .alpha(By(fn() { look().alpha }))
         .scale(By(fn() { look().sx }), about=FromBeside)
-        .says(Is(Some(@view.said(Menu, label=title))))
+        .says(Is(Some(@view.said(Menu, label=title_plain(title)))))
         // (the focus its own as it opens, opened by the pointer: no key presses it; its rows lit as they have it; one of
         // the menu's two stops of Tab's, its rows the other, as kit's panel and roving group are)
         .focusable(Is(true), keys=0)
@@ -541,10 +541,19 @@ fn menu_heading_node(
   b.box(made_for=loc, fn(h) {
     h.padding(By(fn() { (text_in + past() + reach, 6.0, 10.0 + reach, 4.0) })) |> ignore
     h.box(fn(w) {
-      w
-      .words(By(label), look=toast_words_look(Meta, L4_75, 400, false))
-      .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-      |> ignore
+      // (a part of it in the accent: title_accent.mbt)
+      if title_marked(@signals.untracked(label)) {
+        w
+        .words_runs(By(fn() { title_runs(label(), theme().p.accent_text) }))
+        .words_look(Is(toast_words_look(Meta, L4_75, 400, false)))
+        .ink(By(fn() { @ui.tree_theme().color(Muted) }))
+        |> ignore
+      } else {
+        w
+        .words(By(label), look=toast_words_look(Meta, L4_75, 400, false))
+        .ink(By(fn() { @ui.tree_theme().color(Muted) }))
+        |> ignore
+      }
     })
     |> ignore
   })
