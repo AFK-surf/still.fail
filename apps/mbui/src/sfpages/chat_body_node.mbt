@@ -275,7 +275,7 @@ priv struct ChatBodyKeeps {
   steadies : ActivitySteadies
   /// each agent at work's picture on its line, by its key, while that line is made (working_said_node's): what a
   /// message of its coming by data comes out of (agent_said_node's `out_of`)
-  faces : Map[String, @view.View]
+  faces : Map[String, (@view.View, @motion.Way)]
 }
 
 ///|
@@ -856,11 +856,11 @@ fn ask_again_ms(fails : Int) -> Double {
 /// where the message comes by data while the chat is watched (`came`: chat_body_comes, not answered at once) and that
 /// line is made; none else, the message simply there (sf/motion.mbt: what was said before it was shown moves not).
 fn agent_out_of(
-  faces : Map[String, @view.View],
+  faces : Map[String, (@view.View, @motion.Way)],
   here : MessageNodeHere,
   m : () -> Message,
   came : () -> Double?,
-) -> @view.View? {
+) -> (@view.View, @motion.Way)? {
   guard @signals.untracked(came) is Some(_) else { return None }
   let agent = @signals.untracked(fn() { message_agent_of(here, m().by.agent) })
   guard agent != "" else { return None }

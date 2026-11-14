@@ -60,24 +60,31 @@ fn agent_said_node(
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
   core? : @settings.Core? = None,
-  out_of? : @view.View? = None,
+  out_of? : (@view.View, @motion.Way)? = None,
 ) -> MessageRowNode {
   let menu_on : Ref[() -> Bool] = Ref(fn() { false })
   let row = message_row_frame_node(v, key, side, top, over~, fn(r) {
-    // (come by data while its agent was at work: out of that agent's picture on its line (`out_of`), grown from as
-    // wide as it to its own place, a flight, sf/motion.mbt kind 4; View::flies_in. The old page's Spit, emit.mbt)
+    // (come by data while its agent was at work: out of that agent's picture on its line (`out_of`), as emit.mbt's: the
+    // line folds into its picture (Fold), it grows out of the picture's middle to its own place (Spit, a flight,
+    // sf/motion.mbt kind 4: View::flies_in), the line unfolds again (Return); each from the cause's moment)
     match out_of {
-      Some(face) =>
-        r.flies_in(
-          // det-ok(motion-length): a message coming out of its agent's picture, emit.mbt's Spit
-          @motion.flight_by(@motion.tween(@sfbase.Pose::Spit.ms(), ease=Out)),
-          fn(to) {
-            let (fx, fy, fw, _) = face.laid_window_now()
-            guard fw > 0.0 && to.2 > 0.0 else { return None }
-            Some((fx, fy, fw, fw * to.3 / to.2))
-          },
-        )
+      Some((face, fold)) => {
+        let at = r.cause_at()
+        let fold_ms = @sfbase.Pose::Fold.ms()
+        let spit_ms = @sfbase.Pose::Spit.ms()
+        // det-ok(motion-length): emit.mbt's Fold, Spit and Return, a message coming out of its agent's picture
+        fold.go(0.0, @motion.tween(fold_ms, ease=Out), at~)
+        r.at_moment(at + fold_ms + spit_ms, fn() {
+          fold.go(1.0, @motion.tween(@sfbase.Pose::Return.ms(), ease=Out), at=at + fold_ms + spit_ms)
+        })
         |> ignore
+        r.flies_in(emerges(fold_ms, spit_ms), fn(_) {
+          let (fx, fy, fw, fh) = face.laid_window_now()
+          guard fw > 0.0 else { return None }
+          Some((fx + fw / 2.0, fy + fh / 2.0, 0.0, 0.0))
+        })
+        |> ignore
+      }
       None => ()
     }
     let (_, on) = message_others_node(
@@ -292,4 +299,16 @@ fn message_path_held(src : Source, station : String, agent : String, path : Stri
     ],
     from=At(at.0, at.1, at.2, at.3),
   )
+}
+
+///|
+/// A message's way out of its agent's picture (agent_said_node's `out_of`): nothing of it while the line folds (`wait`
+/// ms: drawn as big as nothing, at the picture's middle), then out to its place over `ms` on the ease-out (emit.mbt's
+/// Spit).
+fn emerges(wait : Double, ms : Double) -> @view.Flight {
+  {
+    way: fn(_) {
+      (wait + ms, fn(t) { if t <= wait { 0.0 } else { @ui.Out.at(if t - wait >= ms { 1.0 } else { (t - wait) / ms }) } })
+    },
+  }
 }
