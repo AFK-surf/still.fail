@@ -4544,6 +4544,24 @@ pub fn Tree::ground_read(self : Tree, id : NodeId) -> Int {
 }
 
 ///|
+/// Whether node `id` lights up its ground under the hand (its ground binding read the hand or the focus, or it binds a
+/// ground while watching the hand on itself), whether pointer movement on it chooses it (`on_pointer_moved`), and
+/// whether the hand is on it now.
+pub fn Tree::lit_row_state(self : Tree, id : NodeId) -> (Bool, Bool, Bool) {
+  if !self.alive_id(id) {
+    return (false, false, false)
+  }
+  let n = self.nodes[id.at]
+  let has_ground_bind = n.props.contains(Ground.ord())
+  let watches_hand = n.pointed_cell is Some(_) || n.pressed_cell is Some(_) || n.pointed_in_cell is Some(_)
+  let lights = (n.ground_read & (ground_read_hand | ground_read_focus)) != 0 ||
+    (has_ground_bind && watches_hand)
+  let chooses = n.on_pointer_moved is Some(_)
+  let hand_on = self.pointed == Some(id) || self.pressing == Some(id) || self.pointed_within_at(id.at)
+  (lights, chooses, hand_on)
+}
+
+///|
 /// The shapes it draws over its ground, in its own terms from its top left (@paint.Shape: outlines filled and stroked):
 /// paint's. What they come to as they are drawn is worked out once for the shapes said (their outlines), whatever colour
 /// they are drawn in (View::tint).

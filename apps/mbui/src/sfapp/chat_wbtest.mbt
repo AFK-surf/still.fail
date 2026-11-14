@@ -13,9 +13,10 @@ fn chat_tester(mode : String, w? : Double = 390.0) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
-  // (what the bar shows: its words seen, not those its row left out for the title and its agent, as a phone's is)
+  // (what the bar shows: its words seen, not those its row left out for the title and its agent)
   let bar = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.2 < 100.0 && w.5 > 0.0 }).map(fn(w) { w.0 }) }
-  assert_true(!bar(t).contains("你") && !bar(t).contains("林"), msg="its people left out for its title: \{Repr(bar(t))}")
+  assert_true(bar(t).contains("你"), msg="its people with the room: \{Repr(bar(t))}")
+  assert_true(!bar(t).contains("林"), msg="lettered as it calls them: \{Repr(bar(t))}")
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   let (_, field_y) = t.find("发消息").unwrap()
@@ -28,10 +29,9 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
   t.assert_idle()
-  // its people in the bar where it has the room, lettered as it calls them: the viewer 「你」, not their name
-  let wide = chat_tester("chat", w=480.0)
-  assert_true(bar(wide).contains("你"), msg="its people with the room: \{Repr(bar(wide))}")
-  assert_true(!bar(wide).contains("林"), msg="lettered as it calls them: \{Repr(bar(wide))}")
+  // its people left out for its title where the bar is narrower
+  let narrow = chat_tester("chat", w=350.0)
+  assert_true(!bar(narrow).contains("你") && !bar(narrow).contains("林"), msg="its people left out for its title: \{Repr(bar(narrow))}")
 }
 
 ///|

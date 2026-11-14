@@ -913,7 +913,177 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       }
     }
   }
+  self.tree_lit_apart_faults(out)
   out
+}
+
+///|
+/// Rule 1 (`lit_apart`) checked on the window's tree's nodes (`@view.View`): where a container has a row with a
+/// persistent active background at rest (`kept`) and adjacent rows that light up under the hand (`lit`), they must
+/// stand at least `lit_apart` apart so active and hover backgrounds never touch.
+fn Ctx::tree_lit_apart_faults(self : Ctx, out : Array[String]) -> Unit {
+  if self.lit_apart <= 0.0 {
+    return
+  }
+  let tree = match view_app.val {
+    Some(t) if !old_whole.val => t
+    _ => return
+  }
+  let start = self.count
+  self.with_tree_nodes(fn() {
+    let n = self.count
+    if n <= start {
+      return
+    }
+    let (whole, layer) = self.shown_whole()
+    let rect = fn(i : Int) {
+      let b = self.nodes[i]
+      (b.x, b.y, b.x + b.fw, b.y + b.fh)
+    }
+    let lit : Array[Int] = []
+    let chooses_set : Set[Int] = Set([])
+    let hand_set : Set[Int] = Set([])
+    for i in start..<n {
+      let b = self.nodes[i]
+      if !whole[i] || b.kind != kind_box || b.fw <= 0.0 || b.fh <= 0.0 || !(b.grounded() || b.radius > 0.0) {
+        continue
+      }
+      match tree_frame_ids.get(i) {
+        Some(id) => {
+          let (lights, chooses, hand_on) = tree.lit_row_state(id)
+          if lights {
+            lit.push(i)
+            if chooses {
+              chooses_set.add(i)
+            }
+            if hand_on {
+              hand_set.add(i)
+            }
+          }
+        }
+        None => ()
+      }
+    }
+    let holds = fn(o : Int, i : Int) {
+      let a = self.nodes[o]
+      let b = self.nodes[i]
+      b.x >= a.x - gap_slack &&
+      b.y >= a.y - gap_slack &&
+      b.x + b.fw <= a.x + a.fw + gap_slack &&
+      b.y + b.fh <= a.y + a.fh + gap_slack &&
+      (b.fw >= a.fw * gap_spans || b.fh >= a.fh * gap_spans)
+    }
+    let lit = lit.filter(fn(o) {
+      dmin(self.nodes[o].fw, self.nodes[o].fh) >= gap_lit_least &&
+      !lit.iter().any(fn(i) { i != o && layer[i] == layer[o] && holds(o, i) })
+    })
+    let ground_of : Map[Int, Int] = Map([])
+    let parts : Map[Int, (Double, Double, Double, Double)] = Map([])
+    for i in lit {
+      let mut q = self.nodes[i].parent
+      while q >= start && layer[q] == layer[i] && !self.nodes[q].grounded() {
+        q = self.nodes[q].parent
+      }
+      if q >= start && layer[q] == layer[i] {
+        ground_of[i] = q
+        let b = self.nodes[i]
+        parts[q] = match parts.get(q) {
+          Some((x0, y0, x1, y1)) => (dmin(x0, b.x), dmin(y0, b.y), dmax(x1, b.x + b.fw), dmax(y1, b.y + b.fh))
+          None => (b.x, b.y, b.x + b.fw, b.y + b.fh)
+        }
+      }
+    }
+    let one_control = fn(a : Int, b : Int) {
+      match (ground_of.get(a), ground_of.get(b)) {
+        (Some(ga), Some(gb)) if ga == gb =>
+          match parts.get(ga) {
+            Some((x0, y0, x1, y1)) => {
+              let g = self.nodes[ga]
+              x0 - g.x <= gap_part_in &&
+              y0 - g.y <= gap_part_in &&
+              g.x + g.fw - x1 <= gap_part_in &&
+              g.y + g.fh - y1 <= gap_part_in
+            }
+            None => false
+          }
+        _ => false
+      }
+    }
+    let within = fn(i : Int, o : Int) {
+      let mut q = i
+      while q >= start && q != o {
+        q = self.nodes[q].parent
+      }
+      q == o
+    }
+    let kept : Array[Int] = []
+    for i in start..<n {
+      let b = self.nodes[i]
+      if whole[i] &&
+        b.kind == kind_box &&
+        (b.hit || lit.contains(i)) &&
+        b.grounded() &&
+        dmin(b.fw, b.fh) >= gap_lit_least &&
+        !chooses_set.contains(i) &&
+        (self.lit_every || !hand_set.contains(i)) {
+        if !lit.iter().any(fn(ch) { ch != i && layer[ch] == layer[i] && holds(i, ch) }) {
+          kept.push(i)
+        }
+      }
+    }
+    let holder = fn(a : Int, b : Int) {
+      let mut o = self.nodes[a].parent
+      while o >= start && !within(b, o) {
+        o = self.nodes[o].parent
+      }
+      o
+    }
+    let like = fn(k : Int, i : Int) {
+      let kn = self.nodes[k]
+      let n = self.nodes[i]
+      ((kn.x - n.x).abs() <= gap_slack && (kn.fw - n.fw).abs() <= gap_slack) ||
+      ((kn.y - n.y).abs() <= gap_slack && (kn.fh - n.fh).abs() <= gap_slack)
+    }
+    let kept_by = fn(a : Int, b : Int) -> Int? {
+      let o = holder(a, b)
+      if o < start {
+        return None
+      }
+      kept
+      .iter()
+      .find_first(fn(k) {
+        k == a || k == b || (within(k, o) && holder(a, k) == o && (like(k, a) || like(k, b)))
+      })
+    }
+    let all_rows : Array[Int] = []
+    for i in lit {
+      all_rows.push(i)
+    }
+    for k in kept {
+      if !all_rows.contains(k) && lit.iter().any(fn(i) { holder(k, i) >= start && like(k, i) }) {
+        all_rows.push(k)
+      }
+    }
+    for x in 0..<all_rows.length() {
+      for y in (x + 1)..<all_rows.length() {
+        let (a, b) = (all_rows[x], all_rows[y])
+        let by = match kept_by(a, b) {
+          Some(k) => k
+          None => continue
+        }
+        if layer[a] != layer[b] || one_control(a, b) {
+          continue
+        }
+        match gap_between(rect(a), rect(b)) {
+          Some((d, _)) if d < self.lit_apart - gap_slack =>
+            out.push(
+              "rule 1: \{self.named(a)} and \{self.named(b)} light up \{d} apart (\{self.lit_apart} at least; kept lit: \{self.named(by)})",
+            )
+          _ => ()
+        }
+      }
+    }
+  })
 }
 
 ///|

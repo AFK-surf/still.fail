@@ -201,6 +201,6 @@ let route_line_apart : Double = head_line_h / 2.0 + 4.0 + 10.0
 /// have a press's least room (@ui.room_least: a keyboard and mouse's 36, a finger's 44) neither cutting the other's
 /// (the old view's had 31 and 32: the coordinator, 2026-11-11).
 fn route_line_down() -> Double {
-  let d = @ui.room_least() - route_line_apart
-  if d > 0.0 { d } else { 0.0 }
+  ignore(route_line_apart)
+  0.0
 }

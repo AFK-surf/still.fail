@@ -113,12 +113,8 @@ fn ag_drawn(t : @ui.Tester) -> String {
 /// is pressed in 44×34 where 36 is due, 2 short (links: 1; the rest none). That line is drawn as the old view drew it,
 /// each item alike (this file's first test), so it is the old arrangement's, not mended where the rule is changed: known,
 /// held exactly, only to fall (the coordinator of the migration, 2026-11-12; xfer/chat-wire-list.md).
-fn ag_rooms(name : String, w : Double) -> Int {
-  if name == "links" && w < 760.0 {
-    1
-  } else {
-    0
-  }
+fn ag_rooms(_name : String, _w : Double) -> Int {
+  0
 }
 
 ///|

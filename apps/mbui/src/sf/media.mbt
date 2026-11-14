@@ -32,7 +32,7 @@ pub fn media_bar_h() -> Double {
 /// The keys' row: as tall as a press's room (@ui.room_least: 36 with keyboard and mouse, 44 with touch), its keys (32)
 /// in its middle, so the timeline over it never takes the room they are pressed in.
 pub fn media_row_h() -> Double {
-  dmax(media_key_d, @ui.room_least())
+  media_key_d
 }
 
 ///|
@@ -57,10 +57,10 @@ pub let media_track_share : Double = 0.2
 pub let media_came_share : Double = 0.22
 
 ///|
-/// The timeline (vvTimeline): as tall as a press's room (the web's 22 was less: @ui.room_least), its track in its
+/// The timeline (vvTimeline): 22 high (web/ui viewer/media.css.ts), its track in its
 /// middle, 10 in from the bar's sides; its head (vvHead) 12 across, centred on where it is.
 pub fn media_timeline_h() -> Double {
-  @ui.room_least()
+  22.0
 }
 
 ///|

@@ -2294,7 +2294,7 @@ let phone_controls_most : Double = 720.0
 
 ///|
 fn phone_timeline_h() -> Double {
-  dmax(phone_timeline_least, @ui.room_least())
+  phone_timeline_least
 }
 
 ///|
@@ -2433,7 +2433,7 @@ fn phone_keys_row() -> @ui.Style {
 
 ///|
 fn phone_row_h() -> Double {
-  dmax(phone_key_side, @ui.room_least())
+  phone_key_side
 }
 
 ///|

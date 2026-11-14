@@ -539,8 +539,8 @@ pub fn segmented(
       Array::make(n, dmax(item_w, words.fold(init=0.0, fn(m, w) { dmax(m, w) })))
     }
   } else {
-    // (an icon each: square, as wide as a press's room with the gap beside it)
-    Array::make(n, dmax(item_w, dmax(high, @ui.room_least() - segmented_gap)))
+    // (an icon each: square)
+    Array::make(n, dmax(item_w, high))
   }
   let gaps = segmented_gap * (n - 1).to_double()
   let whole = cols.fold(init=0.0, fn(s, w) { s + w }) + gaps + 2.0 * pad
@@ -3454,7 +3454,7 @@ let panel_note_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, col
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_group_box : @ui.Style = @ui.css("w=Full gap=S0_5")
+let panel_group_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)

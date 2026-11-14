@@ -98,3 +98,53 @@ test "the spacing rules 7 and 8: rows concentric with what holds them (24 round,
   t.frame()
   assert_true(rule_count(t, "rule 8") > 0)
 }
+
+///|
+fn tree_pointed_rows(chosen : Int, gap : Double) -> Tester {
+  Tester::new(
+    fn(c) {
+      c.with_theme({ ..Theme::light(), lit_apart: 2.0, lit_reach: 6.0 }, fn() {  })
+    },
+    w=400.0,
+    h=300.0,
+    corners_held=false,
+    tree=fn(root) {
+      root.box(fn(panel) {
+        panel
+        .width(Is(Some(240.0)))
+        .padding(Is((6.0, 6.0, 6.0, 6.0)))
+        .gap(Is(gap))
+        .ground(Is(0xFFFFFFFFL))
+        .radius(Is(24.0))
+        |> ignore
+        for i in 0..<3 {
+          panel.box(fn(row) {
+            row
+            .width(Is(Some(228.0)))
+            .height(Is(Some(44.0)))
+            .radius(Is(18.0))
+            .presses(Is(true))
+            .ground(By(fn() { if row.pointed() || row.pressed() || i == chosen { 0xEEEEEEFFL } else { 0L } }))
+            .words(Is("row \{i}"))
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+  )
+}
+
+///|
+test "the spacing rules on @view.View tree: rows with a persistent active background require lit_apart >= 2; hover-only rows can sit 0 apart" {
+  // no row kept lit at rest: 0px gap is valid
+  let hover_only = tree_pointed_rows(-1, 0.0)
+  assert_eq(rule1_count(hover_only), 0)
+  // row 0 kept lit at rest with 0px gap: breaks rule 1
+  let flush_active = tree_pointed_rows(0, 0.0)
+  assert_true(rule1_count(flush_active) > 0)
+  // row 0 kept lit at rest with 2px gap: passes rule 1
+  let spaced_active = tree_pointed_rows(0, 2.0)
+  assert_eq(rule1_count(spaced_active), 0)
+}

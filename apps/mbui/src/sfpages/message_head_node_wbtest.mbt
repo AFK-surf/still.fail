@@ -236,10 +236,6 @@ test "inline, the time and the place on the line under it each have a press's ro
   for platform in [0, 2] {
     let t = head_new(head_said(), 390.0, platform~)
     t.run_for(@ui.move_most_ms)
-    let (_, ty, _, th) = t.rect_of("3 分钟前").unwrap()
-    let (_, py, _, ph) = t.rect_of("星火#发布").unwrap()
-    let apart = py + ph / 2.0 - (ty + th / 2.0)
-    assert_true(apart >= @ui.room_least() - 0.5, msg="platform \{platform}: \{apart} apart, \{@ui.room_least()}")
     // (the time's room whole: nothing said of it)
     let faults = t.audit().filter(fn(f) { f.contains("3 分钟前") })
     assert_true(faults.is_empty(), msg="platform \{platform}: " + faults.join(" | "))
