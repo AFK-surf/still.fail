@@ -50,7 +50,7 @@ const same = (c: Cloud, v: Viewer, what: string, more: { logs?: string[]; bodies
 
 test("by the heads, a member's device, one taken out and one left out are given what the whole reads give them; another workspace's nothing; a log or body named that is not given is not", () => {
   const w = world();
-  handover(w);
+  const said = handover(w);
   const c = station(w);
   for (const l of [w.alice, w.bob, w.carol]) bring(c, l);
   // a log of another workspace kept here
@@ -61,7 +61,7 @@ test("by the heads, a member's device, one taken out and one left out are given 
   assert.ok(member.logs.length >= 3 && member.bodies.length === 5, "the logs and the bodies");
   same(c, viewerOf("carol", stranger), "a device the list does not name (left out: its connection refused, as the whole reads)");
   // carol taken out by alice
-  w.alice.say("member.remove", { sub: "carol" });
+  w.alice.say("member.remove", { sub: "carol", cancels: [said.carol.h] });
   bring(c, w.alice);
   assert.equal(c.locked()!.state!.members.has("carol"), false, "carol out");
   same(c, viewerOf("carol", w.carol.app), "carol's app taken out");
