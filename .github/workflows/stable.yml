@@ -363,6 +363,9 @@ jobs:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
+      # (MoonBit for the station's reader, station/mb/build.sh, built here where the natives' cache lacks it: pruned on
+      # the runner, the stable's station job of 0487f79c found `moon: command not found` four times, 43616763857)
+      - uses: ./.github/actions/mbui-moonbit
       - name: Publish all three stable station platforms from the pinned source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
