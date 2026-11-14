@@ -8,7 +8,7 @@
 import type { Admin } from "../api/admin.ts";
 import { langOfCore, queryPairs } from "../api/request.ts";
 import { BUILD_HEADER, COUNTED_FROM, buildOf, coreTooOld } from "../api/oldest.ts";
-import { MOVED_FROM_BUILD } from "../api/moved-from.ts";
+import { MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD } from "../api/moved-from.ts";
 import { deviceBuildsOf } from "./device-builds.ts";
 import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -320,9 +320,14 @@ export function sawBuild(cloud: Cloud, viewer: Admitted["viewer"], headers: Reco
 /// says none is answered as `coreTooOld` answers it (a web page from before builds were said, or not loaded again since:
 /// told to update, every request of it was refused and nothing on it said why, 2026-11-10), and one under COUNTED_FROM
 /// (a development build's, an iOS app's TestFlight number) cannot be told apart.
+/// So too one under ROOT_OUT_FROM_BUILD where the state in force has the root's person out of `~root` (`Cloud.rootOut`):
+/// its rules read the removal that took them out as nothing; anywhere else it reads the state as this station does.
 export function movedTooOld(cloud: Cloud, viewer: Admitted["viewer"], build: number | null): boolean {
-  if (build === null || build < COUNTED_FROM || build >= MOVED_FROM_BUILD) return false;
-  return typeof cloud.chain(joinedOf(cloud, viewer.workspace))?.state?.moved === "string";
+  if (build === null || build < COUNTED_FROM || build >= ROOT_OUT_FROM_BUILD) return false;
+  const ws = joinedOf(cloud, viewer.workspace);
+  if (typeof cloud.chain(ws)?.state?.moved !== "string") return false;
+  // (a Cloud made without the constructor, as tests make one, has none: read on every request, so optional)
+  return build < MOVED_FROM_BUILD || (typeof cloud.rootOut === "function" && cloud.rootOut(ws));
 }
 
 /// The ids of the devices workspace `ws`'s lock here names (null: the home one): its chain's, and where it moved the
@@ -382,7 +387,9 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     // lock let in, as admission let this one, and of a workspace with none, of nobody)
     // (`carried`: a moved chain read as it moved beside its people's logs, cloud/lock.ts `state4Moved`, 2026-11-14: every
     // reader must make the same state, so a core hands a chain over only once each of its stations says it)
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
+    // (`rootout`: a removal of the root's person naming the root's log takes them out, rules/AGENTS.md: a core says one
+    // only once each station the list names says it)
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried", "bind", "rootout"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -517,7 +524,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     const chains = personChainsOf(cloud);
     // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
     // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
-    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
+    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind", "rootout"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
     if (method !== "POST") return [405, { error: "GET or POST" }];
     let said: any;
     try {

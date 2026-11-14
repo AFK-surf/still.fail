@@ -4,7 +4,8 @@
 // another owner's statements still do, what pins a station's lock again (the plane's frame, another station's sync, an
 // owner's device's POST /lock) and what a new genesis meets at a station and at the cloud's copy (cloud/src/lock.ts
 // `keepLockAt`). What is so on 2026-11-14, held as found: nothing here is a design, and a test whose name says "held as
-// found" asserts a fault as it stands (lock-root-gone.test.ts holds three more).
+// found" asserts a fault as it stands (lock-root-gone.test.ts holds three more). Those A1 found are mended since
+// (lock-root-out.test.ts, `~root`: another owner takes the root's person out and admits them again) and say what is so.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { type Entry, LockRefusal, endpointBytes, entryHash } from "../src/cloud/lock.ts";
@@ -85,16 +86,19 @@ const reset = (s: C) => {
 
 // ── A1: her new app, whom it is told to ask ──
 
-test("A1 moved, held as found: alice's new app (no log known, then her log begun anew) is told to ask only her lost app, not bob's", () => {
+test("A1 moved: alice's new app (no log known, then her log begun anew) is told to ask her lost app alone while it binds her; once bob, an owner, takes her out naming her log (`~root`, 2026-11-14), the owners' and admins' apps", () => {
   const { w, c } = moved();
   const phone = dev();
   assert.equal(lets(c[0]!, "alice", phone, "owner"), null, "refused");
   assert.deepEqual(leftFor(c[0]!, phone, "alice"), { approvers: [w.alice.app.base.hex], apps: true }, "her lost app alone");
   const again = new Log("alice", phone);
   assert.deepEqual(leftFor(c[0]!, phone, "alice", again.entries), { approvers: [w.alice.app.base.hex], apps: true }, "the same with her new log brought");
+  w.bob.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
+  bring(c[0]!, w.bob);
+  assert.deepEqual(leftFor(c[0]!, phone, "alice", again.entries), { approvers: [w.bob.app.base.hex], apps: false }, "bob's app, the owner's: hers named no more");
 });
 
-test("A1 moved, held as found: carol an admin and bob not there: alice's new app still told her lost app alone; carol's admit of her new log binds nothing", () => {
+test("A1 moved: carol an admin and bob not there: alice's new app still told her lost app alone; carol's admit of her new log binds nothing, nor does her removal of alice naming alice's log (an owner's alone takes her out)", () => {
   const { w, c, said } = moved();
   w.alice.say("member.remove", { sub: "carol", cancels: [said.carol.h] });
   w.alice.say("member", { sub: "carol", email: "carol@x", lock: w.carol.genesis, role: "admin" });
@@ -106,6 +110,9 @@ test("A1 moved, held as found: carol an admin and bob not there: alice's new app
   w.carol.say("member", { sub: "alice", email: "alice@x", lock: again.genesis, role: "owner" });
   bring(c[0]!, w.carol);
   assert.equal(c[0]!.locked()?.state?.persons.get("alice"), w.alice.genesis, "bound by her lost log still");
+  w.carol.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
+  bring(c[0]!, w.carol);
+  assert.equal(c[0]!.locked()?.state?.persons.get("alice"), w.alice.genesis, "an admin's removal: bound by it still");
   bring(c[0]!, again);
   assert.equal(lets(c[0]!, "alice", phone, "owner"), null, "her new app refused");
 });

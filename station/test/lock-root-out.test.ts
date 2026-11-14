@@ -6,9 +6,11 @@
 // person (log R), bob an owner by her, carol an admin, dave a member.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD } from "../src/api/moved-from.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { wall } from "../src/ops/fibers.ts";
-import { Log, bring, handover, station, world } from "./lock-moved-world.ts";
+import { lockRoute, movedTooOld } from "../src/mesh/serve.ts";
+import { Log, bring, ed, handover, station, viewerOf, world } from "./lock-moved-world.ts";
 
 const NOW = 2_000_000;
 mock.method(wall, "now", () => NOW * 1000);
@@ -118,6 +120,43 @@ test("viii. the owner's removal of the root's person naming the root's log and, 
   assert.deepEqual(of(c, "alice"), { in: true, role: "owner", lock: w.alice.genesis, email: "alice@x", devices: appsOf(w.alice) });
 });
 
+test("xi. bob and eve owners each removed by the other (a circle), bob's removal of the root's person naming the root's log: she stays in by it (only a cancellation that counts takes `~root` out); then her removal of bob: he is out, eve an owner again", () => {
+  const { w, c } = setUp();
+  const eve = new Log("eve");
+  const eves = w.alice.say("member", { sub: "eve", email: "eve@x", lock: eve.genesis, role: "owner" });
+  const bobs = [...w.alice.bodies.entries()].filter(([, b]) => b.kind === "member" && b.sub === "bob").map(([h]) => h);
+  w.bob.say("member.remove", { sub: "eve", cancels: [eves.h] });
+  eve.say("member.remove", { sub: "bob", cancels: bobs });
+  w.bob.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
+  for (const l of [w.alice, w.bob, eve]) bring(c, l);
+  assert.deepEqual([of(c, "bob"), of(c, "eve")].map((x: any) => x.in), [false, false], "bob and eve undecided: neither in");
+  assert.deepEqual(of(c, "alice"), { in: true, role: "owner", lock: w.alice.genesis, email: "alice@x", devices: appsOf(w.alice) });
+  w.alice.say("member.remove", { sub: "bob", cancels: bobs });
+  bring(c, w.alice);
+  assert.deepEqual(of(c, "bob"), { in: false, devices: [] });
+  assert.equal((of(c, "eve") as any).role, "owner", "eve an owner again");
+  assert.deepEqual(of(c, "alice"), { in: true, role: "owner", lock: w.alice.genesis, email: "alice@x", devices: appsOf(w.alice) });
+});
+
+test("x. on and off follow her: after ii, her new log's off: off; the lost log's open after it: still off (her new log's word stands once it says any); bob's removal of ii's admit: by the root's log again, on", () => {
+  const { w, c } = setUp();
+  w.bob.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
+  const again = new Log("alice");
+  const ii = w.bob.say("member", { sub: "alice", email: "alice@new", lock: again.genesis, role: "owner" });
+  for (const l of [w.bob, again]) bring(c, l);
+  assert.notEqual(c.locked(), null, "on, by the root's open (her new log says none)");
+  again.say("off", {});
+  bring(c, again);
+  assert.equal(c.locked(), null, "off: her new log's");
+  w.alice.say("open", { ...w.settings, email: "alice@x" });
+  bring(c, w.alice);
+  assert.equal(c.locked(), null, "still off: the lost log's open counts no more");
+  w.bob.say("member.remove", { sub: "alice", cancels: [ii.h] });
+  bring(c, w.bob);
+  assert.notEqual(c.locked(), null, "on again: the root's newest, an open");
+  assert.deepEqual(of(c, "alice"), { in: false, devices: [] });
+});
+
 test("ix. every order the logs come in gives the same list", () => {
   const w = world();
   handover(w);
@@ -135,3 +174,31 @@ test("ix. every order the logs come in gives the same list", () => {
   assert.equal(JSON.parse(said[0]!)[0].lock, again.genesis);
 });
 
+// A reader from before reads a removal naming the root's log as nothing, so every reader is to make the same state:
+// a station says `rootout` in its GET /lock `serves` (a core says such a removal only where every station the list
+// names says it), and a core of a release under ROOT_OUT_FROM_BUILD is told to update (`movedTooOld`, 426) only in a
+// workspace whose state in force has the root's person out of `~root`: nowhere else is anyone told anything.
+test("a station says `rootout` in what it serves", () => {
+  const { c } = setUp();
+  const [status, body] = lockRoute(c, "GET", [], Buffer.alloc(0), viewerOf("bob", { base: ed() }, "owner") as never) as [number, any];
+  assert.equal(status, 200);
+  assert.ok((body.serves as string[]).includes("rootout"), JSON.stringify(body.serves));
+});
+
+test("a core under ROOT_OUT_FROM_BUILD is told to update only where the root's person is out of `~root`: not before, not for a removal that names nothing of hers, not for an admit alone", () => {
+  const { w, c } = setUp();
+  const build = MOVED_FROM_BUILD;
+  assert.ok(build < ROOT_OUT_FROM_BUILD);
+  const v = viewerOf("bob", { base: ed() }, "owner") as never;
+  const told = () => [movedTooOld(c, v, build), movedTooOld(c, v, ROOT_OUT_FROM_BUILD), c.rootOut(null)];
+  assert.deepEqual(told(), [false, false, false], "as set up");
+  const again = new Log("alice");
+  w.bob.say("member.remove", { sub: "alice", cancels: [] });
+  w.bob.say("member", { sub: "alice", email: "alice@new", lock: again.genesis, role: "owner" });
+  for (const l of [w.bob, again]) bring(c, l);
+  assert.deepEqual(told(), [false, false, false], "a removal naming nothing, an admit alone");
+  w.bob.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
+  bring(c, w.bob);
+  assert.deepEqual(told(), [true, false, true], "out of ~root: under the floor told, at it not");
+  assert.equal(movedTooOld(c, v, MOVED_FROM_BUILD - 1), true, "under the move's floor, as before");
+});

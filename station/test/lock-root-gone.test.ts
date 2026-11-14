@@ -1,6 +1,7 @@
 // A moved workspace whose root's person is gone (their devices lost, or another owner wanting them out), on the
 // station's own code: what the state in force does with it (rules/src/lock/roster.mbt: the root's pair always stands as
-// owner and its binding never moves; on and off are said in the root's log alone), and what `stillfail lock reset`
+// owner; its person bound by it until an owner's removal names it, `~root`, 2026-11-14; on and off are said in the
+// root's log alone), and what `stillfail lock reset`
 // (Cloud.resetLock) leaves a station of two. What is so on 2026-11-14, held as found: nothing here is a design.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
@@ -26,7 +27,7 @@ function setUp() {
   return { w, c };
 }
 
-test("another owner cannot take the root's person out nor lower them: they stay the owner, by their log", () => {
+test("another owner's removal of the root's person naming nothing of theirs (as before `~root`) and an admit of a lower role do nothing: they stay the owner, by their log (one naming that log takes them out: lock-root-out.test.ts)", () => {
   const { w, c } = setUp();
   assert.equal(roleOf(c[0]!, "bob"), "owner");
   // (alice has no admit to cancel: a removal of her cancels nothing)
@@ -42,7 +43,7 @@ test("another owner cannot take the root's person out nor lower them: they stay 
   assert.notEqual(c[0]!.locked(), null, "still on");
 });
 
-test("the root's person begun anew (every device lost, a new log): another owner's admit of the new log binds nothing; its app is refused, its off counts for nothing; the old log still roots it", () => {
+test("the root's person begun anew (every device lost, a new log): another owner's admit of the new log alone binds nothing (the removal naming the old log comes first, lock-root-out.test.ts); its app is refused, its off counts for nothing; the old log still roots it", () => {
   const { w, c } = setUp();
   const again = new Log("alice", dev());
   w.bob.say("member", { sub: "alice", email: "alice@x", lock: again.genesis, role: "owner" });

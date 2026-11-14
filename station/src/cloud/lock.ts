@@ -350,9 +350,10 @@ export function state4(ws: string, root: string, chains: unknown[][], bodies: un
 /// removal names the `moved` entry's hash, their devices their logs have not said (each `by` "chain"). A chain that
 /// does not fold or did not move: `no root`. A member it bound to no log is bound by their own `bind`
 /// (rules/src/lock/roster.mbt `binds_of`).
-export function state4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState } {
+/// `rootIn`: whether the root's person is bound by `~root` (rules/src/lock/state4.mbt `root_in`).
+export function state4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState; rootIn: boolean } {
   const out = rules.state4_moved_js(ws, chain, chains, bodies, now, crypto);
-  return { on: out.on, state: taken(out) };
+  return { on: out.on, state: taken(out), rootIn: out.root_in === true };
 }
 
 /// `roster4` of a workspace whose chain moved, as `state4Moved` reads it: and `carried_keys`, the keys of the app

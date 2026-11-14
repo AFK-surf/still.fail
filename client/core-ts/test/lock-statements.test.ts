@@ -73,13 +73,16 @@ function onOwn(chain: StationEntry[], by: ReturnType<typeof key>, kind: string, 
   return signed({ v: 1, ws: last.ws, seq: chain.length, prev: stationHash(last), at: last.at, kind, body } as Omit<StationEntry, "sig">, by);
 }
 
-async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devices?: boolean; two?: boolean } = {}) {
+/// `root: "lost"`: s1's lost log the root (every device of it gone), which took s1 out by its own genesis and admitted
+/// s1 again by this device's log as an owner (`~root` out, rules/AGENTS.md): s1 bound by a real admit.
+async function setUp(o: { root?: "me" | "alice" | "lost"; mine?: "owner" | "member"; devices?: boolean; two?: boolean } = {}) {
   const me = person("s1", MINE, ME);
   if (o.devices) for (const [k, n] of [[D2, "d2"], [D3, "d3"]] as const) me.chain.push(onOwn(me.chain, me.k, "device", { key: k.id, id: n.repeat(32), label: `s1's ${n}` }));
   const bob = person("r2", 6002, key(6102).hex);
   const xena = person("r3", 6004, key(6104).hex);
   const alice = person("r1", 6001, key(6101).hex);
-  const root = o.root === "alice" ? alice : me;
+  const lost = person("s1", 6009, key(6109).hex);
+  const root = o.root === "alice" ? alice : o.root === "lost" ? lost : me;
   const bodies: unknown[] = [];
   bodies.push(say(root, "open", { ...SETTINGS, email: "a@x.com" }));
   // (the chain's own list, the rig's genesis: s1 its owner, s2 a member, carried once it moved until a removal of each
@@ -87,6 +90,7 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   bodies.push(say(root, "member.remove", { sub: "s2", cancels: [] }));
   if (o.root === "alice") bodies.push(say(alice, "member.remove", { sub: "s1", cancels: [] }));
   if (o.root === "alice") bodies.push(say(alice, "member", { sub: "s1", email: "a@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
+  if (o.root === "lost") bodies.push(say(lost, "member.remove", { sub: "s1", cancels: [gOf(lost)] }), say(lost, "member", { sub: "s1", email: "a@x.com", lock: gOf(me), role: "owner" }));
   bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
   bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
@@ -106,13 +110,13 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const g0 = r.cloud.chains.get("ws")![0]!;
   const headOf = (c: Entry[]): Head => ({ seq: c.length - 1, hash: entryHash(c[c.length - 1]!), genesis: entryHash(c[0]!) });
   const moved = signer.sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(root) }));
-  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob, xena].filter((l) => l !== root || o.root === "alice"), bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[], reset: false, opened: [] as Entry[][] };
+  const st = { chain: [g0, moved] as Entry[], logs: [alice, bob, xena, ...(o.root === "lost" ? [lost] : [])], bodies, brought: [] as Brought[], silent: false, own: me.chain as unknown as Entry[], asked: [] as Asked[], reset: false, opened: [] as Entry[][], rootout: false };
   const g2 = o.two ? r.cloud.chains.get("w2")![0]! : null;
   const st2 = { chain: g2 === null ? [] : [g2, signer.sign(next("w2", headOf([g2]), 1001, "moved", { root: gOf(me) }))] as Entry[], logs: [] as Log[], bodies: bodies2, brought: [] as Brought[], silent: false };
   // (each workspace's stations its own chain, logs and bodies; s1's own log the same at all of them)
-  const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked" | "reset" | "opened"> = st): Effect.Effect<unknown, CoreError> => {
+  const answer = (at: string, method: string, path: string, body: unknown, x: Omit<typeof st, "own" | "asked" | "reset" | "opened" | "rootout"> = st): Effect.Effect<unknown, CoreError> => {
     st.asked.push({ at, method, path, body: JSON.stringify(body ?? null) });
-    const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
+    const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", ...(st.rootout ? ["rootout"] : [])] };
     // (`reset`: every station of ws reset on its machine, `stillfail lock reset`: none kept, a genesis brought pinned, as
     // station/src/mesh/serve.ts `lockRoute` pins one its owner's device brings where none is)
     if (x === st && st.reset && path.startsWith("/lock") && !path.startsWith("/lock/person")) {
@@ -624,4 +628,40 @@ test("the root's person gone: another owner told lock_root_only names `stillfail
   const on = await o.run(Effect.tryPromise({ try: () => o.r.ask("lock.open", { workspace: "ws" }), catch: (e) => e as CoreError }));
   assert.equal(on.error, undefined, on.error?.message);
   assert.deepEqual(o.st.opened.map((es) => es.map((e) => e.kind).join(",")), ["genesis", "genesis"], "a new genesis brought to A and C, as on a chain that never moved");
+});
+
+// After a move the root's person is a member like any other (rules/AGENTS.md, `~root`; the lead, 2026-11-14): another
+// owner's removal of them names the root's log, but only where every station the list names said `rootout` (a reader
+// from before reads it as nothing); elsewhere the act is as before: refused, it would not do what it means.
+test("another owner takes the root's person out: refused as before where a station has not said `rootout`; where every one has, the removal names the root's log and they are out, nobody else", async () => {
+  const o = await setUp({ root: "alice" });
+  assert.equal(o.members(), "r1 owner, r2 admin, r3 member, s1 owner");
+  const before = o.asked();
+  const refused = await o.run(roster(o.inner, "s1", "ws", { member: "r1", gone: true }));
+  assert.equal((refused.error as { code?: string } | undefined)?.code, "forbidden", "as before: it would not do what it means");
+  assert.equal(o.asked(), before, "nobody asked");
+  o.st.rootout = true;
+  await o.run(read(o.inner, "ws"));
+  const out = await o.run(roster(o.inner, "s1", "ws", { member: "r1", gone: true }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(o.asked() - before, 1, "the person asked once");
+  assert.deepEqual(o.said(), ["member.remove r1"]);
+  assert.equal(o.members(), "r2 admin, r3 member, s1 owner", "the root's person out, nobody else");
+  const kept = (o.inner.data.record("lockBodies", "ws") as { bodies?: { kind: string; cancels?: string[] }[] }).bodies ?? [];
+  const alice = o.st.logs.find((l) => l.sub === "r1")!;
+  assert.ok(kept.some((b) => b.kind === "member.remove" && (b.cancels ?? []).includes(gOf(alice))), "it names the root's log");
+});
+
+// Step 4 (the lead's, 2026-11-14): `open` and `off` follow the root's person. Bound by a real admit to the log this device
+// is on (`~root` out), they turn it off and on again from here; on the root's log alone before.
+test("the root's person bound again by a log of theirs: this device on it turns safe mode off and on again", async () => {
+  const w = await setUp({ root: "lost" });
+  assert.equal(w.members(), "r2 admin, r3 member, s1 owner");
+  const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(off.error, undefined, off.error?.message);
+  assert.equal(inForceOf(w.inner, "ws").said, "off");
+  const on = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.open", { workspace: "ws" }), catch: (e) => e as CoreError }));
+  assert.equal(on.error, undefined, on.error?.message);
+  assert.equal(inForceOf(w.inner, "ws").said, "on");
+  assert.deepEqual(w.said(), ["off", "open"]);
 });
