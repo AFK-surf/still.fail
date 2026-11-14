@@ -198,11 +198,29 @@ fn ss_type(t : @ui.Tester, lines : Array[String], finger : Bool) -> Unit raise {
 }
 
 ///|
-test "a chat's page made as nodes, 小屏 and 大屏: one line sent, nothing given back: whole in their row from the press's frame, at full ink, over the composer, never in the field after it, the message before up only" {
+test "a chat's page made as nodes, 小屏 and 大屏: one line sent, nothing given back: whole in their row from the press's frame, at full ink, over the composer, never in the field after it, the message before up only, from rest" {
   for screen in ss_screens {
     let t = ss_typed(screen, ["先上屏"])
-    assert_eq(ss_faults(ss_walk(t, "先上屏"), "\{screen.0}"), [])
+    let frames = ss_walk(t, "先上屏")
+    assert_eq(ss_faults(frames, "\{screen.0}"), [])
+    // (nothing given back: its way as any key's at the foot, from rest, the composer's old view waited for or not)
+    ss_from_rest(frames, "\{screen.0}")
   }
+}
+
+///|
+/// Where the key before the sent one goes among `frames` (from the frame before the press, then each drawn after the
+/// press's moment): its first step in the first frame drawn after the press, the next larger; on a Move the third is
+/// about its fastest, so no smaller than the second by more than a device pixel's half (the Tester's 2 a point).
+fn ss_from_rest(frames : Array[SsFrame], at : String) -> Unit raise {
+  let pressed = frames[0].at
+  let ys = [frames[0].prev.unwrap()] + frames.filter(fn(f) { f.at > pressed + 0.001 }).filter_map(fn(f) { f.prev })
+  assert_true(ys.length() > 4, msg="\{at}: \{ys.length()} frames with the key before")
+  let steps = [ys[0] - ys[1], ys[1] - ys[2], ys[2] - ys[3]]
+  assert_true(
+    steps[0] > 0.0 && steps[1] > steps[0] && steps[2] >= steps[1] - 0.25,
+    msg="\{at}: its first steps \{Repr(steps)}",
+  )
 }
 
 ///|
@@ -223,18 +241,10 @@ test "a chat's page made as nodes, 小屏 and 大屏: three lines sent, the comp
     let at = "\{screen.0}"
     assert_eq(ss_faults(frames, at), [])
     println("SENTSEEN \{at} the key before: \{Repr(frames.map(fn(f) { (f.at, f.prev) }))}")
-    // (from the frame before the press, then each drawn after the press's moment: those drawn at it show nothing gone)
+    ss_from_rest(frames, at)
     let pressed = frames[0].at
     let ys = [frames[0].prev.unwrap()] + frames.filter(fn(f) { f.at > pressed + 0.001 }).filter_map(fn(f) { f.prev })
-    assert_true(ys.length() > 4, msg="\{at}: \{ys.length()} frames with the key before")
-    let steps = [ys[0] - ys[1], ys[1] - ys[2], ys[2] - ys[3]]
-    // (from rest: its first step in the first frame drawn after the press, the next larger; on a Move the third is
-    // about its fastest, so no smaller than the second by more than a device pixel's half)
     let half_px = 0.5 / 2.0
-    assert_true(
-      steps[0] > 0.0 && steps[1] > steps[0] && steps[2] >= steps[1] - half_px,
-      msg="\{at}: its first steps \{Repr(steps)}",
-    )
     // (up as far as the row is tall less what was given back: the row's rest less the two lines the composer gave)
     // (to where it rests on the send's own way, before the station's row of it comes)
     let settled = frames.filter(fn(f) { f.at <= pressed + @ui.move_most_ms && f.prev is Some(_) })
@@ -315,5 +325,25 @@ test "a chat's page made as nodes, 小屏 and 大屏: a quoted picture with an e
         msg="\{screen.0}, frame \{i}: \{Repr(s)}, \{Repr(rest)} at rest",
       )
     }
+  }
+}
+
+///|
+test "a chat's page made as nodes, 小屏 and 大屏: one line sent between two of a host's frames, nothing given back: the message before sets out from rest in the first frame after it, as any key's way at the foot" {
+  for screen in ss_screens {
+    let t = cr_open(screen, fix_pace.val)
+    ss_type(t, ["先上屏"], screen.3 == 2)
+    t.set_frame_period(1000.0 / 60.0)
+    t.draw()
+    let before = match @ui.view_tree().unwrap().list_in_front() {
+      Some(l) => l.count - 1
+      None => -1
+    }
+    let frames = [ss_look(t, "先上屏", before)]
+    t.between_frames(fn() { frames.push(ss_look(t, "先上屏", before)) })
+    tap_send(t)
+    t.run_shown(200.0)
+    t.between_frames(fn() {  })
+    ss_from_rest(frames, "\{screen.0}")
   }
 }
