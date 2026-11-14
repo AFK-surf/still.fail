@@ -11,7 +11,7 @@ import type { Tool } from "../tools/mcp.ts";
 export const BROWSER = {
   name: "browser",
   description:
-    "This chat's own browser: a real Google Chrome with a profile of this chat's, so sign-ins made in it stay for this chat (no other chat sees them; they go when the chat is archived). action endpoint (default) starts it if needed and gives its DevTools endpoint and how to connect (chrome-devtools-mcp --wsEndpoint, Playwright connectOverCDP); tabs lists its tabs; status says whether it runs; stop closes it (its sign-ins stay). Use it for web work that needs a login or should look like a person's browser. To be signed in to a site, open its sign-in page here and call `sign_in` (it asks for the vault's sign-in, or has the person sign in from a card); when a page needs a person for anything else (a captcha, a consent), give them the tab with the `screen` tool.",
+    "This chat's own browser: a real Google Chrome with a profile of this chat's, so sign-ins made in it stay for this chat (no other chat sees them; they go when the chat is archived). action endpoint (default) starts it if needed and gives its DevTools endpoint and how to connect; tabs lists its tabs; status says whether it runs; stop closes it (its sign-ins stay). Use it for web work that needs a login or should look like a person's browser (skill stillfail-browser). To be signed in to a site, open its sign-in page here and call `sign_in`; when a page needs a person for anything else (a captcha, a consent), give them the tab with the `screen` tool.",
   inputSchema: {
     type: "object",
     properties: {

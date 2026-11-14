@@ -84,6 +84,10 @@
   told once to sessions that began before it.
 - A runtime's way with its list of tools is its own, answered per session (`src/sessions/agents.ts` `LISTINGS`): Claude
   Code defers MCP tools, so only what every turn calls (chat_post, chat_state) is marked loaded (左子健, 2026-11-14).
+- A tool's declaration is paid for in every session's context by the runtimes that load the list whole, and Codex
+  gives its model no parameter description of a schema over 5,000 bytes (0.169.0, measured 2026-11-14): a description
+  says what the tool does and when, the details are its skill's in `src/skills/`, which it names (the user,
+  2026-11-14). `test/tools-weight.test.ts` holds the ceilings; raising one needs its reason said in the change.
 - What the still.fail team replies on a bug report never reaches an agent by itself (the user, 2026-11-10: it would be
   outside words in someone's session): still.fail cloud gives the replies only to the chat's workspace's members' apps
   (`client/core-ts/src/feedback-replies.ts`), no station reads or holds them, and an agent sees one only as a person

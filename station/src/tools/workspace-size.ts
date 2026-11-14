@@ -6,11 +6,11 @@ import type { Tool } from "./mcp.ts";
 export function workspaceSizeTools(watch: WorkspaceWatch, remote: Remote): Tool[] {
   return [{
     name: "workspace_limit",
-    description: "Read or change this chat's soft workspace-size limit on one station. Omit station for this station; name a station this chat has used for its remote workspace there. The default is 10 GiB. When a working chat exceeds its limit, the station tells its agent and repeats hourly until it cleans up or raises the limit; it never deletes files or stops work for this. Give limit_gib to set a positive whole number of GiB, or omit it to read the current limit.",
+    description: "Read or change this chat's soft workspace-size limit on one station (10 GiB by default). When a working chat exceeds its limit, the station tells its agent and repeats hourly until it cleans up or raises the limit; it never deletes files or stops work for this.",
     inputSchema: {
       type: "object",
       properties: {
-        station: { type: "string", description: "The station's name or id; omit for this station." },
+        station: { type: "string", description: "A station this chat has used for its remote workspace there, by name or id; omit for this station." },
         limit_gib: { type: "integer", minimum: 1, description: "New soft limit in whole GiB; omit to read it." },
       },
       additionalProperties: false,

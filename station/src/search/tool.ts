@@ -81,7 +81,7 @@ export function searchTools(deps: SearchDeps): Tool[] {
     {
       name: "search",
       description:
-        "Search everything in this workspace, on all its stations at once: chats (titles, archived ones too), every message, agents' execution histories (what they said, thought and ran, and what it gave), services and tasks, skills and memory, profiles, and the files on each station's machine (names and what they say). Looked through as they are now (nothing indexed): the execution histories take a few seconds, the most recently active sessions first. Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, newest first after title matches, with chat links to give people or read with chat_read and session_history. For project workflows missing from your local skill catalog, search kinds=[\"skill\"] across stations first; read a matching skill in full with skill_read.",
+        "Search everything in this workspace, on all its stations at once: chats (titles, archived ones too), every message, agents' execution histories, services and tasks, skills and memory, profiles, and the files on each station's machine (names and what they say). Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, with chat links to give people or read with chat_read and session_history; a skill found is read in full with skill_read.",
       inputSchema: {
         type: "object",
         properties: {

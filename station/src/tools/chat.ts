@@ -1,7 +1,9 @@
 // The agents' tools for their conversations: chat_post, chat_state, chat_history,
 // chat_leave, chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
-// Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
-// hub.rs and compares); what they do is src/sessions/.
+// Names and parameters are the Rust station's; the descriptions say what a tool does and when, the details being the
+// skills' (src/skills/), and are held under ceilings (test/tools-weight.test.ts). What they do is src/sessions/.
+// chat_post still takes `options` beside `text` and kind need_decision, from before cards (sessions/args.ts), and
+// declares neither: with them its schema was over what Codex keeps the parameter descriptions of.
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { chatHistory, chatLeave, chatPost, chatState, mayStage, staged, target, unheld, NOT_POSTED } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
@@ -18,7 +20,7 @@ import { slackTools } from "./slack.ts";
 export const CHAT_POST = {
   name: "chat_post",
   description:
-    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). With only to and title, name the conversation without posting a message or ending the turn. Users always have a chat input box and can reply freely. When you ask people to choose among answers you can name or to confirm one, carry it as a card (options, a single one is fine), and a field (text) when they must write a value; no filler options or unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends). If messages you had not read came in that thread first, the post is held back, not sent: read them, then send it as written by its id (send) or post what fits now.",
+    "Post a message to one of your conversations, in Markdown (Slack and Feishu draw it too; Formatting in your instructions says what differs). kind ends your turn with it; card carries what people answer by choosing or typing (skill stillfail-chats: cards, held posts). With only to and title it names the conversation, nothing posted or ended.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -28,15 +30,15 @@ export const CHAT_POST = {
       },
       "send": {
         "type": "string",
-        "description": "Send a post held back as written: the id its chat_post answered when messages you had not read came in its thread first. Give only to, send and the state the turn now ends with (kind, need, done, about); its text, files, card and title are the held post's. If more unread messages came meanwhile, it is held again under the same id."
+        "description": "The id of a post held back (its chat_post answered it): sends it as written. Give only to, send and the state the turn now ends with (kind, need, done, about)."
       },
       "withdraw": {
         "type": "string",
-        "description": "Withdraw your own answer card by its message ts when the question is resolved or obsolete. Use only to and withdraw; this sends no message, preserves the original post and does not finish your work. Then continue and record the correct ending state."
+        "description": "The message ts of your own answer card to withdraw, its question resolved or obsolete. With to alone: nothing is sent and no turn ends."
       },
       "text": {
         "type": "string",
-        "description": "The message, formatted for where it goes (posted as written). With a card: what it asks and the facts it turns on, so it can be answered from this message alone."
+        "description": "The message, formatted for where it goes (posted as written). With a card: what it asks and the facts it turns on, answerable from this message alone."
       },
       "kind": {
         "type": "string",
@@ -44,34 +46,34 @@ export const CHAT_POST = {
           "all_done",
           "need_human"
         ],
-        "description": "Omit for a progress update. all_done: the chat has nothing unfinished at all (no branch left unmerged, no open question, nothing waiting for a yes); give done. need_human: a person has to give, do or decide something, or answer an open question (a card you posted included); give need. (need_decision, from before cards, is still taken: options, the turn ends need_human.)"
+        "description": "Omit for a progress update. all_done: nothing in the chat is left unfinished; give done. need_human: a person has to give, do or decide something (a card you posted included); give need. Only for a real unresolved need: a factual answer alone needs no follow-up question."
       },
       "need": {
         "type": "string",
-        "description": "For need_human (required): what the person has to give, do or decide, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key, 选统计口径); to verify something, where, how and what to look at; work of yours still running, after the ask (e.g. 选统计口径；CI 还在跑)."
+        "description": "For need_human (required): what the person has to give, do or decide, in one sentence in their language (要 Stripe 的测试 key); to verify something, where, how and what to look at; work of yours still running, after the ask (选统计口径；CI 还在跑)."
       },
       "about": {
         "type": "string",
-        "description": "With kind, optional: the ts of the message in this conversation the state is about (all_done: the one with the result; need_human: the one that asks, by default the card still waiting there, this post's own when it carries one). People's lists jump to it."
+        "description": "With kind: the ts of the message here the state is about (all_done: the result's; need_human: the one that asks, by default the card still waiting there, or this post's own). People's lists jump to it."
       },
       "done": {
         "type": "string",
-        "description": "Only a real unresolved need requires need_human; a factual answer alone needs no follow-up decision. For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused."
+        "description": "For all_done (required): why nothing in the chat is left, in their language: what was finished and where it landed or how it was confirmed, naming the evidence (已合进 main 82f108a5，测试版 1389 已发). Not just 做完了 or done: that is refused."
       },
       "files": {
         "type": "array",
         "items": {
           "type": "string"
         },
-        "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they are uploaded below the text). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each."
+        "description": "Absolute paths of files on this machine to attach (up to 10, 50 MB each), shown below the text unless it places one by name (Formatting in your instructions)."
       },
       "title": {
         "type": "string",
-        "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give it as soon as you know the topic, with a post (including a progress update) or by calling chat_post with only to and title; do not wait for the turn to end. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave."
+        "description": "The conversation's name in still.fail lists (nothing is renamed in Slack): a few words on what it is about, in their language, at most 30 characters. Another only when the chat has moved to something else, not to reword it: the station changes it rarely, and never over a name people gave."
       },
       "card": {
         "type": "object",
-        "description": "What people answer this message with, shown in the chat and in their 待处理 until they look at it. {\"type\": \"options\", \"options\": [...]} offers 1 to 6 choices (recommend one if you can); the recommended one is shown last. Keep any choices listed in the message in the same order. {\"type\": \"text\", \"placeholder\": \"…\"} asks for a value or name. {\"type\": \"login\", \"login\": \"<id>\"} is for a login started by the login tool. An option with action=close ends the wait silently (the choice is told to you with what you are next handed, as an earlier one); other card answers reach you as a message quoting the question. Any later message from a person also closes the card, but can be a clarification rather than a decision: the station tells you which card ended. If the decision is still needed, ask it again with a new card. A newer card replaces the previous one. The card does not end your turn: record need_human (with need) when a person must decide.",
+        "description": "What people answer this message with, in the chat and in their 待处理: options, text (a value they type) or login (one the login tool started). It does not end your turn: end need_human. A person's next message closes it, a decision or not: ask again with a new card if it is still needed.",
         "properties": {
           "type": {
             "type": "string",
@@ -97,7 +99,7 @@ export const CHAT_POST = {
               "properties": {
                 "label": {
                   "type": "string",
-                  "description": "A short phrase that reads on its own, in the language people use there (e.g. 按今天累计, 先不改)."
+                  "description": "A short phrase that reads on its own, in their language (按今天累计, 先不改)."
                 },
                 "detail": {
                   "type": "string",
@@ -113,7 +115,7 @@ export const CHAT_POST = {
                     "reply",
                     "close"
                   ],
-                  "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you: you are told the choice later, with what you are next handed, so use it only when choosing it needs no further work (e.g. 不需要部署)."
+                  "description": "reply (default) sends you the chosen label. close ends this need_human with no message and without waking you (you are told the choice with what you are next handed): only where choosing it needs no further work (不需要部署)."
                 }
               },
               "required": [
@@ -124,50 +126,17 @@ export const CHAT_POST = {
           },
           "assignee": {
             "type": "string",
-            "description": "The email of the person who must decide, chosen explicitly by you from the conversation. Only their 待处理 includes this card; others can still answer in the chat. Always set it for new cards. Omitted: whoever started the chat decides."
+            "description": "The email of the person who must decide, from the conversation: the card is in their 待处理 alone. Always set it."
           },
           "placeholder": {
             "type": "string",
-            "description": "For a text card: a hint shown in the empty field (e.g. sk_test_…)."
+            "description": "For a text card: a hint shown in the empty field (sk_test_…)."
           }
         },
         "required": [
           "type"
         ],
         "additionalProperties": false
-      },
-      "options": {
-        "type": "array",
-        "description": "As said before cards: the same as card {\"type\": \"options\", \"options\": …}. Prefer card.",
-        "items": {
-          "type": "object",
-          "properties": {
-            "label": {
-              "type": "string",
-              "description": "A short phrase that reads on its own, in the language people use there (e.g. 按今天累计, 先不改)."
-            },
-            "detail": {
-              "type": "string",
-              "description": "One line on what choosing it leads to."
-            },
-            "recommended": {
-              "type": "boolean",
-              "description": "The one you recommend (at most one); the card shows it last."
-            },
-            "action": {
-              "type": "string",
-              "enum": [
-                "reply",
-                "close"
-              ],
-              "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you: you are told the choice later, with what you are next handed, so use it only when choosing it needs no further work (e.g. 不需要部署)."
-            }
-          },
-          "required": [
-            "label"
-          ],
-          "additionalProperties": false
-        }
       }
     },
     "required": [
@@ -180,7 +149,7 @@ export const CHAT_POST = {
 export const CHAT_STATE = {
   name: "chat_state",
   description:
-    "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished: done says why, with the evidence), need_human (requires about pointing to your visible question, or a pending answer card; need alone is not visible in the chat) or waiting (only for work you started that brings you back on its own, such as a background command or agent, a job, a loop watching CI, and only when nothing else is left to do meanwhile: for says what; waiting on a person is need_human).",
+    "Record how this turn ends without posting another message (End every turn, in your instructions): all_done, need_human (about points to your visible question unless a card is pending: need alone is not shown in the chat) or waiting (only work you started that brings you back by itself, with nothing else left to do meanwhile; waiting on a person is need_human).",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -194,29 +163,29 @@ export const CHAT_STATE = {
       },
       "need": {
         "type": "string",
-        "description": "For need_human (required): what the person has to give, do or decide, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key, 选统计口径); to verify something, where, how and what to look at; work of yours still running, after the ask (e.g. 选统计口径；CI 还在跑)."
+        "description": "For need_human (required): as chat_post's need."
       },
       "about": {
         "type": "string",
-        "description": "Optional: the ts of the message in your conversation the state is about (all_done: the one with the result; need_human: required unless a card is pending, the message where you visibly ask what is still needed; waiting: the one saying what you started). People's lists jump to it."
+        "description": "The ts of the message in your conversation the state is about (all_done: the result's; need_human: the one where you visibly ask what is still needed, required unless a card is pending; waiting: the one saying what you started). People's lists jump to it."
       },
       "done": {
         "type": "string",
-        "description": "Only a real unresolved need requires need_human; a factual answer alone needs no follow-up decision. For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused."
+        "description": "For all_done (required): as chat_post's done."
       },
       "seconds": {
         "type": "integer",
         "minimum": 10,
         "maximum": 3600,
-        "description": "For waiting: how long until the work brings you back; if nothing has by then, you are asked again (not while you wait on a watch of yours: watch true). A fallback only: something must watch the work. When it truly cannot be watched, give the shortest it could take, not the longest."
+        "description": "For waiting: how long until the work brings you back; if nothing has by then, you are asked again (not with watch). A fallback only: something must watch the work. Where it truly cannot be watched, the shortest it could take."
       },
       "for": {
         "type": "string",
-        "description": "For waiting (required): what you wait for, in a few words people read under your name, in the language they use there (e.g. 安卓滑动测试在模拟器上跑完)."
+        "description": "For waiting (required): what you wait for, in a few words people read under your name, in their language (e.g. 安卓滑动测试在模拟器上跑完)."
       },
       "watch": {
         "type": "boolean",
-        "description": "For waiting: true when what you wait on is only your watch keeping on (job_start with watch: a schedule, a monitor); people then see the chat as watching, and the clock does not ask you again. Leave it out when you wait on anything else, even with a watch running: they see what you wait for."
+        "description": "For waiting: true when all you wait on is your watch keeping on (job_start with watch): people see the chat as watching, and the clock does not ask you again. Left out when you wait on anything else, even with a watch running."
       }
     },
     "required": [
@@ -299,7 +268,7 @@ export const CHAT_LIST = {
 export const CHAT_READ = {
   name: "chat_read",
   description:
-    "Read the messages of any conversation on this station or, by its link, on another station of the workspace or a chat another workspace shares with this one, not only your own, oldest first: the chat people refer to by its link.",
+    "Read the messages of any conversation, not only your own, oldest first: one on this station or, by its link, on another station of the workspace or one another workspace shares with this one.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -335,13 +304,13 @@ export const CHAT_READ = {
 export const SESSION_SEND = {
   name: "session_send",
   description:
-    "Send a message to another session's agent: a chat on this station, on another station of the workspace, or one another workspace shares with this one to write to. Its agent takes it like any message, headed with a link to your chat; it stays out of that chat's conversation (people read agents' letters on a page of their own). It answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
+    "Send a message to another session's agent: a chat on this station, on another station of the workspace, or one another workspace shares with this one to write to. Its agent takes it like any message, headed with a link to your chat, and it stays out of that chat's conversation. It answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
   inputSchema: {
     "type": "object",
     "properties": {
       "to": {
         "type": "string",
-        "description": "The other chat: its link (…/chats/<key>, …/o/<workspace>/<station>/<key>, the link a message from it is headed with), its session key, or a thread address CHANNEL/THREAD_TS on this station; chat_list lists this station's."
+        "description": "The other chat: its link (…/chats/<key>, …/o/<workspace>/<station>/<key>, the link a message from it is headed with), its session key, or a thread address CHANNEL/THREAD_TS on this station."
       },
       "text": {
         "type": "string",
@@ -352,7 +321,7 @@ export const SESSION_SEND = {
         "items": {
           "type": "string"
         },
-        "description": "Absolute local paths of files to attach (at most 10, each up to 50 MB): they are copied to that chat, on this station or another, and its agent gets their paths there."
+        "description": "Absolute local paths of files to attach (at most 10, each up to 50 MB): copied to that chat, and its agent gets their paths there."
       }
     },
     "required": [
@@ -366,7 +335,7 @@ export const SESSION_SEND = {
 export const CHAT_CREATE = {
   name: "chat_create",
   description:
-    "Open a new still.fail chat with an agent of its own, on this station or another station of the workspace, for work that should go on visibly beside yours (a part to do in parallel, something another machine is better placed for). It begins with your message, headed as opened by your chat; whoever started your chat is its starter, so what it asks goes to them. Each time a turn of it ends all_done or need_human (or fails, or a person stops it), you are told with its done or need: to wait for it, end your turn waiting. Write to its agent with session_send to its link. Nothing is retried by itself: when an answer was uncertain, call again with the same key, which gives the chat made then (and sends its first message once) rather than opening another. A chat opened this way opens none itself.",
+    "Open a new still.fail chat with an agent of its own, on this station or another station of the workspace, for work that should go on visibly beside yours (a part to do in parallel, something another machine is better placed for). It begins with your message. You are told how each of its turns ends: to wait for it, end your turn waiting. Write to its agent with session_send to its link. When an answer was uncertain, call again with the same key, which gives the chat made then rather than opening another. Skill stillfail-chats (Other agents) says more.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -380,11 +349,11 @@ export const CHAT_CREATE = {
       },
       "title": {
         "type": "string",
-        "description": "The chat's name in still.fail lists: a few words, in the language people use (at most 120 characters). Its agent names it when left out."
+        "description": "The chat's name in still.fail lists: a few words, in their language (at most 120 characters). Its agent names it when left out."
       },
       "station": {
         "type": "string",
-        "description": "Another station of the workspace to open it on, by its name or id (station_list lists them). Left out: this station."
+        "description": "Another station of the workspace to open it on, by its name or id. Left out: this station."
       },
       "runtime": {
         "type": "string",
@@ -393,11 +362,11 @@ export const CHAT_CREATE = {
       },
       "model": {
         "type": "string",
-        "description": "Its agent's model. Default: the one the person it goes to has opened most chats with on that station (of the models its profiles run there, of runtime when given), when it is used at least twice as often as any other; when not, it is not opened and you are told them: ask the person which, then call again with it."
+        "description": "Its agent's model. Default: the one the person it goes to has opened most chats with on that station, when one clearly leads; when none does, it is not opened and you are told them: ask the person which, then call again with it."
       },
       "effort": {
         "type": "string",
-        "description": "Its agent's reasoning effort. Default: the one the person it goes to has opened most chats with on that runtime and model there lately, else its model's."
+        "description": "Its agent's reasoning effort. Default: the one that person has opened most chats with on that runtime and model there lately, else its model's."
       },
       "files": {
         "type": "array",
@@ -417,7 +386,7 @@ export const CHAT_CREATE = {
 
 export const CHAT_ARCHIVE = {
   name: "chat_archive",
-  description: "Archive another still.fail chat on this station or another station of your workspace. As when a person archives it in the app, its own session goes with it: its running turn can finish, and its jobs and services stop. The chat and its messages remain, but its workspace files may later be cleaned up. Use the chat's link, or its address or session key on this station. Calling again on an already manually archived chat leaves it as it was.",
+  description: "Archive another still.fail chat on this station or another station of your workspace. As when a person archives it in the app, its own session goes with it: its running turn can finish, and its jobs and services stop. The chat and its messages remain, but its workspace files may later be cleaned up. Calling again on an already manually archived chat leaves it as it was.",
   inputSchema: {
     type: "object",
     properties: {

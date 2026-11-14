@@ -30,7 +30,7 @@ export async function skillForPeer(data: string, request: any, workspace: string
 export function skillTools(deps: SearchDeps): Tool[] {
   return [{
     name: "skill_read",
-    description: "Read a skill found by search in full, on this station or another station of the same workspace. Use its exact name and station from the search result. With file, read one of the Markdown reference filenames listed in the reply. Reads only this workspace's skill catalog; does not install, share or execute the skill. Another station must support skill.read; a refused call reports its error.",
+    description: "Read a skill found by search in full, on this station or another station of the same workspace, by its exact name and station from the search result. With file, one of the Markdown reference files the reply lists. It only reads this workspace's skill catalog: nothing is installed, shared or run. A station from before skill.read refuses, and says so.",
     inputSchema: {
       type: "object",
       properties: {
