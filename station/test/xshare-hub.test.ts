@@ -109,6 +109,10 @@ test("an agent of another workspace finds, reads and (when allowed) writes to a 
   const thread = far.rig.thread("C1", a.threadTs);
   const got = far.rig.letters(thread.id).at(-1)!;
   assert.ok(got.author === `near/${keyN}` && got.text.endsWith("send me the plan"), got.text);
+  // Its agent is told who wrote by that chat's name, as the letter was marked: no session of this station's is the writer.
+  await far.rig.quiet();
+  const told = far.rig.claude.sessions.flatMap((s) => [...s.prompts, ...s.steers]).find((p) => p.includes("send me the plan"))!;
+  assert.ok(got.letter?.title && told.includes(`from="${got.letter.title}" bot`), told);
   await far.rig.call(keyA, "session_send", { to: near.rig.hub.link(keyN)!, text: "here it is" });
   const answered = near.rig.letters(near.rig.thread("C1", n.threadTs).id).at(-1)!;
   assert.ok(answered.author === `far/${keyA}` && answered.text.endsWith("here it is"), answered.text);

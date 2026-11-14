@@ -9,6 +9,7 @@ import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 import { isStationAuthor } from "./titles.ts";
+import { sentFrom } from "./sent-from.ts";
 import { cleanCommand, cleanPath, closeCut, summaryCommand } from "./tool-step.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -719,6 +720,13 @@ export function presentHistory(live: J, cx: Context): J {
             if (notice?.kind === "event") return [];
             if (notice?.kind === "said") return [{ key: `${m.ts}.${k}`, from: { name: notice.name, slackUser: null, bound: false }, text: notice.said, place: null, notice: "job" }];
             if (m.station) return [{ key: `${m.ts}.${k}`, from: { name: brand.name(), slackUser: null, bound: false }, text: m.text, place: null, notice: "stillfail" }];
+            // Another chat's agent's letter (session_send) goes by that chat's name, without the heading, as the chat's
+            // page shows it: its station names it only by a session of its own ("another agent" from another station).
+            const sent = m.agent ? sentFrom(m.text) : null;
+            if (sent !== null) {
+              const said = mentions(sent[2], cx);
+              return [{ key: m.ts, from: { name: sent[0], slackUser: null, bound: false }, text: said, place: place(m.thread, m.slack ? m.ts : null), md: markdown(said, cx.md) }];
+            }
             let from: J;
             if (m.slack) {
               const bound = cx.slackUsers.includes(m.user);
