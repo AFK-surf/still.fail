@@ -439,6 +439,79 @@ test "profiles, connects, the vault: their lists" {
 }
 
 ///|
+test "profiles on a phone: a short plan stays whole beside a long account email" {
+  let specs : Array[(Double, Double, String, Bool)] = [
+    (360.0, 1.0, "zuozijian1994@gmail.com", false),
+    (360.0, 1.3, "zuozijian1994@gmail.com", true),
+    (320.0, 1.0, "zuozijian1994.account.supergrok@gmail.com", true),
+    (390.0, 1.0, "zuozijian1994@gmail.com", false),
+  ]
+  for spec in specs {
+    new_run()
+    let base = fixture("settings")
+    let email = spec.2
+    let src : Source = {
+      ..base,
+      topic_read: fn(name, params) {
+        if name == "profiles" {
+          {
+            value: Some({
+              "items": [
+                {
+                  "key": "ws1/st1/grok",
+                  "group": "grok",
+                  "groupTitle": "SuperGrok 订阅",
+                  "title": Json::string(email),
+                  "station": "ws1/st1",
+                  "usable": true,
+                  "state": Json::null(),
+                  "where": "Willow 可用",
+                  "profile": {
+                    "id": "grok",
+                    "name": Json::string(email),
+                    "runtime": "grok",
+                    "access": { "kind": "subscription" },
+                    "planText": "SuperGrok",
+                    "quota": {
+                      "state": "ok",
+                      "windows": [{ "label": "每周", "mark": "W", "left": 100.0, "level": "ok" }],
+                    },
+                  },
+                },
+              ],
+              "wait": { "reading": false, "failing": [], "empty": false },
+            }),
+            error: None,
+            version: 1,
+          }
+        } else {
+          base.topic(name, params).get().snapshot()
+        }
+      },
+    }
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=spec.0, h=844.0)
+    if spec.1 != 1.0 {
+      t.set_font_scale(spec.1)
+    }
+    open_setting("profiles")
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    let shown = t.text_runs().map(fn(r) { r.text })
+    assert_true(shown.contains("SuperGrok"), msg="\{Repr(spec)}: \{Repr(shown)}")
+    let email_shown = shown.iter().any(fn(s) {
+      s == email ||
+      (s.has_suffix("…") && email.has_prefix(s[:s.length() - 1].to_owned()))
+    })
+    assert_true(email_shown, msg="\{Repr(spec)}: \{Repr(shown)}")
+    if spec.3 {
+      assert_false(shown.contains(email), msg="expected email clipped at \{Repr(spec)}: \{Repr(shown)}")
+    }
+    assert_eq(t.squeeze_faults(), [], msg=Repr(spec).to_string())
+    assert_eq(t.words_over_now(), [], msg=Repr(spec).to_string())
+  }
+}
+
+///|
 test "an account on several stations shows its subscription tier" {
   let t = settings_tester("profiles", shows="settings-profile-hosts")
   t.tap_text("Claude 主账号")

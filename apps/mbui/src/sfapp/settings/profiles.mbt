@@ -252,7 +252,11 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
                   // says what is wrong
                   let plan = text(p, "planText")
                   if plan != "" {
-                    c.text(plan, style=plan_words, allow_ellipsis=true) |> ignore
+                    let keep_w = @sf.dmin(c.words_across(plan, plan_words).ceil(), c.sp(plan_keep_max))
+                    c.box(style=@ui.style(min_w=Within(keep_w)), fn() {
+                      c.text(plan, style=plan_words, allow_ellipsis=true) |> ignore
+                    })
+                    |> ignore
                   }
                   c.box(style=@sf.desk_grow, fn() {  }) |> ignore
                   // the chevron on the name's line, never centred on the row's lines (the user, 2026-11-14)
@@ -540,9 +544,13 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
 let quota_line : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
-/// Its plan's words, after its name: cut short with the name where the row has not the room for both.
+/// Its plan's words, after its name: cut short only after the name has given way where the plan itself is long.
 // kept across runs: a value (no field of it changes)
 let plan_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
+
+///|
+/// The most of a plan's width kept whole before the row cuts it alongside the name.
+let plan_keep_max : Double = 100.0
 
 ///|
 /// Its mark, out to where its chips' capsules start (quota_line_out's start).
