@@ -9,6 +9,8 @@ import { sessionKey } from "../src/sessions/hub.ts";
 import { configure } from "../src/sessions/lifecycle.ts";
 import { Rig, message, reply, settle } from "./hub-fakes.ts";
 
+const untimed = (text: string) => text.replace(/^\[Delivered at [^\n]+\]\n/, "");
+
 /// A session whose first turn ended done.
 async function done(r: Rig) {
   const m = message();
@@ -175,7 +177,7 @@ test("-clear ends its process; its next turn starts a new runtime session, told 
   const fresh = r.claude.last();
   assert.notEqual(fresh, session);
   assert.equal(fresh.options.resume, undefined);
-  assert.ok(fresh.prompts[0]!.startsWith("People cleared your context"), fresh.prompts[0]);
+  assert.ok(untimed(fresh.prompts[0]!).startsWith("People cleared your context"), fresh.prompts[0]);
   // Its chat read back, its execution history only when needed.
   assert.ok(fresh.prompts[0]!.includes(`chat_history for C1/${m.threadTs}`), fresh.prompts[0]);
   assert.ok(fresh.prompts[0]!.includes("start over"));
@@ -203,7 +205,7 @@ test("cleared to go on afresh, its next runtime session reads back its work and 
   const fresh = r.claude.last();
   assert.notEqual(fresh, session);
   assert.equal(fresh.options.resume, undefined);
-  assert.ok(fresh.prompts[0]!.startsWith("This is a new conversation"), fresh.prompts[0]);
+  assert.ok(untimed(fresh.prompts[0]!).startsWith("This is a new conversation"), fresh.prompts[0]);
   assert.ok(fresh.prompts[0]!.includes(`session_history with chat ${key}`), fresh.prompts[0]);
   assert.ok(fresh.prompts[0]!.includes(`chat_history for C1/${m.threadTs}`), fresh.prompts[0]);
   // A later clear by hand is told as one.
@@ -214,7 +216,7 @@ test("cleared to go on afresh, its next runtime session reads back its work and 
   await settle();
   await r.accept(reply(m, "9999.4", "<@UBOT> again", { addressed: true }));
   await settle();
-  assert.ok(r.claude.last().prompts[0]!.startsWith("People cleared your context"), r.claude.last().prompts[0]);
+  assert.ok(untimed(r.claude.last().prompts[0]!).startsWith("People cleared your context"), r.claude.last().prompts[0]);
   await r.close();
 });
 
@@ -270,7 +272,7 @@ test("set to, a message to an agent whose large context's cache is over starts i
   assert.notEqual(fresh, session);
   assert.ok(session.disposed);
   assert.equal(fresh.options.resume, undefined);
-  assert.ok(fresh.prompts[0]!.startsWith("This is a new conversation"), fresh.prompts[0]);
+  assert.ok(untimed(fresh.prompts[0]!).startsWith("This is a new conversation"), fresh.prompts[0]);
   assert.ok(fresh.prompts[0]!.includes("now the release"));
   assert.ok(r.chat.texts().includes("缓存已过期，已自动换新上下文，先读回需要的内容再接着做"), r.chat.texts().join("\n"));
   await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
@@ -305,7 +307,7 @@ test("its chat's choice outweighs the station's: set to, a notice starts it afre
   const fresh = r.claude.last();
   assert.notEqual(fresh, session);
   assert.ok(session.disposed);
-  assert.ok(fresh.prompts[0]!.startsWith("This is a new conversation"), fresh.prompts[0]);
+  assert.ok(untimed(fresh.prompts[0]!).startsWith("This is a new conversation"), fresh.prompts[0]);
   assert.ok(fresh.prompts[0]!.includes("a job ended"));
   await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
   fresh.complete();
