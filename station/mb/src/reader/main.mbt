@@ -64,7 +64,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
       }
     { "op": String(op), .. } if moved(op) =>
       try {
-        { "id": id, "text": Json::string(self.read(op, ask.value("args").unwrap_or(Json::null())).stringify()) }
+        { "id": id, "text": Json::string(self.read(op, ask).stringify()) }
       } catch {
         @readops.Refused(status, m) => { "id": id, "status": Json::number(status.to_double()), "error": Json::string(m) }
         e => { "id": id, "status": 500, "error": Json::string(message(e)) }
@@ -77,14 +77,15 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats"].contains(
     op,
   )
 }
 
 ///|
 /// A read, in one snapshot as read/worker.ts makes it (a transaction around it).
-fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
+fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
+  let args = ask.value("args").unwrap_or(Json::null())
   let db = match self.reading {
     Some(db) => db
     None => {
@@ -122,6 +123,8 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
     "recentChatList" => @readops.recent_chat_list(db, args)
     "searchChatList" => @readops.search_chat_list(db, args)
     "threadList" => @readops.thread_list(db)
+    "sharedOf" => @readops.shared_of(db, self.host, self.data, self.sep, ask)
+    "sharedChats" => @readops.shared_chats(db, self.host, self.data, self.sep, ask)
     _ => fail("no read \{op}")
   }
 }
