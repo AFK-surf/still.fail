@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7746223b6](https://github.com/AFK-surf/monoid/commit/7746223b6be1f4b43c9a2ebb824cedb8c26134b5) ci: a native part coming slower than 200 KB/s is a | 2.03 | 2.78 | 11.99 | 31.89 | 44.54 | 28.5 | 55.83 | 98.55 | 111.76 |
 | [3118f7685](https://github.com/AFK-surf/monoid/commit/3118f7685e1a0dcac39464b236dfe4eac893516c) app: a chat's Farview tab drawn by the app itself, | 2.03 | 2.78 | 11.99 | 31.89 | 44.54 | 28.5 | 55.83 | 98.39 | 112.14 |
 | [91fe2703b](https://github.com/AFK-surf/monoid/commit/91fe2703b5f707a03492082674ca7d386887003c) station: what an event stream tells several device | 2.01 | 2.77 | 11.91 | 31.83 | 44.34 | 28.45 | 55.68 | 98.45 | 118.41 |
 | [ba23979ed](https://github.com/AFK-surf/monoid/commit/ba23979ed094039a10f69bc6723c42777220dd3f) mbui app: the fourth group's pages fewer at the de | 2.01 | 2.77 | 11.91 | 31.83 | 44.34 | 28.45 | 55.68 | 98.45 | 118.41 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c3542cb9f](https://github.com/AFK-surf/monoid/commit/c3542cb9fc11c07c7a0d571f2b0da672b8d200ff) station: a skill kept apart is named for the stati | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.23 | 55.31 | 96.67 | 115.89 |
 | [ef0dc454b](https://github.com/AFK-surf/monoid/commit/ef0dc454b2b3e50c5a77208ae54f6d82f68eeab1) app tests: the third reckoned 1500 at the default  | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.23 | 55.31 | 96.67 | 115.89 |
 | [e8639dd39](https://github.com/AFK-surf/monoid/commit/e8639dd3919993a0acdfb2700f39da6b8a5a9834) feat(mbui/headless): add radio_group, split, Hold/ | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.2 | 55.28 | 96.67 | 115.89 |
-| [91143174f](https://github.com/AFK-surf/monoid/commit/91143174f71fcfdd5d0599a6ca374a8cf9948dc2) mbui app: two tests of the chat hold what is seen, | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7746223b6](https://github.com/AFK-surf/monoid/commit/7746223b6be1f4b43c9a2ebb824cedb8c26134b5) ci: a native part coming slower than 200 KB/s is a | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.39 |
 | [3118f7685](https://github.com/AFK-surf/monoid/commit/3118f7685e1a0dcac39464b236dfe4eac893516c) app: a chat's Farview tab drawn by the app itself, | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.39 |
 | [91fe2703b](https://github.com/AFK-surf/monoid/commit/91fe2703b5f707a03492082674ca7d386887003c) station: what an event stream tells several device | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.39 |
 | [ba23979ed](https://github.com/AFK-surf/monoid/commit/ba23979ed094039a10f69bc6723c42777220dd3f) mbui app: the fourth group's pages fewer at the de | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.26 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c3542cb9f](https://github.com/AFK-surf/monoid/commit/c3542cb9fc11c07c7a0d571f2b0da672b8d200ff) station: a skill kept apart is named for the stati | 0.4 | 0.52 | 1.95 | 3.08 | 4.45 | 1.45 | 3.78 | 57.33 |
 | [ef0dc454b](https://github.com/AFK-surf/monoid/commit/ef0dc454b2b3e50c5a77208ae54f6d82f68eeab1) app tests: the third reckoned 1500 at the default  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.35 |
 | [e8639dd39](https://github.com/AFK-surf/monoid/commit/e8639dd3919993a0acdfb2700f39da6b8a5a9834) feat(mbui/headless): add radio_group, split, Hold/ | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.35 |
-| [91143174f](https://github.com/AFK-surf/monoid/commit/91143174f71fcfdd5d0599a6ca374a8cf9948dc2) mbui app: two tests of the chat hold what is seen, | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.35 |
