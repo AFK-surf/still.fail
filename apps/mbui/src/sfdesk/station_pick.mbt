@@ -466,7 +466,7 @@ let pick_crumb_in : Double = 4.0
 /// The way's line in the panel: its own room over and under it, its sides the panel's. Under it, room enough for a
 /// finger's press on a step (26 tall: 9 over and under it, the first row's room as far again: rooms.mbt) before the list.
 // kept across runs: a value (no field of it changes)
-let pick_crumbs_row : @ui.Style = @ui.css("row pt=S0_5 pb=S4 align=ACenter")
+let pick_crumbs_row : @ui.Style = @ui.css("row pt=S0_5 pb=S0_5 align=ACenter")
 
 ///|
 /// A station's name over its places (as a day over a machine's sessions: run_more.mbt machine_day), 14 over it but

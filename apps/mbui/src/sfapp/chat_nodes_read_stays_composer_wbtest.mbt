@@ -51,7 +51,7 @@ fn rsc_end_held(t : @ui.Tester, k : RsCore, what : String, grows : Bool, cause :
   let start = t.time()
   k.look = Some(fn() { seen.push((t.time() - start, rsc_bottom(t, text, x), rs_ground(t).map(fn(g) { g.1 }))) })
   cause()
-  rs_run(t, k.late + rs_watch_ms)
+  rs_watch(t, k.late + rs_watch_ms)
   k.look = None
   guard seen.last() is Some((_, Some(b1), Some(g1))) else { return Some("\{what}: the last row or the composer not drawn at rest") }
   let grew = g0 - g1
@@ -194,7 +194,10 @@ fn rs_composer(
   with_cards? : Bool = true,
 ) -> Array[String] {
   let out : Array[String] = []
-  let (t, src, k) = rs_open(s)
+  // (off the device's pixels, as this was written and holds on main: on them the last row goes by whole pixels and
+  // the composer's ground, the old view's, does not, so at the end (b) reads 0.5-0.6 pt on both screens at every
+  // lateness, a pixel of the row's: the coordinator of the migration's to rule, #6134)
+  let (t, src, k) = rs_open(s, on_pixels=false)
   if !at_end {
     rs_read_up(t, s)
   }
@@ -222,7 +225,7 @@ fn rs_composer(
     out.push("\{name}: the composer's field not focused by a tap (the cause not made)")
   }
   t.type_text("第一行")
-  rs_run(t, k.late + rs_watch_ms)
+  rs_watch(t, k.late + rs_watch_ms)
   rs_push(out, held("\{name}: a second line typed", true, fn() { rs_line(t, s.3, "第二行") }))
   rs_push(out, held("\{name}: a third line typed", true, fn() { rs_line(t, s.3, "第三行") }))
   let add_file = fn() { @sfbase.writing_add(src, draft, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志")) }
@@ -319,12 +322,12 @@ test "a chat's page made as nodes, on 小屏: the keyboard coming up and going, 
   let (t, _, k) = rs_open(s)
   rs_read_up(t, s)
   rs_focus(t)
-  rs_run(t, rs_watch_ms)
+  rs_watch(t, rs_watch_ms)
   rs_push(broken, rs_read_held(t, k, s, "the keyboard up", up(t)))
   rs_push(broken, rs_read_held(t, k, s, "the keyboard down", down(t)))
   let (t, _, k) = rs_open(s)
   rs_focus(t)
-  rs_run(t, rs_watch_ms)
+  rs_watch(t, rs_watch_ms)
   rs_push(broken, rs_end_held(t, k, "the keyboard up", up(t)))
   rs_push(broken, rs_end_held(t, k, "the keyboard down", down(t)))
   assert_eq(broken, [])

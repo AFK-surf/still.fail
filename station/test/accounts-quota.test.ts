@@ -10,7 +10,7 @@ import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
 import { readClaudeCredentials } from "../src/agents/machine-logins.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { at, checkQuota, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, machineUsage, windowLabel } from "../src/accounts/quota.ts";
-import { SESSIONS, agyConversations, agyHome, agyToken, geminiDir } from "../src/agents/agy.ts";
+import { AGY_FILE_TOKENS, SESSIONS, agyAccountFile, agyConversations, agyHome, agyKeychain, agyToken, geminiDir } from "../src/agents/agy.ts";
 import { platform } from "../src/platform/index.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { machine, provider, script, temp, until } from "./accounts-fakes.ts";
@@ -104,34 +104,48 @@ describe("allowances and renewing", { concurrency: true }, () => {
     assert.equal(ran.key, null, "scrubs inherited GEMINI_API_KEY");
     assert.equal(ran.updates, "1");
 
-    // Keychain-backed macOS profile (conversation db exists, no token file on disk): preserves real HOME so `/usr/bin/security`
-    // can reach the login keychain, while an unsigned profile (even with `agy/sessions` linked by `linkTranscripts` and a
-    // cancelled `agy` home) does not read the keychain.
-    const realHome = temp("agy-real-home");
+    // macOS: `agy` is kept to the profile's file (`AGY_FILE_TOKENS`, HOME its agy/), never the login keychain's one
+    // item. A profile whose file `agy` had moved into that item takes it back when the item is its noted account; an
+    // unsigned profile (even with `agy/sessions` linked by `linkTranscripts` and a cancelled `agy` home) and one whose
+    // item is another account's spawn nothing.
     const keyringHome = temp("agy-quota-keyring");
     const keyringDump = join(keyringHome, "dump");
     mkdirSync(agyConversations(keyringHome), { recursive: true });
     writeFileSync(join(agyConversations(keyringHome), "conv.db"), "db");
+    writeFileSync(agyAccountFile(keyringHome), JSON.stringify({ email: "me@gmail.com" }));
+    const kept = JSON.stringify({ token: { access_token: "ya29.kept" }, auth_method: "consumer", id_token_email: "me@gmail.com" });
     const keyringProfile = hubConfig({ profiles: [{ id: "ag-k", home: keyringHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
     const hadKeychain = platform.hasKeychain;
+    const read = agyKeychain.read;
     platform.hasKeychain = true;
+    agyKeychain.read = async () => `go-keyring-base64:${Buffer.from(kept).toString("base64")}`;
     try {
-      const kq = await checkQuota(keyringProfile, { HOME: realHome, PATH: fakePath, FAKE_DUMP: keyringDump, FAKE_AGY_KEYRING: "1", FAKE_KEYCHAIN_HOME: realHome }, undefined, URLS, "zh");
+      const kq = await checkQuota(keyringProfile, { HOME: temp("agy-real-home"), PATH: fakePath, FAKE_DUMP: keyringDump }, undefined, URLS, "zh");
       assert.equal(kq.state, "ok");
       const kran = JSON.parse(readFileSync(keyringDump, "utf8").trim().split("\n")[0]!);
-      assert.equal(kran.home, realHome, "preserves user HOME for macOS keychain lookup");
-      assert.equal(kran.geminiDir, geminiDir(keyringHome));
+      assert.deepEqual([kran.home, kran.geminiDir, kran.fileTokens], [agyHome(keyringHome), geminiDir(keyringHome), AGY_FILE_TOKENS.SSH_CLIENT]);
+      assert.equal(readFileSync(agyToken(keyringHome), "utf8"), kept);
+
+      const otherHome = temp("agy-quota-other");
+      const otherDump = join(otherHome, "dump");
+      mkdirSync(agyHome(otherHome), { recursive: true });
+      writeFileSync(agyAccountFile(otherHome), JSON.stringify({ email: "other@gmail.com" }));
+      const otherProfile = hubConfig({ profiles: [{ id: "ag-o", home: otherHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+      const oq = await checkQuota(otherProfile, { PATH: fakePath, FAKE_DUMP: otherDump }, undefined, URLS, "zh");
+      assert.deepEqual([oq.state, oq.detail], ["unavailable", "登录已过期或失效"]);
+      assert.equal(existsSync(otherDump), false, "another account's item is not taken");
 
       const unsignedHome = temp("agy-quota-unsigned");
       const unsignedDump = join(unsignedHome, "dump");
       mkdirSync(join(agyHome(unsignedHome), SESSIONS), { recursive: true });
       mkdirSync(join(unsignedHome, "agy", ".gemini", "antigravity-cli"), { recursive: true });
       const unsignedProfile = hubConfig({ profiles: [{ id: "ag-u", home: unsignedHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
-      const uq = await checkQuota(unsignedProfile, { HOME: realHome, PATH: fakePath, FAKE_DUMP: unsignedDump, FAKE_AGY_KEYRING: "1", FAKE_KEYCHAIN_HOME: realHome }, undefined, URLS, "zh");
+      const uq = await checkQuota(unsignedProfile, { PATH: fakePath, FAKE_DUMP: unsignedDump }, undefined, URLS, "zh");
       assert.deepEqual([uq.state, uq.signedOut, uq.detail], ["unavailable", undefined, "登录已过期或失效"]);
-      assert.equal(existsSync(unsignedDump), false, "unsigned profile does not spawn agy or read machine keychain");
+      assert.equal(existsSync(unsignedDump), false, "unsigned profile does not spawn agy");
     } finally {
       platform.hasKeychain = hadKeychain;
+      agyKeychain.read = read;
     }
 
     // Expired sign-in prompting interactive OAuth marks signedOut without hanging 60s.

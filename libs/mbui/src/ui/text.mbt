@@ -550,6 +550,51 @@ fn has_digit(text : String) -> Bool {
 }
 
 ///|
+/// The host's clusters of `text` (h_shape), shaped as they always were; and where the face drew a mark of ambiguous
+/// width a whole em among Latin letters (a CJK face: 思源黑体's "it’s"), shaped again a piece at a time
+/// (@text.width_runs), the narrow pieces with @hostapi.style_proportional, their clusters put together. A face whose
+/// such marks are narrow already (Inter, Segoe UI, San Francisco, the system's) is asked nothing more.
+fn shape_widths(text : String, size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Int {
+  let k = h_shape(text, size, weight, style, out)
+  let runs = @text.width_runs(text)
+  guard runs.length() > 1 || runs[0].2 else { return k }
+  // a quote, a middle dot or an ellipsis in a narrow piece drawn a whole em (@text.width_mark): the face is one that
+  // has its marks narrow only when asked
+  let mut wide = false
+  let mut r = 0
+  for j in 0..<k {
+    let st = out[j * 4].to_int()
+    while r < runs.length() - 1 && st >= runs[r].1 {
+      r = r + 1
+    }
+    if runs[r].2 && @text.width_mark(text, st) && out[j * 4 + 2] >= size * 0.95 {
+      wide = true
+      break
+    }
+  }
+  guard wide else { return k }
+  let cap = out.length() / 4
+  let part = FixedArray::make(out.length(), 0.0)
+  let mut k = 0
+  for run in runs {
+    let (a, b, narrow) = run
+    let style = if narrow { style | @hostapi.style_proportional } else { style }
+    let m = h_shape(text.unsafe_substring(start=a, end=b), size, weight, style, part)
+    for j in 0..<m {
+      if k >= cap {
+        break
+      }
+      out[k * 4] = part[j * 4] + a.to_double()
+      out[k * 4 + 1] = part[j * 4 + 1]
+      out[k * 4 + 2] = part[j * 4 + 2]
+      out[k * 4 + 3] = part[j * 4 + 3]
+      k = k + 1
+    }
+  }
+  k
+}
+
+///|
 /// With `spacing` (letter spacing, as Android's: each cluster's advance has it, half before its piece and half
 /// after), shaped with no ligatures (@hostapi.style_no_ligatures): a ligature's letters would not be spaced.
 fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? : Double = 0.0) -> Shaped {
@@ -577,7 +622,7 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
       let m = if text.length() == 0 {
         0
       } else {
-        h_shape(text, size, weight, style, out)
+        shape_widths(text, size, weight, style, out)
       }
       let lb = if m > 1 { Some(@text.line_breaks(text)) } else { None }
       // UAX #29's clusters: a host that cut one in two (a Thai vowel sign some segmenters leave on its own) is

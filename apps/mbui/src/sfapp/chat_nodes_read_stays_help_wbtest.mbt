@@ -15,8 +15,8 @@ let rs_watch_ms : Double = @ui.move_most_ms * 4.0
 /// The long chat's made-up core under a run, and what the run changes of what it says: its calls held as late as
 /// `late` (all of them while `gate` is shut, set off `late` after it opens), answered between frames; its agent at
 /// work; messages told longer (`grown`, their seqs) and given a card (`carded`, by seq: whether answered); `told` bumped
-/// as any of them changes, the chat's version with it. What each frame looks at (`look`), and the test's clock as the
-/// last frame drew (`now`).
+/// as any of them changes, the chat's version with it. What each frame looks at (`look`), the test's clock as the
+/// last frame drew (`now`), and how many times the page before was asked of it (`older`).
 priv struct RsCore {
   l : LongChat
   mut now : Double
@@ -28,6 +28,7 @@ priv struct RsCore {
   grown : Array[Int]
   carded : Map[Int, Bool]
   mut look : (() -> Unit)?
+  mut older : Int
 }
 
 ///|
@@ -98,6 +99,9 @@ fn rs_source(k : RsCore) -> Source {
     },
     call: fn(name, params, done) {
       let go = fn() { (base.call)(name, params, done) }
+      if name == "chat.older" {
+        k.older += 1
+      }
       if k.gate.val || k.late > 0.0 {
         k.held.push((k.now + k.late, go))
       } else {
@@ -136,7 +140,8 @@ fn rs_answer(k : RsCore) -> Unit {
 
 ///|
 /// The long chat opened on screen `s` with its page made as nodes, at its end and at rest, the core answering at once.
-fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
+/// Its list's rows on the device's pixels, but where a caller says not (`on_pixels`).
+fn rs_open(s : (String, Double, Double, Int), on_pixels? : Bool = true) -> (@ui.Tester, Source, RsCore) {
   let (_, w, h, platform) = s
   new_run()
   @sf.presenters_reset()
@@ -152,33 +157,69 @@ fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
     grown: [],
     carded: Map([]),
     look: None,
+    older: 0,
   }
   let src = rs_source(k)
   open_chat(long_ref)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, begun=fn() {
     @sfbase.window_tall.val = h
   })
+  // (a list's rows on the device's pixels, as every host lays them: what is held is where things are drawn, the scroll
+  // moving by whole pixels; off them, as the Tester's own default, the list counts fractions that Scroll::drawn_by draws
+  // put on the pixel, up to half a pixel apart and otherwise as the fraction changes, a mode no device runs)
+  t.set_rows_on_pixels(on_pixels)
+  // (each frame looked at as it was drawn, before what the core answers by then is told: told after the look, it is
+  // laid out at once, and the tree read then is between that answer and the frame that draws it, a frame no device
+  // draws)
   t.each_frame(
     Some(fn() {
       k.now = t.time()
-      rs_answer(k)
       match k.look {
         Some(f) => f()
         None => ()
       }
+      rs_answer(k)
     }),
   )
-  rs_run(t, long_opened_ms)
+  // (and a frame at each moment a held answer of the core's comes due, however the clock is run on: rs_due)
+  t.between_frames(fn() {  }, due=fn() { rs_due(k) })
+  rs_rest(t, long_opened_ms)
   (t, src, k)
 }
 
 ///|
-/// `ms` of the display's frames (and at a rate those between).
-fn rs_run(t : @ui.Tester, ms : Double) -> Unit {
-  let from = t.time()
-  while t.time() - from < ms - 1.0e-6 {
-    t.run_for(@ui.frame_period_default)
+/// When the core's next held answer comes due (+inf: none, or its gate shut): its moment; one already due as the last
+/// frame was drawn, a display's frame after that one, as an answer come between two frames of a device's is told
+/// before the next.
+fn rs_due(k : RsCore) -> Double {
+  if k.gate.val {
+    return @double.infinity
   }
+  let mut at = @double.infinity
+  for h in k.held {
+    let due = if h.0 > k.now + 1.0e-6 { h.0 } else { k.now + @ui.frame_period_default }
+    if due < at {
+      at = due
+    }
+  }
+  at
+}
+
+///|
+/// `ms` looked at after a cause: the frames a device draws (Tester::run_shown), each of the display's while the app
+/// asks for frames, one at each moment a held answer of the core's comes due (rs_due), one at its end; none while the
+/// app is at rest, a frame nobody draws showing nothing (the coordinator of the migration, 2026-11-14: the rule is
+/// about what is drawn; and every display frame of a rest drawn was most of what these files cost a CI job).
+fn rs_watch(t : @ui.Tester, ms : Double) -> Unit {
+  t.run_shown(ms)
+}
+
+///|
+/// `ms` gone by with nothing looked at on the way (a rest between two causes): in one step, a frame only at what is
+/// due (the app's own, a held answer's moment) and at its end. Where the app is at its end is the same however many
+/// frames were drawn on the way.
+fn rs_rest(t : @ui.Tester, ms : Double) -> Unit {
+  t.run_for(ms)
 }
 
 ///|
@@ -197,9 +238,9 @@ fn rs_up(t : @ui.Tester, s : (String, Double, Double, Int), d : Double) -> Unit 
 /// Read up about a screen from the end and come to rest, what that asks of the core answered at once.
 fn rs_read_up(t : @ui.Tester, s : (String, Double, Double, Int)) -> Unit {
   rs_up(t, s, s.2 * 0.4)
-  rs_run(t, long_rest_ms)
+  rs_rest(t, long_rest_ms)
   rs_up(t, s, s.2 * 0.4)
-  rs_run(t, long_rest_ms * 2.0)
+  rs_rest(t, long_rest_ms * 2.0)
 }
 
 ///|
@@ -219,16 +260,41 @@ fn rs_ground(t : @ui.Tester) -> (Double, Double, Double)? {
 }
 
 ///|
-/// The first message of the long chat wholly in sight under the page's head and over the composer: its number and the
-/// top of its words.
+/// The bottom of the page's head (the bar the list runs under): of what is drawn at the window's top across the chat's
+/// pane (over the composer's ground, rs_ground), glass (小屏's bar) or a ground (大屏's), less than a third of the window
+/// `h` tall, the one reaching lowest.
+fn rs_bar(t : @ui.Tester, h : Double) -> Double? {
+  guard rs_ground(t) is Some((gx, _, gw)) else { return None }
+  guard @ui.view_tree() is Some(tree) else { return None }
+  let mut at : Double? = None
+  for d in tree.drawn() {
+    if d.y.abs() < 0.5 &&
+      d.h < h / 3.0 &&
+      d.w > 150.0 &&
+      d.x < gx + gw &&
+      d.x + d.w > gx &&
+      (d.glass is Some(_) || d.ground != 0L) {
+      match at {
+        Some(b) if b >= d.y + d.h => ()
+        _ => at = Some(d.y + d.h)
+      }
+    }
+  }
+  at
+}
+
+///|
+/// The message read: the first of the long chat whose words start at or under the page's head (rs_bar) and end
+/// over the composer's: its number and the top of its words.
 fn rs_read(t : @ui.Tester, k : RsCore, s : (String, Double, Double, Int)) -> (Int, Double)? {
   let bottom = match rs_ground(t) {
     Some((_, y, _)) => y
     None => s.2
   }
+  let bar = rs_bar(t, s.2).unwrap_or(0.0)
   for n in k.l.first.get()..=k.l.last.get() {
     match t.rect_of("第\{n}条：") {
-      Some((_, y, _, h)) if y >= s.2 * 0.12 && y + h <= bottom => return Some((n, y))
+      Some((_, y, _, h)) if y >= bar - 0.001 && y + h <= bottom => return Some((n, y))
       _ => ()
     }
   }
@@ -242,13 +308,47 @@ fn rs_top(t : @ui.Tester, n : Int) -> Double? {
 }
 
 ///|
-/// At the list's end: how far the composer's ground stands under the lowest words drawn over it across its width.
+/// Where the words of the window's tree are that what holds them cuts away whole (a part on its way cut to itself, a
+/// clip), as they are drawn now: Tester::words lists them, but they are drawn nowhere (a card closing over the last
+/// row: its options laid out whole at the size it comes from, under the part's foot as it shrinks).
+fn rs_cut_words() -> Array[(Double, Double)] {
+  guard @ui.view_tree() is Some(tree) else { return [] }
+  let all = tree.drawn_held()
+  let out = []
+  for e in all {
+    let (d, up, _) = e
+    guard d.words != "" else { continue }
+    let mut h = up
+    let mut cut = false
+    while h >= 0 && !cut {
+      let (hd, hu, _) = all[h]
+      if hd.clips && (d.y >= hd.y + hd.h || d.y + d.h <= hd.y) {
+        cut = true
+      }
+      h = hu
+    }
+    if cut {
+      out.push((d.x, d.y))
+    }
+  }
+  out
+}
+
+///|
+/// At the list's end: how far the composer's ground stands under the lowest words drawn over it across its width (not
+/// those cut away whole: rs_cut_words).
 fn rs_end_gap(t : @ui.Tester) -> Double? {
   guard rs_ground(t) is Some((gx, gy, gw)) else { return None }
+  let cut = rs_cut_words()
   let mut low : Double? = None
   for wd in t.words() {
     let (_, x, y, _, h, a) = wd
-    if a > 0.0 && x >= gx && x < gx + gw && y >= 0.0 && y + h <= gy + 0.5 {
+    if a > 0.0 &&
+      x >= gx &&
+      x < gx + gw &&
+      y >= 0.0 &&
+      y + h <= gy + 0.5 &&
+      !cut.iter().any(fn(c) { c.0 == x && c.1 == y }) {
       if low is None || low.unwrap() < y + h {
         low = Some(y + h)
       }
@@ -265,8 +365,8 @@ fn rs_n(x : Double) -> String {
 }
 
 ///|
-/// What `read` gives held over every frame from `cause` (done between frames, before the first looked at) to
-/// `rs_watch_ms` past the core's lateness: None where it held within half a device pixel of what it gave before, else
+/// What `read` gives held over every frame drawn (rs_watch) from `cause` (done between frames, before the first looked
+/// at) to `rs_watch_ms` past the core's lateness: None where it held within half a device pixel of what it gave before, else
 /// what moved, how far at most and when (ms after the cause), and where it is at rest.
 fn rs_held(
   t : @ui.Tester,
@@ -280,7 +380,7 @@ fn rs_held(
   let start = t.time()
   k.look = Some(fn() { seen.push((t.time() - start, read())) })
   cause()
-  rs_run(t, k.late + rs_watch_ms)
+  rs_watch(t, k.late + rs_watch_ms)
   k.look = None
   let mut most = 0.0
   let mut most_at = 0.0

@@ -2244,11 +2244,13 @@ test "wide: 用量: what it counts beside its title, the summary, the days split
   // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
-  // the summary, the days split by person or by model (picked over them), the chats; no accounts' list
+  // the period overview, the days split by person, model or account, the breakdown list; the summary on 累计
   assert_true(t.find("整理发布清单") is Some(_), msg="the chats: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is Some(_), msg="the split")
+  assert_true(t.find("花费明细") is Some(_), msg="breakdown")
+  t.tap_text("累计")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("累计 token") is Some(_) && t.find("跨设备任务") is Some(_), msg="the summary")
-  assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is None, msg="the split")
-  assert_true(t.find("按对话") is None, msg="no list to pick")
 }
 
 ///|

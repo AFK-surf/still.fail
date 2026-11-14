@@ -1247,8 +1247,16 @@ pub fn switch_node(
   parent.box(made_for=loc, fn(at) {
     at.lines_up(Is(Some(Start))) |> ignore
     // (its press's room: as wide as a press's least room where it is drawn narrower, reached from round it as the old
-    // view's press_room has a small target's, laid out as wide as it is drawn: what is by it moves none)
-    at.box(fn(room) {
+    // view's press_room has a small target's, laid out as wide as it is drawn: what is by it moves none. That room is
+    // what it is to the hand, the keys and a screen reader: mbui's headless toggle, a switch by its name, on or off,
+    // taking no press nor the focus while disabled; a light tick felt under a finger as it is turned)
+    let felt = fn(to : Bool) {
+      if @ui.pointing() is Finger {
+        @ui.haptic(TextHandleMove)
+      }
+      turn(to)
+    }
+    @headless.toggle(at, Switch, label, on, felt, disabled~, fn(room, sw) {
     let out = fn() { dmax(0.0, (theme().items.least - switch_size(small).0) / 2.0) }
     room.padding(By(fn() { (out(), 0.0, out(), 0.0) })).margin(By(fn() { (-out(), 0.0, -out(), 0.0) })) |> ignore
     room.box(fn(v) {
@@ -1260,28 +1268,16 @@ pub fn switch_node(
       v.reacts(fn() { room.pressed() && @ui.pointing() is Finger }, fn(down) {
         held.go_by(v, if down { 1.0 } else { 0.0 }, @motion.lift_spring)
       })
-      let press = fn() {
-        let to = !@signals.untracked(on)
-        if @ui.pointing() is Finger {
-          @ui.haptic(TextHandleMove)
-        }
-        turn(to)
-      }
-      // (what takes the focus and the press is what says it is a switch, its name and whether it is on: one thing to a
-      // screen reader and to the keys, its room; the ring the keys' focus shows drawn round its track, below)
-      room
-      .presses(By(fn() { !disabled() }))
-      .focusable(By(fn() { !disabled() }))
-      .on_press(press)
-      .says(By(fn() { Some(@view.said(Switch, label=label(), check=if on() { On } else { Off })) }))
-      |> ignore
       v.alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } })) |> ignore
+      // (a press held however long and let go on it turns it too: the look takes the pointer for that and ends in the
+      // toggle's press, which the tree takes as a press delivered to it. When a press counts is the component's: a
+      // debt, as the icon button's, icon_button_node.mbt; the ring the keys' focus shows drawn round its track, below)
       let on_it = fn(d : @view.Drag) { room.finger_target(d.wx, d.wy) }
       room.gesture(
         @ui.touch_slop(),
-        tap=fn(d) { if on_it(d) && !disabled() { press() } },
+        tap=fn(d) { if on_it(d) { sw.press() } },
         hold=(@ui.long_press_ms, fn(_) {  }),
-        drag=fn(d) { if d.kind == Up && on_it(d) && !disabled() { press() } },
+        drag=fn(d) { if d.kind == Up && on_it(d) { sw.press() } },
       )
       |> ignore
       let size = fn() { switch_size(small) }

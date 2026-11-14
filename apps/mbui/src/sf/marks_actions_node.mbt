@@ -90,17 +90,13 @@ pub fn marks_actions_node(
       |> ignore
     })
     // 取消
-    row.box(fn(b) {
+    @headless.button(row, fn() { said().cancel }, fn(_) { cancel() }, fn(b, _) {
       b
       .height(Is(Some(tool_side)))
       .padding(Is((@ui.Space::px(S2_5), 0.0, @ui.Space::px(S2_5), 0.0)))
       .radius(corner)
       .row(Is(true))
       .lines_up(Is(Some(Middle)))
-      .presses(Is(true))
-      .focusable(Is(true))
-      .says(By(fn() { Some(@view.said(Button, label=said().cancel)) }))
-      .on_press(cancel)
       |> ignore
       b.box(fn(w) {
         w.words(By(fn() { said().cancel })).words_look(By(fn() { meta(400) })).ink(By(fn() { ink().muted })) |> ignore
@@ -126,59 +122,61 @@ pub fn marks_actions_node(
     // 添加到对话, where there is a draft to put it in
     row.show(fn() { said().can_put }, fn(room) {
       room.padding(Is((@ui.Space::px(S1), 0.0, 0.0, 0.0))) |> ignore
-      room.box(fn(b) {
-        b
-        .row(Is(true))
-        .lines_up(Is(Some(Middle)))
-        .height(Is(Some(tool_side)))
-        .padding(Is((@ui.Space::px(S3), 0.0, @ui.Space::px(S3), 0.0)))
-        .gap(Is(@ui.Space::px(S1_25)))
-        .radius(corner)
-        .ground(Is(marks_put_ground))
-        .alpha(By(fn() { if said().ready { 1.0 } else { marks_put_faint } }))
-        .presses(By(fn() { said().ready }))
-        .focusable(By(fn() { said().ready }))
-        .says(By(fn() {
+      @headless.button(
+        room,
+        fn() {
           let s = said()
-          Some(@view.said(Button, label=if s.busy { s.making } else { s.put }))
-        }))
-        .on_press(fn() {
-          if @signals.untracked(fn() { said().ready }) {
-            put()
+          if s.busy {
+            s.making
+          } else {
+            s.put
           }
-        })
-        |> ignore
-        b.box(fn(i) {
-          i
-          .width(Is(Some(marks_put_icon)))
-          .height(Is(Some(marks_put_icon)))
-          .shapes(Is(
-            match icon_numbers("send") {
-              Some(d) => icon_shapes(d, marks_put_icon / 24.0, 0x000000FFL)
-              None => []
-            },
-          ))
-          .drawn_as(Is("/icon/send/"))
-          .tint(Is(0xFFFFFFFFL))
+        },
+        fn(_) { put() },
+        disabled=fn() { !said().ready },
+        fn(b, _) {
+          b
+          .row(Is(true))
+          .lines_up(Is(Some(Middle)))
+          .height(Is(Some(tool_side)))
+          .padding(Is((@ui.Space::px(S3), 0.0, @ui.Space::px(S3), 0.0)))
+          .gap(Is(@ui.Space::px(S1_25)))
+          .radius(corner)
+          .ground(Is(marks_put_ground))
+          .alpha(By(fn() { if said().ready { 1.0 } else { marks_put_faint } }))
           |> ignore
-        })
-        |> ignore
-        b.box(fn(w) {
-          w
-          .words(By(fn() {
-            let s = said()
-            if s.busy {
-              s.making
-            } else {
-              s.put
-            }
-          }))
-          .words_look(By(fn() { meta(600) }))
-          .ink(Is(0xFFFFFFFFL))
+          b.box(fn(i) {
+            i
+            .width(Is(Some(marks_put_icon)))
+            .height(Is(Some(marks_put_icon)))
+            .shapes(Is(
+              match icon_numbers("send") {
+                Some(d) => icon_shapes(d, marks_put_icon / 24.0, 0x000000FFL)
+                None => []
+              },
+            ))
+            .drawn_as(Is("/icon/send/"))
+            .tint(Is(0xFFFFFFFFL))
+            |> ignore
+          })
           |> ignore
-        })
-        |> ignore
-      })
+          b.box(fn(w) {
+            w
+            .words(By(fn() {
+              let s = said()
+              if s.busy {
+                s.making
+              } else {
+                s.put
+              }
+            }))
+            .words_look(By(fn() { meta(600) }))
+            .ink(Is(0xFFFFFFFFL))
+            |> ignore
+          })
+          |> ignore
+        },
+      )
       |> ignore
     })
   })

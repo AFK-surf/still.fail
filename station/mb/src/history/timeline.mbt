@@ -125,7 +125,7 @@ fn kept_whole(tool : String) -> Bool {
 
 ///|
 /// `new Date(time).toISOString()` of a finite number; raises as it throws past the dates JavaScript has.
-fn date_iso(time : Double) -> String raise {
+pub fn date_iso(time : Double) -> String raise {
   let t = if time < 0.0 { -(-time).floor() } else { time.floor() }
   if t.abs() > 8.64e15 {
     fail("Invalid time value")

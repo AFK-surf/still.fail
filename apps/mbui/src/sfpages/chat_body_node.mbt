@@ -172,6 +172,21 @@ fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending
 }
 
 ///|
+/// Whether a row of entry `e` come among a chat's list's keys comes in (sfbase's row_keys' `comes`; the list says where
+/// it is seen): a message the core says was said while the chat shows (Message's `said`), an outbox entry (one from
+/// another device of the viewer's; what was sent from here on its own way, as the send's), an agent's line at work
+/// (`started`); anything else (a message caught up on or read in, what was said elsewhere, where the chat stands, the
+/// unread line) is simply there.
+fn chat_body_comes(e : Entry) -> Bool {
+  match e {
+    Said(m) => m.said
+    Out(_) => true
+    Working(a) => a.started
+    _ => false
+  }
+}
+
+///|
 /// Whether row `b` is what row `a` was: the same room over it and the same entry, an entry the same as the chat's list
 /// keeps it (its message, what was said elsewhere, what was sent from here or an agent's line the same one, read again
 /// only as it changed: sfbase's chat_read; the rest by what they say). What a row reads of its key (chat_body_row's)
@@ -261,9 +276,11 @@ priv struct ChatBodyKeeps {
 /// A chat's messages (chat_list's rows, at rest) in `v`, taking the room it is given: the chat `here` is (its view as
 /// it changes, the list's width as it changes: narrow or wide by it), its rows the entries `entries` says as they
 /// change (view_of_chat's) with what was sent from here and not in the chat yet (`sending`: sfbase's sending_now),
-/// answered with `core` where something is (a login's card, a request's answer); `top` over its first row (list_top:
-/// the chat's bar's room), `foot` under its last, then the composer `composer` builds in the list's foot (its room
-/// under the rows as tall as the two are laid out, as the composer changes: at once as yet). In `scroll`,
+/// answered with `core` where something is (a login's card, a request's answer); under the chat's bar, `cover` tall
+/// (where the bar is drawn to: what hides the list's top, what the list holds what is read under), `room` more over its
+/// first row (the list's head, the two together: its top), `foot` under its last, then the composer `composer` builds
+/// in the list's foot (its room under the rows as tall as the two are laid out, as the composer changes: at once as
+/// yet). In `scroll`,
 /// put where `place` asks: where it opens as chat_open_place says (its unread line `lead` under its top, where it was
 /// left, else at its end, followed there), and at an unread line come after while it is still at its end; a chat too short to fill what shows at its foot, over the composer (the old
 /// list's from_end); the page before asked as it nears its top. `made`, told each row's key and what holds it as its row
@@ -278,7 +295,8 @@ fn chat_body_node(
   entries : () -> Array[Entry],
   sending? : () -> Array[@sfbase.LocalSent] = fn() { [] },
   core? : @settings.Core? = None,
-  top? : () -> Double = fn() { list_top },
+  cover? : () -> Double = fn() { bar_foot },
+  room? : Double = list_room,
   foot? : () -> Double = fn() { list_foot },
   composer? : (@view.View) -> Unit,
   lead? : Double = unread_lead,
@@ -291,6 +309,9 @@ fn chat_body_node(
   shows? : () -> Bool = fn() { true },
 ) -> @view.View {
   let jump = ChatJump::new()
+  // (the list's top: the bar and the room under it, its head; where it opens, where a go-to puts a message and the
+  // unread line are counted from it, as before the bar's own edge was told the list)
+  let top = fn() { cover() + room }
   let kept : ChatBodyKept = { sent: {}, sent_as: {} }
   // (worked out once as the view, its entries or what is on its way change; the keys only change as rows come, go or
   // are taken over: each row reads its own by its key)
@@ -386,9 +407,12 @@ fn chat_body_node(
       fn() { keys.get() },
       est=chat_row_est,
       bar=@ui.tree_scroll_bar(),
-      top_covered=top,
-      // (its Top, the chat's bar's room, the list's head; its Foot, the list's foot: the room under its rows, then the
-      // composer (`composer`), the room under the last row as tall as both are laid out)
+      // (what hides its top is the bar alone, as it is drawn: a message whose words start in the room under it is seen,
+      // and held where it is (View::read_from). Its bar kept clear of the room too, where it was)
+      top_covered=cover,
+      bar_clear=fn() { (top(), 0.0) },
+      // (its Top, the chat's bar and the room under it, the list's head; its Foot, the list's foot: the room under its
+      // rows, then the composer (`composer`), the room under the last row as tall as both are laid out)
       head=fn(h) {
         h.height(By(fn() { Some(top()) })) |> ignore
         made("top", h)
@@ -409,6 +433,15 @@ fn chat_body_node(
         }
       },
       follows=fn() { true },
+      // (what comes with a way, as row_keys' `comes`: a message the core says was said while the chat shows, an outbox
+      // entry, an agent at work; the rest, caught up on, read in or there as the chat opened, simply there: what was
+      // said before it was shown moves not, sf/motion.mbt's head)
+      comes=fn(k) {
+        match rows.get().rows.get(k) {
+          Some(r) => chat_body_comes(r.entry)
+          None => false
+        }
+      },
       // (an agent's line gone at its foot leaves its room under the last row, fading where it is: a turn that ends with
       // no reply carries nothing up to let it fall back; what comes next takes that room first. The owner, 2026-11-12;
       // the coordinator of the migration, 2026-11-13: mbui's View::scrolls_window `leaves_room`)
@@ -429,14 +462,14 @@ fn chat_body_node(
   // to go to first, chat_goes_to's)
   let chat = here.station + "\u{1}" + here.session
   let opens = @signals.untracked(fn() {
-    chat_open_place(rows.get(), (here.view)(), @sfbase.kept_places.get(chat), v.pixel_scale(), top(), lead)
+    chat_open_place(rows.get(), (here.view)(), @sfbase.kept_places.get(chat), v.pixel_scale(), cover(), top(), lead)
   })
   if opens is Some((k, offset)) && !@sfbase.go_tos.contains(chat) {
     place.bring(k, offset~)
   }
   match to {
     Some(r) => {
-      chat_goes_to(v, src, r, jump, place, fn() { rows.get() }, here.view, top, fn() { ask_older(false) }, shows)
+      chat_goes_to(v, src, r, jump, place, fn() { rows.get() }, here.view, cover, top, fn() { ask_older(false) }, shows)
       // (over the list: a passage a mouse picked in a message quoted by its pill)
       chat_quote_node(v, src, r, here, fn() { rows.get() })
       // (a picture's 复制图片 chosen in its menu: read whole and put on the clipboard)
@@ -482,7 +515,7 @@ fn chat_body_node(
       guard has && !lined.val else { return }
       lined.val = true
       if scroll.at_foot_now() && !@sfbase.go_tos.contains(chat) {
-        place.bring("line", offset=-lead)
+        place.bring("line", offset=@sfbase.kept_place_under(@signals.untracked(top) + lead, @signals.untracked(cover)))
       }
     },
     at_start=false,

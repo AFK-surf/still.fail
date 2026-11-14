@@ -125,6 +125,13 @@ yet and you can add one, add it.
   what it holds keeps to its foot all the way, cut at its top (flex Style's `come_foot`; an old view hosted in it too):
   a composer grows from its foot, what is over it going up with it as one (`src/view/list_foot_keeps_foot_test.mbt`;
   the coordinator of the migration, 2026-11-14).
+- A page's list holds what is read where it is on the screen, in every frame (the owner's: what the reader has
+  before their eyes does not move): a block marks where what is read in it starts (`View::read_from`, a message's
+  words under its head line), and the list holds the first key whose marked start is at or under what covers its top
+  and over its pinned foot, by that start, kept while it shows till the hand moves the list or it is asked elsewhere;
+  what is over that start gives and takes its room upward, its own growth goes down (`src/view/list_read_from.mbt`).
+  A list that marks none is held by the block the top of what shows lies in, by its top, as before (the coordinator of
+  the migration, 2026-11-14).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.
@@ -254,6 +261,16 @@ yet and you can add one, add it.
   binding's property alike. Only what is on a way not at its end then (its own, what holds it, a way in or out beside
   it in its column: `Tree::on_way_at`) is judged as ever: a step in the middle of a way (`src/view/answer_marked.mbt`;
   the coordinator of the migration, 2026-11-14).
+- Time nothing happens in is skipped, never walked (the user, 2026-11-14: 「无意义的时间直接跳过是这个项目第一天就开始强调的」).
+  A test that looks at every frame after a cause (`Tester::each_frame`) runs the clock on with the frames a host
+  draws (`Tester::run_shown`: the display's while the app asks for frames, none while it is at rest, one at what is
+  due and at its end), never the display's frames walked one by one through a rest: a frame nobody draws shows
+  nothing, and drawing them was most of what such a test cost a CI job (the coordinator of the migration, 2026-11-14).
+  A frame nothing asks for (no motion, no wake or timer due, nothing come from outside, no input, no step said, no
+  hook on each frame: `Tester::frame_unasked`) is not drawn on a host's run's way either (`set_frame_period`'s
+  run_for; a tape's `set_frame_times` draws each it had), nor by `Tester::frame_as_host`, which walks the display's
+  frames one at a time as an idle host has them, the clock only passing what is not drawn. `Tester::frame` draws each,
+  asked or not: a test walking a span by it (detlint's `frame-walk`) is counted, and that count only falls.
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set

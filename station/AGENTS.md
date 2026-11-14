@@ -166,13 +166,16 @@
   nothing for any other keeper.
 - Where a lock's active chain holds `moved {root}` (2026-11-13; signed by an owner's device once everything that uses the
   workspace takes it, client/core-ts/AGENTS.md), the state in force there is the
-  rules' `state4` of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
-  `mesh/locks/<ws>.bodies.json`), by this station's clock (each app device by the signer its log says, never by its key
-  on the log): `Cloud.locked` gives it to every reader of "the lock"
+  rules' state of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
+  `mesh/locks/<ws>.bodies.json`), read with the chain as it moved (`src/cloud/lock.ts` `state4Moved`, `roster4Moved`;
+  2026-11-14: what the logs have not said yet of those it named, it still says, its devices `by` "chain", an app device
+  of them let in by the state where its person's log never put it on, `src/mesh/serve.ts` `inLock`; this station says
+  `carried` in its `serves` so a core hands a chain over only where every reader reads it so), by this station's clock
+  (each app device by the signer its log says, never by its key on the log): `Cloud.locked` gives it to every reader of "the lock"
   (admission, the vault, rigs, the roster); what reads the chain itself (its seq, head, genesis: `lock-sync.ts`, the
   cloud's copy in `presence.ts`, `lockHead`, pinning) reads `Cloud.chain`. Off is a state (`locked` null, nothing let
-  go); without the root's log or its `open` (`waiting`) nobody is let in and the chain's stations are answered only the
-  lock's own methods. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
+  go); without the root's log (`waiting`) nobody is let in and the chain's stations are answered only the lock's own
+  methods; without an `open` there, the chain's settings stand. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
   its workspace, by the list its bodies make, on or off (`Cloud.givenTo`): to a station or device it names
   (`lock.bodies.*`, `person-sync.ts`; `GET /lock/bodies`, with `lacking`: while off, only to a connection that proves
   itself a device the list names), and to one a removal took out, that removal and its `prev` chain alone (the rules'
@@ -192,6 +195,17 @@
   locked, off or on): a station that pinned the chain goes by the state in force (`leftOut`: never `unpinned`; its home
   off, a joined unlocked one's members taken), and so does `enroll --join` on the machine (`src/cli.ts`
   `joinWorkspace`), which the cloud no longer refuses for a moved home (2026-11-14, `test/lock-moved-joined.test.ts`).
+  A joined station that pins no lock of such a workspace (enrolled by its token alone, `leftOut` "unpinned") is offered
+  the plane's moved chain, never pinning it by that alone (`Cloud.movedOffered`, cloud/presence.ts `takeFromPlane`), and
+  pins it once the state made of the logs and bodies a station of it gives names its own key (`src/mesh/moved-pin.ts`,
+  tried again as a failure is, `lock-sync.ts`): what 「保护」 after a move says is a statement, which the chain never
+  names (2026-11-14, `test/lock-moved-pin.test.ts`). A station gives the bodies only to a station its list names
+  (`bodiesGiven`); the logs heard in the workspace to any station of its roster, as before. No wider than before a move
+  (the lead, 2026-11-14): a station pinning no lock of a workspace, its enrollment naming none, is unprotected and lets
+  in whoever the plane's credentials say, so its first pin is the plane's word either way (trust on first use), a chain
+  the plane made up pinning after a move exactly where one before does; its home, enrolled by its token alone, pins only
+  what its owner's device brings (POST /lock, the moved chain with the logs and bodies, `pinBrought`: their state must
+  let that device in as an owner's and name this station); one enrolled with a lock's hash only a chain holding it.
 - What build each device a lock here names last ran is kept by its id in the lock (`src/mesh/device-builds.ts`, in
   stillfail.db, written only as the build rises or the day changes) and given to a device the lock lets in (GET /lock
   `builds`, `serves` `builds`; GET /lock/person for the asker's own log's devices), with since when this station keeps

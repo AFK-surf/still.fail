@@ -12,6 +12,7 @@ import { wall } from "../src/ops/fibers.ts";
 import { Store } from "../src/store/store.ts";
 import { DeviceBuilds, deviceBuildsOf } from "../src/mesh/device-builds.ts";
 import { inLock, lockPartRoute, lockRoute, movedTooOld, sawBuild } from "../src/mesh/serve.ts";
+import { MOVED_FROM_BUILD } from "../src/api/moved-from.ts";
 import { Log, WS2, bring, station, viewerOf, world } from "./lock-moved-world.ts";
 
 const DAY = 86400;
@@ -109,14 +110,14 @@ test("nothing of a device the lock does not name: not in GET /lock; GET /lock/pe
 
 // A core too old for a workspace whose chain moved (api/moved-from.ts): told to update as one under OLDEST_CORE is (426,
 // `update`), for that workspace's requests alone; one that says no build is answered as `coreTooOld` answers it.
-test("a counted build under 9008 at a workspace whose chain moved: too old there; 9008, none said, one under COUNTED_FROM, the chain not moved, another workspace's: not", () => {
+test("a counted build under MOVED_FROM_BUILD at a workspace whose chain moved: too old there; MOVED_FROM_BUILD, none said, one under COUNTED_FROM, the chain not moved, another workspace's: not", () => {
   const w = world();
   const moved = station(w, 0, true), not = station(w, 1, false);
   const v = viewerOf("bob", w.bob.app, "admin", w.ws) as never;
-  assert.equal(movedTooOld(moved, v, 9007), true, "9007 where it moved");
-  assert.equal(movedTooOld(moved, v, 9008), false, "9008");
+  assert.equal(movedTooOld(moved, v, MOVED_FROM_BUILD - 1), true, "one under it where it moved");
+  assert.equal(movedTooOld(moved, v, MOVED_FROM_BUILD), false, "it");
   assert.equal(movedTooOld(moved, v, null), false, "none said: as coreTooOld answers it");
   assert.equal(movedTooOld(moved, v, 0), false, "an unnumbered build (a development build's, an iOS app's)");
-  assert.equal(movedTooOld(not, v, 9007), false, "its chain not moved");
-  assert.equal(movedTooOld(moved, viewerOf("bob", w.bob.app, "admin", WS2) as never, 9007), false, "another workspace of the station's");
+  assert.equal(movedTooOld(not, v, MOVED_FROM_BUILD - 1), false, "its chain not moved");
+  assert.equal(movedTooOld(moved, viewerOf("bob", w.bob.app, "admin", WS2) as never, MOVED_FROM_BUILD - 1), false, "another workspace of the station's");
 });

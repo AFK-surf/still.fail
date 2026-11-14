@@ -3,7 +3,8 @@
 // GET /lock/bodies), and every reader of the lock goes by what they say. The world: `ws`, its station A, its chain the
 // rig's genesis (this device the owner's app) and a `moved` to alice's log; alice (r1) states the settings (`open`),
 // s1 a member (this device on s1's own log: a station gives those only to a device the state names), bob (r2) a member
-// and A a station; bob's log has a second app device and a web page of his.
+// and A a station; bob's log has a second app device and a web page of his. The chain's own list (s1 its owner, s2 a
+// member) the logs' state carries until a removal of each is said (the model's D6): alice says one of each first.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
@@ -68,6 +69,9 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
   const mine: Log = { sub: "s1", k: key(7001), chain: [], said: null, n: 0 };
   mine.chain.push(signed({ v: 1, ws: "person:s1", seq: 0, prev: null, at: T, kind: "genesis", body: { sub: "s1", device: { key: mine.k.id, id: ME, label: "this", sign_key: signer.id } } } as Omit<StationEntry, "sig">, mine.k));
   const open = say(alice, "open", { ...SETTINGS, email: "alice@x" });
+  // (the chain's saying of s1 and s2 taken back, naming nothing else: s1 is a member by alice's admit below)
+  const out1 = say(alice, "member.remove", { sub: "s1", cancels: [] });
+  const out2 = say(alice, "member.remove", { sub: "s2", cancels: [] });
   const meIn = say(alice, "member", { sub: "s1", email: "a@x.com", lock: gOf(mine), role: "member" });
   const member = say(alice, "member", { sub: "r2", email: "bob@x", lock: gOf(bob), role: "member" });
   const station = say(alice, "station", { key: A });
@@ -78,7 +82,7 @@ async function setUp(first: (st: Served, w: { alice: Log; bob: Log; member: unkn
   const byOther = (e: Omit<Entry, "sig">): Entry => ({ ...e, sig: { key: other.id, alg: "Ed25519", sig: other.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e as Entry))])) } });
   const sign = (e: Omit<Entry, "sig">): Entry => (opts.other ? byOther(e) : signer.sign(e));
   const moved = sign(next("ws", headOf([g0]), 1001, "moved", { root: gOf(alice) }));
-  const st: Served = { chain: [g0, moved], logs: [alice, bob, mine], bodies: [open, meIn, member, station], posted: [], given: [], lacking: [], silent: false, brought: [] };
+  const st: Served = { chain: [g0, moved], logs: [alice, bob, mine], bodies: [open, out1, out2, meIn, member, station], posted: [], given: [], lacking: [], silent: false, brought: [] };
   first(st, { alice, bob, member, open });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     const serves = { takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
@@ -302,21 +306,23 @@ test("the chain changing branch to one without `moved`: the folded chain in forc
   await w.told();
   assert.equal(held(w.inner, "ws")!.head?.hash, entryHash(m2), "back on a branch with `moved`");
   assert.equal(inForceOf(w.inner, "ws").said, "on");
-  assert.equal((await w.who()).members, bobs(w, true), "the people's logs' again");
+  // (the genesis names a second device of s1's, which their log does not: the chain as it moved carries it, s1 being
+  // bound by the chain to no log, as an admit binds them to theirs)
+  assert.equal((await w.who()).members, bobs(w, true).replace(S1, `s1 member: ${[ME.slice(0, 4), OTHER.slice(0, 4)].sort().join(",")}`), "the people's logs' again, and the chain's");
 });
 
-test("waiting with the root's log here and its `open`'s body lacking: nobody and nothing listed; in force once the body comes", async () => {
+test("the root's log here and its `open`'s body lacking: nothing waited for, the chain as it moved says the settings and whom it named; the logs' once the body comes", async () => {
   const w = await setUp((st, x) => void (st.bodies = st.bodies.filter((b) => b !== x.open)));
   await w.run(read(w.inner, "ws"));
   assert.ok(held(w.inner, "ws")!.entries.some((e) => e.kind === "moved"));
   const s = inForceOf(w.inner, "ws");
-  assert.equal(s.said, "waiting");
-  assert.deepEqual([s.f.members.size, s.f.devices.size, s.f.stations.size], [0, 0, 0], "nobody and nothing");
-  const { v, members } = await w.who();
-  assert.equal(members, "", "nobody");
-  assert.equal(v.signers, 0);
-  assert.equal(v.me.waiting, false, "this device is not asked to be approved");
-  assert.ok(!(v.stations as any[]).some((x) => x.protected), "no station listed as the lock's");
+  assert.equal(s.said, "on");
+  // (every statement of alice's stands on the open by its `prev`: none in force, so the chain's own list, s1 its owner
+  // by this device, s2 a member with no device; the root's person by her log; the chain's station)
+  assert.deepEqual([...s.f.stations.keys()], [A]);
+  assert.deepEqual(s.settings?.origins, ["https://stillfail.test"]);
+  const { members } = await w.who();
+  assert.equal(members, [`r1 owner: ${key(6101).hex.slice(0, 4)}`, `s1 owner: ${ME.slice(0, 4)}`, "s2 member: "].join("; "));
   w.st.bodies = [...w.st.bodies, w.open];
   await w.told();
   assert.equal(inForceOf(w.inner, "ws").said, "on");

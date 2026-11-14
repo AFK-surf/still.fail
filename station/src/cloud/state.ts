@@ -9,7 +9,7 @@ import { readJsonFile } from "../ops/json-file.ts";
 import { log } from "../ops/log.ts";
 import { setStationCloud } from "../ops/i18n.ts";
 import { createHash } from "node:crypto";
-import { type Entry, type LockState, apply, asEntry, bodyHash, canonical, entryHash, fold, genesis, lockChain, roster4, sayWord, state4, wsTag } from "./lock.ts";
+import { type Entry, type LockState, apply, asEntry, bodyHash, canonical, entryHash, fold, genesis, lockChain, roster4Moved, sayWord, state4, state4Moved, wsTag } from "./lock.ts";
 import { type BodyRefused, LockBodies } from "./lock-bodies.ts";
 import { type Kept, type LogRules, type OffChain, hashOf, keep, rechoose } from "./log-keep.ts";
 import { PersonChains } from "../mesh/person-chains.ts";
@@ -426,6 +426,16 @@ export class Cloud {
   /// Which of a locked workspace's rigs its person signed for (rigs/adds.ts sets it): until then none of them is
   /// taken, the control plane's word counting for nothing there.
   rigVouched: (workspace: string, rig: Rig) => boolean = () => false;
+  /// The plane's chain of a workspace this station joined and pins no lock of (`leftOut` "unpinned"), where that chain
+  /// moved: what this station may come to keep once the state the logs and bodies make names it (mesh/moved-pin.ts),
+  /// never by the plane's word alone (cloud/presence.ts `takeFromPlane`). By workspace; let go once pinned. (None until
+  /// one is offered, as `planeParted` is: a state made without the constructor has none.)
+  movedOffered?: Map<string, Entry[]>;
+  /// The plane brought `ws`'s chain, moved: kept as offered (`movedOffered`) and those who follow the state told.
+  offerMoved(ws: string, entries: Entry[]): void {
+    (this.movedOffered ??= new Map()).set(ws, entries);
+    this.tell();
+  }
   /// What the control plane last said of the roster and gateways, before the lock filtered them (this run only).
   private planePeers: any[] | null = null;
   private planeGateways: string[] | undefined;
@@ -659,17 +669,17 @@ export class Cloud {
     const bodies = [...kept.values()];
     const subjectOf = (b: any) => (b?.kind === "member.remove" ? `m|${b.sub}` : b?.kind === "station.remove" ? `s|${b.key}` : null);
     try {
-      const inForce = [...new Set(roster4(id, root, chains, bodies).in_force.map((x) => x.body))];
+      const inForce = [...new Set(roster4Moved(id, l.entries, chains, bodies).in_force.map((x) => x.body))];
       const subjects = new Map<string, string[]>();
       for (const h of inForce) {
         const subject = subjectOf(kept.get(h));
         if (subject !== null) subjects.set(subject, [...(subjects.get(subject) ?? []), h]);
       }
       for (const [subject, removals] of subjects) {
-        const r = roster4(id, root, chains, bodies, removals);
+        const r = roster4Moved(id, l.entries, chains, bodies, removals);
         // (each removal of that subject kept, in force or not, as the model's `bodiesFor` gives them)
         const told = [...kept].filter(([, b]) => subjectOf(b) === subject).map(([h]) => h);
-        const keys = [...r.stations, ...r.members.flatMap((m) => m.keys ?? [])];
+        const keys = [...r.stations, ...r.members.flatMap((m) => m.keys ?? []), ...r.carried_keys.map((x) => x.key)];
         const named = new Set([...f.out.state.stations.keys(), ...[...f.out.state.devices.values()].flatMap((d) => [d.id, ...(d.sign_key ? [d.sign_key] : [])])]);
         for (const k of keys) {
           if (named.has(k)) continue;
@@ -779,7 +789,8 @@ export class Cloud {
     if (was !== undefined && was.lock === l && was.ver === ver && now >= was.from && now < was.until) return was;
     const logs = personChainsOf(this).every();
     const kept = [...bodies.all().values()];
-    const s = state4(id, root, logs.map(([, es]) => es), kept, now);
+    // (read with the chain as it moved: what the logs have not said yet of those it named, it still says)
+    const s = state4Moved(id, l.entries, logs.map(([, es]) => es), kept, now);
     const out = s.on === "on" || s.on === "off" ? { state: s.state } : { state: state4(id, root, [], [], now).state, waiting: true as const };
     const st = out.state;
     const word = createHash("sha256").update(canonical({
@@ -803,6 +814,12 @@ export class Cloud {
           else until = Math.min(until, x);
         }
       }
+    }
+    // (and a web page the chain as it moved still says, until its `exp` there)
+    for (const d of l.state?.devices.values() ?? []) {
+      if (d.kind !== "web" || typeof d.exp !== "number") continue;
+      if (d.exp <= now) from = Math.max(from, d.exp);
+      else until = Math.min(until, d.exp);
     }
     const f: InForce = { lock: l, ver, from, until, on: s.on, out, needs, word };
     forces.set(id, f);

@@ -24,4 +24,13 @@
   alone, and the `sign_key` its entries say, the key it signs a workspace's things with unasked (a vault's versions,
   items and box certificates). `fold_person` keeps the last `sign_key` said and every one said; `state4` names an app
   device by it, never by its `key` (the lead, 2026-11-13: nothing the workspace signer signed checked out against a
-  moved state). One whose log says none is listed and signs nothing of the workspace's.
+  moved state). One whose log says none is listed and signs nothing of the workspace's, but by the signer the chain as
+  it moved names it with (below).
+- Once a chain moved, the station and the core read it with `state4_moved` and `roster_moved`, as it moved beside the
+  logs (the model's D6, the lead's, 2026-11-14): what the logs have not said yet of someone it named, it still says
+  (`roster.mbt` `Carried`, `state4.mbt` `carry_of`), so `moved` alone hands it over, nobody waited for or asked. A
+  removal takes back the chain's saying of its subject whether it names it or not, so one said under build 9040's
+  rules (the logs alone) still takes out whom it did; someone re-admitted to the log the chain bound them to (or bound
+  by an admit where the chain bound them to none) has what the chain carried of theirs again (the lead, 2026-11-14:
+  re-admitting is an owner's or admin's own act). Every reader must make the same state, so the build that reads them
+  is a move's floor (`MOVED_FROM_BUILD`, station/src/api/moved-from.ts) and a station says `carried` in its `serves`.

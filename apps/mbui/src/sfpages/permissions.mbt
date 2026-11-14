@@ -25,16 +25,6 @@ pub fn permissions_node(
       _ => "unknown"
     }
   }
-  let where_ = fn() {
-    @sf.t(
-      if @ui.platform() == 0 {
-        "web-pages.permissions.where.mac"
-      } else {
-        "web-pages.permissions.where.windows"
-      },
-      args=[("name", "still.fail")],
-    )
-  }
   @sf.page_node(
     v,
     fn() { @sf.t("web-pages.settings.nav.permissions") },
@@ -51,13 +41,36 @@ pub fn permissions_node(
         fn() { @sf.t("web-pages.permissions.notify.name") },
         fn() { @sf.t("web-pages.permissions.notify.purpose") },
         fn() { @sf.t("web-pages.permissions.notify.without") },
-        where_,
+        notice_where,
         state,
         fn() { (core.notify_ask)() },
-        fn() { @ui.notice_settings() |> ignore },
+        fn() { notice_settings_or_say(core) },
       )
     },
   )
+}
+
+///|
+/// Where this system keeps whether still.fail may show notifications, once refused: a browser's site settings by its
+/// address bar (a page opens none of them), macOS's or the others' settings.
+fn notice_where() -> String {
+  @sf.t(
+    match @ui.platform() {
+      0 => "web-pages.permissions.where.mac"
+      4 => "web-pages.permissions.where.browser"
+      _ => "web-pages.permissions.where.windows"
+    },
+    args=[("name", "still.fail")],
+  )
+}
+
+///|
+/// The system's settings of still.fail's notifications opened, to allow them once refused; where it has none to open
+/// (a browser's page), where to allow them said instead, never nothing.
+fn notice_settings_or_say(core : Core) -> Unit {
+  if !@ui.notice_settings() {
+    (core.say)(notice_where())
+  }
 }
 
 ///|

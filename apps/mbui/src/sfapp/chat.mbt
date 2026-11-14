@@ -35,7 +35,7 @@ fn bar_foot_of(r : ChatRef) -> Double {
 
 ///|
 fn list_top() -> Double {
-  status_top() + chat_bar_h + 14.0
+  bar_foot() + list_room
 }
 
 ///|
@@ -44,9 +44,15 @@ fn list_top_of(r : ChatRef) -> Double {
 }
 
 ///|
-fn list_top_live(v : @view.View, r : ChatRef) -> Double {
-  list_top() + bar_extra_shown(v, r)
+/// Where the chat's bar is drawn to now (its second row as far as it shows): what covers the list's top, its room under
+/// it the list's (list_room).
+fn bar_foot_live(v : @view.View, r : ChatRef) -> Double {
+  bar_foot() + bar_extra_shown(v, r)
 }
+
+///|
+/// The room the list keeps under the chat's bar over its first row: 14.
+let list_room : Double = 14.0
 
 ///|
 /// What the list keeps under its last row over the composer's room: 10.

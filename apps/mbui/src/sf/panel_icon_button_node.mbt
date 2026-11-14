@@ -15,13 +15,11 @@ pub fn panel_icon_button_node(
   press : () -> Unit,
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(v) {
+  @headless.button(made_for=loc, parent, label, fn(_) { press() }, fn(v, _) {
     style_node(v, fn() { panel_icon_box })
     let hot = fn() { lit_node(v) }
     // (its hovered{bg=Hover}: the hover's ground where the hand is on it)
     v.ground(By(fn() { if hot() { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-    presses_node(v, press)
-    v.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
     icon_node(v, icon, panel_icon_size, By(fn() { if hot() { theme().p.text } else { theme().p.muted } })) |> ignore
     panel_tip_node(v, label)
   })

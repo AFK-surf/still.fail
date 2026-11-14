@@ -46,14 +46,17 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   what it needs of the app is given to it as the app starts.
 - The library is looks (the user, 2026-11-14; `libs/mbui/AGENTS.md`, Components): what a control is to the hand, the
   keyboard and a screen reader is mbui's headless component's (`libs/mbui/src/headless`), where there is one, and its
-  part here is that component with still.fail's look (`button_node`, `icon_button_node` over `@headless.button`): it
+  part here is that component with still.fail's look (every unconditional plain button in `src/sf` over
+  `@headless.button`; `check_node`, `check_row_node`'s box and `switch_node` over `@headless.toggle`): it
   says no role, press or focus of its own. A part whose control has no headless component yet stays as it is until
   one is made there, the part moved over it in the same change with nothing seen or read out changed: the parts that
-  still say they are a button themselves are counted (detlint's `button-by-hand`) and only fall, a plain one moved over
-  `@headless.button`, one that says pressed, expanded or selected over the component that carries that once it is
-  made. What only still.fail wants of a control stays here, in its look, and no more than that: the icon button's tip
-  held up by a finger's long press is, but its look takes the pointer for it and says again when a press counts,
-  which is the component's (a debt: `src/sf/icon_button_node.mbt`).
+  still say they are a button themselves are counted (detlint's `button-by-hand`) and only fall, one that says
+  pressed, expanded or selected over the component that carries that once it is
+  made (three conditional or fading-while-asleep parts — `own_head_node`, `quote_card_node`, `viewer_steps_node` —
+  stay as they are). What only still.fail wants of a control stays here, in its look, and no more than that: the icon
+  button's tip held up by a finger's long press and a ripple's press-look are, but their looks take the pointer for
+  them and say again when a press counts, which is the component's (a debt: `src/sf/icon_button_node.mbt`; so is a
+  switch's press held and let go on it, `switch_node`).
 - Its parts are shown on their own, each beside its states, by `src/sfstories` (a story a part, `stories.mbt`), built
   for the browser by `scripts/kit-web.sh` and deployed from main to kit.monoid.zone (`cloud/wrangler.kit.jsonc`).
 

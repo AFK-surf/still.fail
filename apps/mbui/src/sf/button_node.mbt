@@ -151,7 +151,9 @@ fn button_by(
       )
       s.alpha(By(fn() { turning.shown(v) * seen_at(open.shown(v)) })).scale(By(fn() { dmax(open.shown(v), 0.0) }), about=At(0.0, 0.5)) |> ignore
     })
-    // (its icon before its words where it has one: button's `icon`)
+    // (its icon before its words where it has one: button's `icon`. At work the spinner takes its place: its room
+    // closing as the spinner's opens, the icon going as the spinner comes, never the two side by side (the user,
+    // 2026-11-14: 「这个怪怪的」, a spinner and the refresh mark before 刷新 together))
     if icon != "" {
       // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes taking
       // none, so the two ends look alike: button's draw_icon by_ink)
@@ -159,8 +161,20 @@ fn button_by(
         Some(d) => @ui.shapes_ink_in(icon_shapes(d, button_icon / 24.0, 0x000000FFL), button_icon)
         None => (0.0, 0.0)
       }
-      icon_node(v, icon, button_icon, By(fn() { looks().2 })).margin(Is((-ink_l, 0.0, -ink_r, 0.0))) |> ignore
-      v.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
+      let rest = fn() { dmax(1.0 - open.shown(v), 0.0) }
+      v.show(fn() { rest() > 0.0 }, fn(room) {
+        room
+        .row(Is(true))
+        .lines_up(Is(Some(Middle)))
+        .width(By(fn() { Some((button_icon - ink_l - ink_r + gap()) * rest()) }))
+        |> ignore
+        icon_node(room, icon, button_icon, By(fn() { looks().2 }))
+        .margin(Is((-ink_l, 0.0, -ink_r, 0.0)))
+        .alpha(By(fn() { seen_at(rest()) }))
+        .scale(By(rest), about=At(0.0, 0.5))
+        |> ignore
+        room.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
+      })
     }
     let words = v.box(fn(w) {
       w

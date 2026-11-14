@@ -40,6 +40,9 @@ fn message_agent_card_node(
       None => None
     }
   }
+  if pointed {
+    trigger.points(Is(true)) |> ignore
+  }
   hand.val = Some(
     @sf.hover_card_node(
       here.tips,
@@ -49,7 +52,7 @@ fn message_agent_card_node(
       along_offset=if words_along { -@sf.panel_pad - hover_words_in } else { 0.0 },
       held=fn() { (held.val)() },
       press?,
-      pointed?=if pointed { Some(fn() { trigger.pointer_within() }) } else { None },
+      pointed?=if pointed { Some(fn() { trigger.pointed_in() }) } else { None },
     ),
   )
 }

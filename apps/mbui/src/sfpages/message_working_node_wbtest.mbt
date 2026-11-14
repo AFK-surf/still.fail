@@ -170,12 +170,8 @@ test "one of two agents under the pointer, as the old view's: its words in the t
   t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(head_drawn(t), was)
-  // (the stop's room: 24 square 4 from the line that opens its history, as the old view's, so it has 32 across to be
-  // pressed in, under a keyboard and mouse's 36; reported to the coordinator, 2026-11-11, the old one's to mend: held
-  // to exactly this one)
   let faults = t.audit()
-  assert_eq(faults.length(), 1, msg=faults.join(" | "))
-  assert_true(faults[0].has_prefix("room: ") && faults[0].contains("message_working_node.mbt") && faults[0].contains(" 24×24,"), msg=faults[0])
+  assert_eq(faults, [], msg=faults.join(" | "))
   // (pressed with the mouse it shows under: a finger has no pointer over the row)
   t.host_says_finger(Some(false))
   t.click(Button, label=@sf.t("web-main.activity.stop", args=[("who", "Claude")]))

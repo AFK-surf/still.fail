@@ -82,13 +82,17 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const root = o.root === "alice" ? alice : me;
   const bodies: unknown[] = [];
   bodies.push(say(root, "open", { ...SETTINGS, email: "a@x.com" }));
+  // (the chain's own list, the rig's genesis: s1 its owner, s2 a member, carried once it moved until a removal of each
+  // is said, rules `state4_moved`; the root says one of each but its own person, so what follows says the list alone)
+  bodies.push(say(root, "member.remove", { sub: "s2", cancels: [] }));
+  if (o.root === "alice") bodies.push(say(alice, "member.remove", { sub: "s1", cancels: [] }));
   if (o.root === "alice") bodies.push(say(alice, "member", { sub: "s1", email: "a@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
   bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
   bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
   // (w2, where `two`: rooted in s1's log too, B its station)
   const bodies2: unknown[] = [];
-  if (o.two) bodies2.push(say(me, "open", { ...SETTINGS, email: "a@x.com" }, "w2"), say(me, "station", { key: B }, "w2"));
+  if (o.two) bodies2.push(say(me, "open", { ...SETTINGS, email: "a@x.com" }, "w2"), say(me, "member.remove", { sub: "s2", cancels: [] }, "w2"), say(me, "station", { key: B }, "w2"));
   const g = grant();
   let mine: Signer | null = null;
   const r = await rig((signer) => ((mine = signer), { ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME), ...(o.two ? { w2: genesis("w2", signer, true, [{ key: B, name: "b" }], g.keys, ME) } : {}) }), (host) => {
@@ -248,6 +252,20 @@ test("a station taken in (C, which the workspace lists) and A taken out: C given
   assert.equal(outA.error, undefined, outA.error?.message);
   assert.deepEqual(w.said(), ["station C", "station.remove A"]);
   assert.deepEqual([...inForceOf(w.inner, "ws").f.stations.keys()], [C]);
+});
+
+// The door a station keeping no lock pins one by, as before a move (`joinStation` brings it the whole chain): the chain
+// as it moved brought to C with the logs and bodies its state is made of once that state names it (station/src/mesh/
+// moved-pin.ts `pinBrought`). 2026-11-14, the locks' end to end, round 17 run moved: 「保护」 left the station unprotected.
+test("a station taken in after the move (C): the chain as it moved brought to it with the logs and bodies that name it", async () => {
+  const w = await setUp();
+  const inC = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.joinStation", { workspace: "ws", station: C }), catch: (e) => e as CoreError }));
+  assert.equal(inC.error, undefined, inC.error?.message);
+  const posted = w.st.asked.filter((a) => a.at === "ws/C" && a.method === "POST" && a.path === "/lock").map((a) => JSON.parse(a.body) as { entries?: Entry[]; logs?: Entry[][]; bodies?: unknown[] });
+  assert.equal(posted.length, 1, `brought once: ${JSON.stringify(w.st.asked.filter((a) => a.at === "ws/C").map((a) => `${a.method} ${a.path}`))}`);
+  assert.equal(posted[0]!.entries?.at(-1)?.kind, "moved", "the chain as it moved");
+  assert.ok((posted[0]!.logs?.length ?? 0) >= 2, "the logs");
+  assert.ok((posted[0]!.bodies ?? []).some((b) => (b as { kind?: string; key?: string }).kind === "station" && (b as { key?: string }).key === C), "the body that names it among the bodies");
 });
 
 test("off and on again by the root's person; another owner refused with lock_root_only, nobody asked", async () => {

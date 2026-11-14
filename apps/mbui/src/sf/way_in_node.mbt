@@ -137,14 +137,9 @@ pub fn way_in_button_node(
   loc~ : SourceLoc,
 ) -> @view.View {
   let bare = native_input() is Mouse
-  body.box(made_for=loc, fn(v) {
+  @headless.button(made_for=loc, body, label, fn(_) { press() }, disabled=busy, fn(v, b) {
     let theme = fn() { @ui.tree_theme() }
-    let lit = fn() {
-      match @ui.pointing() {
-        Mouse => v.pointed() || v.pressed()
-        Finger => v.pressed()
-      }
-    }
+    let lit = fn() { b.hovered() || b.pressed() }
     let ground = fn() {
       let t = theme()
       match (solid, lit()) {
@@ -167,7 +162,6 @@ pub fn way_in_button_node(
       }
     })
     |> ignore
-    let live = fn() { !busy() }
     v
     .row(Is(true))
     .width_share(Is(1.0))
@@ -177,14 +171,6 @@ pub fn way_in_button_node(
     .radius(By(fn() { theme().corner(Full) }))
     .lines_up(Is(Some(Middle)))
     .ground(By(ground))
-    .presses(By(live))
-    .focusable(By(live))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
-    .on_press(fn() {
-      if @signals.untracked(live) {
-        press()
-      }
-    })
     |> ignore
     // (what it holds in its middle: the old one's justify=JCenter)
     v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
@@ -219,20 +205,20 @@ pub fn way_in_button_node(
     v.gesture(
       @ui.touch_slop(),
       press=fn(d) {
-        if @signals.untracked(live) {
+        if !b.disabled() {
           (rippled.down)(d)
         }
       },
       tap=fn(d) {
         (rippled.tapped)(d)
-        if v.finger_target(d.wx, d.wy) && @signals.untracked(live) {
-          press()
+        if v.finger_target(d.wx, d.wy) {
+          b.press()
         }
       },
       drag=fn(d) {
         // (a mouse's moved on it past the slop: still a press as it is let go on it, as a click is)
-        if d.kind == Up && @ui.pointing() is Mouse && v.finger_target(d.wx, d.wy) && @signals.untracked(live) {
-          press()
+        if d.kind == Up && @ui.pointing() is Mouse && v.finger_target(d.wx, d.wy) {
+          b.press()
         }
       },
     )

@@ -324,7 +324,7 @@ export const SHAPES: Record<string, Shape> = {
     ["failed", "bool", { doc: "It says something failed (the station began it with ⚠️): drawn in red." }],
     ["words", "String", { said: true, doc: "What it says, ⚠️ and a closing 。 left out." }],
     ["retrySession", opt("String"), { doc: "The session waiting to retry at capacity, while this exact notice can cancel its retry." }],
-    ["againSession", opt("String"), { doc: "The session whose turn failed for the provider or the connection, while this exact notice can try it again\n(重试: `session.retry`)." }],
+    ["againSession", opt("String"), { doc: "The session whose turn failed for the provider or the connection, or that the station stopped asking for a state,\nwhile this exact notice can try it again (重试: `session.retry`)." }],
     ["linkAt", opt("i64"), { client: opt("I54"), doc: "One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that\nprofile's page. Absent otherwise." }],
     ["detail", opt("String"), { said: true, doc: "A failure's own words, as what failed said them (a provider's, a process's): shown when the notice is\nopened, under `words`. Absent otherwise." }],
     ["short", opt("String"), { said: true, doc: "A chat's run changed (run-change.ts): what it runs on now in what changed alone (换成 Codex · GPT-6), said in\nplace of `words` where they have not the room on their line. Absent otherwise." }],
@@ -2026,7 +2026,7 @@ export const SHAPES: Record<string, Shape> = {
     ["canUpdate", "bool", { default: true, doc: "A station's: this person may update it from here, as its own page offers its update (an owner or admin of\nthat workspace, it online, its software updatable and newer or its update failed): its press calls\n`software.update`." }],
     ["updating", "bool", { default: true, doc: "A station's: its update is under way, as its overview says." }],
     ["percent", opt("i64"), { client: opt("I54"), doc: "While it updates, how much of its download is in, 0–100, when known (drawn as its own page draws it)." }],
-  ], { doc: "A line of the upgrade of safe mode (`LockUpgrade.lines`; views/lock.ts `waitedLines`, `writerLines`)." }),
+  ], { doc: "A line of the upgrade of safe mode (`LockUpgrade.lines`; views/lock.ts `waitedLines`)." }),
   LockPromptWorkspace: struct([
     ["id", "String"],
     ["name", "String", { said: true }],

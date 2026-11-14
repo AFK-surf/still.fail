@@ -61,8 +61,10 @@
 /// what every chat has: its last message's author and time, and a decided card's line opening its history, 112 more, 421.
 /// A preset's dialog over a new chat swept, and its steps further in (newchat-preset-new and five more, 2026-11-11), what
 /// newchat has under them on a phone and a tablet: the composer's three chips behind the panel, old views, the page
-/// behind counted again, 36 more, 457.)
-let rooms_known : Map[String, Int] = { "room": 457, "apart": 0, "hover": 0 }
+/// behind counted again, 36 more, 457. Each target's room measured by its unparted reach within its holder and window
+/// (@view.press_room), parting with non-overlapping neighbours handled by the hit test without inflating visual gaps
+/// (2026-11-14): 406 fewer, 51.)
+let rooms_known : Map[String, Int] = { "room": 51, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

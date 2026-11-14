@@ -457,6 +457,8 @@ pub let style_mono : Int32
 
 pub let style_no_ligatures : Int32
 
+pub let style_proportional : Int32
+
 pub let style_serif : Int32
 
 pub let style_tabular : Int32

@@ -158,6 +158,16 @@ fn session_activity(db : @sql.Db, keys : Array[String]) -> Map[String, (Json, Js
 }
 
 ///|
+/// store.ts `sessionActivity(s, null)`: every session's.
+fn session_activity_all(db : @sql.Db) -> Map[String, (Json, Json)] raise {
+  let out : Map[String, (Json, Json)] = Map([])
+  for r in db.all(session_activity_sql, []) {
+    out[js_text(field(r, "key"))] = (field(r, "pending"), latest_turn(r))
+  }
+  out
+}
+
+///|
 /// store.ts `watching`: the sessions keeping watch, each with its watches' names, since when, and when one last said
 /// something; of `sessions` alone, or of all.
 fn watching(db : @sql.Db, sessions : Array[String]?) -> Map[String, Json] raise {

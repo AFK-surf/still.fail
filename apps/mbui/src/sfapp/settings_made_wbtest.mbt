@@ -597,8 +597,14 @@ test "用量 made once: its figures, its days, its chats and its stations the tr
     assert_true(app.nav.top() == Setting(@settings.Route::Usage))
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
-    for w in ["用量", "$118", "比前 7 天", "10/4", "最花钱的对话", "整理发布清单", "各设备的工作量", "Maple"] {
+    for w in ["用量", "$118", "比前 7 天", "10/4", "花费明细", "整理发布清单"] {
       assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{Repr(case)}: \{Repr(own)}")
+    }
+    made.tap_text("累计")
+    made.run_for(@ui.move_most_ms)
+    let sum_own = tree_words_drawn()
+    for w in ["各设备的工作量", "Maple"] {
+      assert_true(sum_own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{Repr(case)}: \{Repr(sum_own)}")
     }
   }
 }
@@ -608,12 +614,15 @@ test "用量 keeps its history visible while recent details are prepared" {
   let t = memories_tester(2, mode="settings-usage-details-pending")
   let first = instances_sorted(t)
   let said = t.words_said().map(fn(w) { w.0 })
-  assert_true(said.iter().any(fn(w) { w.contains("各设备的工作量") }), msg="the available history is visible: \{Repr(said)}")
   assert_true(!said.iter().any(fn(w) { w == "$0" }), msg="unprepared usage is not said to be zero: \{Repr(said)}")
   let status = t.semantics().filter(fn(s) { s.role == Status }).map(fn(s) { s.label })
   assert_true(status.iter().any(fn(w) { w.contains("正在读取") }), msg="the recent details are still being read: \{Repr(status)}")
   t.frame_at(t.time() + @sf.breath_ms / 2.0)
   assert_true(first != instances_sorted(t), msg="the details' bones breathe")
+  t.tap_text("累计")
+  t.run_for(@ui.move_most_ms)
+  let sum_said = t.words_said().map(fn(w) { w.0 })
+  assert_true(sum_said.iter().any(fn(w) { w.contains("各设备的工作量") }), msg="the available history is visible on 累计: \{Repr(sum_said)}")
 }
 
 ///|
@@ -702,8 +711,8 @@ test "价目表 made once in a window made narrower and wider as it shows: its c
       made.resize(w, 2400.0)
       made.run_for(@ui.move_most_ms)
       // (its card's name and what its prices are within the window; its table scrolls across within the card)
-      let words = made.words().filter(fn(x) { x.5 > 0.5 && (x.0 == "Willow" || x.0.contains("价")) })
-      assert_true(words.iter().any(fn(x) { x.0 == "Willow" }), msg="its card at \{w}")
+      let words = made.words().filter(fn(x) { x.5 > 0.5 && (x.0 == "模型折算单价" || x.0.contains("价")) })
+      assert_true(words.iter().any(fn(x) { x.0 == "模型折算单价" }), msg="its card at \{w}")
       for x in words {
         assert_true(x.1 >= -0.5 && x.1 + x.3 <= w + 0.5, msg="\{x.0} within \{w} at \{Repr(case)}: \{Repr(x)}")
       }
@@ -719,7 +728,7 @@ test "价目表 made once: its stations' cards and their tables the tree's own, 
     assert_true(app.nav.top() is Setting(@settings.Route::UsagePrices(_)), msg="\{Repr(case)}")
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
-    for w in ["价目表", "Willow"] {
+    for w in ["价目表", "模型折算单价"] {
       assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{Repr(case)}: \{Repr(own)}")
     }
   }
@@ -753,7 +762,7 @@ test "用量 made once in a window 220 wide at words twice as large, as it is re
   // (no words over words on its title's line as it comes in)
   let made_end = usage_line_end(words)
   assert_true(made_over.iter().all(fn(m) { m.y >= made_end }), msg="words over words on its title's line: \{Repr(made_over)}")
-  // (the year's head and the days' bars' split, each a line of words beside a choice)
+  // (the days' bars' split, a line of words beside a choice)
   let bands = fn(all : Array[(String, Double, Double, Double, Double, Double)]) {
     let band = fn(names : Array[String]) {
       let of = all.filter(fn(x) { names.contains(x.0) })
@@ -762,11 +771,11 @@ test "用量 made once in a window 220 wide at words twice as large, as it is re
         of.fold(init=0.0, fn(m, x) { @cmp.maximum(m, x.2 + x.4) }) + 4.0,
       )
     }
-    [band(["Token 活跃度", "近 12 个月", "按天", "按周", "累计"]), band(["按人", "按模型"])]
+    [band(["按人", "按模型", "按账号"])]
   }
   let made_bands = bands(words)
   let made_drawn = made.drawn_instances()
-  // (those two lines: the words beside the choice as wide as its track, 12 apart; the chosen one's words drawn within
+  // (the words beside the choice as wide as its track, 12 apart; the chosen one's words drawn within
   // the track, seen)
   for b in made_bands {
     let track = made_drawn.filter(fn(a) {
@@ -774,10 +783,10 @@ test "用量 made once in a window 220 wide at words twice as large, as it is re
     })
     assert_true(track.length() == 1, msg="the choice's track in \{Repr(b)}: \{track.length()}")
     let (tx, tw) = (track[0][0], track[0][2])
-    // (what is beside it from the card's room's start, where the year's title starts, to 12 before it: as wide as it,
+    // (what is beside it from the card's room's start, where 花费明细 starts, to 12 before it: as wide as it,
     // each within that)
     let beside = words.filter(fn(x) { x.2 + x.4 > b.0 && x.2 < b.1 && x.1 + x.3 <= tx })
-    let start = words.fold(init=1.0e9, fn(m, x) { if x.0 == "Token 活跃度" { @cmp.minimum(m, x.1) } else { m } })
+    let start = words.fold(init=1.0e9, fn(m, x) { if x.0 == "花费明细" { @cmp.minimum(m, x.1) } else { m } })
     assert_true(beside.length() > 0 && (tx - 12.0 - start - tw).abs() < 0.5, msg="the line shared alike: from \{start}, \{Repr(beside)} \{tx}+\{tw}")
     for x in beside {
       assert_true(x.1 + x.3 <= tx - 12.0 + 0.5, msg="\{x.0} beside the track \{tx}+\{tw}")
@@ -802,7 +811,7 @@ test "用量 made once in a window 220 wide at words twice as large, as it is re
 fn usage_line_end(all : Array[(String, Double, Double, Double, Double, Double)]) -> Double {
   let first = all.fold(init=1.0e9, fn(m, x) { if x.0 == "用量" { @cmp.minimum(m, x.2) } else { m } })
   all.fold(init=0.0, fn(m, x) {
-    if (x.0 == "用量" && x.2 == first) || x.0 == "7 天" || x.0 == "30 天" { @cmp.maximum(m, x.2 + x.4) } else { m }
+    if (x.0 == "用量" && x.2 == first) || x.0 == "7 天" || x.0 == "30 天" || x.0 == "累计" { @cmp.maximum(m, x.2 + x.4) } else { m }
   })
 }
 
@@ -1013,6 +1022,8 @@ test "用量 made once: a day's bar activated by a screen reader seen alone, as 
 ///|
 test "用量 made once: what the pointer rests on said: a day of the year; by week, its week" {
   let t = memories_tester(0, mode="settings-usage")
+  t.tap_text("累计")
+  t.run_for(@ui.move_most_ms)
   // (the year's last week's Monday: by its weekday's name's row, at the grid's end)
   let mon = match t.words().search_by(fn(w) { w.0 == "一" || w.0 == "周一" || w.0 == "Mon" }) {
     Some(i) => t.words()[i]

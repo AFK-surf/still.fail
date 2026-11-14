@@ -773,6 +773,11 @@ fn lint_mbt(
       add("hash-order", k, f.line_text(k))
     }
   }
+  // a test walking a span of the clock frame by frame (`while t.time() < … { … t.frame() … }`): each of its frames
+  // drawn whether or not anything asks for it (frame-walk)
+  for k in frames_walked(f) {
+    add("frame-walk", k, f.line_text(k))
+  }
   // a loop that runs the clock on while something still moves or is still to come: run until it stops
   if !frame_core {
     for k in run_until_still(f) {
@@ -823,6 +828,40 @@ fn lint_mbt(
       b += 1
     }
   }
+}
+
+///|
+/// The `while` loops of a test whose condition reads the time (`t.time() < …`) and whose block draws the display's next
+/// frame with Tester::frame (`.frame()`, nothing given): each such loop once, where it begins (frame-walk)
+fn frames_walked(f : MbtFile) -> Array[Int] {
+  let toks = f.toks
+  let out = []
+  for k, t in toks {
+    if !(t.kind == "ident" && t.text == "while" && f.in_test(k)) {
+      continue
+    }
+    let mut j = k + 1
+    let mut timed = false
+    while j < toks.length() && !(toks[j].kind == "op" && toks[j].text == "{") {
+      if toks[j].kind == "ident" && toks[j].text == "time" {
+        timed = true
+      }
+      j += 1
+    }
+    guard timed && j < toks.length() && toks[j].end > j else { continue }
+    for i in (j + 1)..<toks[j].end {
+      if toks[i].kind == "ident" &&
+        toks[i].text == "frame" &&
+        toks[i - 1].text == "." &&
+        i + 2 < toks.length() &&
+        toks[i + 1].text == "(" &&
+        toks[i + 2].text == ")" {
+        out.push(k)
+        break
+      }
+    }
+  }
+  out
 }
 
 ///|

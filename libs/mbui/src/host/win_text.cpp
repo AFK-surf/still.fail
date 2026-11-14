@@ -353,12 +353,13 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
 }
 
 // style & 8: no ligatures (words with letter spacing, each cluster spaced on its own): liga and clig off; style & 32:
-// digits all one width (style.mbt style_tabular): tnum. One typography for each of the three ways they go together.
-static IDWriteTypography *typographies[4];
+// digits all one width (style.mbt style_tabular): tnum; style & 64: a CJK face's marks narrow among Latin letters
+// (style.mbt style_proportional): pwid. One typography for each of the ways they go together.
+static IDWriteTypography *typographies[8];
 
 // the typography of a style's features (NULL: none, the font's own)
 static IDWriteTypography *typography_for(int style) {
-  int k = ((style & 8) ? 1 : 0) | ((style & 32) ? 2 : 0);
+  int k = ((style & 8) ? 1 : 0) | ((style & 32) ? 2 : 0) | ((style & 64) ? 4 : 0);
   if (!k) return NULL;
   if (!typographies[k]) {
     IDWriteTypography *t = NULL;
@@ -368,6 +369,11 @@ static IDWriteTypography *typography_for(int style) {
       t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_CONTEXTUAL_LIGATURES, 0});
     }
     if (k & 2) t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, 1});
+    // (kern said again: DirectWrite sets a range with pwid unkerned otherwise, quotes round "Wo" 3 pt wider at 20)
+    if (k & 4) {
+      t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_PROPORTIONAL_WIDTHS, 1});
+      t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_KERNING, 1});
+    }
     typographies[k] = t;
   }
   return typographies[k];

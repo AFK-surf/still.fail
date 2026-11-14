@@ -220,6 +220,8 @@ pub fn is_gif(Bytes) -> Bool
 
 pub fn italic(String) -> @text.Run
 
+pub fn journal_arranged(String, Double, Double) -> Unit
+
 pub fn journal_shown() -> String
 
 pub fn journal_shows(String) -> Unit
@@ -2513,6 +2515,7 @@ pub fn Tester::by_hand(Self, () -> Unit) -> Unit
 pub fn Tester::census(Self) -> Census
 pub fn Tester::check_looks(Self, Bool) -> Unit
 pub fn Tester::check_rows(Self, Double, Double) -> Unit raise
+pub fn Tester::cjk_face_marks(Self) -> Unit
 pub fn Tester::clear(Self) -> Unit
 pub fn Tester::click(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> Unit raise
 pub fn Tester::clipboard(Self) -> String

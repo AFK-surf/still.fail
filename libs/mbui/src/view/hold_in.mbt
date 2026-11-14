@@ -49,7 +49,7 @@ fn Tree::hold_found(self : Tree, x : Double, y : Double) -> (NodeId, Double, Dou
   let taker_box = Ref((0.0, 0.0, 0.0, 0.0))
   let hold : Ref[(Int, NodeId, Double, Double)?] = Ref(None)
   let near : Array[(Int, NodeId, (Double, Double, Double, Double), Double, Double)] = []
-  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+  self.each_drawn_scaled(fn(c, cx, cy, a, s) {
     let o = order.val
     order.val = o + 1
     let n = self.nodes[c.id.at]
@@ -57,9 +57,17 @@ fn Tree::hold_found(self : Tree, x : Double, y : Double) -> (NodeId, Double, Dou
       match n.hold_only {
         Some((ms, slop)) => hold.val = Some((o, c.id, ms, slop))
         None =>
-          if (n.on_drag is Some(_) && n.claims is None) || n.on_press is Some(_) || n.hosted || n.top_row {
+          if (!n.points && ((n.on_drag is Some(_) && n.claims is None) || n.on_press is Some(_))) ||
+            n.hosted ||
+            n.top_row {
             taker.val = o
             taker_box.val = (cx, cy, cx + c.w * s, cy + c.h * s)
+          } else if !n.points && n.covers(a) {
+            match hold.val {
+              Some((_, hid, _, _)) if self.covers_over(hid, c.id) => hold.val = None
+              _ => ()
+            }
+            near.retain(fn(k) { !self.covers_over(k.1, c.id) })
           }
       }
     } else if n.hold_only is Some((ms, slop)) {

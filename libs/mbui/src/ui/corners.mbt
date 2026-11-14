@@ -1836,7 +1836,37 @@ fn Ctx::corner_cut_off(self : Ctx, i : Int, k : Int) -> Bool {
       (x < n.x - 0.5 || x > n.x + n.fw + 0.5 || y < n.y - 0.5 || y > n.y + n.fh + 0.5) {
       return true
     }
+    if k >= 2 && n.clip && y >= n.y + n.fh - n.corner() - 0.5 && self.clip_cuts_below(q, y) {
+      return true
+    }
     q = n.parent
+  }
+  false
+}
+
+///|
+/// Whether clip box `q` cuts off content below `y`: another box in `q` starts at or under `y` and reaches past `q`'s
+/// foot, so what ends at `y` is in the middle of what `q` holds, not at its foot.
+fn Ctx::clip_cuts_below(self : Ctx, q : Int, y : Double) -> Bool {
+  let foot = self.nodes[q].y + self.nodes[q].fh
+  for m in (q + 1)..<self.count {
+    let d = self.nodes[m]
+    if d.layer || d.fh <= 0.0 || d.y < y - 0.5 || d.y + d.fh <= foot + 0.5 {
+      continue
+    }
+    let mut r = d.parent
+    let mut ok = true
+    while r > q {
+      let rn = self.nodes[r]
+      if rn.layer || (rn.clip && rn.y + rn.fh <= foot + 0.5) {
+        ok = false
+        break
+      }
+      r = rn.parent
+    }
+    if ok && r == q {
+      return true
+    }
   }
   false
 }

@@ -10,7 +10,9 @@
 //   flow ends with the activity's onStop).
 // - What the system lets the app show, told to the core as the app starts and each time it is shown again
 //   (`notify.permission`); the system asked once, the first time signed in with notifications on (`notify.set
-//   {asked}`), and again as they are turned on in settings (refused there, a toast says where to allow them).
+//   {asked}`), and again as they are turned on in settings (refused there, a toast says where to allow them). Android
+//   cannot tell never asked from refused ("ask"), so once `asked` it is told "denied"; a browser can ("default": its
+//   prompt put away leaves it so), which is told as it is, the page's way to allow them asking it again.
 // - A chat on top: its notification taken off. A notification tapped: its link read by the core
 //   (`link.parse`), its workspace switched to, the chat pushed over Home at the message (chat.mbt `go_to`).
 // - Pushes: this device's registration held as the core's `notify` says (`push.register` with the host's
@@ -218,18 +220,22 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
       push_sync(src, None)
     }
   }
-  // the system's answer to an ask
+  // the system's answer to an ask: not granted, what it says now ("ask" right after a refusal is refused; a browser's
+  // prompt put away leaves it "default", asked again by the page's way to allow them, no toast)
   match (h.answer)() {
     Some(granted) => {
-      if !granted && notice_state.from_switch {
+      let state = if granted {
+        "granted"
+      } else if (h.permission)() == "default" {
+        "default"
+      } else {
+        "denied"
+      }
+      if state == "denied" && notice_state.from_switch {
         toast_later(@sf.t("android-misc.notify.allowInSettings", args=[("app", "still.fail")]))
       }
       notice_state.from_switch = false
-      (src.call)(
-        "notify.permission",
-        { "state": Json::string(if granted { "granted" } else { "denied" }) },
-        fn(_) {  },
-      )
+      (src.call)("notify.permission", { "state": Json::string(state) }, answer_unread)
     }
     None => ()
   }
@@ -320,8 +326,9 @@ fn show_notice(n : Json) -> Unit {
 }
 
 ///|
-/// What the system lets the app show, to the core (Notifier.permission): the host's say, "default" while the system
-/// can still be asked and never was.
+/// What the system lets the app show, to the core (Notifier.permission): the host's say; Android's "ask" (never asked,
+/// or refused: it cannot tell) "default" while the core says it was never asked, else "denied"; a browser's "default"
+/// (never answered, its prompt shown whenever asked) as it is, whether asked or not.
 fn tell_permission(src : Source, notify : Json?) -> Unit {
   let state = match (notice_host.val.permission)() {
     "ask" => if field(notify, "asked") is Some(False) { "default" } else { "denied" }

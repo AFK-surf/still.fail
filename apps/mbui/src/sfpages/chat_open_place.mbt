@@ -5,20 +5,22 @@
 ///|
 /// Where a chat's list of rows `rows` (chat view `v`'s) opens, as the row's key and its offset ListPlace::bring takes
 /// (from under what covers the list's top, `cover` tall: the chat's bar); None at its end. At its unread line, `lead`
-/// under that edge; else where it was left this run (`kept`: the message at its top as far under the list's window's
-/// top, as kept: sfbase's kept_place_under), unless it was left at its end (then at its end, what came since showing);
+/// under the list's top (`top`: the bar and the room under it); else where it was left this run (`kept`: the message
+/// at its top as far under the list's window's top, as kept: sfbase's kept_place_under), unless it was left at its end
+/// (then at its end, what came since showing);
 /// else where the core says it was left (`v.at`: the first message at or after it, its top `v.at_offset` under the
-/// window's top in the screen's pixels of `scale`, as kept; else at that edge).
+/// window's top in the screen's pixels of `scale`, as kept; else at the list's top).
 fn chat_open_place(
   rows : ChatBodyRows,
   v : ChatView,
   kept : @sfbase.KeptPlace?,
   scale : Double,
   cover : Double,
+  top : Double,
   lead : Double,
 ) -> (String, Double)? {
   if rows.rows.contains("line") {
-    return Some(("line", -lead))
+    return Some(("line", @sfbase.kept_place_under(top + lead, cover)))
   }
   if kept is Some(p) && p.bottom >= 0.0 {
     return None
@@ -36,7 +38,7 @@ fn chat_open_place(
       k,
       match v.at_offset {
         Some(px) => @sfbase.kept_place_under(px / scale, cover)
-        None => 0.0
+        None => @sfbase.kept_place_under(top, cover)
       },
     ),
   )

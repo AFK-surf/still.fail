@@ -218,7 +218,13 @@ export function peerCall(
     // A rig the control plane names in a workspace in security mode, not signed for here yet: asked for what its
     // person signed for it (`rig.proof`, rigs/adds.ts), and for nothing else until that checks out.
     const proof = request?.method === "rig.proof" && workspace !== null && cloud.peersCurrent && cloud.rigsNamed(workspace).some((r) => r.id === target);
-    const ws = proof ? workspace : workspaceFor(cloud, target, workspace, outside);
+    // A joined workspace whose moved chain the plane offered this station, which pins none of it yet (mesh/moved-pin.ts):
+    // its stations as the plane lists them asked the lock's own methods alone, to bring the logs and bodies that would
+    // name this station; it is none of its memberships until it pins the chain (each station asked checks the asker
+    // itself, peer.ts `member`, by the state it holds).
+    const offered = workspace !== null && cloud.peersCurrent && cloud.movedOffered?.has(workspace) === true && typeof request?.method === "string" && request.method.startsWith("lock.")
+      && (cloud.state?.joined ?? []).some((j) => j.workspace === workspace && j.peers.some((p) => p?.id === target));
+    const ws = proof || offered ? workspace : workspaceFor(cloud, target, workspace, outside);
     let conn: Connection | null = null;
     let dial: Promise<Connection> | null = null;
     const late = "peer request timed out; execution may have happened — query the same task key";

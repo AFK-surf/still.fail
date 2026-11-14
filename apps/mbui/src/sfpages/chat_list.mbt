@@ -867,6 +867,10 @@ let joined_gap : Double = 4.0
 let list_top : Double = 69.0
 
 ///|
+/// The room under the chat's bar over the list's first row (list_top's 24): room, the bar's drawn over none of it.
+let list_room : Double = list_top - bar_foot
+
+///|
 let list_foot : Double = 24.0
 
 ///|

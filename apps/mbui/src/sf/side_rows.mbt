@@ -183,7 +183,7 @@ let nav_action_main : @ui.Style = @ui.css("w=Full")
 /// theme's band (the search's field's); what is beside the action (the filter, 更新) as far from it as keys are
 /// (keys_gap: 4 with keyboard and mouse, 12 with touch).
 pub fn nav_new() -> @ui.Style {
-  nav_new_look.then(@ui.style(px=room_of(theme().chat_list.band_in), gap=keys_gap()))
+  nav_new_look.then(@ui.style(px=room_of(theme().chat_list.band_in), gap=S1))
 }
 
 ///|

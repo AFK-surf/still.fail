@@ -11,7 +11,7 @@ import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_FAILED, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, readMemory, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_FAILED, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_UNANSWERED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, readMemory, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
@@ -59,8 +59,15 @@ const retrying = (turn: { outcome: string | null; declared: string | null; detai
 const AGAIN = ["network", "model", "other", "exited"];
 
 /// A turn that failed for one of `AGAIN`'s reasons and waits on nothing: its notice offers 重试.
-export const retryable = (turn: { outcome: string | null; declared: string | null; detail: string | null }) =>
+const failedAgain = (turn: { outcome: string | null; declared: string | null; detail: string | null }) =>
   turn.outcome === "failed" && turn.declared === null && AGAIN.some((reason) => (turn.detail ?? "").startsWith(`${reason}:`));
+
+/// A turn that completed in no state after the station stopped asking it again (`giveUp`): its notice (回复即可继续)
+/// offers 重试 too, as every notice that says a reply goes on does (the user, 2026-11-14).
+const givenUp = (turn: { outcome: string | null; declared: string | null }) => turn.outcome === "completed" && turn.declared === null;
+
+/// A turn its notice's 重试 takes up again.
+export const retryable = (turn: { outcome: string | null; declared: string | null; detail: string | null }) => failedAgain(turn) || givenUp(turn);
 
 /// How long it waits before trying again a turn the provider had no room for, the `n`th in a row (from 0): twice as long
 /// each time, ten minutes at most.
@@ -621,7 +628,7 @@ export class SessionActor {
     });
   }
 
-  /// Takes up again the failed turn the notice the person pressed (重试) was about, as a reply would, going on where
+  /// Takes up again the failed (or given up on) turn the notice the person pressed (重试) was about, as a reply would, going on where
   /// it stopped. Only that notice's turn, while it is still the last and nothing runs or waits to be delivered: a
   /// delayed press after a reply, or on an older notice, does nothing.
   retryFailed(thread: number, seq: number): Promise<void> {
@@ -630,7 +637,7 @@ export class SessionActor {
       const last = this.deps.store.lastTurn(this.key);
       if (!last || !retryable(last) || last.about?.thread !== thread || last.about?.seq !== seq) return;
       log.info("session", "trying again a failed turn, as asked", { session: this.key });
-      await this.startTurn("resume", GO_ON_AFTER_FAILED);
+      await this.startTurn("resume", givenUp(last) ? GO_ON_AFTER_UNANSWERED : GO_ON_AFTER_FAILED);
     });
   }
 

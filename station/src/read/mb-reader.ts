@@ -56,7 +56,9 @@ export class MbProcess extends EventEmitter {
     // (a failed write is the process gone, told by its exit)
     this.#child.stdin!.on("error", () => {});
     this.#child.on("error", (error) => this.emit("error", error));
-    this.#child.on("exit", (code, signal) => {
+    // Its end once its output is read whole (`close`: after `exit` and its streams' ends): what it said last, then that it
+    // ended. On `exit` a line it wrote just before could still be on its way, its answer taken for none.
+    this.#child.on("close", (code, signal) => {
       this.#exited = true;
       this.emit("exit", code ?? (signal !== null ? 1 : 0));
     });
@@ -70,7 +72,7 @@ export class MbProcess extends EventEmitter {
   terminate(): Promise<number> {
     if (this.#exited) return Promise.resolve(this.#child.exitCode ?? 1);
     return new Promise((resolve) => {
-      this.#child.once("exit", (code) => resolve(code ?? 1));
+      this.#child.once("close", (code) => resolve(code ?? 1));
       this.#child.kill();
     });
   }
