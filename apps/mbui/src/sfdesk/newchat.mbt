@@ -25,11 +25,6 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let frame = new_frame(src, w)
   let station = field(v, "station")
   let address = text(station, "station")
-  let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""
-  // (what fades as it is left for a chat by the sidebar: switch.mbt)
-  if on {
-    page_switch.new_view = v
-  }
   if new_drive_station(src, w) is None {
     @sfpages.new_chat_page(c, src, w, frame)
     return
@@ -134,15 +129,14 @@ fn new_sent(src : Source, w : Workspace, r : ChatRef) -> Unit {
 }
 
 ///|
-/// Over the chat a new chat became: the page leaving; and a new chat left for a chat by the
-/// sidebar, fading over it (switch.mbt). Drawn over the chat's page, after it.
+/// Over the chat a new chat became: the page leaving (a new chat left for another chat is gone at once: switch.mbt).
+/// Drawn over the chat's page, after it.
 pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if @sfbase.new_chat_leaving_of(c, r) {
     let l = c.layer(fn() { new_left(c, src, w, fresh.scene.get(), new_leave(c), new_fade(c)) })
     // (drawn only, while it leaves)
     c.draw_only(l)
   }
-  switch_new_out(c, src, w)
 }
 
 ///|

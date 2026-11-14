@@ -1,5 +1,5 @@
 // The page on top followed as the stack is told it (switch.mbt page_switch_said): one change told whole once, what it
-// ends at alone; two told apart each, no frame drawn between them; a new chat become its chat in place none of it.
+// ends at alone; two told apart each, no frame drawn between them; a new chat left for a chat leaves nothing behind.
 
 ///|
 /// The chat a new chat is left for here.
@@ -31,13 +31,12 @@ test "the page on top told whole: a new chat put on and taken off in one change 
   @signals.end_batch()
   t.draw()
   assert_true(page_switch.was == Some(switch_chat()))
-  assert_false(page_switch.from_new)
   // (no new chat come to: nothing put back)
   assert_eq((fresh.room.get(), fresh.foot.get()), (5.0, 5.0))
 }
 
 ///|
-test "the page on top told apart: a new chat come to, then left for the chat, no frame between: each done, the new chat left as last laid out" {
+test "the page on top told apart: a new chat come to, then left for the chat, no frame between: each done, nothing of the new chat set going" {
   let t = switch_said_tester()
   app.nav.push(NewChat)
   // (come to: put back as its page begins)
@@ -45,10 +44,9 @@ test "the page on top told apart: a new chat come to, then left for the chat, no
   assert_eq(fresh.room.get(), 0.0)
   fresh.room.set(5.0)
   app.nav.pop() |> ignore
-  // (left: a switch from it, its composer's and foot's room as last measured: none was here)
+  // (left for another chat: gone at once, nothing of it set leaving over the chat)
   assert_true(page_switch.was == Some(switch_chat()))
-  assert_true(page_switch.from_new)
-  assert_eq((fresh.room.get(), fresh.foot.get()), (0.0, 0.0))
+  assert_eq(fresh.room.get(), 5.0)
   t.draw()
 }
 
@@ -56,12 +54,10 @@ test "the page on top told apart: a new chat come to, then left for the chat, no
 test "the page on top: a new chat become its chat in place (its words sent) no switch of the new chat left" {
   let t = switch_said_tester()
   app.nav.push(NewChat)
-  page_switch.from_new = false
   fresh.room.set(7.0)
   // (as the new chat's words are sent: became said first, the page become the chat after)
   fresh.became.set(Some({ station: "ws1/st1", session: "s-new", title: "", station_name: "Willow" }))
   app.nav.become(Chat({ station: "ws1/st1", session: "s-new", title: "", station_name: "Willow" }))
-  assert_false(page_switch.from_new)
   assert_eq(fresh.room.get(), 7.0)
   t.draw()
 }
