@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [397697418](https://github.com/AFK-surf/monoid/commit/397697418f1db38553b80eb64d4311ac4dba8b56) lock: after a move, a member with no log of their  | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [a88b08ed6](https://github.com/AFK-surf/monoid/commit/a88b08ed6483d22ae55c4259cce0cf5e1d309fd6) Let a station give its chats Farview in place of C | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [1244072f0](https://github.com/AFK-surf/monoid/commit/1244072f0067363efa1def5997104aabe69b78ea) fix(mbui): the web page keeps a file as the browse | 2 | 2.74 | 11.79 | 31.58 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [651e76ec7](https://github.com/AFK-surf/monoid/commit/651e76ec73ecd3d02c5af5612e85873efa927681) mbui: a Tester reads in view of a page's list the  | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [4ef52f094](https://github.com/AFK-surf/monoid/commit/4ef52f094ff4238961172ac22e3d97282acc3dff) mbui: reuse execution history row views and keep l | 1.99 | 2.72 | 11.61 | 31.24 | 41.75 | 27.85 | 53.46 | 96.57 | 114.87 |
 | [43cbcf4f9](https://github.com/AFK-surf/monoid/commit/43cbcf4f9c64c0044fd1e8635913cd52aa50da41) station: the chat list made for everyone read by t | 1.99 | 2.72 | 11.6 | 31.22 | 41.68 | 27.84 | 53.39 | 96.6 | 109.97 |
 | [8b1493184](https://github.com/AFK-surf/monoid/commit/8b149318444271e2e544a1e60b3afa2db08ad4a3) mbui: main's switches check's runs cut so each run | 1.99 | 2.72 | 11.6 | 31.22 | 41.68 | 27.84 | 53.39 | 96.47 | 111.64 |
-| [091c3fbca](https://github.com/AFK-surf/monoid/commit/091c3fbca1a1d664aebdd0961efd26a4b8ce5267) mbui: the said sweep measures figures as a real fa | 1.99 | 2.72 | 11.59 | 31.22 | 41.66 | 27.83 | 53.38 | 96.58 | 111.63 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [397697418](https://github.com/AFK-surf/monoid/commit/397697418f1db38553b80eb64d4311ac4dba8b56) lock: after a move, a member with no log of their  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.18 |
 | [a88b08ed6](https://github.com/AFK-surf/monoid/commit/a88b08ed6483d22ae55c4259cce0cf5e1d309fd6) Let a station give its chats Farview in place of C | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
 | [1244072f0](https://github.com/AFK-surf/monoid/commit/1244072f0067363efa1def5997104aabe69b78ea) fix(mbui): the web page keeps a file as the browse | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
 | [651e76ec7](https://github.com/AFK-surf/monoid/commit/651e76ec73ecd3d02c5af5612e85873efa927681) mbui: a Tester reads in view of a page's list the  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.2 |
