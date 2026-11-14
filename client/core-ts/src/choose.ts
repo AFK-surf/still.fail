@@ -9,6 +9,7 @@ import { CoreError } from "./error.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as ops from "./ops.ts";
+import * as present from "./present.ts";
 import type { Owner } from "./core/routing.ts";
 import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
@@ -583,8 +584,13 @@ export class Choose implements Owner {
     if (binds !== null && binds.model !== null) {
       const pm = binds.model;
       view.stations = arr(view.stations).filter((s) => s === station || (typeof s.station === "string" && this.#runsBound(s.station, pm)));
-      if (overview !== null && view.problem === null && !this.#runsBound(addr, pm)) {
-        view.problem = t("core-logic.choose.problem.preset_model_missing", { name, preset: text(get(picked!.p, "name")) ?? "", model: model.name(String(pm.model)) });
+      if (overview !== null && !this.#runsBound(addr, pm)) {
+        // its control shows the preset's model as it names it, never the station's own first one in its place
+        const m = String(pm.model);
+        // (`model` stays the station's: the page asks only whether there is one)
+        const runtime = text(get(pm, "runtime")) ?? view.runtime;
+        view.pick = { value: { model: m, runtime, effort: text(get(pm, "effort")) }, valueOption: { name: model.name(m), maker: present.maker(m), runtimes: [] }, efforts: [] };
+        if (view.problem === null) view.problem = t("core-logic.choose.problem.preset_model_missing", { name, preset: text(get(picked!.p, "name")) ?? "", model: model.name(m) });
       }
     }
     view.station = station;

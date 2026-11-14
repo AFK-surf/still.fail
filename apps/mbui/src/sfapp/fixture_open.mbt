@@ -607,6 +607,17 @@ pub fn open_mode(mode : String) -> Unit {
         @sfpages.new_chat_ask("preset-new-clones")
       }
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
+      // (its preset names a model Maple does not run: the stations offered; on Maple, said so)
+      "newchat-preset-model-station" => {
+        @sffixture.new_fix.preset = "p-sf"
+        @sffixture.new_fix.model_bound = true
+        @sfpages.new_chat_ask("station")
+      }
+      "newchat-preset-model-missing" => {
+        @sffixture.new_fix.preset = "p-sf"
+        @sffixture.new_fix.model_bound = true
+        @sffixture.new_fix.station = "st2"
+      }
       "newchat-preset-bound" => {
         @sffixture.new_fix.preset = "p-sf"
         @sffixture.new_fix.bound = true

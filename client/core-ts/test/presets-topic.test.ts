@@ -389,6 +389,7 @@ test("a_preset_that_binds_a_model_starts_only_on_stations_that_run_it_never_on_a
   apply(host, values);
   assert.equal(v(values, 1).station.id, "st");
   assert.match(v(values, 1).problem, /Fable/);
+  assert.equal(v(values, 1).pick.value.model, "claude-fable-5-2", "its control shows the preset's model, never the station's first");
   const before = host.requests.length;
   call(core, ui, 6, "newChat.create", { station: S, key: v(values, 1).next });
   await host.settle();
