@@ -3534,7 +3534,17 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
     const s = arr(get(view(inner, ws), "stations")).find((x) => x?.id === station);
     if (!s) return Effect.fail(CoreError.invalid("not a station of this workspace"));
     const name = str(s.name) || station.slice(0, 8);
-    return sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name }));
+    // Said, and the state in force here naming it: the chain as it moved brought to that station with the logs and
+    // bodies its state is made of, as `joinStation` brings a station the whole chain before a move (the door a station
+    // keeping no lock pins one by: its owner's device, station/src/mesh/moved-pin.ts `pinBrought`, which pins only
+    // where that state names it and lets this device in as an owner's). One that keeps the lock already takes nothing
+    // of it; one that refuses it stays as the security page shows it, not protected.
+    return Effect.tap(sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name })), () => Effect.sync(() => {
+      const entries = held(inner, ws)?.entries ?? [];
+      if (!stateOf(inner, ws).stations.has(station) || entries.length === 0) return;
+      const said = { entries, logs: [...logsOf(inner, ws, false).values()], bodies: bodiesHeld(inner, ws) };
+      inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, station), "POST", "/lock", said, { quiet: true }), { log: "Unhandled", message: "a moved lock brought to the station protected" }));
+    }));
   });
 }
 

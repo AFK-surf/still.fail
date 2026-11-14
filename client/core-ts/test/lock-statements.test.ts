@@ -254,6 +254,20 @@ test("a station taken in (C, which the workspace lists) and A taken out: C given
   assert.deepEqual([...inForceOf(w.inner, "ws").f.stations.keys()], [C]);
 });
 
+// The door a station keeping no lock pins one by, as before a move (`joinStation` brings it the whole chain): the chain
+// as it moved brought to C with the logs and bodies its state is made of once that state names it (station/src/mesh/
+// moved-pin.ts `pinBrought`). 2026-11-14, the locks' end to end, round 17 run moved: 「保护」 left the station unprotected.
+test("a station taken in after the move (C): the chain as it moved brought to it with the logs and bodies that name it", async () => {
+  const w = await setUp();
+  const inC = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.joinStation", { workspace: "ws", station: C }), catch: (e) => e as CoreError }));
+  assert.equal(inC.error, undefined, inC.error?.message);
+  const posted = w.st.asked.filter((a) => a.at === "ws/C" && a.method === "POST" && a.path === "/lock").map((a) => JSON.parse(a.body) as { entries?: Entry[]; logs?: Entry[][]; bodies?: unknown[] });
+  assert.equal(posted.length, 1, `brought once: ${JSON.stringify(w.st.asked.filter((a) => a.at === "ws/C").map((a) => `${a.method} ${a.path}`))}`);
+  assert.equal(posted[0]!.entries?.at(-1)?.kind, "moved", "the chain as it moved");
+  assert.ok((posted[0]!.logs?.length ?? 0) >= 2, "the logs");
+  assert.ok((posted[0]!.bodies ?? []).some((b) => (b as { kind?: string; key?: string }).kind === "station" && (b as { key?: string }).key === C), "the body that names it among the bodies");
+});
+
 test("off and on again by the root's person; another owner refused with lock_root_only, nobody asked", async () => {
   const w = await setUp();
   const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));

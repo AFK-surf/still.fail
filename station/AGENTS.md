@@ -200,7 +200,12 @@
   pins it once the state made of the logs and bodies a station of it gives names its own key (`src/mesh/moved-pin.ts`,
   tried again as a failure is, `lock-sync.ts`): what 「保护」 after a move says is a statement, which the chain never
   names (2026-11-14, `test/lock-moved-pin.test.ts`). A station gives the bodies only to a station its list names
-  (`bodiesGiven`); the logs heard in the workspace to any station of its roster, as before.
+  (`bodiesGiven`); the logs heard in the workspace to any station of its roster, as before. No wider than before a move
+  (the lead, 2026-11-14): a station pinning no lock of a workspace, its enrollment naming none, is unprotected and lets
+  in whoever the plane's credentials say, so its first pin is the plane's word either way (trust on first use), a chain
+  the plane made up pinning after a move exactly where one before does; its home, enrolled by its token alone, pins only
+  what its owner's device brings (POST /lock, the moved chain with the logs and bodies, `pinBrought`: their state must
+  let that device in as an owner's and name this station); one enrolled with a lock's hash only a chain holding it.
 - What build each device a lock here names last ran is kept by its id in the lock (`src/mesh/device-builds.ts`, in
   stillfail.db, written only as the build rises or the day changes) and given to a device the lock lets in (GET /lock
   `builds`, `serves` `builds`; GET /lock/person for the asker's own log's devices), with since when this station keeps
