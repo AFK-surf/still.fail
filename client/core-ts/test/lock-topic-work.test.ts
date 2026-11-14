@@ -167,28 +167,26 @@ async function setUp(o: Size) {
 }
 type World = Awaited<ReturnType<typeof setUp>>;
 
-/// A workspace of the size seen in each of (a), (b), (c), as its makes stand once it is read and at rest.
+/// The build this device says as the file begins (an able one: `0.1.0`, unnumbered, where none is set).
+const BUILD = ownBuild();
+/// A workspace of the size seen in each of (a), (b), (c), as its makes stand once it is read and at rest. (a) is held
+/// back by this device's own build, under MOVED_FROM_BUILD for as long as the test runs (the next scenario sets it).
 async function scenario(which: "a" | "b" | "c", size: Size = SEEN): Promise<World> {
-  const was = ownBuild();
-  if (which === "a") setOwnBuild(`0.1.${MOVED_FROM_BUILD - 1}`);
-  try {
-    const w = await setUp(which === "b" ? { ...size, role: "member" } : size);
-    if (which === "c") {
-      await w.run(read(w.inner, "ws"));
-      await w.run(read(w.inner, "ws"));
-      assert.equal(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved", "(c) moved");
-      assert.equal(inForceOf(w.inner, "ws").said, "on", "(c) the state in force on");
-    } else {
-      assert.notEqual(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved", `(${which}) not moved`);
-      assert.equal(held(w.inner, "ws")?.entries.length, size.chain, `(${which}) a chain of ${size.chain}`);
-    }
-    if (which === "a") assert.deepEqual(handOverState(w.inner, "ws"), { held: ["own build"] }, "(a) held back, saying nothing");
-    if (which === "b") assert.equal(handOverState(w.inner, "ws"), null, "(b) not this device's to move");
-    await w.r.host.time.pass(1000);
-    return w;
-  } finally {
-    setOwnBuild(was);
+  setOwnBuild(which === "a" ? `0.1.${MOVED_FROM_BUILD - 1}` : BUILD);
+  const w = await setUp(which === "b" ? { ...size, role: "member" } : size);
+  if (which === "c") {
+    await w.run(read(w.inner, "ws"));
+    await w.run(read(w.inner, "ws"));
+    assert.equal(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved", "(c) moved");
+    assert.equal(inForceOf(w.inner, "ws").said, "on", "(c) the state in force on");
+  } else {
+    assert.notEqual(held(w.inner, "ws")?.entries.at(-1)?.kind, "moved", `(${which}) not moved`);
+    assert.equal(held(w.inner, "ws")?.entries.length, size.chain, `(${which}) a chain of ${size.chain}`);
   }
+  if (which === "a") assert.deepEqual(handOverState(w.inner, "ws"), { held: ["own build"] }, "(a) held back, saying nothing");
+  if (which === "b") assert.equal(handOverState(w.inner, "ws"), null, "(b) not this device's to move");
+  await w.r.host.time.pass(1000);
+  return w;
 }
 
 type Cost = { calls: number; hashes: number; sigs: number; verified: number; ms: number; by: Record<string, number> };
@@ -225,6 +223,7 @@ async function topicMakes(w: World, go: () => Promise<void>): Promise<{ makes: n
 }
 
 const out: string[] = [];
+process.on("exit", () => console.log(`\n${out.join("\n")}\n`));
 test("measured: a make of the lock topic, safeMode and the vaults' topic, in (a), (b), (c) of the size seen", async () => {
   for (const which of ["a", "b", "c"] as const) {
     const w = await scenario(which);
@@ -236,6 +235,12 @@ test("measured: a make of the lock topic, safeMode and the vaults' topic, in (a)
     out.push(`(${which}) the topic marked, nothing changed: ${marked.makes} make(s), ${marked.calls} rules calls ${JSON.stringify(marked.by)}`);
     const reread = await topicMakes(w, async () => void (await w.run(read(w.inner, "ws"))));
     out.push(`(${which}) the lock read again, the same answers: ${reread.makes} make(s), ${reread.calls} rules calls ${JSON.stringify(reread.by)}; asked ${w.asked.length} so far`);
+    w.r.core.close();
+  }
+  // (a) as large as seen: ten members, logs of a hundred
+  {
+    const w = await scenario("a", { ...SEEN, members: 10, log: 100 });
+    out.push(line("(a) lock, 10 members, logs of 100", cost(() => lockView(w.inner, "ws"), 5)));
     w.r.core.close();
   }
   // One thing changed, read as the sync reads it, and the topic made: what of the rules that took, by name.
@@ -253,6 +258,8 @@ test("measured: a make of the lock topic, safeMode and the vaults' topic, in (a)
     out.push(`(${which}) a member's log one entry longer, read, made: ${JSON.stringify(since(s).calls)}`);
     s = snapshot();
     if (which === "a") {
+      // (the chain as the stations and this device hold it now: what it signed since by itself is on it)
+      w.chain.splice(0, w.chain.length, ...held(w.inner, "ws")!.entries);
       w.after(w.byOwner, "device", { id: ed().hex, sub: "s1", kind: "web", label: "one more page", exp: Math.floor(w.r.host.nowMs() / 1000) + 10 * DAY });
       for (const c of w.stations) c.takeLock(w.chain as unknown as StationEntry[]);
       await w.run(read(w.inner, "ws"));
@@ -262,7 +269,6 @@ test("measured: a make of the lock topic, safeMode and the vaults' topic, in (a)
     }
     w.r.core.close();
   }
-  console.log(`\n${out.join("\n")}\n`);
 });
 
 // Made again with the same things held, the topic and what reads the same call the rules not once and check no
@@ -304,6 +310,8 @@ test("(a), (c) a member's log one entry longer, and (a) the chain one entry long
     assert.equal(log.state4_moved_js ?? 0, 1, `(${which}) the state as if moved (or in force) made once: ${JSON.stringify(log)}`);
     if (which === "a") {
       s = snapshot();
+      // (the chain as the stations and this device hold it now: what it signed since by itself is on it)
+      w.chain.splice(0, w.chain.length, ...held(w.inner, "ws")!.entries);
       w.after(w.byOwner, "device", { id: ed().hex, sub: "s1", kind: "web", label: "one more page", exp: Math.floor(w.r.host.nowMs() / 1000) + 10 * DAY });
       for (const c of w.stations) c.takeLock(w.chain as unknown as StationEntry[]);
       await w.run(read(w.inner, "ws"));
