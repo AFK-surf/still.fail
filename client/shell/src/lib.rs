@@ -2118,8 +2118,11 @@ impl Inner {
         // `bigint` says them; null when it cannot be.
         if op == "fs.meta" {
             let Ok(meta) = std::fs::metadata(str_of(a, "path")?) else { return Ok(Value::Null) };
-            let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
-            return Ok(json!({ "size": meta.len(), "mtimeMs": modified }));
+            let since = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok());
+            let modified = since.map(|d| d.as_millis() as u64);
+            // `mtime`: as Node's statSync (no `bigint`) says `mtimeMs`, its fraction of a millisecond kept.
+            let mtime = since.map(|d| d.as_secs() as f64 * 1e3 + d.subsec_nanos() as f64 / 1e6);
+            return Ok(json!({ "size": meta.len(), "mtimeMs": modified, "mtime": mtime }));
         }
         // The end of a file, at most `bytes` of it (up to its size when opened), decoded as TextDecoder("utf-8") does
         // (what is not UTF-8 replaced, a leading byte order mark dropped); null when it does not open.
@@ -2135,6 +2138,29 @@ impl Inner {
             }
             let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
             return Ok(json!(String::from_utf8_lossy(body)));
+        }
+        // Bytes of a file as hex, from byte `from` (0), `length` of them where it says (to its end where not), or with
+        // `zstd` what the zstd frames there hold (station/mb src/history's transcripts read a piece at a time, a put-away
+        // one a frame at a time); with `exact`, a file that ends before `length` is a failure. Null when it does not open.
+        if op == "fs.bytes" {
+            use std::io::{Read, Seek, SeekFrom};
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let from = a.get("from").and_then(Value::as_u64).unwrap_or(0);
+            let length = a.get("length").and_then(Value::as_u64);
+            let mut bytes = Vec::new();
+            file.seek(SeekFrom::Start(from)).map_err(err)?;
+            match length {
+                Some(n) => file.take(n).read_to_end(&mut bytes),
+                None => file.read_to_end(&mut bytes),
+            }
+            .map_err(err)?;
+            if a.get("exact").and_then(Value::as_bool).unwrap_or(false) && length.is_some_and(|n| (bytes.len() as u64) < n) {
+                return Err("a put-away transcript ended early".into());
+            }
+            if a.get("zstd").and_then(Value::as_bool).unwrap_or(false) {
+                bytes = zstd::decode_all(bytes.as_slice()).map_err(err)?;
+            }
+            return Ok(json!(hex::encode(bytes)));
         }
         // What a link points to, as Node's readlinkSync gives it; null when the path is no link or cannot be read.
         if op == "fs.readlink" {
@@ -3164,6 +3190,12 @@ mod tests {
         assert_eq!(sync("fs.read", json!({ "path": at("a/packed.zst"), "zstd": true }))["value"], json!("x".repeat(1000)));
         assert_eq!(std::fs::read_dir(dir.path().join("a")).unwrap().count(), 2);
         assert_eq!(sync("fs.hash", json!({ "path": at("a/b/plain.txt") }))["value"], plain["value"]["sha256"]);
+        // a piece of a file as hex, a frame of it decompressed, and one that ends early
+        assert_eq!(sync("fs.bytes", json!({ "path": at("a/packed.zst"), "zstd": true }))["value"], json!(hex::encode("x".repeat(1000))));
+        let whole = sync("fs.bytes", json!({ "path": at("a/b/plain.txt") }))["value"].as_str().unwrap().to_string();
+        assert_eq!(sync("fs.bytes", json!({ "path": at("a/b/plain.txt"), "from": 1, "length": 2 }))["value"], json!(whole[2..6]));
+        assert!(sync("fs.bytes", json!({ "path": at("a/b/plain.txt"), "from": 1, "length": 1_000_000, "exact": true }))["error"].is_string());
+        assert_eq!(sync("fs.bytes", json!({ "path": at("none") }))["value"], Value::Null);
         assert_eq!(sync("fs.hash", json!({ "path": at("none") }))["value"], Value::Null);
         // copied, renamed, a folder made, then let go with what it holds; nothing there is no failure
         assert_eq!(sync("fs.copy", json!({ "from": at("a/b/plain.txt"), "to": at("a/copy.txt") }))["value"], Value::Null);

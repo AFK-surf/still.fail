@@ -112,6 +112,11 @@ function filling(op: string, args: unknown): boolean {
 /// of every Claude and Codex project there, 14 s on a station, 2026-11-03), each of the files on the disk rather than the
 /// database.
 const PAGES = new Set(["timeline", "machineSessions"]);
+/// A session's history, read by the MoonBit reader (station/mb src/history's transcripts.mbt) where its program is
+/// there, on the pages' readers still: both its pages and where its reading stands (`transcriptState`, its live view's
+/// start), so that each reads on from what the reader it was read in last keeps (`homes`). Given the words a Codex
+/// script's calls are said in, in the language its args name (sessions.ts `timeline` says them so).
+const HISTORY = new Set(["timeline", "transcriptState"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
 const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage"]);
@@ -219,7 +224,7 @@ export class Readers {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
-    const worker: ReaderLike = (line === this.log || line === this.moved) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
+    const worker: ReaderLike = (line === this.log || line === this.moved || line === this.pages) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
       : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null, catalogVersion: 0 };
     const begun = wall.now();
@@ -647,12 +652,14 @@ export class Readers {
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     if (signal?.aborted) return Promise.reject(cancelled());
-    const line = op === CHECKPOINT ? this.log : this.mbReader !== null && MOVED.has(op) ? this.moved : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
+    const history = this.mbReader !== null && HISTORY.has(op);
+    const line = op === CHECKPOINT ? this.log : history ? this.pages : this.mbReader !== null && MOVED.has(op) ? this.moved : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
-    const given = line !== this.moved ? args
+    const given = history ? { ...(args as object), words: { inScriptOutput: tr(argsLang(args) ?? "zh", "station.transcript.inScriptOutput") } }
+      : line !== this.moved ? args
       : MACHINE.has(op) ? { ...(args as object), roots: machineRoots() }
       // (the usage page says its words in the language its args name, as read/ops-usage.ts reads it)
       : WORDED.has(op) ? { ...(args as object), words: wordsIn(op, op === "usage" ? argsLang(args) ?? lang : lang), now: wall.now() }

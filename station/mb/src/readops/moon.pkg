@@ -13,4 +13,5 @@ import {
   "station/history",
   "station/recent",
   "moonbitlang/core/json",
+  "moonbitlang/core/cmp",
 }
