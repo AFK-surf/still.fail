@@ -70,6 +70,10 @@ priv struct Lift {
   /// how much of its way down or up is left (1 → 0): `k` but for one whose rise lags its way across (View::flies_in's
   /// `up_late`)
   mut ky : Double
+  /// where it set out in the window, kept there (View::flies_in's): it goes from there to where it is drawn now, so
+  /// what moves that place meanwhile (a list's way opening its room) is taken up on its own way, not added to it;
+  /// none: off that place by `d`, which goes with it (View::shared's)
+  fixed : (Double, Double, Double, Double)?
   mut a : Double
   from : FromLook
   /// a flight with an end that stays (View::shared's `stays`): how that end draws its picture (covering, along; contained),
@@ -493,7 +497,11 @@ fn Tree::lift_rect(self : Tree, l : Lift) -> (Double, Double, Double, Double) {
   let (x, y, w, h) = self.placed_window(l.follow)
   let k = l.k
   let ky = l.ky
-  (x + l.d.0 * k, y + l.d.1 * ky, dmax(w + l.d.2 * k, 0.0), dmax(h + l.d.3 * ky, 0.0))
+  match l.fixed {
+    Some((fx, fy, fw, fh)) =>
+      (x + (fx - x) * k, y + (fy - y) * ky, dmax(w + (fw - w) * k, 0.0), dmax(h + (fh - h) * ky, 0.0))
+    None => (x + l.d.0 * k, y + l.d.1 * ky, dmax(w + l.d.2 * k, 0.0), dmax(h + l.d.3 * ky, 0.0))
+  }
 }
 
 ///|
@@ -927,8 +935,8 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
     stop: fn() {  },
   }
   self.flights.push(f)
-  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 0.0, from: d.look, stays: None })
-  g.lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 1.0, from: d.look, stays: None })
+  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 0.0, from: d.look, stays: None, fixed: None })
+  g.lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 1.0, from: d.look, stays: None, fixed: None })
   self.lifted_order()
   // (drawn as of each frame's moment while it goes; over at its end, a moment of its own)
   let stop_way = self.queued(fn() { self.drawn_at() }, fn(t) { self.flight_at(f, t) })
@@ -1028,7 +1036,8 @@ fn Tree::fly_from(
   let top = self.top_node_of(to.at)
   let f : Flying = { node: to, ghost: None, late, fades: false, start: at, dur: ms, along, top, stop: fn() {  } }
   self.flights.push(f)
-  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 1.0, from: look, stays })
+  let fixed = if stays is None { Some(from) } else { None }
+  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 1.0, from: look, stays, fixed })
   self.lifted_order()
   let stop_way = self.queued(fn() { self.drawn_said() }, fn(t) { self.flight_at(f, t) })
   let stop_end = to_v.at_moment(at + ms, fn() { self.flight_over(f) })
